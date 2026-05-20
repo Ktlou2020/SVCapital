@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SV Capital — Test Links</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --gold:    #D4AF37;
+      --gold-bg: rgba(212,175,55,.1);
+      --gold-border: rgba(212,175,55,.25);
+      --green:   #74c69d;
+      --blue:    #60a5fa;
+      --orange:  #fb923c;
+      --red:     #f87171;
+      --purple:  #a78bfa;
+      --teal:    #2dd4bf;
+      --bg:      #0d0f17;
+      --surface: #131720;
+      --surface2:#1a1d2e;
+      --border:  rgba(255,255,255,.07);
+      --text:    #e8eaf6;
+      --muted:   rgba(255,255,255,.45);
+    }
+    body {
+      background: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      padding: 0 0 60px;
+    }
+
+    /* ── Hero banner ── */
+    .hero {
+      background: linear-gradient(135deg, #0d1830 0%, #131720 60%, #0a1020 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 40px 32px 32px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(212,175,55,.08) 0%, transparent 65%);
+      pointer-events: none;
+    }
+    .hero-logo {
+      display: inline-flex; align-items: center; gap: 14px;
+      margin-bottom: 20px;
+    }
+    .hero-logo-icon {
+      width: 52px; height: 52px; border-radius: 14px;
+      background: linear-gradient(135deg, #D4AF37 0%, #b8962a 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; color: #0d0f17;
+      box-shadow: 0 0 0 3px rgba(212,175,55,.2), 0 8px 24px rgba(212,175,55,.25);
+    }
+    .hero-logo-text { text-align: left; }
+    .hero-logo-name { font-size: 1.4rem; font-weight: 900; color: #fff; letter-spacing: .04em; }
+    .hero-logo-sub  { font-size: 0.72rem; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; margin-top: 2px; }
+    .hero h1 { font-size: 1.8rem; font-weight: 900; color: #fff; letter-spacing: -.02em; margin-bottom: 8px; }
+    .hero h1 span { color: var(--gold); }
+    .hero p { font-size: 0.9rem; color: var(--muted); max-width: 520px; margin: 0 auto 22px; line-height: 1.6; }
+
+    /* Feature pill */
+    .feature-pills {
+      display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 0;
+    }
+    .pill {
+      background: rgba(255,255,255,.05); border: 1px solid var(--border);
+      border-radius: 20px; padding: 5px 13px;
+      font-size: 0.7rem; font-weight: 600; color: var(--muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .pill i { font-size: 0.65rem; }
+    .pill--gold   { background: var(--gold-bg);            border-color: var(--gold-border);  color: var(--gold); }
+    .pill--green  { background: rgba(116,198,157,.1);      border-color: rgba(116,198,157,.25);color: var(--green); }
+    .pill--blue   { background: rgba(96,165,250,.1);       border-color: rgba(96,165,250,.25); color: var(--blue); }
+    .pill--orange { background: rgba(251,146,60,.1);       border-color: rgba(251,146,60,.25); color: var(--orange); }
+
+    /* ── Main layout ── */
+    .container { max-width: 960px; margin: 0 auto; padding: 36px 24px 0; }
+
+    /* ── Section heading ── */
+    .section-label {
+      font-size: 0.65rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .12em; color: var(--muted);
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 14px; margin-top: 32px;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ── Card grid ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+    }
+
+    /* ── Link card ── */
+    .link-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      text-decoration: none;
+      display: flex; align-items: flex-start; gap: 14px;
+      transition: border-color .2s, background .2s, transform .15s, box-shadow .2s;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .link-card:hover {
+      border-color: var(--accent, var(--gold-border));
+      background: var(--surface2);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(0,0,0,.35);
+    }
+    .link-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: var(--accent, var(--gold));
+      opacity: 0;
+      transition: opacity .2s;
+    }
+    .link-card:hover::before { opacity: 1; }
+
+    .card-icon {
+      width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      background: var(--icon-bg, var(--gold-bg));
+      color: var(--icon-color, var(--gold));
+      border: 1px solid var(--icon-border, var(--gold-border));
+    }
+    .card-body { flex: 1; min-width: 0; }
+    .card-title {
+      font-size: 0.9rem; font-weight: 700; color: #fff;
+      margin-bottom: 3px; line-height: 1.3;
+    }
+    .card-desc {
+      font-size: 0.75rem; color: var(--muted); line-height: 1.5;
+    }
+    .card-badge {
+      position: absolute; top: 12px; right: 12px;
+      font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+      padding: 2px 8px; border-radius: 8px;
+    }
+    .badge--new    { background: rgba(116,198,157,.15); color: var(--green); border: 1px solid rgba(116,198,157,.25); }
+    .badge--p3     { background: var(--gold-bg);        color: var(--gold);  border: 1px solid var(--gold-border); }
+    .badge--hot    { background: rgba(251,146,60,.12);  color: var(--orange);border: 1px solid rgba(251,146,60,.25); }
+
+    /* ── Special "Print Test" card ── */
+    .print-test-card {
+      background: linear-gradient(135deg, rgba(212,175,55,.08) 0%, rgba(96,165,250,.06) 100%);
+      border: 1.5px solid rgba(212,175,55,.3);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 0;
+    }
+    .print-test-card h3 {
+      font-size: 1rem; font-weight: 800; color: #fff; margin-bottom: 6px;
+      display: flex; align-items: center; gap: 9px;
+    }
+    .print-test-card p { font-size: 0.8rem; color: var(--muted); line-height: 1.6; margin-bottom: 18px; }
+
+    .print-steps {
+      display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;
+    }
+    .print-step {
+      display: flex; align-items: flex-start; gap: 12px;
+      background: rgba(255,255,255,.03); border: 1px solid var(--border);
+      border-radius: 10px; padding: 11px 14px;
+    }
+    .print-step-num {
+      width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+      background: var(--gold-bg); border: 1px solid var(--gold-border);
+      color: var(--gold); font-size: 0.72rem; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .print-step-body { font-size: 0.78rem; line-height: 1.5; }
+    .print-step-body strong { color: #fff; }
+    .print-step-body code {
+      background: rgba(255,255,255,.07); border-radius: 4px;
+      padding: 1px 6px; font-family: monospace; font-size: 0.75rem; color: var(--gold);
+    }
+
+    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 18px; border-radius: 9px;
+      font-size: 0.82rem; font-weight: 700; font-family: inherit;
+      cursor: pointer; text-decoration: none; border: none;
+      transition: transform .15s, box-shadow .2s, opacity .15s;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn--gold  {
+      background: linear-gradient(135deg, #D4AF37, #b8962a);
+      color: #0d0f17;
+      box-shadow: 0 4px 18px rgba(212,175,55,.35);
+    }
+    .btn--blue  {
+      background: rgba(96,165,250,.15); color: var(--blue);
+      border: 1px solid rgba(96,165,250,.3);
+    }
+    .btn--ghost {
+      background: rgba(255,255,255,.05); color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .btn--ghost:hover { color: var(--text); border-color: rgba(255,255,255,.2); }
+
+    /* ── Divider ── */
+    .divider { height: 1px; background: var(--border); margin: 36px 0 0; }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center; padding: 28px 24px 0;
+      font-size: 0.72rem; color: rgba(255,255,255,.2);
+      line-height: 1.7;
+    }
+    .footer a { color: rgba(255,255,255,.35); text-decoration: none; transition: color .15s; }
+    .footer a:hover { color: var(--gold); }
+
+    @media (max-width: 600px) {
+      .hero { padding: 28px 20px 24px; }
+      .hero h1 { font-size: 1.4rem; }
+      .container { padding: 24px 16px 0; }
+      .card-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══ HERO ═══ -->
+<div class="hero">
+  <div class="hero-logo">
+    <div class="hero-logo-icon"><i class="fa-solid fa-gem"></i></div>
+    <div class="hero-logo-text">
+      <div class="hero-logo-name">SV Capital</div>
+      <div class="hero-logo-sub">SmartVest Financial Services · FSP #52449</div>
+    </div>
+  </div>
+  <h1>Platform <span>Test Links</span></h1>
+  <p>Quick access to every module in the SV Capital platform. No login required for Fund Console.</p>
+  <div class="feature-pills">
+    <div class="pill pill--gold"><i class="fa-solid fa-file-invoice"></i> Investor Statements</div>
+    <div class="pill pill--blue"><i class="fa-solid fa-certificate"></i> IT3(b) Tax Certs</div>
+    <div class="pill pill--green"><i class="fa-solid fa-chart-line"></i> Fund Analytics</div>
+    <div class="pill pill--orange"><i class="fa-solid fa-cow"></i> Cattle Operations</div>
+    <div class="pill"><i class="fa-solid fa-wifi"></i> PWA Ready</div>
+  </div>
+</div>
+
+<!-- ═══ MAIN CONTENT ═══ -->
+<div class="container">
+
+  <!-- ── P3 Print Test (hero card) ── -->
+  <div class="section-label"><i class="fa-solid fa-star" style="color:var(--gold)"></i> P3 Feature — Print Documents</div>
+
+  <div class="print-test-card">
+    <h3><i class="fa-solid fa-print" style="color:var(--gold)"></i> Test Investor Statement &amp; IT3(b) Tax Certificate</h3>
+    <p>Follow these steps to trigger the print-window generator from a live allocation record. No login required.</p>
+
+    <div class="print-steps">
+      <div class="print-step">
+        <div class="print-step-num">1</div>
+        <div class="print-step-body">
+          <strong>Open the Fund Console</strong> — click the button below. The page loads without any login.
+        </div>
+      </div>
+      <div class="print-step">
+        <div class="print-step-num">2</div>
+        <div class="print-step-body">
+          <strong>Click "Allocations"</strong> in the left sidebar under the <code>Investors</code> nav section.
+        </div>
+      </div>
+      <div class="print-step">
+        <div class="print-step-num">3</div>
+        <div class="print-step-body">
+          <strong>Click the 👁 eye icon</strong> on any allocation row — the Allocation Detail modal opens.
+        </div>
+      </div>
+      <div class="print-step">
+        <div class="print-step-num">4</div>
+        <div class="print-step-body">
+          <strong>Scroll to the modal footer</strong> and click either:
+          <br>• <span style="background:rgba(212,175,55,.15);color:#D4AF37;padding:2px 8px;border-radius:5px;font-size:0.72rem;font-weight:700">🗒 Investor Statement</span>
+          &nbsp;or&nbsp;
+          <span style="background:rgba(96,165,250,.12);color:#60a5fa;padding:2px 8px;border-radius:5px;font-size:0.72rem;font-weight:700">🏅 IT3(b) Tax Cert</span>
+        </div>
+      </div>
+      <div class="print-step">
+        <div class="print-step-num">5</div>
+        <div class="print-step-body">
+          A new print window opens. Click <strong>"Print / Save PDF"</strong> to generate the PDF.
+          <br><span style="color:rgba(255,200,100,.6);font-size:0.72rem">⚠ If a pop-up blocker fires, allow pop-ups for this site and click again.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <a href="fund/index.html" class="btn btn--gold">
+        <i class="fa-solid fa-arrow-right"></i> Open Fund Console → Go to Allocations
+      </a>
+      <a href="fund/index.html#allocations" class="btn btn--blue" onclick="sessionStorage.setItem('startView','allocations')">
+        <i class="fa-solid fa-bolt"></i> Jump straight to Allocations
+      </a>
+    </div>
+  </div>
+
+  <!-- ── Fund Console ── -->
+  <div class="section-label"><i class="fa-solid fa-chart-line" style="color:var(--gold)"></i> Fund Management Console</div>
+  <div class="card-grid">
+
+    <a href="fund/index.html" class="link-card" style="--accent:rgba(212,175,55,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(212,175,55,.1);--icon-color:#D4AF37;--icon-border:rgba(212,175,55,.2)">
+        <i class="fa-solid fa-gauge-high"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Fund Dashboard</div>
+        <div class="card-desc">AUM overview, deployment stats, payout obligations, product breakdown</div>
+      </div>
+    </a>
+
+    <a href="fund/index.html" onclick="navigate_to('allocations')" class="link-card" style="--accent:rgba(116,198,157,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(116,198,157,.1);--icon-color:#74c69d;--icon-border:rgba(116,198,157,.2)">
+        <i class="fa-solid fa-users-between-lines"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Investor Allocations</div>
+        <div class="card-desc">View live allocations, NAV, maturity — <strong style="color:#D4AF37">print statements here</strong></div>
+      </div>
+      <span class="card-badge badge--p3">Print</span>
+    </a>
+
+    <a href="fund/index.html" class="link-card" style="--accent:rgba(96,165,250,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(96,165,250,.1);--icon-color:#60a5fa;--icon-border:rgba(96,165,250,.2)">
+        <i class="fa-solid fa-calculator"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Return Calculator</div>
+        <div class="card-desc">Compute expected returns across all product types by capital and term</div>
+      </div>
+    </a>
+
+    <a href="fund/index.html" class="link-card" style="--accent:rgba(251,146,60,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(251,146,60,.1);--icon-color:#fb923c;--icon-border:rgba(251,146,60,.2)">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Risk Dashboard</div>
+        <div class="card-desc">HHI concentration engine, vintage chart, loan stress panel, solar risk</div>
+      </div>
+    </a>
+
+    <a href="fund/index.html" class="link-card" style="--accent:rgba(212,175,55,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(212,175,55,.1);--icon-color:#D4AF37;--icon-border:rgba(212,175,55,.2)">
+        <i class="fa-solid fa-receipt"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Fee Ledger</div>
+        <div class="card-desc">Management, performance, structuring fees — charts, filters, CSV export</div>
+      </div>
+    </a>
+
+    <a href="fund/index.html" class="link-card" style="--accent:rgba(167,139,250,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(167,139,250,.1);--icon-color:#a78bfa;--icon-border:rgba(167,139,250,.2)">
+        <i class="fa-solid fa-bell"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Notification Centre</div>
+        <div class="card-desc">Fund alerts by severity, mark-read, dismiss, category filters</div>
+      </div>
+    </a>
+
+    <a href="fund/index.html" class="link-card" style="--accent:rgba(45,212,191,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(45,212,191,.1);--icon-color:#2dd4bf;--icon-border:rgba(45,212,191,.2)">
+        <i class="fa-solid fa-brain"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">AI Deployment Intelligence</div>
+        <div class="card-desc">Opportunity scoring, liquidity analysis, ranked capital deployment advice</div>
+      </div>
+    </a>
+
+    <a href="fund/index.html" class="link-card" style="--accent:rgba(251,191,36,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(251,191,36,.1);--icon-color:#fbbf24;--icon-border:rgba(251,191,36,.2)">
+        <i class="fa-solid fa-calendar-days"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Cash Flow Forecast</div>
+        <div class="card-desc">12-month inflow/outflow engine across all 7 product tables</div>
+      </div>
+    </a>
+
+    <a href="fund/index.html" class="link-card" style="--accent:rgba(248,113,113,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(248,113,113,.1);--icon-color:#f87171;--icon-border:rgba(248,113,113,.2)">
+        <i class="fa-solid fa-shield-halved"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Audit Trail</div>
+        <div class="card-desc">Immutable compliance log, severity filters, before/after diffs, CSV export</div>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- ── Cattle ── -->
+  <div class="section-label"><i class="fa-solid fa-cow" style="color:#fb923c"></i> Cattle Operations</div>
+  <div class="card-grid">
+
+    <a href="fund/cattle.html" class="link-card" style="--accent:rgba(251,146,60,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(251,146,60,.1);--icon-color:#fb923c;--icon-border:rgba(251,146,60,.2)">
+        <i class="fa-solid fa-cow"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Cattle NAV Dashboard</div>
+        <div class="card-desc">Cycle performance, animal CRUD, NAV engine, backgrounding returns</div>
+      </div>
+    </a>
+
+    <a href="fund/cattle.html" class="link-card" style="--accent:rgba(212,175,55,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(212,175,55,.1);--icon-color:#D4AF37;--icon-border:rgba(212,175,55,.2)">
+        <i class="fa-solid fa-receipt"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Cycle Cost Ledger</div>
+        <div class="card-desc">Feed, vet, transport, labour, mortality costs — net return impact panel</div>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- ── Other Portals ── -->
+  <div class="section-label"><i class="fa-solid fa-grid-2" style="color:var(--blue)"></i> Other Portals</div>
+  <div class="card-grid">
+
+    <a href="index.html" class="link-card" style="--accent:rgba(255,130,21,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(255,130,21,.1);--icon-color:#FF8215;--icon-border:rgba(255,130,21,.2)">
+        <i class="fa-solid fa-globe"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Public Website</div>
+        <div class="card-desc">Marketing homepage, product showcase, investment calculator</div>
+      </div>
+    </a>
+
+    <a href="login.html" class="link-card" style="--accent:rgba(96,165,250,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(96,165,250,.1);--icon-color:#60a5fa;--icon-border:rgba(96,165,250,.2)">
+        <i class="fa-solid fa-right-to-bracket"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Login Page</div>
+        <div class="card-desc">Investor/Admin login with forgot password flow — demo credentials shown</div>
+      </div>
+      <span class="card-badge badge--new">P3</span>
+    </a>
+
+    <a href="team/login.html" class="link-card" style="--accent:rgba(124,92,252,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(124,92,252,.1);--icon-color:#7c5cfc;--icon-border:rgba(124,92,252,.2)">
+        <i class="fa-solid fa-id-badge"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Staff Login</div>
+        <div class="card-desc">Email + PIN 2-step flow, forgot PIN flow — try sipho.dlamini@svcapital.co.za</div>
+      </div>
+      <span class="card-badge badge--new">P3</span>
+    </a>
+
+    <a href="admin/index.html" class="link-card" style="--accent:rgba(232,67,147,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(232,67,147,.1);--icon-color:#e84393;--icon-border:rgba(232,67,147,.2)">
+        <i class="fa-solid fa-shield-halved"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Admin Console</div>
+        <div class="card-desc">Investor KYC, document upload, FICA verification, fund management</div>
+      </div>
+      <span class="card-badge badge--new">P3</span>
+    </a>
+
+    <a href="portal/index.html" class="link-card" style="--accent:rgba(16,185,129,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(16,185,129,.1);--icon-color:#10b981;--icon-border:rgba(16,185,129,.2)">
+        <i class="fa-solid fa-building-columns"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Investor Portal</div>
+        <div class="card-desc">Self-service dashboard, deposits via Paystack/Ozow, document download</div>
+      </div>
+    </a>
+
+    <a href="team/hub.html" class="link-card" style="--accent:rgba(0,212,170,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(0,212,170,.1);--icon-color:#00d4aa;--icon-border:rgba(0,212,170,.2)">
+        <i class="fa-solid fa-people-group"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Staff Hub</div>
+        <div class="card-desc">Role-based app launcher — personal KPIs, EVA payslip, team dashboard</div>
+      </div>
+    </a>
+
+    <a href="ifa/index.html" class="link-card" style="--accent:rgba(6,182,212,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(6,182,212,.1);--icon-color:#06b6d4;--icon-border:rgba(6,182,212,.2)">
+        <i class="fa-solid fa-handshake"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">IFA Partner Portal</div>
+        <div class="card-desc">Independent Financial Adviser client management and reporting tools</div>
+      </div>
+    </a>
+
+    <a href="fund/solar.html" class="link-card" style="--accent:rgba(251,191,36,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(251,191,36,.1);--icon-color:#fbbf24;--icon-border:rgba(251,191,36,.2)">
+        <i class="fa-solid fa-solar-panel"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Solar Finance</div>
+        <div class="card-desc">Solar project NAV, full CRUD, supporting documents, Chart.js analytics</div>
+      </div>
+    </a>
+
+    <a href="fund/shortterm.html" class="link-card" style="--accent:rgba(96,165,250,.4)">
+      <div class="card-icon" style="--icon-bg:rgba(96,165,250,.1);--icon-color:#60a5fa;--icon-border:rgba(96,165,250,.2)">
+        <i class="fa-solid fa-hand-holding-dollar"></i>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Short-Term Loans</div>
+        <div class="card-desc">Loan disbursements, overdue tracking, repayment calculator, documents</div>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- ── Demo Credentials ── -->
+  <div class="section-label"><i class="fa-solid fa-key" style="color:var(--muted)"></i> Demo Credentials</div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px">
+    <div>
+      <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">Investor Portal</div>
+      <div style="font-size:0.82rem;font-weight:700;color:#fff;font-family:monospace">investor@svcapital.co.za</div>
+      <div style="font-size:0.78rem;color:var(--muted);font-family:monospace">Demo@2024!</div>
+    </div>
+    <div>
+      <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">Admin Console</div>
+      <div style="font-size:0.82rem;font-weight:700;color:#fff;font-family:monospace">admin@svcapital.co.za</div>
+      <div style="font-size:0.78rem;color:var(--muted);font-family:monospace">Demo@2024!</div>
+    </div>
+    <div>
+      <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">Staff Portal (PIN)</div>
+      <div style="font-size:0.82rem;font-weight:700;color:#fff;font-family:monospace">sipho.dlamini@svcapital.co.za</div>
+      <div style="font-size:0.78rem;color:var(--muted);font-family:monospace">PIN: 1234</div>
+    </div>
+    <div>
+      <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">Fund Console</div>
+      <div style="font-size:0.82rem;font-weight:700;color:var(--green)">No login required ✓</div>
+      <div style="font-size:0.78rem;color:var(--muted)">Open directly</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="divider" style="margin: 36px 24px 0"></div>
+<div class="footer">
+  <strong style="color:rgba(255,255,255,.4)">SV Capital</strong> — SmartVest Financial Services (Pty) Ltd · FSP #52449 · FSCA Regulated<br>
+  <a href="README.md">README / Docs</a> &nbsp;·&nbsp; <a href="index.html">Public Website</a> &nbsp;·&nbsp; <a href="fund/index.html">Fund Console</a>
+</div>
+
+<script>
+  /* Allow the "Jump to Allocations" button to pass a hint to fund/index.html */
+  function navigate_to(view) {
+    sessionStorage.setItem('fundStartView', view);
+  }
+
+  /* Auto-highlight the print card if arriving from a search */
+  if (window.location.hash === '#print') {
+    document.querySelector('.print-test-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,44 @@
+{
+  "name": "SV Capital Fund Portal",
+  "short_name": "SV Capital",
+  "description": "SV Capital — Fund Management & Investor Portal. Track allocations, manage cattle cycles, solar projects and short-term loans.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0d0f17",
+  "theme_color": "#D4AF37",
+  "categories": ["finance", "business"],
+  "lang": "en-ZA",
+  "icons": [
+    {
+      "src": "../assets/svcapital-logo-header.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../assets/svcapital-og.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Go to Fund Dashboard",
+      "url": "/fund/index.html",
+      "icons": [{ "src": "../assets/svcapital-logo-header.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Cattle Operations",
+      "short_name": "Cattle",
+      "description": "Manage cattle cycles and costs",
+      "url": "/fund/cattle.html",
+      "icons": [{ "src": "../assets/svcapital-logo-header.png", "sizes": "96x96" }]
+    }
+  ]
+}

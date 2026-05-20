@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SV Capital — Cattle Investment Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="css/cattle.css">
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-logo">
+      <img src="../assets/logo-inline.svg" alt="SV Capital" onerror="this.style.display='none'">
+      <div>
+        <div class="brand-name">SV Capital</div>
+        <div class="brand-sub">Cattle Investment</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="nav-section-label">Overview</div>
+  <button class="nav-item active" data-view="nav">
+    <i class="fa-solid fa-chart-line"></i> NAV Dashboard
+  </button>
+
+  <div class="nav-section-label">Cattle Data</div>
+  <button class="nav-item" data-view="cycles">
+    <i class="fa-solid fa-layer-group"></i> Cattle Cycles
+  </button>
+  <button class="nav-item" data-view="animals">
+    <i class="fa-solid fa-cow"></i> Individual Animals
+  </button>
+
+  <div class="nav-section-label">Management</div>
+  <button class="nav-item" data-view="import">
+    <i class="fa-solid fa-file-import"></i> Import CSV Data
+  </button>
+  <button class="nav-item" data-view="settings">
+    <i class="fa-solid fa-sliders"></i> NAV Settings
+  </button>
+
+  <div class="nav-section-label">Finance</div>
+  <button class="nav-item" data-view="costs">
+    <i class="fa-solid fa-receipt"></i> Cycle Costs
+  </button>
+
+  <div class="sidebar-footer">
+    <a href="index.html" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i> Back to Fund Console
+    </a>
+  </div>
+</aside>
+
+<!-- ══════════════════════════════════════════════════
+     MAIN CONTENT
+══════════════════════════════════════════════════ -->
+<main class="main">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-title" id="topbarTitle">
+      NAV Dashboard
+      <span>Cattle Finance Product</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-secondary btn-sm" onclick="loadNAVDashboard();navigate('nav',document.querySelector('[data-view=nav]'))" title="Refresh NAV">
+        <i class="fa-solid fa-rotate"></i> Refresh NAV
+      </button>
+      <a href="index.html" class="btn btn-secondary btn-sm">
+        <i class="fa-solid fa-arrow-left"></i> Fund Console
+      </a>
+    </div>
+  </header>
+
+  <!-- VIEWS -->
+  <div class="content">
+
+    <!-- VIEW: NAV DASHBOARD -->
+    <section id="view-nav" class="view active">
+      <div class="loading-state"><div class="spinner"></div> Loading NAV…</div>
+    </section>
+
+    <!-- VIEW: CATTLE CYCLES -->
+    <section id="view-cycles" class="view">
+      <div class="loading-state"><div class="spinner"></div> Loading cycles…</div>
+    </section>
+
+    <!-- VIEW: INDIVIDUAL ANIMALS -->
+    <section id="view-animals" class="view">
+      <div class="loading-state"><div class="spinner"></div> Loading animals…</div>
+    </section>
+
+    <!-- VIEW: IMPORT -->
+    <section id="view-import" class="view">
+      <div class="loading-state"><div class="spinner"></div> Loading…</div>
+    </section>
+
+    <!-- VIEW: SETTINGS -->
+    <section id="view-settings" class="view">
+      <div class="loading-state"><div class="spinner"></div> Loading settings…</div>
+    </section>
+
+    <!-- VIEW: CYCLE COSTS -->
+    <section id="view-costs" class="view">
+
+      <!-- KPI Row -->
+      <div class="nav-grid-4 mb-20" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+        <div class="kpi kpi--gold">
+          <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-coins"></i></div></div>
+          <div class="kpi__value" id="cost-total">—</div>
+          <div class="kpi__label">Total Cycle Costs</div>
+        </div>
+        <div class="kpi" style="border-color:rgba(251,191,36,.25)">
+          <div class="kpi__head"><div class="kpi__icon" style="background:rgba(251,191,36,.12)"><i class="fa-solid fa-wheat-awn" style="color:#fbbf24"></i></div></div>
+          <div class="kpi__value" style="color:#fbbf24" id="cost-feed">—</div>
+          <div class="kpi__label">Feed Costs</div>
+        </div>
+        <div class="kpi" style="border-color:rgba(96,165,250,.25)">
+          <div class="kpi__head"><div class="kpi__icon" style="background:rgba(96,165,250,.12)"><i class="fa-solid fa-syringe" style="color:#60a5fa"></i></div></div>
+          <div class="kpi__value" style="color:#60a5fa" id="cost-vet">—</div>
+          <div class="kpi__label">Vet &amp; Medical</div>
+        </div>
+        <div class="kpi" style="border-color:rgba(248,113,113,.25)">
+          <div class="kpi__head"><div class="kpi__icon" style="background:rgba(248,113,113,.12)"><i class="fa-solid fa-skull-crossbones" style="color:#f87171"></i></div></div>
+          <div class="kpi__value" style="color:#f87171" id="cost-mortality">—</div>
+          <div class="kpi__label">Mortality / Loss</div>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div class="panel">
+          <div class="panel__hd">
+            <div><div class="panel__title">Cost Breakdown by Type</div><div class="panel__sub">Across all cycles</div></div>
+          </div>
+          <div class="panel__bd">
+            <div style="height:240px"><canvas id="costTypeChart"></canvas></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel__hd">
+            <div><div class="panel__title">Cost per Cycle</div><div class="panel__sub">Total spend per batch</div></div>
+          </div>
+          <div class="panel__bd">
+            <div style="height:240px"><canvas id="costCycleChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cost Ledger Table -->
+      <div class="panel">
+        <div class="panel__hd">
+          <div>
+            <div class="panel__title"><i class="fa-solid fa-receipt" style="color:var(--gold);margin-right:8px"></i>Cost Ledger</div>
+            <div class="panel__sub" id="costLedgerSub">All cost entries</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="costCycleFilter" style="background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:6px 10px;border-radius:8px;font-size:12px" onchange="applyCostFilters()">
+              <option value="">All Cycles</option>
+            </select>
+            <select id="costTypeFilter" style="background:#16213e;border:1px solid rgba(255,255,255,.12);color:#fff;padding:6px 10px;border-radius:8px;font-size:12px" onchange="applyCostFilters()">
+              <option value="">All Types</option>
+              <option value="feed">Feed</option>
+              <option value="vet">Vet / Medical</option>
+              <option value="transport">Transport</option>
+              <option value="labour">Labour</option>
+              <option value="mortality">Mortality</option>
+              <option value="other">Other</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="openAddCostModal()">
+              <i class="fa-solid fa-plus"></i> Add Cost
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="exportCostLedger()">
+              <i class="fa-solid fa-download"></i> Export
+            </button>
+          </div>
+        </div>
+        <div class="table-wrapper" style="overflow-x:auto">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Date</th><th>Cycle</th><th>Type</th><th>Description</th>
+                <th class="num">Per Animal</th><th class="num">Animals</th><th class="num">Total</th>
+                <th>Supplier</th><th>Invoice</th><th>Status</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="costLedgerBody">
+              <tr><td colspan="11"><div style="text-align:center;padding:24px;color:rgba(255,255,255,.3)"><i class="fa-solid fa-spinner fa-spin"></i> Loading costs…</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Net Return Impact Panel -->
+      <div class="panel" style="margin-top:20px" id="costNetReturnPanel">
+        <div class="panel__hd">
+          <div><div class="panel__title"><i class="fa-solid fa-scale-balanced" style="color:var(--green-mid);margin-right:8px"></i>Net Return Impact per Cycle</div>
+          <div class="panel__sub">Gross return minus total recorded costs</div></div>
+        </div>
+        <div class="panel__bd" id="costNetReturnBody"><div style="text-align:center;padding:20px;color:rgba(255,255,255,.3)">Loading…</div></div>
+      </div>
+
+    </section><!-- /view-costs -->
+
+  </div><!-- /content -->
+</main>
+
+<!-- ══════════════════════════════════════════════════
+     CYCLE DETAIL MODAL
+══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="cycleDetailOverlay" onclick="if(event.target===this)closeCycleDetail()">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <i class="fa-solid fa-layer-group" style="color:var(--green-mid)"></i>
+      <span class="modal-title">Cycle Detail</span>
+      <button class="modal-close" onclick="closeCycleDetail()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="cycleDetailBody">
+      <!-- rendered by JS -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeCycleDetail()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     CYCLE FORM MODAL (Add / Edit)
+══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="cycleFormOverlay" onclick="if(event.target===this)closeCycleForm()">
+  <div class="modal">
+    <div class="modal-header">
+      <i class="fa-solid fa-pen-to-square" style="color:var(--green-mid)"></i>
+      <span class="modal-title" id="cycleFormTitle">Add Cattle Cycle</span>
+      <button class="modal-close" onclick="closeCycleForm()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cycleFormId">
+      <form id="cycleForm" onsubmit="event.preventDefault();saveCycleForm()">
+        <div class="settings-grid" style="margin-bottom:16px">
+          <div class="form-group">
+            <label>Batch Name</label>
+            <input type="text" id="cf_batch_name" placeholder="e.g. Batch 685 - Agrifund" required>
+          </div>
+          <div class="form-group">
+            <label>Company</label>
+            <input type="text" id="cf_company" placeholder="Agrifund, SVC Farming, SVC Cows…">
+          </div>
+          <div class="form-group">
+            <label>Invoice No.</label>
+            <input type="text" id="cf_inv_no" placeholder="e.g. 66723">
+          </div>
+          <div class="form-group">
+            <label>Cycle No.</label>
+            <input type="text" id="cf_cycle_no" placeholder="e.g. Cycle 5">
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select id="cf_status">
+              <option value="active">Active</option>
+              <option value="sold">Sold</option>
+              <option value="draft">Draft</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>No. Purchased</label>
+            <input type="number" id="cf_no_purchased" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>Mortalities</label>
+            <input type="number" id="cf_mortalities" min="0" value="0">
+          </div>
+          <div class="form-group">
+            <label>Live Count</label>
+            <input type="number" id="cf_no_live" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>No. Sold</label>
+            <input type="number" id="cf_no_sold" min="0" value="0">
+          </div>
+          <div class="form-group">
+            <label>Purchase Value (R)</label>
+            <input type="number" id="cf_purchase_value" step="0.01" min="0" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label>Total Sale Value (R)</label>
+            <input type="number" id="cf_sale_value" step="0.01" min="0" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label>Net Return %</label>
+            <input type="number" id="cf_return_pct" step="0.01" placeholder="e.g. 3.22">
+          </div>
+          <div class="form-group">
+            <label>Cycle Start Date</label>
+            <input type="date" id="cf_start_date">
+          </div>
+          <div class="form-group">
+            <label>Sale Date</label>
+            <input type="date" id="cf_sale_date">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea id="cf_notes" rows="3" style="resize:vertical;font-family:inherit" placeholder="Additional notes…"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeCycleForm()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCycleForm()"><i class="fa-solid fa-save"></i> Save Cycle</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     ANIMAL FORM MODAL (Add / Edit)
+══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="animalFormOverlay" onclick="if(event.target===this)closeAnimalForm()">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <i class="fa-solid fa-cow" style="color:var(--amber-dark,#d97706)"></i>
+      <span class="modal-title" id="animalFormTitle">Add Animal</span>
+      <button class="modal-close" onclick="closeAnimalForm()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="animalFormId">
+      <form id="animalForm" onsubmit="event.preventDefault();saveAnimalForm()">
+
+        <!-- Row 1: Identification -->
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);font-weight:700;margin-bottom:10px">
+          <i class="fa-solid fa-tag"></i> Identification
+        </div>
+        <div class="settings-grid" style="margin-bottom:18px">
+          <div class="form-group">
+            <label>Tag Number <span style="color:var(--red)">*</span></label>
+            <input type="text" id="af_tag_number" placeholder="e.g. ZA-001-2024" required>
+          </div>
+          <div class="form-group">
+            <label>Batch No.</label>
+            <input type="text" id="af_batch_no" placeholder="e.g. Batch 685">
+          </div>
+          <div class="form-group">
+            <label>Batch Name</label>
+            <input type="text" id="af_batch_name" placeholder="e.g. Batch 685 - Agrifund">
+          </div>
+          <div class="form-group">
+            <label>Cycle</label>
+            <select id="af_cycle_id">
+              <option value="">— No cycle linked —</option>
+              <!-- populated dynamically -->
+            </select>
+          </div>
+        </div>
+
+        <!-- Row 2: Animal Details -->
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);font-weight:700;margin-bottom:10px">
+          <i class="fa-solid fa-paw"></i> Animal Details
+        </div>
+        <div class="settings-grid" style="margin-bottom:18px">
+          <div class="form-group">
+            <label>Breed</label>
+            <input type="text" id="af_breed" placeholder="e.g. Brahman, Angus, Bonsmara">
+          </div>
+          <div class="form-group">
+            <label>Gender</label>
+            <select id="af_gender">
+              <option value="">— Select —</option>
+              <option value="Bull">Bull</option>
+              <option value="Heifer">Heifer</option>
+              <option value="Steer">Steer</option>
+              <option value="Cow">Cow</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Entry Mass (kg)</label>
+            <input type="number" id="af_entry_mass" step="0.1" min="0" placeholder="e.g. 220">
+          </div>
+          <div class="form-group">
+            <label>Exit Mass (kg)</label>
+            <input type="number" id="af_exit_mass" step="0.1" min="0" placeholder="e.g. 310">
+          </div>
+        </div>
+
+        <!-- Row 3: Status & Sale -->
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);font-weight:700;margin-bottom:10px">
+          <i class="fa-solid fa-chart-bar"></i> Status & Sale
+        </div>
+        <div class="settings-grid" style="margin-bottom:18px">
+          <div class="form-group">
+            <label>Status</label>
+            <select id="af_status" onchange="_toggleMortalityFields()">
+              <option value="active">Active</option>
+              <option value="sold">Sold</option>
+              <option value="mortality">Mortality</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Sale Batch</label>
+            <input type="text" id="af_sale_batch" placeholder="e.g. Sale Lot 3">
+          </div>
+          <div class="form-group">
+            <label>Sale Date</label>
+            <input type="date" id="af_sale_date">
+          </div>
+          <div class="form-group">
+            <label>&nbsp;</label>
+            <!-- spacer -->
+          </div>
+        </div>
+
+        <!-- Mortality Fields (shown only when status = mortality) -->
+        <div id="animalMortFields" style="display:none;grid-template-columns:1fr 1fr;gap:14px 20px;margin-bottom:18px">
+          <div class="form-group">
+            <label>Mortality Date</label>
+            <input type="date" id="af_mortality_date">
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label>Mortality Report / Cause</label>
+            <textarea id="af_mortality_report" rows="2" style="resize:vertical;font-family:inherit" placeholder="Describe cause of death or link to report…"></textarea>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea id="af_notes" rows="2" style="resize:vertical;font-family:inherit" placeholder="Any additional notes…"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAnimalForm()">Cancel</button>
+      <button class="btn btn-primary" id="animalSaveBtn" onclick="saveAnimalForm()">
+        <i class="fa-solid fa-save"></i> Save Animal
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     TOAST CONTAINER
+══════════════════════════════════════════════════ -->
+<div id="cattleToastContainer"></div>
+
+<!-- ══════════════════════════════════════════════════
+     SCRIPTS
+══════════════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="js/cattle.js"></script>
+
+</body>
+</html>

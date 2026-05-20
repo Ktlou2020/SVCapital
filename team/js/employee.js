@@ -1,0 +1,3340 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   SV Capital — Employee Self-Service Portal  (World-Class Edition)
+   team/js/employee.js
+   ═══════════════════════════════════════════════════════════════════════ */
+'use strict';
+
+/* ─── API helpers ────────────────────────────────────────────────────── */
+const BASE = '../';
+const get    = async p => { try { const r = await fetch(BASE+p); return r.ok ? r.json() : {data:[],total:0}; } catch { return {data:[],total:0}; } };
+const post   = async (p,b) => { const r = await fetch(BASE+p,{method:'POST',  headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
+const patch  = async (p,b) => { const r = await fetch(BASE+p,{method:'PATCH', headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
+const put    = async (p,b) => { const r = await fetch(BASE+p,{method:'PUT',   headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
+const del    = async p     => { await fetch(BASE+p,{method:'DELETE'}); };
+
+async function fetchAll(table) {
+  let page=1, all=[];
+  while(true) {
+    const r = await get(`tables/${table}?limit=100&page=${page}`);
+    all = all.concat(r.data||[]);
+    if ((r.data||[]).length < 100) break;
+    if (r.total > 0 && all.length >= r.total) break;
+    page++;
+  }
+  return all;
+}
+
+/* ─── Formatters / Helpers ───────────────────────────────────────────── */
+const isTrue = v => v === true || v === 'true' || v === 1 || v === '1';
+const zarM   = v => { const n=Number(v)||0; return n>=1e6?`R${(n/1e6).toFixed(1)}M`:n>=1e3?`R${(n/1e3).toFixed(0)}k`:`R${n.toLocaleString()}`; };
+const timeAgo = iso => {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff/60000);
+  if (m<1) return 'just now';
+  if (m<60) return `${m}m ago`;
+  const h = Math.floor(m/60); if (h<24) return `${h}h ago`;
+  const d = Math.floor(h/24); if (d<7) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString('en-ZA',{day:'numeric',month:'short'});
+};
+const kpiColor = v => v>=90?'#00d4aa':v>=75?'#4fc3f7':v>=60?'#f9c846':v>=40?'#ffb347':'#ff5b5b';
+const LEVELS = [
+  {level:1,title:'Analyst',   minXP:0,   color:'#adb5bd'},
+  {level:2,title:'Associate', minXP:500, color:'#5cb85c'},
+  {level:3,title:'Senior',    minXP:1200,color:'#00d4aa'},
+  {level:4,title:'Lead',      minXP:2500,color:'#4fc3f7'},
+  {level:5,title:'Director',  minXP:4500,color:'#7c5cfc'},
+  {level:6,title:'MVP',       minXP:7000,color:'#f9c846'},
+];
+function getLevel(xp) { let l=LEVELS[0]; for(const L of LEVELS){if(xp>=L.minXP)l=L;} return l; }
+function getXpProgress(xp) {
+  const l=getLevel(xp), idx=LEVELS.indexOf(l), next=LEVELS[idx+1];
+  if(!next) return {pct:100,current:xp-l.minXP,needed:0,nextTitle:'MAX'};
+  const cur=xp-l.minXP, need=next.minXP-l.minXP;
+  return {pct:Math.round(cur/need*100),current:cur,needed:need,nextTitle:next.title};
+}
+const catColors = {
+  aum_growth:'#7c5cfc',technical:'#4fc3f7',compliance:'#0984e3',
+  leadership:'#f9c846',client_relations:'#fd79a8',innovation:'#00d4aa',soft_skills:'#ffb347'
+};
+const KPI_DIMS = ['revenue_contribution','client_satisfaction','task_completion_rate',
+  'response_time_score','compliance_score','innovation_score','team_collaboration','attendance_score'];
+const KPI_LABELS = {
+  revenue_contribution:'Revenue Contribution', client_satisfaction:'Client Satisfaction',
+  task_completion_rate:'Task Completion', response_time_score:'Response Time',
+  compliance_score:'Compliance', innovation_score:'Innovation',
+  team_collaboration:'Team Collaboration', attendance_score:'Attendance'
+};
+
+/* ─── State ───────────────────────────────────────────────────────────── */
+let _emp         = null;
+let _employees   = [];
+let _courses     = [];
+let _modules     = {};
+let _progress    = [];
+let _kpiScores   = [];
+let _achievements= [];
+let _evaPeriods  = [];
+let _leaveReqs   = [];
+let _checkins    = [];
+let _okrs        = [];
+let _peerFeedback= [];
+let _pulseSurveys= [];
+let _pulseResp   = [];
+let _oneOnOnes   = [];
+let _learningPaths=[];
+let _activityFeed= [];
+let _notes       = [];
+let _currentView = 'dashboard';
+
+// Reader state
+let _readerCourse  = null;
+let _readerModules = [];
+let _readerModIdx  = 0;
+let _readerMode    = 'lesson';
+let _quizAnswers   = {};
+let _quizSubmitted = false;
+
+// Note editor state
+let _noteEditing = null;
+
+// Pulse state
+let _pulseAnswers = {};
+
+/* ═══ INIT ═══════════════════════════════════════════════════════════ */
+async function init() {
+  showLoader(true);
+  const urlEmpId = new URLSearchParams(location.search).get('id');
+  const [
+    emps, courses, progList, kpis, achs, periods, leaves, checkins,
+    okrs, feedback, surveys, pulseResp, oneOnOnes, paths, feed, notes
+  ] = await Promise.all([
+    fetchAll('employees'),
+    fetchAll('employee_courses'),
+    fetchAll('course_progress'),
+    fetchAll('kpi_scores'),
+    fetchAll('achievements'),
+    fetchAll('eva_periods'),
+    fetchAll('leave_requests'),
+    fetchAll('daily_checkins'),
+    fetchAll('okrs'),
+    fetchAll('peer_feedback'),
+    fetchAll('pulse_surveys'),
+    fetchAll('pulse_responses'),
+    fetchAll('one_on_ones'),
+    fetchAll('learning_paths'),
+    fetchAll('activity_feed'),
+    fetchAll('personal_notes')
+  ]);
+
+  _employees    = emps;
+  _courses      = courses.filter(c=>isTrue(c.status==='active'||c.status));
+  _evaPeriods   = periods;
+  _okrs         = okrs;
+  _peerFeedback = feedback;
+  _pulseSurveys = surveys;
+  _pulseResp    = pulseResp;
+  _oneOnOnes    = oneOnOnes;
+  _learningPaths= paths;
+  _activityFeed = feed;
+
+  _emp = emps.find(e=>e.id===urlEmpId) || emps[0];
+  if (!_emp) { document.getElementById('globalLoader').innerHTML='<p style="color:#ff5b5b">No employees found.</p>'; return; }
+
+  _progress     = progList.filter(p=>p.employee_id===_emp.id);
+  _kpiScores    = kpis.filter(k=>k.employee_id===_emp.id);
+  _achievements = achs.filter(a=>a.employee_id===_emp.id);
+  _leaveReqs    = leaves.filter(l=>l.employee_id===_emp.id);
+  _checkins     = checkins.filter(c=>c.employee_id===_emp.id).sort((a,b)=>new Date(b.checkin_date)-new Date(a.checkin_date));
+  _notes        = notes.filter(n=>n.employee_id===_emp.id);
+
+  buildEmpSwitcher();
+  renderTopbar();
+  showLoader(false);
+  navigate(_currentView, document.querySelector(`.sidebar-nav-btn[data-view="${_currentView}"]`));
+  await autoStreakCheck();
+  checkBirthdays();
+}
+
+/* ─── Topbar / Avatar ─────────────────────────────────────────────────── */
+function renderTopbar() {
+  if (!_emp) return;
+  const xp = Number(_emp.xp_points)||0;
+  const lv = getLevel(xp);
+  const pr = getXpProgress(xp);
+  const el = document.getElementById('sidebar-avatar');
+  if (el) {
+    el.textContent = _emp.avatar_initials || (_emp.first_name||'?')[0];
+    el.style.background = _emp.avatar_color || '#7c5cfc';
+  }
+  const xpEl = document.getElementById('xp-bar');
+  if (xpEl) { xpEl.style.width = pr.pct + '%'; }
+  const xpLbl = document.getElementById('xp-label');
+  if (xpLbl) xpLbl.textContent = `${pr.current}/${pr.needed||'MAX'} XP to ${pr.nextTitle}`;
+  const lvEl = document.getElementById('level-chip');
+  if (lvEl) { lvEl.textContent = lv.title; lvEl.style.background=`${lv.color}20`; lvEl.style.color=lv.color; }
+}
+
+function buildEmpSwitcher() {
+  const sel = document.getElementById('empSelect');
+  if (!sel) return;
+  sel.innerHTML = _employees.map(e=>`<option value="${e.id}" ${e.id===_emp.id?'selected':''}>${e.first_name} ${e.last_name} — ${e.role||''}</option>`).join('');
+  sel.onchange = () => { location.href = 'employee.html?id='+sel.value; };
+}
+
+/* ═══ NAVIGATION ════════════════════════════════════════════════════ */
+function navigate(view, btn) {
+  _currentView = view;
+  document.querySelectorAll('.emp-view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.sidebar-nav-btn').forEach(b=>b.classList.remove('active'));
+  const vEl = document.getElementById('view-'+view);
+  if (vEl) vEl.classList.add('active');
+  if (btn) btn.classList.add('active');
+  // Lazy render
+  const renders = {
+    dashboard:    renderDashboard,
+    courses:      renderCourses,
+    kpis:         renderMyKpis,
+    checkin:      renderCheckin,
+    leave:        renderMyLeave,
+    achievements: renderMyAchievements,
+    okrs:         renderOkrs,
+    feedback:     renderFeedback,
+    pulse:        renderPulse,
+    oneonone:     renderOneOnOnes,
+    paths:        renderPaths,
+    feed:         renderActivityFeed,
+    journal:      renderJournal,
+    eva:          renderEvaPayslip,
+    profile:      renderProfile,
+    calendar:     renderLeaveCalendar
+  };
+  if (renders[view]) renders[view]();
+}
+
+/* ═══ AUTOMATION ENGINE ═════════════════════════════════════════════ */
+async function awardXP(amount, reason='') {
+  if (!_emp) return;
+  const cur = Number(_emp.xp_points)||0;
+  const newXp = cur + amount;
+  const wasLevel = getLevel(cur).title;
+  const updated = await patch(`tables/employees/${_emp.id}`, {xp_points: newXp});
+  _emp.xp_points = newXp;
+  renderTopbar();
+  showXpPopup(amount);
+  const newLevel = getLevel(newXp).title;
+  if (newLevel !== wasLevel) {
+    showToast(`🎉 Level Up! You are now ${newLevel}!`, 'success');
+    const actEl = await post('tables/activity_feed', {
+      employee_id: _emp.id, type:'level_up',
+      title:`Level Up! You're now ${newLevel}`,
+      body:`You've reached the ${newLevel} level with ${newXp} XP!`,
+      icon:'fa-star', color:'#f9c846', xp_shown:0, is_public:true,
+      created_at: new Date().toISOString()
+    });
+    _activityFeed.unshift(actEl);
+  }
+}
+
+async function autoBoostKpi(dimension, points) {
+  if (!dimension || !KPI_DIMS.includes(dimension)) return;
+  const month = new Date().toISOString().slice(0,7);
+  let kpi = _kpiScores.find(k=>k.period_month===month);
+  if (!kpi) {
+    kpi = await post('tables/kpi_scores', {
+      employee_id:_emp.id, period_month:month,
+      revenue_contribution:50, client_satisfaction:50,
+      task_completion_rate:50, response_time_score:50,
+      compliance_score:50, innovation_score:50,
+      team_collaboration:50, attendance_score:50,
+      overall_score:50, submitted_by:'system', submitted_at:new Date().toISOString()
+    });
+    _kpiScores.push(kpi);
+  }
+  const cur = Number(kpi[dimension])||50;
+  const nv  = Math.min(100, cur+points);
+  const update = {}; update[dimension]=nv;
+  const updated = await patch(`tables/kpi_scores/${kpi.id}`, update);
+  Object.assign(kpi, updated);
+}
+
+async function autoAwardCourseBadge(course) {
+  const badge = await post('tables/achievements', {
+    employee_id:_emp.id,
+    badge_id:`BADGE-CRS-${course.id}`,
+    badge_name:`${course.title} Graduate`,
+    badge_icon:'🎓', badge_color:'#7c5cfc',
+    category:'milestone',
+    description:`Completed the course: ${course.title}`,
+    xp_awarded:50, awarded_at:new Date().toISOString(), awarded_by:'system'
+  });
+  _achievements.push(badge);
+  await awardXP(50, 'Course badge');
+}
+
+async function autoCheckBadgeUnlocks(earned) {
+  const milestones = [
+    {id:'BADGE-5COURSES',  count:5,  name:'Course Collector', icon:'📚', desc:'Completed 5 courses'},
+    {id:'BADGE-10COURSES', count:10, name:'Knowledge Seeker',  icon:'🔭', desc:'Completed 10 courses'},
+    {id:'BADGE-STREAK7',   streak:7, name:'7-Day Streak',      icon:'🔥', desc:'7 consecutive check-ins'},
+    {id:'BADGE-STREAK30',  streak:30,name:'Habit Hero',        icon:'⚡', desc:'30 consecutive check-ins'},
+  ];
+  for (const m of milestones) {
+    if (earned.find(e=>e.badge_id===m.id)) continue;
+    const completed = _progress.filter(p=>p.status==='completed').length;
+    const streak    = Number(_emp.streak_days)||0;
+    if ((m.count && completed>=m.count) || (m.streak && streak>=m.streak)) {
+      const badge = await post('tables/achievements', {
+        employee_id:_emp.id, badge_id:m.id, badge_name:m.name,
+        badge_icon:m.icon, badge_color:'#f9c846', category:'milestone',
+        description:m.desc, xp_awarded:100, awarded_at:new Date().toISOString(), awarded_by:'system'
+      });
+      _achievements.push(badge);
+      showToast(`🏅 Badge unlocked: ${m.name}!`, 'success');
+      await awardXP(100, 'Milestone badge');
+    }
+  }
+}
+
+async function autoStreakCheck() {
+  if (!_emp) return;
+  if (!_checkins.length) return;
+  const last = _checkins[0];
+  const lastDate = new Date(last.checkin_date).toDateString();
+  const todayStr = new Date().toDateString();
+  const yestStr  = new Date(Date.now()-86400000).toDateString();
+  if (lastDate !== todayStr && lastDate !== yestStr) {
+    const s = Number(_emp.streak_days)||0;
+    if (s > 0) {
+      await patch(`tables/employees/${_emp.id}`, {streak_days:0});
+      _emp.streak_days = 0;
+      showToast('Streak reset — check in daily to keep your streak! 💪', 'error');
+    }
+  }
+}
+
+/* ═══ COURSE ENGINE ═════════════════════════════════════════════════ */
+async function openCourse(courseId) {
+  const course = _courses.find(c=>c.id===courseId);
+  if (!course) return;
+
+  // Load modules if not cached
+  if (!_modules[courseId]) {
+    const mods = await fetchAll('course_modules');
+    _modules[courseId] = mods.filter(m=>m.course_id===courseId).sort((a,b)=>(Number(a.module_index)||0)-(Number(b.module_index)||0));
+  }
+  _readerCourse  = course;
+  _readerModules = _modules[courseId];
+
+  if (!_readerModules.length) {
+    // Trigger AI generation for this course
+    await startAiGenerationForCourse(courseId);
+    return;
+  }
+
+  // Resume from progress
+  let prog = _progress.find(p=>p.course_id===courseId);
+  if (!prog) {
+    prog = await post('tables/course_progress', {
+      employee_id:_emp.id, course_id:courseId,
+      status:'in_progress', current_module:_readerModules[0]?.id||'',
+      modules_completed:0, quiz_scores:'{}', overall_quiz_score:0,
+      xp_earned:0, kpi_applied:false, started_at:new Date().toISOString()
+    });
+    _progress.push(prog);
+  } else if (prog.status !== 'completed') {
+    await patch(`tables/course_progress/${prog.id}`, {status:'in_progress'});
+    prog.status = 'in_progress';
+  }
+
+  const doneIds = (() => { try { return JSON.parse(prog.quiz_scores||'{}'); } catch { return {}; } });
+  const completedMods = Object.keys(doneIds());
+  _readerModIdx = 0;
+  for (let i=0; i<_readerModules.length; i++) {
+    if (!completedMods.includes(_readerModules[i].id)) { _readerModIdx = i; break; }
+    if (i === _readerModules.length-1) _readerModIdx = i; // all done, show last
+  }
+  _readerMode = 'lesson';
+  _quizAnswers = {};
+  _quizSubmitted = false;
+
+  const overlay = document.getElementById('course-reader');
+  overlay.classList.add('open');
+  renderReader();
+}
+
+function closeCourseReader() {
+  document.getElementById('course-reader').classList.remove('open');
+  _readerCourse = null;
+  if (_currentView === 'courses') renderCourses();
+}
+
+function renderReader() {
+  if (!_readerCourse || !_readerModules.length) return;
+  const mod = _readerModules[_readerModIdx];
+  const prog = _progress.find(p=>p.course_id===_readerCourse.id);
+  const scores = (() => { try { return JSON.parse(prog?.quiz_scores||'{}'); } catch { return {}; } })();
+  const totalMods = _readerModules.length;
+
+  // Topbar
+  document.getElementById('reader-course-title').textContent = _readerCourse.title;
+  document.getElementById('reader-progress').textContent = `Module ${_readerModIdx+1} of ${totalMods}`;
+
+  // Nav sidebar
+  document.getElementById('reader-nav-list').innerHTML = _readerModules.map((m,i)=>`
+    <div class="reader-nav-item ${i===_readerModIdx?'active':''} ${scores[m.id]!==undefined?'done':''}"
+         onclick="jumpToModule(${i})">
+      <span class="reader-nav-num">${scores[m.id]!==undefined?'<i class="fa-solid fa-check" style="font-size:0.55rem"></i>':i+1}</span>
+      <span>${m.title}</span>
+    </div>`).join('');
+
+  // Content
+  document.getElementById('reader-content').innerHTML =
+    _readerMode === 'quiz' ? renderQuiz(mod) : renderLessonContent(mod, scores);
+}
+
+function renderLessonContent(mod, scores) {
+  const done = scores && scores[mod.id] !== undefined;
+  let kps = '';
+  try { const pts = JSON.parse(mod.key_points||'[]'); kps = pts.map(p=>`<li>${p}</li>`).join(''); } catch { kps=''; }
+  return `
+    <div class="lesson-title">${mod.title}</div>
+    <div class="lesson-meta">
+      <span><i class="fa-regular fa-clock"></i> ~${mod.estimated_minutes||8} min</span>
+      <span><i class="fa-solid fa-star"></i> +${mod.xp_reward||50} XP on completion</span>
+    </div>
+    <div class="lesson-body">${mod.content||'<p>Content loading...</p>'}</div>
+    ${kps?`<div class="key-points-box"><h4><i class="fa-solid fa-lightbulb"></i> &nbsp;Key Takeaways</h4><ul>${kps}</ul></div>`:''}
+    <div class="lesson-actions">
+      ${done
+        ? `<button class="btn btn--success btn--lg" disabled><i class="fa-solid fa-check"></i> Module Completed</button>`
+        : `<button class="btn btn--primary btn--lg" onclick="startQuiz()"><i class="fa-solid fa-pen-to-square"></i> Take Quiz to Proceed</button>`
+      }
+      ${_readerModIdx > 0 ? `<button class="btn btn--secondary" onclick="prevModule()"><i class="fa-solid fa-arrow-left"></i> Previous</button>` : ''}
+    </div>`;
+}
+
+function renderQuiz(mod) {
+  let questions = [];
+  try { questions = JSON.parse(mod.quiz||'[]'); } catch { questions=[]; }
+  if (!questions.length) {
+    return `<div class="quiz-wrap">
+      <div class="quiz-title">Quick Knowledge Check</div>
+      <p class="text-muted">No quiz questions for this module.</p>
+      <div class="lesson-actions mt-2">
+        <button class="btn btn--success btn--lg" onclick="completeModule(${JSON.stringify(mod).replace(/"/g,"'")},100,${mod.xp_reward||50})">
+          <i class="fa-solid fa-check"></i> Mark Complete
+        </button>
+      </div></div>`;
+  }
+
+  return `<div class="quiz-wrap">
+    <div class="quiz-title">Module Quiz</div>
+    <div class="quiz-sub">Answer all questions to complete this module and earn XP.</div>
+    ${questions.map((q,qi)=>`
+      <div class="quiz-question" id="q-${qi}">
+        <div class="q-text">Q${qi+1}. ${q.question}</div>
+        <div class="quiz-options">
+          ${q.options.map((o,oi)=>`
+            <div class="quiz-option ${_quizAnswers[qi]===oi?'selected':''}"
+                 onclick="selectAnswer(${qi},${oi})" id="opt-${qi}-${oi}">
+              <div class="opt-radio"></div>
+              <span>${o}</span>
+            </div>`).join('')}
+        </div>
+        <div class="quiz-explanation" id="exp-${qi}">${q.explanation||''}</div>
+      </div>`).join('')}
+    <div class="lesson-actions mt-2">
+      <button class="btn btn--primary btn--lg" id="submit-quiz-btn"
+              onclick="submitQuiz('${mod.id}',${JSON.stringify(questions).replace(/'/g,'\\x27').replace(/"/g,'&quot;')},${mod.xp_reward||50})"
+              ${Object.keys(_quizAnswers).length<questions.length?'disabled':''}>
+        <i class="fa-solid fa-check"></i> Submit Quiz
+      </button>
+      <button class="btn btn--secondary" onclick="_readerMode='lesson';renderReader()">
+        <i class="fa-solid fa-book-open"></i> Back to Lesson
+      </button>
+    </div>
+  </div>`;
+}
+
+function startQuiz() { _readerMode='quiz'; _quizAnswers={}; _quizSubmitted=false; renderReader(); }
+
+function selectAnswer(qi, oi) {
+  if (_quizSubmitted) return;
+  _quizAnswers[qi] = oi;
+  document.querySelectorAll(`#q-${qi} .quiz-option`).forEach((el,idx)=>{
+    el.classList.toggle('selected', idx===oi);
+    el.querySelector('.opt-radio').style.background = idx===oi?'var(--accent)':'';
+  });
+  const mod = _readerModules[_readerModIdx];
+  let qs=[]; try{qs=JSON.parse(mod.quiz||'[]');}catch{}
+  const btn = document.getElementById('submit-quiz-btn');
+  if (btn) btn.disabled = Object.keys(_quizAnswers).length < qs.length;
+}
+
+function submitQuiz(modId, questionsJson, xpReward) {
+  _quizSubmitted = true;
+  let questions=[]; try{questions=JSON.parse(questionsJson);}catch{questions=questionsJson;}
+  if (!Array.isArray(questions)) questions=[];
+  let correct=0;
+  questions.forEach((q,qi)=>{
+    const chosen = _quizAnswers[qi];
+    const isCorrect = chosen === q.correct;
+    if(isCorrect) correct++;
+    document.querySelectorAll(`#q-${qi} .quiz-option`).forEach((el,idx)=>{
+      el.style.pointerEvents='none';
+      if(idx===q.correct) el.classList.add('show-correct');
+      if(idx===chosen && !isCorrect) el.classList.add('incorrect');
+      if(idx===chosen && isCorrect) el.classList.add('correct');
+    });
+    const exp = document.getElementById(`exp-${qi}`);
+    if(exp) exp.classList.add('show');
+  });
+  const score = Math.round(correct/questions.length*100);
+  const mod = _readerModules[_readerModIdx];
+  const pass = score >= (Number(_readerCourse.pass_score)||60);
+
+  const content = document.getElementById('reader-content');
+  const resultHtml = `<div class="quiz-result mt-2">
+    <div class="quiz-score-circle">${score}%</div>
+    <h3>${pass?'🎉 Excellent! Module Complete!':'📖 Keep Learning'}</h3>
+    <p>${pass?`You scored ${correct}/${questions.length}. +${xpReward} XP earned!`:`You scored ${correct}/${questions.length}. Review the lesson and try again.`}</p>
+    <div class="lesson-actions mt-2" style="justify-content:center">
+      ${pass
+        ? `<button class="btn btn--success btn--lg" onclick="completeModuleNow('${modId}',${score},${xpReward})">
+             <i class="fa-solid fa-arrow-right"></i> Continue
+           </button>`
+        : `<button class="btn btn--primary" onclick="startQuiz()">
+             <i class="fa-solid fa-rotate"></i> Retry Quiz
+           </button>
+           <button class="btn btn--secondary" onclick="_readerMode='lesson';renderReader()">Review Lesson</button>`
+      }
+    </div></div>`;
+  if (content) content.insertAdjacentHTML('beforeend', resultHtml);
+  document.getElementById('submit-quiz-btn').style.display='none';
+}
+
+async function completeModuleNow(modId, score, xpReward) {
+  const mod = _readerModules.find(m=>m.id===modId);
+  if (!mod) return;
+  await completeModule(mod, score, xpReward);
+}
+
+async function completeModule(mod, score, xpReward) {
+  const prog = _progress.find(p=>p.course_id===_readerCourse.id);
+  if (!prog) return;
+
+  // Update quiz scores
+  let scores = {}; try { scores=JSON.parse(prog.quiz_scores||'{}'); } catch{}
+  scores[mod.id] = score;
+  const modsDone = Object.keys(scores).length;
+  const allDone  = modsDone >= _readerModules.length;
+
+  const updates = {
+    quiz_scores: JSON.stringify(scores),
+    modules_completed: modsDone,
+    xp_earned: (Number(prog.xp_earned)||0) + xpReward
+  };
+
+  if (allDone) {
+    updates.status = 'completed';
+    updates.completed_at = new Date().toISOString();
+    updates.certificate_id = `CERT-${_emp.id}-${_readerCourse.id}-${Date.now()}`;
+    updates.kpi_applied = true;
+  }
+  const updated = await patch(`tables/course_progress/${prog.id}`, updates);
+  Object.assign(prog, updated);
+
+  await awardXP(xpReward, 'Module completion');
+  if (_readerCourse.kpi_dimension) {
+    await autoBoostKpi(_readerCourse.kpi_dimension, Number(_readerCourse.kpi_boost_points)||5);
+  }
+
+  // Log to activity feed
+  await post('tables/activity_feed', {
+    employee_id:_emp.id, type:'course_complete',
+    title:`Module completed: ${mod.title}`,
+    body:`+${xpReward} XP earned in ${_readerCourse.title}`,
+    icon:'fa-graduation-cap', color:'#7c5cfc',
+    xp_shown:xpReward, is_public:false,
+    created_at:new Date().toISOString()
+  });
+
+  if (allDone) {
+    await autoAwardCourseBadge(_readerCourse);
+    await autoCheckBadgeUnlocks(_achievements);
+    showCourseCelebration(_readerCourse, prog.certificate_id);
+    return;
+  }
+
+  // Move to next module
+  _readerModIdx++;
+  _readerMode = 'lesson';
+  _quizAnswers = {};
+  _quizSubmitted = false;
+  renderReader();
+  showToast(`Module ${modsDone} complete! +${xpReward} XP`, 'success');
+}
+
+function showCourseCelebration(course, certId) {
+  launchConfetti();
+  showToast(`🎉 Course complete! "${course.title}" finished. Certificate issued!`, 'success');
+  // Show certificate
+  openCertificate(certId, course);
+}
+
+function jumpToModule(idx) {
+  const prog = _progress.find(p=>p.course_id===_readerCourse?.id);
+  const scores = (() => { try { return JSON.parse(prog?.quiz_scores||'{}'); } catch { return {}; } })();
+  const mod = _readerModules[idx];
+  if (!mod) return;
+  // Allow jump only if previous done or same
+  _readerModIdx = idx;
+  _readerMode = 'lesson';
+  _quizAnswers = {};
+  _quizSubmitted = false;
+  renderReader();
+}
+
+function prevModule() {
+  if (_readerModIdx > 0) { _readerModIdx--; _readerMode='lesson'; _quizAnswers={}; _quizSubmitted=false; renderReader(); }
+}
+
+/* ─── Certificate ────────────────────────────────────────────────── */
+function openCertificate(certId, course) {
+  const prog = _progress.find(p=>p.course_id===course.id);
+  const date = prog?.completed_at ? new Date(prog.completed_at).toLocaleDateString('en-ZA',{day:'numeric',month:'long',year:'numeric'}) : 'May 2025';
+  const el = document.getElementById('certificate-overlay');
+  el.innerHTML = `
+    <div class="certificate">
+      <button onclick="document.getElementById('certificate-overlay').classList.remove('open')"
+              class="btn btn--ghost btn--sm" style="position:absolute;top:14px;right:14px">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div class="cert-seal"><i class="fa-solid fa-award"></i></div>
+      <div class="cert-issued">Certificate of Completion</div>
+      <div class="cert-name">${_emp.first_name} ${_emp.last_name}</div>
+      <div class="cert-phrase">has successfully completed</div>
+      <div class="cert-course">${course.title}</div>
+      <div class="cert-date">Completed on ${date}</div>
+      <div class="cert-footer">
+        <div class="cert-sig">
+          <div class="cert-sig-line"></div>
+          <div class="cert-sig-name">SV Capital Leadership</div>
+          <div class="cert-sig-role">Learning & Development</div>
+        </div>
+        <div class="cert-id">ID: ${certId||'CERT-'+Date.now()}</div>
+      </div>
+    </div>`;
+  el.classList.add('open');
+}
+
+function openCertificateByProgress(progId) {
+  const prog = _progress.find(p=>p.id===progId);
+  if (!prog) return;
+  const course = _courses.find(c=>c.id===prog.course_id);
+  if (!course) return;
+  openCertificate(prog.certificate_id, course);
+}
+
+/* ─── AI Course Generation ────────────────────────────────────────── */
+async function openAiGenModal() {
+  document.getElementById('aiGenModal').classList.add('open');
+}
+function closeAiGenModal() {
+  document.getElementById('aiGenModal').classList.remove('open');
+}
+
+async function startAiGenerationForCourse(courseId) {
+  const course = _courses.find(c=>c.id===courseId)||{ id:courseId, title:'Custom Course', role_target:_emp.role, category:'aum_growth', kpi_dimension:'revenue_contribution', kpi_boost_points:8, xp_reward:150 };
+  await runAiGeneration(course, '');
+}
+
+async function startAiGeneration() {
+  const title = document.getElementById('ai-title').value.trim();
+  const focus = document.getElementById('ai-focus').value.trim();
+  if (!title) { showToast('Please enter a course title.','error'); return; }
+  closeAiGenModal();
+  const cat = document.getElementById('ai-cat').value || 'aum_growth';
+  const dim = document.getElementById('ai-dim').value || 'revenue_contribution';
+
+  const course = await post('tables/employee_courses', {
+    id: `CRS-AI-${Date.now()}`,
+    title, role_target: _emp.role||'all',
+    department: _emp.department||'General',
+    category: cat, difficulty:'intermediate',
+    description: focus||`AI-generated course for ${_emp.role}: ${title}`,
+    learning_objectives: `Build expertise in: ${title}`,
+    estimated_minutes: 45, xp_reward:200,
+    kpi_dimension: dim, kpi_boost_points:10,
+    modules_count:3, quiz_questions:3, pass_score:60,
+    status:'active', ai_generated:true,
+    thumbnail_icon:'fa-robot',
+    thumbnail_color: catColors[cat]||'#7c5cfc'
+  });
+  _courses.push(course);
+  await runAiGeneration(course, focus);
+}
+
+async function runAiGeneration(course, focus) {
+  const ov = document.getElementById('ai-gen-overlay');
+  ov.classList.add('open');
+  const steps = ['Analysing role & objectives','Structuring 3 modules','Generating lesson content','Building quiz questions','Enrolling you in the course'];
+
+  function setStep(idx) {
+    document.querySelectorAll('.ai-gen-step').forEach((el,i)=>{
+      el.className = 'ai-gen-step' + (i<idx?' done':i===idx?' active':'');
+    });
+  }
+
+  setStep(0); await sleep(600);
+  setStep(1); await sleep(700);
+  const mods = buildModuleTemplates(course, focus);
+  setStep(2); await sleep(800);
+  for (const m of mods) {
+    const saved = await post('tables/course_modules', {...m, course_id:course.id});
+    if (!_modules[course.id]) _modules[course.id]=[]; _modules[course.id].push(saved);
+  }
+  setStep(3); await sleep(600);
+  setStep(4); await sleep(500);
+
+  // Enroll
+  if (!_progress.find(p=>p.course_id===course.id)) {
+    const prog = await post('tables/course_progress', {
+      employee_id:_emp.id, course_id:course.id,
+      status:'in_progress', current_module:_modules[course.id][0]?.id||'',
+      modules_completed:0, quiz_scores:'{}', overall_quiz_score:0,
+      xp_earned:0, kpi_applied:false, started_at:new Date().toISOString()
+    });
+    _progress.push(prog);
+  }
+
+  ov.classList.remove('open');
+  showToast(`✨ Course "${course.title}" generated! 3 modules ready.`,'success');
+
+  // Open reader
+  _readerCourse = course;
+  _readerModules = _modules[course.id]||[];
+  _readerModIdx = 0; _readerMode='lesson'; _quizAnswers={}; _quizSubmitted=false;
+  document.getElementById('course-reader').classList.add('open');
+  renderReader();
+}
+
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+function buildModuleTemplates(course, focus) {
+  const role = course.role_target||_emp.role||'professional';
+  const field = (course.category||'aum_growth').replace('_',' ');
+  const fo = focus||`${field} best practices for ${role}s`;
+  const diff = course.difficulty||'intermediate';
+  const mods = [
+    { module_index:1, title:`Foundations of ${course.title}`, estimated_minutes:12, xp_reward:Math.round(Number(course.xp_reward||150)*0.3) },
+    { module_index:2, title:`Core Strategies & Application`, estimated_minutes:16, xp_reward:Math.round(Number(course.xp_reward||150)*0.35) },
+    { module_index:3, title:`Advanced Practice & Impact`,    estimated_minutes:18, xp_reward:Math.round(Number(course.xp_reward||150)*0.35) },
+  ];
+  return mods.map((m,i)=>({
+    ...m,
+    content:   buildModuleContent(i+1, m.title, role, field, fo, diff),
+    key_points: JSON.stringify(buildKeyPoints(m.title, field, i+1)),
+    quiz:       JSON.stringify(buildQuiz(m.title, field, i+1)),
+  }));
+}
+
+function buildModuleContent(num, title, role, field, focusNote, diff) {
+  const intros = [
+    `<p>Welcome to Module ${num}. As a <strong>${role}</strong> at SV Capital, understanding ${field} is directly tied to your ability to grow AUM and deliver exceptional client outcomes. This module lays the groundwork.</p>`,
+    `<p>In this module, we move from theory into practice. You'll learn the core strategies that top-performing ${role}s use to drive results in ${field}.</p>`,
+    `<p>This final module elevates your mastery. We explore advanced techniques that set the best apart — and how to apply them in your specific context at SV Capital.</p>`,
+  ];
+  return `${intros[num-1]}
+<h3>The SV Capital Context</h3>
+<p>Our firm operates at the intersection of alternative investments and high-net-worth client relationships. Every skill you develop in ${field} translates directly to stronger client trust, better deal flow, and a larger share of the EVA pool.</p>
+<h3>Focus: ${focusNote}</h3>
+<p>The highest-performing teams systematically apply the principles in this module. Research shows that professionals who invest in structured learning in their core domain outperform peers by 23% on revenue metrics within 12 months.</p>
+<h3>Key Principle ${num}</h3>
+<p>At the <strong>${diff}</strong> level, the most important skill is intentional execution. That means understanding <em>why</em> each approach works, not just <em>how</em>. This module gives you both.</p>
+<ul>
+  <li>Apply a structured framework rather than ad-hoc approaches</li>
+  <li>Measure your impact against KPIs that matter to the business</li>
+  <li>Build repeatable processes that compound over time</li>
+  <li>Communicate your value in the language of AUM growth and client outcomes</li>
+</ul>
+<p>Complete the quiz below to lock in these concepts and earn your XP towards the EVA pool boost.</p>`;
+}
+
+function buildKeyPoints(title, field, num) {
+  const banks = [
+    [`Define your goal in terms of measurable client outcomes`, `Map every activity to AUM growth or retention`,
+     `Use data to identify the highest-leverage actions each week`, `Build trust through consistency and communication`,
+     `Review and iterate: what got measured got improved`],
+    [`Apply the 80/20 rule — focus on the 20% that drives 80% of results`,
+     `Anticipate client needs before they're expressed`,
+     `Use structured frameworks to make decisions faster and better`,
+     `Collaborate across the team to amplify individual impact`,
+     `Document what works — build institutional knowledge`],
+    [`Master the nuance — advanced performance comes from edge-case handling`,
+     `Develop a personal system for continuous improvement`,
+     `Use feedback loops: KPI trends, peer feedback, and 1-on-1 insights`,
+     `Position yourself as the go-to expert on your KPI dimension`,
+     `Link your personal goals to the team EVA pool for maximum alignment`],
+  ];
+  return banks[Math.min(num-1,2)];
+}
+
+function buildQuiz(title, field, num) {
+  const banks = [
+    [
+      {question:`What is the primary metric used to evaluate performance at SV Capital?`,
+       options:['Number of meetings held','Assets Under Management growth','Email response time','Office attendance'],
+       correct:1,explanation:'AUM growth is the north star — it captures revenue-generating capacity and client trust simultaneously.'},
+      {question:`Which approach best describes the SV Capital performance philosophy?`,
+       options:['Individual heroics','Seniority-based reward','KPI-linked EVA sharing','Flat equal pay'],
+       correct:2,explanation:'The EVA pool rewards individual KPI performance and collective team results, aligning everyone around growth.'},
+      {question:`When beginning a new ${field} initiative, what should you do first?`,
+       options:['Launch immediately to gain advantage','Define measurable outcomes and KPI links','Wait for manager approval on everything','Copy what competitors do'],
+       correct:1,explanation:'Clear measurable outcomes ensure effort translates to KPI improvement and EVA pool contribution.'},
+    ],
+    [
+      {question:`A client has not responded to two follow-up messages. What is the best next step?`,
+       options:['Abandon the relationship','Escalate immediately to management','Try a different channel with fresh context','Send the same message again'],
+       correct:2,explanation:'Different channels often reach clients who miss emails. Fresh context shows you understand their time constraints.'},
+      {question:`Which of the following is the most effective way to increase your revenue_contribution KPI?`,
+       options:['Close more deals regardless of fit','Build deeper relationships with fewer HNW clients','Increase number of cold calls','Focus only on existing clients'],
+       correct:1,explanation:'Deep HNW relationships yield larger mandates, better referrals, and longer retention — the highest-ROI activity.'},
+      {question:`How does the EVA pool work at SV Capital?`,
+       options:['It is split equally regardless of KPI','It rewards only the top performer','60% is individual KPI-weighted, 40% is collective','It is paid out monthly regardless of company performance'],
+       correct:2,explanation:'The 60/40 split incentivises both personal excellence and team collaboration — two pillars of SV Capital\'s culture.'},
+    ],
+    [
+      {question:`What is the most effective signal that you are performing at the "Lead" level or above?`,
+       options:['Having the highest XP score','Consistently mentoring others while hitting personal KPIs','Completing all assigned courses','Attending all team meetings'],
+       correct:1,explanation:'Leadership means elevating others while delivering results. This is what distinguishes Lead from Senior performers.'},
+      {question:`How should you use KPI trend data from your performance charts?`,
+       options:['Ignore it — the manager will handle it','Use it to identify patterns and proactively address declining dimensions','Only look at it during performance reviews','Share only positive trends with the team'],
+       correct:1,explanation:'Proactive interpretation of your own data is a hallmark of high performers — it drives course corrections before they become problems.'},
+      {question:`A peer gives you 360° feedback highlighting a weak KPI dimension. What is the best response?`,
+       options:['Dispute the feedback','Thank them and ask for specific examples to act on','Ignore it if your manager hasn\'t raised it','Give them negative feedback in return'],
+       correct:1,explanation:'360° feedback is a gift. Specific examples unlock targeted improvement. High performers seek and act on honest feedback.'},
+    ],
+  ];
+  return banks[Math.min(num-1,2)];
+}
+
+/* ═══ VIEW: DASHBOARD ═══════════════════════════════════════════════ */
+function renderDashboard() {
+  if (!_emp) return;
+  const xp   = Number(_emp.xp_points)||0;
+  const lv   = getLevel(xp);
+  const pr   = getXpProgress(xp);
+  const streak = Number(_emp.streak_days)||0;
+  const thisMonth = new Date().toISOString().slice(0,7);
+  const kpi  = _kpiScores.find(k=>k.period_month===thisMonth)||_kpiScores[0]||{};
+  const done = _progress.filter(p=>p.status==='completed').length;
+  const eva  = calcMyEVA();
+  const recentFeed = _activityFeed.filter(f=>f.employee_id===_emp.id||isTrue(f.is_public)).slice(0,5);
+  const myOkr = _okrs.find(o=>o.employee_id===_emp.id && o.period_month===thisMonth);
+  const openOoo = _oneOnOnes.find(o=>o.employee_id===_emp.id && o.status==='scheduled');
+  const activePulse = _pulseSurveys.find(s=>s.status==='active');
+  const alreadyResponded = activePulse && _pulseResp.find(r=>r.employee_id===_emp.id && r.survey_id===activePulse.id);
+  const todayStr = new Date().toDateString();
+  const checkedIn = _checkins.length && new Date(_checkins[0].checkin_date).toDateString()===todayStr;
+  const moodMap = {'😊':'Excellent','🙂':'Good','😐':'Neutral','😔':'Low','😓':'Stressed'};
+  const recentMoods = _checkins.slice(0,5).map(c=>c.mood||'😐');
+  const stressedCount = recentMoods.filter(m=>m==='😓').length;
+
+  const el = document.getElementById('view-dashboard');
+  el.innerHTML = `
+    <!-- Profile Hero -->
+    <div class="profile-hero">
+      <div class="hero-avatar" style="background:${_emp.avatar_color||'#7c5cfc'}">${_emp.avatar_initials||(_emp.first_name||'?')[0]}</div>
+      <div class="hero-info">
+        <h2>${_emp.first_name} ${_emp.last_name}</h2>
+        <div class="hero-role">${_emp.role||''} · ${_emp.department||''}</div>
+        <span class="hero-level" style="background:${lv.color}20;color:${lv.color}">
+          <i class="fa-solid fa-star" style="font-size:0.6rem"></i> ${lv.title}
+        </span>
+        <div class="xp-track mt-1"><div class="xp-fill" id="xp-bar" style="width:${pr.pct}%"></div></div>
+        <div class="xp-label" id="xp-label">${pr.current}/${pr.needed||'MAX'} XP → ${pr.nextTitle}</div>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="hero-stat-val text-gold">${done}</div>
+          <div class="hero-stat-lbl">Courses</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-val text-accent">${_achievements.length}</div>
+          <div class="hero-stat-lbl">Badges</div>
+        </div>
+        <div class="hero-stat">
+          <div class="streak-display"><i class="fa-solid fa-fire"></i> ${streak}</div>
+          <div class="hero-stat-lbl">Day Streak</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-val text-success">${eva}</div>
+          <div class="hero-stat-lbl">EVA Share</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notifications row -->
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px">
+      ${!checkedIn ? `<div class="burnout-alert" style="flex:1;min-width:200px;padding:12px 16px;cursor:pointer" onclick="navigate('checkin',document.querySelector('[data-view=checkin]'))">
+        <i class="fa-solid fa-sun" style="color:#f9c846"></i>
+        <p><strong style="color:#f9c846">Daily check-in pending</strong> — Start your day right, earn XP & keep your streak!</p>
+      </div>` : ''}
+      ${activePulse && !alreadyResponded ? `<div class="burnout-alert" style="flex:1;min-width:200px;padding:12px 16px;background:rgba(0,212,170,0.06);border-color:rgba(0,212,170,0.25);cursor:pointer" onclick="navigate('pulse',document.querySelector('[data-view=pulse]'))">
+        <i class="fa-solid fa-poll" style="color:var(--accent2)"></i>
+        <p><strong style="color:var(--accent2)">Pulse survey available</strong> — 3 quick questions, helps leadership make better decisions.</p>
+      </div>` : ''}
+      ${openOoo ? `<div class="burnout-alert" style="flex:1;min-width:200px;padding:12px 16px;background:rgba(124,92,252,0.06);border-color:rgba(124,92,252,0.25);cursor:pointer" onclick="navigate('oneonone',document.querySelector('[data-view=oneonone]'))">
+        <i class="fa-solid fa-comments" style="color:var(--accent)"></i>
+        <p><strong style="color:var(--accent)">1-on-1 scheduled</strong> — ${new Date(openOoo.scheduled_date).toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'short'})}</p>
+      </div>` : ''}
+      ${stressedCount>=3 ? `<div class="burnout-alert">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <p><strong>Wellbeing check:</strong> You've logged stressed moods recently. Consider talking to your manager or checking the wellbeing resources below.</p>
+      </div>` : ''}
+    </div>
+
+    <!-- Stats cards -->
+    <div class="cards-grid">
+      <div class="stat-card" style="cursor:pointer" onclick="navigate('kpis',document.querySelector('[data-view=kpis]'))">
+        <div class="stat-card-icon" style="background:rgba(0,212,170,0.15);color:var(--accent2)"><i class="fa-solid fa-chart-bar"></i></div>
+        <div class="stat-card-val">${Math.round(Number(kpi.overall_score)||0)}%</div>
+        <div class="stat-card-lbl">Overall KPI Score</div>
+        <div class="stat-card-trend up"><i class="fa-solid fa-arrow-trend-up"></i> View breakdown →</div>
+      </div>
+      <div class="stat-card" style="cursor:pointer" onclick="navigate('okrs',document.querySelector('[data-view=okrs]'))">
+        <div class="stat-card-icon" style="background:rgba(124,92,252,0.15);color:var(--accent)"><i class="fa-solid fa-bullseye"></i></div>
+        <div class="stat-card-val">${myOkr?Math.round(Number(myOkr.overall_progress)||0)+'%':'—'}</div>
+        <div class="stat-card-lbl">OKR Progress</div>
+        <div class="stat-card-trend up"><i class="fa-solid fa-arrow-right"></i> View OKRs →</div>
+      </div>
+      <div class="stat-card" style="cursor:pointer" onclick="navigate('courses',document.querySelector('[data-view=courses]'))">
+        <div class="stat-card-icon" style="background:rgba(249,200,70,0.15);color:var(--gold)"><i class="fa-solid fa-graduation-cap"></i></div>
+        <div class="stat-card-val">${_progress.filter(p=>p.status==='in_progress').length}</div>
+        <div class="stat-card-lbl">Courses In Progress</div>
+        <div class="stat-card-trend up">${done} completed total →</div>
+      </div>
+      <div class="stat-card" style="cursor:pointer" onclick="navigate('feedback',document.querySelector('[data-view=feedback]'))">
+        <div class="stat-card-icon" style="background:rgba(253,121,168,0.15);color:#fd79a8"><i class="fa-solid fa-hands-clapping"></i></div>
+        <div class="stat-card-val">${_peerFeedback.filter(f=>f.to_employee_id===_emp.id).length}</div>
+        <div class="stat-card-lbl">Kudos Received</div>
+        <div class="stat-card-trend up">View all →</div>
+      </div>
+    </div>
+
+    <!-- Activity Feed preview -->
+    <div class="section-head"><i class="fa-solid fa-bolt"></i> Recent Activity</div>
+    <div class="chart-container" style="padding:16px 20px">
+      ${recentFeed.length ? recentFeed.map(f=>`
+        <div class="feed-item">
+          <div class="feed-icon-wrap" style="background:${f.color||'#7c5cfc'}20;color:${f.color||'#7c5cfc'}">
+            <i class="fa-solid ${f.icon||'fa-bolt'}"></i>
+          </div>
+          <div class="feed-body">
+            <strong>${f.title||''}</strong>
+            <p>${f.body||''}</p>
+            <div class="feed-time">${timeAgo(f.created_at)}</div>
+          </div>
+          ${Number(f.xp_shown)>0?`<div class="feed-xp">+${f.xp_shown} XP</div>`:''}
+        </div>`).join('') : `<div class="empty-state"><i class="fa-solid fa-bolt"></i><p>No recent activity yet.</p></div>`}
+      <button class="btn btn--ghost btn--sm mt-2" onclick="navigate('feed',document.querySelector('[data-view=feed]'))">
+        View all activity <i class="fa-solid fa-arrow-right"></i>
+      </button>
+    </div>`;
+}
+
+/* ═══ VIEW: COURSES ═════════════════════════════════════════════════ */
+function renderCourses() {
+  const myCourseIds = _progress.map(p=>p.course_id);
+  const myActive = _courses.filter(c=>myCourseIds.includes(c.id));
+  const recommended = _courses.filter(c=>
+    !myCourseIds.includes(c.id) && (c.role_target===_emp.role||c.role_target==='all')
+  ).slice(0,6);
+  const completedIds = _progress.filter(p=>p.status==='completed').map(p=>p.course_id);
+
+  const el = document.getElementById('view-courses');
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>My Learning</h1><div class="view-sub">Courses, certificates &amp; AI-generated learning</div></div>
+      <div class="view-header-actions">
+        <button class="btn btn--primary" onclick="openAiGenModal()"><i class="fa-solid fa-robot"></i> AI Generate</button>
+      </div>
+    </div>
+
+    <!-- AI Banner -->
+    <div class="ai-banner">
+      <div class="ai-banner-icon"><i class="fa-solid fa-brain"></i></div>
+      <div class="ai-banner-text">
+        <h3>AI Course Generator</h3>
+        <p>Tell us what you want to learn and we'll instantly generate a structured 3-module course with quizzes, key points, and automatic KPI boosts.</p>
+      </div>
+      <button class="btn btn--primary" onclick="openAiGenModal()"><i class="fa-solid fa-plus"></i> Create Course</button>
+    </div>
+
+    <!-- In Progress -->
+    ${myActive.length ? `<div class="section-head"><i class="fa-solid fa-play"></i> In Progress <span class="section-count">${myActive.filter(c=>!completedIds.includes(c.id)).length}</span></div>
+    <div class="courses-grid">
+      ${myActive.filter(c=>!completedIds.includes(c.id)).map(c=>courseCardHTML(c,'inprog')).join('')}
+    </div>` : ''}
+
+    <!-- Completed -->
+    ${completedIds.length ? `<div class="section-head"><i class="fa-solid fa-check-circle"></i> Completed <span class="section-count">${completedIds.length}</span></div>
+    <div class="courses-grid">
+      ${myActive.filter(c=>completedIds.includes(c.id)).map(c=>courseCardHTML(c,'done')).join('')}
+    </div>` : ''}
+
+    <!-- Recommended -->
+    <div class="section-head"><i class="fa-solid fa-sparkles"></i> Recommended for You <span class="section-count">${recommended.length}</span></div>
+    <div class="courses-grid">
+      ${recommended.map(c=>courseCardHTML(c,'rec')).join('')}
+      ${!recommended.length?`<div class="empty-state"><i class="fa-solid fa-check"></i><p>You've enrolled in all available courses!</p></div>`:''}
+    </div>`;
+}
+
+function courseCardHTML(c, mode) {
+  const prog = _progress.find(p=>p.course_id===c.id);
+  const pct  = prog ? Math.round((Number(prog.modules_completed)||0)/(Number(c.modules_count)||1)*100) : 0;
+  const isDone = prog?.status==='completed';
+  const diffC = {beginner:'#00d4aa',intermediate:'#f9c846',advanced:'#ff6b6b'}[c.difficulty]||'#6b7280';
+  return `<div class="course-card ${isDone?'completed':''}" onclick="${isDone?`openCertificateByProgress('${prog?.id}')`:`openCourse('${c.id}')`}">
+    <div class="course-banner" style="background:${c.thumbnail_color||'#7c5cfc'}20">
+      <i class="fa-solid ${c.thumbnail_icon||'fa-book'}" style="color:${c.thumbnail_color||'#7c5cfc'}"></i>
+      <span class="diff-badge" style="background:${diffC}20;color:${diffC}">${c.difficulty||'intermediate'}</span>
+      ${isDone?`<span style="position:absolute;top:8px;left:8px;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(0,212,170,0.2);color:var(--accent2)">✓ Done</span>`:''}
+    </div>
+    <div class="course-progress-bar"><div class="course-progress-bar-fill" style="width:${pct}%"></div></div>
+    <div class="course-body">
+      <h4>${c.title}</h4>
+      <p>${(c.description||'').slice(0,80)}${(c.description||'').length>80?'…':''}</p>
+    </div>
+    <div class="course-footer">
+      <i class="fa-regular fa-clock"></i> ${c.estimated_minutes||30}m &nbsp;
+      <i class="fa-solid fa-layer-group"></i> ${c.modules_count||3} modules
+      ${isDone?`<span class="xp-chip" style="background:rgba(0,212,170,0.15);color:var(--accent2)">✓ Certificate</span>`:`<span class="xp-chip">+${c.xp_reward||100} XP</span>`}
+    </div>
+  </div>`;
+}
+
+/* ═══ VIEW: MY KPIs ═════════════════════════════════════════════════ */
+function renderMyKpis() {
+  const thisMonth = new Date().toISOString().slice(0,7);
+  const kpi = _kpiScores.find(k=>k.period_month===thisMonth)||_kpiScores[0]||{};
+  const history = _kpiScores.slice().sort((a,b)=>b.period_month.localeCompare(a.period_month)).slice(0,6);
+  const el = document.getElementById('view-kpis');
+  el.innerHTML = `
+    <div class="view-header"><div><h1>My KPIs</h1><div class="view-sub">Performance across 8 dimensions + trend charts</div></div></div>
+    <div class="two-col">
+      <div>
+        <div class="section-head"><i class="fa-solid fa-chart-bar"></i> Current Period: ${kpi.period_month||thisMonth}</div>
+        ${KPI_DIMS.map(dim=>{
+          const val = Math.round(Number(kpi[dim])||0);
+          const col = kpiColor(val);
+          return `<div class="kpi-dim-row">
+            <div class="kpi-dim-label">${KPI_LABELS[dim]}</div>
+            <div class="kpi-track"><div class="kpi-fill" style="width:${val}%;background:${col}"></div></div>
+            <div class="kpi-val" style="color:${col}">${val}</div>
+          </div>`;
+        }).join('')}
+        <div class="section-head mt-3"><i class="fa-solid fa-link"></i> Course → KPI Map</div>
+        <div class="chart-container">
+          ${_courses.filter(c=>c.kpi_dimension).slice(0,5).map(c=>`
+            <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:0.8rem">
+              <i class="fa-solid ${c.thumbnail_icon||'fa-book'}" style="color:${c.thumbnail_color};width:16px"></i>
+              <span style="flex:1">${c.title}</span>
+              <span class="chip chip-purple">+${c.kpi_boost_points||5} ${KPI_LABELS[c.kpi_dimension]||c.kpi_dimension}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div>
+        <div class="section-head"><i class="fa-solid fa-chart-line"></i> Trend (Last 6 Months)</div>
+        <div class="chart-container" style="height:280px">
+          <canvas id="kpi-trend-chart"></canvas>
+        </div>
+        <div class="section-head mt-2"><i class="fa-solid fa-spider-web"></i> Dimension Radar</div>
+        <div class="chart-container" style="height:280px">
+          <canvas id="kpi-radar-chart"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="section-head mt-2"><i class="fa-solid fa-table"></i> Score History</div>
+    <div class="data-table-wrap chart-container" style="padding:0">
+      <table class="data-table">
+        <thead><tr><th>Period</th>${KPI_DIMS.map(d=>`<th>${KPI_LABELS[d].split(' ')[0]}</th>`).join('')}<th>Overall</th></tr></thead>
+        <tbody>${history.map(k=>`<tr>
+          <td>${k.period_month}</td>
+          ${KPI_DIMS.map(d=>`<td style="color:${kpiColor(Number(k[d])||0)}">${Math.round(Number(k[d])||0)}</td>`).join('')}
+          <td style="font-weight:700;color:${kpiColor(Number(k.overall_score)||0)}">${Math.round(Number(k.overall_score)||0)}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  // Draw charts
+  setTimeout(()=>drawKpiCharts(history, kpi), 50);
+}
+
+function drawKpiCharts(history, current) {
+  const trendCtx = document.getElementById('kpi-trend-chart');
+  const radarCtx = document.getElementById('kpi-radar-chart');
+  if (!trendCtx || !radarCtx) return;
+  const labels = history.map(k=>k.period_month).reverse();
+  if (window._kpiTrendChart) window._kpiTrendChart.destroy();
+  window._kpiTrendChart = new Chart(trendCtx, {
+    type:'line',
+    data: {
+      labels,
+      datasets:[{
+        label:'Overall KPI',
+        data: history.map(k=>Math.round(Number(k.overall_score)||0)).reverse(),
+        borderColor:'#7c5cfc',backgroundColor:'rgba(124,92,252,0.1)',
+        fill:true, tension:0.4, pointBackgroundColor:'#7c5cfc', pointRadius:4
+      },{
+        label:'Revenue',
+        data: history.map(k=>Math.round(Number(k.revenue_contribution)||0)).reverse(),
+        borderColor:'#00d4aa',backgroundColor:'transparent',
+        tension:0.4, pointRadius:3, borderDash:[4,4]
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#6b7280',font:{size:10}}}},
+      scales:{x:{ticks:{color:'#6b7280',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},
+              y:{min:0,max:100,ticks:{color:'#6b7280',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}}}}
+  });
+  if (window._kpiRadarChart) window._kpiRadarChart.destroy();
+  window._kpiRadarChart = new Chart(radarCtx, {
+    type:'radar',
+    data:{
+      labels: KPI_DIMS.map(d=>KPI_LABELS[d].split(' ')[0]),
+      datasets:[{
+        label:'This Month',
+        data: KPI_DIMS.map(d=>Math.round(Number(current[d])||0)),
+        borderColor:'#7c5cfc',backgroundColor:'rgba(124,92,252,0.15)',
+        pointBackgroundColor:'#7c5cfc'
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#6b7280',font:{size:10}}}},
+      scales:{r:{min:0,max:100,ticks:{display:false},grid:{color:'rgba(255,255,255,0.06)'},
+                 pointLabels:{color:'#6b7280',font:{size:10}},
+                 angleLines:{color:'rgba(255,255,255,0.06)'}}}}
+  });
+}
+
+/* ═══ VIEW: OKRs ════════════════════════════════════════════════════ */
+function renderOkrs() {
+  const myOkrs = _okrs.filter(o=>o.employee_id===_emp.id).sort((a,b)=>b.period_month.localeCompare(a.period_month));
+  const el = document.getElementById('view-okrs');
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>My OKRs</h1><div class="view-sub">Objectives &amp; Key Results — linked to KPI boosts</div></div>
+      <div class="view-header-actions">
+        <button class="btn btn--primary" onclick="openOkrModal()"><i class="fa-solid fa-plus"></i> New OKR</button>
+      </div>
+    </div>
+    ${!myOkrs.length ? `<div class="empty-state"><i class="fa-solid fa-bullseye"></i><h3>No OKRs yet</h3><p>Set your first Objective &amp; Key Results to get started.</p></div>` : ''}
+    ${myOkrs.map(okr=>okrCardHTML(okr)).join('')}`;
+}
+
+function okrCardHTML(okr) {
+  const overall = Math.round(Number(okr.overall_progress)||0);
+  const statusColors = {on_track:'var(--accent2)',at_risk:'var(--warn)',completed:'var(--accent2)',draft:'var(--muted)'};
+  const sc = statusColors[okr.status]||'var(--muted)';
+  const krs = [
+    {label:'KR1',text:okr.kr1_text,prog:Number(okr.kr1_progress)||0,target:Number(okr.kr1_target)||100},
+    {label:'KR2',text:okr.kr2_text,prog:Number(okr.kr2_progress)||0,target:Number(okr.kr2_target)||100},
+    {label:'KR3',text:okr.kr3_text,prog:Number(okr.kr3_progress)||0,target:Number(okr.kr3_target)||100},
+  ].filter(kr=>kr.text);
+  return `<div class="okr-card">
+    <div class="okr-header">
+      <div class="okr-icon"><i class="fa-solid fa-bullseye"></i></div>
+      <div style="flex:1">
+        <div class="okr-objective">${okr.objective||'Untitled OKR'}</div>
+        <div class="okr-period">${okr.period_month} &middot; <span class="okr-status-chip" style="background:${sc}20;color:${sc}">${okr.status||'draft'}</span></div>
+        ${okr.kpi_dimension?`<div style="font-size:0.72rem;color:var(--muted);margin-top:4px">
+          <i class="fa-solid fa-link"></i> Completion boosts <strong>${KPI_LABELS[okr.kpi_dimension]||okr.kpi_dimension}</strong> by +${okr.kpi_boost_on_complete||10} pts
+        </div>`:''}
+      </div>
+      <div class="okr-overall">
+        <div class="okr-pct">${overall}%</div>
+        <div class="okr-pct-lbl">Overall</div>
+      </div>
+    </div>
+    ${krs.map(kr=>`<div class="kr-row">
+      <div class="kr-top">
+        <span class="kr-label">${kr.label}</span>
+        <span class="kr-text">${kr.text}</span>
+        <span class="kr-pct" style="color:${kpiColor(kr.prog)}">${Math.round(kr.prog)}%</span>
+      </div>
+      <div class="kr-track"><div class="kr-fill" style="width:${kr.prog}%;background:${kpiColor(kr.prog)}"></div></div>
+    </div>`).join('')}
+    ${okr.manager_notes?`<div class="oneone-section"><div class="oneone-section-title">Manager Note</div><p>${okr.manager_notes}</p></div>`:''}
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn--ghost btn--sm" onclick="openOkrProgress('${okr.id}')"><i class="fa-solid fa-pen"></i> Update Progress</button>
+      ${overall>=100?`<button class="btn btn--success btn--sm" onclick="completeOkr('${okr.id}')"><i class="fa-solid fa-star"></i> Mark Complete</button>`:''}
+    </div>
+  </div>`;
+}
+
+function openOkrModal(id) {
+  const okr = id ? _okrs.find(o=>o.id===id) : null;
+  const m = document.getElementById('generic-modal');
+  m.innerHTML = `<div class="modal">
+    <div class="modal-header"><h3>${okr?'Edit OKR':'New OKR'}</h3><button class="btn btn--ghost btn--sm" onclick="closeModal('generic-modal')"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Objective</label><input id="okr-obj" value="${okr?.objective||''}" placeholder="e.g. Grow AUM by 15% this quarter" /></div>
+      <div class="form-group"><label>Key Result 1</label><input id="okr-kr1" value="${okr?.kr1_text||''}" placeholder="e.g. Close R25M in new mandates" /></div>
+      <div class="form-group"><label>Key Result 2</label><input id="okr-kr2" value="${okr?.kr2_text||''}" placeholder="e.g. Onboard 3 new HNW clients" /></div>
+      <div class="form-group"><label>Key Result 3</label><input id="okr-kr3" value="${okr?.kr3_text||''}" placeholder="e.g. Achieve 90%+ client satisfaction" /></div>
+      <div class="form-row">
+        <div class="form-group"><label>Period</label><input id="okr-period" value="${okr?.period_month||new Date().toISOString().slice(0,7)}" /></div>
+        <div class="form-group"><label>KPI Dimension</label>
+          <select id="okr-dim">${KPI_DIMS.map(d=>`<option value="${d}" ${okr?.kpi_dimension===d?'selected':''}>${KPI_LABELS[d]}</option>`).join('')}</select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn--secondary" onclick="closeModal('generic-modal')">Cancel</button>
+      <button class="btn btn--primary" onclick="submitOkr('${id||''}')">Save OKR</button>
+    </div>
+  </div>`;
+  document.getElementById('generic-modal').classList.add('open');
+}
+
+async function submitOkr(id) {
+  const obj = document.getElementById('okr-obj').value.trim();
+  if (!obj) { showToast('Objective is required','error'); return; }
+  const data = {
+    employee_id:_emp.id, period_month:document.getElementById('okr-period').value,
+    objective:obj, kr1_text:document.getElementById('okr-kr1').value,
+    kr2_text:document.getElementById('okr-kr2').value, kr3_text:document.getElementById('okr-kr3').value,
+    kr1_progress:0,kr2_progress:0,kr3_progress:0,overall_progress:0,
+    kpi_dimension:document.getElementById('okr-dim').value, kpi_boost_on_complete:10,
+    status:'on_track', created_at:new Date().toISOString()
+  };
+  if (id) { const r=await patch(`tables/okrs/${id}`,data); Object.assign(_okrs.find(o=>o.id===id)||{},r); }
+  else { const r=await post('tables/okrs',data); _okrs.push(r); }
+  closeModal('generic-modal');
+  renderOkrs();
+  showToast('OKR saved!','success');
+}
+
+function openOkrProgress(id) {
+  const okr = _okrs.find(o=>o.id===id); if(!okr) return;
+  const m = document.getElementById('generic-modal');
+  m.innerHTML = `<div class="modal">
+    <div class="modal-header"><h3>Update OKR Progress</h3><button class="btn btn--ghost btn--sm" onclick="closeModal('generic-modal')"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal-body">
+      ${[1,2,3].filter(n=>okr[`kr${n}_text`]).map(n=>`
+        <div class="form-group">
+          <label>KR${n}: ${okr[`kr${n}_text`]}</label>
+          <div style="display:flex;align-items:center;gap:10px">
+            <input type="range" min="0" max="100" value="${okr[`kr${n}_progress`]||0}" id="kr${n}-slider"
+                   oninput="document.getElementById('kr${n}-val').textContent=this.value+'%'"
+                   style="flex:1;accent-color:var(--accent)" />
+            <span id="kr${n}-val" style="min-width:36px;font-weight:700">${okr[`kr${n}_progress`]||0}%</span>
+          </div>
+        </div>`).join('')}
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn--secondary" onclick="closeModal('generic-modal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveOkrProgress('${id}')">Save Progress</button>
+    </div>
+  </div>`;
+  document.getElementById('generic-modal').classList.add('open');
+}
+
+async function saveOkrProgress(id) {
+  const okr = _okrs.find(o=>o.id===id); if(!okr) return;
+  const krs = [1,2,3].filter(n=>okr[`kr${n}_text`]);
+  const vals = krs.map(n=>Number(document.getElementById(`kr${n}-slider`)?.value||0));
+  const overall = Math.round(vals.reduce((s,v)=>s+v,0)/vals.length);
+  const updates = {};
+  krs.forEach((n,i)=>{ updates[`kr${n}_progress`]=vals[i]; });
+  updates.overall_progress = overall;
+  if (overall>=100) updates.status='completed';
+  const r = await patch(`tables/okrs/${id}`, updates);
+  Object.assign(okr, r);
+  closeModal('generic-modal');
+  if (overall>=100) await completeOkr(id, true);
+  else renderOkrs();
+  showToast('OKR progress updated!','success');
+}
+
+async function completeOkr(id, alreadyUpdated=false) {
+  const okr = _okrs.find(o=>o.id===id); if(!okr) return;
+  if (!alreadyUpdated) {
+    const r=await patch(`tables/okrs/${id}`,{status:'completed',overall_progress:100});
+    Object.assign(okr,r);
+  }
+  if (okr.kpi_dimension) await autoBoostKpi(okr.kpi_dimension, Number(okr.kpi_boost_on_complete)||10);
+  await awardXP(100, 'OKR completed');
+  showToast('🎯 OKR Completed! KPI boost applied + 100 XP earned!','success');
+  renderOkrs();
+}
+
+/* ═══ VIEW: FEEDBACK / KUDOS ════════════════════════════════════════ */
+function renderFeedback() {
+  const received = _peerFeedback.filter(f=>f.to_employee_id===_emp.id);
+  const given    = _peerFeedback.filter(f=>f.from_employee_id===_emp.id);
+  const public360 = _peerFeedback.filter(f=>isTrue(f.is_public)).slice(0,20);
+
+  function empName(id) { const e=_employees.find(e=>e.id===id); return e?`${e.first_name} ${e.last_name}`:'Team Member'; }
+  function empAv(id)   { const e=_employees.find(e=>e.id===id); return {init:e?.avatar_initials||'?',col:e?.avatar_color||'#7c5cfc'}; }
+
+  const el = document.getElementById('view-feedback');
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>Feedback &amp; Kudos</h1><div class="view-sub">Recognition wall, 360° feedback &amp; give kudos</div></div>
+      <div class="view-header-actions">
+        <button class="btn btn--primary" onclick="openKudosModal()"><i class="fa-solid fa-hands-clapping"></i> Give Kudos</button>
+        <button class="btn btn--secondary" onclick="openFeedbackModal()"><i class="fa-solid fa-comments"></i> 360° Feedback</button>
+      </div>
+    </div>
+
+    <!-- Give Kudos quick form -->
+    <div class="give-kudos-form">
+      <h4><i class="fa-solid fa-star text-gold"></i> &nbsp;Recognise a Teammate</h4>
+      <div class="form-row">
+        <div class="form-group"><label>To</label>
+          <select id="kudos-to">
+            ${_employees.filter(e=>e.id!==_emp.id).map(e=>`<option value="${e.id}">${e.first_name} ${e.last_name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>KPI Dimension</label>
+          <select id="kudos-dim">${KPI_DIMS.map(d=>`<option value="${d}">${KPI_LABELS[d]}</option>`).join('')}</select>
+        </div>
+      </div>
+      <div class="form-group"><label>Your message</label>
+        <textarea id="kudos-msg" rows="2" placeholder="What did they do that impressed you?"></textarea>
+      </div>
+      <button class="btn btn--primary" onclick="submitKudos()"><i class="fa-solid fa-paper-plane"></i> Send Kudos (+25 XP)</button>
+    </div>
+
+    <div class="feedback-tabs">
+      <button class="feedback-tab active" onclick="switchFeedbackTab('received',this)">Received (${received.length})</button>
+      <button class="feedback-tab" onclick="switchFeedbackTab('given',this)">Given (${given.length})</button>
+      <button class="feedback-tab" onclick="switchFeedbackTab('team',this)">Team Wall</button>
+    </div>
+
+    <div id="feedback-panel">
+      ${received.map(f=>{const av=empAv(f.from_employee_id); return `
+        <div class="kudos-card">
+          <div class="kudos-avatar" style="background:${av.col}">${av.init}</div>
+          <div class="kudos-body">
+            <div class="kudos-top">
+              <span class="kudos-from">${empName(f.from_employee_id)}</span>
+              <span class="kudos-kpi">${KPI_LABELS[f.kpi_dimension]||f.kpi_dimension}</span>
+              <span class="kudos-time">${timeAgo(f.created_at)}</span>
+            </div>
+            <div class="kudos-msg">${f.message||''}</div>
+            ${f.xp_awarded?`<div class="kudos-xp">+${f.xp_awarded} XP awarded to them</div>`:''}
+          </div>
+          ${f.type==='kudos'?`<span style="font-size:1.4rem">👏</span>`:`<span style="font-size:1.4rem">💬</span>`}
+        </div>`}).join('') || `<div class="empty-state"><i class="fa-solid fa-heart"></i><p>No kudos received yet. You've got this!</p></div>`}
+    </div>`;
+}
+
+function switchFeedbackTab(tab, btn) {
+  document.querySelectorAll('.feedback-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const panel = document.getElementById('feedback-panel');
+  const received = _peerFeedback.filter(f=>f.to_employee_id===_emp.id);
+  const given    = _peerFeedback.filter(f=>f.from_employee_id===_emp.id);
+  const teamPub  = _peerFeedback.filter(f=>isTrue(f.is_public)&&f.type==='kudos').slice(0,20);
+  function empName(id) { const e=_employees.find(e=>e.id===id); return e?`${e.first_name} ${e.last_name}`:'Team Member'; }
+  function empAv(id)   { const e=_employees.find(e=>e.id===id); return {init:e?.avatar_initials||'?',col:e?.avatar_color||'#7c5cfc'}; }
+  const list = tab==='received'?received:tab==='given'?given:teamPub;
+  panel.innerHTML = list.map(f=>{
+    const av = empAv(tab==='received'?f.from_employee_id:tab==='given'?f.to_employee_id:f.from_employee_id);
+    const name = tab==='received'?empName(f.from_employee_id):tab==='given'?empName(f.to_employee_id):
+      `${empName(f.from_employee_id)} → ${empName(f.to_employee_id)}`;
+    return `<div class="kudos-card">
+      <div class="kudos-avatar" style="background:${av.col}">${av.init}</div>
+      <div class="kudos-body">
+        <div class="kudos-top">
+          <span class="kudos-from">${name}</span>
+          <span class="kudos-kpi">${KPI_LABELS[f.kpi_dimension]||f.kpi_dimension}</span>
+          <span class="kudos-time">${timeAgo(f.created_at)}</span>
+        </div>
+        <div class="kudos-msg">${f.message||''}</div>
+      </div>
+      ${f.type==='kudos'?`<span style="font-size:1.4rem">👏</span>`:`<span style="font-size:1.4rem">💬</span>`}
+    </div>`;
+  }).join('') || `<div class="empty-state"><i class="fa-solid fa-comment-slash"></i><p>Nothing here yet.</p></div>`;
+}
+
+async function submitKudos() {
+  const to  = document.getElementById('kudos-to').value;
+  const dim = document.getElementById('kudos-dim').value;
+  const msg = document.getElementById('kudos-msg').value.trim();
+  if (!msg) { showToast('Write a message before sending.','error'); return; }
+  const rec = await post('tables/peer_feedback',{
+    from_employee_id:_emp.id, to_employee_id:to, type:'kudos',
+    kpi_dimension:dim, message:msg, rating:5, is_public:true,
+    period_month:new Date().toISOString().slice(0,7),
+    created_at:new Date().toISOString(), xp_awarded:25
+  });
+  _peerFeedback.push(rec);
+  document.getElementById('kudos-msg').value='';
+  await awardXP(25,'Kudos given');
+  showToast('Kudos sent! +25 XP earned.','success');
+  renderFeedback();
+}
+
+function openKudosModal()   { /* inline form is enough */ showToast('Use the quick form above to send kudos!','info'); }
+function openFeedbackModal(){ /* inline form handles it */
+  const el = document.getElementById('generic-modal');
+  el.innerHTML = `<div class="modal">
+    <div class="modal-header"><h3>Give 360° Feedback</h3><button class="btn btn--ghost btn--sm" onclick="closeModal('generic-modal')"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>To</label>
+        <select id="fb360-to">${_employees.filter(e=>e.id!==_emp.id).map(e=>`<option value="${e.id}">${e.first_name} ${e.last_name}</option>`).join('')}</select>
+      </div>
+      <div class="form-group"><label>KPI Dimension</label>
+        <select id="fb360-dim">${KPI_DIMS.map(d=>`<option value="${d}">${KPI_LABELS[d]}</option>`).join('')}</select>
+      </div>
+      <div class="form-group"><label>Rating (1-5)</label>
+        <input type="number" id="fb360-rating" min="1" max="5" value="4" /></div>
+      <div class="form-group"><label>Feedback</label>
+        <textarea id="fb360-msg" rows="4" placeholder="Constructive, specific, helpful..."></textarea>
+      </div>
+      <div class="form-group"><label style="display:flex;gap:8px;align-items:center">
+        <input type="checkbox" id="fb360-priv" />Make this private (only visible to the recipient)</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn--secondary" onclick="closeModal('generic-modal')">Cancel</button>
+      <button class="btn btn--primary" onclick="submit360()">Send Feedback (+15 XP)</button>
+    </div>
+  </div>`;
+  el.classList.add('open');
+}
+
+async function submit360() {
+  const to=document.getElementById('fb360-to').value;
+  const msg=document.getElementById('fb360-msg').value.trim();
+  if(!msg){showToast('Write feedback first.','error');return;}
+  const r=await post('tables/peer_feedback',{
+    from_employee_id:_emp.id, to_employee_id:to, type:'360_feedback',
+    kpi_dimension:document.getElementById('fb360-dim').value,
+    message:msg, rating:Number(document.getElementById('fb360-rating').value)||4,
+    is_public:!document.getElementById('fb360-priv').checked,
+    period_month:new Date().toISOString().slice(0,7),
+    created_at:new Date().toISOString(), xp_awarded:15
+  });
+  _peerFeedback.push(r);
+  closeModal('generic-modal');
+  await awardXP(15,'360 feedback given');
+  showToast('Feedback sent! +15 XP','success');
+}
+
+/* ═══ VIEW: PULSE SURVEY ════════════════════════════════════════════ */
+function renderPulse() {
+  const active = _pulseSurveys.find(s=>s.status==='active');
+  const done   = active && _pulseResp.find(r=>r.employee_id===_emp.id&&r.survey_id===active.id);
+  const history= _pulseSurveys.filter(s=>s.status==='closed');
+  const el = document.getElementById('view-pulse');
+  el.innerHTML = `
+    <div class="view-header"><div><h1>Pulse Surveys</h1><div class="view-sub">Weekly 3-question team wellbeing check-in</div></div></div>
+    ${done ? `<div class="pulse-submitted">
+      <i class="fa-solid fa-check-circle"></i>
+      <h3>Already submitted this week!</h3>
+      <p>Thanks for your input. Results help leadership make better decisions.</p>
+    </div>` : active ? `
+    <div class="pulse-card" id="pulse-form">
+      <h3>📊 Weekly Pulse — Week ${active.week}</h3>
+      <div class="pulse-week">3 quick questions · Takes under 60 seconds</div>
+      ${[['r1',active.q1,1],[' r2',active.q2,2],['r3',active.q3,3]].map(([key,q,n])=>`
+        <div class="pulse-question">
+          <div class="q-text">${n}. ${q}</div>
+          <div class="pulse-scale">
+            ${[1,2,3,4,5].map(v=>`<button class="pulse-btn" data-key="${key.trim()}" data-val="${v}"
+              onclick="selectPulse('${key.trim()}',${v},this)">${v}</button>`).join('')}
+          </div>
+        </div>`).join('')}
+      <div class="pulse-question">
+        <div class="q-text">4. eNPS: How likely are you to recommend SV Capital as a great place to work? (0–10)</div>
+        <div class="pulse-scale pulse-enps" id="enps-scale">
+          ${[0,1,2,3,4,5,6,7,8,9,10].map(v=>`<button class="pulse-btn" data-key="enps" data-val="${v}"
+            onclick="selectPulse('enps',${v},this)">${v}</button>`).join('')}
+        </div>
+      </div>
+      <div class="form-group mt-2"><label>Optional: Anything on your mind?</label>
+        <textarea id="pulse-comment" rows="2" placeholder="Share any thoughts or blockers..."></textarea>
+      </div>
+      <button class="btn btn--primary mt-2" onclick="submitPulse('${active.id}','${active.week}')">Submit Pulse +20 XP</button>
+    </div>` : `<div class="empty-state"><i class="fa-solid fa-poll"></i><h3>No active survey</h3><p>Check back next Monday!</p></div>`}
+
+    <div class="section-head mt-3"><i class="fa-solid fa-history"></i> Previous Surveys</div>
+    ${history.map(s=>{
+      const myR = _pulseResp.find(r=>r.employee_id===_emp.id&&r.survey_id===s.id);
+      return `<div class="wellbeing-card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <strong>${s.week}</strong>
+          ${myR?`<span class="chip chip-green">Submitted</span>`:`<span class="chip chip-gray">Missed</span>`}
+        </div>
+        ${myR?`<div style="font-size:0.78rem;color:var(--muted);margin-top:6px">
+          Energy: <strong>${myR.r1}/5</strong> &nbsp;·&nbsp;
+          Clarity: <strong>${myR.r2}/5</strong> &nbsp;·&nbsp;
+          Support: <strong>${myR.r3}/5</strong> &nbsp;·&nbsp;
+          eNPS: <strong>${myR.enps}/10</strong>
+        </div>`:''}
+      </div>`;
+    }).join('')}`;
+  _pulseAnswers={};
+}
+
+function selectPulse(key, val, btn) {
+  _pulseAnswers[key]=val;
+  btn.closest('.pulse-scale').querySelectorAll('.pulse-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+async function submitPulse(surveyId, week) {
+  if (!_pulseAnswers.r1||!_pulseAnswers.r2||!_pulseAnswers.r3||_pulseAnswers.enps===undefined) {
+    showToast('Please answer all questions first.','error'); return;
+  }
+  const r = await post('tables/pulse_responses',{
+    survey_id:surveyId, employee_id:_emp.id, week,
+    r1:_pulseAnswers.r1, r2:_pulseAnswers.r2, r3:_pulseAnswers.r3,
+    enps:_pulseAnswers.enps,
+    open_comment:document.getElementById('pulse-comment').value||'',
+    submitted_at:new Date().toISOString()
+  });
+  _pulseResp.push(r);
+  await awardXP(20,'Pulse survey');
+  renderPulse();
+  showToast('Pulse submitted! +20 XP','success');
+}
+
+/* ═══ VIEW: 1-ON-1s ════════════════════════════════════════════════ */
+function renderOneOnOnes() {
+  const mine = _oneOnOnes.filter(o=>o.employee_id===_emp.id).sort((a,b)=>new Date(b.scheduled_date)-new Date(a.scheduled_date));
+  const el = document.getElementById('view-oneonone');
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>1-on-1s</h1><div class="view-sub">Meeting notes, action items &amp; growth conversations</div></div>
+      <div class="view-header-actions">
+        <button class="btn btn--primary" onclick="openNewOneOnOneModal()"><i class="fa-solid fa-calendar-plus"></i> Request 1-on-1</button>
+      </div>
+    </div>
+    ${!mine.length?`<div class="empty-state"><i class="fa-solid fa-comments"></i><p>No 1-on-1s scheduled yet.</p></div>`:''}
+    ${mine.map(o=>{
+      let actions=[]; try{actions=JSON.parse(o.action_items||'[]');}catch{}
+      const topics = Array.isArray(o.topics)?o.topics:(o.topics||'').split(',').filter(Boolean);
+      return `<div class="oneone-card">
+        <div class="oneone-header">
+          <div class="oneone-date"><i class="fa-solid fa-calendar"></i> ${new Date(o.scheduled_date).toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'long',year:'numeric'})}</div>
+          <span class="oneone-status status-${o.status}">${o.status}</span>
+          ${o.mood_rating?`<span style="font-size:0.85rem">${['','😓','😔','😐','🙂','😊'][Number(o.mood_rating)||0]||''}</span>`:''}
+          ${topics.length?`<div style="display:flex;gap:4px;flex-wrap:wrap">${topics.map(t=>`<span class="chip chip-gray">${t}</span>`).join('')}</div>`:''}
+        </div>
+        ${o.agenda?`<div class="oneone-section"><div class="oneone-section-title">Agenda</div><p>${o.agenda}</p></div>`:''}
+        ${o.employee_notes?`<div class="oneone-section"><div class="oneone-section-title">Your Notes</div><p>${o.employee_notes}</p></div>`:''}
+        ${o.manager_notes?`<div class="oneone-section"><div class="oneone-section-title">Manager Notes</div><p>${o.manager_notes}</p></div>`:''}
+        ${actions.length?`<div class="oneone-section">
+          <div class="oneone-section-title">Action Items</div>
+          ${actions.map((a,ai)=>`<div class="action-item ${a.done?'done':''}">
+            <div class="action-check" onclick="toggleAction('${o.id}',${ai})">${a.done?'<i class="fa-solid fa-check" style="font-size:0.6rem;color:#fff"></i>':''}</div>
+            <span class="action-text">${a.task||a.text||''}</span>
+            ${a.due?`<span class="action-due">${a.due}</span>`:''}
+          </div>`).join('')}
+        </div>`:''}
+        ${o.status==='scheduled'?`<button class="btn btn--ghost btn--sm mt-1" onclick="addNotesToOneOnOne('${o.id}')">
+          <i class="fa-solid fa-pen"></i> Add my notes
+        </button>`:''}
+      </div>`;
+    }).join('')}`;
+}
+
+async function toggleAction(oooId, idx) {
+  const o = _oneOnOnes.find(o=>o.id===oooId); if(!o) return;
+  let actions=[]; try{actions=JSON.parse(o.action_items||'[]');}catch{}
+  if(!actions[idx]) return;
+  actions[idx].done = !actions[idx].done;
+  const r=await patch(`tables/one_on_ones/${oooId}`,{action_items:JSON.stringify(actions)});
+  o.action_items=JSON.stringify(actions);
+  renderOneOnOnes();
+  if(actions[idx].done) { await awardXP(10,'Action item'); showToast('Action item done! +10 XP','success'); }
+}
+
+function addNotesToOneOnOne(id) {
+  const o=_oneOnOnes.find(x=>x.id===id); if(!o) return;
+  const el=document.getElementById('generic-modal');
+  el.innerHTML=`<div class="modal">
+    <div class="modal-header"><h3>Add My Notes</h3><button class="btn btn--ghost btn--sm" onclick="closeModal('generic-modal')"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Agenda points you want to discuss</label>
+        <textarea id="ooo-agenda" rows="3" placeholder="Topics you want to raise...">${o.agenda||''}</textarea></div>
+      <div class="form-group"><label>Your notes / preparation</label>
+        <textarea id="ooo-enotes" rows="4" placeholder="Anything you want to share with your manager...">${o.employee_notes||''}</textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn--secondary" onclick="closeModal('generic-modal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveOneOnOneNotes('${id}')">Save Notes</button>
+    </div>
+  </div>`;
+  el.classList.add('open');
+}
+
+async function saveOneOnOneNotes(id) {
+  const r=await patch(`tables/one_on_ones/${id}`,{
+    agenda:document.getElementById('ooo-agenda').value,
+    employee_notes:document.getElementById('ooo-enotes').value
+  });
+  Object.assign(_oneOnOnes.find(o=>o.id===id)||{},r);
+  closeModal('generic-modal');
+  renderOneOnOnes();
+  showToast('Notes saved!','success');
+}
+
+function openNewOneOnOneModal() {
+  const el=document.getElementById('generic-modal');
+  el.innerHTML=`<div class="modal">
+    <div class="modal-header"><h3>Request 1-on-1</h3><button class="btn btn--ghost btn--sm" onclick="closeModal('generic-modal')"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Preferred Date</label><input type="date" id="ooo-date" /></div>
+      <div class="form-group"><label>Topics (comma-separated)</label><input id="ooo-topics" placeholder="development, workload, okr" /></div>
+      <div class="form-group"><label>Agenda / What you want to discuss</label>
+        <textarea id="ooo-new-agenda" rows="3" placeholder="Describe what you'd like to cover..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn--secondary" onclick="closeModal('generic-modal')">Cancel</button>
+      <button class="btn btn--primary" onclick="submitNewOneOnOne()">Request Meeting</button>
+    </div>
+  </div>`;
+  el.classList.add('open');
+}
+
+async function submitNewOneOnOne() {
+  const d=document.getElementById('ooo-date').value;
+  if(!d){showToast('Please select a date.','error');return;}
+  const topicsStr=document.getElementById('ooo-topics').value;
+  const topics=topicsStr.split(',').map(t=>t.trim()).filter(Boolean);
+  const r=await post('tables/one_on_ones',{
+    employee_id:_emp.id, manager_id:'MGR001',
+    scheduled_date:d+'T10:00:00Z', status:'scheduled',
+    agenda:document.getElementById('ooo-new-agenda').value,
+    employee_notes:'',manager_notes:'',action_items:'[]',
+    mood_rating:0, topics, next_date:'', created_at:new Date().toISOString()
+  });
+  _oneOnOnes.push(r);
+  closeModal('generic-modal');
+  renderOneOnOnes();
+  showToast('1-on-1 requested!','success');
+}
+
+/* ═══ VIEW: LEARNING PATHS ══════════════════════════════════════════ */
+function renderPaths() {
+  const relevantPaths = _learningPaths.filter(p=>
+    p.role_target==='all' || p.role_target===_emp.role ||
+    (_emp.department && p.role_target===_emp.department)
+  );
+  const el = document.getElementById('view-paths');
+  el.innerHTML = `
+    <div class="view-header"><div><h1>Learning Paths</h1><div class="view-sub">Structured journeys to career growth</div></div></div>
+    ${!relevantPaths.length?`<div class="empty-state"><i class="fa-solid fa-road"></i><p>No learning paths available for your role yet.</p></div>`:''}
+    ${relevantPaths.map(path=>{
+      let courseIds=[]; try{courseIds=Array.isArray(path.course_ids)?path.course_ids:JSON.parse(path.course_ids||'[]');}catch{}
+      const total=courseIds.length;
+      const done=courseIds.filter(cid=>_progress.find(p=>p.course_id===cid&&p.status==='completed')).length;
+      const pct=total?Math.round(done/total*100):0;
+      return `<div class="path-card">
+        <div class="path-header">
+          <div class="path-icon" style="background:${path.thumbnail_color||'#7c5cfc'}20;color:${path.thumbnail_color||'#7c5cfc'}">
+            <i class="fa-solid ${path.thumbnail_icon||'fa-road'}"></i>
+          </div>
+          <div class="path-info">
+            <h4>${path.title}</h4>
+            <p>${path.description||''}</p>
+            <div class="path-badges mt-1">
+              ${isTrue(path.is_mandatory)?`<span class="path-badge-chip mandatory"><i class="fa-solid fa-lock"></i> Mandatory</span>`:''}
+              ${path.deadline_days?`<span class="path-badge-chip">${path.deadline_days}d deadline</span>`:''}
+              <span class="path-badge-chip"><i class="fa-solid fa-star"></i> +${path.xp_bonus||0} XP on completion</span>
+              ${path.badge_reward?`<span class="path-badge-chip"><i class="fa-solid fa-medal"></i> ${path.badge_reward}</span>`:''}
+            </div>
+          </div>
+          <div style="text-align:right;min-width:60px">
+            <div style="font-size:1.4rem;font-weight:800;color:${kpiColor(pct)}">${pct}%</div>
+            <div style="font-size:0.68rem;color:var(--muted)">${done}/${total} done</div>
+          </div>
+        </div>
+        <div class="kpi-track"><div class="kpi-fill" style="width:${pct}%;background:${path.thumbnail_color||'#7c5cfc'}"></div></div>
+        <div class="path-steps mt-1">
+          ${courseIds.map((cid,i)=>{
+            const c=_courses.find(x=>x.id===cid)||{title:cid};
+            const isDone=_progress.find(p=>p.course_id===cid&&p.status==='completed');
+            const isActive=!isDone&&(!i||courseIds.slice(0,i).every(id=>_progress.find(p=>p.course_id===id&&p.status==='completed')));
+            return `<div class="path-step ${isDone?'done':isActive?'active':''}" onclick="${isDone?`openCertificateByProgress('${_progress.find(p=>p.course_id===cid)?.id||''}')`:`openCourse('${cid}')`}">
+              ${isDone?`<i class="fa-solid fa-check" style="font-size:0.7rem"></i>`:`<span>${i+1}</span>`}
+              ${c.title||cid}
+            </div>`;
+          }).join('')}
+        </div>
+        ${pct>=100?`<button class="btn btn--success btn--sm mt-2" onclick="completePath('${path.id}')">
+          <i class="fa-solid fa-trophy"></i> Claim Path Reward (+${path.xp_bonus||0} XP)
+        </button>`:''}
+      </div>`;
+    }).join('')}`;
+}
+
+async function completePath(pathId) {
+  const path=_learningPaths.find(p=>p.id===pathId); if(!path) return;
+  await awardXP(Number(path.xp_bonus)||200,'Learning path completed');
+  if(path.badge_reward) {
+    const b=await post('tables/achievements',{
+      employee_id:_emp.id, badge_id:`BADGE-PATH-${pathId}`,
+      badge_name:path.badge_reward, badge_icon:'🏆', badge_color:'#f9c846',
+      category:'milestone', description:`Completed learning path: ${path.title}`,
+      xp_awarded:50, awarded_at:new Date().toISOString(), awarded_by:'system'
+    });
+    _achievements.push(b);
+  }
+  showToast(`🏆 Path "${path.title}" complete! +${path.xp_bonus||200} XP and ${path.badge_reward||'badge'} earned!`,'success');
+  renderPaths();
+}
+
+/* ═══ VIEW: ACTIVITY FEED ═══════════════════════════════════════════ */
+function renderActivityFeed() {
+  const feed = _activityFeed.filter(f=>f.employee_id===_emp.id||isTrue(f.is_public))
+    .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const el = document.getElementById('view-feed');
+  el.innerHTML = `
+    <div class="view-header"><div><h1>Activity Feed</h1><div class="view-sub">Your achievements &amp; team highlights</div></div></div>
+    <div class="chart-container" style="padding:16px 20px">
+      ${feed.length ? feed.map(f=>`
+        <div class="feed-item">
+          <div class="feed-icon-wrap" style="background:${f.color||'#7c5cfc'}20;color:${f.color||'#7c5cfc'}">
+            <i class="fa-solid ${f.icon||'fa-bolt'}"></i>
+          </div>
+          <div class="feed-body">
+            <strong>${f.title||''}</strong>
+            <p>${f.body||''}</p>
+            <div class="feed-time">${timeAgo(f.created_at)}</div>
+          </div>
+          ${Number(f.xp_shown)>0?`<div class="feed-xp">+${f.xp_shown} XP</div>`:''}
+        </div>`).join('')
+       : `<div class="empty-state"><i class="fa-solid fa-bolt"></i><p>No activity yet.</p></div>`}
+    </div>`;
+}
+
+/* ═══ VIEW: CHECK-IN ════════════════════════════════════════════════ */
+function renderCheckin() {
+  const todayStr = new Date().toDateString();
+  const alreadyDone = _checkins.length && new Date(_checkins[0].checkin_date).toDateString()===todayStr;
+  const moodEmojis = ['😊','🙂','😐','😔','😓'];
+  const moodLabels = ['Excellent','Good','Neutral','Low','Stressed'];
+  const streak = Number(_emp.streak_days)||0;
+  const recentMoods = _checkins.slice(0,7);
+  const el = document.getElementById('view-checkin');
+
+  if (alreadyDone) {
+    const today=_checkins[0];
+    el.innerHTML=`
+      <div class="view-header"><div><h1>Daily Check-in</h1></div></div>
+      <div class="checkin-card">
+        <div class="flex-gap mb-2"><i class="fa-solid fa-check-circle text-success" style="font-size:1.5rem"></i>
+          <h3>You've checked in today! ${today.mood||'🙂'}</h3>
+        </div>
+        <p class="text-muted">Feeling: ${moodLabels[moodEmojis.indexOf(today.mood)]||today.mood||'—'}</p>
+        ${today.tasks_planned?`<p class="text-muted mt-1">Tasks planned: ${today.tasks_planned}</p>`:''}
+        <div class="streak-display mt-2"><i class="fa-solid fa-fire"></i> ${streak}-day streak</div>
+      </div>
+      ${renderCheckinHistory(recentMoods)}`;
+    return;
+  }
+
+  el.innerHTML=`
+    <div class="view-header"><div><h1>Daily Check-in</h1><div class="view-sub">Start your day · Earn XP · Keep your streak</div></div></div>
+    <div class="checkin-card">
+      <h3>Good ${getTimeOfDay()}, ${_emp.first_name}! 👋</h3>
+      <div class="sub">How are you feeling today?</div>
+      <div class="mood-grid" id="mood-grid">
+        ${moodEmojis.map((e,i)=>`<button class="mood-btn" onclick="selectMood('${e}',this)">
+          ${e}<span>${moodLabels[i]}</span></button>`).join('')}
+      </div>
+      <div class="form-group">
+        <label>What's your top 3 tasks for today?</label>
+        <textarea id="ci-tasks" rows="3" placeholder="1. Client call with Bergvliet trust&#10;2. Complete AUM module 2&#10;3. Update pipeline CRM"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Anything on your mind? (optional)</label>
+        <textarea id="ci-notes" rows="2" placeholder="Blockers, wins, thoughts..."></textarea>
+      </div>
+      <div class="flex-gap mt-2">
+        <div class="streak-display"><i class="fa-solid fa-fire"></i> ${streak}-day streak</div>
+        <button class="btn btn--primary btn--lg" id="ci-submit" onclick="submitCheckin()" disabled>
+          <i class="fa-solid fa-sun"></i> Check In &amp; Earn 20 XP
+        </button>
+      </div>
+    </div>
+    ${renderCheckinHistory(recentMoods)}`;
+}
+
+function renderCheckinHistory(recentMoods) {
+  if(!recentMoods.length) return '';
+  return `<div class="section-head mt-2"><i class="fa-solid fa-calendar-week"></i> Recent Mood History</div>
+    <div class="wellbeing-card">
+      <div class="mood-history">
+        ${recentMoods.map(c=>`<div class="mood-dot" title="${new Date(c.checkin_date).toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'short'})}">
+          ${c.mood||'😐'}
+          <span class="mood-date">${new Date(c.checkin_date).toLocaleDateString('en-ZA',{weekday:'short'})}</span>
+        </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+let _selectedMood = '';
+function selectMood(emoji, btn) {
+  _selectedMood = emoji;
+  document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('ci-submit').disabled = false;
+}
+
+async function submitCheckin() {
+  if (!_selectedMood) { showToast('Select your mood first!','error'); return; }
+  const tasks=document.getElementById('ci-tasks').value;
+  const notes=document.getElementById('ci-notes').value;
+  const todayStr=new Date().toISOString().slice(0,10);
+  const streak=(Number(_emp.streak_days)||0)+1;
+  const rec=await post('tables/daily_checkins',{
+    employee_id:_emp.id, checkin_date:todayStr,
+    mood:_selectedMood, tasks_planned:tasks, tasks_completed:'',
+    notes, xp_awarded:20, streak_contribution:1
+  });
+  _checkins.unshift(rec);
+  await patch(`tables/employees/${_emp.id}`,{streak_days:streak});
+  _emp.streak_days=streak;
+  await awardXP(20,'Daily check-in');
+  await autoBoostKpi('attendance_score', 1);
+  if(streak%7===0) showToast(`🔥 ${streak}-day streak milestone! +50 bonus XP!`,'success');
+  if(_selectedMood==='😓') showToast('💙 Noticed you\'re feeling stressed. Your wellbeing matters — reach out to your manager.','info');
+  renderCheckin();
+  showToast('Checked in! +20 XP, streak updated 🔥','success');
+}
+
+function getTimeOfDay() {
+  const h=new Date().getHours(); return h<12?'morning':h<17?'afternoon':'evening';
+}
+
+/* ═══ VIEW: LEAVE ═══════════════════════════════════════════════════ */
+function renderMyLeave() {
+  const statusCols = {pending:'chip-gold',approved:'chip-green',rejected:'chip-red',cancelled:'chip-gray'};
+  const el = document.getElementById('view-leave');
+  el.innerHTML=`
+    <div class="view-header">
+      <div><h1>My Leave</h1><div class="view-sub">Request &amp; track leave</div></div>
+      <div class="view-header-actions">
+        <button class="btn btn--primary" onclick="openLeaveModal()"><i class="fa-solid fa-plus"></i> Request Leave</button>
+      </div>
+    </div>
+    <div class="data-table-wrap chart-container" style="padding:0">
+      <table class="data-table">
+        <thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>EVA Impact</th></tr></thead>
+        <tbody>${_leaveReqs.length?_leaveReqs.map(l=>`<tr>
+          <td>${l.leave_type||'—'}</td>
+          <td>${l.start_date||'—'}</td>
+          <td>${l.end_date||'—'}</td>
+          <td>${l.days_requested||'—'}</td>
+          <td><span class="chip ${statusCols[l.status]||'chip-gray'}">${l.status||'pending'}</span></td>
+          <td style="color:var(--warn)">${l.eva_impact_pct?`-${l.eva_impact_pct}%`:'—'}</td>
+        </tr>`).join(''):`<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px">No leave requests yet.</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function openLeaveModal() {
+  const el=document.getElementById('generic-modal');
+  el.innerHTML=`<div class="modal">
+    <div class="modal-header"><h3>Request Leave</h3><button class="btn btn--ghost btn--sm" onclick="closeModal('generic-modal')"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Leave Type</label>
+        <select id="lv-type">
+          <option>Annual</option><option>Sick</option><option>Study</option><option>Family Responsibility</option><option>Unpaid</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Start Date</label><input type="date" id="lv-start" /></div>
+        <div class="form-group"><label>End Date</label><input type="date" id="lv-end" /></div>
+      </div>
+      <div class="form-group"><label>Reason</label><textarea id="lv-reason" rows="3"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn--secondary" onclick="closeModal('generic-modal')">Cancel</button>
+      <button class="btn btn--primary" onclick="submitLeave()">Submit Request</button>
+    </div>
+  </div>`;
+  el.classList.add('open');
+}
+
+async function submitLeave() {
+  const start=document.getElementById('lv-start').value;
+  const end=document.getElementById('lv-end').value;
+  if(!start||!end){showToast('Select start and end dates.','error');return;}
+  const days=Math.max(1,Math.round((new Date(end)-new Date(start))/86400000)+1);
+  const r=await post('tables/leave_requests',{
+    employee_id:_emp.id, leave_type:document.getElementById('lv-type').value,
+    start_date:start, end_date:end, days_requested:days,
+    reason:document.getElementById('lv-reason').value, status:'pending'
+  });
+  _leaveReqs.push(r);
+  closeModal('generic-modal');
+  renderMyLeave();
+  showToast('Leave request submitted!','success');
+}
+
+/* ═══ VIEW: ACHIEVEMENTS ════════════════════════════════════════════ */
+function renderMyAchievements() {
+  const allDefs=[
+    {id:'BADGE-FIRST-COURSE',  icon:'🎓', name:'First Finish',      desc:'Complete your first course',          xp:50},
+    {id:'BADGE-5COURSES',      icon:'📚', name:'Course Collector',  desc:'Complete 5 courses',                  xp:100},
+    {id:'BADGE-10COURSES',     icon:'🔭', name:'Knowledge Seeker',  desc:'Complete 10 courses',                 xp:200},
+    {id:'BADGE-STREAK7',       icon:'🔥', name:'7-Day Streak',      desc:'Check in for 7 consecutive days',     xp:70},
+    {id:'BADGE-STREAK30',      icon:'⚡', name:'Habit Hero',        desc:'30-day check-in streak',              xp:300},
+    {id:'BADGE-KUDOS5',        icon:'👏', name:'Team Player',       desc:'Give 5 kudos to teammates',           xp:50},
+    {id:'BADGE-OKR-FIRST',     icon:'🎯', name:'Goal Setter',       desc:'Complete your first OKR',             xp:100},
+    {id:'BADGE-PULSE5',        icon:'📊', name:'Consistent Voice',  desc:'Submit 5 pulse surveys',              xp:50},
+  ];
+  const earned = _achievements;
+  const done = _progress.filter(p=>p.status==='completed').length;
+  const kudosGiven = _peerFeedback.filter(f=>f.from_employee_id===_emp.id&&f.type==='kudos').length;
+  const okrsDone = _okrs.filter(o=>o.employee_id===_emp.id&&o.status==='completed').length;
+  const pulseDone = _pulseResp.filter(r=>r.employee_id===_emp.id).length;
+  const streak = Number(_emp.streak_days)||0;
+
+  const el=document.getElementById('view-achievements');
+  el.innerHTML=`
+    <div class="view-header"><div><h1>Achievements</h1><div class="view-sub">Badges, milestones &amp; recognition wall</div></div></div>
+    <div class="cards-grid" style="max-width:600px">
+      <div class="stat-card">
+        <div class="stat-card-icon" style="background:rgba(249,200,70,0.15);color:var(--gold)"><i class="fa-solid fa-medal"></i></div>
+        <div class="stat-card-val">${earned.length}</div>
+        <div class="stat-card-lbl">Badges Earned</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-icon" style="background:rgba(124,92,252,0.15);color:var(--accent)"><i class="fa-solid fa-star"></i></div>
+        <div class="stat-card-val">${Number(_emp.xp_points)||0}</div>
+        <div class="stat-card-lbl">Total XP</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-icon" style="background:rgba(255,91,91,0.15);color:var(--danger)"><i class="fa-solid fa-fire"></i></div>
+        <div class="stat-card-val">${streak}</div>
+        <div class="stat-card-lbl">Current Streak</div>
+      </div>
+    </div>
+    <div class="section-head"><i class="fa-solid fa-trophy"></i> Your Badges</div>
+    <div class="ach-wall">
+      ${allDefs.map(def=>{
+        const e=earned.find(b=>b.badge_id===def.id);
+        return `<div class="ach-tile ${e?'':'locked'}">
+          <span class="ach-tile-icon">${def.icon}</span>
+          <div class="ach-tile-name">${def.name}</div>
+          <div class="ach-tile-xp">+${def.xp} XP</div>
+          <div style="font-size:0.65rem;color:var(--muted);margin-top:3px">${e?`Earned ${timeAgo(e.awarded_at)}`:def.desc}</div>
+          ${!e?`<i class="fa-solid fa-lock ach-lock"></i>`:''}
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="section-head mt-2"><i class="fa-solid fa-graduation-cap"></i> Course Certificates (${_progress.filter(p=>p.status==='completed').length})</div>
+    ${_progress.filter(p=>p.status==='completed').map(p=>{
+      const c=_courses.find(x=>x.id===p.course_id)||{title:p.course_id,thumbnail_icon:'fa-book',thumbnail_color:'#7c5cfc'};
+      return `<div class="wellbeing-card" style="display:flex;align-items:center;gap:14px;cursor:pointer" onclick="openCertificateByProgress('${p.id}')">
+        <i class="fa-solid ${c.thumbnail_icon||'fa-book'}" style="font-size:1.3rem;color:${c.thumbnail_color||'#7c5cfc'}"></i>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:0.88rem">${c.title}</div>
+          <div style="font-size:0.72rem;color:var(--muted)">Completed ${p.completed_at?timeAgo(p.completed_at):'recently'}</div>
+        </div>
+        <button class="btn btn--ghost btn--sm"><i class="fa-solid fa-certificate"></i> View</button>
+      </div>`;
+    }).join('') || `<div class="empty-state" style="padding:24px"><i class="fa-solid fa-graduation-cap"></i><p>Complete courses to earn certificates.</p></div>`}`;
+}
+
+/* ═══ VIEW: JOURNAL ═════════════════════════════════════════════════ */
+function renderJournal() {
+  const el = document.getElementById('view-journal');
+  const pinned = _notes.filter(n=>isTrue(n.pinned));
+  const others = _notes.filter(n=>!isTrue(n.pinned));
+  el.innerHTML=`
+    <div class="view-header">
+      <div><h1>Personal Journal</h1><div class="view-sub">Private notes, ideas &amp; work reflections</div></div>
+      <div class="view-header-actions">
+        <button class="btn btn--primary" onclick="openNoteEditor(null)"><i class="fa-solid fa-plus"></i> New Note</button>
+      </div>
+    </div>
+    ${pinned.length?`<div class="section-head"><i class="fa-solid fa-thumbtack"></i> Pinned</div>
+    <div class="notes-grid">${pinned.map(n=>noteCardHTML(n)).join('')}</div>`:''}
+    <div class="section-head"><i class="fa-solid fa-note-sticky"></i> All Notes <span class="section-count">${_notes.length}</span></div>
+    <div class="notes-grid">
+      ${others.map(n=>noteCardHTML(n)).join('')}
+      ${!_notes.length?`<div class="empty-state"><i class="fa-solid fa-pen"></i><p>No notes yet. Start writing!</p></div>`:''}
+    </div>`;
+}
+
+function noteCardHTML(n) {
+  return `<div class="note-card ${isTrue(n.pinned)?'pinned':''}" onclick="openNoteEditor('${n.id}')">
+    ${isTrue(n.pinned)?`<i class="fa-solid fa-thumbtack note-pin"></i>`:''}
+    <div class="note-title">${n.title||'Untitled'}</div>
+    <div class="note-preview">${(n.content||'').replace(/<[^>]+>/g,'').slice(0,120)}${(n.content||'').length>120?'…':''}</div>
+    <div class="note-footer">
+      <span class="note-date">${timeAgo(n.updated_at||n.created_at)}</span>
+      ${isTrue(n.is_private)?`<span class="note-private"><i class="fa-solid fa-lock"></i>Private</span>`:`<span class="note-private"><i class="fa-solid fa-users"></i>Shared</span>`}
+    </div>
+  </div>`;
+}
+
+function openNoteEditor(noteId) {
+  _noteEditing = noteId ? _notes.find(n=>n.id===noteId)||null : null;
+  const overlay = document.getElementById('note-editor');
+  overlay.innerHTML=`<div class="note-editor-box">
+    <div class="note-editor-top">
+      <input id="note-title" value="${_noteEditing?.title||''}" placeholder="Note title..." />
+      <label style="display:flex;gap:6px;align-items:center;font-size:0.78rem;color:var(--muted);white-space:nowrap">
+        <input type="checkbox" id="note-pin" ${isTrue(_noteEditing?.pinned)?'checked':''} /> Pin
+      </label>
+      <label style="display:flex;gap:6px;align-items:center;font-size:0.78rem;color:var(--muted);white-space:nowrap">
+        <input type="checkbox" id="note-private" ${_noteEditing?isTrue(_noteEditing.is_private)?'checked':'':'checked'} /> Private
+      </label>
+      <button class="btn btn--ghost btn--sm" onclick="closeNoteEditor()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="note-editor-body">
+      <textarea id="note-content" placeholder="Write your thoughts...">${_noteEditing?.content||''}</textarea>
+    </div>
+    <div class="note-editor-footer">
+      ${_noteEditing?`<button class="btn btn--ghost btn--sm" onclick="deleteNote('${_noteEditing.id}')"><i class="fa-solid fa-trash"></i></button>`:''}
+      <div style="flex:1"></div>
+      <button class="btn btn--secondary" onclick="closeNoteEditor()">Cancel</button>
+      <button class="btn btn--primary" onclick="saveNote('${noteId||''}')"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+  </div>`;
+  overlay.classList.add('open');
+}
+
+function closeNoteEditor() { document.getElementById('note-editor').classList.remove('open'); }
+
+async function saveNote(id) {
+  const title=document.getElementById('note-title').value||'Untitled';
+  const content=document.getElementById('note-content').value;
+  const pinned=document.getElementById('note-pin').checked;
+  const priv=document.getElementById('note-private').checked;
+  const now=new Date().toISOString();
+  if(id&&id!=='') {
+    const r=await patch(`tables/personal_notes/${id}`,{title,content,pinned,is_private:priv,updated_at:now});
+    Object.assign(_notes.find(n=>n.id===id)||{},r);
+  } else {
+    const r=await post('tables/personal_notes',{employee_id:_emp.id,title,content,pinned,is_private:priv,created_at:now,updated_at:now});
+    _notes.unshift(r);
+  }
+  closeNoteEditor();
+  renderJournal();
+  showToast('Note saved!','success');
+}
+
+async function deleteNote(id) {
+  if(!confirm('Delete this note?')) return;
+  await del(`tables/personal_notes/${id}`);
+  _notes=_notes.filter(n=>n.id!==id);
+  closeNoteEditor();
+  renderJournal();
+  showToast('Note deleted.','info');
+}
+
+/* ═══ VIEW: EVA PAYSLIP ══════════════════════════════════════════ */
+const EMP_AUM_RATE = 0.025; // 2.5% of AUM = gross revenue
+
+function renderEvaPayslip() {
+  const latest = _evaPeriods.sort((a,b)=>b.period_month.localeCompare(a.period_month))[0]||{};
+  const kpi    = _kpiScores.find(k=>k.period_month===latest.period_month)||_kpiScores[0]||{};
+
+  // Derive revenue from AUM using 2.5% rule
+  const aum        = Number(latest.total_aum)||0;
+  const grossRev   = aum > 0 ? aum * EMP_AUM_RATE : (Number(latest.gross_revenue)||0);
+  const opCosts    = Number(latest.operational_costs)||0;
+  const evaPool    = Math.max(0, grossRev - opCosts);
+  const teamPct    = (Number(latest.team_pool_pct)||50) / 100;
+  const teamPool   = Number(latest.team_pool_amount) || (evaPool * teamPct);
+
+  const empWeight  = Number(_emp.eva_weight)||1;
+  const allW       = _employees.filter(e=>e.status!=='inactive').reduce((s,e)=>s+(Number(e.eva_weight)||1),0)||1;
+  const score      = Number(kpi.overall_score)||75;
+  const indSplit   = Number(latest.individual_split_pct||60)/100;
+  const colSplit   = 1-indSplit;
+  const headcount  = _employees.filter(e=>e.status!=='inactive').length||1;
+  const indPool    = teamPool * indSplit;
+  const colPool    = teamPool * colSplit;
+  const indShare   = indPool * (empWeight/allW) * (score/100);
+  const colShare   = colPool / headcount;
+  const totalEva   = indShare + colShare;
+  const base       = Number(_emp.base_salary)||50000;
+
+  const el=document.getElementById('view-eva');
+  el.innerHTML=`
+    <div class="view-header"><div><h1>EVA Statement</h1><div class="view-sub">Your performance bonus breakdown — ${latest.period_month||'—'}</div></div></div>
+
+    <!-- Revenue formula explanation -->
+    <div style="background:rgba(0,212,170,0.07);border:1px solid rgba(0,212,170,0.2);border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:0.82rem">
+      <div style="font-weight:700;color:var(--accent2);margin-bottom:6px"><i class="fa-solid fa-calculator"></i> &nbsp;Revenue Formula: 2.5% × AUM</div>
+      <div style="color:var(--muted)">
+        Gross Revenue = 2.5% × ${zarM(aum)} AUM = <strong style="color:var(--accent2)">${zarM(grossRev)}</strong>
+        &nbsp;·&nbsp; EVA Pool = Revenue − Costs = <strong>${zarM(evaPool)}</strong>
+        &nbsp;·&nbsp; Team Share (${Math.round(teamPct*100)}%) = <strong>${zarM(teamPool)}</strong>
+      </div>
+    </div>
+
+    <div class="eva-payslip">
+      <div class="payslip-header">
+        <div>
+          <div class="payslip-company">SV Capital (Pty) Ltd</div>
+          <div class="payslip-name">${_emp.first_name} ${_emp.last_name}</div>
+          <div class="payslip-period">${_emp.role||''} · Period: ${latest.period_month||'—'}</div>
+        </div>
+        <div class="payslip-logo"><i class="fa-solid fa-bolt"></i></div>
+      </div>
+      <div class="payslip-body">
+        <div class="payslip-row"><span class="label">Base Salary</span><span class="value">${zarM(base)}/month</span></div>
+        <div class="payslip-row"><span class="label">Total AUM</span><span class="value">${zarM(aum)}</span></div>
+        <div class="payslip-row"><span class="label">Gross Revenue (2.5% × AUM)</span><span class="value" style="color:var(--accent2)">${zarM(grossRev)}</span></div>
+        <div class="payslip-row"><span class="label">Operational Costs</span><span class="value">${zarM(opCosts)}</span></div>
+        <div class="payslip-row"><span class="label">EVA Pool (Revenue − Costs)</span><span class="value">${zarM(evaPool)}</span></div>
+        <div class="payslip-row"><span class="label">Team Pool (${Math.round(teamPct*100)}%)</span><span class="value">${zarM(teamPool)}</span></div>
+        <div class="payslip-row"><span class="label">Individual Pool (${Math.round(indSplit*100)}%)</span><span class="value">${zarM(indPool)}</span></div>
+        <div class="payslip-row"><span class="label">Collective Pool (${Math.round(colSplit*100)}%)</span><span class="value">${zarM(colPool)}</span></div>
+        <div class="payslip-row"><span class="label">Your KPI Score</span><span class="value" style="color:${kpiColor(score)}">${Math.round(score)}%</span></div>
+        <div class="payslip-row"><span class="label">Your EVA Weight</span><span class="value">${empWeight}× (of total ${allW.toFixed(1)})</span></div>
+        <div class="payslip-row"><span class="label">Individual Share</span><span class="value">${zarM(indShare)}</span></div>
+        <div class="payslip-row"><span class="label">Collective Share (÷${headcount} headcount)</span><span class="value">${zarM(colShare)}</span></div>
+        <div class="payslip-row highlight total">
+          <span class="label">Total EVA Bonus</span>
+          <span class="value">${zarM(totalEva)}</span>
+        </div>
+        <div class="payslip-row"><span class="label">Status</span><span class="value"><span class="chip ${latest.status==='paid'?'chip-green':latest.status==='finalised'?'chip-purple':'chip-gold'}">${latest.status||'pending'}</span></span></div>
+      </div>
+      <div class="payslip-footer">Formula: Revenue=2.5%×AUM · EVA=Revenue−Costs · Individual=TeamPool×${Math.round(indSplit*100)}%×(weight/Σweights)×(KPI/100) · Collective=TeamPool×${Math.round(colSplit*100)}%÷headcount</div>
+    </div>
+    <div class="section-head mt-3"><i class="fa-solid fa-lightbulb"></i> How to Increase Your EVA</div>
+    <div class="chart-container">
+      ${KPI_DIMS.map(dim=>{
+        const val=Math.round(Number(kpi[dim])||0);
+        const potential=Math.min(100,val+10);
+        const gain=potential-val;
+        return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.82rem">
+          <span style="min-width:160px;color:var(--muted)">${KPI_LABELS[dim]}</span>
+          <div class="kpi-track" style="flex:1"><div class="kpi-fill" style="width:${val}%;background:${kpiColor(val)}"></div></div>
+          <span style="min-width:36px;font-weight:700;color:${kpiColor(val)}">${val}</span>
+          ${gain>0?`<span style="font-size:0.7rem;color:var(--accent2);min-width:90px">+${gain} pts → +${zarM(totalEva*0.05)} EVA</span>`:'<span style="min-width:90px"></span>'}
+        </div>`;
+      }).join('')}
+      <div style="margin-top:14px;font-size:0.78rem;color:var(--muted)">
+        Tip: Complete a course to boost KPI dimensions directly. Each +10 point KPI improvement can increase your EVA bonus by ~${zarM(totalEva*0.05)}.
+      </div>
+    </div>
+    ${_evaPeriods.length>1?`<div class="section-head mt-2"><i class="fa-solid fa-history"></i> History</div>
+    <div class="data-table-wrap chart-container" style="padding:0">
+      <table class="data-table">
+        <thead><tr><th>Period</th><th>Team Pool</th><th>KPI Score</th><th>Status</th></tr></thead>
+        <tbody>${_evaPeriods.slice(0,6).map(p=>`<tr>
+          <td>${p.period_month}</td>
+          <td>${zarM(Number(p.team_pool_amount)||0)}</td>
+          <td>${Math.round(Number(_kpiScores.find(k=>k.period_month===p.period_month)?.overall_score)||0)}%</td>
+          <td><span class="chip ${p.status==='paid'?'chip-green':p.status==='finalised'?'chip-purple':'chip-gold'}">${p.status||'pending'}</span></td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`:''}`;
+}
+
+/* ═══ BIRTHDAY SYSTEM ═══════════════════════════════════════════════ */
+function checkBirthdays() {
+  const today = new Date();
+  const todayMD = `${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+  _employees.forEach(async emp => {
+    if (!emp.birth_date) return;
+    const bd = emp.birth_date; // YYYY-MM-DD
+    const empMD = bd.slice(5); // MM-DD
+    if (empMD !== todayMD) return;
+
+    const isMe = emp.id === _emp.id;
+    const name = isMe ? 'your birthday' : `${emp.first_name} ${emp.last_name}'s birthday`;
+
+    // Show banner
+    const banner = document.createElement('div');
+    banner.style.cssText = `position:fixed;top:0;left:72px;right:0;z-index:800;
+      background:linear-gradient(90deg,rgba(249,200,70,0.95),rgba(255,179,71,0.95));
+      color:#0e0f13;padding:10px 20px;font-size:0.85rem;font-weight:700;
+      display:flex;align-items:center;gap:12px;box-shadow:0 2px 16px rgba(0,0,0,0.3)`;
+    banner.innerHTML = `<span style="font-size:1.4rem">🎂</span>
+      <span>${isMe ? '🎉 Happy Birthday to YOU!' : `🎂 Today is ${emp.first_name} ${emp.last_name}'s birthday!`}
+      ${isMe ? ' The whole team wishes you an amazing day!' : ' Wish them a happy birthday!'}</span>
+      ${!isMe ? `<button onclick="openKudosForBirthday('${emp.id}')" style="margin-left:auto;background:#0e0f13;color:#f9c846;border:none;padding:5px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.78rem">
+        Send 🎂 Wishes
+      </button>` : ''}
+      <button onclick="this.parentElement.remove()" style="background:transparent;border:none;cursor:pointer;font-size:1rem;margin-left:${isMe?'auto':'8px'}">✕</button>`;
+    document.body.prepend(banner);
+
+    // Auto-award birthday XP to the person (only if viewing as that person)
+    if (isMe) {
+      const today_str = new Date().toISOString().slice(0,10);
+      const alreadyAwarded = _activityFeed.find(f=>
+        f.employee_id===emp.id && f.type==='badge_earned' && f.title.includes('Birthday') &&
+        f.created_at && f.created_at.slice(0,10)===today_str
+      );
+      if (!alreadyAwarded) {
+        await awardXP(100, 'Birthday bonus!');
+        showToast('🎂 Happy Birthday! +100 XP bonus from the team!', 'success');
+        const act = await post('tables/activity_feed', {
+          employee_id: emp.id, type: 'badge_earned',
+          title: '🎂 Birthday! +100 XP',
+          body: `Happy Birthday ${emp.first_name}! The SV Capital team celebrates you today.`,
+          icon: 'fa-cake-candles', color: '#f9c846',
+          xp_shown: 100, is_public: true,
+          created_at: new Date().toISOString()
+        });
+        _activityFeed.unshift(act);
+      }
+    }
+  });
+}
+
+function openKudosForBirthday(empId) {
+  const emp = _employees.find(e=>e.id===empId); if (!emp) return;
+  navigate('feedback', document.querySelector('[data-view=feedback]'));
+  setTimeout(()=>{
+    const sel = document.getElementById('kudos-to');
+    if (sel) sel.value = empId;
+    const msg = document.getElementById('kudos-msg');
+    if (msg) msg.value = `Happy Birthday ${emp.first_name}! 🎂 Wishing you a wonderful day and an amazing year ahead!`;
+    msg?.focus();
+  }, 300);
+}
+
+/* ═══ VIEW: PROFILE ═════════════════════════════════════════════════ */
+function renderProfile() {
+  if (!_emp) return;
+  const el = document.getElementById('view-profile');
+  const hasBanking = _emp.bank_account_number;
+  const bd = _emp.birth_date;
+  const age = bd ? Math.floor((Date.now()-new Date(bd).getTime())/(1000*60*60*24*365.25)) : null;
+  const bdFormatted = bd ? new Date(bd+'T12:00:00').toLocaleDateString('en-ZA',{day:'numeric',month:'long',year:'numeric'}) : 'Not set';
+  const nextBday = bd ? getNextBirthday(bd) : null;
+
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>My Profile</h1><div class="view-sub">Personal details, banking information &amp; documents</div></div>
+      <div class="view-header-actions">
+        <button class="btn btn--primary" onclick="openProfileEditModal()"><i class="fa-solid fa-pen"></i> Edit Profile</button>
+      </div>
+    </div>
+
+    <div class="two-col" style="gap:20px">
+      <!-- Personal details -->
+      <div>
+        <div class="section-head"><i class="fa-solid fa-user"></i> Personal Information</div>
+        <div class="chart-container" style="padding:0">
+          ${profileRow('fa-id-card','Full Name',`${_emp.first_name} ${_emp.last_name}`)}
+          ${profileRow('fa-envelope','Email',_emp.email||'—')}
+          ${profileRow('fa-phone','Phone',_emp.phone||'—')}
+          ${profileRow('fa-briefcase','Role',`${_emp.role||'—'} · ${_emp.department||'—'}`)}
+          ${profileRow('fa-calendar-check','Start Date',_emp.start_date?new Date(_emp.start_date).toLocaleDateString('en-ZA',{day:'numeric',month:'long',year:'numeric'}):'—')}
+          ${profileRow('fa-id-badge','ID Number',_emp.id_number?maskId(_emp.id_number):'Not set')}
+          ${profileRow('fa-phone-volume','Emergency Contact',_emp.emergency_contact_name?`${_emp.emergency_contact_name} · ${_emp.emergency_contact_phone||''}` :'Not set')}
+          ${profileRow('fa-align-left','Bio',_emp.bio||'—')}
+        </div>
+
+        <div class="section-head mt-3">
+          <i class="fa-solid fa-cake-candles text-gold"></i> Birthday
+        </div>
+        <div class="chart-container" style="padding:0">
+          ${profileRow('fa-calendar','Date of Birth',bdFormatted)}
+          ${age ? profileRow('fa-hourglass','Age',`${age} years old`) : ''}
+          ${nextBday ? profileRow('fa-party-horn','Next Birthday',`${nextBday.label} — ${nextBday.daysAway===0?'🎂 TODAY!':nextBday.daysAway+' days away'}`) : ''}
+        </div>
+      </div>
+
+      <!-- Banking details -->
+      <div>
+        <div class="section-head">
+          <i class="fa-solid fa-building-columns"></i> Banking Information
+          <span style="margin-left:auto;font-size:0.68rem;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">
+            <i class="fa-solid fa-lock"></i> Encrypted · Admin only
+          </span>
+        </div>
+        <div class="chart-container" style="padding:0">
+          ${profileRow('fa-building-columns','Bank Name',_emp.bank_name||'Not set')}
+          ${profileRow('fa-credit-card','Account Number',_emp.bank_account_number?maskAccount(_emp.bank_account_number):'Not set')}
+          ${profileRow('fa-wallet','Account Type',_emp.bank_account_type||'—')}
+          ${profileRow('fa-hashtag','Branch Code',_emp.bank_branch_code||'—')}
+          ${profileRow('fa-user-check','Account Holder',_emp.bank_account_holder||'—')}
+        </div>
+
+        <div class="section-head mt-3"><i class="fa-solid fa-file-upload"></i> Proof of Banking</div>
+        <div class="chart-container">
+          ${_emp.proof_of_banking_url
+            ? `<div style="display:flex;align-items:center;gap:12px;padding:4px 0">
+                <i class="fa-solid fa-file-pdf" style="color:var(--danger);font-size:1.3rem"></i>
+                <div style="flex:1">
+                  <div style="font-size:0.85rem;font-weight:600">${_emp.proof_of_banking_url.split('/').pop()}</div>
+                  <div style="font-size:0.72rem;color:var(--muted)">Proof of banking on file</div>
+                </div>
+                <span class="chip chip-green"><i class="fa-solid fa-check"></i> Verified</span>
+              </div>`
+            : `<div style="border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center">
+                <i class="fa-solid fa-cloud-upload" style="font-size:2rem;color:var(--muted);margin-bottom:10px;display:block"></i>
+                <div style="font-size:0.85rem;font-weight:600;margin-bottom:4px">No document uploaded yet</div>
+                <div style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Upload a bank confirmation letter, statement header, or cancelled cheque</div>
+                <label class="btn btn--secondary" style="cursor:pointer">
+                  <i class="fa-solid fa-upload"></i> Upload Document
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleBankingDocUpload(this)" />
+                </label>
+              </div>`
+          }
+        </div>
+
+        <div class="section-head mt-3"><i class="fa-solid fa-shield-halved"></i> Account Security</div>
+        <div class="chart-container" style="padding:0">
+          ${profileRow('fa-key','Password','••••••••')}
+          ${profileRow('fa-clock','Last Login',timeAgo(new Date().toISOString()))}
+          ${profileRow('fa-circle-check','Profile Status',`<span class="chip ${hasBanking?'chip-green':'chip-gold'}">${hasBanking?'Complete':'Banking Pending'}</span>`)}
+        </div>
+      </div>
+    </div>`;
+}
+
+function profileRow(icon, label, value) {
+  return `<div style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--border);font-size:0.83rem">
+    <i class="fa-solid ${icon}" style="width:16px;color:var(--muted);text-align:center"></i>
+    <span style="color:var(--muted);min-width:140px">${label}</span>
+    <span style="color:var(--text);flex:1">${value}</span>
+  </div>`;
+}
+
+function maskAccount(num) {
+  const s = String(num);
+  return '•'.repeat(Math.max(0,s.length-4)) + s.slice(-4);
+}
+function maskId(id) {
+  const s = String(id);
+  return s.slice(0,6) + '•'.repeat(Math.max(0,s.length-8)) + s.slice(-2);
+}
+
+function getNextBirthday(bdStr) {
+  if (!bdStr) return null;
+  const today = new Date();
+  const thisYear = today.getFullYear();
+  const [,mm,dd] = bdStr.split('-').map(Number);
+  let next = new Date(thisYear, mm-1, dd);
+  if (next < today && !(next.toDateString()===today.toDateString())) next.setFullYear(thisYear+1);
+  const diff = Math.round((next-today)/(1000*60*60*24));
+  return {
+    label: next.toLocaleDateString('en-ZA',{day:'numeric',month:'long',year:'numeric'}),
+    daysAway: diff < 0 ? 0 : diff
+  };
+}
+
+function handleBankingDocUpload(input) {
+  const file = input.files[0]; if (!file) return;
+  // Simulate upload — store filename as proof_of_banking_url
+  const fakePath = `uploads/banking/${_emp.id}_${file.name}`;
+  patch(`tables/employees/${_emp.id}`, { proof_of_banking_url: fakePath }).then(r=>{
+    _emp.proof_of_banking_url = fakePath;
+    renderProfile();
+    showToast(`Document "${file.name}" uploaded successfully!`, 'success');
+  });
+}
+
+function openProfileEditModal() {
+  const el = document.getElementById('generic-modal');
+  el.innerHTML = `<div class="modal" style="width:560px">
+    <div class="modal-header">
+      <i class="fa-solid fa-user" style="color:var(--accent)"></i>
+      <h3>Edit My Profile</h3>
+      <button class="btn btn--ghost btn--sm" style="margin-left:auto" onclick="closeModal('generic-modal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="section-head" style="margin-top:0">Personal</div>
+      <div class="form-row">
+        <div class="form-group"><label>Phone</label><input id="prof-phone" value="${_emp.phone||''}" placeholder="+27 82 000 0000" /></div>
+        <div class="form-group"><label>Date of Birth</label><input type="date" id="prof-dob" value="${_emp.birth_date||''}" /></div>
+      </div>
+      <div class="form-group"><label>SA ID Number</label><input id="prof-idnum" value="${_emp.id_number||''}" placeholder="YYMMDD0000000" /></div>
+      <div class="form-group"><label>Bio</label><textarea id="prof-bio" rows="2">${_emp.bio||''}</textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>Emergency Contact Name</label><input id="prof-ecname" value="${_emp.emergency_contact_name||''}" /></div>
+        <div class="form-group"><label>Emergency Contact Phone</label><input id="prof-ecphone" value="${_emp.emergency_contact_phone||''}" /></div>
+      </div>
+      <div class="section-head">Banking Details</div>
+      <div class="form-group"><label>Bank Name</label>
+        <select id="prof-bank">
+          ${['First National Bank','Standard Bank','Nedbank','Absa Bank','Capitec Bank','Investec','Mercantile Bank','African Bank'].map(b=>`<option ${_emp.bank_name===b?'selected':''}>${b}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Account Number</label><input id="prof-accnum" value="${_emp.bank_account_number||''}" placeholder="Account number" /></div>
+        <div class="form-group"><label>Account Type</label>
+          <select id="prof-acctype">
+            ${['Cheque','Savings','Transmission'].map(t=>`<option ${_emp.bank_account_type===t?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Branch Code</label><input id="prof-branch" value="${_emp.bank_branch_code||''}" placeholder="6-digit code" /></div>
+        <div class="form-group"><label>Account Holder Name</label><input id="prof-holder" value="${_emp.bank_account_holder||''}" placeholder="As on bank account" /></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn--secondary" onclick="closeModal('generic-modal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveProfile()"><i class="fa-solid fa-floppy-disk"></i> Save Profile</button>
+    </div>
+  </div>`;
+  el.classList.add('open');
+}
+
+async function saveProfile() {
+  const updates = {
+    phone:               document.getElementById('prof-phone').value,
+    birth_date:          document.getElementById('prof-dob').value,
+    id_number:           document.getElementById('prof-idnum').value,
+    bio:                 document.getElementById('prof-bio').value,
+    emergency_contact_name:  document.getElementById('prof-ecname').value,
+    emergency_contact_phone: document.getElementById('prof-ecphone').value,
+    bank_name:           document.getElementById('prof-bank').value,
+    bank_account_number: document.getElementById('prof-accnum').value,
+    bank_account_type:   document.getElementById('prof-acctype').value,
+    bank_branch_code:    document.getElementById('prof-branch').value,
+    bank_account_holder: document.getElementById('prof-holder').value,
+  };
+  const r = await patch(`tables/employees/${_emp.id}`, updates);
+  Object.assign(_emp, r);
+  closeModal('generic-modal');
+  renderProfile();
+  renderTopbar();
+  showToast('Profile updated successfully!', 'success');
+}
+
+/* ═══ VIEW: LEAVE CALENDAR ══════════════════════════════════════════ */
+function renderLeaveCalendar() {
+  const el = document.getElementById('view-calendar');
+  const allLeave = []; // will load all employees' approved leave
+
+  // Gather all leave from all employees by fetching fresh
+  fetchAll('leave_requests').then(allReqs => {
+    const approved = allReqs.filter(l => l.status === 'approved' || l.status === 'pending');
+
+    const today = new Date();
+    const calYear  = today.getFullYear();
+    const calMonth = today.getMonth(); // 0-indexed
+
+    renderCalendarView(el, approved, calYear, calMonth);
+  });
+
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>Team Leave Calendar</h1><div class="view-sub">See who is on leave &amp; plan accordingly</div></div>
+      <div class="view-header-actions">
+        <button class="btn btn--primary" onclick="navigate('leave',document.querySelector('[data-view=leave]'))">
+          <i class="fa-solid fa-plus"></i> Request Leave
+        </button>
+      </div>
+    </div>
+    <div id="cal-loading" style="text-align:center;padding:40px;color:var(--muted)">
+      <i class="fa-solid fa-calendar-days" style="font-size:2rem;margin-bottom:10px;display:block;opacity:0.4"></i>
+      Loading calendar…
+    </div>`;
+}
+
+function renderCalendarView(container, leaveList, year, month) {
+  const today = new Date();
+  const firstDay = new Date(year, month, 1);
+  const lastDay  = new Date(year, month+1, 0);
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dayNames   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  // Build leave map: date-str → [employee records]
+  const leaveMap = {};
+  leaveList.forEach(l => {
+    const start = new Date(l.start_date+'T00:00:00');
+    const end   = new Date(l.end_date+'T00:00:00');
+    const emp   = _employees.find(e=>e.id===l.employee_id);
+    if (!emp) return;
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
+      const key = d.toISOString().slice(0,10);
+      if (!leaveMap[key]) leaveMap[key] = [];
+      leaveMap[key].push({ emp, leave: l });
+    }
+  });
+
+  // Build birthdays for this month
+  const bdMap = {};
+  _employees.forEach(emp => {
+    if (!emp.birth_date) return;
+    const [,bm,bd] = emp.birth_date.split('-').map(Number);
+    if (bm-1 === month) {
+      const key = `${year}-${String(bm).padStart(2,'0')}-${String(bd).padStart(2,'0')}`;
+      if (!bdMap[key]) bdMap[key] = [];
+      bdMap[key].push(emp);
+    }
+  });
+
+  // Calendar grid cells
+  const startDow = firstDay.getDay(); // 0=Sun
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let d = 1; d <= lastDay.getDate(); d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  // Legend
+  const legendColors = {};
+  _employees.forEach((e,i) => {
+    legendColors[e.id] = e.avatar_color || `hsl(${i*60},65%,55%)`;
+  });
+
+  const html = `
+    <div class="view-header">
+      <div><h1>Team Leave Calendar</h1><div class="view-sub">See who is on leave &amp; plan accordingly</div></div>
+      <div class="view-header-actions">
+        <button class="btn btn--secondary btn--sm" onclick="shiftCalMonth(-1)">&larr; Prev</button>
+        <span style="font-weight:700;font-size:0.9rem;min-width:120px;text-align:center">${monthNames[month]} ${year}</span>
+        <button class="btn btn--secondary btn--sm" onclick="shiftCalMonth(1)">Next &rarr;</button>
+        <button class="btn btn--primary" onclick="navigate('leave',document.querySelector('[data-view=leave]'))">
+          <i class="fa-solid fa-plus"></i> Request Leave
+        </button>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+      <span style="font-size:0.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Team:</span>
+      ${_employees.map(e=>`<div style="display:flex;align-items:center;gap:5px;font-size:0.75rem">
+        <div style="width:10px;height:10px;border-radius:50%;background:${e.avatar_color||'#7c5cfc'}"></div>
+        ${e.first_name}
+      </div>`).join('')}
+      <span style="margin-left:8px;font-size:0.72rem;color:var(--muted)">|</span>
+      <div style="display:flex;align-items:center;gap:5px;font-size:0.75rem">
+        <span style="font-size:0.9rem">🎂</span> Birthday
+      </div>
+    </div>
+
+    <!-- Calendar grid -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+      <!-- Day headers -->
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);background:var(--surface2)">
+        ${dayNames.map(d=>`<div style="padding:10px;text-align:center;font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">${d}</div>`).join('')}
+      </div>
+
+      <!-- Day cells -->
+      <div style="display:grid;grid-template-columns:repeat(7,1fr)">
+        ${cells.map(d=>{
+          if (!d) return `<div style="min-height:80px;border:1px solid var(--border);opacity:0.2"></div>`;
+          const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+          const isToday = dateStr === today.toISOString().slice(0,10);
+          const onLeave = leaveMap[dateStr] || [];
+          const bdays   = bdMap[dateStr] || [];
+          const isWeekend = new Date(dateStr).getDay()===0||new Date(dateStr).getDay()===6;
+          return `<div style="min-height:80px;border:1px solid var(--border);padding:6px 8px;
+              background:${isToday?'rgba(124,92,252,0.12)':isWeekend?'rgba(255,255,255,0.01)':'transparent'};
+              position:relative">
+            <div style="font-size:0.8rem;font-weight:${isToday?'800':'600'};color:${isToday?'var(--accent)':'var(--text)'}">
+              ${d}
+            </div>
+            ${bdays.map(emp=>`<div style="font-size:0.65rem;background:rgba(249,200,70,0.15);border-radius:4px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#f9c846">
+              🎂 ${emp.first_name}
+            </div>`).join('')}
+            ${onLeave.slice(0,3).map(({emp,leave})=>`
+              <div title="${emp.first_name} ${emp.last_name} — ${leave.leave_type}" style="font-size:0.65rem;border-radius:4px;padding:1px 5px;margin-top:2px;
+                   background:${emp.avatar_color||'#7c5cfc'}25;color:${emp.avatar_color||'#7c5cfc'};
+                   white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                ${emp.avatar_initials||emp.first_name[0]}  ${emp.first_name}
+              </div>`).join('')}
+            ${onLeave.length>3?`<div style="font-size:0.6rem;color:var(--muted);margin-top:1px">+${onLeave.length-3} more</div>`:''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- Who is on leave this month -->
+    <div class="section-head mt-3"><i class="fa-solid fa-calendar-xmark"></i> Leave This Month</div>
+    ${leaveList.filter(l=>{
+        const s=new Date(l.start_date+'T00:00:00'); const e=new Date(l.end_date+'T00:00:00');
+        return (s.getFullYear()===year&&s.getMonth()===month)||(e.getFullYear()===year&&e.getMonth()===month);
+      }).length
+      ? leaveList.filter(l=>{
+          const s=new Date(l.start_date+'T00:00:00'); const e=new Date(l.end_date+'T00:00:00');
+          return (s.getFullYear()===year&&s.getMonth()===month)||(e.getFullYear()===year&&e.getMonth()===month);
+        }).map(l=>{
+          const emp=_employees.find(e=>e.id===l.employee_id)||{};
+          const sc={approved:'chip-green',pending:'chip-gold',rejected:'chip-red'};
+          return `<div class="kudos-card">
+            <div class="kudos-avatar" style="background:${emp.avatar_color||'#7c5cfc'}">${emp.avatar_initials||'?'}</div>
+            <div class="kudos-body">
+              <div class="kudos-top">
+                <span class="kudos-from">${emp.first_name||''} ${emp.last_name||''}</span>
+                <span class="kudos-kpi">${l.leave_type||'Leave'}</span>
+                <span class="chip ${sc[l.status]||'chip-gray'}" style="margin-left:auto">${l.status}</span>
+              </div>
+              <div class="kudos-msg">${l.start_date} → ${l.end_date} &nbsp;·&nbsp; ${l.days_requested||'?'} days
+                ${l.reason?` &nbsp;·&nbsp; "${l.reason}"`:''}
+              </div>
+            </div>
+          </div>`;
+        }).join('')
+      : `<div class="empty-state" style="padding:24px"><i class="fa-solid fa-calendar-check"></i><p>No leave requests this month.</p></div>`
+    }
+
+    <!-- Upcoming Birthdays -->
+    <div class="section-head mt-3"><i class="fa-solid fa-cake-candles text-gold"></i> Team Birthdays This Month</div>
+    ${Object.entries(bdMap).length
+      ? Object.entries(bdMap).map(([dateStr,emps])=>`
+          <div class="kudos-card">
+            <span style="font-size:1.8rem">🎂</span>
+            <div class="kudos-body">
+              <div class="kudos-top">
+                ${emps.map(e=>`<span class="kudos-from">${e.first_name} ${e.last_name}</span>`).join(', ')}
+                <span class="kudos-time">${new Date(dateStr+'T12:00:00').toLocaleDateString('en-ZA',{day:'numeric',month:'long'})}</span>
+              </div>
+              <div class="kudos-msg">Birthday celebration! Don't forget to wish them well 🎉</div>
+            </div>
+          </div>`)
+        .join('')
+      : `<div class="empty-state" style="padding:24px"><i class="fa-solid fa-cake-candles"></i><p>No birthdays this month.</p></div>`
+    }`;
+
+  container.innerHTML = html;
+}
+
+// Calendar navigation state
+let _calYear  = new Date().getFullYear();
+let _calMonth = new Date().getMonth();
+
+function shiftCalMonth(dir) {
+  _calMonth += dir;
+  if (_calMonth > 11) { _calMonth = 0; _calYear++; }
+  if (_calMonth < 0)  { _calMonth = 11; _calYear--; }
+  const el = document.getElementById('view-calendar');
+  fetchAll('leave_requests').then(allReqs => {
+    const approved = allReqs.filter(l=>l.status==='approved'||l.status==='pending');
+    renderCalendarView(el, approved, _calYear, _calMonth);
+  });
+}
+
+/* ═══ UTILITIES ═════════════════════════════════════════════════════ */
+function calcMyEVA() {
+  const latest    = _evaPeriods.sort((a,b)=>b.period_month.localeCompare(a.period_month))[0]||{};
+  const kpi       = _kpiScores.find(k=>k.period_month===latest.period_month)||_kpiScores[0]||{};
+  // Revenue formula: 2.5% of AUM
+  const aum       = Number(latest.total_aum)||0;
+  const grossRev  = aum > 0 ? aum * EMP_AUM_RATE : (Number(latest.gross_revenue)||0);
+  const opCosts   = Number(latest.operational_costs)||0;
+  const evaPool   = Math.max(0, grossRev - opCosts);
+  const teamPct   = (Number(latest.team_pool_pct)||50) / 100;
+  const teamPool  = Number(latest.team_pool_amount) || (evaPool * teamPct);
+  const empWeight = Number(_emp.eva_weight)||1;
+  const allW      = _employees.filter(e=>e.status!=='inactive').reduce((s,e)=>s+(Number(e.eva_weight)||1),0)||1;
+  const score     = Number(kpi.overall_score)||75;
+  const indSplit  = Number(latest.individual_split_pct||60)/100;
+  const colSplit  = 1-indSplit;
+  const headcount = _employees.filter(e=>e.status!=='inactive').length||1;
+  const total     = (teamPool*indSplit*(empWeight/allW)*(score/100)) + (teamPool*colSplit/headcount);
+  return zarM(total);
+}
+
+function showLoader(show) {
+  const el = document.getElementById('globalLoader');
+  if (el) el.style.display = show?'flex':'none';
+}
+
+function showToast(msg, type='info') {
+  const c = document.getElementById('toast-container');
+  if(!c) return;
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(()=>el.remove(),4000);
+}
+
+function showXpPopup(amount) {
+  const el = document.createElement('div');
+  el.className = 'xp-popup';
+  el.textContent = `+${amount} XP`;
+  el.style.left = Math.random()*200+100+'px';
+  el.style.top  = '50%';
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),1600);
+}
+
+function launchConfetti() {
+  const cols=['#7c5cfc','#00d4aa','#f9c846','#ff6b6b','#4fc3f7'];
+  for(let i=0;i<60;i++) {
+    const el=document.createElement('div');
+    el.className='confetti-piece';
+    el.style.cssText=`left:${Math.random()*100}vw;top:-10px;background:${cols[Math.floor(Math.random()*cols.length)]};--dur:${0.8+Math.random()*1.5}s;animation-delay:${Math.random()*0.5}s`;
+    document.body.appendChild(el);
+    setTimeout(()=>el.remove(),2500);
+  }
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+window.navigate = navigate;
+window.openProfileEditModal = openProfileEditModal;
+window.saveProfile = saveProfile;
+window.handleBankingDocUpload = handleBankingDocUpload;
+window.openKudosForBirthday = openKudosForBirthday;
+window.shiftCalMonth = shiftCalMonth;
+window.openCourse = openCourse;
+window.closeCourseReader = closeCourseReader;
+window.jumpToModule = jumpToModule;
+window.prevModule = prevModule;
+window.startQuiz = startQuiz;
+window.selectAnswer = selectAnswer;
+window.submitQuiz = submitQuiz;
+window.completeModuleNow = completeModuleNow;
+window.openCertificateByProgress = openCertificateByProgress;
+window.openAiGenModal = openAiGenModal;
+window.closeAiGenModal = closeAiGenModal;
+window.startAiGeneration = startAiGeneration;
+window.openOkrModal = openOkrModal;
+window.submitOkr = submitOkr;
+window.openOkrProgress = openOkrProgress;
+window.saveOkrProgress = saveOkrProgress;
+window.completeOkr = completeOkr;
+window.submitKudos = submitKudos;
+window.openKudosModal = openKudosModal;
+window.openFeedbackModal = openFeedbackModal;
+window.submit360 = submit360;
+window.switchFeedbackTab = switchFeedbackTab;
+window.selectPulse = selectPulse;
+window.submitPulse = submitPulse;
+window.toggleAction = toggleAction;
+window.addNotesToOneOnOne = addNotesToOneOnOne;
+window.saveOneOnOneNotes = saveOneOnOneNotes;
+window.openNewOneOnOneModal = openNewOneOnOneModal;
+window.submitNewOneOnOne = submitNewOneOnOne;
+window.completePath = completePath;
+window.openLeaveModal = openLeaveModal;
+window.submitLeave = submitLeave;
+window.selectMood = selectMood;
+window.submitCheckin = submitCheckin;
+window.openNoteEditor = openNoteEditor;
+window.closeNoteEditor = closeNoteEditor;
+window.saveNote = saveNote;
+window.deleteNote = deleteNote;
+window.closeModal = closeModal;
+window.toggleHelpPanel = toggleHelpPanel;
+
+/* ═══════════════════════════════════════════════════════════════════════
+   HELP & ONBOARDING SYSTEM
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Help content per view ──────────────────────────────────────────── */
+const HELP_CONTENT = {
+  dashboard: {
+    title: 'Dashboard',
+    icon: 'fa-house',
+    intro: 'Your personal command centre. Everything important at a glance.',
+    sections: [
+      { heading: 'Profile Hero', icon: 'fa-user-circle', color: '#7c5cfc',
+        text: 'Shows your name, role, current XP level, and daily streak. The XP bar at the top tracks your progress to the next level. Click the avatar (bottom of sidebar) to jump to Achievements.' },
+      { heading: 'Smart Notifications', icon: 'fa-bell', color: '#f59e0b',
+        text: 'Context-aware reminders appear here automatically — daily check-in reminder, active pulse surveys, upcoming 1-on-1s, and wellbeing alerts (3+ stressed check-ins triggers a burnout warning).' },
+      { heading: 'Stats Cards', icon: 'fa-chart-bar', color: '#00d4aa',
+        text: 'Quick KPI overview, your estimated EVA bonus share, courses completed this month, and streak count. These update in real time as you take actions.' },
+      { heading: 'Recent Activity', icon: 'fa-bolt', color: '#f59e0b',
+        text: 'The last few things you\'ve done — course completions, kudos, check-ins, OKR milestones. Full history is in the Activity Feed view (⚡ in sidebar).' },
+    ]
+  },
+  courses: {
+    title: 'My Courses',
+    icon: 'fa-book-open',
+    intro: 'Your learning library. Complete courses to earn XP, boost KPI dimensions, and unlock certificates.',
+    sections: [
+      { heading: 'Course Cards', icon: 'fa-layer-group', color: '#7c5cfc',
+        text: 'Each card shows: title, category, difficulty, estimated time, XP reward, and which KPI dimension it boosts. Colour-coded by category (purple = AUM Growth, teal = Innovation, pink = Client Relations, etc.).' },
+      { heading: 'Starting a Course', icon: 'fa-play', color: '#00d4aa',
+        text: 'Click "Start Course" or "Continue" to open the Course Reader. Use the left panel to jump between modules. Complete the quiz at the end of each module to progress.' },
+      { heading: 'Quizzes', icon: 'fa-question-circle', color: '#f59e0b',
+        text: 'Each module ends with a multiple-choice quiz. You need to score above the pass mark (usually 70%) to complete the module and earn XP. You can retry if you don\'t pass.' },
+      { heading: 'Certificates', icon: 'fa-certificate', color: '#e84393',
+        text: 'Completing a full course generates a certificate with your name, date, and a unique certificate ID. View all certificates in the Achievements view.' },
+      { heading: 'AI Course Generator', icon: 'fa-robot', color: '#7c5cfc',
+        text: 'Click "Generate with AI" to create a personalised 3-module course on any topic. Enter a title, focus area, category and the KPI you want to boost. The system generates full lesson content and quizzes tailored to your role in seconds.' },
+    ]
+  },
+  paths: {
+    title: 'Learning Paths',
+    icon: 'fa-road',
+    intro: 'Structured course sequences designed for your role. Think of them as curated learning journeys.',
+    sections: [
+      { heading: 'Mandatory vs Optional', icon: 'fa-flag', color: '#e84393',
+        text: 'Paths marked "Mandatory" must be completed. They often have a deadline and are tied to compliance or onboarding requirements. Optional paths earn bonus XP and badges.' },
+      { heading: 'Path Progress', icon: 'fa-stairs', color: '#00d4aa',
+        text: 'Courses in a path unlock sequentially. Complete course 1 to unlock course 2. A progress bar shows your overall path completion percentage.' },
+      { heading: 'Path Rewards', icon: 'fa-trophy', color: '#f59e0b',
+        text: 'Completing a full learning path awards bonus XP on top of the individual course XP, plus a special path completion badge.' },
+    ]
+  },
+  kpis: {
+    title: 'My KPIs',
+    icon: 'fa-chart-bar',
+    intro: 'Your 8 performance dimensions tracked monthly. KPIs directly determine your individual EVA bonus share.',
+    sections: [
+      { heading: '8 KPI Dimensions', icon: 'fa-sliders', color: '#7c5cfc',
+        text: 'Revenue Contribution, Client Satisfaction, Task Completion, Response Time, Compliance Score, Innovation Score, Team Collaboration, and Attendance. Each scored 0–100.' },
+      { heading: 'How Scores are Set', icon: 'fa-pen', color: '#f59e0b',
+        text: 'Your manager scores you monthly in the Team Dashboard. You can boost your own scores by: completing courses (auto-boost), completing OKRs (+10 pts), giving kudos, and maintaining daily check-in streaks (attendance).' },
+      { heading: 'Trend Chart', icon: 'fa-chart-line', color: '#00d4aa',
+        text: 'The line chart shows your score trends across the last 6 months. The radar chart compares your profile shape against the ideal 100% benchmark.' },
+      { heading: 'KPI & EVA Link', icon: 'fa-link', color: '#e84393',
+        text: 'Your overall score × your EVA weight determines your individual pool share. A 10-point KPI improvement can meaningfully increase your bonus. The improvement table at the bottom shows exactly how much.' },
+    ]
+  },
+  okrs: {
+    title: 'My OKRs',
+    icon: 'fa-bullseye',
+    intro: 'Objectives and Key Results. Set your goals, track progress, and earn XP + KPI boosts on completion.',
+    sections: [
+      { heading: 'What is an OKR?', icon: 'fa-info-circle', color: '#7c5cfc',
+        text: 'An Objective is a qualitative goal ("I want to improve client satisfaction"). Key Results are measurable milestones that prove you\'ve hit it (3 per objective). When all 3 KRs reach 100%, the OKR is complete.' },
+      { heading: 'Creating an OKR', icon: 'fa-plus', color: '#00d4aa',
+        text: 'Click "+ New OKR". Set your objective, add 3 key results with targets, and link it to a KPI dimension. Each OKR completion auto-boosts that KPI by +10 points and awards +100 XP.' },
+      { heading: 'Updating Progress', icon: 'fa-arrows-alt', color: '#f59e0b',
+        text: 'Click any OKR card to update key result progress with sliders. The overall % auto-calculates. Your manager can also add notes.' },
+    ]
+  },
+  feedback: {
+    title: 'Feedback & Kudos',
+    icon: 'fa-hands-clapping',
+    intro: 'Recognise great work, request 360° feedback, and build a culture of appreciation.',
+    sections: [
+      { heading: 'Giving Kudos', icon: 'fa-heart', color: '#e84393',
+        text: 'Select a colleague, choose a KPI dimension their work exemplifies, write a message, and send. You earn +25 XP for every kudos you give. Kudos are visible on the team wall (if marked public).' },
+      { heading: '360° Feedback', icon: 'fa-circle-nodes', color: '#7c5cfc',
+        text: 'Request structured feedback from peers across multiple KPI dimensions, with a 1–5 rating and comments. This helps build a more accurate picture of your performance.' },
+      { heading: 'Received / Given / Team Wall Tabs', icon: 'fa-tab', color: '#00d4aa',
+        text: 'Switch between feedback you\'ve received, feedback you\'ve given, and the public team kudos wall where everyone\'s recognition is visible.' },
+    ]
+  },
+  pulse: {
+    title: 'Pulse Survey',
+    icon: 'fa-poll',
+    intro: 'A quick weekly survey to measure team health, engagement, and satisfaction.',
+    sections: [
+      { heading: 'The Survey', icon: 'fa-clipboard-list', color: '#7c5cfc',
+        text: 'Each week contains 3 short questions plus an eNPS (Employee Net Promoter Score) question. Surveys take 2–3 minutes. Complete it to earn +20 XP.' },
+      { heading: 'eNPS', icon: 'fa-chart-bar', color: '#00d4aa',
+        text: 'On a scale of 0–10, how likely are you to recommend SV Capital as a great place to work? This is the Employee Net Promoter Score — a global standard metric for employee engagement.' },
+      { heading: 'Previous Responses', icon: 'fa-history', color: '#f59e0b',
+        text: 'View your past survey responses below the current survey. Your answers help leadership understand team morale trends over time.' },
+    ]
+  },
+  oneonone: {
+    title: '1-on-1s',
+    icon: 'fa-comments',
+    intro: 'Structured one-on-one meetings with your manager. Track agendas, action items, and notes.',
+    sections: [
+      { heading: 'Upcoming & Past Meetings', icon: 'fa-calendar', color: '#7c5cfc',
+        text: 'Upcoming meetings show the date, agenda, and any topics you\'ve submitted. Past meetings show outcomes, manager notes, and action items.' },
+      { heading: 'Action Items', icon: 'fa-check-square', color: '#00d4aa',
+        text: 'Action items from 1-on-1s appear here. Tick them off when done — each completed action earns +10 XP. Your manager tracks completion rates.' },
+      { heading: 'Adding Pre-Meeting Notes', icon: 'fa-pen', color: '#f59e0b',
+        text: 'Before a meeting, click "Add Notes" to submit talking points, questions, or updates you want to cover. Your manager can see these in advance.' },
+      { heading: 'Requesting a Meeting', icon: 'fa-plus', color: '#e84393',
+        text: 'Click "Request 1-on-1" to propose a new meeting. Add an agenda and any topics. Your manager will confirm the time.' },
+    ]
+  },
+  checkin: {
+    title: 'Daily Check-in',
+    icon: 'fa-sun',
+    intro: 'A 30-second daily ritual that builds your streak, earns XP, and helps the business track team wellbeing.',
+    sections: [
+      { heading: 'Mood Selector', icon: 'fa-face-smile', color: '#f59e0b',
+        text: 'Choose from 5 moods: Energised 🔥, Happy 😊, Neutral 😐, Stressed 😰, or Exhausted 😴. Be honest — your responses are anonymised in aggregate reporting. Streak and XP are awarded regardless of mood.' },
+      { heading: 'Tasks', icon: 'fa-list-check', color: '#00d4aa',
+        text: 'Enter how many tasks you planned for the day and how many you completed yesterday. This feeds your task completion KPI over time.' },
+      { heading: 'Streak System', icon: 'fa-fire', color: '#e84393',
+        text: 'Check in every day to build a streak. At 7-day milestones you earn +50 bonus XP. Miss a day and the streak resets to 0. Streaks also boost your Attendance KPI score.' },
+      { heading: 'Burnout Detection', icon: 'fa-triangle-exclamation', color: '#ef4444',
+        text: 'If you log "Stressed" or "Exhausted" 3 or more days in a row, a wellbeing alert appears on your dashboard and a notification is triggered for your manager. This is designed to help, not penalise.' },
+    ]
+  },
+  leave: {
+    title: 'My Leave',
+    icon: 'fa-calendar-days',
+    intro: 'Submit, track and manage your leave requests.',
+    sections: [
+      { heading: 'Leave Types', icon: 'fa-tags', color: '#7c5cfc',
+        text: 'Annual Leave, Sick Leave, Study Leave, Family Responsibility Leave, and Unpaid Leave. Each type has different balances and EVA implications.' },
+      { heading: 'EVA Impact', icon: 'fa-chart-line', color: '#e84393',
+        text: 'Extended leave can reduce your EVA bonus share for that period. The "EVA Impact %" shown on each request indicates the reduction. This resets next period.' },
+      { heading: 'Approval Process', icon: 'fa-check-double', color: '#00d4aa',
+        text: 'Once submitted, your manager reviews your request in the Team Dashboard. Status changes from "pending" → "approved" or "rejected". You\'ll see the updated status here.' },
+      { heading: 'Leave Calendar', icon: 'fa-calendar-week', color: '#f59e0b',
+        text: 'See the full team leave calendar in the 📅 calendar view (sidebar). Plan leave to avoid clashing with critical team coverage periods.' },
+    ]
+  },
+  achievements: {
+    title: 'Achievements',
+    icon: 'fa-trophy',
+    intro: 'Your badge collection, certificates, and XP milestones.',
+    sections: [
+      { heading: 'Earning Badges', icon: 'fa-medal', color: '#f59e0b',
+        text: 'Badges are awarded automatically for milestones: completing 5 courses, 7-day streak, giving 10 kudos, 100% OKR completion, and more. Each badge awards bonus XP.' },
+      { heading: 'Certificates', icon: 'fa-certificate', color: '#7c5cfc',
+        text: 'Every completed course generates a certificate. Click any certificate to open the printable PDF-ready certificate overlay with your name, date, and unique ID.' },
+      { heading: 'XP & Levels', icon: 'fa-star', color: '#00d4aa',
+        text: 'Analyst (0) → Associate (500) → Senior (1,200) → Lead (2,500) → Director (4,500) → MVP (7,000). Your level is displayed on your profile and the leaderboard.' },
+    ]
+  },
+  feed: {
+    title: 'Activity Feed',
+    icon: 'fa-bolt',
+    intro: 'A chronological record of all your XP events, milestones, and notable actions.',
+    sections: [
+      { heading: 'What Appears Here', icon: 'fa-list', color: '#7c5cfc',
+        text: 'Course completions, badges earned, kudos given and received, OKR milestones, level-ups, streak milestones, and onboarding steps. All timestamped.' },
+      { heading: 'Public vs Private', icon: 'fa-eye', color: '#00d4aa',
+        text: 'Some events are public (visible to the whole team on the team dashboard) — like level-ups and badges. Others are private — like personal notes and journal entries.' },
+    ]
+  },
+  journal: {
+    title: 'Journal',
+    icon: 'fa-pen-to-square',
+    intro: 'Your completely private digital journal. Reflect, plan, and write freely.',
+    sections: [
+      { heading: 'Privacy', icon: 'fa-lock', color: '#7c5cfc',
+        text: '100% private. No manager, director, or admin can see your journal entries. This is your personal space.' },
+      { heading: 'Creating Notes', icon: 'fa-plus', color: '#00d4aa',
+        text: 'Click "New Note" to open the editor. Add a title, write your content, and choose whether to pin it. Pinned notes appear at the top of your journal.' },
+      { heading: 'Editing & Deleting', icon: 'fa-pen', color: '#f59e0b',
+        text: 'Click any note to edit it. Use the delete button to remove it permanently. Edits are saved with a timestamp.' },
+    ]
+  },
+  eva: {
+    title: 'EVA Statement',
+    icon: 'fa-money-bill-trend-up',
+    intro: 'Your transparent payslip-style breakdown of how your EVA bonus is calculated.',
+    sections: [
+      { heading: 'The Formula', icon: 'fa-calculator', color: '#7c5cfc',
+        text: 'Gross Revenue = Total AUM × 2.5%. EVA Pool = Revenue − Costs. Team Pool = EVA Pool × 50%. Your share = (KPI Score × EVA Weight) / All Weights × Individual Pool + Collective Pool / Headcount.' },
+      { heading: 'Individual vs Collective', icon: 'fa-users', color: '#00d4aa',
+        text: '60% of the Team Pool is split based on KPI performance (weighted). The other 40% is split equally among all active employees — the "collective" share. You earn both.' },
+      { heading: 'EVA Weight', icon: 'fa-weight-scale', color: '#f59e0b',
+        text: 'Your EVA weight (0.5–2.0) is set by your role. A weight of 1.8 (Investment Analyst) means you get 1.8× more individual pool allocation than someone with weight 1.0.' },
+      { heading: 'Improving Your Share', icon: 'fa-trending-up', color: '#e84393',
+        text: 'Boost your KPI scores by completing courses, hitting OKRs, maintaining streaks, and giving kudos. The improvement table at the bottom shows the exact ZAR impact of a 10-point KPI increase.' },
+    ]
+  },
+  profile: {
+    title: 'My Profile',
+    icon: 'fa-id-card',
+    intro: 'Your personal and banking details. Keep everything up to date for accurate EVA payments.',
+    sections: [
+      { heading: 'Personal Details', icon: 'fa-user', color: '#7c5cfc',
+        text: 'Your name, email, phone, date of birth, and SA ID number. The ID number determines your login PIN (last 4 digits). Keep this accurate.' },
+      { heading: 'Banking Details', icon: 'fa-building-columns', color: '#00d4aa',
+        text: 'Your bank account details for EVA bonus payments. Account number is masked for security (•••••1234). Click Edit to update. Upload proof of banking using the upload button.' },
+      { heading: 'Emergency Contact', icon: 'fa-phone-volume', color: '#e84393',
+        text: 'Add an emergency contact name and phone number. This is only accessed by HR in genuine emergencies.' },
+      { heading: 'Sensitive Field Masking', icon: 'fa-eye-slash', color: '#f59e0b',
+        text: 'SA ID number and bank account number are masked in the display for your protection. Only you can see and edit them.' },
+    ]
+  },
+  calendar: {
+    title: 'Leave Calendar',
+    icon: 'fa-calendar-days',
+    intro: 'Full team leave visibility. See who is off when and plan accordingly.',
+    sections: [
+      { heading: 'The Monthly Grid', icon: 'fa-calendar', color: '#7c5cfc',
+        text: 'A full month grid showing all approved leave. Each employee has a unique colour. Leave blocks span the correct days. Use the arrows to navigate months.' },
+      { heading: 'Birthday Overlays', icon: 'fa-birthday-cake', color: '#f59e0b',
+        text: 'A 🎂 chip appears on each team member\'s birthday. The "Birthdays This Month" section below the grid lists everyone celebrating this month.' },
+      { heading: 'Who\'s On Leave', icon: 'fa-user-clock', color: '#e84393',
+        text: 'The "On Leave Today" section at the bottom shows everyone currently on leave with their leave type and return date.' },
+      { heading: 'Requesting Leave', icon: 'fa-plus', color: '#00d4aa',
+        text: 'Click "Request Leave" in the top-right to jump to the My Leave view where you can submit a new request.' },
+    ]
+  },
+};
+
+/* ── Help Panel State & Toggle ──────────────────────────────────────── */
+let _helpPanelOpen = false;
+
+function toggleHelpPanel() {
+  _helpPanelOpen = !_helpPanelOpen;
+  const panel   = document.getElementById('helpPanel');
+  const overlay = document.getElementById('helpOverlay');
+  const btn     = document.getElementById('helpBtn');
+  if (_helpPanelOpen) {
+    panel.style.right   = '0';
+    overlay.style.display = 'block';
+    if (btn) btn.style.transform = 'scale(0.9)';
+    renderHelpContent(_currentView);
+  } else {
+    panel.style.right   = '-420px';
+    overlay.style.display = 'none';
+    if (btn) btn.style.transform = '';
+  }
+}
+
+function renderHelpContent(view) {
+  const content = HELP_CONTENT[view] || HELP_CONTENT.dashboard;
+  const contextLabel = document.getElementById('help-context-label');
+  if (contextLabel) contextLabel.textContent = 'Viewing: ' + (content.title || view);
+
+  const body = document.getElementById('helpPanelBody');
+  if (!body) return;
+
+  body.innerHTML = `
+    <!-- View intro -->
+    <div style="background:rgba(124,92,252,0.08);border:1px solid rgba(124,92,252,0.15);border-radius:12px;padding:14px 16px;margin-bottom:20px;display:flex;gap:12px;align-items:flex-start">
+      <i class="fa-solid ${content.icon}" style="color:#7c5cfc;font-size:1rem;margin-top:2px;flex-shrink:0"></i>
+      <div>
+        <div style="font-size:0.88rem;font-weight:800;color:#e8eaf6;margin-bottom:4px">${content.title}</div>
+        <div style="font-size:0.78rem;color:#9ca3af;line-height:1.6">${content.intro}</div>
+      </div>
+    </div>
+
+    <!-- Sections -->
+    ${content.sections.map(s => `
+      <div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
+          <div style="width:28px;height:28px;border-radius:7px;background:${s.color}20;color:${s.color};display:flex;align-items:center;justify-content:center;font-size:0.75rem;flex-shrink:0"><i class="fa-solid ${s.icon}"></i></div>
+          <div style="font-size:0.82rem;font-weight:700;color:#e8eaf6">${s.heading}</div>
+        </div>
+        <div style="font-size:0.78rem;color:#9ca3af;line-height:1.7;padding-left:37px">${s.text}</div>
+      </div>
+    `).join('')}
+
+    <!-- Quick nav -->
+    <div style="background:var(--surface2,#1a1c24);border-radius:10px;padding:14px;margin-top:8px">
+      <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#6b7280;margin-bottom:10px">Jump to view</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${Object.entries(HELP_CONTENT).map(([key, hc]) => `
+          <button onclick="navigate('${key}',document.querySelector('[data-view=${key}]'));toggleHelpPanel();" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:4px 10px;font-size:0.72rem;font-weight:600;color:#9ca3af;cursor:pointer;font-family:inherit;transition:all 0.15s" onmouseover="this.style.background='rgba(124,92,252,0.12)';this.style.color='#c4b5fd'" onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.color='#9ca3af'">
+            <i class="fa-solid ${hc.icon}" style="margin-right:4px;font-size:0.68rem"></i>${hc.title}
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+/* ── Auto-update help when navigating ──────────────────────────────── */
+const _origNavigate = window.navigate;
+window.navigate = function(view, btn) {
+  _origNavigate(view, btn);
+  if (_helpPanelOpen) renderHelpContent(view);
+};
+
+/* ── Onboarding Banner ──────────────────────────────────────────────── */
+async function checkOnboardingBanner() {
+  if (!_emp) return;
+  const ob = await fetchAll('employee_onboarding').then(list => list.find(o => o.employee_id === _emp.id));
+  if (!ob || ob.status === 'completed') return;
+
+  const banner = document.getElementById('onboarding-banner');
+  const msgEl  = document.getElementById('ob-welcome-msg');
+  const chipsEl= document.getElementById('ob-task-chips');
+  const pctEl  = document.getElementById('ob-progress-text');
+  if (!banner) return;
+
+  const pct = ob.tasks_total > 0 ? Math.round((ob.tasks_completed||0) / ob.tasks_total * 100) : 0;
+  const tasksLeft = (ob.tasks_total||0) - (ob.tasks_completed||0);
+
+  if (msgEl) msgEl.textContent = ob.welcome_message || 'Complete your onboarding steps to get fully set up.';
+  if (pctEl) pctEl.textContent = pct + '%';
+
+  // Show next 3 incomplete tasks as chips
+  const defaultTasks = [
+    { title:'Complete Profile',       view:'profile',   icon:'fa-id-card' },
+    { title:'Banking Details',        view:'profile',   icon:'fa-building-columns' },
+    { title:'SV Capital Orientation', view:'courses',   icon:'fa-gem' },
+    { title:'Platform Walkthrough',   view:'courses',   icon:'fa-laptop-code' },
+    { title:'Compliance Course',      view:'courses',   icon:'fa-shield-halved' },
+    { title:'First Check-in',         view:'checkin',   icon:'fa-sun' },
+    { title:'Set First OKR',          view:'okrs',      icon:'fa-bullseye' },
+    { title:'Give Kudos',             view:'feedback',  icon:'fa-hands-clapping' },
+  ];
+
+  if (chipsEl) {
+    const incomplete = defaultTasks.slice(ob.tasks_completed||0, (ob.tasks_completed||0) + 3);
+    chipsEl.innerHTML = incomplete.map(t => `
+      <button onclick="navigate('${t.view}',document.querySelector('[data-view=${t.view}]'))" style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:20px;padding:4px 12px;font-size:0.72rem;font-weight:600;color:#f59e0b;cursor:pointer;font-family:inherit;transition:background 0.15s">
+        <i class="fa-solid ${t.icon}" style="font-size:0.68rem"></i> ${t.title}
+      </button>
+    `).join('') + `<span style="font-size:0.72rem;color:#6b7280;align-self:center">${tasksLeft} tasks remaining</span>`;
+  }
+
+  // Push content down to make room for banner
+  banner.style.display = 'block';
+  const empLayout = document.querySelector('.emp-layout');
+  if (empLayout) empLayout.style.paddingTop = '100px';
+}
+
+document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', () => {
+  // Run onboarding check after main init
+  setTimeout(checkOnboardingBanner, 1500);
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ONBOARDING TASK PERSISTENCE ENGINE
+   Evaluates real employee data to determine which onboarding tasks are
+   complete, PATCHes the employee_onboarding record, and handles the
+   completion ceremony when all required tasks are done.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Task completion evaluator ──────────────────────────────────────── */
+function evaluateOnboardingTasks() {
+  if (!_emp) return { completed: [], total: 10, count: 0 };
+
+  // Course completions
+  const completedCourseIds = _progress
+    .filter(p => p.status === 'completed')
+    .map(p => p.course_id);
+
+  // Determine per-task completion
+  const tasks = [
+    // 1 complete_profile: phone + DOB + ID number + emergency contact all set
+    { key:'complete_profile',   done: !!((_emp.phone||'').trim() && (_emp.birth_date||'').trim() && (_emp.id_number||'').trim() && (_emp.emergency_contact_name||'').trim()) },
+    // 2 add_banking: bank name + account number set
+    { key:'add_banking',        done: !!((_emp.bank_name||'').trim() && (_emp.bank_account_number||'').trim()) },
+    // 3 SV Capital Orientation course
+    { key:'course_orientation', done: completedCourseIds.includes('CRS-OB-001') },
+    // 4 Platform Walkthrough course
+    { key:'course_platform',    done: completedCourseIds.includes('CRS-OB-002') },
+    // 5 Compliance course
+    { key:'course_compliance',  done: completedCourseIds.includes('CRS-OB-003') },
+    // 6 first check-in: at least one checkin exists
+    { key:'first_checkin',      done: _checkins.length > 0 },
+    // 7 first OKR: at least one OKR created
+    { key:'set_first_okr',      done: _okrs.length > 0 },
+    // 8 first kudos: at least one outgoing kudos
+    { key:'give_first_kudos',   done: _peerFeedback.filter(f => f.from_employee_id === _emp.id && f.type === 'kudos').length > 0 },
+    // 9 view EVA statement: tracked in localStorage
+    { key:'view_eva_statement', done: localStorage.getItem(`ob_eva_viewed_${_emp.id}`) === '1' },
+    // 10 proof of banking uploaded
+    { key:'upload_proof_banking', done: !!((_emp.proof_of_banking_url||'').trim()) },
+  ];
+
+  const completed = tasks.filter(t => t.done).map(t => t.key);
+  return { completed, total: tasks.length, count: completed.length, tasks };
+}
+
+/* ── Required task keys (must all be done for completion) ──────────── */
+const REQUIRED_TASK_KEYS = [
+  'complete_profile', 'add_banking', 'course_orientation',
+  'course_platform',  'course_compliance', 'first_checkin', 'upload_proof_banking'
+];
+
+/* ── Main sync function — call after any onboarding-relevant action ─ */
+let _obRecord = null; // cached onboarding record for current employee
+let _obSyncing = false;
+
+async function syncOnboardingProgress() {
+  if (!_emp || _obSyncing) return;
+  _obSyncing = true;
+  try {
+    // Fetch or use cached onboarding record
+    if (!_obRecord) {
+      const all = await fetchAll('employee_onboarding');
+      _obRecord = all.find(o => o.employee_id === _emp.id) || null;
+    }
+    if (!_obRecord || _obRecord.status === 'completed') return;
+
+    const { count, completed, total, tasks } = evaluateOnboardingTasks();
+    const wasCount = Number(_obRecord.tasks_completed) || 0;
+
+    // Check if all REQUIRED tasks are done
+    const allRequiredDone = REQUIRED_TASK_KEYS.every(k => completed.includes(k));
+    const isNowComplete   = allRequiredDone;
+
+    if (count === wasCount && !isNowComplete) return; // nothing changed
+
+    const updates = { tasks_completed: count };
+    if (isNowComplete) {
+      updates.status       = 'completed';
+      updates.completed_at = new Date().toISOString();
+    }
+
+    const updated = await patch(`tables/employee_onboarding/${_obRecord.id}`, updates);
+    Object.assign(_obRecord, updated);
+
+    // Refresh banner
+    if (isNowComplete) {
+      await handleOnboardingCompletion();
+    } else {
+      // Refresh progress display on banner
+      refreshOnboardingBanner(count, total, completed, tasks);
+    }
+
+    // Notify director if just completed
+    if (isNowComplete && _obRecord.created_by) {
+      await notifyDirectorOnboardingComplete();
+    }
+
+  } finally {
+    _obSyncing = false;
+  }
+}
+
+/* ── Refresh banner without full re-fetch ──────────────────────────── */
+function refreshOnboardingBanner(count, total, completed, tasks) {
+  const pctEl  = document.getElementById('ob-progress-text');
+  const chipsEl= document.getElementById('ob-task-chips');
+  const banner  = document.getElementById('onboarding-banner');
+  if (!banner || banner.style.display === 'none') return;
+
+  const pct = total > 0 ? Math.round(count / total * 100) : 0;
+  if (pctEl) pctEl.textContent = pct + '%';
+
+  const allTasks = [
+    { key:'complete_profile',    title:'Complete Profile',       view:'profile',   icon:'fa-id-card' },
+    { key:'add_banking',         title:'Banking Details',        view:'profile',   icon:'fa-building-columns' },
+    { key:'course_orientation',  title:'SV Capital Orientation', view:'courses',   icon:'fa-gem' },
+    { key:'course_platform',     title:'Platform Walkthrough',   view:'courses',   icon:'fa-laptop-code' },
+    { key:'course_compliance',   title:'Compliance Course',      view:'courses',   icon:'fa-shield-halved' },
+    { key:'first_checkin',       title:'First Check-in',         view:'checkin',   icon:'fa-sun' },
+    { key:'set_first_okr',       title:'Set First OKR',          view:'okrs',      icon:'fa-bullseye' },
+    { key:'give_first_kudos',    title:'Give Kudos',             view:'feedback',  icon:'fa-hands-clapping' },
+    { key:'view_eva_statement',  title:'View EVA Statement',     view:'eva',       icon:'fa-money-bill-trend-up' },
+    { key:'upload_proof_banking',title:'Upload Proof of Banking',view:'profile',   icon:'fa-file-invoice' },
+  ];
+
+  const incomplete = allTasks.filter(t => !completed.includes(t.key)).slice(0, 3);
+  const tasksLeft  = total - count;
+
+  if (chipsEl) {
+    chipsEl.innerHTML = incomplete.map(t => `
+      <button onclick="navigate('${t.view}',document.querySelector('[data-view=${t.view}]'))" style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:20px;padding:4px 12px;font-size:0.72rem;font-weight:600;color:#f59e0b;cursor:pointer;font-family:inherit;transition:background 0.15s">
+        <i class="fa-solid ${t.icon}" style="font-size:0.68rem"></i> ${t.title}
+      </button>
+    `).join('') + `<span style="font-size:0.72rem;color:#6b7280;align-self:center">${tasksLeft} task${tasksLeft!==1?'s':''} remaining</span>`;
+  }
+}
+
+/* ── Onboarding completion ceremony ────────────────────────────────── */
+async function handleOnboardingCompletion() {
+  const banner = document.getElementById('onboarding-banner');
+
+  // Award bonus XP for completing onboarding
+  await awardXP(150, 'Onboarding journey completed');
+  launchConfetti();
+
+  // Log to activity feed
+  await post('tables/activity_feed', {
+    employee_id: _emp.id,
+    type:        'onboarding_completed',
+    title:       '🎉 Onboarding journey complete!',
+    body:        'You have completed all required onboarding tasks. Welcome to the team!',
+    icon:        'fa-rocket',
+    color:       '#f59e0b',
+    xp_shown:    150,
+    is_public:   true,
+    created_at:  new Date().toISOString(),
+  });
+
+  // Replace banner with congratulations state
+  if (banner) {
+    banner.style.background = 'linear-gradient(135deg,#0a1f0a,#0b0c10)';
+    banner.style.borderBottomColor = 'rgba(0,212,170,0.5)';
+    banner.innerHTML = `
+      <div style="max-width:900px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:16px">
+        <div style="width:44px;height:44px;border-radius:12px;background:rgba(0,212,170,0.15);border:1px solid rgba(0,212,170,0.4);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">🎉</div>
+        <div style="flex:1">
+          <div style="font-size:0.9rem;font-weight:800;color:#00d4aa;margin-bottom:2px">Onboarding complete! Welcome to SV Capital! 🚀</div>
+          <div style="font-size:0.78rem;color:#9ca3af;line-height:1.4">You've completed all required onboarding steps and earned <strong style="color:#f59e0b">+150 bonus XP</strong>. You're officially ready to go — the team is excited to have you!</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+          <span style="font-size:1.6rem;font-weight:900;color:#00d4aa">100%</span>
+          <button class="btn btn--ghost btn--sm" onclick="document.getElementById('onboarding-banner').style.display='none';document.querySelector('.emp-layout').style.paddingTop=''" style="font-size:0.7rem;padding:4px 10px">Dismiss</button>
+        </div>
+      </div>
+    `;
+    banner.style.display = 'block';
+    // Auto-dismiss after 12 seconds
+    setTimeout(() => {
+      banner.style.display = 'none';
+      const empLayout = document.querySelector('.emp-layout');
+      if (empLayout) empLayout.style.paddingTop = '';
+    }, 12000);
+  }
+
+  showToast('🎉 Onboarding complete! +150 bonus XP awarded. Welcome to the team!', 'success');
+}
+
+/* ── Director notification on completion ───────────────────────────── */
+async function notifyDirectorOnboardingComplete() {
+  if (!_obRecord || !_obRecord.created_by) return;
+  try {
+    await post('tables/activity_feed', {
+      employee_id: _obRecord.created_by,
+      type:        'onboarding_completed_notification',
+      title:       `✅ ${_emp.first_name} ${_emp.last_name} completed onboarding!`,
+      body:        `${_emp.first_name} ${_emp.last_name} (${_emp.role || 'Employee'}) has completed all required onboarding tasks and is fully set up on the platform.`,
+      icon:        'fa-user-check',
+      color:       '#00d4aa',
+      xp_shown:    0,
+      is_public:   false,
+      created_at:  new Date().toISOString(),
+    });
+  } catch(e) { /* non-critical — don't block */ }
+}
+
+/* ── Hook into triggering actions ───────────────────────────────────── */
+
+// Wrap saveProfile to sync after
+const _origSaveProfile = saveProfile;
+saveProfile = async function() {
+  await _origSaveProfile.apply(this, arguments);
+  setTimeout(syncOnboardingProgress, 500);
+};
+
+// Wrap submitCheckin to sync after
+const _origSubmitCheckin = submitCheckin;
+submitCheckin = async function() {
+  await _origSubmitCheckin.apply(this, arguments);
+  setTimeout(syncOnboardingProgress, 500);
+};
+
+// Wrap submitOkr to sync after
+const _origSubmitOkr = submitOkr;
+submitOkr = async function() {
+  await _origSubmitOkr.apply(this, arguments);
+  setTimeout(syncOnboardingProgress, 500);
+};
+
+// Wrap submitKudos to sync after
+const _origSubmitKudos = submitKudos;
+submitKudos = async function() {
+  await _origSubmitKudos.apply(this, arguments);
+  setTimeout(syncOnboardingProgress, 500);
+};
+
+// Wrap completeModule to sync after course completion
+const _origCompleteModule = completeModule;
+completeModule = async function() {
+  await _origCompleteModule.apply(this, arguments);
+  setTimeout(syncOnboardingProgress, 800);
+};
+
+// Wrap handleBankingDocUpload to sync after upload
+const _origHandleBankingDocUpload = handleBankingDocUpload;
+handleBankingDocUpload = function() {
+  _origHandleBankingDocUpload.apply(this, arguments);
+  setTimeout(syncOnboardingProgress, 1000);
+};
+
+// Track EVA statement view — called when navigate fires for 'eva' view
+const _origNavigateForOb = window.navigate;
+window.navigate = function(view, btn) {
+  _origNavigateForOb(view, btn);
+  if (view === 'eva' && _emp) {
+    if (localStorage.getItem(`ob_eva_viewed_${_emp.id}`) !== '1') {
+      localStorage.setItem(`ob_eva_viewed_${_emp.id}`, '1');
+      setTimeout(syncOnboardingProgress, 500);
+    }
+  }
+};
+
+// Export syncOnboardingProgress for use from window scope
+window.syncOnboardingProgress = syncOnboardingProgress;

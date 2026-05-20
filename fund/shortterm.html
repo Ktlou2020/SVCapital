@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SV Capital — Short-Term Investment Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="css/fund.css">
+  <style>
+    :root {
+      --stl-blue:   #3b82f6;
+      --stl-teal:   #14b8a6;
+      --stl-green:  #22c55e;
+      --stl-amber:  #f59e0b;
+      --stl-red:    #ef4444;
+      --stl-bg:     #0b0d10;
+      --stl-card:   #111827;
+      --stl-border: rgba(59,130,246,.18);
+    }
+
+    body { background: var(--stl-bg); }
+    .stl-layout { display: flex; height: 100vh; overflow: hidden; }
+
+    /* Sidebar */
+    .stl-sidebar {
+      width: 240px; min-width: 240px;
+      background: #0d1117; border-right: 1px solid rgba(255,255,255,.07);
+      display: flex; flex-direction: column; overflow-y: auto;
+    }
+    .stl-brand { padding: 20px 18px 16px; border-bottom: 1px solid rgba(255,255,255,.07); }
+    .stl-brand-name { font-size: 15px; font-weight: 800; color: #fff; }
+    .stl-brand-sub  { font-size: 11px; color: var(--stl-blue); letter-spacing: .5px; margin-top: 2px; }
+    .stl-nav-label  { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,.35); padding: 14px 18px 6px; font-weight: 700; }
+    .stl-nav-btn {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 18px; font-size: 13px; font-weight: 500;
+      color: rgba(255,255,255,.65); background: none; border: none;
+      cursor: pointer; width: 100%; text-align: left;
+      transition: all .15s; border-left: 3px solid transparent;
+    }
+    .stl-nav-btn:hover { color: #fff; background: rgba(255,255,255,.05); }
+    .stl-nav-btn.active { color: var(--stl-blue); background: rgba(59,130,246,.08); border-left-color: var(--stl-blue); }
+    .stl-nav-btn i { width: 16px; text-align: center; }
+    .stl-sidebar-footer { margin-top: auto; padding: 16px 18px; border-top: 1px solid rgba(255,255,255,.07); }
+    .stl-back-link { font-size: 12px; color: rgba(255,255,255,.4); text-decoration: none; display: flex; align-items: center; gap: 7px; transition: color .15s; }
+    .stl-back-link:hover { color: rgba(255,255,255,.8); }
+
+    /* Main */
+    .stl-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .stl-topbar { padding: 16px 28px; border-bottom: 1px solid rgba(255,255,255,.07); display: flex; align-items: center; justify-content: space-between; background: #0d1117; }
+    .stl-topbar-title { font-size: 18px; font-weight: 800; color: #fff; }
+    .stl-topbar-sub   { font-size: 12px; color: rgba(255,255,255,.4); margin-top: 2px; }
+    .stl-topbar-actions { display: flex; gap: 10px; }
+    .stl-content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+    /* Views */
+    .stl-view { display: none; }
+    .stl-view.active { display: block; }
+
+    /* NAV Hero */
+    .stl-nav-hero {
+      background: linear-gradient(135deg, #0d1832, #081426);
+      border: 1px solid var(--stl-border); border-radius: 16px;
+      padding: 28px 32px; margin-bottom: 24px;
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 32px; flex-wrap: wrap;
+    }
+    .stl-hero-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--stl-blue); opacity: .8; margin-bottom: 6px; }
+    .stl-hero-value { font-size: 38px; font-weight: 900; color: #fff; letter-spacing: -1px; line-height: 1; }
+    .stl-hero-sub   { font-size: 13px; color: rgba(255,255,255,.5); margin-top: 6px; }
+    .stl-hero-stats { display: flex; gap: 36px; }
+    .stl-hero-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: rgba(255,255,255,.4); margin-bottom: 4px; }
+    .stl-hero-stat-val   { font-size: 22px; font-weight: 800; color: #fff; }
+    .stl-hero-stat-sub   { font-size: 11px; color: rgba(255,255,255,.4); }
+
+    /* KPI row */
+    .stl-kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 24px; }
+    .stl-kpi { background: var(--stl-card); border: 1px solid rgba(255,255,255,.07); border-radius: 12px; padding: 18px 20px; }
+    .stl-kpi-label { font-size: 11px; color: rgba(255,255,255,.45); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px; }
+    .stl-kpi-value { font-size: 22px; font-weight: 800; color: #fff; }
+    .stl-kpi-sub   { font-size: 11px; color: rgba(255,255,255,.35); margin-top: 3px; }
+    .stl-kpi.blue   .stl-kpi-value { color: var(--stl-blue); }
+    .stl-kpi.green  .stl-kpi-value { color: var(--stl-green); }
+    .stl-kpi.amber  .stl-kpi-value { color: var(--stl-amber); }
+    .stl-kpi.red    .stl-kpi-value { color: var(--stl-red); }
+    .stl-kpi.teal   .stl-kpi-value { color: var(--stl-teal); }
+
+    /* Card */
+    .stl-card { background: var(--stl-card); border: 1px solid rgba(255,255,255,.07); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+    .stl-card-hd { padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,.06); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .stl-card-title { font-size: 14px; font-weight: 700; color: #fff; }
+    .stl-card-body  { padding: 20px; }
+
+    /* Table */
+    .stl-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .stl-table th { text-align: left; padding: 10px 14px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: rgba(255,255,255,.4); border-bottom: 1px solid rgba(255,255,255,.06); white-space: nowrap; }
+    .stl-table th.num { text-align: right; }
+    .stl-table td { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.04); color: rgba(255,255,255,.85); vertical-align: middle; }
+    .stl-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .stl-table tbody tr:hover { background: rgba(255,255,255,.025); }
+    .stl-table tbody tr:last-child td { border-bottom: none; }
+
+    /* Overdue row highlight */
+    .stl-table tbody tr.row-overdue td { background: rgba(239,68,68,.04); }
+    .stl-table tbody tr.row-overdue:hover td { background: rgba(239,68,68,.08); }
+
+    /* Filter bar */
+    .stl-filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+    .stl-search { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); border-radius: 8px; padding: 7px 12px; flex: 1; min-width: 200px; }
+    .stl-search input { background: none; border: none; outline: none; color: #fff; font-size: 13px; width: 100%; }
+    .stl-search i { color: rgba(255,255,255,.3); font-size: 12px; }
+    .stl-select { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 13px; outline: none; }
+    .stl-select option { background: #1a1f2e; }
+
+    /* Badges */
+    .stl-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+    .stl-badge-active     { background: rgba(59,130,246,.15);  color: #60a5fa; }
+    .stl-badge-repaid     { background: rgba(34,197,94,.15);   color: #4ade80; }
+    .stl-badge-overdue    { background: rgba(239,68,68,.15);   color: #f87171; }
+    .stl-badge-partial    { background: rgba(245,158,11,.15);  color: #fbbf24; }
+    .stl-badge-written_off{ background: rgba(156,163,175,.12); color: #9ca3af; }
+
+    /* Overdue counter */
+    .stl-overdue-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 700; color: #f87171;
+      background: rgba(239,68,68,.12); padding: 2px 8px; border-radius: 20px;
+    }
+
+    /* Buttons */
+    .stl-btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 7px; transition: all .15s; }
+    .stl-btn-primary   { background: var(--stl-blue); color: #fff; }
+    .stl-btn-primary:hover { background: #2563eb; }
+    .stl-btn-secondary { background: rgba(255,255,255,.08); color: rgba(255,255,255,.8); border: 1px solid rgba(255,255,255,.12); }
+    .stl-btn-secondary:hover { background: rgba(255,255,255,.13); color: #fff; }
+    .stl-btn-sm { padding: 5px 11px; font-size: 12px; }
+    .stl-btn-danger    { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.2); }
+    .stl-btn-danger:hover { background: rgba(239,68,68,.25); }
+    .stl-btn-success   { background: rgba(34,197,94,.15); color: #4ade80; border: 1px solid rgba(34,197,94,.2); }
+    .stl-btn-success:hover { background: rgba(34,197,94,.25); }
+
+    /* Fund return panel */
+    .stl-return-panel {
+      background: linear-gradient(135deg, #0d1832, #081426);
+      border: 1px solid var(--stl-border); border-radius: 14px; padding: 24px; margin-bottom: 20px;
+    }
+    .stl-return-value { font-size: 36px; font-weight: 900; color: var(--stl-blue); }
+    .stl-return-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.06); font-size: 13px; }
+    .stl-return-row:last-child { border-bottom: none; }
+    .stl-return-row-label { color: rgba(255,255,255,.5); }
+    .stl-return-row-val   { color: #fff; font-weight: 600; }
+
+    /* Chart */
+    .stl-chart-wrap { height: 260px; position: relative; }
+
+    /* Modal */
+    .stl-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); backdrop-filter: blur(6px); z-index: 900; display: none; align-items: center; justify-content: center; padding: 20px; }
+    .stl-modal-overlay.open { display: flex; }
+    .stl-modal { background: #131720; border: 1px solid rgba(255,255,255,.12); border-radius: 16px; width: 100%; max-width: 720px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 80px rgba(0,0,0,.6); }
+    .stl-modal-hd { padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 12px; }
+    .stl-modal-title { font-size: 16px; font-weight: 800; color: #fff; flex: 1; }
+    .stl-modal-close { background: rgba(255,255,255,.08); border: none; color: rgba(255,255,255,.6); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+    .stl-modal-close:hover { background: rgba(255,255,255,.15); color: #fff; }
+    .stl-modal-body { padding: 24px; }
+    .stl-modal-ft   { padding: 16px 24px; border-top: 1px solid rgba(255,255,255,.08); display: flex; justify-content: flex-end; gap: 10px; }
+
+    /* Form */
+    .stl-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
+    .stl-form-grid.col3 { grid-template-columns: 1fr 1fr 1fr; }
+    .stl-form-group { display: flex; flex-direction: column; gap: 6px; }
+    .stl-form-group label { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.6); }
+    .stl-form-group input, .stl-form-group select, .stl-form-group textarea { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 9px 12px; color: #fff; font-size: 13px; outline: none; font-family: inherit; transition: border-color .15s; }
+    .stl-form-group input:focus, .stl-form-group select:focus, .stl-form-group textarea:focus { border-color: var(--stl-blue); }
+    .stl-form-group select option { background: #1a1f2e; }
+    .stl-form-group .hint { font-size: 11px; color: rgba(255,255,255,.3); }
+    .stl-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--stl-blue); opacity: .8; margin: 0 0 10px; display: flex; align-items: center; gap: 7px; }
+    .stl-divider { border: none; border-top: 1px solid rgba(255,255,255,.07); margin: 18px 0; }
+
+    /* Loading */
+    .stl-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; color: rgba(255,255,255,.4); gap: 12px; }
+    .stl-spinner { width: 32px; height: 32px; border: 3px solid rgba(59,130,246,.15); border-top-color: var(--stl-blue); border-radius: 50%; animation: stlspin .8s linear infinite; }
+    @keyframes stlspin { to { transform: rotate(360deg); } }
+
+    /* Toast */
+    #stlToastContainer { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .stl-toast { background: #1e2531; border-radius: 10px; padding: 12px 18px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: #fff; box-shadow: 0 8px 32px rgba(0,0,0,.4); min-width: 260px; max-width: 380px; animation: stlSlideIn .25s ease; border-left: 3px solid var(--stl-blue); }
+    .stl-toast.error  { border-left-color: #f87171; }
+    .stl-toast.success{ border-left-color: #4ade80; }
+    @keyframes stlSlideIn { from { opacity:0; transform: translateX(30px); } to { opacity:1; transform: translateX(0); } }
+
+    /* Docs drawer */
+    .stl-drawer-overlay { position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:800;display:none;justify-content:flex-end; }
+    .stl-drawer-overlay.open { display:flex; }
+    .stl-drawer { width:520px;max-width:100vw;background:#131720;height:100vh;overflow-y:auto;box-shadow:-20px 0 60px rgba(0,0,0,.5);display:flex;flex-direction:column; }
+    .stl-drawer-hd { padding:20px 24px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:12px;flex-shrink:0; }
+    .stl-drawer-title { font-size:16px;font-weight:800;color:#fff;flex:1; }
+    .stl-drawer-body { padding:20px 24px;flex:1;overflow-y:auto; }
+    .stl-doc-btn { background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:#60a5fa;font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s; }
+    .stl-doc-btn:hover { background:rgba(59,130,246,.22); }
+
+    @media (max-width: 900px) {
+      .stl-sidebar { display: none; }
+      .stl-kpi-row { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="stl-layout">
+
+  <!-- ═══════ SIDEBAR ═══════ -->
+  <aside class="stl-sidebar">
+    <div class="stl-brand">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <i class="fa-solid fa-hand-holding-dollar" style="color:var(--stl-blue);font-size:20px"></i>
+        <div>
+          <div class="stl-brand-name">SV Capital</div>
+          <div class="stl-brand-sub">Short-Term Loans</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stl-nav-label">Overview</div>
+    <button class="stl-nav-btn active" data-view="dashboard" onclick="stlNavigate('dashboard',this)">
+      <i class="fa-solid fa-gauge-high"></i> Dashboard
+    </button>
+
+    <div class="stl-nav-label">Portfolio</div>
+    <button class="stl-nav-btn" data-view="loans" onclick="stlNavigate('loans',this)">
+      <i class="fa-solid fa-file-invoice-dollar"></i> All Loans
+    </button>
+    <button class="stl-nav-btn" data-view="overdue" onclick="stlNavigate('overdue',this)">
+      <i class="fa-solid fa-triangle-exclamation" style="color:#f87171"></i> Overdue
+      <span id="stlOverdueBadge" style="display:none;background:#ef4444;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;margin-left:auto">0</span>
+    </button>
+
+    <div class="stl-nav-label">Analytics</div>
+    <button class="stl-nav-btn" data-view="returns" onclick="stlNavigate('returns',this)">
+      <i class="fa-solid fa-chart-line"></i> NAV &amp; Returns
+    </button>
+
+    <div class="stl-sidebar-footer">
+      <a href="index.html" class="stl-back-link">
+        <i class="fa-solid fa-arrow-left"></i> Back to Fund Console
+      </a>
+    </div>
+  </aside>
+
+  <!-- ═══════ MAIN ═══════ -->
+  <div class="stl-main">
+    <header class="stl-topbar">
+      <div>
+        <div class="stl-topbar-title" id="stlTopTitle">Dashboard</div>
+        <div class="stl-topbar-sub">Short-Term Investment Product · NAV &amp; Returns Engine</div>
+      </div>
+      <div class="stl-topbar-actions">
+        <button class="stl-btn stl-btn-secondary stl-btn-sm" onclick="loadSTLAll()">
+          <i class="fa-solid fa-rotate"></i> Refresh
+        </button>
+        <button class="stl-btn stl-btn-primary stl-btn-sm" onclick="openAddLoanModal()">
+          <i class="fa-solid fa-plus"></i> New Loan
+        </button>
+        <a href="index.html" class="stl-btn stl-btn-secondary stl-btn-sm" style="text-decoration:none">
+          <i class="fa-solid fa-arrow-left"></i> Fund Console
+        </a>
+      </div>
+    </header>
+
+    <div class="stl-content">
+
+      <section class="stl-view active" id="stl-view-dashboard">
+        <div class="stl-loading"><div class="stl-spinner"></div> Loading…</div>
+      </section>
+
+      <section class="stl-view" id="stl-view-loans">
+        <div class="stl-loading"><div class="stl-spinner"></div> Loading loans…</div>
+      </section>
+
+      <section class="stl-view" id="stl-view-overdue">
+        <div class="stl-loading"><div class="stl-spinner"></div> Loading…</div>
+      </section>
+
+      <section class="stl-view" id="stl-view-returns">
+        <div class="stl-loading"><div class="stl-spinner"></div> Loading…</div>
+      </section>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════ DOCS DRAWER ═══════ -->
+<div class="stl-drawer-overlay" id="stlDocsOverlay" onclick="if(event.target===this)closeLoanDocs()">
+  <div class="stl-drawer">
+    <div class="stl-drawer-hd">
+      <i class="fa-solid fa-folder-open" style="color:var(--stl-blue)"></i>
+      <span class="stl-drawer-title" id="stlDocsTitle">Documents</span>
+      <button class="stl-modal-close" onclick="closeLoanDocs()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="stl-drawer-body" id="stlDocsBody">
+      <div class="stl-loading"><div class="stl-spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ LOAN FORM MODAL ═══════ -->
+<div class="stl-modal-overlay" id="stlLoanModal" onclick="if(event.target===this)closeLoanModal()">
+  <div class="stl-modal">
+    <div class="stl-modal-hd">
+      <i class="fa-solid fa-hand-holding-dollar" style="color:var(--stl-blue)"></i>
+      <span class="stl-modal-title" id="stlModalTitle">Add Loan</span>
+      <button class="stl-modal-close" onclick="closeLoanModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="stl-modal-body">
+      <input type="hidden" id="stl_form_id">
+      <form id="stlLoanForm" onsubmit="event.preventDefault();saveLoanForm()">
+
+        <div class="stl-section-label"><i class="fa-solid fa-building"></i> Business Details</div>
+        <div class="stl-form-grid" style="margin-bottom:18px">
+          <div class="stl-form-group">
+            <label>Business Name <span style="color:#f87171">*</span></label>
+            <input type="text" id="sl_business_name" placeholder="e.g. Ndlovu Trading & Supplies" required>
+          </div>
+          <div class="stl-form-group">
+            <label>Business Reg. No.</label>
+            <input type="text" id="sl_business_reg" placeholder="e.g. 2019/384721/07">
+          </div>
+          <div class="stl-form-group">
+            <label>Contact Name</label>
+            <input type="text" id="sl_contact_name" placeholder="Primary contact">
+          </div>
+          <div class="stl-form-group">
+            <label>Contact Phone</label>
+            <input type="text" id="sl_contact_phone" placeholder="e.g. 082 456 7890">
+          </div>
+        </div>
+
+        <hr class="stl-divider">
+        <div class="stl-section-label"><i class="fa-solid fa-coins"></i> Loan Terms</div>
+        <div class="stl-form-grid col3" style="margin-bottom:18px">
+          <div class="stl-form-group">
+            <label>Loan Reference</label>
+            <input type="text" id="sl_loan_ref" placeholder="e.g. STL-2025-006">
+          </div>
+          <div class="stl-form-group">
+            <label>Amount Disbursed (R) <span style="color:#f87171">*</span></label>
+            <input type="number" id="sl_amount" step="0.01" min="0" placeholder="0.00" required>
+          </div>
+          <div class="stl-form-group">
+            <label>Interest Rate (%)</label>
+            <input type="number" id="sl_rate_pct" step="0.01" min="0" max="100" placeholder="e.g. 18.00">
+            <span class="hint">Annual rate as percentage</span>
+          </div>
+          <div class="stl-form-group">
+            <label>Interest Amount (R)</label>
+            <input type="number" id="sl_interest_amount" step="0.01" min="0" placeholder="Fixed interest if agreed">
+            <span class="hint">Leave blank to calculate from rate</span>
+          </div>
+          <div class="stl-form-group">
+            <label>Total Repayable (R)</label>
+            <input type="number" id="sl_total_repayable" step="0.01" min="0" placeholder="Principal + interest">
+          </div>
+          <div class="stl-form-group">
+            <label>Status</label>
+            <select id="sl_status">
+              <option value="active">Active</option>
+              <option value="repaid">Repaid</option>
+              <option value="overdue">Overdue</option>
+              <option value="partial">Partial Repayment</option>
+              <option value="written_off">Written Off</option>
+            </select>
+          </div>
+        </div>
+
+        <hr class="stl-divider">
+        <div class="stl-section-label"><i class="fa-solid fa-calendar"></i> Dates</div>
+        <div class="stl-form-grid" style="margin-bottom:18px">
+          <div class="stl-form-group">
+            <label>Disbursement Date</label>
+            <input type="date" id="sl_disbursement_date">
+          </div>
+          <div class="stl-form-group">
+            <label>Agreed Repayment Date</label>
+            <input type="date" id="sl_repayment_date">
+          </div>
+          <div class="stl-form-group">
+            <label>Actual Repayment Date</label>
+            <input type="date" id="sl_actual_repayment_date">
+            <span class="hint">Leave blank if not yet repaid</span>
+          </div>
+          <div class="stl-form-group">
+            <label>Partial Repayments Received (R)</label>
+            <input type="number" id="sl_partial" step="0.01" min="0" placeholder="0.00">
+          </div>
+        </div>
+
+        <div class="stl-form-group">
+          <label>Notes / Collateral</label>
+          <textarea id="sl_notes" rows="3" style="resize:vertical" placeholder="Collateral details, contract notes, security…"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="stl-modal-ft">
+      <button class="stl-btn stl-btn-secondary" onclick="closeLoanModal()">Cancel</button>
+      <button class="stl-btn stl-btn-primary" id="stlSaveBtn" onclick="saveLoanForm()">
+        <i class="fa-solid fa-save"></i> Save Loan
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="stlToastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="js/shortterm.js"></script>
+</body>
+</html>

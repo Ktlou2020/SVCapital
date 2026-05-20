@@ -1,0 +1,1444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SV Capital — Fund Management</title>
+  <!-- PWA -->
+  <link rel="manifest" href="../manifest.json" />
+  <meta name="theme-color" content="#D4AF37" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="SV Capital" />
+  <link rel="apple-touch-icon" href="../assets/svcapital-logo-header.png" />
+  <!-- /PWA -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="css/fund.css" />
+  <!-- Staff Auth (optional session widget — guard disabled for open access) -->
+  <script src="../js/staff-auth.js"></script>
+  <script>document.addEventListener('DOMContentLoaded',()=>{ StaffAuth.injectWidget(); });</script>
+</head>
+<body>
+<div class="app">
+
+  <!-- ══════════════ SIDEBAR ══════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar__brand">
+      <a href="../admin/index.html" class="brand-row">
+        <img src="../assets/logo-inline.svg" alt="SV Capital" />
+        <div>
+          <div class="brand-name">SV Capital</div>
+          <div class="brand-sub">Fund Management</div>
+        </div>
+      </a>
+      <div class="module-badge">
+        <i class="fa-solid fa-chart-bar"></i>
+        <span>Operations Console</span>
+      </div>
+    </div>
+
+    <nav class="sidebar__nav">
+      <div class="nav-label">Overview</div>
+      <button class="nav-btn active" data-view="dashboard" onclick="navigate('dashboard',this)">
+        <i class="fa-solid fa-gauge-high"></i> Dashboard
+      </button>
+
+      <div class="nav-label">Tools</div>
+      <button class="nav-btn" data-view="calculator" onclick="navigate('calculator',this)">
+        <i class="fa-solid fa-calculator"></i> Return Calculator
+      </button>
+
+      <div class="nav-label">Products</div>
+      <a href="cattle.html" class="nav-btn" style="text-decoration:none">
+        <i class="fa-solid fa-cow"></i> Cattle Finance
+        <span style="font-size:9px;background:rgba(116,198,157,.25);color:#74c69d;padding:1px 6px;border-radius:8px;margin-left:auto">NAV</span>
+      </a>
+      <a href="solar.html" class="nav-btn" style="text-decoration:none">
+        <i class="fa-solid fa-solar-panel"></i> Solar Finance
+        <span style="font-size:9px;background:rgba(245,158,11,.25);color:#f59e0b;padding:1px 6px;border-radius:8px;margin-left:auto">NAV</span>
+      </a>
+      <a href="shortterm.html" class="nav-btn" style="text-decoration:none">
+        <i class="fa-solid fa-hand-holding-dollar"></i> Short-Term Loans
+        <span style="font-size:9px;background:rgba(59,130,246,.25);color:#60a5fa;padding:1px 6px;border-radius:8px;margin-left:auto">NAV</span>
+      </a>
+
+      <div class="nav-label">Operations</div>
+      <button class="nav-btn" data-view="runs" onclick="navigate('runs',this);setupRunFilters()">
+        <i class="fa-solid fa-play-circle"></i> Fund Runs
+        <span class="nav-badge" id="activeRunsBadge" style="display:none">0</span>
+      </button>
+      <button class="nav-btn" data-view="schedules" onclick="navigate('schedules',this)">
+        <i class="fa-solid fa-calendar-days"></i> Payout Schedules
+      </button>
+
+      <div class="nav-label">Intelligence</div>
+      <button class="nav-btn" data-view="intelligence" onclick="navigate('intelligence',this)">
+        <i class="fa-solid fa-brain"></i> Fund Intelligence
+        <span style="font-size:9px;background:rgba(168,85,247,.25);color:#c084fc;padding:1px 6px;border-radius:8px;margin-left:auto">AI</span>
+      </button>
+      <button class="nav-btn" data-view="forecast" onclick="navigate('forecast',this)">
+        <i class="fa-solid fa-chart-gantt"></i> Cash Flow Forecast
+        <span style="font-size:9px;background:rgba(20,184,166,.2);color:#2dd4bf;padding:1px 6px;border-radius:8px;margin-left:auto">12M</span>
+      </button>
+
+      <div class="nav-label">Compliance</div>
+      <button class="nav-btn" data-view="allocations" onclick="navigate('allocations',this)">
+        <i class="fa-solid fa-users-between-lines"></i> Investor Allocations
+      </button>
+      <button class="nav-btn" data-view="audit" onclick="navigate('audit',this)">
+        <i class="fa-solid fa-shield-check"></i> Audit Trail
+        <span class="nav-badge" id="criticalAuditBadge" style="display:none;background:#f87171">!</span>
+      </button>
+
+      <div class="nav-label">Analytics</div>
+      <button class="nav-btn" data-view="fees" onclick="navigate('fees',this)">
+        <i class="fa-solid fa-receipt"></i> Fee Ledger
+        <span style="font-size:9px;background:rgba(212,175,55,.25);color:#D4AF37;padding:1px 6px;border-radius:8px;margin-left:auto">REV</span>
+      </button>
+      <button class="nav-btn" data-view="risk" onclick="navigate('risk',this)">
+        <i class="fa-solid fa-triangle-exclamation"></i> Risk Dashboard
+        <span class="nav-badge" id="riskAlertBadge" style="display:none;background:#fb923c">!</span>
+      </button>
+
+      <div class="nav-label">Alerts</div>
+      <button class="nav-btn" data-view="notifications" onclick="navigate('notifications',this)">
+        <i class="fa-solid fa-bell"></i> Notification Centre
+        <span class="nav-badge" id="unreadNotifBadge" style="display:none">0</span>
+      </button>
+
+      <div class="nav-label">Reference</div>
+      <button class="nav-btn" data-view="pools" onclick="navigate('pools',this)">
+        <i class="fa-solid fa-layer-group"></i> Pool Overview
+      </button>
+      <button class="nav-btn" data-view="reports" onclick="navigate('reports',this)">
+        <i class="fa-solid fa-chart-mixed"></i> Reports & Analytics
+      </button>
+    </nav>
+
+    <div class="sidebar__footer">
+      <a href="../admin/index.html" class="back-link">
+        <i class="fa-solid fa-arrow-left"></i> Back to Admin Console
+      </a>
+    </div>
+  </aside>
+
+  <!-- ══════════════ MAIN ══════════════ -->
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar__title" id="topTitle">Dashboard</div>
+        <div class="topbar__crumb">SV Capital · Fund Management Operations</div>
+      </div>
+      <div class="topbar__right">
+        <button class="btn btn--secondary btn--sm" onclick="navigate('calculator', document.querySelector('[data-view=calculator]'))">
+          <i class="fa-solid fa-calculator"></i> Calculator
+        </button>
+        <button class="btn btn--primary btn--sm" onclick="navigate('runs',document.querySelector('[data-view=runs]'));setTimeout(openNewRunModal,100)">
+          <i class="fa-solid fa-plus"></i> New Fund Run
+        </button>
+        <a href="cattle.html" class="btn btn--secondary btn--sm" title="Cattle Investment NAV">
+          <i class="fa-solid fa-cow"></i> Cattle
+        </a>
+        <a href="solar.html" class="btn btn--secondary btn--sm" title="Solar Finance NAV">
+          <i class="fa-solid fa-solar-panel"></i> Solar
+        </a>
+        <a href="shortterm.html" class="btn btn--secondary btn--sm" title="Short-Term Loans">
+          <i class="fa-solid fa-hand-holding-dollar"></i> STL
+        </a>
+        <button class="btn btn--sm" style="background:rgba(168,85,247,.18);color:#c084fc;border:1px solid rgba(168,85,247,.3)" onclick="navigate('intelligence',document.querySelector('[data-view=intelligence]'))">
+          <i class="fa-solid fa-brain"></i> Intelligence
+        </button>
+        <button class="btn btn--sm btn--secondary" id="topbarNotifBtn" style="position:relative" onclick="navigate('notifications',document.querySelector('[data-view=notifications]'))" title="Notification Centre">
+          <i class="fa-solid fa-bell"></i>
+          <span id="topbarNotifCount" style="display:none;position:absolute;top:-5px;right:-5px;background:#f87171;color:#fff;font-size:9px;font-weight:900;border-radius:50%;width:16px;height:16px;display:none;align-items:center;justify-content:center;line-height:1">0</span>
+        </button>
+        <a href="../admin/index.html" class="btn btn--secondary btn--sm">
+          <i class="fa-solid fa-shield-halved"></i> Admin
+        </a>
+      </div>
+    </header>
+
+    <main class="page">
+
+      <!-- ════════════════════════════════
+           DASHBOARD
+      ════════════════════════════════ -->
+      <div class="view active" id="view-dashboard">
+
+        <div class="stats-grid stats-grid--4">
+          <div class="kpi kpi--gold">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-coins"></i></div><span class="kpi__trend trend--up">Live AUM</span></div>
+            <div class="kpi__value" id="ds-aum">—</div>
+            <div class="kpi__label">Active Portfolio AUM</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-play-circle"></i></div><span class="kpi__trend trend--flat" id="ds-active-runs">0</span></div>
+            <div class="kpi__value" id="ds-deployed">—</div>
+            <div class="kpi__label">Capital in Active Runs</div>
+          </div>
+          <div class="kpi kpi--green">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-trending-up"></i></div></div>
+            <div class="kpi__value" id="ds-gross-ret">—</div>
+            <div class="kpi__label">Total Gross Returns Generated</div>
+          </div>
+          <div class="kpi kpi--teal">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-circle-dollar-to-slot"></i></div></div>
+            <div class="kpi__value" id="ds-net-ret">—</div>
+            <div class="kpi__label">Total Net Returns (after fees)</div>
+          </div>
+        </div>
+
+        <div class="stats-grid stats-grid--4 mb-20" style="margin-top:-6px">
+          <div class="kpi kpi--blue">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-calendar-check"></i></div></div>
+            <div class="kpi__value" id="ds-pending">—</div>
+            <div class="kpi__label">Pending Payouts</div>
+          </div>
+          <div class="kpi kpi--green">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-check-circle"></i></div></div>
+            <div class="kpi__value" id="ds-runs">—</div>
+            <div class="kpi__label">Completed Fund Runs</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-layer-group"></i></div></div>
+            <div class="kpi__value" id="ds-pools">—</div>
+            <div class="kpi__label">Active Investment Pools</div>
+          </div>
+          <div class="kpi kpi--purple">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-chart-pie"></i></div></div>
+            <div class="kpi__value">—</div>
+            <div class="kpi__label">Avg Alpha vs Benchmark</div>
+          </div>
+        </div>
+
+        <!-- ── Investment Products Row ── -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
+          <a href="cattle.html" style="text-decoration:none">
+            <div style="background:linear-gradient(135deg,#0a1f0a,#0d2e0d);border:1px solid rgba(116,198,157,.2);border-radius:12px;padding:18px 20px;transition:border-color .2s;cursor:pointer" onmouseenter="this.style.borderColor='rgba(116,198,157,.5)'" onmouseleave="this.style.borderColor='rgba(116,198,157,.2)'">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+                <div style="background:rgba(116,198,157,.12);width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center">
+                  <i class="fa-solid fa-cow" style="color:#74c69d;font-size:16px"></i>
+                </div>
+                <span style="font-size:9px;background:rgba(116,198,157,.18);color:#74c69d;padding:2px 7px;border-radius:8px;font-weight:700;text-transform:uppercase">NAV</span>
+              </div>
+              <div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:2px">Cattle Finance</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.4)">Backgrounded cattle · live NAV engine</div>
+              <div style="margin-top:10px;font-size:11px;color:#74c69d;font-weight:600">Open Module →</div>
+            </div>
+          </a>
+          <a href="solar.html" style="text-decoration:none">
+            <div style="background:linear-gradient(135deg,#1a1200,#2a1f00);border:1px solid rgba(245,158,11,.2);border-radius:12px;padding:18px 20px;transition:border-color .2s;cursor:pointer" onmouseenter="this.style.borderColor='rgba(245,158,11,.5)'" onmouseleave="this.style.borderColor='rgba(245,158,11,.2)'">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+                <div style="background:rgba(245,158,11,.12);width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center">
+                  <i class="fa-solid fa-solar-panel" style="color:#f59e0b;font-size:16px"></i>
+                </div>
+                <span style="font-size:9px;background:rgba(245,158,11,.18);color:#f59e0b;padding:2px 7px;border-radius:8px;font-weight:700;text-transform:uppercase">NAV</span>
+              </div>
+              <div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:2px">Solar Finance</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.4)">5yr · 6yr · 7yr investment products</div>
+              <div style="margin-top:10px;font-size:11px;color:#f59e0b;font-weight:600">Open Module →</div>
+            </div>
+          </a>
+          <a href="shortterm.html" style="text-decoration:none">
+            <div style="background:linear-gradient(135deg,#0d1832,#0a1428);border:1px solid rgba(59,130,246,.2);border-radius:12px;padding:18px 20px;transition:border-color .2s;cursor:pointer" onmouseenter="this.style.borderColor='rgba(59,130,246,.5)'" onmouseleave="this.style.borderColor='rgba(59,130,246,.2)'">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+                <div style="background:rgba(59,130,246,.12);width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center">
+                  <i class="fa-solid fa-hand-holding-dollar" style="color:#60a5fa;font-size:16px"></i>
+                </div>
+                <span style="font-size:9px;background:rgba(59,130,246,.18);color:#60a5fa;padding:2px 7px;border-radius:8px;font-weight:700;text-transform:uppercase">NAV</span>
+              </div>
+              <div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:2px">Short-Term Loans</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.4)">Business disbursements · overdue tracking</div>
+              <div style="margin-top:10px;font-size:11px;color:#60a5fa;font-weight:600">Open Module →</div>
+            </div>
+          </a>
+        </div>
+
+        <div class="grid-2">
+          <!-- Recent Fund Runs -->
+          <div class="panel">
+            <div class="panel__hd">
+              <div><div class="panel__title">Recent Fund Runs</div></div>
+              <button class="btn btn--sm btn--secondary" onclick="navigate('runs', document.querySelector('[data-view=runs]'))">View All <i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+            <div class="tbl-wrap">
+              <table class="data-table">
+                <thead><tr><th>Run</th><th>Product</th><th>Capital</th><th>Rate</th><th>Net Return</th><th>Status</th></tr></thead>
+                <tbody id="dashRunsBody"><tr><td colspan="6"><div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Right column -->
+          <div>
+            <!-- Upcoming Payouts -->
+            <div class="panel mb-20" style="margin-bottom:18px">
+              <div class="panel__hd">
+                <div><div class="panel__title">Upcoming Payouts</div><div class="panel__sub">Scheduled & processing</div></div>
+                <button class="btn btn--sm btn--secondary" onclick="navigate('schedules', document.querySelector('[data-view=schedules]'))">View All</button>
+              </div>
+              <div class="panel__bd" id="upcomingPayoutsWidget">
+                <div class="empty" style="padding:20px"><i class="fa-solid fa-calendar"></i><p>Loading...</p></div>
+              </div>
+            </div>
+
+            <!-- Runs by Product Chart -->
+            <div class="panel">
+              <div class="panel__hd"><div class="panel__title">Runs by Product Type</div></div>
+              <div class="panel__bd">
+                <div class="chart-box chart-box--sm"><canvas id="runTypeChart"></canvas></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Returns chart - full width -->
+        <div class="panel mt-16" style="margin-top:18px">
+          <div class="panel__hd">
+            <div><div class="panel__title">Gross vs Net Returns by Run</div><div class="panel__sub">Completed fund runs</div></div>
+          </div>
+          <div class="panel__bd">
+            <div class="chart-box chart-box--md"><canvas id="returnsChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Product Consoles -->
+        <div class="panel" style="margin-top:18px">
+          <div class="panel__hd">
+            <div>
+              <div class="panel__title">Product Management Consoles</div>
+              <div class="panel__sub">Access product-specific operational tools and live NAV</div>
+            </div>
+          </div>
+          <div class="panel__bd" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;padding:16px">
+
+            <!-- Cattle Finance -->
+            <a href="cattle.html" style="text-decoration:none">
+              <div style="background:linear-gradient(135deg,#0d1e13,#1a3a26);border-radius:12px;padding:20px;color:#fff;cursor:pointer;transition:transform .18s,box-shadow .18s;display:block"
+                   onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 30px rgba(45,106,79,.35)'"
+                   onmouseout="this.style.transform='';this.style.boxShadow=''">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                  <div style="width:40px;height:40px;background:rgba(116,198,157,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">🐄</div>
+                  <div>
+                    <div style="font-size:14px;font-weight:700">Cattle Finance</div>
+                    <div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.8px">Live Product</div>
+                  </div>
+                  <div style="margin-left:auto;font-size:10px;background:rgba(116,198,157,.2);color:#74c69d;padding:3px 8px;border-radius:20px;font-weight:700">ACTIVE</div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+                  <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Target Return</div><div style="font-size:16px;font-weight:800;color:#74c69d">14.83%</div></div>
+                  <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Cycle Term</div><div style="font-size:16px;font-weight:800">~183 days</div></div>
+                </div>
+                <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:14px">Physical cattle backed · Feedlot backgrounding · Live NAV engine</div>
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <span style="font-size:11px;color:#74c69d;font-weight:600"><i class="fa-solid fa-chart-line"></i> View NAV Dashboard</span>
+                  <i class="fa-solid fa-arrow-right" style="color:rgba(255,255,255,.3)"></i>
+                </div>
+              </div>
+            </a>
+
+            <!-- Solar — Coming Soon -->
+            <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:20px;color:#fff;opacity:.65">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                <div style="width:40px;height:40px;background:rgba(255,193,7,.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">☀️</div>
+                <div>
+                  <div style="font-size:14px;font-weight:700">Solar Finance</div>
+                  <div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.8px">5/6/7 Year Terms</div>
+                </div>
+                <div style="margin-left:auto;font-size:10px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.4);padding:3px 8px;border-radius:20px;font-weight:700">SOON</div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+                <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Target Return</div><div style="font-size:16px;font-weight:800;color:#ffc107">13.5–21.4%</div></div>
+                <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Term</div><div style="font-size:16px;font-weight:800">5–7 Years</div></div>
+              </div>
+              <div style="font-size:11px;color:rgba(255,255,255,.5)">Solar asset backed · Long-term amortising · NAV console coming soon</div>
+            </div>
+
+            <!-- SMME Short-Term -->
+            <div style="background:linear-gradient(135deg,#1e1a0d,#2e2510);border-radius:12px;padding:20px;color:#fff;opacity:.65">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                <div style="width:40px;height:40px;background:rgba(244,162,97,.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">🏢</div>
+                <div>
+                  <div style="font-size:14px;font-weight:700">SMME Short-Term</div>
+                  <div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.8px">5-Month Loan</div>
+                </div>
+                <div style="margin-left:auto;font-size:10px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.4);padding:3px 8px;border-radius:20px;font-weight:700">SOON</div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+                <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Target Return</div><div style="font-size:16px;font-weight:800;color:#f4a261">13.92%</div></div>
+                <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Term</div><div style="font-size:16px;font-weight:800">~150 days</div></div>
+              </div>
+              <div style="font-size:11px;color:rgba(255,255,255,.5)">Working capital loans · SMME portfolio tracking · Coming soon</div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════
+           RETURN CALCULATOR
+      ════════════════════════════════ -->
+      <div class="view" id="view-calculator">
+
+        <div class="calc-section">
+          <div class="calc-section__title"><i class="fa-solid fa-sliders"></i> Calculation Parameters</div>
+          <div class="form-grid form-grid--4 mb-16">
+            <div class="f-group">
+              <label class="f-label">Principal Amount (R) *</label>
+              <div class="f-suffix">
+                <input type="number" class="f-input" id="calcPrincipal" value="100000" min="0" step="1000" oninput="calcUpdate()" />
+                <span class="f-suffix-label">ZAR</span>
+              </div>
+            </div>
+            <div class="f-group">
+              <label class="f-label">Annual Return Rate *</label>
+              <div class="f-suffix">
+                <input type="number" class="f-input" id="calcRate" value="14.83" min="0" max="100" step="0.01" oninput="calcUpdate()" />
+                <span class="f-suffix-label">%</span>
+              </div>
+            </div>
+            <div class="f-group">
+              <label class="f-label">Investment Term *</label>
+              <div class="f-suffix">
+                <input type="number" class="f-input" id="calcDays" value="183" min="1" max="3650" oninput="calcUpdate()" />
+                <span class="f-suffix-label">days</span>
+              </div>
+              <div class="f-hint" id="calcDaysLabel">183 days</div>
+            </div>
+            <div class="f-group">
+              <label class="f-label">Calculation Method</label>
+              <select class="f-select" id="calcMode" onchange="calcToggleCompounds(this.value==='compound');calcUpdate()">
+                <option value="simple">Simple Interest</option>
+                <option value="compound">Compound Interest</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-grid form-grid--4 mb-16" id="calcCompoundsRow" style="display:none">
+            <div class="f-group">
+              <label class="f-label">Compounding Frequency</label>
+              <select class="f-select" id="calcCompounds" onchange="calcUpdate()">
+                <option value="1">Annually (1×)</option>
+                <option value="2">Semi-Annual (2×)</option>
+                <option value="4">Quarterly (4×)</option>
+                <option value="12">Monthly (12×)</option>
+                <option value="365">Daily (365×)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-grid form-grid--3">
+            <div class="f-group">
+              <label class="f-label">Management Fee p.a.</label>
+              <div class="f-suffix">
+                <input type="number" class="f-input" id="calcMgmtFee" value="2.00" min="0" max="10" step="0.1" oninput="calcUpdate()" />
+                <span class="f-suffix-label">%</span>
+              </div>
+              <div class="f-hint">Charged on capital × pro-rated days</div>
+            </div>
+            <div class="f-group">
+              <label class="f-label">Performance Fee (of gross return)</label>
+              <div class="f-suffix">
+                <input type="number" class="f-input" id="calcPerfFee" value="0" min="0" max="50" step="1" oninput="calcUpdate()" />
+                <span class="f-suffix-label">%</span>
+              </div>
+              <div class="f-hint">0% for standard products</div>
+            </div>
+            <div class="f-group">
+              <label class="f-label">Benchmark Rate (for comparison)</label>
+              <div class="f-suffix">
+                <input type="number" class="f-input" id="calcBenchmark" value="14.83" min="0" max="100" step="0.01" oninput="calcUpdate()" />
+                <span class="f-suffix-label">%</span>
+              </div>
+              <div class="f-hint">Contracted rate for alpha calc</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Results -->
+        <div class="calc-result">
+          <div class="calc-result__item">
+            <div class="calc-result__label">Gross Return</div>
+            <div class="calc-result__value calc-result__value--gold" id="calcGross">R 0.00</div>
+            <div class="calc-result__sub">before all fees</div>
+          </div>
+          <div class="calc-result__item">
+            <div class="calc-result__label">Total Fees</div>
+            <div class="calc-result__value calc-result__value--orange" id="calcTotalFees">R 0.00</div>
+            <div class="calc-result__sub">mgmt <span id="calcMgmtFeeAmt">—</span> + perf <span id="calcPerfFeeAmt">—</span></div>
+          </div>
+          <div class="calc-result__item">
+            <div class="calc-result__label">Net Return</div>
+            <div class="calc-result__value calc-result__value--green" id="calcNet">R 0.00</div>
+            <div class="calc-result__sub">net rate: <span id="calcNetRate">—</span> p.a.</div>
+          </div>
+          <div class="calc-result__item">
+            <div class="calc-result__label">Total Payout</div>
+            <div class="calc-result__value calc-result__value--white" id="calcPayout">R 0.00</div>
+            <div class="calc-result__sub">EAR: <span id="calcEffRate">—</span></div>
+          </div>
+        </div>
+
+        <div class="rate-comparison mt-12" id="calcBenchComp">
+          <i class="fa-solid fa-scale-balanced"></i>
+          <span>Enter values above to see benchmark comparison</span>
+        </div>
+
+        <!-- Accrual Schedule Preview -->
+        <div class="panel mt-16" style="margin-top:18px">
+          <div class="panel__hd">
+            <div><div class="panel__title">Accrual Schedule</div><div class="panel__sub">30-day increments to maturity</div></div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="data-table">
+              <thead><tr><th>Period</th><th>Cumulative Gross</th><th>Period Increment</th><th>Net Accrued</th><th>Total Payout if Exited</th></tr></thead>
+              <tbody id="calcScheduleBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Quick presets -->
+        <div class="panel mt-16" style="margin-top:18px">
+          <div class="panel__hd"><div class="panel__title">Quick Presets — SV Capital Products</div></div>
+          <div class="panel__bd">
+            <div class="form-grid form-grid--3">
+              <button class="btn btn--secondary w-full" onclick="applyPreset(0.1483,183,'cattle')">
+                <i class="fa-solid fa-cow"></i> Cattle · 14.83% · 183 days
+              </button>
+              <button class="btn btn--secondary w-full" onclick="applyPreset(0.135,365,'solar_7yr')">
+                <i class="fa-solid fa-solar-panel"></i> Solar 7yr · 13.50% · 1yr
+              </button>
+              <button class="btn btn--secondary w-full" onclick="applyPreset(0.12,90,'short_term')">
+                <i class="fa-solid fa-bolt"></i> Short-Term · 12.00% · 90 days
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════
+           FUND RUNS
+      ════════════════════════════════ -->
+      <div class="view" id="view-runs">
+        <div class="tbl-ctrl">
+          <div class="tbl-ctrl__left">
+            <div style="font-size:0.82rem;color:var(--text-muted)">
+              Showing <strong id="runsCount">—</strong> fund runs
+            </div>
+          </div>
+          <div class="tbl-ctrl__right">
+            <div class="srch"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search runs..." id="runSearch" /></div>
+            <select class="flt" id="runStatusFilter">
+              <option value="">All Status</option>
+              <option value="draft">Draft</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+            <button class="btn btn--primary btn--sm" onclick="openNewRunModal()"><i class="fa-solid fa-plus"></i> New Run</button>
+          </div>
+        </div>
+        <div id="runsList" style="padding:4px 0">
+          <div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════
+           PAYOUT SCHEDULES
+      ════════════════════════════════ -->
+      <div class="view" id="view-schedules">
+        <div class="stats-grid stats-grid--4 mb-20">
+          <div class="kpi kpi--blue">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-list-check"></i></div></div>
+            <div class="kpi__value" id="sched-total">—</div>
+            <div class="kpi__label">Total Schedules</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-clock"></i></div></div>
+            <div class="kpi__value" id="sched-scheduled">—</div>
+            <div class="kpi__label">Scheduled</div>
+          </div>
+          <div class="kpi kpi--teal">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-gears"></i></div></div>
+            <div class="kpi__value" id="sched-processing">—</div>
+            <div class="kpi__label">Processing</div>
+          </div>
+          <div class="kpi kpi--green">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-circle-check"></i></div></div>
+            <div class="kpi__value" id="sched-paid">—</div>
+            <div class="kpi__label">Paid Out</div>
+          </div>
+        </div>
+
+        <div class="panel" style="background:linear-gradient(135deg,#0f1e2b,#162535);border-color:rgba(255,130,21,0.2);margin-bottom:18px">
+          <div class="panel__bd" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div>
+              <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.45);margin-bottom:4px">Total Upcoming Payout Value</div>
+              <div style="font-size:2rem;font-weight:800;color:var(--gold)" id="sched-total-payout">—</div>
+            </div>
+            <div style="font-size:0.8rem;color:rgba(255,255,255,0.45)">Scheduled + Processing payouts</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="tbl-ctrl">
+            <div class="tbl-ctrl__left"><div class="srch"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search investor or pool..." id="schedSearch" /></div></div>
+            <div class="tbl-ctrl__right">
+              <select class="flt" id="schedFilter">
+                <option value="">All Status</option>
+                <option value="scheduled">Scheduled</option>
+                <option value="processing">Processing</option>
+                <option value="paid">Paid</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="data-table">
+              <thead><tr><th>Investor</th><th>Pool</th><th>Product</th><th>Capital</th><th>Rate</th><th>Net Return</th><th>Total Payout</th><th>Payout Date</th><th>Status</th></tr></thead>
+              <tbody id="schedsBody"><tr><td colspan="9"><div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════
+           POOL OVERVIEW
+      ════════════════════════════════ -->
+      <div class="view" id="view-pools">
+        <div class="panel">
+          <div class="panel__hd">
+            <div><div class="panel__title">Investment Pool Overview</div><div class="panel__sub">All pools — click "New Run" to create a fund run for any pool</div></div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="data-table">
+              <thead><tr><th>Pool</th><th>Product</th><th>Raised</th><th>Target</th><th>Fill Rate</th><th>Benchmark</th><th>Investors</th><th>Actions</th></tr></thead>
+              <tbody id="poolsOverviewBody"><tr><td colspan="8"><div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════
+           REPORTS & ANALYTICS
+      ════════════════════════════════ -->
+      <div class="view" id="view-reports">
+        <div class="stats-grid stats-grid--4 mb-20">
+          <div class="kpi kpi--green">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-check-double"></i></div></div>
+            <div class="kpi__value" id="rpt-runs">—</div>
+            <div class="kpi__label">Completed Runs</div>
+          </div>
+          <div class="kpi kpi--gold">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-coins"></i></div></div>
+            <div class="kpi__value" id="rpt-capital">—</div>
+            <div class="kpi__label">Total Capital Cycled</div>
+          </div>
+          <div class="kpi kpi--teal">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-chart-line"></i></div></div>
+            <div class="kpi__value" id="rpt-avg-rate">—</div>
+            <div class="kpi__label">Avg Actual Rate</div>
+          </div>
+          <div class="kpi kpi--purple">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-bolt"></i></div></div>
+            <div class="kpi__value" id="rpt-avg-alpha">—</div>
+            <div class="kpi__label">Avg Alpha</div>
+          </div>
+        </div>
+
+        <div class="stats-grid stats-grid--3 mb-20">
+          <div class="kpi kpi--green">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-arrow-trend-up"></i></div></div>
+            <div class="kpi__value" id="rpt-gross">—</div>
+            <div class="kpi__label">Total Gross Returns</div>
+          </div>
+          <div class="kpi kpi--teal">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-circle-dollar-to-slot"></i></div></div>
+            <div class="kpi__value" id="rpt-net">—</div>
+            <div class="kpi__label">Total Net Returns</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-receipt"></i></div></div>
+            <div class="kpi__value" id="rpt-fee-income">—</div>
+            <div class="kpi__label">Total Fee Income</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Product Performance Chart -->
+          <div class="panel">
+            <div class="panel__hd">
+              <div><div class="panel__title">Avg Rate by Product Type</div><div class="panel__sub">Benchmark vs actual achieved</div></div>
+            </div>
+            <div class="panel__bd">
+              <div class="chart-box chart-box--md"><canvas id="productPerfChart"></canvas></div>
+            </div>
+          </div>
+
+          <!-- Run Type Chart (reuse from dashboard) -->
+          <div class="panel">
+            <div class="panel__hd">
+              <div><div class="panel__title">Rate Comparison Table</div><div class="panel__sub">Alpha analysis — completed runs</div></div>
+            </div>
+            <div class="tbl-wrap">
+              <table class="data-table">
+                <thead><tr><th>Run</th><th>Product</th><th>Benchmark</th><th>Actual</th><th>Alpha</th><th>Net Return</th><th>Term</th></tr></thead>
+                <tbody id="rateCompBody"><tr><td colspan="7" class="text-center td-m" style="padding:24px">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════
+           INVESTOR ALLOCATIONS
+      ════════════════════════════════ -->
+      <div class="view" id="view-allocations">
+        <!-- KPI row -->
+        <div class="stats-grid stats-grid--4 mb-20">
+          <div class="kpi kpi--gold">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-users"></i></div></div>
+            <div class="kpi__value" id="alloc-investors">—</div>
+            <div class="kpi__label">Unique Investors</div>
+          </div>
+          <div class="kpi kpi--teal">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-coins"></i></div></div>
+            <div class="kpi__value" id="alloc-capital">—</div>
+            <div class="kpi__label">Total Capital Allocated</div>
+          </div>
+          <div class="kpi kpi--green">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-arrow-trend-up"></i></div></div>
+            <div class="kpi__value" id="alloc-expected">—</div>
+            <div class="kpi__label">Total Expected Payouts</div>
+          </div>
+          <div class="kpi kpi--purple">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-check-double"></i></div></div>
+            <div class="kpi__value" id="alloc-matured">—</div>
+            <div class="kpi__label">Matured Allocations</div>
+          </div>
+        </div>
+
+        <!-- Filter bar -->
+        <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
+          <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:7px 12px;flex:1;min-width:200px">
+            <i class="fa-solid fa-search" style="color:rgba(255,255,255,.3);font-size:12px"></i>
+            <input type="text" id="allocSearch" placeholder="Search investor, product, entity…" style="background:none;border:none;outline:none;color:#fff;font-size:13px;width:100%" oninput="renderAllocationsView()">
+          </div>
+          <select id="allocProductFilter" class="f-select" style="width:180px" onchange="renderAllocationsView()">
+            <option value="">All Products</option>
+            <option value="cattle">Cattle Finance</option>
+            <option value="solar_7yr">Solar 7yr</option>
+            <option value="solar_6yr">Solar 6yr</option>
+            <option value="solar_5yr">Solar 5yr</option>
+            <option value="short_term">Short-Term</option>
+            <option value="fund_run">Fund Run</option>
+          </select>
+          <select id="allocStatusFilter" class="f-select" style="width:150px" onchange="renderAllocationsView()">
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="committed">Committed</option>
+            <option value="matured">Matured</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="defaulted">Defaulted</option>
+          </select>
+          <button class="btn btn--primary btn--sm" onclick="openNewAllocationModal()">
+            <i class="fa-solid fa-plus"></i> Add Allocation
+          </button>
+        </div>
+
+        <!-- Table -->
+        <div class="panel">
+          <div class="panel__hd">
+            <div><div class="panel__title">Investor Allocations</div><div class="panel__sub" id="allocSubtitle">Loading…</div></div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Investor</th>
+                  <th>Product</th>
+                  <th>Deployment</th>
+                  <th class="num">Capital</th>
+                  <th class="num">Share %</th>
+                  <th class="num">Expected Payout</th>
+                  <th>Maturity</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="allocBody">
+                <tr><td colspan="9"><div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading allocations…</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Per-investor breakdown -->
+        <div class="panel" style="margin-top:18px">
+          <div class="panel__hd"><div><div class="panel__title">Portfolio by Investor</div><div class="panel__sub">Total capital and exposure per investor</div></div></div>
+          <div id="allocByInvestor" style="padding:16px"></div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════
+           AUDIT TRAIL
+      ════════════════════════════════ -->
+      <div class="view" id="view-audit">
+        <!-- Stats row -->
+        <div class="stats-grid stats-grid--4 mb-20">
+          <div class="kpi kpi--teal">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-list-check"></i></div></div>
+            <div class="kpi__value" id="aud-total">—</div>
+            <div class="kpi__label">Total Audit Events</div>
+          </div>
+          <div class="kpi kpi--green">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-circle-check"></i></div></div>
+            <div class="kpi__value" id="aud-today">—</div>
+            <div class="kpi__label">Events Today</div>
+          </div>
+          <div class="kpi" style="border-color:rgba(251,146,60,.25)">
+            <div class="kpi__head"><div class="kpi__icon" style="background:rgba(251,146,60,.12)"><i class="fa-solid fa-triangle-exclamation" style="color:#fb923c"></i></div></div>
+            <div class="kpi__value" style="color:#fb923c" id="aud-warnings">—</div>
+            <div class="kpi__label">Warning Events</div>
+          </div>
+          <div class="kpi" style="border-color:rgba(248,113,113,.25)">
+            <div class="kpi__head"><div class="kpi__icon" style="background:rgba(248,113,113,.12)"><i class="fa-solid fa-circle-xmark" style="color:#f87171"></i></div></div>
+            <div class="kpi__value" style="color:#f87171" id="aud-critical">—</div>
+            <div class="kpi__label">Critical Events</div>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
+          <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:7px 12px;flex:1;min-width:200px">
+            <i class="fa-solid fa-search" style="color:rgba(255,255,255,.3);font-size:12px"></i>
+            <input type="text" id="audSearch" placeholder="Search events, actors, entities…" style="background:none;border:none;outline:none;color:#fff;font-size:13px;width:100%" oninput="renderAuditTable()">
+          </div>
+          <select id="audTypeFilter" class="f-select" style="width:170px" onchange="renderAuditTable()">
+            <option value="">All Types</option>
+            <option value="fund_run">Fund Run</option>
+            <option value="solar_project">Solar Project</option>
+            <option value="loan">Loan</option>
+            <option value="cattle">Cattle</option>
+            <option value="pool">Pool</option>
+            <option value="schedule">Schedule</option>
+            <option value="auth">Auth</option>
+            <option value="system">System</option>
+          </select>
+          <select id="audSeverityFilter" class="f-select" style="width:140px" onchange="renderAuditTable()">
+            <option value="">All Severities</option>
+            <option value="info">Info</option>
+            <option value="warning">Warning</option>
+            <option value="critical">Critical</option>
+          </select>
+          <button class="btn btn--secondary btn--sm" onclick="exportAuditLog()">
+            <i class="fa-solid fa-download"></i> Export CSV
+          </button>
+        </div>
+
+        <!-- Audit log table -->
+        <div class="panel">
+          <div class="panel__hd">
+            <div><div class="panel__title"><i class="fa-solid fa-shield-check" style="color:var(--teal);margin-right:8px"></i>Immutable Audit Log</div>
+            <div class="panel__sub">Read-only · All state changes recorded · FSCA compliant</div></div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Severity</th>
+                  <th>Type</th>
+                  <th>Action</th>
+                  <th>Entity</th>
+                  <th>Actor</th>
+                  <th>Summary</th>
+                  <th>Detail</th>
+                </tr>
+              </thead>
+              <tbody id="auditBody">
+                <tr><td colspan="8"><div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading audit log…</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════
+           CASH FLOW FORECAST
+      ════════════════════════════════ -->
+      <div class="view" id="view-forecast">
+        <!-- Hero -->
+        <div style="background:linear-gradient(135deg,#091e1e,#0d2e2e);border:1px solid rgba(45,212,191,.18);border-radius:16px;padding:22px 28px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+              <div style="width:36px;height:36px;background:rgba(45,212,191,.15);border-radius:9px;display:flex;align-items:center;justify-content:center">
+                <i class="fa-solid fa-chart-gantt" style="color:#2dd4bf;font-size:16px"></i>
+              </div>
+              <div style="font-size:17px;font-weight:900;color:#fff">12-Month Cash Flow Forecast</div>
+            </div>
+            <p style="font-size:12px;color:rgba(255,255,255,.4);margin:0">Projected inflows (maturities + repayments) vs outflows (payout obligations) across all products</p>
+          </div>
+          <button class="btn btn--sm" style="background:rgba(45,212,191,.15);color:#2dd4bf;border:1px solid rgba(45,212,191,.3)" onclick="loadForecast()">
+            <i class="fa-solid fa-rotate"></i> Recalculate
+          </button>
+        </div>
+
+        <!-- KPIs -->
+        <div class="stats-grid stats-grid--4 mb-20">
+          <div class="kpi kpi--teal">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-arrow-down-to-bracket"></i></div></div>
+            <div class="kpi__value" id="fcst-inflow">—</div>
+            <div class="kpi__label">Total Projected Inflows (12M)</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-arrow-up-from-bracket"></i></div></div>
+            <div class="kpi__value" id="fcst-outflow">—</div>
+            <div class="kpi__label">Total Payout Obligations (12M)</div>
+          </div>
+          <div class="kpi kpi--green">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-scale-balanced"></i></div></div>
+            <div class="kpi__value" id="fcst-net">—</div>
+            <div class="kpi__label">Net Cash Position (12M)</div>
+          </div>
+          <div class="kpi kpi--gold">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-hourglass-half"></i></div></div>
+            <div class="kpi__value" id="fcst-peak-month">—</div>
+            <div class="kpi__label">Peak Obligation Month</div>
+          </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="panel mb-20">
+          <div class="panel__hd"><div><div class="panel__title">Monthly Cash Flow — Inflows vs Outflows</div><div class="panel__sub">Next 12 months · all products included</div></div></div>
+          <div class="panel__bd">
+            <div class="chart-box chart-box--md" style="height:300px"><canvas id="forecastChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Monthly breakdown table -->
+        <div class="panel mb-20">
+          <div class="panel__hd"><div><div class="panel__title">Monthly Breakdown</div></div></div>
+          <div class="tbl-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th class="num">Inflows</th>
+                  <th class="num">Outflows</th>
+                  <th class="num">Net</th>
+                  <th class="num">Cumulative Net</th>
+                  <th>Events</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="forecastBody">
+                <tr><td colspan="7"><div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading forecast…</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Event timeline -->
+        <div class="panel">
+          <div class="panel__hd"><div><div class="panel__title">Maturity & Obligation Timeline</div><div class="panel__sub">All scheduled events · next 12 months</div></div></div>
+          <div id="forecastTimeline" style="padding:16px"></div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════
+           FUND INTELLIGENCE
+      ════════════════════════════════ -->
+      <div class="view" id="view-intelligence">
+
+        <!-- Hero banner -->
+        <div style="background:linear-gradient(135deg,#1a0d2e,#160b25);border:1px solid rgba(168,85,247,.2);border-radius:16px;padding:24px 28px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+              <div style="width:38px;height:38px;background:rgba(168,85,247,.18);border-radius:10px;display:flex;align-items:center;justify-content:center">
+                <i class="fa-solid fa-brain" style="color:#c084fc;font-size:17px"></i>
+              </div>
+              <div>
+                <div style="font-size:18px;font-weight:900;color:#fff">Fund Intelligence</div>
+                <div style="font-size:12px;color:rgba(255,255,255,.4)">AI-powered deployment analysis · Live data engine</div>
+              </div>
+            </div>
+            <p style="font-size:13px;color:rgba(255,255,255,.5);margin:0;max-width:560px">
+              Real-time analysis of your fund's available capital, upcoming obligations, and data-driven deployment recommendations across all product lines.
+            </p>
+          </div>
+          <button class="btn btn--sm" style="background:rgba(168,85,247,.2);color:#c084fc;border:1px solid rgba(168,85,247,.3);flex-shrink:0" onclick="loadIntelligence()">
+            <i class="fa-solid fa-rotate"></i> Refresh Analysis
+          </button>
+        </div>
+
+        <!-- Loading placeholder -->
+        <div id="intelligenceContent">
+          <div class="panel"><div class="panel__bd" style="padding:60px;text-align:center;color:rgba(255,255,255,.3)">
+            <i class="fa-solid fa-brain" style="font-size:40px;margin-bottom:16px;color:rgba(168,85,247,.3)"></i>
+            <p style="margin:0;font-size:14px">Loading Fund Intelligence…</p>
+          </div></div>
+        </div>
+
+      </div>
+
+      <!-- ════════════════════════════════
+           FEE LEDGER & REVENUE
+      ════════════════════════════════ -->
+      <div class="view" id="view-fees">
+        <div class="stats-grid stats-grid--4 mb-20">
+          <div class="kpi kpi--gold">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-coins"></i></div><span class="kpi__trend trend--up">All time</span></div>
+            <div class="kpi__value" id="fee-total-earned">—</div>
+            <div class="kpi__label">Total Fee Revenue Earned</div>
+          </div>
+          <div class="kpi kpi--green">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-circle-check"></i></div></div>
+            <div class="kpi__value" id="fee-received">—</div>
+            <div class="kpi__label">Fees Received (Cash)</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-hourglass-half"></i></div></div>
+            <div class="kpi__value" id="fee-accrued">—</div>
+            <div class="kpi__label">Fees Accrued (Pending)</div>
+          </div>
+          <div class="kpi kpi--teal">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-chart-pie"></i></div></div>
+            <div class="kpi__value" id="fee-margin">—</div>
+            <div class="kpi__label">Fee Margin (% of Capital)</div>
+          </div>
+        </div>
+
+        <div class="grid-2 mb-20">
+          <!-- Fee by type chart -->
+          <div class="panel">
+            <div class="panel__hd"><div><div class="panel__title">Revenue by Fee Type</div><div class="panel__sub">Breakdown of all fee categories</div></div></div>
+            <div class="panel__bd"><div class="chart-box chart-box--sm" style="height:240px"><canvas id="feeTypeChart"></canvas></div></div>
+          </div>
+          <!-- Fee by product chart -->
+          <div class="panel">
+            <div class="panel__hd"><div><div class="panel__title">Revenue by Product</div><div class="panel__sub">Contribution per product line</div></div></div>
+            <div class="panel__bd"><div class="chart-box chart-box--sm" style="height:240px"><canvas id="feeProductChart"></canvas></div></div>
+          </div>
+        </div>
+
+        <!-- Fee timeline chart -->
+        <div class="panel mb-20">
+          <div class="panel__hd"><div><div class="panel__title">Monthly Fee Revenue Timeline</div><div class="panel__sub">Received fees by month</div></div></div>
+          <div class="panel__bd"><div class="chart-box chart-box--sm" style="height:220px"><canvas id="feeTimelineChart"></canvas></div></div>
+        </div>
+
+        <!-- Fee ledger table -->
+        <div class="panel">
+          <div class="panel__hd">
+            <div><div class="panel__title"><i class="fa-solid fa-receipt" style="color:#D4AF37;margin-right:8px"></i>Fee Ledger</div><div class="panel__sub" id="feeLedgerSub">All fee entries</div></div>
+            <div style="display:flex;gap:8px">
+              <select id="feeTypeFilter" class="f-select" style="width:160px" onchange="applyFeeFilters()">
+                <option value="">All Types</option>
+                <option value="management">Management</option>
+                <option value="performance">Performance</option>
+                <option value="structuring">Structuring</option>
+                <option value="admin">Admin</option>
+                <option value="early_exit">Early Exit</option>
+              </select>
+              <select id="feeStatusFilter" class="f-select" style="width:140px" onchange="applyFeeFilters()">
+                <option value="">All Statuses</option>
+                <option value="received">Received</option>
+                <option value="accrued">Accrued</option>
+                <option value="invoiced">Invoiced</option>
+                <option value="waived">Waived</option>
+              </select>
+              <button class="btn btn--sm btn--secondary" onclick="exportFeeLedger()"><i class="fa-solid fa-download"></i> Export</button>
+            </div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="data-table">
+              <thead><tr><th>Date</th><th>Run / Project</th><th>Product</th><th>Fee Type</th><th class="num">Capital Base</th><th class="num">Rate</th><th class="num">Fee Amount</th><th>Status</th><th>Invoice</th></tr></thead>
+              <tbody id="feeLedgerBody"><tr><td colspan="9"><div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading…</p></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════
+           RISK DASHBOARD
+      ════════════════════════════════ -->
+      <div class="view" id="view-risk">
+        <!-- Risk hero -->
+        <div style="background:linear-gradient(135deg,#1a0a0a,#2e1010);border:1px solid rgba(248,113,113,.18);border-radius:16px;padding:22px 28px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+              <div style="width:36px;height:36px;background:rgba(248,113,113,.15);border-radius:9px;display:flex;align-items:center;justify-content:center">
+                <i class="fa-solid fa-shield-halved" style="color:#f87171;font-size:16px"></i>
+              </div>
+              <div style="font-size:17px;font-weight:900;color:#fff">Portfolio Risk Dashboard</div>
+            </div>
+            <p style="font-size:12px;color:rgba(255,255,255,.4);margin:0">Concentration risk, default exposure, vintage analysis, and liquidity stress across all products</p>
+          </div>
+          <button class="btn btn--sm" style="background:rgba(248,113,113,.15);color:#f87171;border:1px solid rgba(248,113,113,.3)" onclick="loadRiskDashboard()">
+            <i class="fa-solid fa-rotate"></i> Refresh
+          </button>
+        </div>
+
+        <!-- Risk KPIs -->
+        <div class="stats-grid stats-grid--4 mb-20">
+          <div class="kpi" style="border-color:rgba(248,113,113,.25)">
+            <div class="kpi__head"><div class="kpi__icon" style="background:rgba(248,113,113,.12)"><i class="fa-solid fa-circle-xmark" style="color:#f87171"></i></div></div>
+            <div class="kpi__value" style="color:#f87171" id="risk-default-rate">—</div>
+            <div class="kpi__label">Loan Default Rate</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-triangle-exclamation"></i></div></div>
+            <div class="kpi__value" id="risk-overdue-exposure">—</div>
+            <div class="kpi__label">Overdue Exposure (ZAR)</div>
+          </div>
+          <div class="kpi kpi--gold">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-chart-pie"></i></div></div>
+            <div class="kpi__value" id="risk-top-concentration">—</div>
+            <div class="kpi__label">Top Product Concentration</div>
+          </div>
+          <div class="kpi kpi--teal">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-scale-balanced"></i></div></div>
+            <div class="kpi__value" id="risk-hhi">—</div>
+            <div class="kpi__label">Portfolio HHI Score</div>
+          </div>
+        </div>
+
+        <div class="grid-2 mb-20">
+          <!-- Concentration donut -->
+          <div class="panel">
+            <div class="panel__hd"><div><div class="panel__title">Capital Concentration by Product</div><div class="panel__sub">% of total deployed capital</div></div></div>
+            <div class="panel__bd"><div class="chart-box chart-box--sm" style="height:260px"><canvas id="riskConcentrationChart"></canvas></div></div>
+          </div>
+          <!-- Vintage bars -->
+          <div class="panel">
+            <div class="panel__hd"><div><div class="panel__title">Vintage Analysis</div><div class="panel__sub">Capital deployed by year of deployment</div></div></div>
+            <div class="panel__bd"><div class="chart-box chart-box--sm" style="height:260px"><canvas id="riskVintageChart"></canvas></div></div>
+          </div>
+        </div>
+
+        <!-- Concentration risk table -->
+        <div class="panel mb-20">
+          <div class="panel__hd"><div><div class="panel__title">Concentration Risk by Product</div><div class="panel__sub">With HHI component and threshold alerts</div></div></div>
+          <div class="tbl-wrap">
+            <table class="data-table">
+              <thead><tr><th>Product</th><th class="num">Capital Deployed</th><th class="num">Share %</th><th class="num">HHI Component</th><th>Risk Band</th><th>Alert</th></tr></thead>
+              <tbody id="riskConcentrationBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Loan default & stress table -->
+        <div class="panel mb-20">
+          <div class="panel__hd"><div><div class="panel__title">Loan Default & Stress Analysis</div><div class="panel__sub">Short-term loan portfolio health</div></div></div>
+          <div id="riskLoanPanel" style="padding:16px"></div>
+        </div>
+
+        <!-- Solar project risk -->
+        <div class="panel">
+          <div class="panel__hd"><div><div class="panel__title">Solar Portfolio Risk Factors</div><div class="panel__sub">Term, rate, and maturity distribution</div></div></div>
+          <div id="riskSolarPanel" style="padding:16px"></div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════
+           NOTIFICATION CENTRE
+      ════════════════════════════════ -->
+      <div class="view" id="view-notifications">
+        <!-- Header bar -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-size:18px;font-weight:800;color:#fff;margin-bottom:4px"><i class="fa-solid fa-bell" style="color:var(--orange);margin-right:10px"></i>Notification Centre</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.4)" id="notifSubtitle">Loading…</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="notifCategoryFilter" class="f-select" style="width:160px" onchange="applyNotifFilters()">
+              <option value="">All Categories</option>
+              <option value="overdue">Overdue</option>
+              <option value="maturity">Maturity</option>
+              <option value="liquidity">Liquidity</option>
+              <option value="compliance">Compliance</option>
+              <option value="performance">Performance</option>
+              <option value="system">System</option>
+            </select>
+            <select id="notifSeverityFilter" class="f-select" style="width:140px" onchange="applyNotifFilters()">
+              <option value="">All Severities</option>
+              <option value="critical">Critical</option>
+              <option value="warning">Warning</option>
+              <option value="info">Info</option>
+            </select>
+            <button class="btn btn--sm btn--secondary" onclick="markAllNotifsRead()"><i class="fa-solid fa-check-double"></i> Mark All Read</button>
+            <button class="btn btn--sm btn--secondary" onclick="loadNotifications()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          </div>
+        </div>
+
+        <!-- Notification list -->
+        <div id="notifList">
+          <div class="panel"><div class="panel__bd" style="padding:40px;text-align:center;color:rgba(255,255,255,.4)"><i class="fa-solid fa-spinner fa-spin" style="font-size:28px;margin-bottom:12px"></i><p>Loading notifications…</p></div></div>
+        </div>
+      </div>
+
+    </main>
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ════════════════════════════════
+     MODAL: NEW FUND RUN
+════════════════════════════════ -->
+<div class="overlay" id="newRunModal" onclick="if(event.target===this)M.close('newRunModal')">
+  <div class="modal modal--lg">
+    <div class="modal__hd">
+      <span class="modal__title"><i class="fa-solid fa-plus" style="color:var(--orange);margin-right:8px"></i>Create New Fund Run</span>
+      <button class="modal__close" onclick="M.close('newRunModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__bd">
+      <div class="form-grid form-grid--2 mb-16">
+        <div class="f-group" style="grid-column:1/-1">
+          <label class="f-label">Run Name *</label>
+          <input type="text" class="f-input" id="newRunName" placeholder="e.g. Cattle Pool Q2 2025 — Payout Run" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Linked Investment Pool</label>
+          <select class="f-select" id="newRunPool"><option value="">Loading pools...</option></select>
+        </div>
+        <div class="f-group">
+          <label class="f-label">Pool Name (auto-filled or custom)</label>
+          <input type="text" class="f-input" id="newRunPoolName" placeholder="Pool name" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Run Type *</label>
+          <select class="f-select" id="newRunRunType">
+            <option value="return_calculation">Return Calculation</option>
+            <option value="payout_processing">Payout Processing</option>
+            <option value="reinvestment">Reinvestment</option>
+            <option value="partial_payout">Partial Payout</option>
+          </select>
+        </div>
+        <div class="f-group">
+          <label class="f-label">Product Type</label>
+          <select class="f-select" id="newRunType2">
+            <option value="cattle">Cattle</option>
+            <option value="solar_7yr">Solar 7yr</option>
+            <option value="solar_6yr">Solar 6yr</option>
+            <option value="solar_5yr">Solar 5yr</option>
+            <option value="short_term">Short-Term</option>
+            <option value="delivery_bike">Delivery Bike</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid form-grid--3 mb-16">
+        <div class="f-group">
+          <label class="f-label">Start Date *</label>
+          <input type="date" class="f-input" id="newRunStart" onchange="calcNewRunDays()" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">End Date *</label>
+          <input type="date" class="f-input" id="newRunEnd" onchange="calcNewRunDays()" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Term (auto-calculated)</label>
+          <div style="height:40px;display:flex;align-items:center;font-size:0.9rem;font-weight:700;color:var(--orange)" id="newRunDaysDisplay">— days</div>
+        </div>
+      </div>
+      <div class="form-grid form-grid--4 mb-16">
+        <div class="f-group">
+          <label class="f-label">Capital Deployed (R) *</label>
+          <input type="number" class="f-input" id="newRunCapital" placeholder="1500000" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Benchmark Rate (%)</label>
+          <input type="number" class="f-input" id="newRunBenchmark" placeholder="14.83" step="0.01" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Mgmt Fee (% p.a.)</label>
+          <input type="number" class="f-input" id="newRunMgmtFee" value="2.00" step="0.1" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Perf Fee (% of gross)</label>
+          <input type="number" class="f-input" id="newRunPerfFee" value="20.00" step="1" />
+        </div>
+      </div>
+      <div class="form-grid form-grid--2 mb-16">
+        <div class="f-group">
+          <label class="f-label">Number of Investors</label>
+          <input type="number" class="f-input" id="newRunInvestors" placeholder="18" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Notes</label>
+          <input type="text" class="f-input" id="newRunNotes" placeholder="Internal notes..." />
+        </div>
+      </div>
+    </div>
+    <div class="modal__ft">
+      <button class="btn btn--secondary" onclick="M.close('newRunModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveNewRun()"><i class="fa-solid fa-plus"></i> Create Fund Run</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     MODAL: VIEW RUN
+════════════════════════════════ -->
+<div class="overlay" id="runModal" onclick="if(event.target===this)M.close('runModal')">
+  <div class="modal modal--lg">
+    <div class="modal__hd">
+      <span class="modal__title" id="runModalTitle">Fund Run</span>
+      <button class="modal__close" onclick="M.close('runModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__bd" id="runModalBody">Loading...</div>
+    <div class="modal__ft">
+      <button class="btn btn--secondary" onclick="M.close('runModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     MODAL: CALCULATE RETURNS
+════════════════════════════════ -->
+<div class="overlay" id="calcReturnsModal" onclick="if(event.target===this)M.close('calcReturnsModal')">
+  <div class="modal modal--lg">
+    <div class="modal__hd">
+      <span class="modal__title" id="calcRunTitle">Calculate Returns</span>
+      <button class="modal__close" onclick="M.close('calcReturnsModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__bd">
+      <input type="hidden" id="crRunId" />
+      <div class="form-grid form-grid--3 mb-16">
+        <div class="f-group">
+          <label class="f-label">Capital Deployed (R)</label>
+          <input type="number" class="f-input" id="crCapital" oninput="crUpdate()" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Actual Rate Achieved (%)</label>
+          <input type="number" class="f-input" id="crActualRate" step="0.0001" oninput="crUpdate()" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Benchmark Rate (%)</label>
+          <input type="number" class="f-input" id="crBenchmark" step="0.0001" oninput="crUpdate()" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Term (days)</label>
+          <input type="number" class="f-input" id="crDays" oninput="crUpdate()" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Mgmt Fee (% p.a.)</label>
+          <input type="number" class="f-input" id="crMgmtFee" step="0.1" oninput="crUpdate()" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Perf Fee (% of gross)</label>
+          <input type="number" class="f-input" id="crPerfFee" step="1" oninput="crUpdate()" />
+        </div>
+      </div>
+
+      <!-- Live calculation result -->
+      <div class="payout-summary">
+        <div class="payout-summary__title">Calculated Returns — Live Preview</div>
+        <div class="payout-row"><span class="payout-row__k">Gross Return</span><span class="payout-row__v" id="crGross">—</span></div>
+        <div class="payout-row"><span class="payout-row__k">Management Fee</span><span class="payout-row__v" id="crMgmtAmt">—</span></div>
+        <div class="payout-row"><span class="payout-row__k">Performance Fee</span><span class="payout-row__v" id="crPerfAmt">—</span></div>
+        <div class="payout-row"><span class="payout-row__k">Total Fees</span><span class="payout-row__v" id="crTotalFees">—</span></div>
+        <div class="payout-row"><span class="payout-row__k">Net Return to Investors</span><span class="payout-row__v" style="color:var(--green)" id="crNet">—</span></div>
+        <div class="payout-row payout-row--total"><span class="payout-row__k">Total Payout (capital + net return)</span><span class="payout-row__v" id="crTotal">—</span></div>
+        <div class="payout-row" style="padding-top:12px;border-top:1px solid rgba(255,255,255,0.1)"><span class="payout-row__k">Alpha vs Benchmark</span><span class="payout-row__v" id="crAlpha">—</span></div>
+      </div>
+    </div>
+    <div class="modal__ft">
+      <button class="btn btn--secondary" onclick="M.close('calcReturnsModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveCalculatedReturns()"><i class="fa-solid fa-save"></i> Save to Fund Run</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     MODAL: EDIT RUN
+════════════════════════════════ -->
+<div class="overlay" id="editRunModal" onclick="if(event.target===this)M.close('editRunModal')">
+  <div class="modal">
+    <div class="modal__hd">
+      <span class="modal__title">Edit Fund Run</span>
+      <button class="modal__close" onclick="M.close('editRunModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__bd">
+      <input type="hidden" id="editRunId" />
+      <div class="form-grid form-grid--2 mb-16">
+        <div class="f-group" style="grid-column:1/-1">
+          <label class="f-label">Run Name *</label>
+          <input type="text" class="f-input" id="editRunName" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Status</label>
+          <select class="f-select" id="editRunStatus">
+            <option value="draft">Draft</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div class="f-group">
+          <label class="f-label">Total Investors</label>
+          <input type="number" class="f-input" id="editRunInvestors" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Capital Deployed (R)</label>
+          <input type="number" class="f-input" id="editRunCapital" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Benchmark Rate (%)</label>
+          <input type="number" class="f-input" id="editRunBenchmark" step="0.01" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Term (days)</label>
+          <input type="number" class="f-input" id="editRunDays" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Mgmt Fee (% p.a.)</label>
+          <input type="number" class="f-input" id="editRunMgmt" step="0.1" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Perf Fee (% of gross)</label>
+          <input type="number" class="f-input" id="editRunPerf" step="1" />
+        </div>
+        <div class="f-group" style="grid-column:1/-1">
+          <label class="f-label">Notes</label>
+          <textarea class="f-textarea f-input" id="editRunNotes" rows="3"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal__ft">
+      <button class="btn btn--secondary" onclick="M.close('editRunModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveEditRun()"><i class="fa-solid fa-save"></i> Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-box" id="toastBox"></div>
+
+<script src="js/fund.js"></script>
+<script>
+  // Quick preset loader for calculator
+  function applyPreset(rate, days, product) {
+    document.getElementById('calcRate').value = (rate*100).toFixed(2);
+    document.getElementById('calcBenchmark').value = (rate*100).toFixed(2);
+    document.getElementById('calcDays').value = days;
+    calcUpdate();
+  }
+</script>
+<!-- PWA Service Worker Registration -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        .then(reg => {
+          console.log('[PWA] Service worker registered:', reg.scope);
+          /* Check for updates every 60s while app is open */
+          setInterval(() => reg.update(), 60000);
+        })
+        .catch(err => console.warn('[PWA] SW registration failed:', err));
+    });
+  }
+</script>
+</body>
+</html>

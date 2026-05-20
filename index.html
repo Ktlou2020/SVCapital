@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SV Capital — South Africa's Premier Alternative Investment Platform</title>
+  <meta name="description" content="Invest in real assets — cattle, solar, delivery, and more. SV Capital gives every South African access to inflation-beating alternative investments from R500." />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- CountUp.js -->
+  <script src="https://cdn.jsdelivr.net/npm/countup.js@2.8.0/dist/countUp.umd.js"></script>
+
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/home-ci.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════
+       NAVIGATION
+  ═══════════════════════════════════════════════ -->
+  <nav id="navbar" class="navbar">
+    <div class="nav-container">
+      <a href="#" class="nav-logo">
+        <img src="assets/logo-inline.svg" alt="SV Capital" class="nav-logo-img" width="36" height="36">
+        <span class="logo-sv">SV</span><span class="logo-capital">CAPITAL</span>
+        <span class="logo-badge">FSP 52449</span>
+      </a>
+
+      <button class="nav-mobile-toggle" id="mobileToggle" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#products" class="nav-link">Products</a></li>
+        <li><a href="#calculator" class="nav-link">Calculator</a></li>
+        <li><a href="#how-it-works" class="nav-link">How It Works</a></li>
+        <li><a href="#impact" class="nav-link">Impact</a></li>
+        <li><a href="#faq" class="nav-link">FAQ</a></li>
+        <li><a href="login.html" class="nav-btn nav-btn--ghost">Sign In</a></li>
+        <li><a href="signup.html" class="nav-btn nav-btn--primary">Get Started</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════
+       HERO
+  ═══════════════════════════════════════════════ -->
+  <header class="hero" id="hero">
+    <div class="hero-bg">
+      <div class="hero-gradient-orb orb-1"></div>
+      <div class="hero-gradient-orb orb-2"></div>
+      <div class="hero-gradient-orb orb-3"></div>
+      <div class="hero-grid"></div>
+    </div>
+
+    <div class="hero-container">
+      <div class="hero-content">
+        <div class="hero-eyebrow">
+          <span class="eyebrow-dot"></span>
+          <span>South Africa's Leading Alternative Investment Platform</span>
+        </div>
+        <h1 class="hero-headline">
+          Your money should<br />
+          work as hard<br />
+          <em>as you do.</em>
+        </h1>
+        <p class="hero-sub">
+          Invest in real, tangible assets — from cattle to clean energy. Starting from just <strong>R500</strong>, earn inflation-beating returns while building a better South Africa.
+        </p>
+        <div class="hero-ctas">
+          <a href="#products" class="btn btn--gold btn--lg">
+            <span>Explore Investments</span>
+            <i class="fa-solid fa-arrow-right"></i>
+          </a>
+          <a href="#calculator" class="btn btn--ghost btn--lg">
+            <i class="fa-solid fa-calculator"></i>
+            <span>Calculate Returns</span>
+          </a>
+        </div>
+        <div class="hero-trust">
+          <div class="trust-item">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>FSCA Regulated · FSP 52449</span>
+          </div>
+          <div class="trust-divider"></div>
+          <div class="trust-item">
+            <i class="fa-solid fa-users"></i>
+            <span>3,000+ Investors</span>
+          </div>
+          <div class="trust-divider"></div>
+          <div class="trust-item">
+            <i class="fa-solid fa-coins"></i>
+            <span>R200M+ Invested</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="portfolio-card">
+          <div class="portfolio-card__header">
+            <span class="portfolio-card__label">Live Portfolio Snapshot</span>
+            <span class="portfolio-card__badge portfolio-card__badge--live">● LIVE</span>
+          </div>
+          <div class="portfolio-card__value">R127,450</div>
+          <div class="portfolio-card__return positive">
+            <i class="fa-solid fa-arrow-trend-up"></i> +14.83% p.a.
+          </div>
+          <div class="portfolio-card__chart-wrap">
+            <canvas id="heroChart" height="80"></canvas>
+          </div>
+          <div class="portfolio-card__allocations">
+            <div class="alloc-item">
+              <span class="alloc-dot" style="background:#D4AF37"></span>
+              <span class="alloc-name">Cattle</span>
+              <span class="alloc-pct">40%</span>
+            </div>
+            <div class="alloc-item">
+              <span class="alloc-dot" style="background:#4CAF50"></span>
+              <span class="alloc-name">Solar</span>
+              <span class="alloc-pct">35%</span>
+            </div>
+            <div class="alloc-item">
+              <span class="alloc-dot" style="background:#2196F3"></span>
+              <span class="alloc-name">Short-Term</span>
+              <span class="alloc-pct">15%</span>
+            </div>
+            <div class="alloc-item">
+              <span class="alloc-dot" style="background:#FF9800"></span>
+              <span class="alloc-name">Delivery</span>
+              <span class="alloc-pct">10%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Floating badges -->
+        <div class="hero-float hero-float--1">
+          <i class="fa-solid fa-lock"></i>
+          <div>
+            <strong>Asset-Backed</strong>
+            <span>100% real assets</span>
+          </div>
+        </div>
+        <div class="hero-float hero-float--2">
+          <i class="fa-solid fa-leaf"></i>
+          <div>
+            <strong>700+ Jobs</strong>
+            <span>Created in SA</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scroll indicator -->
+    <div class="hero-scroll">
+      <span>Scroll to explore</span>
+      <div class="scroll-mouse">
+        <div class="scroll-wheel"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════
+       FEATURED IN
+  ═══════════════════════════════════════════════ -->
+  <section class="featured-in">
+    <div class="container">
+      <p class="featured-label">As seen in</p>
+      <div class="featured-logos">
+        <span class="featured-logo-item">Moneyweb</span>
+        <span class="featured-logo-item">702</span>
+        <span class="featured-logo-item">City Press</span>
+        <span class="featured-logo-item">Business Day</span>
+        <span class="featured-logo-item">Daily Maverick</span>
+        <span class="featured-logo-item">Forbes Africa</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       PRODUCTS
+  ═══════════════════════════════════════════════ -->
+  <section class="products" id="products">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-eyebrow">Investment Products</div>
+        <h2 class="section-title">Real assets. Real returns.</h2>
+        <p class="section-sub">Choose from South Africa's most innovative asset-backed investment products. Every rand you invest is tied to a tangible, productive asset.</p>
+      </div>
+
+      <div class="products-grid">
+
+        <!-- Cattle Investment -->
+        <article class="product-card product-card--cattle" data-product="cattle">
+          <div class="product-card__bg"></div>
+          <div class="product-card__badge-row">
+            <span class="risk-badge risk-badge--moderate">Moderate Risk</span>
+            <span class="popular-badge">🔥 Most Popular</span>
+          </div>
+          <div class="product-card__icon">
+            <i class="fa-solid fa-cow"></i>
+          </div>
+          <h3 class="product-card__title">Cattle Investment</h3>
+          <p class="product-card__desc">Partner with Beefcor — South Africa's premier feedlot — and earn returns as your herd grows from 200kg to 500kg. Ancient asset, modern returns.</p>
+          <div class="product-card__stats">
+            <div class="stat">
+              <span class="stat__label">Avg. Return</span>
+              <span class="stat__value stat__value--gold">14.83%</span>
+              <span class="stat__unit">p.a.</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Min. Invest</span>
+              <span class="stat__value">R500</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Term</span>
+              <span class="stat__value">12 mo</span>
+            </div>
+          </div>
+          <div class="product-card__detail">
+            <div class="detail-row">
+              <i class="fa-solid fa-shield-halved"></i>
+              <span>99% cattle survival guarantee</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-chart-line"></i>
+              <span>9 years of consistent returns</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-seedling"></i>
+              <span>Supports local agriculture</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="signup.html" class="btn btn--gold btn--full">Invest Now</a>
+            <button class="btn btn--ghost btn--full" onclick="openModal('cattle')">View Details</button>
+          </div>
+        </article>
+
+        <!-- Solar 7-Year -->
+        <article class="product-card product-card--solar product-card--featured" data-product="solar">
+          <div class="product-card__bg"></div>
+          <div class="product-card__featured-ribbon">Best Returns</div>
+          <div class="product-card__badge-row">
+            <span class="risk-badge risk-badge--moderate">Moderate Risk</span>
+          </div>
+          <div class="product-card__icon">
+            <i class="fa-solid fa-solar-panel"></i>
+          </div>
+          <h3 class="product-card__title">Solar Investment</h3>
+          <p class="product-card__desc">Power South Africa's energy future. Your capital funds solar panel installations — generating clean electricity, long-term contracts, and growing returns.</p>
+          <div class="product-card__stats">
+            <div class="stat">
+              <span class="stat__label">Best Return</span>
+              <span class="stat__value stat__value--gold">21.40%</span>
+              <span class="stat__unit">p.a. (7yr)</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Min. Invest</span>
+              <span class="stat__value">R10,000</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Term</span>
+              <span class="stat__value">5–7 yrs</span>
+            </div>
+          </div>
+          <div class="product-card__tiers">
+            <div class="tier tier--active">
+              <span class="tier__label">5 Years</span>
+              <span class="tier__return">6.41% p.a.</span>
+            </div>
+            <div class="tier">
+              <span class="tier__label">6 Years</span>
+              <span class="tier__return">15.53% p.a.</span>
+            </div>
+            <div class="tier tier--best">
+              <span class="tier__label">7 Years</span>
+              <span class="tier__return">21.40% p.a.</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="signup.html" class="btn btn--gold btn--full">Invest Now</a>
+            <button class="btn btn--ghost btn--full" onclick="openModal('solar')">View Details</button>
+          </div>
+        </article>
+
+        <!-- Short-Term -->
+        <article class="product-card product-card--short" data-product="short">
+          <div class="product-card__bg"></div>
+          <div class="product-card__badge-row">
+            <span class="risk-badge risk-badge--aggressive">Aggressive</span>
+            <span class="popular-badge">⚡ Fastest Returns</span>
+          </div>
+          <div class="product-card__icon">
+            <i class="fa-solid fa-bolt"></i>
+          </div>
+          <h3 class="product-card__title">Short-Term Investment</h3>
+          <p class="product-card__desc">Fund South African SMMEs through purchase order finance. Powered by MoolaLend, this 5-month product delivers impressive annualised returns fast.</p>
+          <div class="product-card__stats">
+            <div class="stat">
+              <span class="stat__label">Avg. Return</span>
+              <span class="stat__value stat__value--gold">13.92%</span>
+              <span class="stat__unit">p.a.</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Min. Invest</span>
+              <span class="stat__value">R1,000</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Term</span>
+              <span class="stat__value">5 mo</span>
+            </div>
+          </div>
+          <div class="product-card__detail">
+            <div class="detail-row">
+              <i class="fa-solid fa-building"></i>
+              <span>Powered by MoolaLend</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-handshake"></i>
+              <span>Supports SA SMMEs</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-rotate"></i>
+              <span>Auto-reinvest option</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="signup.html" class="btn btn--gold btn--full">Invest Now</a>
+            <button class="btn btn--ghost btn--full" onclick="openModal('short')">View Details</button>
+          </div>
+        </article>
+
+        <!-- Delivery Bike -->
+        <article class="product-card product-card--delivery" data-product="delivery">
+          <div class="product-card__bg"></div>
+          <div class="product-card__badge-row">
+            <span class="risk-badge risk-badge--aggressive">Aggressive</span>
+            <span class="popular-badge">🏍 New Economy</span>
+          </div>
+          <div class="product-card__icon">
+            <i class="fa-solid fa-motorcycle"></i>
+          </div>
+          <h3 class="product-card__title">Delivery Bike Investment</h3>
+          <p class="product-card__desc">Fuel South Africa's booming last-mile delivery economy. Bikes leased to riders on Mr D, Takealot & UberEats — weekly rental income flows directly to you.</p>
+          <div class="product-card__stats">
+            <div class="stat">
+              <span class="stat__label">Avg. Return</span>
+              <span class="stat__value stat__value--gold">12.05%</span>
+              <span class="stat__unit">p.a.</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Min. Invest</span>
+              <span class="stat__value">R3,100</span>
+            </div>
+            <div class="stat">
+              <span class="stat__label">Term</span>
+              <span class="stat__value">18 mo</span>
+            </div>
+          </div>
+          <div class="product-card__detail">
+            <div class="detail-row">
+              <i class="fa-solid fa-truck-fast"></i>
+              <span>Mr D, Takealot & UberEats</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-users"></i>
+              <span>Creates gig economy jobs</span>
+            </div>
+            <div class="detail-row">
+              <i class="fa-solid fa-calendar-week"></i>
+              <span>Weekly rental payments</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="signup.html" class="btn btn--gold btn--full">Invest Now</a>
+            <button class="btn btn--ghost btn--full" onclick="openModal('delivery')">View Details</button>
+          </div>
+        </article>
+
+      </div>
+
+      <!-- Comparison callout -->
+      <div class="compare-callout">
+        <div class="compare-callout__inner">
+          <div class="compare-callout__text">
+            <h3>How does SV Capital compare?</h3>
+            <p>See why thousands choose us over traditional savings accounts and money market funds.</p>
+          </div>
+          <div class="compare-table-wrap">
+            <table class="compare-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>SA Bank Savings</th>
+                  <th>JSE Average</th>
+                  <th class="compare-highlight">SV Capital</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Annual Return</td>
+                  <td>5–7%</td>
+                  <td>8–11%</td>
+                  <td class="compare-highlight"><strong>12–21%</strong></td>
+                </tr>
+                <tr>
+                  <td>Minimum Investment</td>
+                  <td>R0</td>
+                  <td>R1,000+</td>
+                  <td class="compare-highlight"><strong>R500</strong></td>
+                </tr>
+                <tr>
+                  <td>Asset-Backed</td>
+                  <td><i class="fa-solid fa-xmark text-red"></i></td>
+                  <td><i class="fa-solid fa-minus text-gray"></i></td>
+                  <td class="compare-highlight"><i class="fa-solid fa-check text-green"></i></td>
+                </tr>
+                <tr>
+                  <td>Real-World Impact</td>
+                  <td><i class="fa-solid fa-xmark text-red"></i></td>
+                  <td><i class="fa-solid fa-xmark text-red"></i></td>
+                  <td class="compare-highlight"><i class="fa-solid fa-check text-green"></i></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       CALCULATOR
+  ═══════════════════════════════════════════════ -->
+  <section class="calculator-section" id="calculator">
+    <div class="calc-bg">
+      <div class="calc-orb calc-orb-1"></div>
+      <div class="calc-orb calc-orb-2"></div>
+    </div>
+    <div class="container">
+      <div class="section-header section-header--light">
+        <div class="section-eyebrow section-eyebrow--light">Investment Calculator</div>
+        <h2 class="section-title section-title--light">See your money grow</h2>
+        <p class="section-sub section-sub--light">Adjust the sliders and watch your wealth build in real time. No sign-up required.</p>
+      </div>
+
+      <div class="calc-layout">
+        <div class="calc-controls">
+          <div class="calc-product-tabs">
+            <button class="calc-tab active" data-calc="cattle">
+              <i class="fa-solid fa-cow"></i> Cattle
+            </button>
+            <button class="calc-tab" data-calc="solar7">
+              <i class="fa-solid fa-solar-panel"></i> Solar 7yr
+            </button>
+            <button class="calc-tab" data-calc="short">
+              <i class="fa-solid fa-bolt"></i> Short-Term
+            </button>
+            <button class="calc-tab" data-calc="delivery">
+              <i class="fa-solid fa-motorcycle"></i> Delivery
+            </button>
+          </div>
+
+          <div class="calc-input-group">
+            <label class="calc-label">
+              Investment Amount
+              <span class="calc-amount-display" id="calcAmountDisplay">R10,000</span>
+            </label>
+            <input type="range" id="calcAmountSlider" class="calc-slider"
+              min="500" max="500000" step="500" value="10000"
+              aria-label="Investment amount" />
+            <div class="calc-slider-ticks">
+              <span>R500</span>
+              <span>R250k</span>
+              <span>R500k</span>
+            </div>
+          </div>
+
+          <div class="calc-info-grid" id="calcInfoGrid">
+            <!-- Filled by JS -->
+          </div>
+
+          <a href="signup.html" class="btn btn--gold btn--full btn--lg" style="margin-top:1.5rem;">
+            Start Investing Today <i class="fa-solid fa-arrow-right"></i>
+          </a>
+        </div>
+
+        <div class="calc-results">
+          <div class="calc-result-card">
+            <div class="calc-result-header">
+              <span id="calcProductName">Cattle Investment</span>
+              <span class="calc-result-term" id="calcTerm">12 months</span>
+            </div>
+            <div class="calc-result-main">
+              <div class="calc-result-stat">
+                <span class="calc-result-label">Total Payout</span>
+                <span class="calc-result-value" id="calcTotal">R11,483</span>
+              </div>
+              <div class="calc-result-stat">
+                <span class="calc-result-label">Returns Earned</span>
+                <span class="calc-result-value calc-result-value--gold" id="calcReturns">R1,483</span>
+              </div>
+              <div class="calc-result-stat">
+                <span class="calc-result-label">Effective Rate</span>
+                <span class="calc-result-value" id="calcRate">14.83% p.a.</span>
+              </div>
+            </div>
+            <div class="calc-chart-wrap">
+              <canvas id="calcChart" height="200"></canvas>
+            </div>
+            <p class="calc-disclaimer">Calculator is for illustration purposes only. Past performance is not a guarantee of future returns. Consult a financial advisor before investing.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       HOW IT WORKS
+  ═══════════════════════════════════════════════ -->
+  <section class="how-it-works" id="how-it-works">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-eyebrow">The Process</div>
+        <h2 class="section-title">Simple. Transparent. Powerful.</h2>
+        <p class="section-sub">From sign-up to payout in four straightforward steps.</p>
+      </div>
+
+      <div class="steps-layout">
+        <div class="steps-visual">
+          <div class="steps-phone">
+            <div class="phone-screen">
+              <div class="phone-app-header">
+                <span class="phone-app-logo">SV</span>
+                <span>My Portfolio</span>
+              </div>
+              <div class="phone-balance">
+                <span class="phone-balance-label">Total Value</span>
+                <span class="phone-balance-amount">R45,230</span>
+                <span class="phone-balance-return">+R5,887 earned</span>
+              </div>
+              <div class="phone-investments">
+                <div class="phone-inv-item">
+                  <i class="fa-solid fa-cow" style="color:#D4AF37"></i>
+                  <span>Cattle Pool #14</span>
+                  <span class="phone-inv-return">+14.83%</span>
+                </div>
+                <div class="phone-inv-item">
+                  <i class="fa-solid fa-solar-panel" style="color:#4CAF50"></i>
+                  <span>Solar 7yr Pool</span>
+                  <span class="phone-inv-return">+21.40%</span>
+                </div>
+                <div class="phone-inv-item">
+                  <i class="fa-solid fa-bolt" style="color:#2196F3"></i>
+                  <span>Short-Term #8</span>
+                  <span class="phone-inv-return">+13.92%</span>
+                </div>
+              </div>
+              <div class="phone-cta-btn">Invest More</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="steps-list">
+          <div class="step" data-step="1">
+            <div class="step__number">01</div>
+            <div class="step__content">
+              <h3>Sign Up & Fund Your Wallet</h3>
+              <p>Create your free account in under 5 minutes. Complete FICA verification and fund your wallet via EFT or instant bank payment — no minimums on your wallet.</p>
+              <div class="step__time">⏱ Takes less than 5 minutes</div>
+            </div>
+          </div>
+          <div class="step-connector"></div>
+
+          <div class="step" data-step="2">
+            <div class="step__number">02</div>
+            <div class="step__content">
+              <h3>Choose Your Investment</h3>
+              <p>Browse live investment pools. Each listing shows real-time pool progress, expected returns, term length, and full product details. Select the product that fits your goals.</p>
+              <div class="step__time">📊 Real-time pool tracking</div>
+            </div>
+          </div>
+          <div class="step-connector"></div>
+
+          <div class="step" data-step="3">
+            <div class="step__number">03</div>
+            <div class="step__content">
+              <h3>We Manage Everything</h3>
+              <p>Once invested, our partners (Beefcor, The Solar Experts, MoolaLend, OnFleet) professionally manage the underlying assets. You track progress on your dashboard.</p>
+              <div class="step__time">🛡 Professionally managed assets</div>
+            </div>
+          </div>
+          <div class="step-connector"></div>
+
+          <div class="step" data-step="4">
+            <div class="step__number">04</div>
+            <div class="step__content">
+              <h3>Receive Your Payout</h3>
+              <p>At maturity, choose to reinvest, switch products, take a partial payout, or withdraw everything to your bank account. Full control, your way.</p>
+              <div class="step__time">💰 Multiple payout options</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- App Download CTA -->
+      <div class="app-cta">
+        <div class="app-cta__text">
+          <h3>Manage your investments on the go</h3>
+          <p>The SV Capital app gives you real-time visibility into your portfolio, pool progress, and returns — right from your phone.</p>
+          <div class="app-btns">
+            <a href="#" class="app-store-btn">
+              <i class="fa-brands fa-apple"></i>
+              <div><span>Download on the</span><strong>App Store</strong></div>
+            </a>
+            <a href="#" class="app-store-btn">
+              <i class="fa-brands fa-google-play"></i>
+              <div><span>Get it on</span><strong>Google Play</strong></div>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       IMPACT / STATS
+  ═══════════════════════════════════════════════ -->
+  <section class="impact" id="impact">
+    <div class="impact-bg">
+      <div class="impact-pattern"></div>
+    </div>
+    <div class="container">
+      <div class="section-header section-header--light">
+        <div class="section-eyebrow section-eyebrow--light">Our Impact</div>
+        <h2 class="section-title section-title--light">Numbers that matter.</h2>
+        <p class="section-sub section-sub--light">Beyond returns — every investment creates real-world impact across South Africa.</p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card" data-target="3000" data-suffix="+" data-label="Active Investors">
+          <div class="stat-card__icon"><i class="fa-solid fa-users"></i></div>
+          <div class="stat-card__number"><span class="countup" id="stat1">3000</span>+</div>
+          <div class="stat-card__label">Active Investors</div>
+          <div class="stat-card__desc">South Africans building wealth through alternative assets</div>
+        </div>
+        <div class="stat-card" data-target="200" data-suffix="M+" data-label="Funds Invested">
+          <div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div>
+          <div class="stat-card__number">R<span class="countup" id="stat2">200</span>M+</div>
+          <div class="stat-card__label">Funds Invested</div>
+          <div class="stat-card__desc">Capital deployed into real, productive South African assets</div>
+        </div>
+        <div class="stat-card" data-target="700" data-suffix="+" data-label="Jobs Created">
+          <div class="stat-card__icon"><i class="fa-solid fa-person-digging"></i></div>
+          <div class="stat-card__number"><span class="countup" id="stat3">700</span>+</div>
+          <div class="stat-card__label">Jobs Created</div>
+          <div class="stat-card__desc">Direct employment generated by our investment ecosystem</div>
+        </div>
+        <div class="stat-card" data-target="30" data-suffix="M+" data-label="Cash Payouts">
+          <div class="stat-card__icon"><i class="fa-solid fa-money-bill-transfer"></i></div>
+          <div class="stat-card__number">R<span class="countup" id="stat4">30</span>M+</div>
+          <div class="stat-card__label">Cash Payouts</div>
+          <div class="stat-card__desc">Actual returns paid out to our investor community</div>
+        </div>
+        <div class="stat-card" data-target="9" data-suffix=" years" data-label="Track Record">
+          <div class="stat-card__icon"><i class="fa-solid fa-calendar-check"></i></div>
+          <div class="stat-card__number"><span class="countup" id="stat5">9</span> yrs</div>
+          <div class="stat-card__label">Track Record</div>
+          <div class="stat-card__desc">Consistent, inflation-beating returns since our first cattle pool</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__icon"><i class="fa-solid fa-solar-panel"></i></div>
+          <div class="stat-card__number">GW+</div>
+          <div class="stat-card__label">Clean Energy Funded</div>
+          <div class="stat-card__desc">Contributing to South Africa's renewable energy transition</div>
+        </div>
+      </div>
+
+      <!-- SDG badges -->
+      <div class="sdg-section">
+        <p class="sdg-label">Contributing to UN Sustainable Development Goals</p>
+        <div class="sdg-badges">
+          <div class="sdg-badge sdg-badge--1">
+            <span class="sdg-num">SDG 8</span>
+            <span class="sdg-name">Decent Work & Economic Growth</span>
+          </div>
+          <div class="sdg-badge sdg-badge--2">
+            <span class="sdg-num">SDG 9</span>
+            <span class="sdg-name">Industry, Innovation & Infrastructure</span>
+          </div>
+          <div class="sdg-badge sdg-badge--3">
+            <span class="sdg-num">SDG 7</span>
+            <span class="sdg-name">Affordable & Clean Energy</span>
+          </div>
+          <div class="sdg-badge sdg-badge--4">
+            <span class="sdg-num">SDG 10</span>
+            <span class="sdg-name">Reduced Inequalities</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       TRUST / COMPLIANCE
+  ═══════════════════════════════════════════════ -->
+  <section class="trust-section">
+    <div class="container">
+      <div class="trust-grid">
+        <div class="trust-main">
+          <div class="section-eyebrow">Regulatory Compliance</div>
+          <h2 class="section-title" style="font-size:2rem;">Your money is in safe hands.</h2>
+          <p style="color:var(--text-muted); margin-bottom:1.5rem; line-height:1.7;">All fund collections and disbursements are managed by <strong>SmartVest Financial Services</strong>, a licensed Financial Services Provider authorised by the <strong>Financial Sector Conduct Authority (FSCA)</strong>.</p>
+          <div class="compliance-items">
+            <div class="compliance-item">
+              <div class="compliance-item__icon"><i class="fa-solid fa-certificate"></i></div>
+              <div>
+                <strong>FSP License #52449</strong>
+                <p>Authorised by the FSCA to manage short-term and long-term deposits</p>
+              </div>
+            </div>
+            <div class="compliance-item">
+              <div class="compliance-item__icon"><i class="fa-solid fa-user-shield"></i></div>
+              <div>
+                <strong>FICA Compliant</strong>
+                <p>Full Know-Your-Customer onboarding with AML/FICA compliance</p>
+              </div>
+            </div>
+            <div class="compliance-item">
+              <div class="compliance-item__icon"><i class="fa-solid fa-handshake"></i></div>
+              <div>
+                <strong>Vetted Partners</strong>
+                <p>Comprehensive due diligence on all investment partners before any deal</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="trust-awards">
+          <h3 style="color:var(--gold); margin-bottom:1.5rem; font-size:1rem; letter-spacing:0.1em; text-transform:uppercase;">Awards & Recognition</h3>
+          <div class="award-card">
+            <div class="award-card__year">2018</div>
+            <div class="award-card__content">
+              <strong>Top 40 Start-Ups in South Africa</strong>
+              <p>Recognised as one of South Africa's most innovative new businesses</p>
+            </div>
+          </div>
+          <div class="award-card">
+            <div class="award-card__year">2018</div>
+            <div class="award-card__content">
+              <strong>Runner-Up Best Tech Start-Up in Africa</strong>
+              <p>Continental recognition for technology-driven alternative investment innovation</p>
+            </div>
+          </div>
+          <div class="award-card">
+            <div class="award-card__year">2017</div>
+            <div class="award-card__content">
+              <strong>1 of 80 Start-Ups — Global Accelerator</strong>
+              <p>Selected from thousands of applicants for prestigious residency programme</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       TEAM
+  ═══════════════════════════════════════════════ -->
+  <section class="team-section" id="team">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-eyebrow">Leadership</div>
+        <h2 class="section-title">Built by believers.</h2>
+        <p class="section-sub">Two chartered finance professionals with a shared mission: democratise access to alternative investments in Africa.</p>
+      </div>
+
+      <div class="team-grid">
+        <div class="team-card">
+          <div class="team-card__avatar">
+            <div class="team-avatar-placeholder">AM</div>
+          </div>
+          <div class="team-card__content">
+            <h3>Ayanda Majola</h3>
+            <span class="team-card__role">Co-Founder & CEO</span>
+            <p>Chartered Accountant turned alternative investment pioneer. Ayanda's vision is to empower future generations and build generational wealth across Africa through transformative investment strategies.</p>
+            <a href="https://za.linkedin.com/in/ayanda-majola-72350bb9" class="team-linkedin" target="_blank">
+              <i class="fa-brands fa-linkedin"></i> LinkedIn Profile
+            </a>
+          </div>
+        </div>
+        <div class="team-card">
+          <div class="team-card__avatar">
+            <div class="team-avatar-placeholder">KT</div>
+          </div>
+          <div class="team-card__content">
+            <h3>Kagiso Tloubatla</h3>
+            <span class="team-card__role">Co-Founder & COO</span>
+            <p>Finance strategist driving operational excellence at SV Capital. Kagiso brings deep expertise in financial structures and a relentless focus on building systems that scale across the African continent.</p>
+            <a href="https://za.linkedin.com/in/kagiso-tloubatla-b0097462" class="team-linkedin" target="_blank">
+              <i class="fa-brands fa-linkedin"></i> LinkedIn Profile
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       TESTIMONIALS
+  ═══════════════════════════════════════════════ -->
+  <section class="testimonials-section">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-eyebrow">Investor Stories</div>
+        <h2 class="section-title">Trusted by thousands.</h2>
+      </div>
+      <div class="testimonials-grid">
+        <div class="testimonial-card">
+          <div class="testimonial-stars">★★★★★</div>
+          <p>"I started with R1,000 in the cattle investment three years ago. The consistent returns have helped me build an emergency fund I never had before. SV Capital made investing real for me."</p>
+          <div class="testimonial-author">
+            <div class="author-avatar">NM</div>
+            <div>
+              <strong>Nomsa M.</strong>
+              <span>Johannesburg · Cattle Investor since 2022</span>
+            </div>
+          </div>
+        </div>
+        <div class="testimonial-card testimonial-card--featured">
+          <div class="testimonial-stars">★★★★★</div>
+          <p>"As someone sceptical of 'alternative' investments, what won me over was the transparency. I can see exactly where my money goes, who manages the assets, and what the real risks are. That's rare."</p>
+          <div class="testimonial-author">
+            <div class="author-avatar">TK</div>
+            <div>
+              <strong>Thabo K.</strong>
+              <span>Cape Town · Solar + Cattle Investor</span>
+            </div>
+          </div>
+        </div>
+        <div class="testimonial-card">
+          <div class="testimonial-stars">★★★★★</div>
+          <p>"The 7-year solar investment is a long commitment, but at 21.4% annualised, it's the best return I've found anywhere. My money is funding clean energy — that means something to me."</p>
+          <div class="testimonial-author">
+            <div class="author-avatar">LP</div>
+            <div>
+              <strong>Lerato P.</strong>
+              <span>Pretoria · Solar 7yr Investor</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       FAQ
+  ═══════════════════════════════════════════════ -->
+  <section class="faq-section" id="faq">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-eyebrow">FAQ</div>
+        <h2 class="section-title">Everything you need to know.</h2>
+        <p class="section-sub">Transparent answers to the questions every investor should ask.</p>
+      </div>
+
+      <div class="faq-layout">
+        <div class="faq-categories">
+          <button class="faq-cat active" data-cat="general">General</button>
+          <button class="faq-cat" data-cat="products">Products</button>
+          <button class="faq-cat" data-cat="compliance">Compliance</button>
+          <button class="faq-cat" data-cat="returns">Returns & Tax</button>
+        </div>
+
+        <div class="faq-list" id="faqList">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       FINAL CTA
+  ═══════════════════════════════════════════════ -->
+  <section class="final-cta">
+    <div class="final-cta-bg">
+      <div class="final-cta-orb"></div>
+    </div>
+    <div class="container">
+      <div class="final-cta__inner">
+        <div class="final-cta__badge">
+          <i class="fa-solid fa-rocket"></i> Start today with R500
+        </div>
+        <h2>The best time to invest<br /><em>was yesterday. Today works too.</em></h2>
+        <p>Join 3,000+ South Africans who are already building wealth through real, tangible assets. Sign up in 5 minutes. No jargon, no hidden fees, no excuses.</p>
+        <div class="final-cta-actions">
+          <a href="signup.html" class="btn btn--gold btn--xl">
+            Open Your Account — Free <i class="fa-solid fa-arrow-right"></i>
+          </a>
+          <a href="#products" class="btn btn--outline-light btn--xl">
+            Browse Products First
+          </a>
+        </div>
+        <div class="final-cta-trust">
+          <span><i class="fa-solid fa-lock"></i> FSCA Regulated</span>
+          <span><i class="fa-solid fa-shield-halved"></i> SmartVest FSP 52449</span>
+          <span><i class="fa-solid fa-star"></i> Top 40 SA Start-Up 2018</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       FOOTER
+  ═══════════════════════════════════════════════ -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="footer-logo" style="display:flex;align-items:center;gap:10px">
+            <img src="assets/logo-inline.svg" alt="SV Capital" width="36" height="36" style="display:block;border-radius:8px">
+            <div><span class="logo-sv">SV</span><span class="logo-capital">CAPITAL</span></div>
+          </div>
+          <p>South Africa's premier platform for alternative, asset-backed investments. Building wealth and impact, one investment at a time.</p>
+          <div class="footer-social">
+            <a href="#" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
+            <a href="#" aria-label="LinkedIn"><i class="fa-brands fa-linkedin"></i></a>
+            <a href="#" aria-label="Facebook"><i class="fa-brands fa-facebook"></i></a>
+            <a href="#" aria-label="Twitter/X"><i class="fa-brands fa-x-twitter"></i></a>
+          </div>
+        </div>
+
+        <div class="footer-links-col">
+          <h4>Products</h4>
+          <ul>
+            <li><a href="https://www.svcapital.co.za/cattle-investment" target="_blank">Cattle Investment</a></li>
+            <li><a href="https://www.svcapital.co.za/solar-investment---7-years" target="_blank">Solar Investment</a></li>
+            <li><a href="https://www.svcapital.co.za/short-term-investment" target="_blank">Short-Term Investment</a></li>
+            <li><a href="https://www.svcapital.co.za/delivery-bike-investment" target="_blank">Delivery Bike Investment</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-links-col">
+          <h4>Company</h4>
+          <ul>
+            <li><a href="https://www.svcapital.co.za/about" target="_blank">About Us</a></li>
+            <li><a href="https://www.svcapital.co.za/faqs" target="_blank">FAQs</a></li>
+            <li><a href="https://www.svcapital.co.za/investment-calculator" target="_blank">Calculator</a></li>
+            <li><a href="#" target="_blank">Blog</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-links-col">
+          <h4>Legal</h4>
+          <ul>
+            <li><a href="#">Privacy Policy</a></li>
+            <li><a href="#">Terms of Service</a></li>
+            <li><a href="#">Risk Disclosure</a></li>
+            <li><a href="#">FSCA Compliance</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-links-col">
+          <h4>Get in Touch</h4>
+          <ul>
+            <li><a href="mailto:info@svcapital.co.za"><i class="fa-solid fa-envelope"></i> info@svcapital.co.za</a></li>
+            <li><a href="https://api.whatsapp.com/send?phone=27" target="_blank"><i class="fa-brands fa-whatsapp"></i> WhatsApp Support</a></li>
+            <li><a href="login.html"><i class="fa-solid fa-arrow-right-to-bracket"></i> Investor Login</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p class="footer-disclaimer">
+          <strong>Risk Warning:</strong> Alternative investments carry risk. Returns are not guaranteed and past performance is not indicative of future results. Investments are illiquid for the full investment term. Early withdrawals are not permitted. SV Capital is not a bank and deposits are not covered by the Deposit Insurance Scheme. All fund management is conducted by SmartVest Financial Services (FSP 52449), authorised by the FSCA. Please read all product documentation and consult a financial advisor before investing.
+        </p>
+        <div class="footer-legal-row">
+          <span>© 2025 SV Capital (Pty) Ltd. All rights reserved.</span>
+          <span>SmartVest Financial Services · FSP 52449 · FSCA Authorised</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════════
+       PRODUCT DETAIL MODALS
+  ═══════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModal()">
+    <div class="modal" id="modalBox" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal-content" id="modalContent"></div>
+    </div>
+  </div>
+
+  <!-- WhatsApp Float -->
+  <a href="https://api.whatsapp.com/send?phone=27" class="whatsapp-float" target="_blank" aria-label="Chat on WhatsApp">
+    <i class="fa-brands fa-whatsapp"></i>
+    <span class="whatsapp-label">Need help?</span>
+  </a>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SV Capital — Sign In</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --orange:         #FF8215;
+      --orange-dark:    #E56200;
+      --orange-light:   #FF9B0C;
+      --orange-pale:    rgba(255,130,21,0.08);
+      --orange-shadow:  0 8px 32px rgba(255,130,21,0.25);
+      --teal:           #2F8C9B;
+      --teal-dark:      #1E6E7A;
+      --green:          #22C55E;
+      --text-h:         #1a1a1a;
+      --text-body:      #303030;
+      --text-muted:     #6b7280;
+      --text-dim:       #9ca3af;
+      --bg:             #F7F8FA;
+      --bg-white:       #FFFFFF;
+      --border:         rgba(0,0,0,0.09);
+      --border-md:      rgba(0,0,0,0.13);
+      --shadow:         0 4px 20px rgba(0,0,0,0.09);
+      --shadow-lg:      0 20px 60px rgba(0,0,0,0.14);
+      --radius:         12px;
+      --radius-lg:      18px;
+      --radius-xl:      24px;
+      --font:           'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --serif:          'DM Serif Display', Georgia, serif;
+      --ease:           0.25s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    html, body { height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text-body);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* ─── Layout ─── */
+    .login-layout {
+      display: flex;
+      min-height: 100vh;
+      width: 100%;
+    }
+
+    /* ─── Left Panel (Brand) ─── */
+    .login-left {
+      flex: 1;
+      background: linear-gradient(145deg, #1a3a4a 0%, #0d2535 60%, #162030 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 64px 72px;
+      position: relative;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .login-left::before {
+      content: '';
+      position: absolute;
+      top: -100px; right: -100px;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(255,130,21,0.10) 0%, transparent 65%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .login-left::after {
+      content: '';
+      position: absolute;
+      bottom: -80px; left: -80px;
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(47,140,155,0.12) 0%, transparent 65%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    /* Decorative floating shapes */
+    .login-deco {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      opacity: 0.06;
+    }
+    .login-deco--1 { width: 280px; height: 280px; border: 2px solid rgba(255,155,12,1); top: 10%; right: 5%; }
+    .login-deco--2 { width: 160px; height: 160px; border: 2px solid rgba(47,140,155,1); bottom: 15%; right: 15%; opacity: 0.1; }
+
+    .login-left__content {
+      position: relative;
+      z-index: 2;
+      max-width: 480px;
+    }
+
+    /* Brand mark in left panel */
+    .login-brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 56px;
+    }
+
+    .login-brand img {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+    }
+
+    .login-brand__name {
+      font-size: 1.4rem;
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      line-height: 1;
+    }
+
+    .login-brand__tagline {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.5);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-top: 4px;
+      font-weight: 500;
+    }
+
+    .login-hero__eyebrow {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-weight: 700;
+      color: var(--orange);
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .login-hero__eyebrow::before {
+      content: '';
+      display: block;
+      width: 24px; height: 2px;
+      background: var(--orange);
+      border-radius: 2px;
+    }
+
+    .login-hero__headline {
+      font-family: var(--serif);
+      font-size: 2.8rem;
+      font-weight: 400;
+      color: #fff;
+      line-height: 1.18;
+      letter-spacing: -0.01em;
+      margin-bottom: 20px;
+    }
+
+    .login-hero__headline em {
+      font-style: italic;
+      color: var(--orange-light);
+    }
+
+    .login-hero__sub {
+      font-size: 0.95rem;
+      color: rgba(255,255,255,0.55);
+      line-height: 1.7;
+      margin-bottom: 44px;
+      max-width: 380px;
+    }
+
+    /* Stat pills */
+    .login-stats {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+
+    .login-stat {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 50px;
+      padding: 8px 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .login-stat__value {
+      font-size: 1rem;
+      font-weight: 900;
+      color: var(--orange-light);
+    }
+
+    .login-stat__label {
+      font-size: 0.73rem;
+      color: rgba(255,255,255,0.55);
+      font-weight: 500;
+    }
+
+    /* Product badges */
+    .login-products {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .login-product-tag {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 20px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .login-product-tag--cattle  { background: rgba(217,119,6,0.15);  color: #F59E0B; border: 1px solid rgba(217,119,6,0.25);  }
+    .login-product-tag--solar   { background: rgba(234,88,12,0.12);  color: #FB923C; border: 1px solid rgba(234,88,12,0.20);  }
+    .login-product-tag--smme    { background: rgba(37,99,235,0.12);  color: #60A5FA; border: 1px solid rgba(37,99,235,0.20);  }
+
+    /* FSCA badge */
+    .login-fsca {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 48px;
+      padding: 12px 18px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: var(--radius);
+      max-width: 360px;
+    }
+
+    .login-fsca i { color: var(--orange); font-size: 1.1rem; }
+
+    .login-fsca__text {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.45);
+      line-height: 1.5;
+    }
+
+    .login-fsca__text strong {
+      color: rgba(255,255,255,0.75);
+      display: block;
+      font-size: 0.75rem;
+      margin-bottom: 2px;
+    }
+
+    /* ─── Right Panel (Form) ─── */
+    .login-right {
+      width: 480px;
+      min-width: 420px;
+      max-width: 540px;
+      background: var(--bg-white);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 56px 48px;
+      border-left: 1px solid var(--border);
+      position: relative;
+    }
+
+    .login-form-wrap {
+      width: 100%;
+      max-width: 360px;
+    }
+
+    .login-form-header {
+      margin-bottom: 36px;
+    }
+
+    .login-form-eyebrow {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-weight: 700;
+      color: var(--orange);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .login-form-title {
+      font-size: 1.8rem;
+      font-weight: 900;
+      color: var(--text-h);
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      margin-bottom: 8px;
+    }
+
+    .login-form-sub {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Demo credentials notice */
+    .demo-notice {
+      background: linear-gradient(135deg, rgba(47,140,155,0.07), rgba(47,140,155,0.04));
+      border: 1px solid rgba(47,140,155,0.2);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 28px;
+    }
+
+    .demo-notice__title {
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: var(--teal-dark);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+
+    .demo-notice__item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      font-size: 0.78rem;
+      border-bottom: 1px solid rgba(47,140,155,0.1);
+    }
+
+    .demo-notice__item:last-child { border-bottom: none; }
+
+    .demo-notice__label { color: var(--text-muted); font-weight: 500; }
+
+    .demo-notice__value {
+      font-weight: 800;
+      color: var(--teal-dark);
+      font-family: monospace;
+      font-size: 0.8rem;
+      background: rgba(47,140,155,0.1);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    /* Role selector */
+    .role-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .role-tab {
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+      cursor: pointer;
+      text-align: center;
+      transition: all var(--ease);
+      position: relative;
+    }
+
+    .role-tab.active {
+      background: var(--orange-pale);
+      border-color: var(--orange);
+    }
+
+    .role-tab i {
+      font-size: 1.1rem;
+      color: var(--text-dim);
+      display: block;
+      margin-bottom: 6px;
+      transition: color var(--ease);
+    }
+
+    .role-tab.active i { color: var(--orange); }
+
+    .role-tab__name {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      transition: color var(--ease);
+    }
+
+    .role-tab.active .role-tab__name { color: var(--orange-dark); }
+
+    /* Form fields */
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 7px;
+    }
+
+    .form-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1.5px solid var(--border-md);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      color: var(--text-h);
+      font-size: 0.9rem;
+      font-family: var(--font);
+      transition: all var(--ease);
+      outline: none;
+    }
+
+    .form-input:focus {
+      border-color: var(--orange);
+      background: #fff;
+      box-shadow: 0 0 0 3px var(--orange-pale);
+    }
+
+    .form-input-wrap {
+      position: relative;
+    }
+
+    .form-input-wrap .form-input {
+      padding-left: 42px;
+    }
+
+    .form-input-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      pointer-events: none;
+    }
+
+    .form-input-toggle {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 0.82rem;
+      background: none;
+      border: none;
+      padding: 0;
+      transition: color var(--ease);
+    }
+
+    .form-input-toggle:hover { color: var(--orange); }
+
+    /* Submit button */
+    .btn-login {
+      width: 100%;
+      background: linear-gradient(135deg, #FF9B0C 0%, #FF6421 60%, #FF5229 100%);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      padding: 14px 20px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      font-family: var(--font);
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      transition: all var(--ease);
+      box-shadow: var(--orange-shadow);
+      position: relative;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .btn-login::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.12), transparent);
+    }
+
+    .btn-login:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px rgba(255,130,21,0.35);
+    }
+
+    .btn-login:active { transform: translateY(0); }
+
+    .btn-login.loading {
+      opacity: 0.85;
+      pointer-events: none;
+    }
+
+    /* Links */
+    .login-links {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 22px;
+    }
+
+    .login-link {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color var(--ease);
+      font-weight: 500;
+    }
+
+    .login-link:hover { color: var(--orange); }
+
+    /* Divider */
+    .form-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 24px 0;
+    }
+
+    .form-divider::before, .form-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .form-divider span {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+      font-weight: 600;
+    }
+
+    /* Quick access buttons */
+    .quick-access {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .quick-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 11px 16px;
+      border-radius: var(--radius);
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-decoration: none;
+      border: 1.5px solid var(--border-md);
+      background: var(--bg);
+      color: var(--text-body);
+      transition: all var(--ease);
+      cursor: pointer;
+      font-family: var(--font);
+    }
+
+    .quick-btn i { font-size: 0.9rem; }
+
+    .quick-btn--portal:hover {
+      border-color: var(--orange);
+      color: var(--orange);
+      background: var(--orange-pale);
+    }
+
+    .quick-btn--admin:hover {
+      border-color: var(--teal);
+      color: var(--teal-dark);
+      background: rgba(47,140,155,0.07);
+    }
+
+    /* Error message */
+    .form-error {
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.78rem;
+      color: #dc2626;
+      font-weight: 600;
+      display: none;
+      margin-bottom: 16px;
+    }
+
+    .form-error.show { display: flex; align-items: center; gap: 8px; }
+
+    /* Footer */
+    .login-footer {
+      margin-top: 36px;
+      text-align: center;
+    }
+
+    .login-footer a {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-decoration: none;
+      transition: color var(--ease);
+    }
+
+    .login-footer a:hover { color: var(--orange); }
+
+    .login-footer__copy {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-top: 10px;
+    }
+
+    /* ─── Forgot password panel ─── */
+    .forgot-panel { display: none; }
+    .forgot-panel.show { display: block; }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      font-family: var(--font);
+      margin-bottom: 24px;
+      transition: color var(--ease);
+    }
+    .back-link:hover { color: var(--orange); }
+
+    .success-panel { display: none; text-align: center; padding: 24px 0; }
+    .success-panel.show { display: block; }
+    .success-icon {
+      width: 64px; height: 64px;
+      background: linear-gradient(135deg, rgba(34,197,94,.15), rgba(34,197,94,.08));
+      border: 1.5px solid rgba(34,197,94,.3);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 18px;
+      font-size: 1.6rem; color: var(--green);
+    }
+    .success-title { font-size: 1.2rem; font-weight: 900; color: var(--text-h); margin-bottom: 8px; }
+    .success-sub   { font-size: 0.85rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 20px; }
+    .success-note  { font-size: 0.72rem; color: var(--text-dim); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-bottom: 20px; line-height: 1.5; }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 900px) {
+      .login-left { display: none; }
+      .login-right { width: 100%; max-width: 100%; min-width: 0; padding: 40px 24px; border-left: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="login-layout">
+
+  <!-- ═══ LEFT PANEL — Brand Story ═══ -->
+  <div class="login-left">
+    <div class="login-deco login-deco--1"></div>
+    <div class="login-deco login-deco--2"></div>
+
+    <div class="login-left__content">
+
+      <!-- Brand -->
+      <div class="login-brand">
+        <img src="assets/logo-inline.svg" alt="SV Capital logo">
+        <div>
+          <div class="login-brand__name">SV Capital</div>
+          <div class="login-brand__tagline">Investments that make sense</div>
+        </div>
+      </div>
+
+      <!-- Hero -->
+      <div class="login-hero__eyebrow">Investor Platform</div>
+      <h1 class="login-hero__headline">
+        Welcome back to your<br>
+        <em>investment journey</em>
+      </h1>
+      <p class="login-hero__sub">
+        Access your portfolio, track your investments, and grow your wealth with South Africa's leading alternative investment platform.
+      </p>
+
+      <!-- Stats -->
+      <div class="login-stats">
+        <div class="login-stat">
+          <span class="login-stat__value">R200M+</span>
+          <span class="login-stat__label">Assets Under Management</span>
+        </div>
+        <div class="login-stat">
+          <span class="login-stat__value">21%</span>
+          <span class="login-stat__label">Best Annual Return</span>
+        </div>
+        <div class="login-stat">
+          <span class="login-stat__value">700+</span>
+          <span class="login-stat__label">Jobs Created</span>
+        </div>
+      </div>
+
+      <!-- Products -->
+      <div style="margin-bottom:12px;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:700">Available Investment Products</div>
+      <div class="login-products">
+        <span class="login-product-tag login-product-tag--cattle">Cattle Finance</span>
+        <span class="login-product-tag login-product-tag--solar">Solar Energy</span>
+        <span class="login-product-tag login-product-tag--smme">SMME Short-Term</span>
+      </div>
+
+      <!-- FSCA -->
+      <div class="login-fsca">
+        <i class="fa-solid fa-shield-halved"></i>
+        <div class="login-fsca__text">
+          <strong>FSCA Regulated · FSP #52449</strong>
+          SmartVest Financial Services (Pty) Ltd. Authorised Financial Services Provider regulated by the Financial Sector Conduct Authority.
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ RIGHT PANEL — Login Form ═══ -->
+  <div class="login-right">
+    <div class="login-form-wrap">
+
+      <!-- Header -->
+      <div class="login-form-header">
+        <div class="login-form-eyebrow">
+          <i class="fa-solid fa-lock" style="font-size:0.75rem"></i>
+          Secure Access
+        </div>
+        <h2 class="login-form-title">Sign in to your account</h2>
+        <p class="login-form-sub">Enter your credentials to access your SV Capital portfolio.</p>
+      </div>
+
+      <!-- Demo credentials -->
+      <div class="demo-notice">
+        <div class="demo-notice__title"><i class="fa-solid fa-circle-info" style="margin-right:5px;color:var(--teal)"></i>Demo Credentials</div>
+        <div class="demo-notice__item">
+          <span class="demo-notice__label">Investor Portal</span>
+          <span class="demo-notice__value">investor@svcapital.co.za</span>
+        </div>
+        <div class="demo-notice__item">
+          <span class="demo-notice__label">Admin Console</span>
+          <span class="demo-notice__value">admin@svcapital.co.za</span>
+        </div>
+        <div class="demo-notice__item">
+          <span class="demo-notice__label">Password</span>
+          <span class="demo-notice__value">Demo@2024!</span>
+        </div>
+      </div>
+
+      <!-- Role selector -->
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:10px">Access Level</div>
+      <div class="role-tabs" id="roleTabs">
+        <button class="role-tab active" id="roleInvestor" onclick="selectRole('investor')">
+          <i class="fa-solid fa-chart-pie"></i>
+          <span class="role-tab__name">Investor Portal</span>
+        </button>
+        <button class="role-tab" id="roleAdmin" onclick="selectRole('admin')">
+          <i class="fa-solid fa-shield-halved"></i>
+          <span class="role-tab__name">Admin Console</span>
+        </button>
+      </div>
+
+      <!-- Error -->
+      <div class="form-error" id="formError">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span id="formErrorText">Invalid credentials. Please try again.</span>
+      </div>
+
+      <!-- Form -->
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label" for="emailInput">Email Address</label>
+          <div class="form-input-wrap">
+            <i class="fa-solid fa-envelope form-input-icon"></i>
+            <input type="email" id="emailInput" class="form-input" placeholder="your@email.co.za" required autocomplete="email" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="passwordInput">Password</label>
+          <div class="form-input-wrap">
+            <i class="fa-solid fa-lock form-input-icon"></i>
+            <input type="password" id="passwordInput" class="form-input" placeholder="Enter your password" required autocomplete="current-password" />
+            <button type="button" class="form-input-toggle" id="pwToggle" onclick="togglePassword()">
+              <i class="fa-solid fa-eye" id="pwEyeIcon"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-login" id="loginBtn">
+          <span id="loginBtnText"><i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In</span>
+        </button>
+
+        <div class="login-links">
+          <a href="#" class="login-link" onclick="showForgotPassword(event)">Forgot password?</a>
+          <a href="index.html" class="login-link"><i class="fa-solid fa-arrow-left" style="font-size:0.7rem;margin-right:4px"></i>Back to website</a>
+        </div>
+      </form>
+
+      <!-- ─── FORGOT PASSWORD PANEL ─── -->
+      <div class="forgot-panel" id="forgotPanel">
+        <button class="back-link" onclick="showLoginForm()">
+          <i class="fa-solid fa-arrow-left" style="font-size:0.7rem"></i> Back to sign in
+        </button>
+        <div class="login-form-header" style="margin-bottom:24px">
+          <div class="login-form-eyebrow"><i class="fa-solid fa-key" style="font-size:0.75rem"></i> Password Reset</div>
+          <h2 class="login-form-title">Reset your password</h2>
+          <p class="login-form-sub">Enter your registered email address and we'll send you a reset link.</p>
+        </div>
+
+        <!-- Success state -->
+        <div class="success-panel" id="forgotSuccessPanel">
+          <div class="success-icon"><i class="fa-solid fa-envelope-circle-check"></i></div>
+          <div class="success-title">Check your inbox</div>
+          <div class="success-sub">A password reset link has been sent to <strong id="forgotEmailSent"></strong>.</div>
+          <div class="success-note"><i class="fa-solid fa-circle-info" style="margin-right:5px;color:var(--teal)"></i> If you don't see the email within a few minutes, check your spam folder. The link expires in 30 minutes.</div>
+          <button class="btn-login" onclick="showLoginForm()" style="margin-top:4px">
+            <i class="fa-solid fa-arrow-left" style="margin-right:8px"></i>Back to Sign In
+          </button>
+        </div>
+
+        <!-- Request form -->
+        <div id="forgotFormState">
+          <div class="form-error" id="forgotError">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span id="forgotErrorText">Please enter a valid email address.</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="forgotEmailInput">Email Address</label>
+            <div class="form-input-wrap">
+              <i class="fa-solid fa-envelope form-input-icon"></i>
+              <input type="email" id="forgotEmailInput" class="form-input" placeholder="your@email.co.za" autocomplete="email"
+                     onkeydown="if(event.key==='Enter')submitForgotPassword()" />
+            </div>
+          </div>
+          <button class="btn-login" id="forgotBtn" onclick="submitForgotPassword()">
+            <span id="forgotBtnText"><i class="fa-solid fa-paper-plane" style="margin-right:8px"></i>Send Reset Link</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="form-divider"><span>Quick access — demo only</span></div>
+
+      <!-- Quick access -->
+      <div class="quick-access">
+        <a href="portal/index.html" class="quick-btn quick-btn--portal">
+          <i class="fa-solid fa-chart-pie" style="color:var(--orange)"></i>
+          Investor Portal
+        </a>
+        <a href="admin/index.html" class="quick-btn quick-btn--admin">
+          <i class="fa-solid fa-shield-halved" style="color:var(--teal)"></i>
+          Admin Console
+        </a>
+      </div>
+
+      <!-- Footer -->
+      <div class="login-footer">
+        <a href="index.html">www.svcapital.co.za</a>
+        <div class="login-footer__copy">© 2024 SmartVest Financial Services (Pty) Ltd. All rights reserved.</div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let selectedRole = 'investor';
+
+  /* ─── Forgot Password Flow ─── */
+  function showForgotPassword(e) {
+    if (e) e.preventDefault();
+    document.getElementById('loginForm').style.display = 'none';
+    document.querySelectorAll('.login-links').forEach(el => el.style.display = 'none');
+    document.getElementById('forgotPanel').classList.add('show');
+    document.getElementById('forgotError').classList.remove('show');
+    document.getElementById('forgotSuccessPanel').classList.remove('show');
+    document.getElementById('forgotFormState').style.display = 'block';
+    setTimeout(() => document.getElementById('forgotEmailInput')?.focus(), 80);
+  }
+
+  function showLoginForm() {
+    document.getElementById('loginForm').style.display = 'block';
+    document.querySelectorAll('.login-links').forEach(el => el.style.display = '');
+    document.getElementById('forgotPanel').classList.remove('show');
+    if (document.getElementById('forgotEmailInput')) document.getElementById('forgotEmailInput').value = '';
+    document.getElementById('forgotError').classList.remove('show');
+  }
+
+  function submitForgotPassword() {
+    const emailEl = document.getElementById('forgotEmailInput');
+    const errEl   = document.getElementById('forgotError');
+    const errTxt  = document.getElementById('forgotErrorText');
+    const btn     = document.getElementById('forgotBtn');
+    const btnTxt  = document.getElementById('forgotBtnText');
+    const email   = emailEl.value.toLowerCase().trim();
+
+    errEl.classList.remove('show');
+    if (!email || !email.includes('@') || !email.includes('.')) {
+      emailEl.style.borderColor = '#ef4444';
+      errTxt.textContent = 'Please enter a valid email address.';
+      errEl.classList.add('show');
+      setTimeout(() => { emailEl.style.borderColor = ''; }, 3000);
+      return;
+    }
+
+    btn.disabled = true;
+    btnTxt.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Sending…';
+
+    setTimeout(() => {
+      document.getElementById('forgotFormState').style.display = 'none';
+      document.getElementById('forgotEmailSent').textContent = email;
+      document.getElementById('forgotSuccessPanel').classList.add('show');
+      btn.disabled = false;
+      btnTxt.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:8px"></i>Send Reset Link';
+    }, 1200);
+  }
+
+  function selectRole(role) {
+    selectedRole = role;
+    document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(`role${role.charAt(0).toUpperCase() + role.slice(1)}`).classList.add('active');
+
+    // Pre-fill email hint
+    const emailEl = document.getElementById('emailInput');
+    if (role === 'admin') {
+      emailEl.placeholder = 'admin@svcapital.co.za';
+      if (!emailEl.value) emailEl.value = 'admin@svcapital.co.za';
+    } else {
+      emailEl.placeholder = 'investor@svcapital.co.za';
+      if (emailEl.value === 'admin@svcapital.co.za') emailEl.value = 'investor@svcapital.co.za';
+    }
+  }
+
+  function togglePassword() {
+    const pw = document.getElementById('passwordInput');
+    const icon = document.getElementById('pwEyeIcon');
+    if (pw.type === 'password') {
+      pw.type = 'text';
+      icon.className = 'fa-solid fa-eye-slash';
+    } else {
+      pw.type = 'password';
+      icon.className = 'fa-solid fa-eye';
+    }
+  }
+
+  function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('emailInput').value.toLowerCase().trim();
+    const password = document.getElementById('passwordInput').value;
+    const errorEl = document.getElementById('formError');
+    const errorText = document.getElementById('formErrorText');
+    const btn = document.getElementById('loginBtn');
+    const btnText = document.getElementById('loginBtnText');
+
+    errorEl.classList.remove('show');
+    btn.classList.add('loading');
+    btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Signing in…';
+
+    setTimeout(() => {
+      // Demo credentials
+      const validInvestor = (email === 'investor@svcapital.co.za' || email === 'thabo@email.co.za') && password === 'Demo@2024!';
+      const validAdmin    = (email === 'admin@svcapital.co.za' || email === 'ayanda@svcapital.co.za') && password === 'Demo@2024!';
+      const validAny      = password === 'Demo@2024!';
+
+      if (selectedRole === 'admin' && (validAdmin || validAny)) {
+        btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
+        setTimeout(() => { window.location.href = 'admin/index.html'; }, 400);
+      } else if (selectedRole === 'investor' && (validInvestor || validAny)) {
+        btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
+        setTimeout(() => { window.location.href = 'portal/index.html'; }, 400);
+      } else {
+        btn.classList.remove('loading');
+        btnText.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In';
+        errorText.textContent = 'Invalid credentials. Use the demo credentials shown above.';
+        errorEl.classList.add('show');
+        document.getElementById('emailInput').style.borderColor = '#ef4444';
+        document.getElementById('passwordInput').style.borderColor = '#ef4444';
+        setTimeout(() => {
+          document.getElementById('emailInput').style.borderColor = '';
+          document.getElementById('passwordInput').style.borderColor = '';
+        }, 3000);
+      }
+    }, 900);
+  }
+</script>
+</body>
+</html>

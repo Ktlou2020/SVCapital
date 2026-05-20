@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SV Capital — Team Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="css/team.css" />
+  <!-- Staff Auth guard -->
+  <script src="../js/staff-auth.js"></script>
+  <script>document.addEventListener('DOMContentLoaded',()=>{ StaffAuth.guard('team'); StaffAuth.injectWidget(); });</script>
+</head>
+<body>
+
+<div id="globalLoader" style="position:fixed;inset:0;background:#0d0f14;display:flex;align-items:center;justify-content:center;z-index:9999;gap:14px;flex-direction:column">
+  <div style="width:44px;height:44px;border:3px solid rgba(124,92,252,0.2);border-top-color:#7c5cfc;border-radius:50%;animation:spin 0.7s linear infinite"></div>
+  <div style="font-size:0.82rem;color:#555c72;font-weight:600">Loading Team Dashboard…</div>
+  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+</div>
+
+<div class="app-layout">
+
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar__brand">
+      <a href="../admin/index.html" class="brand-link">
+        <div class="brand-logo"><i class="fa-solid fa-people-group"></i></div>
+        <div class="brand-text">
+          <span class="brand-name">SV Capital</span>
+          <span class="brand-role">Team Dashboard</span>
+        </div>
+      </a>
+    </div>
+
+    <nav class="sidebar__nav">
+      <div class="nav-section-label">Overview</div>
+      <button class="nav-item active" data-view="dashboard" onclick="navigate('dashboard', this)">
+        <i class="fa-solid fa-grid-2"></i> Dashboard
+      </button>
+
+      <div class="nav-section-label">Performance</div>
+      <button class="nav-item" data-view="leaderboard" onclick="navigate('leaderboard', this)">
+        <i class="fa-solid fa-ranking-star"></i> Leaderboard
+      </button>
+      <button class="nav-item" data-view="kpis" onclick="navigate('kpis', this)">
+        <i class="fa-solid fa-chart-bar"></i> KPI Management
+      </button>
+
+      <div class="nav-section-label">People Ops</div>
+      <button class="nav-item" data-view="leave" onclick="navigate('leave', this)">
+        <i class="fa-solid fa-calendar-days"></i> Leave Management
+        <span class="nav-badge" id="leaveBadge" style="display:none">0</span>
+      </button>
+      <button class="nav-item" data-view="eva" onclick="navigate('eva', this)">
+        <i class="fa-solid fa-coins"></i> EVA Pool
+      </button>
+
+      <div class="nav-section-label">Gamification</div>
+      <button class="nav-item" data-view="achievements" onclick="navigate('achievements', this)">
+        <i class="fa-solid fa-trophy"></i> Achievements
+      </button>
+
+      <div class="nav-section-label">Admin</div>
+      <button class="nav-item" data-view="settings" onclick="navigate('settings', this)">
+        <i class="fa-solid fa-sliders"></i> Settings
+      </button>
+    </nav>
+
+    <div class="sidebar__footer">
+      <div class="sidebar-user">
+        <div class="sidebar-user__avatar">AM</div>
+        <div class="sidebar-user__info">
+          <span class="user-name">Ayanda Majola</span>
+          <span class="user-role">CEO · Admin</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══ MAIN ═══ -->
+  <div class="main-content">
+
+    <!-- ── Topbar ── -->
+    <header class="topbar">
+      <div class="topbar__left">
+        <div>
+          <div class="topbar__title" id="topbarTitle">Team Dashboard</div>
+          <div class="topbar__breadcrumb">SV Capital Internal Platform</div>
+        </div>
+      </div>
+      <div class="topbar__actions">
+        <!-- Period selector -->
+        <div class="period-selector">
+          <i class="fa-solid fa-calendar" style="color:var(--accent);font-size:0.8rem"></i>
+          <select id="periodSelect"></select>
+        </div>
+        <button class="topbar-btn" title="Add KPI Scores" onclick="openKpiModal()">
+          <i class="fa-solid fa-chart-bar"></i>
+        </button>
+        <button class="topbar-btn" title="Award Badge" onclick="openBadgeModal()">
+          <i class="fa-solid fa-medal"></i>
+        </button>
+        <button class="topbar-btn" title="New Leave Request" onclick="openLeaveModal()">
+          <i class="fa-solid fa-calendar-plus"></i>
+        </button>
+        <a href="employee.html" class="btn btn--primary btn--sm" title="Employee Self-Service Portal">
+          <i class="fa-solid fa-user-circle"></i> Employee View
+        </a>
+        <a href="../admin/index.html" class="btn btn--secondary btn--sm">
+          <i class="fa-solid fa-arrow-left"></i> Admin
+        </a>
+      </div>
+    </header>
+
+    <!-- ── Views ── -->
+    <div class="view-content">
+
+      <!-- ══ DASHBOARD ══ -->
+      <section class="view-section active" id="view-dashboard">
+
+        <!-- EVA Hero -->
+        <div class="eva-hero">
+          <div class="eva-hero__header">
+            <div>
+              <div class="eva-hero__label">
+                <span class="live-dot" style="display:inline-block;vertical-align:middle;margin-right:6px"></span>
+                Economic Value Added Pool
+              </div>
+              <div class="eva-hero__title">Team Performance Overview</div>
+            </div>
+            <div id="db-period-label" class="eva-hero__period">—</div>
+          </div>
+          <div class="eva-hero__metrics">
+            <div class="eva-metric">
+              <div class="eva-metric__label">Total AUM</div>
+              <div class="eva-metric__value" id="db-aum">—</div>
+              <div class="eva-metric__sub" id="db-aum-growth">—</div>
+            </div>
+            <div class="eva-metric" style="padding-left:24px">
+              <div class="eva-metric__label">Gross Revenue</div>
+              <div class="eva-metric__value teal" id="db-revenue">—</div>
+              <div class="eva-metric__sub" id="db-op-costs">—</div>
+            </div>
+            <div class="eva-metric" style="padding-left:24px">
+              <div class="eva-metric__label">EVA Pool Total</div>
+              <div class="eva-metric__value accent" id="db-eva-pool">—</div>
+              <div class="eva-metric__sub">50% Company / 50% Team</div>
+            </div>
+            <div class="eva-metric" style="padding-left:24px">
+              <div class="eva-metric__label">Team Pool</div>
+              <div class="eva-metric__value gold" id="db-team-pool">—</div>
+              <div class="eva-metric__sub">60% Individual / 40% Collective</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stat row -->
+        <div class="grid-4" style="margin-bottom:24px">
+          <div class="stat-card">
+            <div class="stat-card__accent" style="background:linear-gradient(90deg,#7c5cfc,#a78bfa)"></div>
+            <div class="stat-card__icon" style="background:rgba(124,92,252,0.15);color:var(--accent)">
+              <i class="fa-solid fa-chart-bar"></i>
+            </div>
+            <div class="stat-card__value" id="db-avg-score">—</div>
+            <div class="stat-card__label">Avg Team KPI Score</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__accent" style="background:linear-gradient(90deg,#00d4aa,#55efc4)"></div>
+            <div class="stat-card__icon" style="background:rgba(0,212,170,0.15);color:var(--accent2)">
+              <i class="fa-solid fa-coins"></i>
+            </div>
+            <div class="stat-card__value" id="db-team-pool-stat">—</div>
+            <div class="stat-card__label">Team EVA Pool</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__accent" style="background:linear-gradient(90deg,#f9c846,#ffd700)"></div>
+            <div class="stat-card__icon" style="background:rgba(249,200,70,0.15);color:var(--gold)">
+              <i class="fa-solid fa-calendar-xmark"></i>
+            </div>
+            <div class="stat-card__value" id="db-pending-leave">—</div>
+            <div class="stat-card__label">Pending Leave Requests</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__accent" style="background:linear-gradient(90deg,#fd79a8,#e84393)"></div>
+            <div class="stat-card__icon" style="background:rgba(253,121,168,0.15);color:#fd79a8">
+              <i class="fa-solid fa-trophy"></i>
+            </div>
+            <div class="stat-card__value" id="db-active-challenges">—</div>
+            <div class="stat-card__label">Active Challenges</div>
+          </div>
+        </div>
+
+        <div class="grid-2-1" style="margin-bottom:24px">
+          <!-- Employee grid -->
+          <div>
+            <div class="section-header" style="margin-bottom:16px">
+              <div>
+                <div class="section-title" style="font-size:1rem">Team Members</div>
+                <div class="section-sub">Current period performance</div>
+              </div>
+              <button class="btn btn--secondary btn--sm" onclick="navigate('leaderboard', document.querySelector('[data-view=leaderboard]'))">
+                <i class="fa-solid fa-ranking-star"></i> Leaderboard
+              </button>
+            </div>
+            <div class="grid-2" id="db-emp-grid"></div>
+          </div>
+
+          <!-- Right column: challenges + chart -->
+          <div style="display:flex;flex-direction:column;gap:20px">
+            <div class="card">
+              <div class="section-header" style="margin-bottom:14px">
+                <div class="section-title" style="font-size:0.9rem">Active Challenges</div>
+                <button class="btn btn--xs btn--secondary" onclick="navigate('achievements', document.querySelector('[data-view=achievements]'))">View all</button>
+              </div>
+              <div id="db-challenges"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPI Chart -->
+        <div class="card">
+          <div class="section-header" style="margin-bottom:18px">
+            <div>
+              <div class="section-title" style="font-size:0.95rem">Team KPI Breakdown</div>
+              <div class="section-sub">Latest period scores by dimension</div>
+            </div>
+          </div>
+          <div style="height:280px"><canvas id="dashboardChart"></canvas></div>
+        </div>
+
+      </section><!-- /dashboard -->
+
+      <!-- ══ LEADERBOARD ══ -->
+      <section class="view-section" id="view-leaderboard">
+        <div class="section-header">
+          <div>
+            <div class="section-title">🏆 Performance Leaderboard</div>
+            <div class="section-sub">Ranked by XP · Click any row for full KPI profile</div>
+          </div>
+        </div>
+
+        <div class="grid-2-1" style="gap:24px">
+          <div>
+            <div id="lb-list" class="leaderboard-list"></div>
+          </div>
+
+          <!-- Period breakdown table -->
+          <div class="card">
+            <div style="font-size:0.85rem;font-weight:800;margin-bottom:14px;color:var(--text-primary)">
+              <i class="fa-solid fa-coins" style="color:var(--gold)"></i> EVA Distribution
+            </div>
+            <div class="data-table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>KPI</th>
+                    <th>Wt</th>
+                    <th>Indiv</th>
+                    <th>Collective</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody id="lb-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section><!-- /leaderboard -->
+
+      <!-- ══ KPI MANAGEMENT ══ -->
+      <section class="view-section" id="view-kpis">
+        <div class="section-header">
+          <div>
+            <div class="section-title">KPI Management</div>
+            <div class="section-sub">Score employees across 8 performance dimensions</div>
+          </div>
+          <button class="btn btn--primary" onclick="openKpiModal()">
+            <i class="fa-solid fa-plus"></i> Add Scores
+          </button>
+        </div>
+
+        <div class="grid-2-1" style="margin-bottom:24px;gap:24px">
+          <div class="card" style="padding:16px 0 0">
+            <div style="padding:0 20px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <select class="form-control" id="kpi-emp-select" style="width:200px" onchange="renderKpis()">
+                <option value="">All Employees</option>
+              </select>
+            </div>
+            <div class="data-table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Period</th>
+                    <th style="min-width:220px">Dimensions</th>
+                    <th>Overall</th>
+                    <th>EVA Share</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="kpi-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="font-size:0.85rem;font-weight:800;margin-bottom:14px;color:var(--text-primary)">
+              <i class="fa-solid fa-spider-web" style="color:var(--accent)"></i> Radar Comparison
+            </div>
+            <div style="height:320px"><canvas id="kpiRadarChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- KPI Dimension Guide -->
+        <div class="card">
+          <div style="font-size:0.85rem;font-weight:800;margin-bottom:16px">KPI Dimensions Reference</div>
+          <div class="grid-4" style="gap:12px">
+            <div style="padding:12px;background:var(--bg-elevated);border-radius:var(--radius-sm);border:1px solid var(--border)">
+              <div style="color:#7c5cfc;font-size:0.8rem;font-weight:700;margin-bottom:4px"><i class="fa-solid fa-chart-line"></i> Revenue Contribution</div>
+              <div style="font-size:0.67rem;color:var(--text-muted);line-height:1.4">AUM growth attributable to employee activity, referrals and client acquisition.</div>
+            </div>
+            <div style="padding:12px;background:var(--bg-elevated);border-radius:var(--radius-sm);border:1px solid var(--border)">
+              <div style="color:#f9c846;font-size:0.8rem;font-weight:700;margin-bottom:4px"><i class="fa-solid fa-star"></i> Client Satisfaction</div>
+              <div style="font-size:0.67rem;color:var(--text-muted);line-height:1.4">NPS scores, review ratings and client retention rates.</div>
+            </div>
+            <div style="padding:12px;background:var(--bg-elevated);border-radius:var(--radius-sm);border:1px solid var(--border)">
+              <div style="color:#00d4aa;font-size:0.8rem;font-weight:700;margin-bottom:4px"><i class="fa-solid fa-check-circle"></i> Task Completion</div>
+              <div style="font-size:0.67rem;color:var(--text-muted);line-height:1.4">% of assigned tasks and projects completed on time within the period.</div>
+            </div>
+            <div style="padding:12px;background:var(--bg-elevated);border-radius:var(--radius-sm);border:1px solid var(--border)">
+              <div style="color:#4fc3f7;font-size:0.8rem;font-weight:700;margin-bottom:4px"><i class="fa-solid fa-bolt"></i> Response Time</div>
+              <div style="font-size:0.67rem;color:var(--text-muted);line-height:1.4">Average response time to clients and internal stakeholders.</div>
+            </div>
+            <div style="padding:12px;background:var(--bg-elevated);border-radius:var(--radius-sm);border:1px solid var(--border)">
+              <div style="color:#0984e3;font-size:0.8rem;font-weight:700;margin-bottom:4px"><i class="fa-solid fa-shield"></i> Compliance</div>
+              <div style="font-size:0.67rem;color:var(--text-muted);line-height:1.4">Adherence to regulatory requirements, FSCA rules and internal procedures.</div>
+            </div>
+            <div style="padding:12px;background:var(--bg-elevated);border-radius:var(--radius-sm);border:1px solid var(--border)">
+              <div style="color:#a29bfe;font-size:0.8rem;font-weight:700;margin-bottom:4px"><i class="fa-solid fa-lightbulb"></i> Innovation</div>
+              <div style="font-size:0.67rem;color:var(--text-muted);line-height:1.4">Process improvements, new ideas submitted and operational waste reduced.</div>
+            </div>
+            <div style="padding:12px;background:var(--bg-elevated);border-radius:var(--radius-sm);border:1px solid var(--border)">
+              <div style="color:#fd79a8;font-size:0.8rem;font-weight:700;margin-bottom:4px"><i class="fa-solid fa-people-group"></i> Collaboration</div>
+              <div style="font-size:0.67rem;color:var(--text-muted);line-height:1.4">Peer feedback scores, cross-department project participation.</div>
+            </div>
+            <div style="padding:12px;background:var(--bg-elevated);border-radius:var(--radius-sm);border:1px solid var(--border)">
+              <div style="color:#55efc4;font-size:0.8rem;font-weight:700;margin-bottom:4px"><i class="fa-solid fa-calendar-check"></i> Attendance</div>
+              <div style="font-size:0.67rem;color:var(--text-muted);line-height:1.4">Punctuality, presence rate and streak continuity.</div>
+            </div>
+          </div>
+        </div>
+      </section><!-- /kpis -->
+
+      <!-- ══ LEAVE MANAGEMENT ══ -->
+      <section class="view-section" id="view-leave">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Leave Management</div>
+            <div class="section-sub">Track annual, sick and study leave with EVA impact</div>
+          </div>
+          <button class="btn btn--primary" onclick="openLeaveModal()">
+            <i class="fa-solid fa-plus"></i> New Request
+          </button>
+        </div>
+
+        <div class="grid-3" style="margin-bottom:24px">
+          <div class="stat-card">
+            <div class="stat-card__accent" style="background:linear-gradient(90deg,#ffb347,#ffd700)"></div>
+            <div class="stat-card__icon" style="background:rgba(255,179,71,0.15);color:var(--warning)"><i class="fa-solid fa-clock"></i></div>
+            <div class="stat-card__value" id="leave-pending-count">—</div>
+            <div class="stat-card__label">Pending Approval</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__accent" style="background:linear-gradient(90deg,#00d4aa,#55efc4)"></div>
+            <div class="stat-card__icon" style="background:rgba(0,212,170,0.15);color:var(--success)"><i class="fa-solid fa-check"></i></div>
+            <div class="stat-card__value" id="leave-approved-count">—</div>
+            <div class="stat-card__label">Approved</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__accent" style="background:linear-gradient(90deg,#4fc3f7,#0984e3)"></div>
+            <div class="stat-card__icon" style="background:rgba(79,195,247,0.15);color:var(--info)"><i class="fa-solid fa-calendar"></i></div>
+            <div class="stat-card__value" id="leave-total-count">—</div>
+            <div class="stat-card__label">Total Requests</div>
+          </div>
+        </div>
+
+        <!-- Leave type legend -->
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px">
+          <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:var(--text-secondary)"><div style="width:10px;height:10px;border-radius:50%;background:#4fc3f7"></div>Annual Leave</div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:var(--text-secondary)"><div style="width:10px;height:10px;border-radius:50%;background:#ff5b5b"></div>Sick Leave</div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:var(--text-secondary)"><div style="width:10px;height:10px;border-radius:50%;background:#f9c846"></div>Study Leave</div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:var(--text-secondary)"><div style="width:10px;height:10px;border-radius:50%;background:#fd79a8"></div>Family Responsibility</div>
+        </div>
+
+        <div id="leave-list" style="display:flex;flex-direction:column;gap:10px"></div>
+      </section><!-- /leave -->
+
+      <!-- ══ EVA POOL ══ -->
+      <section class="view-section" id="view-eva">
+        <div class="section-header">
+          <div>
+            <div class="section-title">EVA Compensation Pool</div>
+            <div class="section-sub">Economic Value Added — transparent team compensation ledger</div>
+          </div>
+          <button class="btn btn--secondary btn--sm" onclick="exportEvaCSV()">
+            <i class="fa-solid fa-file-csv"></i> Export CSV
+          </button>
+        </div>
+
+        <!-- EVA mechanics explanation -->
+        <div class="card" style="margin-bottom:24px;background:linear-gradient(135deg,#1a1035,#0d1a2e);border-color:rgba(124,92,252,0.25)">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0">
+            <div style="padding:0 24px 0 0;border-right:1px solid var(--border)">
+              <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:6px">Step 1 — Pool Creation</div>
+              <div style="font-size:1.1rem;font-weight:800;color:var(--text-primary);margin-bottom:4px">Revenue − Costs = EVA</div>
+              <div style="font-size:0.72rem;color:var(--text-secondary)">Gross Revenue minus all Operational Costs forms the Economic Value Added pool for the period.</div>
+            </div>
+            <div style="padding:0 24px;border-right:1px solid var(--border)">
+              <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:6px">Step 2 — Split</div>
+              <div style="font-size:1.1rem;font-weight:800;color:var(--text-primary);margin-bottom:4px">50% Company / 50% Team</div>
+              <div style="font-size:0.72rem;color:var(--text-secondary)">The company retains 50% for reinvestment. The remaining 50% forms the Team Pool distributed to staff.</div>
+            </div>
+            <div style="padding:0 0 0 24px">
+              <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:6px">Step 3 — Distribution</div>
+              <div style="font-size:1.1rem;font-weight:800;color:var(--text-primary);margin-bottom:4px">60% Individual / 40% Collective</div>
+              <div style="font-size:0.72rem;color:var(--text-secondary)">60% is weighted by KPI score × EVA weight. 40% is split equally across the team as a collective reward.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Revenue formula banner -->
+        <div id="eva-revenue-formula" style="background:rgba(0,212,170,0.07);border:1px solid rgba(0,212,170,0.2);border-radius:10px;padding:12px 18px;margin-bottom:18px;font-size:0.82rem;color:var(--text-secondary)">
+          <i class="fa-solid fa-calculator" style="color:var(--accent2)"></i>
+          &nbsp;<b>Revenue = 2.5% × AUM</b>
+        </div>
+
+        <!-- Period metrics -->
+        <div class="grid-4" style="margin-bottom:24px">
+          <div class="stat-card">
+            <div class="stat-card__icon" style="background:rgba(0,212,170,0.12);color:var(--accent2)"><i class="fa-solid fa-arrow-trend-up"></i></div>
+            <div class="stat-card__value" style="font-size:1.2rem" id="eva-gross-revenue">—</div>
+            <div class="stat-card__label">Gross Revenue (2.5% AUM)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__icon" style="background:rgba(255,91,91,0.12);color:var(--danger)"><i class="fa-solid fa-minus"></i></div>
+            <div class="stat-card__value" style="font-size:1.2rem" id="eva-op-costs">—</div>
+            <div class="stat-card__label">Operational Costs</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__icon" style="background:rgba(124,92,252,0.12);color:var(--accent)"><i class="fa-solid fa-equals"></i></div>
+            <div class="stat-card__value" style="font-size:1.2rem" id="eva-pool-total">—</div>
+            <div class="stat-card__label">EVA Pool Total</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__icon" style="background:rgba(249,200,70,0.12);color:var(--gold)"><i class="fa-solid fa-people-group"></i></div>
+            <div class="stat-card__value" style="font-size:1.2rem" id="eva-team-pool">—</div>
+            <div class="stat-card__label">Team Pool (50%)</div>
+          </div>
+        </div>
+
+        <div class="grid-2-1" style="gap:24px">
+          <!-- Breakdown table -->
+          <div class="card" style="padding:0 0 16px">
+            <div style="padding:18px 20px 14px;display:flex;align-items:center;justify-content:space-between">
+              <div style="font-size:0.88rem;font-weight:800;color:var(--text-primary)">Individual Breakdown</div>
+              <div style="display:flex;gap:16px;font-size:0.7rem;color:var(--text-muted)">
+                <div>Individual: <b style="color:var(--accent)" id="eva-indiv-pool">—</b></div>
+                <div>Collective: <b style="color:var(--accent2)" id="eva-collect-pool">—</b></div>
+              </div>
+            </div>
+            <div class="data-table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>KPI</th>
+                    <th>Weight</th>
+                    <th>Share%</th>
+                    <th style="color:var(--accent)">Individual</th>
+                    <th style="color:var(--accent2)">Collective</th>
+                    <th style="color:var(--gold)">Total</th>
+                  </tr>
+                </thead>
+                <tbody id="eva-breakdown-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Donut + meta -->
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="card">
+              <div style="font-size:0.82rem;font-weight:800;margin-bottom:12px">Pool Distribution</div>
+              <div style="height:220px"><canvas id="evaDonut"></canvas></div>
+            </div>
+            <div class="card" style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div style="font-size:0.72rem;color:var(--text-muted)">Status</div>
+                <div id="eva-status"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div style="font-size:0.72rem;color:var(--text-muted)">AUM Growth</div>
+                <div style="font-size:0.85rem;font-weight:700;color:var(--success)" id="eva-aum-growth">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="eva-content"></div>
+      </section><!-- /eva -->
+
+      <!-- ══ ACHIEVEMENTS ══ -->
+      <section class="view-section" id="view-achievements">
+        <div class="section-header">
+          <div>
+            <div class="section-title">🏆 Achievements & Challenges</div>
+            <div class="section-sub">Badges, team challenges and rewards</div>
+          </div>
+          <button class="btn btn--primary" onclick="openBadgeModal()">
+            <i class="fa-solid fa-medal"></i> Award Badge
+          </button>
+        </div>
+
+        <!-- Active Challenges -->
+        <div style="margin-bottom:28px">
+          <div style="font-size:0.85rem;font-weight:800;color:var(--text-primary);margin-bottom:14px">
+            <i class="fa-solid fa-bolt" style="color:var(--accent)"></i> Team Challenges
+          </div>
+          <div class="grid-3" id="challenges-list"></div>
+        </div>
+
+        <!-- Achievement Wall -->
+        <div>
+          <div style="font-size:0.85rem;font-weight:800;color:var(--text-primary);margin-bottom:14px">
+            <i class="fa-solid fa-medal" style="color:var(--gold)"></i> Achievement Wall
+          </div>
+          <div class="achievement-grid" id="achievements-grid"></div>
+        </div>
+      </section><!-- /achievements -->
+
+      <!-- ══ SETTINGS ══ -->
+      <section class="view-section" id="view-settings">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Team Settings</div>
+            <div class="section-sub">Manage employee profiles, XP, EVA weights and streak data</div>
+          </div>
+        </div>
+
+        <div class="grid-3" id="settings-emp-grid"></div>
+      </section><!-- /settings -->
+
+    </div><!-- /view-content -->
+  </div><!-- /main-content -->
+</div><!-- /app-layout -->
+
+<!-- ══════════════════════════════════════════════════════
+     MODALS
+════════════════════════════════════════════════════════ -->
+
+<!-- ── KPI Entry Modal ── -->
+<div class="modal-overlay" id="kpiModal" onclick="if(event.target===this)closeModal('kpiModal')">
+  <div class="modal modal--wide">
+    <div class="modal__header">
+      <div>
+        <div class="modal__title"><i class="fa-solid fa-chart-bar" style="color:var(--accent)"></i> KPI Score Entry</div>
+        <div class="modal__sub">Score 0–100 across all 8 performance dimensions</div>
+      </div>
+      <button class="modal__close" onclick="closeModal('kpiModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <form id="kpiForm" onsubmit="event.preventDefault();submitKpi()">
+      <div class="form-row">
+        <div class="form-group" style="margin-bottom:0">
+          <label>Employee</label>
+          <select id="km-employee" class="form-control" required>
+            <option value="">Select Employee</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Period (YYYY-MM)</label>
+          <input type="month" id="km-period" class="form-control" required />
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:8px">
+        <!-- Revenue -->
+        <div class="form-group">
+          <label>Revenue Contribution — <span id="km-revenue_contribution-val">50</span></label>
+          <input type="range" id="km-revenue_contribution" class="score-slider" min="0" max="100" value="50" oninput="sliderUpdate('km-revenue_contribution')">
+        </div>
+        <!-- Client Satisfaction -->
+        <div class="form-group">
+          <label>Client Satisfaction — <span id="km-client_satisfaction-val">50</span></label>
+          <input type="range" id="km-client_satisfaction" class="score-slider" min="0" max="100" value="50" oninput="sliderUpdate('km-client_satisfaction')">
+        </div>
+        <!-- Task Completion -->
+        <div class="form-group">
+          <label>Task Completion Rate — <span id="km-task_completion_rate-val">50</span></label>
+          <input type="range" id="km-task_completion_rate" class="score-slider" min="0" max="100" value="50" oninput="sliderUpdate('km-task_completion_rate')">
+        </div>
+        <!-- Response Time -->
+        <div class="form-group">
+          <label>Response Time Score — <span id="km-response_time_score-val">50</span></label>
+          <input type="range" id="km-response_time_score" class="score-slider" min="0" max="100" value="50" oninput="sliderUpdate('km-response_time_score')">
+        </div>
+        <!-- Compliance -->
+        <div class="form-group">
+          <label>Compliance Score — <span id="km-compliance_score-val">50</span></label>
+          <input type="range" id="km-compliance_score" class="score-slider" min="0" max="100" value="50" oninput="sliderUpdate('km-compliance_score')">
+        </div>
+        <!-- Innovation -->
+        <div class="form-group">
+          <label>Innovation Score — <span id="km-innovation_score-val">50</span></label>
+          <input type="range" id="km-innovation_score" class="score-slider" min="0" max="100" value="50" oninput="sliderUpdate('km-innovation_score')">
+        </div>
+        <!-- Team Collaboration -->
+        <div class="form-group">
+          <label>Team Collaboration — <span id="km-team_collaboration-val">50</span></label>
+          <input type="range" id="km-team_collaboration" class="score-slider" min="0" max="100" value="50" oninput="sliderUpdate('km-team_collaboration')">
+        </div>
+        <!-- Attendance -->
+        <div class="form-group">
+          <label>Attendance Score — <span id="km-attendance_score-val">50</span></label>
+          <input type="range" id="km-attendance_score" class="score-slider" min="0" max="100" value="50" oninput="sliderUpdate('km-attendance_score')">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="km-notes" class="form-control" placeholder="Optional notes for this period…"></textarea>
+      </div>
+
+      <div class="modal__footer">
+        <button type="button" class="btn btn--secondary" onclick="closeModal('kpiModal')">Cancel</button>
+        <button type="submit" class="btn btn--primary"><i class="fa-solid fa-save"></i> Save Scores</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Leave Request Modal ── -->
+<div class="modal-overlay" id="leaveModal" onclick="if(event.target===this)closeModal('leaveModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <div class="modal__title"><i class="fa-solid fa-calendar-plus" style="color:var(--accent2)"></i> Leave Request</div>
+        <div class="modal__sub">Submit a leave request for a team member</div>
+      </div>
+      <button class="modal__close" onclick="closeModal('leaveModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="leaveForm" onsubmit="event.preventDefault();submitLeave()">
+      <div class="form-group">
+        <label>Employee</label>
+        <select id="lm-employee" class="form-control" required>
+          <option value="">Select Employee</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Leave Type</label>
+        <select id="lm-type" class="form-control" required>
+          <option value="annual">Annual Leave</option>
+          <option value="sick">Sick Leave</option>
+          <option value="study">Study Leave</option>
+          <option value="family">Family Responsibility</option>
+          <option value="unpaid">Unpaid Leave</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="margin-bottom:0">
+          <label>Start Date</label>
+          <input type="date" id="lm-start" class="form-control" required />
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>End Date</label>
+          <input type="date" id="lm-end" class="form-control" required />
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:16px">
+        <label>Reason</label>
+        <textarea id="lm-reason" class="form-control" placeholder="Reason for leave…"></textarea>
+      </div>
+      <div class="modal__footer">
+        <button type="button" class="btn btn--secondary" onclick="closeModal('leaveModal')">Cancel</button>
+        <button type="submit" class="btn btn--primary"><i class="fa-solid fa-paper-plane"></i> Submit Request</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Award Badge Modal ── -->
+<div class="modal-overlay" id="badgeModal" onclick="if(event.target===this)closeModal('badgeModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <div class="modal__title"><i class="fa-solid fa-medal" style="color:var(--gold)"></i> Award Badge</div>
+        <div class="modal__sub">Recognise outstanding performance with a badge and XP</div>
+      </div>
+      <button class="modal__close" onclick="closeModal('badgeModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="badgeForm" onsubmit="event.preventDefault();submitBadge()">
+      <div class="form-group">
+        <label>Employee</label>
+        <select id="bm-employee" class="form-control" required>
+          <option value="">Select Employee</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="margin-bottom:0">
+          <label>Badge Name</label>
+          <input type="text" id="bm-name" class="form-control" placeholder="e.g. Rainmaker" required />
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Category</label>
+          <select id="bm-category" class="form-control">
+            <option value="performance">Performance</option>
+            <option value="streak">Streak</option>
+            <option value="collaboration">Collaboration</option>
+            <option value="innovation">Innovation</option>
+            <option value="client">Client</option>
+            <option value="compliance">Compliance</option>
+            <option value="milestone">Milestone</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:16px">
+        <div class="form-group" style="margin-bottom:0">
+          <label>Icon (FontAwesome class)</label>
+          <input type="text" id="bm-icon" class="form-control" placeholder="fa-medal" value="fa-medal" />
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Badge Colour</label>
+          <input type="color" id="bm-color" class="form-control" value="#7c5cfc" style="height:42px;padding:4px" />
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:16px">
+        <label>XP Award — <span id="bm-xp-val">200</span> XP</label>
+        <input type="range" id="bm-xp" class="score-slider" min="50" max="1000" step="50" value="200" oninput="document.getElementById('bm-xp-val').textContent=this.value">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="bm-desc" class="form-control" placeholder="What did they achieve?"></textarea>
+      </div>
+      <div class="modal__footer">
+        <button type="button" class="btn btn--secondary" onclick="closeModal('badgeModal')">Cancel</button>
+        <button type="submit" class="btn btn--primary"><i class="fa-solid fa-medal"></i> Award Badge</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Employee Edit Modal ── -->
+<div class="modal-overlay" id="empModal" onclick="if(event.target===this)closeModal('empModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <div class="modal__title" id="em-name">Employee</div>
+        <div class="modal__sub">Update XP, streak, EVA weight and status</div>
+      </div>
+      <button class="modal__close" onclick="closeModal('empModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin-bottom:0">
+        <label>XP Points</label>
+        <input type="number" id="em-xp" class="form-control" min="0" />
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Streak Days</label>
+        <input type="number" id="em-streak" class="form-control" min="0" />
+      </div>
+    </div>
+    <div class="form-row" style="margin-top:14px">
+      <div class="form-group" style="margin-bottom:0">
+        <label>EVA Weight</label>
+        <input type="number" id="em-weight" class="form-control" min="0.1" max="5" step="0.1" />
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Status</label>
+        <select id="em-status" class="form-control">
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="on_leave">On Leave</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:14px">
+      <label>Bio</label>
+      <textarea id="em-bio" class="form-control" placeholder="Short bio…"></textarea>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="closeModal('empModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="submitEmpEdit()"><i class="fa-solid fa-save"></i> Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── KPI Detail Modal ── -->
+<div class="modal-overlay" id="kpiDetailModal" onclick="if(event.target===this)closeModal('kpiDetailModal')">
+  <div class="modal modal--wide">
+    <div class="modal__header">
+      <div class="modal__title"><i class="fa-solid fa-user" style="color:var(--accent)"></i> Employee KPI Profile</div>
+      <button class="modal__close" onclick="closeModal('kpiDetailModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div id="kdm-header"></div>
+    <div style="margin-top:18px;margin-bottom:8px;font-size:0.8rem;font-weight:700;color:var(--text-secondary)">KPI DIMENSIONS</div>
+    <div id="kdm-kpis"></div>
+    <div style="margin-top:16px;margin-bottom:8px;font-size:0.8rem;font-weight:700;color:var(--text-secondary)">BADGES EARNED</div>
+    <div id="kdm-badges"></div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="closeModal('kpiDetailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="js/team.js"></script>
+<!-- Sync db-team-pool-stat with db-team-pool after init -->
+<script>
+  const _syncTeamPool = setInterval(() => {
+    const src = document.getElementById('db-team-pool');
+    const dst = document.getElementById('db-team-pool-stat');
+    if (src && dst && src.textContent !== '—') {
+      dst.textContent = src.textContent;
+      clearInterval(_syncTeamPool);
+    }
+  }, 500);
+</script>
+</body>
+</html>

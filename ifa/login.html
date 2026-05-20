@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SV Capital — IFA Portal Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --orange:       #FF8215;
+      --orange-dark:  #E56200;
+      --orange-light: #FF9B0C;
+      --teal:         #2F8C9B;
+      --teal-dark:    #1E6E7A;
+      --green:        #22C55E;
+      --bg:           #F7F8FA;
+      --bg-white:     #FFFFFF;
+      --text-h:       #1a1a1a;
+      --text-body:    #303030;
+      --text-muted:   #6b7280;
+      --border:       rgba(0,0,0,0.09);
+      --shadow:       0 4px 20px rgba(0,0,0,0.09);
+      --shadow-lg:    0 20px 60px rgba(0,0,0,0.14);
+      --radius:       12px;
+      --radius-lg:    18px;
+      --font:         'Inter', -apple-system, sans-serif;
+      --serif:        'DM Serif Display', Georgia, serif;
+      --ease:         0.25s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    html, body { height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text-body);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ── */
+    .login-layout { display: flex; min-height: 100vh; width: 100%; }
+
+    /* ── Left Panel ── */
+    .login-left {
+      flex: 1;
+      background: linear-gradient(145deg, #0d2535 0%, #132030 50%, #0a1a25 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 64px 72px;
+      position: relative;
+      overflow: hidden;
+      min-width: 0;
+    }
+    .login-left::before {
+      content: '';
+      position: absolute;
+      top: -100px; right: -100px;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(255,130,21,0.09) 0%, transparent 65%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .login-left::after {
+      content: '';
+      position: absolute;
+      bottom: -80px; left: -80px;
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(47,140,155,0.11) 0%, transparent 65%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .deco {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .deco--1 { width: 280px; height: 280px; border: 2px solid rgba(255,155,12,0.07); top: 8%; right: 4%; }
+    .deco--2 { width: 160px; height: 160px; border: 2px solid rgba(47,140,155,0.10); bottom: 14%; right: 14%; }
+    .deco--3 { width: 80px; height: 80px; background: rgba(255,130,21,0.04); top: 55%; left: 8%; }
+
+    .login-left__content { position: relative; z-index: 2; max-width: 460px; }
+
+    .brand {
+      display: flex; align-items: center; gap: 16px;
+      margin-bottom: 52px;
+    }
+    .brand img { width: 52px; height: 52px; border-radius: 10px; }
+    .brand__name {
+      font-size: 1.35rem; font-weight: 900; color: #fff;
+      letter-spacing: 0.08em; text-transform: uppercase; line-height: 1;
+    }
+    .brand__sub {
+      font-size: 0.68rem; color: rgba(255,255,255,0.45);
+      letter-spacing: 0.14em; text-transform: uppercase; margin-top: 4px;
+    }
+
+    /* IFA badge on left panel */
+    .ifa-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(47,140,155,0.15);
+      border: 1px solid rgba(47,140,155,0.35);
+      color: #5ecfdc;
+      font-size: 0.7rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.12em;
+      padding: 6px 14px; border-radius: 50px;
+      margin-bottom: 22px;
+    }
+
+    .hero-headline {
+      font-family: var(--serif);
+      font-size: 2.6rem; font-weight: 400; color: #fff;
+      line-height: 1.2; letter-spacing: -0.01em;
+      margin-bottom: 18px;
+    }
+    .hero-headline em { font-style: italic; color: var(--orange-light); }
+
+    .hero-sub {
+      font-size: 0.92rem; color: rgba(255,255,255,0.5);
+      line-height: 1.75; margin-bottom: 44px; max-width: 380px;
+    }
+
+    /* Feature pills */
+    .features { display: flex; flex-direction: column; gap: 14px; }
+    .feature-item {
+      display: flex; align-items: center; gap: 14px;
+    }
+    .feature-icon {
+      width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem;
+    }
+    .feature-icon--teal  { background: rgba(47,140,155,0.15); color: #5ecfdc; }
+    .feature-icon--gold  { background: rgba(212,175,55,0.15); color: #D4AF37; }
+    .feature-icon--green { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .feature-icon--orange{ background: rgba(255,130,21,0.15); color: var(--orange); }
+    .feature-text { font-size: 0.85rem; color: rgba(255,255,255,0.65); line-height: 1.45; }
+    .feature-text strong { color: rgba(255,255,255,0.9); font-weight: 600; }
+
+    /* ── Right Panel (Form) ── */
+    .login-right {
+      width: 480px; flex-shrink: 0;
+      background: var(--bg-white);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 64px 52px;
+      position: relative;
+    }
+
+    .form-header { margin-bottom: 36px; }
+    .form-eyebrow {
+      font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.14em; color: var(--teal);
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 10px;
+    }
+    .form-eyebrow::before {
+      content: ''; display: block;
+      width: 20px; height: 2px;
+      background: var(--teal); border-radius: 2px;
+    }
+    .form-title {
+      font-size: 1.85rem; font-weight: 800; color: var(--text-h);
+      letter-spacing: -0.02em; margin-bottom: 8px;
+    }
+    .form-sub { font-size: 0.85rem; color: var(--text-muted); }
+
+    /* Form elements */
+    .form-group { margin-bottom: 20px; }
+    .form-label {
+      display: block; font-size: 0.78rem; font-weight: 600;
+      color: var(--text-h); margin-bottom: 7px; letter-spacing: 0.01em;
+    }
+    .input-wrap { position: relative; }
+    .input-wrap .input-icon {
+      position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted); font-size: 0.82rem; pointer-events: none;
+    }
+    .form-input {
+      width: 100%; height: 48px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0 14px 0 40px;
+      font-size: 0.92rem; font-family: var(--font); color: var(--text-h);
+      background: var(--bg);
+      transition: border-color var(--ease), box-shadow var(--ease);
+      outline: none;
+    }
+    .form-input:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(47,140,155,0.12);
+      background: #fff;
+    }
+    .form-input.error { border-color: #ef4444; }
+
+    .toggle-pw {
+      position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer;
+      color: var(--text-muted); font-size: 0.82rem; padding: 4px;
+    }
+    .toggle-pw:hover { color: var(--text-h); }
+
+    .form-row-inline {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .checkbox-label {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.82rem; color: var(--text-muted); cursor: pointer;
+    }
+    .checkbox-label input { accent-color: var(--teal); width: 15px; height: 15px; }
+    .forgot-link {
+      font-size: 0.82rem; color: var(--teal); font-weight: 600;
+      text-decoration: none;
+    }
+    .forgot-link:hover { text-decoration: underline; }
+
+    /* Error message */
+    .error-msg {
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 0.82rem; color: #dc2626;
+      display: none; align-items: center; gap: 10px;
+      margin-bottom: 20px;
+    }
+    .error-msg.visible { display: flex; }
+
+    /* Submit button */
+    .btn-login {
+      width: 100%; height: 52px;
+      background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
+      color: #fff; border: none; border-radius: var(--radius);
+      font-size: 0.95rem; font-weight: 700; font-family: var(--font);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      gap: 10px; letter-spacing: 0.01em;
+      transition: opacity var(--ease), transform var(--ease), box-shadow var(--ease);
+      box-shadow: 0 6px 24px rgba(47,140,155,0.30);
+      margin-bottom: 28px;
+    }
+    .btn-login:hover { opacity: 0.92; transform: translateY(-1px); box-shadow: 0 10px 32px rgba(47,140,155,0.38); }
+    .btn-login:active { transform: translateY(0); }
+    .btn-login:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    /* Spinner */
+    .spinner {
+      width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.35);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Divider */
+    .divider {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 20px;
+    }
+    .divider::before, .divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+    .divider span { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
+
+    /* Other portals */
+    .portal-links {
+      display: flex; gap: 10px; margin-bottom: 32px;
+    }
+    .portal-link {
+      flex: 1; height: 42px; border: 1.5px solid var(--border);
+      border-radius: var(--radius); background: var(--bg);
+      font-size: 0.78rem; font-weight: 600; color: var(--text-muted);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      gap: 7px; text-decoration: none;
+      transition: border-color var(--ease), color var(--ease), background var(--ease);
+    }
+    .portal-link:hover {
+      border-color: var(--orange); color: var(--orange); background: rgba(255,130,21,0.04);
+    }
+
+    .form-footer {
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;
+    }
+    .form-footer a { color: var(--teal); font-weight: 600; text-decoration: none; }
+    .form-footer a:hover { text-decoration: underline; }
+
+    /* Demo credentials hint */
+    .demo-hint {
+      background: rgba(47,140,155,0.06);
+      border: 1px solid rgba(47,140,155,0.18);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-size: 0.78rem; color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .demo-hint strong { color: var(--teal); }
+    .demo-hint code {
+      background: rgba(47,140,155,0.08);
+      padding: 1px 6px; border-radius: 4px;
+      font-size: 0.76rem; color: var(--teal-dark);
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .login-left { display: none; }
+      .login-right { width: 100%; padding: 48px 32px; }
+    }
+    @media (max-width: 480px) {
+      .login-right { padding: 40px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-layout">
+
+  <!-- ── Left Brand Panel ── -->
+  <div class="login-left">
+    <div class="deco deco--1"></div>
+    <div class="deco deco--2"></div>
+    <div class="deco deco--3"></div>
+
+    <div class="login-left__content">
+      <div class="brand">
+        <img src="../assets/logo-inline.svg" alt="SV Capital" />
+        <div>
+          <div class="brand__name">SV Capital</div>
+          <div class="brand__sub">FSP #52449 · FSCA Regulated</div>
+        </div>
+      </div>
+
+      <div class="ifa-badge">
+        <i class="fa-solid fa-handshake"></i>
+        IFA Partner Portal
+      </div>
+
+      <h1 class="hero-headline">
+        Manage your clients,<br><em>grow together.</em>
+      </h1>
+
+      <p class="hero-sub">
+        Your dedicated portal to view client portfolios, track performance, 
+        monitor linked investments and support your clients on the 
+        SV Capital alternative investment platform.
+      </p>
+
+      <div class="features">
+        <div class="feature-item">
+          <div class="feature-icon feature-icon--teal"><i class="fa-solid fa-users-between-lines"></i></div>
+          <div class="feature-text"><strong>Client Overview</strong> — See all your linked clients, their portfolios and wallet balances at a glance</div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon feature-icon--gold"><i class="fa-solid fa-chart-line"></i></div>
+          <div class="feature-text"><strong>Performance Tracking</strong> — Monitor investments, expected returns, and maturity timelines</div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon feature-icon--green"><i class="fa-solid fa-coins"></i></div>
+          <div class="feature-text"><strong>AUM Dashboard</strong> — Real-time view of your assets under management and commission overview</div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon feature-icon--orange"><i class="fa-solid fa-headset"></i></div>
+          <div class="feature-text"><strong>Support Management</strong> — View and escalate support tickets raised by your clients</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Right Form Panel ── -->
+  <div class="login-right">
+
+    <div class="form-header">
+      <div class="form-eyebrow">IFA Partner Access</div>
+      <h2 class="form-title">Sign in to your portal</h2>
+      <p class="form-sub">Enter your registered IFA email and password to access your client dashboard.</p>
+    </div>
+
+    <div class="demo-hint">
+      <strong>Demo credentials</strong><br>
+      Use any registered IFA email (e.g. <code>thandi.mokoena@wealthwise.co.za</code>)<br>
+      Password: <code>ifa123</code>
+    </div>
+
+    <div class="error-msg" id="loginError">
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <span id="loginErrorText">Invalid email or password. Please try again.</span>
+    </div>
+
+    <form id="loginForm" onsubmit="handleLogin(event)" novalidate>
+      <div class="form-group">
+        <label class="form-label" for="emailInput">Email Address</label>
+        <div class="input-wrap">
+          <i class="fa-solid fa-envelope input-icon"></i>
+          <input type="email" class="form-input" id="emailInput"
+                 placeholder="you@ifafirm.co.za" autocomplete="email" required />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="passwordInput">Password</label>
+        <div class="input-wrap">
+          <i class="fa-solid fa-lock input-icon"></i>
+          <input type="password" class="form-input" id="passwordInput"
+                 placeholder="••••••••" autocomplete="current-password" required />
+          <button type="button" class="toggle-pw" onclick="togglePw()" id="togglePwBtn">
+            <i class="fa-solid fa-eye" id="togglePwIcon"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="form-row-inline">
+        <label class="checkbox-label">
+          <input type="checkbox" id="rememberMe" /> Remember me
+        </label>
+        <a href="#" class="forgot-link">Forgot password?</a>
+      </div>
+
+      <button type="submit" class="btn-login" id="loginBtn">
+        <span id="loginBtnLabel"><i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In</span>
+        <div class="spinner" id="loginSpinner" style="display:none"></div>
+      </button>
+    </form>
+
+    <div class="divider"><span>or access another portal</span></div>
+
+    <div class="portal-links">
+      <a href="../portal/index.html" class="portal-link">
+        <i class="fa-solid fa-chart-pie"></i> Investor Portal
+      </a>
+      <a href="../admin/index.html" class="portal-link">
+        <i class="fa-solid fa-shield-halved"></i> Admin Console
+      </a>
+    </div>
+
+    <div class="form-footer">
+      Not registered as an IFA partner?
+      <a href="mailto:partners@svcapital.co.za">Contact SV Capital</a> to apply.<br>
+      <br>
+      <a href="../index.html">← Back to SV Capital website</a>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  /* ── Demo IFA credentials (matched against ifas table by email) ── */
+  const DEMO_PASSWORD = 'ifa123';
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('emailInput').value.trim().toLowerCase();
+    const pw    = document.getElementById('passwordInput').value;
+
+    hideError();
+    setLoading(true);
+
+    // Validate fields
+    if (!email || !pw) {
+      showError('Please enter your email and password.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Fetch IFAs and match by email
+      const res  = await fetch('../tables/ifas?limit=100');
+      const data = await res.json();
+      const ifas = data.data || [];
+      const match = ifas.find(f => (f.email || '').toLowerCase() === email);
+
+      if (!match) {
+        showError('No IFA account found with that email address.');
+        setLoading(false);
+        return;
+      }
+
+      if (pw !== DEMO_PASSWORD) {
+        showError('Incorrect password. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      if (match.status === 'suspended') {
+        showError('Your IFA account has been suspended. Please contact SV Capital support.');
+        setLoading(false);
+        return;
+      }
+
+      if (match.status === 'inactive') {
+        showError('Your IFA account is currently inactive. Please contact SV Capital to reactivate.');
+        setLoading(false);
+        return;
+      }
+
+      // Store session
+      const session = {
+        ifaId: match.id,
+        name: match.first_name + ' ' + match.last_name,
+        email: match.email,
+        company: match.company_name,
+        license: match.license_number,
+        status: match.status,
+        loginTime: Date.now()
+      };
+
+      if (document.getElementById('rememberMe').checked) {
+        localStorage.setItem('svc_ifa_session', JSON.stringify(session));
+      } else {
+        sessionStorage.setItem('svc_ifa_session', JSON.stringify(session));
+      }
+
+      // Redirect to dashboard
+      window.location.href = 'index.html';
+
+    } catch (err) {
+      console.error('Login error:', err);
+      showError('Unable to connect. Please try again.');
+      setLoading(false);
+    }
+  }
+
+  function setLoading(on) {
+    const btn     = document.getElementById('loginBtn');
+    const label   = document.getElementById('loginBtnLabel');
+    const spinner = document.getElementById('loginSpinner');
+    btn.disabled    = on;
+    label.style.display  = on ? 'none' : 'flex';
+    spinner.style.display = on ? 'block' : 'none';
+  }
+
+  function showError(msg) {
+    const box = document.getElementById('loginError');
+    document.getElementById('loginErrorText').textContent = msg;
+    box.classList.add('visible');
+    document.getElementById('emailInput').classList.add('error');
+    document.getElementById('passwordInput').classList.add('error');
+  }
+
+  function hideError() {
+    document.getElementById('loginError').classList.remove('visible');
+    document.getElementById('emailInput').classList.remove('error');
+    document.getElementById('passwordInput').classList.remove('error');
+  }
+
+  function togglePw() {
+    const inp  = document.getElementById('passwordInput');
+    const icon = document.getElementById('togglePwIcon');
+    if (inp.type === 'password') {
+      inp.type = 'text';
+      icon.className = 'fa-solid fa-eye-slash';
+    } else {
+      inp.type = 'password';
+      icon.className = 'fa-solid fa-eye';
+    }
+  }
+
+  // Pre-fill if session exists
+  window.addEventListener('DOMContentLoaded', () => {
+    const stored = localStorage.getItem('svc_ifa_session') || sessionStorage.getItem('svc_ifa_session');
+    if (stored) {
+      try {
+        const s = JSON.parse(stored);
+        // Auto-redirect if session < 24h
+        if (s.loginTime && (Date.now() - s.loginTime) < 86400000) {
+          window.location.href = 'index.html';
+        }
+      } catch(_) {}
+    }
+  });
+</script>
+
+</body>
+</html>
