@@ -635,7 +635,7 @@
     }
     .btn-secondary:hover { border-color: var(--orange); color: var(--orange); }
 
-    .btn-row { display: flex; gap: 12px; margin-top: 24px; }
+    .btn-row { display: flex; gap: 12px; margin-top: 24px; margin-bottom: 8px; }
 
     /* Success screen */
     .success-screen { display: none; text-align: center; padding: 24px 0; }
@@ -819,7 +819,7 @@
     </div>
 
     <!-- Global error banner -->
-    <div id="formError" style="display:none;background:#fef2f2;border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 14px;font-size:0.8rem;color:#b91c1c;margin-bottom:14px">
+    <div id="formError" style="display:none;background:#fef2f2;border:1px solid rgba(239,68,68,0.30);border-radius:10px;padding:12px 14px;font-size:0.82rem;color:#b91c1c;margin-bottom:14px;position:sticky;top:0;z-index:10;box-shadow:0 2px 8px rgba(239,68,68,0.12)">
       <i class="fa-solid fa-circle-exclamation"></i>
       <span id="formErrorMsg" style="margin-left:6px">Please fix the errors above.</span>
     </div>
@@ -898,7 +898,7 @@
       </div>
 
       <div class="btn-row" style="margin-top:8px">
-        <button class="btn-primary" onclick="goToStep(2)">
+        <button type="button" class="btn-primary" onclick="goToStep(2)">
           Continue <i class="fa-solid fa-arrow-right"></i>
         </button>
       </div>
@@ -964,10 +964,10 @@
       </label>
 
       <div class="btn-row">
-        <button class="btn-secondary" onclick="goToStep(1)" style="max-width:110px">
+        <button type="button" class="btn-secondary" onclick="goToStep(1)" style="max-width:110px">
           <i class="fa-solid fa-arrow-left"></i> Back
         </button>
-        <button class="btn-primary" onclick="goToStep(3)">
+        <button type="button" class="btn-primary" onclick="goToStep(3)">
           Continue <i class="fa-solid fa-arrow-right"></i>
         </button>
       </div>
@@ -1029,10 +1029,10 @@
       </div>
 
       <div class="btn-row">
-        <button class="btn-secondary" onclick="goToStep(2)" style="max-width:110px">
+        <button type="button" class="btn-secondary" onclick="goToStep(2)" style="max-width:110px">
           <i class="fa-solid fa-arrow-left"></i> Back
         </button>
-        <button class="btn-primary" onclick="goToStep(4)">
+        <button type="button" class="btn-primary" onclick="goToStep(4)">
           Continue — Upload FICA Docs <i class="fa-solid fa-arrow-right"></i>
         </button>
       </div>
@@ -1180,10 +1180,10 @@
       </div>
 
       <div class="btn-row">
-        <button class="btn-secondary" onclick="goToStep(3)" style="max-width:110px">
+        <button type="button" class="btn-secondary" onclick="goToStep(3)" style="max-width:110px">
           <i class="fa-solid fa-arrow-left"></i> Back
         </button>
-        <button class="btn-primary" id="submitBtn" onclick="submitRegistration()">
+        <button type="button" class="btn-primary" id="submitBtn" onclick="submitRegistration()">
           <span id="submitBtnText"><i class="fa-solid fa-user-plus"></i> Create Account &amp; Submit FICA</span>
           <span id="submitSpinner" style="display:none"><i class="fa-solid fa-spinner fa-spin"></i> Creating account…</span>
         </button>
@@ -1233,7 +1233,7 @@
       </div>
 
       <a href="login.html" style="display:block;margin-bottom:12px">
-        <button class="btn-primary">
+        <button type="button" class="btn-primary" onclick="window.location.href='login.html'">
           <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In to Your Portal
         </button>
       </a>
@@ -1277,8 +1277,9 @@ function goToStep(n) {
 
   updateStepIndicators(n);
 
-  // Scroll to top of form
-  document.querySelector('.signup-right').scrollTop = 0;
+  // Always scroll the right panel back to the top when changing steps
+  const panel = document.querySelector('.signup-right');
+  if (panel) panel.scrollTo({ top: 0, behavior: 'smooth' });
 
   // Update FICA progress bar if entering step 4
   if (n === 4) updateFicaProgress();
@@ -1314,14 +1315,17 @@ function validateStep(n) {
           email     = v('email'),     phone    = v('phone'),
           idNumber  = v('idNumber');
 
+    // Strip spaces/dashes from ID number before checking
+    const idClean = idNumber.replace(/[\s\-]/g, '');
+
     if (!firstName) return showError('Please enter your first name.');
     if (!lastName)  return showError('Please enter your last name.');
     if (!email || !email.includes('@') || !email.includes('.'))
       return showError('Please enter a valid email address.');
-    if (!phone || phone.replace(/\D/g,'').length < 10)
-      return showError('Please enter a valid phone number (at least 10 digits).');
-    if (!idNumber || idNumber.length !== 13 || !/^\d{13}$/.test(idNumber))
-      return showError('Please enter a valid 13-digit South African ID number.');
+    if (!phone || phone.replace(/\D/g,'').length < 9)
+      return showError('Please enter a valid phone number.');
+    if (!idClean || idClean.length !== 13 || !/^\d{13}$/.test(idClean))
+      return showError('Please enter a valid 13-digit South African ID number (digits only).');
   }
 
   if (n === 2) {
@@ -1339,6 +1343,7 @@ function validateStep(n) {
   }
 
   if (n === 3) {
+    // selectedRisk defaults to 'moderate' so this always passes — just ensure it's set
     if (!selectedRisk) return showError('Please select an investment risk profile.');
   }
 
@@ -1351,7 +1356,10 @@ function showError(msg) {
   const el = document.getElementById('formError');
   document.getElementById('formErrorMsg').textContent = msg;
   el.style.display = 'block';
-  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // Scroll the right panel to top so error is visible
+  const panel = document.querySelector('.signup-right');
+  if (panel) panel.scrollTo({ top: 0, behavior: 'smooth' });
+  else el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   return false;
 }
 function hideError() { document.getElementById('formError').style.display = 'none'; }

@@ -754,11 +754,11 @@
       <!-- Role selector -->
       <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:10px">Access Level</div>
       <div class="role-tabs" id="roleTabs">
-        <button class="role-tab active" id="roleInvestor" onclick="selectRole('investor')">
+        <button type="button" class="role-tab active" id="roleInvestor" onclick="selectRole('investor')">
           <i class="fa-solid fa-chart-pie"></i>
           <span class="role-tab__name">Investor Portal</span>
         </button>
-        <button class="role-tab" id="roleAdmin" onclick="selectRole('admin')">
+        <button type="button" class="role-tab" id="roleAdmin" onclick="selectRole('admin')">
           <i class="fa-solid fa-shield-halved"></i>
           <span class="role-tab__name">Admin Console</span>
         </button>
@@ -803,7 +803,7 @@
 
       <!-- ─── FORGOT PASSWORD PANEL ─── -->
       <div class="forgot-panel" id="forgotPanel">
-        <button class="back-link" onclick="showLoginForm()">
+        <button type="button" class="back-link" onclick="showLoginForm()">
           <i class="fa-solid fa-arrow-left" style="font-size:0.7rem"></i> Back to sign in
         </button>
         <div class="login-form-header" style="margin-bottom:24px">
@@ -818,7 +818,7 @@
           <div class="success-title">Check your inbox</div>
           <div class="success-sub">A password reset link has been sent to <strong id="forgotEmailSent"></strong>.</div>
           <div class="success-note"><i class="fa-solid fa-circle-info" style="margin-right:5px;color:var(--teal)"></i> If you don't see the email within a few minutes, check your spam folder. The link expires in 30 minutes.</div>
-          <button class="btn-login" onclick="showLoginForm()" style="margin-top:4px">
+          <button type="button" class="btn-login" onclick="showLoginForm()" style="margin-top:4px">
             <i class="fa-solid fa-arrow-left" style="margin-right:8px"></i>Back to Sign In
           </button>
         </div>
@@ -837,7 +837,7 @@
                      onkeydown="if(event.key==='Enter')submitForgotPassword()" />
             </div>
           </div>
-          <button class="btn-login" id="forgotBtn" onclick="submitForgotPassword()">
+          <button type="button" class="btn-login" id="forgotBtn" onclick="submitForgotPassword()">
             <span id="forgotBtnText"><i class="fa-solid fa-paper-plane" style="margin-right:8px"></i>Send Reset Link</span>
           </button>
         </div>
