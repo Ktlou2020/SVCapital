@@ -10,6 +10,9 @@ RUN npm install --production --no-audit --no-fund
 # ── Stage 2: Production ──────────────────────────────
 FROM node:20-alpine AS production
 
+# Set NODE_ENV so SSL is enabled and production optimisations apply
+ENV NODE_ENV=production
+
 # Set working directory to /app (project root)
 WORKDIR /app
 

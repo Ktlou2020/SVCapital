@@ -95,7 +95,18 @@ router.post('/login', async (req, res) => {
       redirect: redirectMap[user.role] || '/portal/index.html',
     });
   } catch (err) {
-    console.error('Login error:', err);
+    console.error('Login error:', err.message);
+    const isDbDown = err.message && (
+      err.message.includes('connect') ||
+      err.message.includes('ECONNREFUSED') ||
+      err.message.includes('timeout') ||
+      err.message.includes('SSL') ||
+      err.message.includes('password authentication') ||
+      err.message.includes('does not exist')
+    );
+    if (isDbDown) {
+      return res.status(503).json({ error: 'Database is currently unavailable. Please try again shortly.' });
+    }
     res.status(500).json({ error: 'Internal server error.' });
   }
 });
@@ -177,7 +188,18 @@ router.post('/register', async (req, res) => {
       redirect: '/portal/index.html',
     });
   } catch (err) {
-    console.error('Register error:', err);
+    console.error('Register error:', err.message);
+    const isDbDown = err.message && (
+      err.message.includes('connect') ||
+      err.message.includes('ECONNREFUSED') ||
+      err.message.includes('timeout') ||
+      err.message.includes('SSL') ||
+      err.message.includes('password authentication') ||
+      err.message.includes('does not exist')
+    );
+    if (isDbDown) {
+      return res.status(503).json({ error: 'Database is currently unavailable. Please try again shortly.' });
+    }
     res.status(500).json({ error: 'Internal server error.' });
   }
 });

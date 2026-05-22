@@ -92,20 +92,24 @@ app.use('/api/tables', require('./routes/tables'));
    ──────────────────────────────────────────────────────────────────────── */
 app.get('/api/health', async (req, res) => {
   let dbStatus = 'unknown';
+  let dbError  = null;
   try {
     const pool = require('./db/pool');
     await pool.query('SELECT 1');
     dbStatus = 'connected';
   } catch (err) {
-    dbStatus = `disconnected: ${err.message}`;
-    console.warn('Health check — DB not reachable:', err.message);
+    dbError  = err.message || String(err);
+    dbStatus = 'disconnected';
+    console.warn('Health check — DB not reachable:', dbError);
   }
   // Always 200 — the server is up regardless of DB state
   res.status(200).json({
-    status: 'ok',
-    db: dbStatus,
-    ts: new Date().toISOString(),
-    env: process.env.NODE_ENV || 'development',
+    status:   'ok',
+    db:       dbStatus,
+    dbError:  dbError,
+    dbUrl:    process.env.DATABASE_URL ? '✅ set' : '❌ not set',
+    ts:       new Date().toISOString(),
+    env:      process.env.NODE_ENV || 'development',
   });
 });
 
@@ -138,11 +142,13 @@ app.use((err, req, res, _next) => {
 
 /* ─── Start ─── */
 app.listen(PORT, '0.0.0.0', async () => {
+  const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
   console.log('');
   console.log('🚀 SV Capital server started');
   console.log(`   Port:        ${PORT}`);
   console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`   Database:    ${process.env.DATABASE_URL ? '✅ DATABASE_URL set' : '⚠️  DATABASE_URL NOT SET'}`);
+  console.log(`   Database:    ${dbUrl ? `✅ DATABASE_URL set (${dbUrl.split('@').pop()?.split('/')[0] || 'host hidden'})` : '⚠️  DATABASE_URL NOT SET'}`);
+  console.log(`   SSL:         ${dbUrl ? '✅ enabled (rejectUnauthorized: false)' : '⚠️  no URL — SSL inactive'}`);
   console.log(`   JWT Secret:  ${process.env.JWT_SECRET ? '✅ set' : '⚠️  using default (insecure)'}`);
   console.log('');
 
