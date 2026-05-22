@@ -3,10 +3,16 @@
    ═══════════════════════════════════════════════ */
 'use strict';
 
-/* ─── Session ─── */
+/* ─── Session — uses shared Auth object from ../js/api.js ─── */
 let IFA_SESSION = null;
 
 function getSession() {
+  // First try the new JWT-based auth
+  const user = Auth.getUser();
+  if (user && (user.role === 'ifa') && user.ifaId) {
+    return { ifaId: user.ifaId, name: `${user.firstName || ''} ${user.lastName || ''}`.trim(), company: '' };
+  }
+  // Fall back to legacy IFA session storage
   try {
     const raw = localStorage.getItem('svc_ifa_session') || sessionStorage.getItem('svc_ifa_session');
     return raw ? JSON.parse(raw) : null;
@@ -14,6 +20,19 @@ function getSession() {
 }
 
 function requireAuth() {
+  // Check JWT-based login first
+  if (Auth.isLoggedIn()) {
+    const user = Auth.getUser();
+    if (user && (user.role === 'ifa' || user.role === 'admin' || user.role === 'director')) {
+      IFA_SESSION = {
+        ifaId:   user.ifaId || user.investorId || 'IFA-001',
+        name:    `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+        company: '',
+        email:   user.email,
+      };
+      return true;
+    }
+  }
   IFA_SESSION = getSession();
   if (!IFA_SESSION) {
     window.location.href = 'login.html';
@@ -23,9 +42,9 @@ function requireAuth() {
 }
 
 function signOut() {
+  Auth.logout('/login.html');
   localStorage.removeItem('svc_ifa_session');
   sessionStorage.removeItem('svc_ifa_session');
-  window.location.href = 'login.html';
 }
 
 /* ─── State ─── */
@@ -94,41 +113,35 @@ document.addEventListener('DOMContentLoaded', async () => {
    DATA LOADERS — shared fetch helpers
 ═══════════════════════════════════════════════ */
 async function fetchIFA() {
-  const res = await fetch(`../tables/ifas/${IFA_SESSION.ifaId}`);
-  return await res.json();
+  return await API.ifas.get(IFA_SESSION.ifaId);
 }
 
 async function fetchClients(clientIds) {
   if (!clientIds.length) return [];
-  const res = await fetch('../tables/investors?limit=200');
-  const data = await res.json();
+  const data = await API.investors.list({ limit: 200 });
   return (data.data || []).filter(inv => clientIds.includes(inv.id));
 }
 
 async function fetchInvestments(clientIds) {
   if (!clientIds.length) return [];
-  const res = await fetch('../tables/investments?limit=500');
-  const data = await res.json();
+  const data = await API.investments.list({ limit: 500 });
   return (data.data || []).filter(inv => clientIds.includes(inv.investor_id));
 }
 
 async function fetchTransactions(clientIds) {
   if (!clientIds.length) return [];
-  const res = await fetch('../tables/transactions?limit=500');
-  const data = await res.json();
+  const data = await API.transactions.list({ limit: 500 });
   return (data.data || []).filter(t => clientIds.includes(t.investor_id));
 }
 
 async function fetchTickets(clientIds) {
   if (!clientIds.length) return [];
-  const res = await fetch('../tables/tickets?limit=200');
-  const data = await res.json();
+  const data = await API.tickets.list({ limit: 200 });
   return (data.data || []).filter(t => clientIds.includes(t.investor_id));
 }
 
 async function fetchPools() {
-  const res = await fetch('../tables/pools?limit=100');
-  const data = await res.json();
+  const data = await API.pools.list({ limit: 100 });
   return data.data || [];
 }
 

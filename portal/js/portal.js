@@ -1,10 +1,21 @@
 /* ═══════════════════════════════════════════════
    SV CAPITAL — Investor Portal JS
-   Demo investor: Thabo Khumalo (INV-002)
    ═══════════════════════════════════════════════ */
 'use strict';
 
-const DEMO_INVESTOR_ID = 'INV-002';
+/* ─── Resolve investor ID from JWT session or fall back to demo ─── */
+const DEMO_INVESTOR_ID = (() => {
+  // Check JWT-based auth first
+  if (typeof Auth !== 'undefined') {
+    if (!Auth.isLoggedIn()) {
+      window.location.href = '/login.html';
+      return 'INV-001';
+    }
+    const user = Auth.getUser();
+    if (user && user.investorId) return user.investorId;
+  }
+  return 'INV-001'; // fallback for demo
+})();
 
 let PORTAL = {
   investor: null,
