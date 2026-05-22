@@ -94,9 +94,27 @@ function navigate(view, btnEl) {
    ═══════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
   Toast.init();
+
+  // ─── Require authentication ───
+  if (typeof Auth !== 'undefined') {
+    if (!Auth.isLoggedIn()) {
+      window.location.href = '/login.html';
+      return;
+    }
+    const user = Auth.getUser();
+    if (user && !['admin','director'].includes(user.role)) {
+      window.location.href = '/login.html';
+      return;
+    }
+    // Show logged-in user name in topbar if element exists
+    const adminNameEl = document.getElementById('adminUserName');
+    if (adminNameEl && user) {
+      adminNameEl.textContent = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+    }
+  }
+
   await loadDashboard();
   setupGlobalSearch();
-  // Initialise admin notification dot based on actual unread items
   _syncAdminNotifDot();
 });
 
@@ -1498,7 +1516,7 @@ async function saveSettings() {
 async function loadIFAs() {
   try {
     const [ifaRes, invRes] = await Promise.all([
-      fetch('tables/ifas?limit=100').then(r => r.json()),
+      API.ifas.list({ limit: 100 }),
       API.investors.list({ limit: 200 })
     ]);
     STATE.ifas = ifaRes.data || [];
@@ -1756,11 +1774,7 @@ async function saveNewIFA() {
   };
 
   try {
-    await fetch('tables/ifas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    await API.ifas.create(payload);
     Toast.success(`IFA ${fn} ${ln} created successfully`);
     Modal.close('addIFAModal');
     await loadIFAs();
@@ -1798,11 +1812,7 @@ async function confirmLinkClient() {
   const invAUM = inv ? (inv.total_invested || 0) : 0;
 
   try {
-    await fetch(`tables/ifas/${ifaId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assigned_clients: updated, aum_managed: (ifa.aum_managed || 0) + invAUM })
-    });
+    await API.ifas.update(ifaId, { assigned_clients: updated, aum_managed: (ifa.aum_managed || 0) + invAUM });
     Toast.success(`${inv ? inv.first_name + ' ' + inv.last_name : 'Investor'} linked to IFA`);
     Modal.close('linkClientModal');
     await loadIFAs();
@@ -1822,11 +1832,7 @@ async function unlinkClient(ifaId, investorId) {
   const newAUM = Math.max(0, (ifa.aum_managed || 0) - removedAUM);
 
   try {
-    await fetch(`tables/ifas/${ifaId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assigned_clients: updated, aum_managed: newAUM })
-    });
+    await API.ifas.update(ifaId, { assigned_clients: updated, aum_managed: newAUM });
     Toast.success('Client unlinked from IFA');
     Modal.close('ifaDetailModal');
     await loadIFAs();
@@ -1841,11 +1847,7 @@ async function toggleIFAStatus(ifaId, currentStatus) {
   if (!confirm(`${newStatus === 'active' ? 'Activate' : 'Deactivate'} this IFA?`)) return;
 
   try {
-    await fetch(`tables/ifas/${ifaId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus })
-    });
+    await API.ifas.update(ifaId, { status: newStatus });
     Toast.success(`IFA ${label} successfully`);
     Modal.close('ifaDetailModal');
     await loadIFAs();
@@ -1857,7 +1859,7 @@ async function toggleIFAStatus(ifaId, currentStatus) {
 async function deleteIFA(ifaId) {
   if (!confirm('Permanently remove this IFA from the platform? This cannot be undone.')) return;
   try {
-    await fetch(`tables/ifas/${ifaId}`, { method: 'DELETE' });
+    await API.ifas.delete(ifaId);
     Toast.success('IFA removed from platform');
     Modal.close('ifaDetailModal');
     await loadIFAs();
@@ -1963,21 +1965,13 @@ async function saveKycUpload() {
   statusEl.textContent = '';
 
   try {
-    await fetch('tables/kyc_documents', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id:             `FICA-${Date.now()}`,
-        investor_id:    investorId,
-        investor_name:  invName,
-        document_type:  docType,
-        file_name:      fileName,
-        file_size:      fileSize,
-        mime_type:      mimeType,
-        file_data:      fileData,
-        status:         statusVal,
-        submitted_date: new Date().toISOString()
-      })
+    await API.kyc.create({
+      id:           `FICA-${Date.now()}`,
+      investor_id:  investorId,
+      doc_type:     docType,
+      file_name:    fileName,
+      status:       statusVal,
+      notes:        `Uploaded via admin: ${invName}. Size: ${fileSize}. MIME: ${mimeType}.`
     });
     Toast.success('Document uploaded successfully');
     Modal.close('kycUploadModal');

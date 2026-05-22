@@ -152,7 +152,7 @@
         <a href="../portal/index.html" class="btn btn--secondary btn--sm">
           <i class="fa-solid fa-user"></i> Portal
         </a>
-        <a href="../login.html" class="btn btn--secondary btn--sm" title="Sign Out">
+        <a href="#" onclick="if(typeof Auth!=='undefined'){Auth.logout('/login.html');}else{window.location.href='../login.html';}" class="btn btn--secondary btn--sm" title="Sign Out">
           <i class="fa-solid fa-arrow-right-from-bracket"></i> Sign Out
         </a>
       </div>
