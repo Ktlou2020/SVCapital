@@ -1,0 +1,401 @@
+/* ═══════════════════════════════════════════════════════
+   Auto-setup: runs migrate + seed on first boot if the
+   users table is empty. Safe to call on every startup.
+   ═══════════════════════════════════════════════════════ */
+'use strict';
+
+const pool   = require('./pool');
+const bcrypt = require('bcryptjs');
+
+/* ─── Full schema (same as migrate.js, inline so no child process needed) ─── */
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS users (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email         TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role          TEXT NOT NULL DEFAULT 'investor'
+                  CHECK (role IN ('investor','admin','ifa','fund_manager','staff','director')),
+  first_name    TEXT,
+  last_name     TEXT,
+  is_active     BOOLEAN DEFAULT true,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW(),
+  last_login    TIMESTAMPTZ,
+  investor_id   TEXT,
+  ifa_id        TEXT,
+  staff_pin     TEXT
+);
+CREATE INDEX IF NOT EXISTS users_email_idx ON users(email);
+CREATE INDEX IF NOT EXISTS users_role_idx  ON users(role);
+
+CREATE TABLE IF NOT EXISTS investors (
+  id                  TEXT PRIMARY KEY,
+  first_name          TEXT, last_name TEXT, email TEXT, phone TEXT,
+  id_number           TEXT, date_of_birth TEXT, province TEXT,
+  address TEXT, occupation TEXT, employer TEXT,
+  risk_profile        TEXT DEFAULT 'moderate',
+  kyc_status          TEXT DEFAULT 'pending',
+  status              TEXT DEFAULT 'active',
+  wallet_balance      NUMERIC(18,2) DEFAULT 0,
+  total_invested      NUMERIC(18,2) DEFAULT 0,
+  total_returns       NUMERIC(18,2) DEFAULT 0,
+  referral_code       TEXT, referred_by TEXT, ifa_id TEXT,
+  date_joined         TIMESTAMPTZ DEFAULT NOW(),
+  notes               TEXT,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS investment_pools (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL,
+  product_type TEXT NOT NULL, status TEXT DEFAULT 'open',
+  target_amount NUMERIC(18,2) DEFAULT 0, raised_amount NUMERIC(18,2) DEFAULT 0,
+  min_investment NUMERIC(18,2) DEFAULT 1000, max_investment NUMERIC(18,2),
+  annual_rate NUMERIC(8,4) DEFAULT 0, term_months INT DEFAULT 6,
+  start_date DATE, end_date DATE, description TEXT,
+  risk_level TEXT DEFAULT 'medium', investor_count INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS investments (
+  id TEXT PRIMARY KEY,
+  investor_id TEXT REFERENCES investors(id) ON DELETE CASCADE,
+  pool_id TEXT REFERENCES investment_pools(id) ON DELETE SET NULL,
+  amount NUMERIC(18,2) NOT NULL, status TEXT DEFAULT 'active',
+  start_date DATE, end_date DATE,
+  expected_return NUMERIC(18,2) DEFAULT 0, actual_return NUMERIC(18,2) DEFAULT 0,
+  annual_rate NUMERIC(8,4) DEFAULT 0, product_type TEXT, term_months INT,
+  payout_option TEXT DEFAULT 'reinvest', notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS investments_investor_idx ON investments(investor_id);
+CREATE INDEX IF NOT EXISTS investments_pool_idx     ON investments(pool_id);
+
+CREATE TABLE IF NOT EXISTS transactions (
+  id TEXT PRIMARY KEY,
+  investor_id TEXT REFERENCES investors(id) ON DELETE CASCADE,
+  type TEXT NOT NULL, amount NUMERIC(18,2) NOT NULL,
+  status TEXT DEFAULT 'completed', reference TEXT, description TEXT,
+  investment_id TEXT, pool_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS transactions_investor_idx ON transactions(investor_id);
+
+CREATE TABLE IF NOT EXISTS kyc_documents (
+  id TEXT PRIMARY KEY,
+  investor_id TEXT REFERENCES investors(id) ON DELETE CASCADE,
+  doc_type TEXT NOT NULL, status TEXT DEFAULT 'pending',
+  file_url TEXT, file_name TEXT, notes TEXT,
+  reviewed_by TEXT, reviewed_at TIMESTAMPTZ,
+  submitted_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS maturity_instructions (
+  id TEXT PRIMARY KEY,
+  investor_id TEXT REFERENCES investors(id) ON DELETE CASCADE,
+  investment_id TEXT, instruction TEXT NOT NULL,
+  amount NUMERIC(18,2), bank_account TEXT, bank_name TEXT,
+  account_holder TEXT, account_number TEXT, branch_code TEXT,
+  status TEXT DEFAULT 'pending', notes TEXT, processed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id TEXT PRIMARY KEY,
+  investor_id TEXT REFERENCES investors(id) ON DELETE CASCADE,
+  subject TEXT NOT NULL, message TEXT,
+  category TEXT DEFAULT 'general', priority TEXT DEFAULT 'medium',
+  status TEXT DEFAULT 'open', assigned_to TEXT, response TEXT,
+  responded_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS platform_settings (
+  key TEXT PRIMARY KEY, value TEXT, description TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ifas (
+  id TEXT PRIMARY KEY, first_name TEXT, last_name TEXT,
+  email TEXT UNIQUE, phone TEXT, license_number TEXT, company_name TEXT,
+  status TEXT DEFAULT 'active', commission_rate NUMERIC(6,4) DEFAULT 1.5,
+  assigned_clients JSONB DEFAULT '[]', aum_managed NUMERIC(18,2) DEFAULT 0,
+  date_joined TIMESTAMPTZ DEFAULT NOW(), notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS fund_runs (
+  id TEXT PRIMARY KEY, run_name TEXT NOT NULL, product_type TEXT NOT NULL,
+  status TEXT DEFAULT 'draft', principal_amount NUMERIC(18,2) DEFAULT 0,
+  annual_rate NUMERIC(8,6) DEFAULT 0, term_days INT DEFAULT 183,
+  start_date DATE, end_date DATE,
+  gross_return NUMERIC(18,2) DEFAULT 0, management_fee NUMERIC(18,2) DEFAULT 0,
+  performance_fee NUMERIC(18,2) DEFAULT 0, structuring_fee NUMERIC(18,2) DEFAULT 0,
+  admin_fee NUMERIC(18,2) DEFAULT 0, total_fees NUMERIC(18,2) DEFAULT 0,
+  net_return NUMERIC(18,2) DEFAULT 0, total_payout NUMERIC(18,2) DEFAULT 0,
+  investor_count INT DEFAULT 0, notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS return_schedules (
+  id TEXT PRIMARY KEY,
+  fund_run_id TEXT REFERENCES fund_runs(id) ON DELETE CASCADE,
+  investor_id TEXT REFERENCES investors(id) ON DELETE CASCADE,
+  amount_invested NUMERIC(18,2), expected_return NUMERIC(18,2),
+  gross_return NUMERIC(18,2), fees NUMERIC(18,2), net_return NUMERIC(18,2),
+  expected_date DATE, status TEXT DEFAULT 'pending',
+  paid_at TIMESTAMPTZ, notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS audit_events (
+  id TEXT PRIMARY KEY, event_type TEXT NOT NULL,
+  entity_type TEXT, entity_id TEXT,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  user_email TEXT, description TEXT, ip_address TEXT, metadata JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS audit_events_entity_idx ON audit_events(entity_type, entity_id);
+
+CREATE TABLE IF NOT EXISTS investor_allocations (
+  id TEXT PRIMARY KEY,
+  fund_run_id TEXT REFERENCES fund_runs(id) ON DELETE CASCADE,
+  investor_id TEXT REFERENCES investors(id) ON DELETE CASCADE,
+  investment_id TEXT, amount NUMERIC(18,2), nav_share NUMERIC(10,6),
+  gross_return NUMERIC(18,2), net_return NUMERIC(18,2), fees NUMERIC(18,2),
+  status TEXT DEFAULT 'active',
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS fee_ledger (
+  id TEXT PRIMARY KEY,
+  fund_run_id TEXT REFERENCES fund_runs(id) ON DELETE CASCADE,
+  fee_type TEXT NOT NULL, amount NUMERIC(18,2) NOT NULL,
+  rate NUMERIC(8,6), basis TEXT, description TEXT, accrued_at DATE,
+  status TEXT DEFAULT 'accrued',
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS fund_notifications (
+  id TEXT PRIMARY KEY, type TEXT NOT NULL, title TEXT NOT NULL,
+  message TEXT, entity_type TEXT, entity_id TEXT,
+  is_read BOOLEAN DEFAULT false, priority TEXT DEFAULT 'medium',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS cattle_costs (
+  id TEXT PRIMARY KEY, cycle_id TEXT, category TEXT NOT NULL,
+  amount NUMERIC(18,2) NOT NULL, description TEXT, date DATE,
+  vendor TEXT, invoice_ref TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS employees (
+  id TEXT PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL, phone TEXT,
+  role TEXT NOT NULL, department TEXT,
+  status TEXT DEFAULT 'active', pin_hash TEXT, hire_date DATE, notes TEXT,
+  permissions JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS employees_email_idx ON employees(email);
+`;
+
+async function autoSetup() {
+  if (!process.env.DATABASE_URL) {
+    console.log('⚠️  Skipping auto-setup: DATABASE_URL not set.');
+    return;
+  }
+
+  try {
+    console.log('🔄 Running auto-setup (migrate + seed if empty)…');
+
+    // 1. Create all tables
+    await pool.query(SCHEMA);
+    console.log('✅ Schema ready.');
+
+    // 2. Check if already seeded
+    const { rows } = await pool.query('SELECT COUNT(*) FROM users');
+    if (parseInt(rows[0].count) > 0) {
+      console.log(`✅ Database already has ${rows[0].count} users — skipping seed.`);
+      return;
+    }
+
+    // 3. Seed users
+    console.log('🌱 Seeding initial users and data…');
+    const adminHash    = await bcrypt.hash('Admin@2024!', 12);
+    const investorHash = await bcrypt.hash('Demo@2024!', 12);
+    const ifaHash      = await bcrypt.hash('ifa123', 12);
+
+    await pool.query(`
+      INSERT INTO users (email, password_hash, role, first_name, last_name, investor_id)
+      VALUES
+        ('admin@svcapital.co.za',    $1, 'admin',    'Ayanda',  'Dlamini', NULL),
+        ('director@svcapital.co.za', $1, 'director', 'Sarah',   'Van Wyk', NULL),
+        ('investor@svcapital.co.za', $2, 'investor', 'Thabo',   'Nkosi',   'INV-001'),
+        ('thabo@email.co.za',        $2, 'investor', 'Thabo',   'Nkosi',   'INV-001'),
+        ('priya@email.co.za',        $2, 'investor', 'Priya',   'Naidoo',  'INV-002'),
+        ('sipho@email.co.za',        $2, 'investor', 'Sipho',   'Zulu',    'INV-003'),
+        ('maria@email.co.za',        $2, 'investor', 'Maria',   'Santos',  'INV-004'),
+        ('james@email.co.za',        $2, 'investor', 'James',   'Mokoena', 'INV-005'),
+        ('ifa@svcapital.co.za',      $3, 'ifa',      'Bongani', 'Khumalo', NULL)
+      ON CONFLICT (email) DO NOTHING
+    `, [adminHash, investorHash, ifaHash]);
+
+    // 4. Seed investors
+    await pool.query(`
+      INSERT INTO investors
+        (id, first_name, last_name, email, phone, id_number, province, occupation,
+         risk_profile, kyc_status, status, wallet_balance, total_invested, total_returns,
+         referral_code, date_joined)
+      VALUES
+        ('INV-001','Thabo','Nkosi','thabo@email.co.za','082 123 4567','8801015800082',
+         'Gauteng','Engineer','moderate','verified','active',45000,250000,31200,'SVC001','2023-01-15'),
+        ('INV-002','Priya','Naidoo','priya@email.co.za','071 234 5678','9203026100083',
+         'KwaZulu-Natal','Doctor','conservative','verified','active',12500,180000,22000,'SVC002','2023-03-01'),
+        ('INV-003','Sipho','Zulu','sipho@email.co.za','065 345 6789','7706016200084',
+         'Western Cape','Teacher','moderate','verified','active',8000,95000,11800,'SVC003','2023-06-20'),
+        ('INV-004','Maria','Santos','maria@email.co.za','083 456 7890','9512056300085',
+         'Gauteng','Accountant','aggressive','pending','active',22000,320000,48500,'SVC004','2023-09-05'),
+        ('INV-005','James','Mokoena','james@email.co.za','076 567 8901','8804016400086',
+         'Limpopo','Entrepreneur','moderate','verified','active',5500,75000,9200,'SVC005','2024-01-10')
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    // 5. Seed pools
+    await pool.query(`
+      INSERT INTO investment_pools
+        (id, name, product_type, status, target_amount, raised_amount,
+         min_investment, annual_rate, term_months, start_date, end_date,
+         description, risk_level, investor_count)
+      VALUES
+        ('POOL-001','Cattle Finance Q1 2024','cattle','closed',2000000,1980000,5000,0.1483,6,
+         '2024-01-01','2024-07-01','6-month cattle finance cycle — Limpopo region.','medium',8),
+        ('POOL-002','Solar Energy 7-Year','solar','open',5000000,3250000,10000,0.2140,84,
+         '2024-03-01','2031-03-01','Premium 7-year solar PPA — guaranteed offtake.','low',12),
+        ('POOL-003','SMME Short-Term Q2','smme','open',1000000,870000,1000,0.1392,5,
+         '2024-04-01','2024-09-01','Short-term SMME bridge lending.','high',15),
+        ('POOL-004','Delivery Bikes Cycle 3','delivery_bikes','open',1500000,1100000,2500,0.1600,12,
+         '2024-02-01','2025-02-01','E-commerce delivery fleet.','medium',10),
+        ('POOL-005','Cattle Finance Q2 2024','cattle','open',2500000,1200000,5000,0.1500,6,
+         '2024-07-01','2025-01-01','Second cattle cycle — Mpumalanga herd.','medium',5),
+        ('POOL-006','Solar Energy 5-Year','solar','open',3000000,750000,10000,0.0641,60,
+         '2024-06-01','2029-06-01','Community solar energy 5-year PPA.','low',7),
+        ('POOL-007','SMME Q3 Batch','smme','open',800000,400000,1000,0.1392,5,
+         '2024-08-01','2025-01-01','Q3 SMME lending pool.','high',9),
+        ('POOL-008','Solar 6-Year Premium','solar','open',4000000,500000,10000,0.1553,72,
+         '2024-09-01','2030-09-01','6-year solar with mid-term liquidity window.','low',3),
+        ('POOL-009','Cattle Q3 — Karoo Region','cattle','open',1800000,200000,5000,0.1483,6,
+         '2024-10-01','2025-04-01','Karoo region cattle cycle.','medium',2),
+        ('POOL-010','Delivery Bikes Cycle 4','delivery_bikes','open',2000000,100000,2500,0.1800,12,
+         '2024-11-01','2025-11-01','Expanded fleet — last-mile logistics.','medium',1)
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    // 6. Seed investments
+    await pool.query(`
+      INSERT INTO investments
+        (id, investor_id, pool_id, amount, status, start_date, end_date,
+         expected_return, actual_return, annual_rate, product_type, term_months, payout_option)
+      VALUES
+        ('INV-TXN-001','INV-001','POOL-001',100000,'matured','2024-01-15','2024-07-15',7415,7415,0.1483,'cattle',6,'reinvest'),
+        ('INV-TXN-002','INV-001','POOL-002',75000,'active','2024-03-01',NULL,16050,0,0.2140,'solar',84,'withdraw'),
+        ('INV-TXN-003','INV-001','POOL-004',50000,'active','2024-02-01',NULL,8000,0,0.1600,'delivery_bikes',12,'reinvest'),
+        ('INV-TXN-004','INV-002','POOL-001',80000,'matured','2024-01-15','2024-07-15',5932,5932,0.1483,'cattle',6,'withdraw'),
+        ('INV-TXN-005','INV-002','POOL-002',60000,'active','2024-03-01',NULL,12840,0,0.2140,'solar',84,'reinvest'),
+        ('INV-TXN-006','INV-003','POOL-003',30000,'active','2024-04-01',NULL,1741.5,0,0.1392,'smme',5,'withdraw'),
+        ('INV-TXN-007','INV-003','POOL-004',40000,'active','2024-02-01',NULL,6400,0,0.1600,'delivery_bikes',12,'reinvest'),
+        ('INV-TXN-008','INV-004','POOL-002',150000,'active','2024-03-01',NULL,32100,0,0.2140,'solar',84,'reinvest'),
+        ('INV-TXN-009','INV-004','POOL-001',100000,'matured','2024-01-15','2024-07-15',7415,7415,0.1483,'cattle',6,'reinvest'),
+        ('INV-TXN-010','INV-005','POOL-003',25000,'active','2024-04-01',NULL,1451.25,0,0.1392,'smme',5,'withdraw')
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    // 7. Seed transactions
+    await pool.query(`
+      INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, created_at)
+      VALUES
+        ('TXN-001','INV-001','deposit',100000,'completed','DEP-001','Initial deposit','2024-01-10'),
+        ('TXN-002','INV-001','investment',100000,'completed','INV-TXN-001','Cattle Finance Q1','2024-01-15'),
+        ('TXN-003','INV-001','deposit',75000,'completed','DEP-002','Solar investment deposit','2024-02-25'),
+        ('TXN-004','INV-001','investment',75000,'completed','INV-TXN-002','Solar 7-Year investment','2024-03-01'),
+        ('TXN-005','INV-001','return',7415,'completed','RET-001','Cattle Q1 return paid','2024-07-16'),
+        ('TXN-006','INV-001','deposit',50000,'completed','DEP-003','Delivery bikes deposit','2024-01-28'),
+        ('TXN-007','INV-001','investment',50000,'completed','INV-TXN-003','Delivery Bikes Cycle 3','2024-02-01'),
+        ('TXN-008','INV-002','deposit',80000,'completed','DEP-004','INV-002 initial deposit','2024-01-10'),
+        ('TXN-009','INV-002','investment',80000,'completed','INV-TXN-004','Cattle Finance Q1','2024-01-15'),
+        ('TXN-010','INV-002','return',5932,'completed','RET-002','Cattle Q1 return paid','2024-07-16'),
+        ('TXN-011','INV-002','deposit',60000,'completed','DEP-005','Solar deposit','2024-02-25'),
+        ('TXN-012','INV-002','investment',60000,'completed','INV-TXN-005','Solar 7-Year','2024-03-01'),
+        ('TXN-013','INV-003','deposit',70000,'completed','DEP-006','INV-003 deposit','2024-01-20'),
+        ('TXN-014','INV-003','investment',30000,'completed','INV-TXN-006','SMME Short-Term','2024-04-01'),
+        ('TXN-015','INV-003','investment',40000,'completed','INV-TXN-007','Delivery Bikes','2024-02-01')
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    // 8. Seed platform settings
+    await pool.query(`
+      INSERT INTO platform_settings (key, value, description) VALUES
+        ('platform_name',       'SV Capital',                    'Platform display name'),
+        ('company_name',        'SmartVest Financial Services',  'Legal company name'),
+        ('fsp_number',          'FSP #52449',                    'FSCA FSP licence number'),
+        ('support_email',       'support@svcapital.co.za',       'Support email address'),
+        ('min_investment',      '1000',                          'Global minimum investment (ZAR)'),
+        ('kyc_required',        'true',                          'KYC required before investment'),
+        ('maintenance_mode',    'false',                         'Maintenance mode'),
+        ('currency',            'ZAR',                           'Platform currency')
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+    `);
+
+    // 9. Seed IFAs
+    await pool.query(`
+      INSERT INTO ifas (id, first_name, last_name, email, phone, license_number,
+        company_name, status, commission_rate, assigned_clients, aum_managed, date_joined)
+      VALUES
+        ('IFA-001','Bongani','Khumalo','bongani@khumalo-wealth.co.za','011 234 5678','FSP-48821',
+         'Khumalo Wealth Management','active',1.5,'["INV-001","INV-002"]',430000,'2022-05-01'),
+        ('IFA-002','Zanele','Moyo','zanele@moyo-advisory.co.za','021 345 6789','FSP-51234',
+         'Moyo Financial Advisory','active',1.2,'["INV-003"]',95000,'2023-01-15'),
+        ('IFA-003','Pieter','van der Berg','pieter@vpw.co.za','041 456 7890','FSP-39821',
+         'Van der Berg & Partners','active',2.0,'["INV-004"]',320000,'2022-11-20'),
+        ('IFA-004','Lindiwe','Dube','lindiwe@dubewealth.co.za','031 567 8901','FSP-62341',
+         'Dube Wealth Solutions','inactive',1.5,'[]',0,'2023-07-10'),
+        ('IFA-005','Ahmed','Patel','ahmed@patelinvest.co.za','012 678 9012','FSP-44532',
+         'Patel Investment Group','active',1.8,'["INV-005"]',75000,'2023-09-01')
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    // 10. Seed KYC docs
+    await pool.query(`
+      INSERT INTO kyc_documents (id, investor_id, doc_type, status, file_name, submitted_at)
+      VALUES
+        ('KYC-001','INV-001','id_document','approved','thabo_id.pdf','2024-01-10'),
+        ('KYC-002','INV-001','proof_of_address','approved','thabo_poa.pdf','2024-01-10'),
+        ('KYC-003','INV-002','id_document','approved','priya_id.pdf','2024-03-01'),
+        ('KYC-004','INV-002','proof_of_address','approved','priya_poa.pdf','2024-03-01'),
+        ('KYC-005','INV-004','id_document','pending','maria_id.pdf','2024-09-05'),
+        ('KYC-006','INV-004','proof_of_address','pending','maria_poa.pdf','2024-09-05')
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    // 11. Seed support tickets
+    await pool.query(`
+      INSERT INTO support_tickets (id, investor_id, subject, message, category, priority, status, created_at)
+      VALUES
+        ('TKT-001','INV-001','When will my returns be paid?','Cattle Q1 matured — waiting.','investment','medium','resolved','2024-07-14'),
+        ('TKT-002','INV-002','KYC document upload issue','Cannot upload bank statement.','kyc','high','resolved','2024-03-15'),
+        ('TKT-003','INV-003','Solar pool availability','More solar pools opening?','investment','low','open','2024-07-20'),
+        ('TKT-004','INV-004','Account verification pending','Pending for 3 weeks.','kyc','high','in_progress','2024-09-20')
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    console.log('✅ Seed complete — platform ready.');
+
+  } catch (err) {
+    console.error('❌ Auto-setup error:', err.message);
+    // Don't crash the server — log the error and continue
+  }
+}
+
+module.exports = autoSetup;

@@ -105,7 +105,8 @@ router.post('/register', async (req, res) => {
   try {
     const {
       email, password, firstName, lastName, phone,
-      idNumber, province, occupation, role = 'investor'
+      idNumber, province, occupation, role = 'investor',
+      riskProfile = 'moderate', referredBy = '', notes = '',
     } = req.body;
 
     if (!email || !password || !firstName || !lastName)
@@ -140,11 +141,13 @@ router.post('/register', async (req, res) => {
       await pool.query(`
         INSERT INTO investors
           (id, first_name, last_name, email, phone, id_number, province, occupation,
+           risk_profile, referred_by, notes,
            kyc_status, status, wallet_balance, referral_code, date_joined)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', 'active', 0, $9, NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', 'active', 0, $12, NOW())
       `, [invId, firstName.trim(), lastName.trim(),
           email.toLowerCase().trim(), phone || null,
           idNumber || null, province || null, occupation || null,
+          riskProfile || 'moderate', referredBy || null, notes || null,
           referralCode]);
 
       // Link investor_id on user

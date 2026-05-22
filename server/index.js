@@ -137,7 +137,7 @@ app.use((err, req, res, _next) => {
 });
 
 /* ─── Start ─── */
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log('');
   console.log('🚀 SV Capital server started');
   console.log(`   Port:        ${PORT}`);
@@ -145,6 +145,10 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   Database:    ${process.env.DATABASE_URL ? '✅ DATABASE_URL set' : '⚠️  DATABASE_URL NOT SET'}`);
   console.log(`   JWT Secret:  ${process.env.JWT_SECRET ? '✅ set' : '⚠️  using default (insecure)'}`);
   console.log('');
+
+  // Auto-create tables and seed demo data on first boot
+  const autoSetup = require('./db/setup');
+  await autoSetup();
 });
 
 module.exports = app;

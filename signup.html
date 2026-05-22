@@ -1541,76 +1541,40 @@ async function _doSubmit(skippedFica) {
   btnText.style.display = 'none';
   spinner.style.display = 'inline-flex';
 
-  const firstName = v('firstName'),  lastName = v('lastName'),
-        email     = v('email'),      phone    = v('phone'),
-        idNumber  = v('idNumber'),   city     = v('city'),
-        province  = v('province'),   referral = v('referralCode').toUpperCase();
+  const firstName = v('firstName'), lastName  = v('lastName'),
+        email     = v('email'),     phone     = v('phone'),
+        password  = v('password'),  idNumber  = v('idNumber'),
+        province  = v('province'),  referral  = v('referralCode').toUpperCase();
 
-  // Generate investor ID
-  const newId   = 'INV-' + Math.floor(Math.random() * 9000 + 1000);
-  const refCode = (firstName.substring(0,3) + lastName.substring(0,3)).toUpperCase() + Math.floor(Math.random() * 900 + 100);
-
-  // Count uploaded docs
   const uploadedDocs = Object.entries(ficaFiles).filter(([,f]) => f !== null).map(([k]) => k);
 
   try {
-    // 1. Register user account (creates user + investor profile in one call)
-    const password = v('password') || 'SVC@' + Math.random().toString(36).slice(2,10);
-    let regData;
-    try {
-      regData = await Auth.register({
-        email, password, firstName, lastName, phone,
-        idNumber, province, occupation: v('occupation') || '',
-        role: 'investor',
-      });
-    } catch (regErr) {
-      // If register endpoint not available yet, fall back to just creating investor record
-      console.warn('Auth.register failed, falling back:', regErr.message);
-    }
+    // ── Single API call: register creates user + investor profile ──
+    const regData = await Auth.register({
+      email, password, firstName, lastName, phone,
+      idNumber, province,
+      occupation:  v('occupation') || '',
+      role:        'investor',
+      referredBy:  referral || '',
+      riskProfile: selectedRisk,
+      notes:       `Experience: ${v('investExp')}. Heard: ${v('hearAbout')}. FICA docs: ${uploadedDocs.join(', ') || 'none'}.`,
+    });
 
-    // Use registered investorId or generated one
-    const assignedId = regData?.user?.investorId || newId;
+    const assignedId = regData.user.investorId;
 
-    // 2. Create/update investor record (may already exist from register)
-    await API.investors.create({
-      id:            assignedId,
-      first_name:    firstName,
-      last_name:     lastName,
-      email:         email,
-      phone:         phone,
-      id_number:     idNumber,
-      province:      province,
-      status:        'active',
-      kyc_status:    skippedFica ? 'pending' : 'pending',
-      wallet_balance: 0,
-      total_invested: 0,
-      total_returns:  0,
-      risk_profile:   selectedRisk,
-      date_joined:    new Date().toISOString(),
-      referral_code:  refCode,
-      referred_by:    referral || '',
-      notes:          `Registered via website signup. Experience: ${v('investExp')}. Heard about us: ${v('hearAbout')}. FICA docs: ${uploadedDocs.join(', ') || 'none uploaded'}.`,
-    }).catch(() => {/* investor may already exist from register */});
-
-    // 3. Create a KYC/FICA record that admin can review
+    // ── Optional: create KYC record if docs were uploaded ──
     if (!skippedFica && uploadedDocs.length > 0) {
       await API.kyc.create({
-        id:          'KYC-' + assignedId,
         investor_id: assignedId,
         doc_type:    'id_document',
         status:      'pending',
         file_name:   uploadedDocs.join(', '),
-        notes:       `Documents submitted at registration. Files: ${uploadedDocs.join(', ')}.`,
+        notes:       `Submitted at registration. Files: ${uploadedDocs.join(', ')}.`,
       }).catch(() => {});
     }
 
-    // 4. Create admin notification ticket for FICA review
-    const ficaTicketMsg = skippedFica
-      ? `New investor ${firstName} ${lastName} (${assignedId}, ${email}) registered but skipped FICA document upload. Follow up required.`
-      : `New investor ${firstName} ${lastName} (${assignedId}, ${email}) has submitted FICA documents for review.\n\nDocuments uploaded: ${uploadedDocs.join(', ')}.\n\nPlease review in KYC / FICA section.`;
-
+    // ── Create admin support ticket for review ──
     await API.tickets.create({
-      id:          'TKT-FICA-' + assignedId,
       investor_id: assignedId,
       subject:     skippedFica
         ? `New Registration — FICA Pending — ${firstName} ${lastName}`
@@ -1618,41 +1582,31 @@ async function _doSubmit(skippedFica) {
       category:    'kyc',
       priority:    'high',
       status:      'open',
-      message:     ficaTicketMsg,
+      message:     skippedFica
+        ? `New investor ${firstName} ${lastName} (${assignedId}) registered — no FICA docs uploaded yet.`
+        : `New investor ${firstName} ${lastName} (${assignedId}) submitted FICA docs: ${uploadedDocs.join(', ')}.`,
     }).catch(() => {});
 
-    // If user was registered, redirect to portal
-    if (regData?.token) {
-      document.getElementById('step4').style.display = 'none';
-      document.getElementById('formSteps').style.display = 'none';
-      const successScreen = document.getElementById('successScreen');
-      successScreen.style.display = 'block';
-      document.getElementById('successMsg').textContent =
-        `Welcome, ${firstName}! Your investor account has been created. ` +
-        (skippedFica
-          ? 'Please upload your FICA documents in your portal to start investing.'
-          : 'Your FICA documents have been submitted and will be reviewed within 1–2 business days.');
-      setTimeout(() => { window.location.href = '/portal/index.html'; }, 3000);
-      return;
-    }
-
-    // Show success screen
+    // ── Show success and redirect to portal ──
     document.getElementById('step4').style.display = 'none';
     document.getElementById('formSteps').style.display = 'none';
     const successScreen = document.getElementById('successScreen');
     successScreen.style.display = 'block';
     document.getElementById('successMsg').textContent =
-      `Welcome, ${firstName}! Your investor account (${assignedId}) has been created. ` +
+      `Welcome, ${firstName}! Your investor account has been created. ` +
       (skippedFica
         ? 'Please upload your FICA documents in your portal to start investing.'
-        : 'Your FICA documents have been submitted and will be reviewed within 1–2 business days. Check your email at ' + email + ' for updates.');
+        : 'Your FICA documents have been submitted and will be reviewed within 1–2 business days.');
+
+    setTimeout(() => { window.location.href = '/portal/index.html'; }, 2500);
 
   } catch (err) {
     console.error('Registration error:', err);
     btn.disabled          = false;
     btnText.style.display = 'inline-flex';
     spinner.style.display = 'none';
-    showError('Registration failed — please check your details and try again. If the problem persists, contact support@svcapital.co.za');
+    // Show the actual error from the server (e.g. "email already exists")
+    showError(err.message || 'Registration failed — please check your details and try again.');
   }
 }
 
