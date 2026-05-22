@@ -17,11 +17,6 @@ const cookieParser = require('cookie-parser');
 const cors         = require('cors');
 const rateLimit    = require('express-rate-limit');
 const path         = require('path');
-const pool         = require('./db/pool');
-
-const authRoutes   = require('./routes/auth');
-const usersRoutes  = require('./routes/users');
-const tablesRoutes = require('./routes/tables');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -52,7 +47,6 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
 
 app.use(cors({
   origin: (origin, cb) => {
-    // Allow requests with no origin (mobile apps, curl, same-origin)
     if (!origin || ALLOWED_ORIGINS.length === 0) return cb(null, true);
     if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
     cb(new Error(`CORS: origin ${origin} not allowed`));
@@ -87,27 +81,39 @@ app.use('/api/', apiLimiter);
 app.use('/api/auth/', authLimiter);
 
 /* ─── API Routes ─── */
-app.use('/api/auth',   authRoutes);
-app.use('/api/users',  usersRoutes);
-app.use('/api/tables', tablesRoutes);
+app.use('/api/auth',   require('./routes/auth'));
+app.use('/api/users',  require('./routes/users'));
+app.use('/api/tables', require('./routes/tables'));
 
-/* ─── Health Check ─── */
+/* ─── Health Check ─────────────────────────────────────────────────────────
+   Always returns HTTP 200 so Railway knows the process is alive.
+   DB connectivity is reported in the body but does NOT affect the status code.
+   (Railway healthcheck kills the container on any non-2xx response.)
+   ──────────────────────────────────────────────────────────────────────── */
 app.get('/api/health', async (req, res) => {
+  let dbStatus = 'unknown';
   try {
+    const pool = require('./db/pool');
     await pool.query('SELECT 1');
-    res.json({ status: 'ok', db: 'connected', ts: new Date().toISOString() });
+    dbStatus = 'connected';
   } catch (err) {
-    res.status(503).json({ status: 'error', db: 'disconnected', error: err.message });
+    dbStatus = `disconnected: ${err.message}`;
+    console.warn('Health check — DB not reachable:', err.message);
   }
+  // Always 200 — the server is up regardless of DB state
+  res.status(200).json({
+    status: 'ok',
+    db: dbStatus,
+    ts: new Date().toISOString(),
+    env: process.env.NODE_ENV || 'development',
+  });
 });
 
 /* ─── Static Frontend Files ─── */
-// Serve the frontend from the parent directory (project root)
 const STATIC_DIR = path.join(__dirname, '..');
 app.use(express.static(STATIC_DIR, {
-  index: false, // We handle index manually
+  index: false,
   setHeaders: (res, filePath) => {
-    // Cache static assets (CSS/JS/images) aggressively, but not HTML
     if (/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff2?)$/.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=86400');
     } else {
@@ -116,9 +122,8 @@ app.use(express.static(STATIC_DIR, {
   }
 }));
 
-/* ─── SPA Fallback — serve index.html for all non-API, non-file routes ─── */
+/* ─── SPA Fallback ─── */
 app.get('*', (req, res) => {
-  // If the path looks like a file (has extension), 404
   if (path.extname(req.path)) {
     return res.status(404).send('Not found');
   }
@@ -133,9 +138,13 @@ app.use((err, req, res, _next) => {
 
 /* ─── Start ─── */
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 SV Capital server running on port ${PORT}`);
+  console.log('');
+  console.log('🚀 SV Capital server started');
+  console.log(`   Port:        ${PORT}`);
   console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`   Database:    ${process.env.DATABASE_URL ? '✅ Connected' : '⚠️  DATABASE_URL not set'}`);
+  console.log(`   Database:    ${process.env.DATABASE_URL ? '✅ DATABASE_URL set' : '⚠️  DATABASE_URL NOT SET'}`);
+  console.log(`   JWT Secret:  ${process.env.JWT_SECRET ? '✅ set' : '⚠️  using default (insecure)'}`);
+  console.log('');
 });
 
 module.exports = app;
