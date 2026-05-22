@@ -1,139 +1,302 @@
 /* ═══════════════════════════════════════════════
    SV CAPITAL — Shared API Layer
-   Wraps the RESTful Table API with typed helpers
+   Backend: Express + PostgreSQL on Railway
    ═══════════════════════════════════════════════ */
 
 'use strict';
 
-/* ─── Base URL: resolve from root to work from any subdirectory ─── */
-const _API_BASE = (() => {
-  // Count path segments from the current page to compute relative depth.
-  // pathname example from root: /api/code_sandbox_light/preview/{id}/admin/index.html
-  // We need to strip the filename and go up enough levels to reach tables/
-  const path = window.location.pathname;
-  // Count directory segments in path (after the trailing slash)
-  const parts = path.replace(/\/[^/]+$/, '').split('/').filter(Boolean);
-  // The "tables" endpoint lives at the project root level.
-  // Detect nesting: if we're in admin/ or portal/, we need one "../"
-  // Simple heuristic: count path segments that look like subdirectories
-  const segments = path.split('/').filter(Boolean);
-  // Last segment is the file, everything else is directories
-  const dirs = segments.length - 1; // number of directory segments
-  // The tables/ API is always at the project base.
-  // In the sandbox, project base = preview/{id}/ which has some prefix.
-  // We use a relative approach: go up enough to reach project root.
-  // Typical structure: /prefix/admin/ needs '../', /prefix/ needs ''
-  // Detect if we're in a subdirectory of the project by looking at path depth vs known base.
-  // Simpler: we always use '../' for known subdirs (admin, portal) and '' for root.
-  const isSubdir = /\/(admin|portal|ifa|fund)\//.test(path);
-  return isSubdir ? '../' : '';
-})();
+/* ─── API Base URL ─── */
+// Always use /api — the Express server handles routing from any subpath
+const _API_BASE = '/api/';
 
-const API = {
-  /* ─── Core Fetch ─── */
-  async get(table, params = {}) {
-    const qs = new URLSearchParams(params).toString();
-    const url = `${_API_BASE}tables/${table}${qs ? '?' + qs : ''}`;
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`GET ${table} failed: ${r.status}`);
-    return r.json();
+/* ─── Auth token management ─── */
+const Auth = {
+  /**
+   * Get stored JWT token (from localStorage or sessionStorage)
+   */
+  getToken() {
+    return localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token') || null;
   },
 
-  async getById(table, id) {
-    const r = await fetch(`${_API_BASE}tables/${table}/${id}`);
-    if (!r.ok) throw new Error(`GET ${table}/${id} failed: ${r.status}`);
-    return r.json();
+  /**
+   * Store token and user info
+   */
+  setToken(token, user, remember = true) {
+    const store = remember ? localStorage : sessionStorage;
+    store.setItem('svc_token', token);
+    if (user) store.setItem('svc_user', JSON.stringify(user));
   },
 
-  async post(table, data) {
-    const r = await fetch(`${_API_BASE}tables/${table}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+  /**
+   * Get stored user info
+   */
+  getUser() {
+    try {
+      const raw = localStorage.getItem('svc_user') || sessionStorage.getItem('svc_user');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  },
+
+  /**
+   * Clear auth data (logout)
+   */
+  clear() {
+    ['svc_token', 'svc_user'].forEach(k => {
+      localStorage.removeItem(k);
+      sessionStorage.removeItem(k);
     });
-    if (!r.ok) throw new Error(`POST ${table} failed: ${r.status}`);
-    return r.json();
   },
 
-  async put(table, id, data) {
-    const r = await fetch(`${_API_BASE}tables/${table}/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    if (!r.ok) throw new Error(`PUT ${table}/${id} failed: ${r.status}`);
-    return r.json();
+  /**
+   * Check if user is authenticated
+   */
+  isLoggedIn() {
+    return !!this.getToken();
   },
 
-  async patch(table, id, data) {
-    const r = await fetch(`${_API_BASE}tables/${table}/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    if (!r.ok) throw new Error(`PATCH ${table}/${id} failed: ${r.status}`);
-    return r.json();
+  /**
+   * Get role of current user
+   */
+  getRole() {
+    const user = this.getUser();
+    return user ? user.role : null;
   },
 
-  async delete(table, id) {
-    const r = await fetch(`${_API_BASE}tables/${table}/${id}`, { method: 'DELETE' });
-    if (!r.ok) throw new Error(`DELETE ${table}/${id} failed: ${r.status}`);
+  /**
+   * Redirect to login if not authenticated
+   * @param {string} loginPage - relative path to login
+   */
+  requireLogin(loginPage = '/login.html') {
+    if (!this.isLoggedIn()) {
+      window.location.href = loginPage;
+      return false;
+    }
     return true;
   },
 
+  /**
+   * Login via API
+   */
+  async login(email, password, remember = true) {
+    const res = await fetch(`${_API_BASE}auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Login failed');
+    Auth.setToken(data.token, data.user, remember);
+    return data;
+  },
+
+  /**
+   * Register via API
+   */
+  async register(payload) {
+    const res = await fetch(`${_API_BASE}auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Registration failed');
+    Auth.setToken(data.token, data.user, true);
+    return data;
+  },
+
+  /**
+   * Logout
+   */
+  async logout(redirectTo = '/login.html') {
+    try {
+      await fetch(`${_API_BASE}auth/logout`, { method: 'POST', credentials: 'include' });
+    } catch (_) {}
+    Auth.clear();
+    window.location.href = redirectTo;
+  },
+
+  /**
+   * Get current user from API (/me)
+   */
+  async me() {
+    const res = await API._fetch('GET', 'auth/me');
+    return res;
+  },
+
+  /**
+   * Change password
+   */
+  async changePassword(currentPassword, newPassword) {
+    return API._fetch('PUT', 'auth/change-password', { currentPassword, newPassword });
+  },
+};
+
+/* ─── Core fetch helper ─── */
+const API = {
+  async _fetch(method, path, body = null, params = {}) {
+    const qs = Object.keys(params).length
+      ? '?' + new URLSearchParams(params).toString()
+      : '';
+    const url = `${_API_BASE}${path}${qs}`;
+    const token = Auth.getToken();
+
+    const opts = {
+      method,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    };
+    if (body && method !== 'GET') opts.body = JSON.stringify(body);
+
+    const r = await fetch(url, opts);
+
+    // Handle 401 — redirect to login
+    if (r.status === 401) {
+      Auth.clear();
+      // Only redirect if we're not already on a login page
+      if (!window.location.pathname.includes('login')) {
+        window.location.href = '/login.html';
+      }
+      throw new Error('Session expired — please log in again.');
+    }
+
+    if (!r.ok) {
+      let errMsg = `${method} ${path} failed: ${r.status}`;
+      try {
+        const err = await r.json();
+        errMsg = err.error || errMsg;
+      } catch (_) {}
+      throw new Error(errMsg);
+    }
+
+    // 204 No Content
+    if (r.status === 204) return true;
+    return r.json();
+  },
+
+  /* ─── Table CRUD ─── */
+  async get(table, params = {}) {
+    return this._fetch('GET', `tables/${table}`, null, params);
+  },
+
+  async getById(table, id) {
+    return this._fetch('GET', `tables/${table}/${id}`);
+  },
+
+  async post(table, data) {
+    return this._fetch('POST', `tables/${table}`, data);
+  },
+
+  async put(table, id, data) {
+    return this._fetch('PUT', `tables/${table}/${id}`, data);
+  },
+
+  async patch(table, id, data) {
+    return this._fetch('PATCH', `tables/${table}/${id}`, data);
+  },
+
+  async delete(table, id) {
+    return this._fetch('DELETE', `tables/${table}/${id}`);
+  },
+
   /* ─── Paginated list ─── */
-  async list(table, { page = 1, limit = 100, search = '', sort = '' } = {}) {
-    return this.get(table, { page, limit, ...(search && { search }), ...(sort && { sort }) });
+  async list(table, { page = 1, limit = 100, search = '', sort = '', ...extra } = {}) {
+    const params = { page, limit };
+    if (search) params.search = search;
+    if (sort)   params.sort   = sort;
+    Object.assign(params, extra);
+    return this.get(table, params);
   },
 
   /* ─── Domain helpers ─── */
   investors: {
-    list: (opts) => API.list('investors', opts),
-    get: (id) => API.getById('investors', id),
-    create: (data) => API.post('investors', data),
+    list:   (opts)     => API.list('investors', opts || {}),
+    get:    (id)       => API.getById('investors', id),
+    create: (data)     => API.post('investors', data),
     update: (id, data) => API.patch('investors', id, data),
-    delete: (id) => API.delete('investors', id),
+    delete: (id)       => API.delete('investors', id),
   },
   pools: {
-    list: (opts) => API.list('investment_pools', opts),
-    get: (id) => API.getById('investment_pools', id),
-    create: (data) => API.post('investment_pools', data),
+    list:   (opts)     => API.list('investment_pools', opts || {}),
+    get:    (id)       => API.getById('investment_pools', id),
+    create: (data)     => API.post('investment_pools', data),
     update: (id, data) => API.patch('investment_pools', id, data),
+    delete: (id)       => API.delete('investment_pools', id),
   },
   investments: {
-    list: (opts) => API.list('investments', opts),
-    get: (id) => API.getById('investments', id),
-    create: (data) => API.post('investments', data),
+    list:   (opts)     => API.list('investments', opts || {}),
+    get:    (id)       => API.getById('investments', id),
+    create: (data)     => API.post('investments', data),
     update: (id, data) => API.patch('investments', id, data),
   },
   transactions: {
-    list: (opts) => API.list('transactions', opts),
-    get: (id) => API.getById('transactions', id),
-    create: (data) => API.post('transactions', data),
+    list:   (opts)     => API.list('transactions', opts || {}),
+    get:    (id)       => API.getById('transactions', id),
+    create: (data)     => API.post('transactions', data),
     update: (id, data) => API.patch('transactions', id, data),
   },
   kyc: {
-    list: (opts) => API.list('kyc_documents', opts),
-    get: (id) => API.getById('kyc_documents', id),
+    list:   (opts)     => API.list('kyc_documents', opts || {}),
+    get:    (id)       => API.getById('kyc_documents', id),
     update: (id, data) => API.patch('kyc_documents', id, data),
-    create: (data) => API.post('kyc_documents', data),
+    create: (data)     => API.post('kyc_documents', data),
   },
   tickets: {
-    list: (opts) => API.list('support_tickets', opts),
-    get: (id) => API.getById('support_tickets', id),
-    create: (data) => API.post('support_tickets', data),
+    list:   (opts)     => API.list('support_tickets', opts || {}),
+    get:    (id)       => API.getById('support_tickets', id),
+    create: (data)     => API.post('support_tickets', data),
     update: (id, data) => API.patch('support_tickets', id, data),
   },
   maturityInstructions: {
-    list: (opts) => API.list('maturity_instructions', opts),
-    get: (id) => API.getById('maturity_instructions', id),
-    create: (data) => API.post('maturity_instructions', data),
+    list:   (opts)     => API.list('maturity_instructions', opts || {}),
+    get:    (id)       => API.getById('maturity_instructions', id),
+    create: (data)     => API.post('maturity_instructions', data),
     update: (id, data) => API.patch('maturity_instructions', id, data),
   },
   settings: {
-    list: () => API.list('platform_settings'),
+    list:   ()         => API.list('platform_settings'),
     update: (id, data) => API.patch('platform_settings', id, data),
-  }
+  },
+  ifas: {
+    list:   (opts)     => API.list('ifas', opts || {}),
+    get:    (id)       => API.getById('ifas', id),
+    create: (data)     => API.post('ifas', data),
+    update: (id, data) => API.patch('ifas', id, data),
+    delete: (id)       => API.delete('ifas', id),
+  },
+  fundRuns: {
+    list:   (opts)     => API.list('fund_runs', opts || {}),
+    get:    (id)       => API.getById('fund_runs', id),
+    create: (data)     => API.post('fund_runs', data),
+    update: (id, data) => API.patch('fund_runs', id, data),
+    delete: (id)       => API.delete('fund_runs', id),
+  },
+  returnSchedules: {
+    list:   (opts)     => API.list('return_schedules', opts || {}),
+    get:    (id)       => API.getById('return_schedules', id),
+    create: (data)     => API.post('return_schedules', data),
+    update: (id, data) => API.patch('return_schedules', id, data),
+  },
+  employees: {
+    list:   (opts)     => API.list('employees', opts || {}),
+    get:    (id)       => API.getById('employees', id),
+    create: (data)     => API.post('employees', data),
+    update: (id, data) => API.patch('employees', id, data),
+    delete: (id)       => API.delete('employees', id),
+  },
+  users: {
+    list:        (opts)           => API._fetch('GET', 'users', null, opts || {}),
+    get:         (id)             => API._fetch('GET', `users/${id}`),
+    create:      (data)           => API._fetch('POST', 'users', data),
+    update:      (id, data)       => API._fetch('PUT', `users/${id}`, data),
+    delete:      (id)             => API._fetch('DELETE', `users/${id}`),
+    toggleActive:(id)             => API._fetch('PATCH', `users/${id}/toggle-active`),
+    resetPassword:(id, newPassword) => API._fetch('PATCH', `users/${id}/reset-password`, { newPassword }),
+  },
 };
 
 /* ═══════════════════════════════════════════════
@@ -195,12 +358,11 @@ const Utils = {
   /* Product display info */
   productInfo(type) {
     const map = {
-      cattle: { label: 'Cattle', icon: 'fa-cow', color: '#D4AF37', badgeClass: 'badge--gold' },
-      solar_7yr: { label: 'Solar 7yr', icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
-      solar_6yr: { label: 'Solar 6yr', icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
-      solar_5yr: { label: 'Solar 5yr', icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
-      short_term: { label: 'Short-Term', icon: 'fa-bolt', color: '#3b82f6', badgeClass: 'badge--blue' },
-      delivery_bike: { label: 'Delivery Bike', icon: 'fa-motorcycle', color: '#f97316', badgeClass: 'badge--orange' },
+      cattle:         { label: 'Cattle Finance', icon: 'fa-cow',        color: '#D4AF37', badgeClass: 'badge--gold' },
+      solar:          { label: 'Solar Energy',   icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
+      smme:           { label: 'SMME Lending',   icon: 'fa-bolt',        color: '#3b82f6', badgeClass: 'badge--blue' },
+      delivery_bikes: { label: 'Delivery Bikes', icon: 'fa-motorcycle',  color: '#f97316', badgeClass: 'badge--orange' },
+      other:          { label: 'Other',           icon: 'fa-circle',      color: '#8ea3b8', badgeClass: 'badge--gray' },
     };
     return map[type] || { label: type, icon: 'fa-circle', color: '#8ea3b8', badgeClass: 'badge--gray' };
   },
@@ -208,28 +370,39 @@ const Utils = {
   /* Status badge HTML */
   statusBadge(status) {
     const map = {
-      active: ['badge--green', 'Active'],
-      open: ['badge--green', 'Open'],
-      filling: ['badge--blue', 'Filling'],
-      approved: ['badge--green', 'Approved'],
-      completed: ['badge--green', 'Completed'],
-      paid_out: ['badge--green', 'Paid Out'],
-      matured: ['badge--purple', 'Matured'],
-      pending: ['badge--orange', 'Pending'],
-      pending_fica: ['badge--orange', 'Pending FICA'],
-      fica_submitted: ['badge--blue', 'FICA Submitted'],
-      submitted: ['badge--blue', 'Submitted'],
-      under_review: ['badge--blue', 'Under Review'],
-      processing: ['badge--blue', 'Processing'],
-      in_progress: ['badge--blue', 'In Progress'],
+      active:           ['badge--green',  'Active'],
+      open:             ['badge--green',  'Open'],
+      filling:          ['badge--blue',   'Filling'],
+      approved:         ['badge--green',  'Approved'],
+      completed:        ['badge--green',  'Completed'],
+      paid_out:         ['badge--green',  'Paid Out'],
+      matured:          ['badge--purple', 'Matured'],
+      pending:          ['badge--orange', 'Pending'],
+      pending_fica:     ['badge--orange', 'Pending FICA'],
+      fica_submitted:   ['badge--blue',   'FICA Submitted'],
+      submitted:        ['badge--blue',   'Submitted'],
+      under_review:     ['badge--blue',   'Under Review'],
+      processing:       ['badge--blue',   'Processing'],
+      in_progress:      ['badge--blue',   'In Progress'],
       waiting_investor: ['badge--orange', 'Waiting'],
-      suspended: ['badge--red', 'Suspended'],
-      rejected: ['badge--red', 'Rejected'],
-      failed: ['badge--red', 'Failed'],
-      closed: ['badge--gray', 'Closed'],
-      reinvested: ['badge--purple', 'Reinvested'],
-      fica_approved: ['badge--green', 'FICA Approved'],
-      resolved: ['badge--gray', 'Resolved'],
+      suspended:        ['badge--red',    'Suspended'],
+      rejected:         ['badge--red',    'Rejected'],
+      failed:           ['badge--red',    'Failed'],
+      closed:           ['badge--gray',   'Closed'],
+      reinvested:       ['badge--purple', 'Reinvested'],
+      fica_approved:    ['badge--green',  'FICA Approved'],
+      resolved:         ['badge--gray',   'Resolved'],
+      draft:            ['badge--gray',   'Draft'],
+      cancelled:        ['badge--red',    'Cancelled'],
+      verified:         ['badge--green',  'Verified'],
+      expired:          ['badge--orange', 'Expired'],
+      onboarding:       ['badge--blue',   'Onboarding'],
+      inactive:         ['badge--gray',   'Inactive'],
+      paid:             ['badge--green',  'Paid'],
+      overdue:          ['badge--red',    'Overdue'],
+      accrued:          ['badge--blue',   'Accrued'],
+      collected:        ['badge--green',  'Collected'],
+      waived:           ['badge--gray',   'Waived'],
     };
     const [cls, label] = map[status] || ['badge--gray', status];
     return `<span class="badge ${cls}">${label}</span>`;
@@ -238,9 +411,9 @@ const Utils = {
   /* Priority badge */
   priorityBadge(priority) {
     const map = {
-      low: 'badge--gray',
+      low:    'badge--gray',
       medium: 'badge--blue',
-      high: 'badge--orange',
+      high:   'badge--orange',
       urgent: 'badge--red',
     };
     return `<span class="badge ${map[priority] || 'badge--gray'}">${priority}</span>`;
@@ -297,8 +470,9 @@ const Toast = {
     }, duration);
   },
   success: (msg) => Toast.show(msg, 'success'),
-  error: (msg) => Toast.show(msg, 'error'),
-  info: (msg) => Toast.show(msg, 'info'),
+  error:   (msg) => Toast.show(msg, 'error'),
+  info:    (msg) => Toast.show(msg, 'info'),
+  warning: (msg) => Toast.show(msg, 'warning'),
 };
 
 /* ═══════════════════════════════════════════════

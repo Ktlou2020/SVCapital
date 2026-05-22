@@ -870,7 +870,29 @@
 </div>
 
 <script>
+  'use strict';
+
   let selectedRole = 'investor';
+
+  /* ─── If already logged in, redirect to correct portal ─── */
+  (function checkExistingSession() {
+    const token = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+    if (!token) return;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.exp * 1000 > Date.now()) {
+        const redirectMap = {
+          admin:        'admin/index.html',
+          director:     'team/director.html',
+          investor:     'portal/index.html',
+          ifa:          'ifa/index.html',
+          fund_manager: 'fund/index.html',
+          staff:        'team/hub.html',
+        };
+        window.location.href = redirectMap[payload.role] || 'portal/index.html';
+      }
+    } catch (_) {}
+  })();
 
   /* ─── Forgot Password Flow ─── */
   function showForgotPassword(e) {
@@ -892,7 +914,7 @@
     document.getElementById('forgotError').classList.remove('show');
   }
 
-  function submitForgotPassword() {
+  async function submitForgotPassword() {
     const emailEl = document.getElementById('forgotEmailInput');
     const errEl   = document.getElementById('forgotError');
     const errTxt  = document.getElementById('forgotErrorText');
@@ -912,13 +934,19 @@
     btn.disabled = true;
     btnTxt.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Sending…';
 
-    setTimeout(() => {
-      document.getElementById('forgotFormState').style.display = 'none';
-      document.getElementById('forgotEmailSent').textContent = email;
-      document.getElementById('forgotSuccessPanel').classList.add('show');
-      btn.disabled = false;
-      btnTxt.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:8px"></i>Send Reset Link';
-    }, 1200);
+    try {
+      await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+    } catch (_) {}
+
+    document.getElementById('forgotFormState').style.display = 'none';
+    document.getElementById('forgotEmailSent').textContent = email;
+    document.getElementById('forgotSuccessPanel').classList.add('show');
+    btn.disabled = false;
+    btnTxt.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:8px"></i>Send Reset Link';
   }
 
   function selectRole(role) {
@@ -926,7 +954,6 @@
     document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
     document.getElementById(`role${role.charAt(0).toUpperCase() + role.slice(1)}`).classList.add('active');
 
-    // Pre-fill email hint
     const emailEl = document.getElementById('emailInput');
     if (role === 'admin') {
       emailEl.placeholder = 'admin@svcapital.co.za';
@@ -938,7 +965,7 @@
   }
 
   function togglePassword() {
-    const pw = document.getElementById('passwordInput');
+    const pw   = document.getElementById('passwordInput');
     const icon = document.getElementById('pwEyeIcon');
     if (pw.type === 'password') {
       pw.type = 'text';
@@ -949,44 +976,63 @@
     }
   }
 
-  function handleLogin(e) {
-    e.preventDefault();
-    const email = document.getElementById('emailInput').value.toLowerCase().trim();
-    const password = document.getElementById('passwordInput').value;
-    const errorEl = document.getElementById('formError');
+  function showError(msg) {
+    const errorEl   = document.getElementById('formError');
     const errorText = document.getElementById('formErrorText');
-    const btn = document.getElementById('loginBtn');
-    const btnText = document.getElementById('loginBtnText');
+    errorText.textContent = msg;
+    errorEl.classList.add('show');
+    ['emailInput','passwordInput'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.borderColor = '#ef4444';
+        setTimeout(() => { el.style.borderColor = ''; }, 3000);
+      }
+    });
+  }
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const email    = document.getElementById('emailInput').value.toLowerCase().trim();
+    const password = document.getElementById('passwordInput').value;
+    const remember = document.getElementById('rememberMe')?.checked !== false;
+    const errorEl  = document.getElementById('formError');
+    const btn      = document.getElementById('loginBtn');
+    const btnText  = document.getElementById('loginBtnText');
 
     errorEl.classList.remove('show');
+    btn.disabled = true;
     btn.classList.add('loading');
     btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Signing in…';
 
-    setTimeout(() => {
-      // Demo credentials
-      const validInvestor = (email === 'investor@svcapital.co.za' || email === 'thabo@email.co.za') && password === 'Demo@2024!';
-      const validAdmin    = (email === 'admin@svcapital.co.za' || email === 'ayanda@svcapital.co.za') && password === 'Demo@2024!';
-      const validAny      = password === 'Demo@2024!';
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
 
-      if (selectedRole === 'admin' && (validAdmin || validAny)) {
-        btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
-        setTimeout(() => { window.location.href = 'admin/index.html'; }, 400);
-      } else if (selectedRole === 'investor' && (validInvestor || validAny)) {
-        btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
-        setTimeout(() => { window.location.href = 'portal/index.html'; }, 400);
-      } else {
-        btn.classList.remove('loading');
-        btnText.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In';
-        errorText.textContent = 'Invalid credentials. Use the demo credentials shown above.';
-        errorEl.classList.add('show');
-        document.getElementById('emailInput').style.borderColor = '#ef4444';
-        document.getElementById('passwordInput').style.borderColor = '#ef4444';
-        setTimeout(() => {
-          document.getElementById('emailInput').style.borderColor = '';
-          document.getElementById('passwordInput').style.borderColor = '';
-        }, 3000);
+      if (!res.ok) {
+        throw new Error(data.error || 'Invalid credentials.');
       }
-    }, 900);
+
+      /* Store token */
+      const store = remember ? localStorage : sessionStorage;
+      store.setItem('svc_token', data.token);
+      store.setItem('svc_user',  JSON.stringify(data.user));
+
+      btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
+      setTimeout(() => {
+        window.location.href = data.redirect || 'portal/index.html';
+      }, 350);
+
+    } catch (err) {
+      btn.disabled = false;
+      btn.classList.remove('loading');
+      btnText.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In';
+      showError(err.message || 'Login failed. Please try again.');
+    }
   }
 </script>
 </body>

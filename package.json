@@ -1,0 +1,16 @@
+{
+  "name": "svcapital-platform",
+  "version": "1.0.0",
+  "description": "SV Capital Alternative Investment Platform",
+  "scripts": {
+    "start": "cd server && node index.js",
+    "build": "cd server && npm install --production",
+    "dev": "cd server && node index.js",
+    "migrate": "cd server && node db/migrate.js",
+    "seed": "cd server && node db/seed.js",
+    "setup": "cd server && npm install && node db/migrate.js && node db/seed.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
