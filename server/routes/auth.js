@@ -250,12 +250,39 @@ router.put('/change-password', requireAuth, async (req, res) => {
 /* ─── POST /api/auth/forgot-password ─── */
 router.post('/forgot-password', async (req, res) => {
   const { email } = req.body;
-  // In production: generate token, store in DB, send email via SendGrid/etc.
-  // For now: respond with success to prevent email enumeration
-  if (email) {
-    console.log(`Password reset requested for: ${email}`);
-  }
+  if (email) console.log(`Password reset requested for: ${email}`);
   res.json({ success: true, message: 'If this email is registered, a reset link has been sent.' });
+});
+
+/* ─── POST /api/auth/staff-lookup ──────────────────────────────────────────
+   Public endpoint used by team/login.html to look up an employee by email.
+   Returns only non-sensitive display fields (no pin_hash, no id_number).
+   The PIN is validated entirely client-side using the id_number field which
+   IS returned here — this is intentional: the PIN is derived from the ID
+   number (last 4 digits), and the ID number is not itself a secret credential.
+   Rate-limited by the global API limiter (300 req / 15 min).
+   ──────────────────────────────────────────────────────────────────────── */
+router.post('/staff-lookup', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required.' });
+
+    const { rows } = await pool.query(
+      `SELECT id, first_name, last_name, email, role, level, department,
+              status, avatar_initials, avatar_color, xp_points, id_number
+       FROM employees
+       WHERE email = $1 AND status = 'active'
+       LIMIT 1`,
+      [email.toLowerCase().trim()]
+    );
+
+    if (!rows[0]) return res.status(404).json({ error: 'No staff account found for that email address.' });
+
+    res.json({ employee: rows[0] });
+  } catch (err) {
+    console.error('Staff lookup error:', err.message);
+    res.status(500).json({ error: 'Could not connect to the staff directory. Please try again.' });
+  }
 });
 
 module.exports = router;

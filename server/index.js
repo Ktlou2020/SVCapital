@@ -103,19 +103,51 @@ app.get('/api/provision', async (req, res) => {
     const cooPassword = process.env.COO_PASSWORD || 'SvCap!C00#2026';
     const cooHash     = await bcrypt.hash(cooPassword, 12);
 
+    // 1. Wipe and re-create the main login user (JWT auth)
     await pool.query('DELETE FROM users');
     await pool.query(`
       INSERT INTO users (email, password_hash, role, first_name, last_name)
       VALUES ('coo@svcapital.co.za', $1, 'director', 'COO', 'SV Capital')
     `, [cooHash]);
 
-    const { rows } = await pool.query('SELECT id, email, role, created_at FROM users');
-    console.log('✅ Provision endpoint: COO account created.');
+    // 2. Ensure employees table has required columns
+    await pool.query(`
+      DO $$ BEGIN
+        BEGIN ALTER TABLE employees ADD COLUMN level TEXT DEFAULT 'junior'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE employees ADD COLUMN id_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE employees ADD COLUMN avatar_initials TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE employees ADD COLUMN avatar_color TEXT DEFAULT '#7c5cfc'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE employees ADD COLUMN xp_points INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+      END $$
+    `);
+
+    // 3. Upsert COO employee record (for team/login.html — PIN = last 4 of id_number = 9001)
+    await pool.query(`
+      INSERT INTO employees
+        (id, first_name, last_name, email, role, level, department,
+         status, id_number, avatar_initials, avatar_color, xp_points, hire_date)
+      VALUES
+        ('EMP-COO-001', 'COO', 'SV Capital', 'coo@svcapital.co.za',
+         'CEO', 'executive', 'Executive',
+         'active', '0000000009001', 'CO', '#7c5cfc', 0, NOW())
+      ON CONFLICT (email) DO UPDATE SET
+        role = 'CEO', level = 'executive', department = 'Executive',
+        status = 'active', id_number = '0000000009001',
+        avatar_initials = 'CO', avatar_color = '#7c5cfc'
+    `);
+
+    const { rows: users }     = await pool.query('SELECT id, email, role, created_at FROM users');
+    const { rows: employees } = await pool.query('SELECT id, email, role, level, id_number FROM employees WHERE email = $1', ['coo@svcapital.co.za']);
+    console.log('✅ Provision endpoint: COO user + employee created.');
     res.json({
-      success:  true,
-      message:  'Users table wiped. COO account created.',
-      users:    rows,
-      password: cooPassword,
+      success:        true,
+      message:        'Users wiped. COO login user + employee record created.',
+      loginUser:      users,
+      employeeRecord: employees,
+      loginDetails: {
+        mainLogin:    { url: '/login.html',       email: 'coo@svcapital.co.za', password: cooPassword, redirectsTo: '/admin/index.html' },
+        teamLogin:    { url: '/team/login.html',  email: 'coo@svcapital.co.za', pin: '9001 (last 4 digits of ID number)', redirectsTo: '/team/hub.html' },
+      },
     });
   } catch (err) {
     console.error('Provision error:', err.message);

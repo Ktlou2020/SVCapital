@@ -454,7 +454,7 @@
             <input class="pin-box" id="p4" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
           </div>
           <div style="text-align:center;font-size:0.72rem;color:var(--muted);margin-top:8px">
-            Default PIN is the last 4 digits of your SA ID number
+            Your PIN was set by your administrator
           </div>
         </div>
 
@@ -539,27 +539,23 @@ async function lookupEmail() {
   hideError();
 
   try {
-    // Search employees table by email
-    let found = null;
-    let page = 1;
-    while (!found) {
-      const res = await fetch(`../tables/employees?page=${page}&limit=100`);
-      const data = await res.json();
-      if (!data.data || data.data.length === 0) break;
-      found = data.data.find(e => (e.email || '').trim().toLowerCase() === emailRaw);
-      if (found || data.data.length < 100) break;
-      page++;
-    }
+    // Look up employee via the dedicated public staff-lookup endpoint
+    const res  = await fetch('/api/auth/staff-lookup', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email: emailRaw }),
+    });
+    const data = await res.json();
 
-    if (!found) {
+    if (!res.ok) {
       shakeInput('emailInput');
-      showError('No staff account found for that email address. Please check and try again.');
+      showError(data.error || 'No staff account found for that email address. Please check and try again.');
       setBtnLoading('btnContinue', false);
       return;
     }
 
-    _foundEmployee = found;
-    showStep2(found);
+    _foundEmployee = data.employee;
+    showStep2(data.employee);
 
   } catch(err) {
     console.error(err);
@@ -608,11 +604,9 @@ function attemptLogin() {
   const bankAcc = (_foundEmployee.bank_account_number || '').replace(/\D/g,'');
   const fallbackPin = bankAcc.slice(-4);
 
-  // Also accept "1234" as universal demo PIN
   const valid =
     pin === expectedPin   ||
-    (expectedPin === '' && pin === fallbackPin) ||
-    pin === '1234';
+    (expectedPin === '' && pin === fallbackPin);
 
   if (!valid) {
     // Shake PIN boxes and show error
@@ -623,7 +617,7 @@ function attemptLogin() {
     const wrap = document.getElementById('pinWrap');
     wrap.classList.add('shake');
     setTimeout(() => { wrap.classList.remove('shake'); document.querySelectorAll('.pin-box').forEach(b=>b.classList.remove('error')); }, 500);
-    showError('Incorrect PIN. Please try again. (Hint: last 4 digits of your ID number)');
+    showError('Incorrect PIN. Please try again.');
     document.getElementById('p1').focus();
     return;
   }

@@ -194,12 +194,23 @@ CREATE TABLE IF NOT EXISTS cattle_costs (
 CREATE TABLE IF NOT EXISTS employees (
   id TEXT PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL, phone TEXT,
-  role TEXT NOT NULL, department TEXT,
+  role TEXT NOT NULL, level TEXT DEFAULT 'junior', department TEXT,
   status TEXT DEFAULT 'active', pin_hash TEXT, hire_date DATE, notes TEXT,
   permissions JSONB DEFAULT '{}',
+  id_number TEXT, avatar_initials TEXT, avatar_color TEXT DEFAULT '#7c5cfc',
+  xp_points INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS employees_email_idx ON employees(email);
+
+-- Add missing columns to existing deployments (safe — IF NOT EXISTS equivalent)
+DO $$ BEGIN
+  BEGIN ALTER TABLE employees ADD COLUMN level TEXT DEFAULT 'junior'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN id_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN avatar_initials TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN avatar_color TEXT DEFAULT '#7c5cfc'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN xp_points INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+END $$;
 `;
 
 async function autoSetup() {
@@ -278,6 +289,21 @@ async function autoSetup() {
         ('maintenance_mode',    'false',                         'Maintenance mode'),
         ('currency',            'ZAR',                           'Platform currency')
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+    `);
+
+    // 6. Seed COO employee record (for team/login.html staff portal access)
+    await pool.query(`
+      INSERT INTO employees
+        (id, first_name, last_name, email, role, level, department,
+         status, id_number, avatar_initials, avatar_color, xp_points, hire_date)
+      VALUES
+        ('EMP-COO-001', 'COO', 'SV Capital', 'coo@svcapital.co.za',
+         'CEO', 'executive', 'Executive',
+         'active', '0000000009001', 'CO', '#7c5cfc', 0, NOW())
+      ON CONFLICT (email) DO UPDATE SET
+        role = 'CEO', level = 'executive', department = 'Executive',
+        status = 'active', id_number = '0000000009001',
+        avatar_initials = 'CO', avatar_color = '#7c5cfc'
     `);
 
     console.log('✅ Provisioning complete — COO account ready.');
