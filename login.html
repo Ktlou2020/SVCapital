@@ -475,66 +475,7 @@
 
     .login-link:hover { color: var(--orange); }
 
-    /* Divider */
-    .form-divider {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin: 24px 0;
-    }
 
-    .form-divider::before, .form-divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--border);
-    }
-
-    .form-divider span {
-      font-size: 0.72rem;
-      color: var(--text-dim);
-      white-space: nowrap;
-      font-weight: 600;
-    }
-
-    /* Quick access buttons */
-    .quick-access {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-
-    .quick-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 11px 16px;
-      border-radius: var(--radius);
-      font-size: 0.8rem;
-      font-weight: 700;
-      text-decoration: none;
-      border: 1.5px solid var(--border-md);
-      background: var(--bg);
-      color: var(--text-body);
-      transition: all var(--ease);
-      cursor: pointer;
-      font-family: var(--font);
-    }
-
-    .quick-btn i { font-size: 0.9rem; }
-
-    .quick-btn--portal:hover {
-      border-color: var(--orange);
-      color: var(--orange);
-      background: var(--orange-pale);
-    }
-
-    .quick-btn--admin:hover {
-      border-color: var(--teal);
-      color: var(--teal-dark);
-      background: rgba(47,140,155,0.07);
-    }
 
     /* Error message */
     .form-error {
@@ -783,21 +724,6 @@
             <span id="forgotBtnText"><i class="fa-solid fa-paper-plane" style="margin-right:8px"></i>Send Reset Link</span>
           </button>
         </div>
-      </div>
-
-      <!-- Divider -->
-      <div class="form-divider"><span>Quick access — demo only</span></div>
-
-      <!-- Quick access -->
-      <div class="quick-access">
-        <a href="portal/index.html" class="quick-btn quick-btn--portal">
-          <i class="fa-solid fa-chart-pie" style="color:var(--orange)"></i>
-          Investor Portal
-        </a>
-        <a href="admin/index.html" class="quick-btn quick-btn--admin">
-          <i class="fa-solid fa-shield-halved" style="color:var(--teal)"></i>
-          Admin Console
-        </a>
       </div>
 
       <!-- Footer -->
