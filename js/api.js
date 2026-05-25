@@ -12,10 +12,23 @@ const _API_BASE = '/api/';
 /* ─── Auth token management ─── */
 const Auth = {
   /**
-   * Get stored JWT token (from localStorage or sessionStorage)
+   * Get stored JWT token (from localStorage or sessionStorage).
+   * Returns null if expired.
    */
   getToken() {
-    return localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token') || null;
+    const token = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token') || null;
+    if (!token) return null;
+    // Validate expiry without a library
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.exp && payload.exp * 1000 < Date.now()) {
+        // Expired — clean up silently
+        localStorage.removeItem('svc_token'); sessionStorage.removeItem('svc_token');
+        localStorage.removeItem('svc_user');  sessionStorage.removeItem('svc_user');
+        return null;
+      }
+    } catch (_) {}
+    return token;
   },
 
   /**
@@ -28,30 +41,64 @@ const Auth = {
   },
 
   /**
-   * Get stored user info
+   * Get stored user info.
+   * Falls back to the staffSession SSO bridge written by StaffAuth.setSession()
+   * so that pages using Auth.getUser() work after a team/PIN login.
    */
   getUser() {
     try {
+      // Prefer explicit svc_user (set by JWT login or by StaffAuth SSO bridge)
       const raw = localStorage.getItem('svc_user') || sessionStorage.getItem('svc_user');
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+
+    // Last resort: read staffSession directly
+    try {
+      const ss = localStorage.getItem('staffSession');
+      if (ss) {
+        const s = JSON.parse(ss);
+        if (s && s.empId && s.expiresAt > Date.now()) {
+          return {
+            id:        s.empId,
+            email:     s.email,
+            role:      s.jwtRole || 'staff',
+            firstName: s.firstName,
+            lastName:  s.lastName,
+            _staffSso: true,
+          };
+        }
+      }
+    } catch (_) {}
+    return null;
   },
 
   /**
-   * Clear auth data (logout)
+   * Clear auth data (both JWT and StaffAuth SSO bridge).
+   * Calling Auth.clear() logs out from both auth systems.
    */
   clear() {
     ['svc_token', 'svc_user'].forEach(k => {
       localStorage.removeItem(k);
       sessionStorage.removeItem(k);
     });
+    // Also clear staffSession so StaffAuth pages redirect to login
+    localStorage.removeItem('staffSession');
   },
 
   /**
-   * Check if user is authenticated
+   * Check if user is authenticated via JWT or staffSession
    */
   isLoggedIn() {
-    return !!this.getToken();
+    if (this.getToken()) return true;
+    // Fall back to staffSession
+    try {
+      const ss = localStorage.getItem('staffSession');
+      if (ss) {
+        const s = JSON.parse(ss);
+        return !!(s && s.empId && s.expiresAt > Date.now());
+      }
+    } catch (_) {}
+    return false;
   },
 
   /**
@@ -107,13 +154,18 @@ const Auth = {
   },
 
   /**
-   * Logout
+   * Logout — clears JWT session, StaffAuth session, and SSO bridge.
+   * Works regardless of which login path was used.
    */
   async logout(redirectTo = '/login.html') {
     try {
       await fetch(`${_API_BASE}auth/logout`, { method: 'POST', credentials: 'include' });
     } catch (_) {}
-    Auth.clear();
+    Auth.clear(); // clears svc_token, svc_user, staffSession
+    // Also call StaffAuth.clearSession() if the library is loaded on this page
+    if (typeof StaffAuth !== 'undefined' && typeof StaffAuth.clearSession === 'function') {
+      StaffAuth.clearSession();
+    }
     window.location.href = redirectTo;
   },
 

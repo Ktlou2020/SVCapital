@@ -165,11 +165,45 @@
       expiresAt:      now + SESSION_TTL,
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+
+    // ── SSO bridge: write a compatible svc_user record so that api.js Auth
+    //    helpers (Auth.isLoggedIn, Auth.getUser, Auth.getRole) see this session.
+    //    Maps employee role titles to JWT roles used by admin/ifa pages.
+    const jwtRole = _empRoleToJwtRole(employee.role, employee.level);
+    const bridge = {
+      id:        employee.id,
+      email:     employee.email,
+      role:      jwtRole,
+      firstName: employee.first_name,
+      lastName:  employee.last_name,
+      _staffSso: true,   // marker so Auth.clear() knows it can remove this
+    };
+    localStorage.setItem('svc_user', JSON.stringify(bridge));
+
     return session;
+  }
+
+  /* Map employee role/level strings → JWT role used by admin.js guards */
+  function _empRoleToJwtRole(role, level) {
+    if (level === 'executive') return 'director';
+    if (!role) return 'staff';
+    const r = role.toLowerCase();
+    if (r.includes('ceo') || r.includes('director') || r.includes('coo') || r.includes('cto')) return 'director';
+    if (r.includes('admin') || r.includes('compliance') || r.includes('finance') || r.includes('operations') || r.includes('tech lead')) return 'admin';
+    if (r.includes('ifa') || r.includes('adviser') || r.includes('advisor')) return 'ifa';
+    return 'staff';
   }
 
   function clearSession() {
     localStorage.removeItem(SESSION_KEY);
+    // Also clear the SSO bridge user record if it was written by staff login
+    try {
+      const raw = localStorage.getItem('svc_user');
+      if (raw) {
+        const u = JSON.parse(raw);
+        if (u && u._staffSso) localStorage.removeItem('svc_user');
+      }
+    } catch (_) {}
   }
 
   function refreshSession(updates) {
@@ -253,7 +287,17 @@
    * ───────────────────────────────────────────────────────────── */
 
   function logout() {
-    clearSession();
+    clearSession(); // clears staffSession + svc_user SSO bridge
+
+    // Also clear JWT tokens so main login.html doesn't auto-restore the session
+    ['svc_token', 'svc_user'].forEach(k => {
+      localStorage.removeItem(k);
+      sessionStorage.removeItem(k);
+    });
+
+    // Tell the server to clear the httpOnly cookie
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+
     window.location.replace(LOGIN_URL());
   }
 
