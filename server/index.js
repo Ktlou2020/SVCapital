@@ -85,6 +85,44 @@ app.use('/api/auth',   require('./routes/auth'));
 app.use('/api/users',  require('./routes/users'));
 app.use('/api/tables', require('./routes/tables'));
 
+/* ─── One-time Provision Endpoint ───────────────────────────────────────────
+   GET /api/provision?secret=<PROVISION_SECRET>
+   Forces a wipe of the users table and re-seeds the COO account.
+   Protected by PROVISION_SECRET env var (defaults to 'svc-provision-2026').
+   Remove or disable this route once the platform is fully set up.
+   ──────────────────────────────────────────────────────────────────────── */
+app.get('/api/provision', async (req, res) => {
+  const secret = process.env.PROVISION_SECRET || 'svc-provision-2026';
+  if (req.query.secret !== secret) {
+    return res.status(403).json({ error: 'Forbidden.' });
+  }
+  try {
+    const pool   = require('./db/pool');
+    const bcrypt = require('bcryptjs');
+
+    const cooPassword = process.env.COO_PASSWORD || 'SvCap!C00#2026';
+    const cooHash     = await bcrypt.hash(cooPassword, 12);
+
+    await pool.query('DELETE FROM users');
+    await pool.query(`
+      INSERT INTO users (email, password_hash, role, first_name, last_name)
+      VALUES ('coo@svcapital.co.za', $1, 'director', 'COO', 'SV Capital')
+    `, [cooHash]);
+
+    const { rows } = await pool.query('SELECT id, email, role, created_at FROM users');
+    console.log('✅ Provision endpoint: COO account created.');
+    res.json({
+      success:  true,
+      message:  'Users table wiped. COO account created.',
+      users:    rows,
+      password: cooPassword,
+    });
+  } catch (err) {
+    console.error('Provision error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ─── Health Check ─────────────────────────────────────────────────────────
    Always returns HTTP 200 so Railway knows the process is alive.
    DB connectivity is reported in the body but does NOT affect the status code.
