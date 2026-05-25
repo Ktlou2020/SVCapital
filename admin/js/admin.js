@@ -90,6 +90,83 @@ function navigate(view, btnEl) {
 }
 
 /* ═══════════════════════════════════════════════
+   USER IDENTITY — populate sidebar + topbar from session
+   ═══════════════════════════════════════════════ */
+function _populateAdminIdentity(jwtUser) {
+  // Build a merged identity object.
+  // staffSession has the richest data (avatar colour, initials, level, department).
+  // svc_user / jwtUser fills gaps when only a JWT login was used.
+  let identity = {
+    initials:   null,
+    color:      '#7c5cfc',
+    name:       null,
+    role:       null,
+    department: null,
+    email:      jwtUser ? jwtUser.email : null,
+  };
+
+  // Try staffSession first
+  try {
+    const raw = localStorage.getItem('staffSession');
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (s && s.empId && s.expiresAt > Date.now()) {
+        identity.initials   = s.avatarInitials || null;
+        identity.color      = s.avatarColor    || '#7c5cfc';
+        identity.name       = `${s.firstName || ''} ${s.lastName || ''}`.trim() || null;
+        identity.role       = s.role           || null;
+        identity.department = s.department     || null;
+        identity.email      = s.email          || identity.email;
+      }
+    }
+  } catch (_) {}
+
+  // Fill any gaps from jwtUser (svc_user bridge or real JWT payload)
+  if (jwtUser) {
+    if (!identity.name)
+      identity.name = `${jwtUser.firstName || ''} ${jwtUser.lastName || ''}`.trim() || jwtUser.email || null;
+    if (!identity.role)
+      identity.role = jwtUser.role || null;
+  }
+
+  // Derive initials from name if not set
+  if (!identity.initials && identity.name) {
+    const parts = identity.name.trim().split(/\s+/);
+    identity.initials = parts.length >= 2
+      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      : identity.name.slice(0, 2).toUpperCase();
+  }
+
+  // Build display role label
+  const roleLabelMap = {
+    director: 'Director',
+    admin:    'Admin',
+    ifa:      'IFA Partner',
+    staff:    'Staff',
+  };
+  const roleLabel = roleLabelMap[identity.role] || identity.role || 'Admin';
+  const deptLabel = identity.department ? `${identity.department} · ` : '';
+  const sidebarRoleText = `${deptLabel}${roleLabel}`;
+
+  // ── Apply to sidebar ──
+  const avatarEl = document.getElementById('adminSidebarAvatar');
+  const nameEl   = document.getElementById('adminSidebarName');
+  const roleEl   = document.getElementById('adminSidebarRole');
+
+  if (avatarEl) {
+    avatarEl.textContent       = identity.initials || '??';
+    avatarEl.style.background  = identity.color;
+    avatarEl.style.color       = '#fff';
+  }
+  if (nameEl)  nameEl.textContent = identity.name  || identity.email || 'Unknown User';
+  if (roleEl)  roleEl.textContent = sidebarRoleText;
+
+  // ── Apply to topbar (legacy element — keep for compatibility) ──
+  const topbarNameEl = document.getElementById('adminUserName');
+  if (topbarNameEl) topbarNameEl.textContent = identity.name || identity.email || '';
+}
+
+/* ═══════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -106,11 +183,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       window.location.href = '/team/login.html';
       return;
     }
-    // Show logged-in user name in topbar if element exists
-    const adminNameEl = document.getElementById('adminUserName');
-    if (adminNameEl && user) {
-      adminNameEl.textContent = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
-    }
+    // ── Populate user identity from session ──────────────────────────
+    // Prefer staffSession (richer: has avatar colour, initials, department)
+    // Fall back to svc_user / JWT payload for main-login users.
+    _populateAdminIdentity(user);
   }
 
   await loadDashboard();
