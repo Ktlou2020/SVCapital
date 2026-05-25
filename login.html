@@ -307,47 +307,6 @@
       line-height: 1.5;
     }
 
-    /* Demo credentials notice */
-    .demo-notice {
-      background: linear-gradient(135deg, rgba(47,140,155,0.07), rgba(47,140,155,0.04));
-      border: 1px solid rgba(47,140,155,0.2);
-      border-radius: var(--radius);
-      padding: 14px 16px;
-      margin-bottom: 28px;
-    }
-
-    .demo-notice__title {
-      font-size: 0.72rem;
-      font-weight: 800;
-      color: var(--teal-dark);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 8px;
-    }
-
-    .demo-notice__item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 4px 0;
-      font-size: 0.78rem;
-      border-bottom: 1px solid rgba(47,140,155,0.1);
-    }
-
-    .demo-notice__item:last-child { border-bottom: none; }
-
-    .demo-notice__label { color: var(--text-muted); font-weight: 500; }
-
-    .demo-notice__value {
-      font-weight: 800;
-      color: var(--teal-dark);
-      font-family: monospace;
-      font-size: 0.8rem;
-      background: rgba(47,140,155,0.1);
-      padding: 2px 8px;
-      border-radius: 4px;
-    }
-
     /* Role selector */
     .role-tabs {
       display: grid;
@@ -734,23 +693,6 @@
         <p class="login-form-sub">Enter your credentials to access your SV Capital portfolio.</p>
       </div>
 
-      <!-- Demo credentials -->
-      <div class="demo-notice">
-        <div class="demo-notice__title"><i class="fa-solid fa-circle-info" style="margin-right:5px;color:var(--teal)"></i>Demo Credentials</div>
-        <div class="demo-notice__item">
-          <span class="demo-notice__label">Investor Portal</span>
-          <span class="demo-notice__value">investor@svcapital.co.za</span>
-        </div>
-        <div class="demo-notice__item">
-          <span class="demo-notice__label">Admin Console</span>
-          <span class="demo-notice__value">admin@svcapital.co.za</span>
-        </div>
-        <div class="demo-notice__item">
-          <span class="demo-notice__label">Password</span>
-          <span class="demo-notice__value">Demo@2024!</span>
-        </div>
-      </div>
-
       <!-- Role selector -->
       <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:10px">Access Level</div>
       <div class="role-tabs" id="roleTabs">
@@ -884,7 +826,7 @@
       if (payload.exp * 1000 > Date.now()) {
         const redirectMap = {
           admin:        'admin/index.html',
-          director:     'team/director.html',
+          director:     'admin/index.html',
           investor:     'portal/index.html',
           ifa:          'ifa/index.html',
           fund_manager: 'fund/index.html',
@@ -956,13 +898,7 @@
     document.getElementById(`role${role.charAt(0).toUpperCase() + role.slice(1)}`).classList.add('active');
 
     const emailEl = document.getElementById('emailInput');
-    if (role === 'admin') {
-      emailEl.placeholder = 'admin@svcapital.co.za';
-      if (!emailEl.value) emailEl.value = 'admin@svcapital.co.za';
-    } else {
-      emailEl.placeholder = 'investor@svcapital.co.za';
-      if (emailEl.value === 'admin@svcapital.co.za') emailEl.value = 'investor@svcapital.co.za';
-    }
+    emailEl.placeholder = role === 'admin' ? 'your@email.com' : 'your@email.com';
   }
 
   function togglePassword() {

@@ -74,7 +74,7 @@ router.post('/login', async (req, res) => {
     // Determine redirect URL based on role
     const redirectMap = {
       admin:        '/admin/index.html',
-      director:     '/team/director.html',
+      director:     '/admin/index.html',
       investor:     '/portal/index.html',
       ifa:          '/ifa/index.html',
       fund_manager: '/fund/index.html',

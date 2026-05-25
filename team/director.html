@@ -13,7 +13,21 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const s = StaffAuth.getSession();
-      if (!s) { window.location.replace('login.html'); return; }
+      if (!s) {
+        // No staffSession — check for a valid svc_token JWT (issued by /login.html)
+        try {
+          const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+          if (jwt) {
+            const payload = JSON.parse(atob(jwt.split('.')[1]));
+            if (payload && payload.exp * 1000 > Date.now() &&
+                (payload.role === 'director' || payload.role === 'admin')) {
+              return; // Valid JWT with director/admin role — allow access
+            }
+          }
+        } catch (_) {}
+        window.location.replace('login.html');
+        return;
+      }
       if (!StaffAuth.isDirector(s)) { window.location.replace('hub.html?denied=director'); return; }
     });
   </script>
