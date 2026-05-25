@@ -28,14 +28,17 @@ app.set('trust proxy', 1);
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc:  ["'self'"],
-      scriptSrc:   ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com', '*.googleapis.com'],
-      styleSrc:    ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'cdnjs.cloudflare.com'],
-      fontSrc:     ["'self'", 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com'],
-      imgSrc:      ["'self'", 'data:', 'blob:', '*'],
-      connectSrc:  ["'self'"],
-      frameSrc:    ["'none'"],
-      objectSrc:   ["'none'"],
+      defaultSrc:    ["'self'"],
+      scriptSrc:     ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com', '*.googleapis.com'],
+      // Allow inline onclick=/onkeydown= event handler attributes.
+      // helmet sets this to 'none' by default, overriding unsafe-inline in scriptSrc.
+      scriptSrcAttr: ["'unsafe-inline'"],
+      styleSrc:      ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'cdnjs.cloudflare.com'],
+      fontSrc:       ["'self'", 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com'],
+      imgSrc:        ["'self'", 'data:', 'blob:', '*'],
+      connectSrc:    ["'self'"],
+      frameSrc:      ["'none'"],
+      objectSrc:     ["'none'"],
     },
   },
 }));

@@ -409,15 +409,14 @@
             <i class="fa-solid fa-envelope input-icon"></i>
             <input type="email" id="emailInput" class="form-input"
               placeholder="you@svcapital.co.za"
-              autocomplete="email" autocapitalize="off"
-              onkeydown="if(event.key==='Enter')lookupEmail()" />
+              autocomplete="email" autocapitalize="off" />
           </div>
         </div>
-        <button type="button" class="btn-primary" id="btnContinue" onclick="lookupEmail()">
+        <button type="button" class="btn-primary" id="btnContinue">
           Continue&nbsp;<i class="fa-solid fa-arrow-right"></i>
         </button>
         <div style="text-align:center;margin-top:14px">
-          <button type="button" class="back-btn" onclick="showForgotPin()">
+          <button type="button" class="back-btn" id="btnForgotPin">
             <i class="fa-solid fa-key" style="font-size:0.7rem"></i> Forgot your PIN?
           </button>
         </div>
@@ -448,10 +447,10 @@
           </div>
         </div>
 
-        <button type="button" class="btn-primary" id="btnLogin" onclick="attemptLogin()" disabled>
+        <button type="button" class="btn-primary" id="btnLogin" disabled>
           Sign In&nbsp;<i class="fa-solid fa-right-to-bracket"></i>
         </button>
-        <button type="button" class="btn-ghost" onclick="resetToStep1()">
+        <button type="button" class="btn-ghost" id="btnBackToEmail">
           <i class="fa-solid fa-arrow-left"></i>&nbsp;Use a different email
         </button>
 
@@ -459,7 +458,7 @@
 
       <!-- ── FORGOT PIN PANEL ── -->
       <div class="forgot-panel" id="forgotPinPanel">
-        <button type="button" class="back-btn" onclick="closeForgotPin()">
+        <button type="button" class="back-btn" id="btnCloseForgot">
           <i class="fa-solid fa-arrow-left" style="font-size:0.7rem"></i> Back to sign in
         </button>
 
@@ -474,7 +473,7 @@
           <div class="fp-success-title">Reset link sent!</div>
           <div class="fp-success-sub">A PIN reset link has been sent to <strong id="fpEmailSent"></strong>.</div>
           <div class="fp-success-note"><i class="fa-solid fa-circle-info" style="margin-right:5px;color:var(--teal)"></i> The link expires in 30 minutes. If you don't see it, check your spam or contact your system administrator.</div>
-          <button type="button" class="btn-primary" onclick="closeForgotPin()">Back to Sign In</button>
+          <button type="button" class="btn-primary" id="btnFpBackToLogin">Back to Sign In</button>
         </div>
 
         <!-- Form -->
@@ -488,11 +487,10 @@
             <div class="input-wrap">
               <i class="fa-solid fa-envelope input-icon"></i>
               <input type="email" id="fpEmailInput" class="form-input"
-                     placeholder="you@svcapital.co.za" autocomplete="email"
-                     onkeydown="if(event.key==='Enter')submitFpReset()" />
+                     placeholder="you@svcapital.co.za" autocomplete="email" />
             </div>
           </div>
-          <button type="button" class="btn-primary" id="fpBtn" onclick="submitFpReset()">
+          <button type="button" class="btn-primary" id="fpBtn">
             <span id="fpBtnContent"><i class="fa-solid fa-paper-plane" style="margin-right:8px"></i>Send Reset Link</span>
           </button>
         </div>
@@ -529,7 +527,45 @@ window.addEventListener('DOMContentLoaded', () => {
   } catch(_) {}
 
   wirePinBoxes();
+  wireButtons();
 });
+
+/* ─── Wire all button/input events (no inline onclick= attributes) ──────
+   CSP script-src-attr 'none' blocks onclick= / onkeydown= attributes.
+   All handlers must be attached here via addEventListener.
+   ──────────────────────────────────────────────────────────────────── */
+function wireButtons() {
+  // Step 1 — Continue button
+  document.getElementById('btnContinue').addEventListener('click', lookupEmail);
+
+  // Step 1 — Email Enter key
+  document.getElementById('emailInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') lookupEmail();
+  });
+
+  // Step 1 — Forgot PIN link
+  document.getElementById('btnForgotPin').addEventListener('click', showForgotPin);
+
+  // Step 2 — Sign In button
+  document.getElementById('btnLogin').addEventListener('click', attemptLogin);
+
+  // Step 2 — Back to email button
+  document.getElementById('btnBackToEmail').addEventListener('click', resetToStep1);
+
+  // Forgot PIN panel — Close/back button
+  document.getElementById('btnCloseForgot').addEventListener('click', closeForgotPin);
+
+  // Forgot PIN panel — Send reset link button
+  document.getElementById('fpBtn').addEventListener('click', submitFpReset);
+
+  // Forgot PIN panel — Back to Sign In (success state)
+  document.getElementById('btnFpBackToLogin').addEventListener('click', closeForgotPin);
+
+  // Forgot PIN panel — Enter key on email input
+  document.getElementById('fpEmailInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitFpReset();
+  });
+}
 
 /* ─── STEP 1 — Email lookup ─────────────────────────── */
 async function lookupEmail() {
