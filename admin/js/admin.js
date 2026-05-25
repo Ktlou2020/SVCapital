@@ -98,12 +98,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ─── Require authentication ───
   if (typeof Auth !== 'undefined') {
     if (!Auth.isLoggedIn()) {
-      window.location.href = '/login.html';
+      window.location.href = '/team/login.html';
       return;
     }
     const user = Auth.getUser();
     if (user && !['admin','director'].includes(user.role)) {
-      window.location.href = '/login.html';
+      window.location.href = '/team/login.html';
       return;
     }
     // Show logged-in user name in topbar if element exists

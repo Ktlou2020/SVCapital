@@ -565,16 +565,41 @@
 
   // Pre-fill if session exists
   window.addEventListener('DOMContentLoaded', () => {
-    const stored = localStorage.getItem('svc_ifa_session') || sessionStorage.getItem('svc_ifa_session');
-    if (stored) {
-      try {
-        const s = JSON.parse(stored);
-        // Auto-redirect if session < 24h
-        if (s.loginTime && (Date.now() - s.loginTime) < 86400000) {
-          window.location.href = 'index.html';
+    // 1. Valid staffSession (team PIN login) → go straight to IFA dashboard
+    try {
+      const ss = localStorage.getItem('staffSession');
+      if (ss) {
+        const s = JSON.parse(ss);
+        if (s && s.empId && s.expiresAt > Date.now()) {
+          window.location.replace('index.html');
+          return;
         }
-      } catch(_) {}
-    }
+      }
+    } catch(_) {}
+
+    // 2. Valid JWT (main login.html) → go straight to IFA dashboard
+    try {
+      const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+      if (jwt) {
+        const p = JSON.parse(atob(jwt.split('.')[1]));
+        if (p && p.exp * 1000 > Date.now()) {
+          window.location.replace('index.html');
+          return;
+        }
+      }
+    } catch(_) {}
+
+    // 3. Legacy IFA-specific session → go straight to IFA dashboard
+    try {
+      const stored = localStorage.getItem('svc_ifa_session') || sessionStorage.getItem('svc_ifa_session');
+      if (stored) {
+        const s = JSON.parse(stored);
+        if (s.loginTime && (Date.now() - s.loginTime) < 86400000) {
+          window.location.replace('index.html');
+          return;
+        }
+      }
+    } catch(_) {}
   });
 </script>
 

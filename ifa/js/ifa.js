@@ -20,12 +20,13 @@ function getSession() {
 }
 
 function requireAuth() {
-  // Check JWT-based login first
+  // Check JWT or staffSession via the unified Auth helper
   if (Auth.isLoggedIn()) {
     const user = Auth.getUser();
-    if (user && (user.role === 'ifa' || user.role === 'admin' || user.role === 'director')) {
+    // Allow staff roles that have IFA/admin/director access
+    if (user && (user.role === 'ifa' || user.role === 'admin' || user.role === 'director' || user.role === 'staff')) {
       IFA_SESSION = {
-        ifaId:   user.ifaId || user.investorId || 'IFA-001',
+        ifaId:   user.ifaId || user.investorId || user.id || 'IFA-SSO',
         name:    `${user.firstName || ''} ${user.lastName || ''}`.trim(),
         company: '',
         email:   user.email,
@@ -35,14 +36,15 @@ function requireAuth() {
   }
   IFA_SESSION = getSession();
   if (!IFA_SESSION) {
-    window.location.href = 'login.html';
+    // Redirect to the unified staff login, not the legacy IFA-specific one
+    window.location.href = '/team/login.html';
     return false;
   }
   return true;
 }
 
 function signOut() {
-  Auth.logout('/login.html');
+  Auth.logout('/team/login.html');
   localStorage.removeItem('svc_ifa_session');
   sessionStorage.removeItem('svc_ifa_session');
 }
