@@ -239,12 +239,6 @@
     .divider-line { flex: 1; height: 1px; background: var(--border); }
     .divider-text { font-size: 0.75rem; color: var(--muted); }
 
-    .demo-hint {
-      font-size: 0.75rem; color: var(--muted); text-align: center;
-      line-height: 1.6; margin-top: 20px;
-    }
-    .demo-hint span { color: var(--purple); font-weight: 600; }
-
     /* PIN input */
     .pin-wrap { display: flex; gap: 10px; justify-content: center; margin-bottom: 4px; }
     .pin-box {
@@ -419,15 +413,11 @@
               onkeydown="if(event.key==='Enter')lookupEmail()" />
           </div>
         </div>
-        <button class="btn-primary" id="btnContinue" onclick="lookupEmail()">
+        <button type="button" class="btn-primary" id="btnContinue" onclick="lookupEmail()">
           Continue&nbsp;<i class="fa-solid fa-arrow-right"></i>
         </button>
-        <div class="demo-hint">
-          Demo: try <span>sipho.dlamini@svcapital.co.za</span><br>
-          or <span>zanele.nkosi@svcapital.co.za</span>
-        </div>
         <div style="text-align:center;margin-top:14px">
-          <button class="back-btn" onclick="showForgotPin()">
+          <button type="button" class="back-btn" onclick="showForgotPin()">
             <i class="fa-solid fa-key" style="font-size:0.7rem"></i> Forgot your PIN?
           </button>
         </div>
@@ -458,10 +448,10 @@
           </div>
         </div>
 
-        <button class="btn-primary" id="btnLogin" onclick="attemptLogin()" disabled>
+        <button type="button" class="btn-primary" id="btnLogin" onclick="attemptLogin()" disabled>
           Sign In&nbsp;<i class="fa-solid fa-right-to-bracket"></i>
         </button>
-        <button class="btn-ghost" onclick="resetToStep1()">
+        <button type="button" class="btn-ghost" onclick="resetToStep1()">
           <i class="fa-solid fa-arrow-left"></i>&nbsp;Use a different email
         </button>
 
@@ -469,7 +459,7 @@
 
       <!-- ── FORGOT PIN PANEL ── -->
       <div class="forgot-panel" id="forgotPinPanel">
-        <button class="back-btn" onclick="closeForgotPin()">
+        <button type="button" class="back-btn" onclick="closeForgotPin()">
           <i class="fa-solid fa-arrow-left" style="font-size:0.7rem"></i> Back to sign in
         </button>
 
@@ -484,7 +474,7 @@
           <div class="fp-success-title">Reset link sent!</div>
           <div class="fp-success-sub">A PIN reset link has been sent to <strong id="fpEmailSent"></strong>.</div>
           <div class="fp-success-note"><i class="fa-solid fa-circle-info" style="margin-right:5px;color:var(--teal)"></i> The link expires in 30 minutes. If you don't see it, check your spam or contact your system administrator.</div>
-          <button class="btn-primary" onclick="closeForgotPin()">Back to Sign In</button>
+          <button type="button" class="btn-primary" onclick="closeForgotPin()">Back to Sign In</button>
         </div>
 
         <!-- Form -->
@@ -502,7 +492,7 @@
                      onkeydown="if(event.key==='Enter')submitFpReset()" />
             </div>
           </div>
-          <button class="btn-primary" id="fpBtn" onclick="submitFpReset()">
+          <button type="button" class="btn-primary" id="fpBtn" onclick="submitFpReset()">
             <span id="fpBtnContent"><i class="fa-solid fa-paper-plane" style="margin-right:8px"></i>Send Reset Link</span>
           </button>
         </div>
@@ -517,29 +507,45 @@
 <script>
 /* ─── State ─────────────────────────────────────────── */
 let _foundEmployee = null;
+let _lookingUp     = false;  // guard against double-clicks
 
 /* ─── On load: redirect if already logged in ─────────── */
 window.addEventListener('DOMContentLoaded', () => {
+  // JWT bypass — if already logged in via /login.html, go straight to hub
+  try {
+    const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+    if (jwt) {
+      const p = JSON.parse(atob(jwt.split('.')[1]));
+      if (p && p.exp * 1000 > Date.now()) {
+        window.location.replace('hub.html');
+        return;
+      }
+    }
+  } catch(_) {}
+
   const s = StaffAuth.getSession();
-  if (s) {
-    // Already have a valid session → go to hub
-    window.location.replace('hub.html');
-  }
-  // Wire up PIN boxes
+  if (s) { window.location.replace('hub.html'); return; }
+
   wirePinBoxes();
 });
 
 /* ─── STEP 1 — Email lookup ─────────────────────────── */
 async function lookupEmail() {
+  if (_lookingUp) return;
+
   const emailRaw = document.getElementById('emailInput').value.trim().toLowerCase();
-  if (!emailRaw) { shakeInput('emailInput'); return showError('Please enter your work email address.'); }
+  if (!emailRaw)               { shakeInput('emailInput'); return showError('Please enter your work email address.'); }
   if (!emailRaw.includes('@')) { shakeInput('emailInput'); return showError('Please enter a valid email address.'); }
 
-  setBtnLoading('btnContinue', true);
+  _lookingUp = true;
   hideError();
 
+  const btn     = document.getElementById('btnContinue');
+  const origHTML = btn.innerHTML;
+  btn.disabled  = true;
+  btn.innerHTML = '<div class="spinner"></div>&nbsp;Looking up…';
+
   try {
-    // Look up employee via the dedicated public staff-lookup endpoint
     const res  = await fetch('/api/auth/staff-lookup', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -549,8 +555,10 @@ async function lookupEmail() {
 
     if (!res.ok) {
       shakeInput('emailInput');
-      showError(data.error || 'No staff account found for that email address. Please check and try again.');
-      setBtnLoading('btnContinue', false);
+      showError(data.error || 'No staff account found for that email address.');
+      btn.disabled  = false;
+      btn.innerHTML = origHTML;
+      _lookingUp    = false;
       return;
     }
 
@@ -558,15 +566,17 @@ async function lookupEmail() {
     showStep2(data.employee);
 
   } catch(err) {
-    console.error(err);
-    showError('Could not connect to the staff directory. Please try again.');
-    setBtnLoading('btnContinue', false);
+    console.error('Staff lookup error:', err);
+    showError('Could not reach the server. Please check your connection and try again.');
+    btn.disabled  = false;
+    btn.innerHTML = origHTML;
+    _lookingUp    = false;
   }
 }
 
 /* ─── STEP 2 — Show PIN screen ───────────────────────── */
 function showStep2(emp) {
-  setBtnLoading('btnContinue', false);
+  _lookingUp = false;
 
   // Update step indicator
   document.getElementById('stepDot1').classList.remove('active');
@@ -624,7 +634,8 @@ function attemptLogin() {
 
   // ✅ Valid — create session and redirect
   hideError();
-  setBtnLoading('btnLogin', true);
+  const loginBtn = document.getElementById('btnLogin');
+  if (loginBtn) { loginBtn.disabled = true; loginBtn.innerHTML = '<div class="spinner"></div>&nbsp;Signing in…'; }
 
   // Update step indicator
   document.getElementById('stepDot2').classList.remove('active');
@@ -786,17 +797,7 @@ function shakeInput(id) {
   setTimeout(() => el.classList.remove('shake', 'error'), 600);
 }
 
-function setBtnLoading(btnId, loading) {
-  const btn = document.getElementById(btnId);
-  if (!btn) return;
-  btn.disabled = loading;
-  if (loading) {
-    btn.dataset.orig = btn.innerHTML;
-    btn.innerHTML = '<div class="spinner"></div> Please wait…';
-  } else {
-    btn.innerHTML = btn.dataset.orig || btn.innerHTML;
-  }
-}
+
 </script>
 </body>
 </html>
