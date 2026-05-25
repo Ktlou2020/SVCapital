@@ -188,7 +188,16 @@ const STATIC_DIR = path.join(__dirname, '..');
 app.use(express.static(STATIC_DIR, {
   index: false,
   setHeaders: (res, filePath) => {
-    if (/\.(css|js|png|jpg|jpeg|gif|svg|ico|woff2?)$/.test(filePath)) {
+    // HTML files: always revalidate
+    if (/\.html$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    // JS and CSS files: revalidate (etag-based, no long cache)
+    } else if (/\.(js|css)$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache');
+    // Static assets (images, fonts): cache for 1 day
+    } else if (/\.(png|jpg|jpeg|gif|svg|ico|woff2?)$/.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=86400');
     } else {
       res.setHeader('Cache-Control', 'no-cache');

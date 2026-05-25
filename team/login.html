@@ -503,7 +503,7 @@
 
 </div><!-- /page -->
 
-<script src="../js/staff-auth.js"></script>
+<script src="../js/staff-auth.js?v=2"></script>
 <script>
 /* ─── State ─────────────────────────────────────────── */
 let _foundEmployee = null;
@@ -511,20 +511,22 @@ let _lookingUp     = false;  // guard against double-clicks
 
 /* ─── On load: redirect if already logged in ─────────── */
 window.addEventListener('DOMContentLoaded', () => {
-  // JWT bypass — if already logged in via /login.html, go straight to hub
+  // staffSession bypass — already logged in via team login
+  const s = StaffAuth.getSession();
+  if (s) { window.location.replace('hub.html'); return; }
+
+  // JWT bypass — if logged in via /login.html (JWT auth), redirect to admin
+  // (hub.html requires staffSession which JWT users don't have)
   try {
     const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
     if (jwt) {
       const p = JSON.parse(atob(jwt.split('.')[1]));
       if (p && p.exp * 1000 > Date.now()) {
-        window.location.replace('hub.html');
+        window.location.replace('/admin/index.html');
         return;
       }
     }
   } catch(_) {}
-
-  const s = StaffAuth.getSession();
-  if (s) { window.location.replace('hub.html'); return; }
 
   wirePinBoxes();
 });

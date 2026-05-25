@@ -437,7 +437,7 @@
 
 <div id="toast"><i class="fa-solid fa-circle-check" style="color:var(--teal)"></i> <span id="toastMsg"></span></div>
 
-<script src="../js/staff-auth.js"></script>
+<script src="../js/staff-auth.js?v=2"></script>
 <script>
 
 /* ── RBAC config (mirrors staff-auth.js APPS_REGISTRY) ── */
@@ -528,6 +528,19 @@ const APP_META = {
 window.addEventListener('DOMContentLoaded', () => {
   const session = StaffAuth.getSession();
   if (!session) {
+    // JWT bypass — users logged in via /login.html (director/admin role)
+    try {
+      const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+      if (jwt) {
+        const p = JSON.parse(atob(jwt.split('.')[1]));
+        if (p && p.exp * 1000 > Date.now() &&
+            (p.role === 'director' || p.role === 'admin')) {
+          // Redirect JWT directors to their proper page rather than hub
+          window.location.replace('/admin/index.html');
+          return;
+        }
+      }
+    } catch(_) {}
     window.location.replace('login.html');
     return;
   }
