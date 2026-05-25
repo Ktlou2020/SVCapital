@@ -285,4 +285,83 @@ router.post('/staff-lookup', async (req, res) => {
   }
 });
 
+/* ─── POST /api/auth/staff-token ────────────────────────────────────────────
+   Called immediately after a successful PIN login on team/login.html.
+   Accepts the employee's email + PIN (last 4 of id_number) that have
+   already been validated client-side, verifies them server-side, then
+   issues a real JWT and sets the svc_token httpOnly cookie.
+   This gives PIN-login employees a proper Bearer token so they can call
+   authenticated API routes (fund, admin, ifa data endpoints).
+   Rate-limited by the global API limiter.
+   ──────────────────────────────────────────────────────────────────────── */
+router.post('/staff-token', async (req, res) => {
+  try {
+    const { email, pin } = req.body;
+    if (!email || !pin) return res.status(400).json({ error: 'Email and PIN are required.' });
+    if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be 4 digits.' });
+
+    // Re-fetch employee to verify PIN server-side (last 4 of id_number)
+    const { rows } = await pool.query(
+      `SELECT id, first_name, last_name, email, role, level, department,
+              status, avatar_initials, avatar_color, xp_points, id_number
+       FROM employees
+       WHERE email = $1 AND status = 'active'
+       LIMIT 1`,
+      [email.toLowerCase().trim()]
+    );
+    const emp = rows[0];
+    if (!emp) return res.status(404).json({ error: 'Employee not found.' });
+
+    // Verify PIN against last 4 digits of id_number
+    const idDigits = (emp.id_number || '').replace(/\D/g, '');
+    const expectedPin = idDigits.slice(-4);
+    if (!expectedPin || pin !== expectedPin) {
+      return res.status(401).json({ error: 'Invalid PIN.' });
+    }
+
+    // Map employee role/level → JWT role understood by requireRole middleware
+    function empToJwtRole(role, level) {
+      if (level === 'executive') return 'director';
+      if (!role) return 'staff';
+      const r = role.toLowerCase();
+      if (r.includes('ceo') || r.includes('director') || r.includes('coo') || r.includes('cto')) return 'director';
+      if (r.includes('admin') || r.includes('compliance') || r.includes('finance') ||
+          r.includes('operations') || r.includes('tech lead')) return 'admin';
+      if (r.includes('ifa') || r.includes('adviser') || r.includes('advisor')) return 'ifa';
+      return 'staff';
+    }
+    const jwtRole = empToJwtRole(emp.role, emp.level);
+
+    // Look up the linked users row (if any) — purely for compatibility fields
+    const { rows: userRows } = await pool.query(
+      `SELECT id FROM users WHERE email = $1 LIMIT 1`,
+      [emp.email]
+    );
+
+    const tokenPayload = {
+      id:        userRows[0]?.id || emp.id,
+      email:     emp.email,
+      role:      jwtRole,
+      firstName: emp.first_name,
+      lastName:  emp.last_name,
+      empId:     emp.id,          // extra field — preserved through to client
+    };
+
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+
+    // Set httpOnly cookie (same flags as main login)
+    res.cookie('svc_token', token, {
+      httpOnly: true,
+      secure:   IS_PROD,
+      sameSite: IS_PROD ? 'none' : 'lax',
+      maxAge:   8 * 60 * 60 * 1000,
+    });
+
+    res.json({ token, role: jwtRole, email: emp.email });
+  } catch (err) {
+    console.error('Staff-token error:', err.message);
+    res.status(500).json({ error: 'Could not issue staff token.' });
+  }
+});
+
 module.exports = router;

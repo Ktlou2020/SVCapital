@@ -640,7 +640,7 @@ function showStep2(emp) {
 }
 
 /* ─── STEP 2 — PIN validation ────────────────────────── */
-function attemptLogin() {
+async function attemptLogin() {
   const pin = ['p1','p2','p3','p4'].map(id => document.getElementById(id).value).join('');
   if (pin.length < 4) return;
 
@@ -681,7 +681,32 @@ function attemptLogin() {
   document.getElementById('stepLine2').classList.add('done');
   document.getElementById('stepDot3').classList.add('done');
 
-  const session = StaffAuth.setSession(_foundEmployee);
+  // Write staffSession (for team/* pages)
+  StaffAuth.setSession(_foundEmployee);
+
+  // Exchange PIN for a real JWT so fund/admin/ifa API calls work without
+  // re-authentication. Fire-and-forget — redirect happens regardless.
+  try {
+    const tr = await fetch('/api/auth/staff-token', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email: _foundEmployee.email, pin }),
+    });
+    if (tr.ok) {
+      const td = await tr.json();
+      // Store JWT in localStorage so api.js Auth helpers and fund.js fetch calls
+      // can attach it as Bearer token. Also stored in httpOnly cookie by server.
+      localStorage.setItem('svc_token', td.token);
+      localStorage.setItem('svc_user', JSON.stringify({
+        id:        _foundEmployee.id,
+        email:     _foundEmployee.email,
+        role:      td.role,
+        firstName: _foundEmployee.first_name,
+        lastName:  _foundEmployee.last_name,
+        empId:     _foundEmployee.id,
+      }));
+    }
+  } catch (_) { /* non-blocking — staffSession still works for team pages */ }
 
   // Redirect: check if there was a pending destination
   const redirect = sessionStorage.getItem('staffLoginRedirect');

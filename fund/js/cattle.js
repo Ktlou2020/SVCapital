@@ -9,8 +9,18 @@
 const BASE = '../';
 
 /* ── API HELPERS ──────────────────────────────────────────── */
+function _getAuthToken() {
+  return localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token') || null;
+}
 async function apiFetch(path, opts = {}) {
+  const token = _getAuthToken();
+  opts.headers = Object.assign(
+    token ? { Authorization: `Bearer ${token}` } : {},
+    opts.headers || {}
+  );
+  opts.credentials = 'include';
   const r = await fetch(BASE + path, opts);
+  if (r.status === 401) { window.location.replace('/team/login.html'); throw new Error('Session expired'); }
   if (!r.ok) { const t = await r.text().catch(() => ''); throw new Error(`API ${r.status}: ${t}`); }
   return r;
 }

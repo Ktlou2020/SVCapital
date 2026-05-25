@@ -196,8 +196,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 /* ═══════════════════════════════════════════════
    API HELPERS
 ═══════════════════════════════════════════════ */
+/* Return the best available auth token — svc_token (JWT) first,
+   then fall back to staffSession so PIN-login employees work too. */
+function _getAuthToken() {
+  const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+  if (jwt) return jwt;
+  // staffSession doesn't carry a real JWT, but the svc_user SSO bridge has
+  // the email so we can't issue a token client-side. Return null — the server
+  // will see the cookie (httpOnly) set at JWT login time, which also works.
+  return null;
+}
+
 async function apiFetch(path, opts={}) {
+  const token = _getAuthToken();
+  // Merge auth header with any caller-supplied headers
+  opts.headers = Object.assign(
+    token ? { Authorization: `Bearer ${token}` } : {},
+    opts.headers || {}
+  );
+  opts.credentials = 'include'; // also send httpOnly cookie as fallback
   const r = await fetch(BASE + path, opts);
+  if (r.status === 401) {
+    // Session expired — send back to login
+    window.location.replace('/team/login.html');
+    throw new Error('Session expired');
+  }
   if (!r.ok) throw new Error(`${opts.method||'GET'} ${path} → ${r.status}`);
   if (r.status === 204) return null;
   return r.json();
