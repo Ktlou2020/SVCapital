@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SV Capital — Admin Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="../css/admin.css" />
+  <link rel="stylesheet" href="../css/ci-theme.css" />
+  <link rel="stylesheet" href="../css/sv-intelligence.css" />
+  <!-- Staff Auth guard -->
+  <script src="../js/staff-auth.js?v=3"></script>
+  <script>document.addEventListener('DOMContentLoaded',()=>{ StaffAuth.guard('admin'); StaffAuth.injectWidget(); });</script>
+</head>
+<body>
+
+<div class="app-layout">
+
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar__brand">
+      <a href="../index.html" class="sv-portal-logo" title="SV Capital — Home">
+        <img src="../assets/logo-inline.svg" alt="SV Capital" width="38" height="38" style="display:block;border-radius:8px;">
+        <div class="brand-text">
+          <span class="brand-name">SV Capital</span>
+          <span class="brand-role">Admin Console</span>
+        </div>
+      </a>
+    </div>
+
+    <nav class="sidebar__nav">
+      <div class="nav-section-label">Overview</div>
+      <button class="nav-item active" data-view="dashboard" onclick="navigate('dashboard', this)">
+        <i class="fa-solid fa-grid-2"></i> Dashboard
+      </button>
+
+      <div class="nav-section-label">Investors</div>
+      <button class="nav-item" data-view="investors" onclick="navigate('investors', this)">
+        <i class="fa-solid fa-users"></i> Investor Management
+      </button>
+      <button class="nav-item" data-view="ifa" onclick="navigate('ifa', this)">
+        <i class="fa-solid fa-handshake"></i> IFA Management
+        <span class="nav-badge" id="ifaBadge" style="display:none">0</span>
+      </button>
+      <button class="nav-item" data-view="kyc" onclick="navigate('kyc', this)">
+        <i class="fa-solid fa-id-card"></i> KYC / FICA
+        <span class="nav-badge" id="kycBadge">0</span>
+      </button>
+
+      <div class="nav-section-label">Investments</div>
+      <button class="nav-item" data-view="pools" onclick="navigate('pools', this)">
+        <i class="fa-solid fa-layer-group"></i> Investment Pools
+      </button>
+      <button class="nav-item" data-view="investments" onclick="navigate('investments', this)">
+        <i class="fa-solid fa-chart-line"></i> Investments
+      </button>
+      <button class="nav-item" data-view="maturity" onclick="navigate('maturity', this)">
+        <i class="fa-solid fa-hourglass-end"></i> Maturity Instructions
+      </button>
+
+      <div class="nav-section-label">Finance</div>
+      <button class="nav-item" data-view="transactions" onclick="navigate('transactions', this)">
+        <i class="fa-solid fa-arrows-rotate"></i> Transactions
+      </button>
+
+      <div class="nav-section-label">Operations</div>
+      <button class="nav-item" data-view="support" onclick="navigate('support', this)">
+        <i class="fa-solid fa-headset"></i> Support Tickets
+        <span class="nav-badge" id="ticketBadge">0</span>
+      </button>
+      <button class="nav-item" data-view="analytics" onclick="navigate('analytics', this)">
+        <i class="fa-solid fa-chart-pie"></i> Analytics
+      </button>
+      <button class="nav-item" data-view="settings" onclick="navigate('settings', this)">
+        <i class="fa-solid fa-gear"></i> Settings
+      </button>
+    </nav>
+
+    <div class="sidebar__footer">
+      <div class="sidebar-user">
+        <div class="sidebar-user__avatar" id="adminSidebarAvatar">??</div>
+        <div class="sidebar-user__info">
+          <span class="user-name" id="adminSidebarName">Loading…</span>
+          <span class="user-role" id="adminSidebarRole"></span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══ MAIN ═══ -->
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar__left">
+        <div>
+          <div class="topbar__title" id="topbarTitle">Dashboard</div>
+          <div class="topbar__breadcrumb">SV Capital Admin Console</div>
+        </div>
+      </div>
+      <div class="topbar__search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" placeholder="Search investors, pools, transactions..." id="globalSearch" />
+      </div>
+      <div class="topbar__actions">
+        <div style="position:relative">
+          <button class="topbar-btn" title="Notifications" onclick="toggleAdminNotif()" id="adminNotifBtn">
+            <i class="fa-solid fa-bell"></i>
+            <span class="notif-dot" id="adminNotifDot"></span>
+          </button>
+          <div id="adminNotifPanel" style="display:none;position:absolute;top:calc(100% + 8px);right:0;width:320px;background:#fff;border:1px solid rgba(0,0,0,0.09);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.13);z-index:999;overflow:hidden">
+            <div style="padding:14px 18px 10px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:0.88rem;font-weight:800;color:#1a1a1a">Admin Alerts</span>
+              <button onclick="adminMarkAllRead()" style="font-size:0.7rem;color:#FF8215;font-weight:700;background:none;border:none;cursor:pointer">Mark all read</button>
+            </div>
+            <div style="max-height:340px;overflow-y:auto">
+              <div class="notif-item unread">
+                <div class="notif-icon" style="background:rgba(239,68,68,0.1)"><i class="fa-solid fa-user-clock" style="color:#ef4444"></i></div>
+                <div class="notif-body"><div class="notif-title">KYC documents pending</div><div class="notif-sub">3 investors are awaiting FICA verification review.</div><div class="notif-time">1 hour ago</div></div>
+              </div>
+              <div class="notif-item unread">
+                <div class="notif-icon" style="background:rgba(255,130,21,0.1)"><i class="fa-solid fa-wallet" style="color:#FF8215"></i></div>
+                <div class="notif-body"><div class="notif-title">New wallet top-up</div><div class="notif-sub">Thabo Khumalo deposited R5,000 via Paystack.</div><div class="notif-time">2 hours ago</div></div>
+              </div>
+              <div class="notif-item">
+                <div class="notif-icon" style="background:rgba(34,197,94,0.1)"><i class="fa-solid fa-coins" style="color:#22c55e"></i></div>
+                <div class="notif-body"><div class="notif-title">Pool funded</div><div class="notif-sub">Cattle Pool Q2 has reached its funding target.</div><div class="notif-time">Yesterday</div></div>
+              </div>
+              <div class="notif-item">
+                <div class="notif-icon" style="background:rgba(47,140,155,0.1)"><i class="fa-solid fa-headset" style="color:#2F8C9B"></i></div>
+                <div class="notif-body"><div class="notif-title">New support ticket</div><div class="notif-sub">Ticket #TKT-007 opened by Lerato Dlamini — Withdrawal query.</div><div class="notif-time">2 days ago</div></div>
+              </div>
+            </div>
+            <div style="padding:10px 18px;border-top:1px solid rgba(0,0,0,0.07);text-align:center">
+              <button onclick="navigate('support', document.querySelector('[data-view=support]'));toggleAdminNotif()" style="font-size:0.78rem;color:#FF8215;font-weight:600;background:none;border:none;cursor:pointer">View all in Support &rarr;</button>
+            </div>
+          </div>
+        </div>
+        <button class="topbar-btn" title="Back to Website" onclick="window.open('../index.html','_blank')">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </button>
+        <a href="../ifa/index.html" class="btn btn--secondary btn--sm" title="IFA Partner Portal">
+          <i class="fa-solid fa-handshake"></i> IFA Portal
+        </a>
+        <a href="../fund/index.html" class="btn btn--secondary btn--sm" title="Fund Management Console">
+          <i class="fa-solid fa-chart-bar"></i> Fund Ops
+        </a>
+        <a href="../team/index.html" class="btn btn--secondary btn--sm" title="Team Dashboard">
+          <i class="fa-solid fa-people-group"></i> Team
+        </a>
+        <a href="../portal/index.html" class="btn btn--secondary btn--sm">
+          <i class="fa-solid fa-user"></i> Portal
+        </a>
+        <a href="#" onclick="if(typeof Auth!=='undefined'){Auth.logout('/team/login.html');}else{window.location.href='../team/login.html';}" class="btn btn--secondary btn--sm" title="Sign Out">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i> Sign Out
+        </a>
+      </div>
+    </header>
+
+    <main class="page-content">
+
+      <!-- ══════════════════════════════════
+           VIEW: DASHBOARD
+      ══════════════════════════════════ -->
+      <div class="view active" id="view-dashboard">
+        <div class="stats-row" id="dashStats">
+          <div class="stat-card stat-card--gold">
+            <div class="stat-card__header">
+              <div class="stat-card__icon"><i class="fa-solid fa-users"></i></div>
+              <div class="stat-card__trend up"><i class="fa-solid fa-arrow-trend-up"></i> +12%</div>
+            </div>
+            <div class="stat-card__value" id="ds-investors">—</div>
+            <div class="stat-card__label">Total Investors</div>
+          </div>
+          <div class="stat-card stat-card--green">
+            <div class="stat-card__header">
+              <div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div>
+              <div class="stat-card__trend up"><i class="fa-solid fa-arrow-trend-up"></i> +8%</div>
+            </div>
+            <div class="stat-card__value" id="ds-invested">—</div>
+            <div class="stat-card__label">Total Invested (AUM)</div>
+          </div>
+          <div class="stat-card stat-card--blue">
+            <div class="stat-card__header">
+              <div class="stat-card__icon"><i class="fa-solid fa-money-bill-transfer"></i></div>
+              <div class="stat-card__trend up"><i class="fa-solid fa-arrow-trend-up"></i> +15%</div>
+            </div>
+            <div class="stat-card__value" id="ds-returns">—</div>
+            <div class="stat-card__label">Total Returns Paid</div>
+          </div>
+          <div class="stat-card stat-card--purple">
+            <div class="stat-card__header">
+              <div class="stat-card__icon"><i class="fa-solid fa-layer-group"></i></div>
+              <div class="stat-card__trend neutral">Live</div>
+            </div>
+            <div class="stat-card__value" id="ds-pools">—</div>
+            <div class="stat-card__label">Active Pools</div>
+          </div>
+        </div>
+
+        <div class="grid-layout grid-layout--sidebar">
+          <!-- Left column -->
+          <div>
+            <!-- AUM Chart -->
+            <div class="panel mb-20">
+              <div class="panel__header">
+                <span class="panel__title">Assets Under Management — Monthly</span>
+                <div class="tab-bar">
+                  <button class="tab-btn active">6M</button>
+                  <button class="tab-btn">1Y</button>
+                  <button class="tab-btn">All</button>
+                </div>
+              </div>
+              <div class="panel__body">
+                <div class="chart-wrap chart-wrap--lg">
+                  <canvas id="aumChart"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recent Investments Table -->
+            <div class="table-card">
+              <div class="table-card__header">
+                <div>
+                  <div class="table-card__title">Recent Investments</div>
+                  <div class="table-card__sub">Latest investor activity across all pools</div>
+                </div>
+                <button class="btn btn--secondary btn--sm" onclick="navigate('investments', document.querySelector('[data-view=investments]'))">
+                  View All <i class="fa-solid fa-arrow-right"></i>
+                </button>
+              </div>
+              <div style="overflow-x:auto">
+                <table class="data-table">
+                  <thead><tr>
+                    <th>Investor</th><th>Product</th><th>Amount</th><th>Return Rate</th><th>Status</th><th>Date</th>
+                  </tr></thead>
+                  <tbody id="recentInvestmentsBody">
+                    <tr><td colspan="6" class="text-center text-muted" style="padding:24px">Loading...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right column -->
+          <div>
+            <!-- Pool Health -->
+            <div class="panel mb-20">
+              <div class="panel__header">
+                <span class="panel__title">Open Pools Status</span>
+                <button class="btn btn--secondary btn--sm" onclick="navigate('pools', document.querySelector('[data-view=pools]'))">View All</button>
+              </div>
+              <div class="panel__body" id="openPoolsWidget">Loading...</div>
+            </div>
+
+            <!-- Product Mix Chart -->
+            <div class="panel mb-20">
+              <div class="panel__header">
+                <span class="panel__title">AUM by Product</span>
+              </div>
+              <div class="panel__body">
+                <div class="chart-wrap chart-wrap--md">
+                  <canvas id="productMixChart"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pending Actions -->
+            <div class="panel">
+              <div class="panel__header">
+                <span class="panel__title">Pending Actions</span>
+              </div>
+              <div class="panel__body" id="pendingActionsWidget">Loading...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: INVESTORS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-investors">
+        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)" id="investorStats">
+          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-check"></i></div></div><div class="stat-card__value" id="is-active">—</div><div class="stat-card__label">Active Investors</div></div>
+          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-clock"></i></div></div><div class="stat-card__value" id="is-pending">—</div><div class="stat-card__label">Pending FICA</div></div>
+          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-wallet"></i></div></div><div class="stat-card__value" id="is-wallet">—</div><div class="stat-card__label">Total Wallet Balances</div></div>
+          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="is-aum">—</div><div class="stat-card__label">Investor AUM</div></div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">All Investors</div>
+              <div class="table-card__sub" id="investorCount">Loading...</div>
+            </div>
+            <div class="table-card__controls">
+              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search name, email, ID..." id="investorSearch" /></div>
+              <select class="tbl-filter" id="investorStatusFilter">
+                <option value="">All Status</option>
+                <option value="active">Active</option>
+                <option value="pending_fica">Pending FICA</option>
+                <option value="fica_submitted">FICA Submitted</option>
+                <option value="suspended">Suspended</option>
+              </select>
+              <button class="btn btn--primary btn--sm" onclick="openAddInvestorModal()">
+                <i class="fa-solid fa-plus"></i> Add Investor
+              </button>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>Investor</th><th>Contact</th><th>FICA</th><th>Wallet</th><th>Invested</th><th>Returns</th><th>Joined</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="investorsBody">
+                <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-card__footer">
+            <span id="investorsFooterText">—</span>
+            <div class="pagination" id="investorsPagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: IFA MANAGEMENT
+      ══════════════════════════════════ -->
+      <div class="view" id="view-ifa">
+        <!-- Stats Row -->
+        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)" id="ifaStats">
+          <div class="stat-card stat-card--gold">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-handshake"></i></div></div>
+            <div class="stat-card__value" id="ifa-total">—</div>
+            <div class="stat-card__label">Total IFAs</div>
+          </div>
+          <div class="stat-card stat-card--green">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-circle-check"></i></div></div>
+            <div class="stat-card__value" id="ifa-active">—</div>
+            <div class="stat-card__label">Active IFAs</div>
+          </div>
+          <div class="stat-card stat-card--blue">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-users-between-lines"></i></div></div>
+            <div class="stat-card__value" id="ifa-clients">—</div>
+            <div class="stat-card__label">Total IFA Clients</div>
+          </div>
+          <div class="stat-card stat-card--purple">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div>
+            <div class="stat-card__value" id="ifa-aum">—</div>
+            <div class="stat-card__label">IFA-Managed AUM</div>
+          </div>
+        </div>
+
+        <!-- IFA Table -->
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Independent Financial Advisers</div>
+              <div class="table-card__sub" id="ifaCount">Loading IFAs...</div>
+            </div>
+            <div class="table-card__controls">
+              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search name, company, license..." id="ifaSearch" /></div>
+              <select class="tbl-filter" id="ifaStatusFilter">
+                <option value="">All Status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="suspended">Suspended</option>
+              </select>
+              <button class="btn btn--primary btn--sm" onclick="openAddIFAModal()">
+                <i class="fa-solid fa-plus"></i> Add IFA
+              </button>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>IFA</th><th>Company</th><th>License</th><th>Clients</th><th>AUM Managed</th><th>Commission</th><th>Status</th><th>Joined</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="ifaBody">
+                <tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-card__footer">
+            <span id="ifaFooterText">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: KYC / FICA
+      ══════════════════════════════════ -->
+      <div class="view" id="view-kyc">
+        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hourglass-half"></i></div></div><div class="stat-card__value" id="kyc-pending">—</div><div class="stat-card__label">Pending Review</div></div>
+          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-magnifying-glass"></i></div></div><div class="stat-card__value" id="kyc-review">—</div><div class="stat-card__label">Under Review</div></div>
+          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-circle"></i></div></div><div class="stat-card__value" id="kyc-approved">—</div><div class="stat-card__label">Approved</div></div>
+          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-circle-xmark"></i></div></div><div class="stat-card__value" id="kyc-rejected">—</div><div class="stat-card__label">Rejected</div></div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-card__header">
+            <div><div class="table-card__title">KYC Documents</div><div class="table-card__sub">FICA verification queue</div></div>
+            <div class="table-card__controls" style="gap:8px">
+              <select class="tbl-filter" id="kycStatusFilter">
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="under_review">Under Review</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+              <button class="btn btn--primary btn--sm" onclick="openKycUploadModal('','')">
+                <i class="fa-solid fa-upload"></i> Upload Document
+              </button>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>Investor</th><th>Document Type</th><th>File</th><th>Status</th><th>Submitted</th><th>Document</th><th>Actions</th><th></th>
+              </tr></thead>
+              <tbody id="kycBody">
+                <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: POOLS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-pools">
+        <div class="flex-between mb-16" style="flex-wrap:wrap;gap:10px">
+          <div>
+            <h2 style="font-size:1rem;font-weight:700;color:var(--white)">Investment Pools</h2>
+            <p style="font-size:0.75rem;color:var(--text-muted)">Manage all active and historical investment pools</p>
+          </div>
+          <button class="btn btn--primary" onclick="openAddPoolModal()"><i class="fa-solid fa-plus"></i> New Pool</button>
+        </div>
+
+        <div class="tab-bar">
+          <button class="tab-btn active" onclick="filterPools('all', this)">All Pools</button>
+          <button class="tab-btn" onclick="filterPools('open', this)">Open</button>
+          <button class="tab-btn" onclick="filterPools('active', this)">Active</button>
+          <button class="tab-btn" onclick="filterPools('matured', this)">Matured</button>
+          <button class="tab-btn" onclick="filterPools('paid_out', this)">Paid Out</button>
+        </div>
+
+        <div class="grid-3" id="poolsGrid">
+          <div class="text-center text-muted" style="grid-column:1/-1;padding:32px">Loading...</div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: INVESTMENTS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-investments">
+        <div class="stats-row" style="grid-template-columns:repeat(5,1fr)">
+          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="inv-total">—</div><div class="stat-card__label">Total Investments</div></div>
+          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-play"></i></div></div><div class="stat-card__value" id="inv-active">—</div><div class="stat-card__label">Active</div></div>
+          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-double"></i></div></div><div class="stat-card__value" id="inv-paidout">—</div><div class="stat-card__label">Paid Out</div></div>
+          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hourglass-end"></i></div></div><div class="stat-card__value" id="inv-matured">—</div><div class="stat-card__label">Matured</div></div>
+          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div><div class="stat-card__value" id="inv-capital">—</div><div class="stat-card__label">Capital Deployed</div></div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-card__header">
+            <div><div class="table-card__title">All Investments</div></div>
+            <div class="table-card__controls">
+              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search investor, pool..." id="investmentSearch" /></div>
+              <select class="tbl-filter" id="investmentProductFilter">
+                <option value="">All Products</option>
+                <option value="cattle">Cattle</option>
+                <option value="solar_7yr">Solar 7yr</option>
+                <option value="solar_6yr">Solar 6yr</option>
+                <option value="solar_5yr">Solar 5yr</option>
+                <option value="short_term">Short-Term</option>
+                <option value="delivery_bike">Delivery Bike</option>
+              </select>
+              <select class="tbl-filter" id="investmentStatusFilter">
+                <option value="">All Status</option>
+                <option value="active">Active</option>
+                <option value="matured">Matured</option>
+                <option value="paid_out">Paid Out</option>
+              </select>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>Investor</th><th>Pool</th><th>Product</th><th>Amount</th><th>Exp. Return</th><th>Status</th><th>Maturity</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="investmentsBody">
+                <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-card__footer">
+            <span id="investmentsFooter">—</span>
+            <div class="pagination" id="investmentsPagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: MATURITY INSTRUCTIONS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-maturity">
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Maturity Instructions</div>
+              <div class="table-card__sub">Investor payout and reinvestment instructions</div>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>Investor</th><th>Pool</th><th>Instruction</th><th>Payout Amount</th><th>Status</th><th>Submitted</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="maturityBody">
+                <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: TRANSACTIONS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-transactions">
+        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-down"></i></div></div><div class="stat-card__value" id="txn-deposits">—</div><div class="stat-card__label">Total Deposits</div></div>
+          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-up"></i></div></div><div class="stat-card__value" id="txn-invested">—</div><div class="stat-card__label">Capital Invested</div></div>
+          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-star"></i></div></div><div class="stat-card__value" id="txn-returns">—</div><div class="stat-card__label">Returns Paid</div></div>
+          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-receipt"></i></div></div><div class="stat-card__value" id="txn-count">—</div><div class="stat-card__label">Total Transactions</div></div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-card__header">
+            <div><div class="table-card__title">Transaction Ledger</div></div>
+            <div class="table-card__controls">
+              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search investor, reference..." id="txnSearch" /></div>
+              <select class="tbl-filter" id="txnTypeFilter">
+                <option value="">All Types</option>
+                <option value="deposit">Deposit</option>
+                <option value="investment">Investment</option>
+                <option value="return">Return</option>
+                <option value="payout">Payout</option>
+                <option value="fee">Fee</option>
+                <option value="referral_bonus">Referral Bonus</option>
+              </select>
+              <button class="btn btn--primary btn--sm" onclick="openAddTxnModal()">
+                <i class="fa-solid fa-plus"></i> Record Transaction
+              </button>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>Investor</th><th>Type</th><th>Amount</th><th>Status</th><th>Reference</th><th>Description</th><th>Date</th><th>Action</th>
+              </tr></thead>
+              <tbody id="txnBody">
+                <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-card__footer">
+            <span id="txnFooter">—</span>
+            <div class="pagination" id="txnPagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: SUPPORT TICKETS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-support">
+        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat-card stat-card--red" style="--red:#ef4444"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-ticket"></i></div></div><div class="stat-card__value" id="tkt-open">—</div><div class="stat-card__label">Open Tickets</div></div>
+          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-spinner"></i></div></div><div class="stat-card__value" id="tkt-inprogress">—</div><div class="stat-card__label">In Progress</div></div>
+          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check"></i></div></div><div class="stat-card__value" id="tkt-resolved">—</div><div class="stat-card__label">Resolved</div></div>
+          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-exclamation-triangle"></i></div></div><div class="stat-card__value" id="tkt-urgent">—</div><div class="stat-card__label">High/Urgent</div></div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-card__header">
+            <div><div class="table-card__title">Support Tickets</div></div>
+            <div class="table-card__controls">
+              <select class="tbl-filter" id="ticketStatusFilter">
+                <option value="">All Status</option>
+                <option value="open">Open</option>
+                <option value="in_progress">In Progress</option>
+                <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+              </select>
+              <select class="tbl-filter" id="ticketPriorityFilter">
+                <option value="">All Priority</option>
+                <option value="urgent">Urgent</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>Investor</th><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th><th>Assigned</th><th>Created</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="ticketsBody">
+                <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: ANALYTICS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-analytics">
+        <div class="stats-row">
+          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div><div class="stat-card__value">14.83%</div><div class="stat-card__label">Avg Cattle Return</div></div>
+          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-bolt"></i></div></div><div class="stat-card__value">R500</div><div class="stat-card__label">Lowest Min. Investment</div></div>
+          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-plus"></i></div></div><div class="stat-card__value" id="an-monthlynew">—</div><div class="stat-card__label">New Investors (30d)</div></div>
+          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-handshake"></i></div></div><div class="stat-card__value" id="an-referrals">—</div><div class="stat-card__label">Referred Investors</div></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title">Investment Volume by Product</span></div>
+            <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="productVolChart"></canvas></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title">Investor Provinces Distribution</span></div>
+            <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="provinceChart"></canvas></div></div>
+          </div>
+        </div>
+
+        <div class="grid-2 mt-16">
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title">Risk Profile Breakdown</span></div>
+            <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="riskChart"></canvas></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title">Transaction Flow (Last 6 Months)</span></div>
+            <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="txnFlowChart"></canvas></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: SETTINGS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-settings">
+        <div class="grid-layout grid-layout--sidebar">
+          <div>
+            <div class="panel">
+              <div class="panel__header">
+                <span class="panel__title">Platform Settings</span>
+                <button class="btn btn--primary btn--sm" onclick="saveSettings()"><i class="fa-solid fa-save"></i> Save Changes</button>
+              </div>
+              <div class="panel__body" id="settingsBody">Loading...</div>
+            </div>
+          </div>
+          <div>
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title">Compliance Info</span></div>
+              <div class="panel__body">
+                <div class="info-list">
+                  <div class="info-row"><span class="info-row__label">FSCA License</span><span class="info-row__value text-gold">FSP 52449</span></div>
+                  <div class="info-row"><span class="info-row__label">Fund Manager</span><span class="info-row__value">SmartVest Financial Services</span></div>
+                  <div class="info-row"><span class="info-row__label">License Type</span><span class="info-row__value">FSP — Short & Long-Term</span></div>
+                  <div class="info-row"><span class="info-row__label">Regulator</span><span class="info-row__value">FSCA (South Africa)</span></div>
+                  <div class="info-row"><span class="info-row__label">AML Status</span><span class="info-row__value text-green">Compliant</span></div>
+                  <div class="info-row"><span class="info-row__label">FICA Status</span><span class="info-row__value text-green">Compliant</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel__header"><span class="panel__title">Quick Links</span></div>
+              <div class="panel__body" style="display:flex;flex-direction:column;gap:8px">
+                <a href="../index.html" target="_blank" class="btn btn--secondary btn--full"><i class="fa-solid fa-globe"></i> View Public Website</a>
+                <a href="../portal/index.html" target="_blank" class="btn btn--secondary btn--full"><i class="fa-solid fa-user"></i> Open Investor Portal</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- Mobile sidebar toggle -->
+<button class="mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">
+  <i class="fa-solid fa-bars"></i>
+</button>
+
+<!-- ════ MODALS ════ -->
+
+<!-- Add Investor Modal -->
+<div class="modal-overlay" id="addInvestorModal" onclick="if(event.target===this)Modal.close('addInvestorModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title">Add New Investor</span>
+      <button class="modal__close" onclick="Modal.close('addInvestorModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">First Name *</label><input type="text" class="form-input" id="newInvFirstName" placeholder="Nomsa" /></div>
+        <div class="form-group"><label class="form-label">Last Name *</label><input type="text" class="form-input" id="newInvLastName" placeholder="Dlamini" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Email *</label><input type="email" class="form-input" id="newInvEmail" placeholder="nomsa@gmail.com" /></div>
+        <div class="form-group"><label class="form-label">Phone</label><input type="text" class="form-input" id="newInvPhone" placeholder="071 234 5678" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">SA ID Number</label><input type="text" class="form-input" id="newInvIdNum" placeholder="9203156789012" /></div>
+        <div class="form-group"><label class="form-label">Risk Profile</label>
+          <select class="form-select" id="newInvRisk">
+            <option value="conservative">Conservative</option>
+            <option value="moderate" selected>Moderate</option>
+            <option value="aggressive">Aggressive</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">City</label><input type="text" class="form-input" id="newInvCity" placeholder="Johannesburg" /></div>
+        <div class="form-group"><label class="form-label">Province</label>
+          <select class="form-select" id="newInvProvince">
+            <option>Gauteng</option><option>Western Cape</option><option>KwaZulu-Natal</option>
+            <option>Eastern Cape</option><option>Limpopo</option><option>Mpumalanga</option>
+            <option>North West</option><option>Free State</option><option>Northern Cape</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Admin Notes</label><textarea class="form-textarea" id="newInvNotes" placeholder="Any relevant notes..."></textarea></div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('addInvestorModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveNewInvestor()"><i class="fa-solid fa-plus"></i> Create Investor</button>
+    </div>
+  </div>
+</div>
+
+<!-- Investor Detail Modal -->
+<div class="modal-overlay" id="investorDetailModal" onclick="if(event.target===this)Modal.close('investorDetailModal')">
+  <div class="modal modal--lg">
+    <div class="modal__header">
+      <span class="modal__title" id="invDetailTitle">Investor Profile</span>
+      <button class="modal__close" onclick="Modal.close('investorDetailModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="invDetailBody">Loading...</div>
+  </div>
+</div>
+
+<!-- Add Pool Modal -->
+<div class="modal-overlay" id="addPoolModal" onclick="if(event.target===this)Modal.close('addPoolModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title">Create Investment Pool</span>
+      <button class="modal__close" onclick="Modal.close('addPoolModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Pool Name *</label><input type="text" class="form-input" id="newPoolName" placeholder="Cattle Pool #16" /></div>
+        <div class="form-group"><label class="form-label">Product Type *</label>
+          <select class="form-select" id="newPoolType">
+            <option value="cattle">Cattle</option>
+            <option value="solar_7yr">Solar 7yr</option>
+            <option value="solar_6yr">Solar 6yr</option>
+            <option value="solar_5yr">Solar 5yr</option>
+            <option value="short_term">Short-Term</option>
+            <option value="delivery_bike">Delivery Bike</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row form-row--3">
+        <div class="form-group"><label class="form-label">Target Amount (R) *</label><input type="number" class="form-input" id="newPoolTarget" placeholder="500000" /></div>
+        <div class="form-group"><label class="form-label">Min. Investment (R)</label><input type="number" class="form-input" id="newPoolMin" placeholder="500" /></div>
+        <div class="form-group"><label class="form-label">Term (months)</label><input type="number" class="form-input" id="newPoolTerm" placeholder="12" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Benchmark Rate (e.g. 0.1483)</label><input type="number" class="form-input" id="newPoolRate" placeholder="0.1483" step="0.0001" /></div>
+        <div class="form-group"><label class="form-label">Partner Name</label><input type="text" class="form-input" id="newPoolPartner" placeholder="Beefcor" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Open Date</label><input type="date" class="form-input" id="newPoolOpenDate" /></div>
+        <div class="form-group"><label class="form-label">Close Date</label><input type="date" class="form-input" id="newPoolCloseDate" /></div>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('addPoolModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveNewPool()"><i class="fa-solid fa-plus"></i> Create Pool</button>
+    </div>
+  </div>
+</div>
+
+<!-- Transaction Modal -->
+<div class="modal-overlay" id="addTxnModal" onclick="if(event.target===this)Modal.close('addTxnModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title">Record Transaction</span>
+      <button class="modal__close" onclick="Modal.close('addTxnModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="form-group"><label class="form-label">Investor Name</label><input type="text" class="form-input" id="txnInvestorName" placeholder="Investor name" /></div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Type</label>
+          <select class="form-select" id="txnType">
+            <option value="deposit">Deposit</option>
+            <option value="withdrawal">Withdrawal</option>
+            <option value="investment">Investment</option>
+            <option value="return">Return</option>
+            <option value="payout">Payout</option>
+            <option value="fee">Fee</option>
+            <option value="referral_bonus">Referral Bonus</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Amount (R)</label><input type="number" class="form-input" id="txnAmount" placeholder="10000" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Reference</label><input type="text" class="form-input" id="txnRef" placeholder="EFT-2025-001234" /></div>
+        <div class="form-group"><label class="form-label">Status</label>
+          <select class="form-select" id="txnStatus">
+            <option value="completed">Completed</option>
+            <option value="pending">Pending</option>
+            <option value="processing">Processing</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Description</label><input type="text" class="form-input" id="txnDesc" placeholder="Wallet top-up via EFT" /></div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('addTxnModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveNewTxn()"><i class="fa-solid fa-save"></i> Record</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ticket Detail Modal -->
+<div class="modal-overlay" id="ticketModal" onclick="if(event.target===this)Modal.close('ticketModal')">
+  <div class="modal modal--lg">
+    <div class="modal__header">
+      <span class="modal__title" id="ticketModalTitle">Support Ticket</span>
+      <button class="modal__close" onclick="Modal.close('ticketModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="ticketModalBody">Loading...</div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('ticketModal')">Close</button>
+      <button class="btn btn--primary" id="ticketSaveBtn">Save Response</button>
+    </div>
+  </div>
+</div>
+
+<!-- KYC Upload Modal -->
+<div class="modal-overlay" id="kycUploadModal" onclick="if(event.target===this)Modal.close('kycUploadModal')">
+  <div class="modal modal--lg">
+    <div class="modal__header">
+      <span class="modal__title"><i class="fa-solid fa-upload" style="color:var(--orange);margin-right:8px"></i>Upload KYC / FICA Document</span>
+      <button class="modal__close" onclick="Modal.close('kycUploadModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <form id="kycUploadForm" onsubmit="event.preventDefault()">
+        <input type="hidden" id="kycUploadInvestorId">
+        <input type="hidden" id="kycUploadInvestorName">
+        <div class="form-row form-row--2" style="margin-bottom:16px">
+          <div class="form-group">
+            <label class="form-label">Investor *</label>
+            <select class="form-select" id="kycUploadInvestorSelect">
+              <option value="">— Select investor —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Document Type *</label>
+            <select class="form-select" id="kycUploadDocType">
+              <option value="">— Select type —</option>
+              <option value="id_document">ID Document (RSA ID / Passport)</option>
+              <option value="proof_of_address">Proof of Address</option>
+              <option value="bank_statement">Bank Statement</option>
+              <option value="selfie">Selfie / Liveness</option>
+              <option value="tax_number">Tax Number (IT150)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Initial Status</label>
+            <select class="form-select" id="kycUploadStatusField">
+              <option value="pending">Pending Review</option>
+              <option value="under_review">Under Review</option>
+            </select>
+          </div>
+        </div>
+        <!-- Drop zone -->
+        <div id="kycDropZone"
+             style="border:2px dashed rgba(255,130,21,0.4);border-radius:12px;padding:28px;text-align:center;cursor:pointer;background:rgba(255,130,21,0.03);transition:border-color .2s"
+             ondragover="event.preventDefault();this.style.borderColor='var(--orange)'"
+             ondragleave="this.style.borderColor='rgba(255,130,21,0.4)'"
+             ondrop="kycUploadHandleDrop(event);this.style.borderColor='rgba(255,130,21,0.4)'"
+             onclick="document.getElementById('kycFileInput').click()">
+          <i class="fa-solid fa-cloud-arrow-up" style="font-size:2rem;color:var(--orange);margin-bottom:10px;display:block"></i>
+          <div id="kycUploadDropLabel" style="font-size:0.85rem;color:var(--text-muted)">Click or drag a file here</div>
+          <div style="font-size:0.72rem;color:var(--text-dim);margin-top:6px">PDF, JPG, PNG, WEBP · Max 10 MB</div>
+          <input type="file" id="kycFileInput" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none" onchange="kycUploadHandleFile(this)">
+        </div>
+        <div id="kycUploadPreview"></div>
+        <div id="kycUploadStatus" style="margin-top:10px;font-size:0.8rem"></div>
+      </form>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('kycUploadModal')">Cancel</button>
+      <button class="btn btn--primary" id="kycUploadSaveBtn" onclick="saveKycUpload()">
+        <i class="fa-solid fa-upload"></i> Upload Document
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- FICA Document Viewer Modal -->
+<div class="modal-overlay" id="ficaDocModal" onclick="if(event.target===this)Modal.close('ficaDocModal')">
+  <div class="modal modal--lg">
+    <div class="modal__header">
+      <span class="modal__title" id="ficaDocTitle">FICA Document</span>
+      <button class="modal__close" onclick="Modal.close('ficaDocModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="ficaDocContainer" style="min-height:300px">Loading...</div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('ficaDocModal')">Close</button>
+      <button class="btn btn--primary" id="ficaDocDownload" style="display:none"><i class="fa-solid fa-download"></i> Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Pool Modal -->
+<div class="modal-overlay" id="editPoolModal" onclick="if(event.target===this)Modal.close('editPoolModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title">Edit Investment Pool</span>
+      <button class="modal__close" onclick="Modal.close('editPoolModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="editPoolId" />
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Pool Name *</label><input type="text" class="form-input" id="editPoolName" /></div>
+        <div class="form-group"><label class="form-label">Status *</label>
+          <select class="form-select" id="editPoolStatus">
+            <option value="open">Open</option>
+            <option value="filling">Filling</option>
+            <option value="active">Active</option>
+            <option value="closed">Closed</option>
+            <option value="matured">Matured</option>
+            <option value="paid_out">Paid Out</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Product Type</label>
+          <select class="form-select" id="editPoolType">
+            <option value="cattle">Cattle</option>
+            <option value="solar_7yr">Solar 7yr</option>
+            <option value="solar_6yr">Solar 6yr</option>
+            <option value="solar_5yr">Solar 5yr</option>
+            <option value="short_term">Short-Term</option>
+            <option value="delivery_bike">Delivery Bike</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Term (months)</label><input type="number" class="form-input" id="editPoolTerm" /></div>
+      </div>
+      <div class="form-row form-row--3">
+        <div class="form-group"><label class="form-label">Target Amount (R)</label><input type="number" class="form-input" id="editPoolTarget" /></div>
+        <div class="form-group"><label class="form-label">Raised Amount (R)</label><input type="number" class="form-input" id="editPoolRaised" /></div>
+        <div class="form-group"><label class="form-label">Min. Investment (R)</label><input type="number" class="form-input" id="editPoolMin" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Benchmark Rate (e.g. 0.1483)</label><input type="number" class="form-input" id="editPoolRate" step="0.0001" /></div>
+        <div class="form-group"><label class="form-label">Actual Rate (achieved)</label><input type="number" class="form-input" id="editPoolActualRate" step="0.0001" placeholder="0 if still active" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Partner Name</label><input type="text" class="form-input" id="editPoolPartner" /></div>
+        <div class="form-group"><label class="form-label">Investor Count</label><input type="number" class="form-input" id="editPoolInvCount" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Open Date</label><input type="date" class="form-input" id="editPoolOpenDate" /></div>
+        <div class="form-group"><label class="form-label">Close / Maturity Date</label><input type="date" class="form-input" id="editPoolCloseDate" /></div>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('editPoolModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveEditPool()"><i class="fa-solid fa-save"></i> Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- IFA Detail Modal -->
+<div class="modal-overlay" id="ifaDetailModal" onclick="if(event.target===this)Modal.close('ifaDetailModal')">
+  <div class="modal modal--lg">
+    <div class="modal__header">
+      <span class="modal__title" id="ifaDetailTitle">IFA Details</span>
+      <button class="modal__close" onclick="Modal.close('ifaDetailModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="ifaDetailBody">Loading...</div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('ifaDetailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add IFA Modal -->
+<div class="modal-overlay" id="addIFAModal" onclick="if(event.target===this)Modal.close('addIFAModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title">Add New IFA</span>
+      <button class="modal__close" onclick="Modal.close('addIFAModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">First Name *</label><input type="text" class="form-input" id="newIFAFirstName" placeholder="Thandi" /></div>
+        <div class="form-group"><label class="form-label">Last Name *</label><input type="text" class="form-input" id="newIFALastName" placeholder="Mokoena" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Email Address *</label><input type="email" class="form-input" id="newIFAEmail" placeholder="ifa@example.co.za" /></div>
+        <div class="form-group"><label class="form-label">Phone</label><input type="text" class="form-input" id="newIFAPhone" placeholder="+27 82 000 0000" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">FSP License Number *</label><input type="text" class="form-input" id="newIFALicense" placeholder="FSP-XXXXX" /></div>
+        <div class="form-group"><label class="form-label">Company / Firm Name</label><input type="text" class="form-input" id="newIFACompany" placeholder="Advisory Firm (Pty) Ltd" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Commission Rate (%)</label><input type="number" class="form-input" id="newIFACommission" placeholder="1.5" step="0.25" min="0" max="5" /></div>
+        <div class="form-group"><label class="form-label">Status</label>
+          <select class="form-select" id="newIFAStatus">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="suspended">Suspended</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Notes</label><textarea class="form-input" id="newIFANotes" rows="3" placeholder="Internal notes about this IFA..."></textarea></div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('addIFAModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveNewIFA()"><i class="fa-solid fa-plus"></i> Create IFA</button>
+    </div>
+  </div>
+</div>
+
+<!-- Link Client to IFA Modal -->
+<div class="modal-overlay" id="linkClientModal" onclick="if(event.target===this)Modal.close('linkClientModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title">Link Investor to IFA</span>
+      <button class="modal__close" onclick="Modal.close('linkClientModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="linkClientIFAId" />
+      <div class="form-group">
+        <label class="form-label">Select Investor</label>
+        <select class="form-select" id="linkClientInvestorSelect" style="height:auto">
+          <option value="">— Choose investor —</option>
+        </select>
+      </div>
+      <p style="font-size:0.78rem;color:var(--text-muted);margin-top:8px">Only investors not already linked to this IFA will be shown.</p>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('linkClientModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="confirmLinkClient()"><i class="fa-solid fa-link"></i> Link Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="../js/api.js?v=2"></script>
+<script src="js/admin.js"></script>
+<script src="../js/sv-intelligence.js"></script>
+</body>
+</html>

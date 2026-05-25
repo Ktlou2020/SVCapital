@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SV Capital — Staff Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0b0c10;
+      --surface:  #111318;
+      --surface2: #1a1c24;
+      --surface3: #22252f;
+      --border:   rgba(255,255,255,0.07);
+      --border2:  rgba(255,255,255,0.12);
+      --purple:   #7c5cfc;
+      --teal:     #00d4aa;
+      --text:     #e8eaf6;
+      --muted:    #6b7280;
+      --muted2:   #9ca3af;
+    }
+
+    html, body {
+      min-height: 100vh;
+      background: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(124,92,252,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,92,252,0.035) 1px, transparent 1px);
+      background-size: 52px 52px;
+    }
+
+    /* Orbs */
+    .orb { position: fixed; border-radius: 50%; filter: blur(100px); opacity: 0.12; z-index: 0; pointer-events: none; }
+    .orb--1 { width: 600px; height: 600px; background: #7c5cfc; top: -200px; left: -150px; animation: float1 16s ease-in-out infinite alternate; }
+    .orb--2 { width: 400px; height: 400px; background: #00d4aa; bottom: -100px; right: -80px; animation: float2 20s ease-in-out infinite alternate; }
+    @keyframes float1 { to { transform: translate(30px, 50px); } }
+    @keyframes float2 { to { transform: translate(-20px, -30px); } }
+
+    /* ── Global loader ── */
+    #globalLoader {
+      position: fixed; inset: 0; background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 16px; z-index: 9999;
+    }
+    #globalLoader .spin { width: 40px; height: 40px; border: 3px solid rgba(124,92,252,0.15); border-top-color: var(--purple); border-radius: 50%; animation: spin 0.65s linear infinite; }
+    #globalLoader .load-text { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Layout ── */
+    .hub-wrap {
+      position: relative; z-index: 1;
+      max-width: 1100px; margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 0 0;
+      margin-bottom: 0;
+    }
+    .topbar-brand { display: flex; align-items: center; gap: 12px; }
+    .topbar-icon {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: linear-gradient(135deg, #7c5cfc, #00d4aa);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; color: #fff;
+    }
+    .topbar-name { font-size: 1.05rem; font-weight: 800; letter-spacing: -0.02em; }
+    .topbar-sub  { font-size: 0.72rem; color: var(--muted); }
+
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+
+    .session-pill {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: 40px; padding: 6px 14px 6px 7px;
+      font-size: 0.8rem; cursor: default;
+    }
+    .session-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.68rem; font-weight: 800; color: #fff; flex-shrink: 0;
+    }
+    .session-name  { font-weight: 700; color: var(--text); }
+    .session-role  { font-size: 0.7rem; color: var(--muted); }
+
+    .btn-logout {
+      display: flex; align-items: center; gap: 7px;
+      padding: 8px 16px; border-radius: 8px;
+      background: transparent; border: 1px solid var(--border2);
+      color: var(--muted); font-size: 0.8rem; font-weight: 600;
+      cursor: pointer; font-family: inherit;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .btn-logout:hover { border-color: #ef4444; color: #ef4444; background: rgba(239,68,68,0.06); }
+
+    /* ── Hero greeting ── */
+    .hero {
+      padding: 48px 0 36px;
+      display: flex; align-items: flex-end; justify-content: space-between;
+      gap: 24px;
+    }
+    .hero-left {}
+    .hero-greeting { font-size: 0.85rem; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
+    .hero-name { font-size: 2.4rem; font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 10px; }
+    .hero-name em { font-style: normal; background: linear-gradient(135deg, #7c5cfc, #00d4aa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+
+    .role-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 24px; padding: 6px 16px 6px 8px;
+      font-size: 0.8rem; font-weight: 600;
+    }
+    .role-badge-dot {
+      width: 22px; height: 22px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem; color: #fff;
+    }
+    .access-count {
+      font-size: 0.82rem; color: var(--muted); margin-top: 10px;
+    }
+    .access-count strong { color: var(--purple); }
+
+    /* XP badge */
+    .xp-badge {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 16px 20px;
+      display: flex; align-items: center; gap: 12px;
+      min-width: 180px;
+    }
+    .xp-icon { font-size: 1.6rem; }
+    .xp-label { font-size: 0.7rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+    .xp-value { font-size: 1.4rem; font-weight: 800; color: var(--purple); }
+
+    /* ── Section header ── */
+    .section-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px; padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-title { font-size: 0.7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+    .section-count { font-size: 0.72rem; color: var(--muted2); background: var(--surface2); border-radius: 20px; padding: 2px 10px; font-weight: 600; }
+
+    /* ── App grid ── */
+    .app-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+      margin-bottom: 48px;
+    }
+
+    .app-tile {
+      position: relative; overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+      cursor: pointer;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+      text-decoration: none; color: inherit;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .app-tile:hover {
+      transform: translateY(-3px);
+      border-color: var(--tile-color, var(--purple));
+      box-shadow: 0 8px 40px rgba(0,0,0,0.3), 0 0 0 1px var(--tile-color, var(--purple));
+    }
+    .app-tile:active { transform: translateY(-1px); }
+
+    /* Glowing accent strip at top */
+    .app-tile::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--tile-color, var(--purple));
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .app-tile:hover::before { opacity: 1; }
+
+    /* Corner glow */
+    .app-tile::after {
+      content: '';
+      position: absolute; top: -60px; right: -60px;
+      width: 150px; height: 150px;
+      border-radius: 50%;
+      background: var(--tile-color, var(--purple));
+      opacity: 0.04;
+      transition: opacity 0.2s, transform 0.3s;
+    }
+    .app-tile:hover::after { opacity: 0.1; transform: scale(1.2); }
+
+    .tile-top { display: flex; align-items: flex-start; justify-content: space-between; }
+    .tile-icon-wrap {
+      width: 52px; height: 52px; border-radius: 14px;
+      background: color-mix(in srgb, var(--tile-color, var(--purple)) 15%, transparent);
+      border: 1px solid color-mix(in srgb, var(--tile-color, var(--purple)) 25%, transparent);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; color: var(--tile-color, var(--purple));
+      flex-shrink: 0;
+    }
+    .tile-arrow {
+      color: var(--muted); font-size: 0.85rem;
+      transition: color 0.15s, transform 0.15s;
+    }
+    .app-tile:hover .tile-arrow { color: var(--tile-color, var(--purple)); transform: translateX(3px) translateY(-3px); }
+
+    .tile-label { font-size: 1.05rem; font-weight: 800; letter-spacing: -0.01em; }
+    .tile-desc  { font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
+
+    .tile-footer {
+      display: flex; align-items: center; gap: 8px;
+      padding-top: 14px; border-top: 1px solid var(--border);
+    }
+    .tile-tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--surface2); border-radius: 6px; padding: 3px 9px;
+      font-size: 0.68rem; font-weight: 600; color: var(--muted2);
+    }
+    .tile-tag.primary {
+      background: color-mix(in srgb, var(--tile-color, var(--purple)) 12%, transparent);
+      color: var(--tile-color, var(--purple));
+    }
+
+    /* PRIMARY tile (My Dashboard) — full-width */
+    .app-tile--primary {
+      grid-column: 1 / -1;
+      flex-direction: row; align-items: center; gap: 24px;
+      padding: 28px 32px;
+    }
+    .app-tile--primary .tile-icon-wrap {
+      width: 64px; height: 64px; border-radius: 18px; font-size: 1.6rem; flex-shrink: 0;
+    }
+    .app-tile--primary .tile-body { flex: 1; }
+    .app-tile--primary .tile-label { font-size: 1.2rem; }
+    .app-tile--primary .tile-footer { border-top: none; padding-top: 0; margin-top: 6px; }
+    .app-tile--primary .tile-arrow { font-size: 1.1rem; }
+
+    /* Locked tile */
+    .app-tile--locked {
+      opacity: 0.38; cursor: not-allowed; pointer-events: none;
+      filter: grayscale(0.5);
+    }
+
+    /* ── Access denied banner ── */
+    .denied-banner {
+      display: none;
+      background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 12px; padding: 16px 20px;
+      margin-bottom: 28px;
+      align-items: center; gap: 14px;
+    }
+    .denied-banner.show { display: flex; }
+    .denied-banner i { color: #ef4444; font-size: 1.1rem; flex-shrink: 0; }
+    .denied-banner p { font-size: 0.85rem; color: #fca5a5; }
+    .denied-banner strong { color: #fff; }
+
+    /* ── Locked apps section ── */
+    .locked-section { margin-top: 40px; }
+    .locked-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+    .locked-tile {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 16px 18px;
+      display: flex; align-items: center; gap: 14px;
+      opacity: 0.4;
+    }
+    .locked-tile-icon {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: var(--surface3); display: flex; align-items: center; justify-content: center;
+      font-size: 0.95rem; color: var(--muted); flex-shrink: 0;
+    }
+    .locked-tile-label { font-size: 0.88rem; font-weight: 700; color: var(--muted2); }
+    .locked-tile-tag { font-size: 0.68rem; color: var(--muted); display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+
+    /* ── Footer ── */
+    .hub-footer {
+      text-align: center; padding-top: 32px;
+      border-top: 1px solid var(--border);
+      font-size: 0.75rem; color: var(--muted);
+    }
+    .hub-footer a { color: var(--purple); text-decoration: none; }
+
+    /* ── Session info bar ── */
+    .session-bar {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px 18px;
+      display: flex; align-items: center; gap: 20px;
+      margin-bottom: 40px; flex-wrap: wrap;
+      font-size: 0.78rem;
+    }
+    .session-bar-item { display: flex; align-items: center; gap: 7px; color: var(--muted); }
+    .session-bar-item strong { color: var(--muted2); font-weight: 600; }
+    .session-bar-sep { width: 1px; height: 14px; background: var(--border2); }
+    .session-expire { margin-left: auto; font-size: 0.72rem; color: var(--muted); }
+    .session-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); display: inline-block; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+      background: var(--surface2); border: 1px solid var(--border2); border-radius: 12px;
+      padding: 12px 20px; font-size: 0.85rem; font-weight: 600;
+      display: flex; align-items: center; gap: 10px;
+      z-index: 9000; transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* Director tile — golden glow */
+    .app-tile--director {
+      background: linear-gradient(135deg, #1a1c24 0%, #1f1a0e 100%);
+      border-color: rgba(245,158,11,0.3);
+    }
+    .app-tile--director:hover {
+      border-color: #f59e0b;
+      box-shadow: 0 8px 40px rgba(245,158,11,0.25), 0 0 0 1px #f59e0b;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .hero { flex-direction: column; gap: 16px; }
+      .app-tile--primary { flex-direction: column; }
+      .topbar-right .session-pill .session-role { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="orb orb--1"></div>
+<div class="orb orb--2"></div>
+
+<!-- Global loader -->
+<div id="globalLoader">
+  <div class="spin"></div>
+  <div class="load-text">Loading your portal…</div>
+</div>
+
+<div class="hub-wrap" style="display:none" id="hubContent">
+
+  <!-- ── Topbar ── -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-icon"><i class="fa-solid fa-gem"></i></div>
+      <div>
+        <div class="topbar-name">SV Capital</div>
+        <div class="topbar-sub">Staff Portal</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="session-pill">
+        <div class="session-avatar" id="topAvatar"></div>
+        <div>
+          <div class="session-name" id="topName"></div>
+          <div class="session-role" id="topRole"></div>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="StaffAuth.logout()">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+        Sign out
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Access-denied banner (shown when redirected with ?denied=) ── -->
+  <div class="denied-banner" id="deniedBanner">
+    <i class="fa-solid fa-lock"></i>
+    <p id="deniedMsg"></p>
+  </div>
+
+  <!-- ── Hero ── -->
+  <section class="hero">
+    <div class="hero-left">
+      <div class="hero-greeting" id="heroGreeting">Good morning</div>
+      <div class="hero-name">Welcome, <em id="heroName">…</em></div>
+      <div class="role-badge">
+        <div class="role-badge-dot" id="roleDot"><i class="fa-solid fa-id-badge" style="font-size:0.65rem"></i></div>
+        <span id="roleName"></span>
+        &nbsp;·&nbsp;
+        <span id="levelName" style="color:var(--muted);font-weight:500;font-size:0.75rem"></span>
+      </div>
+      <div class="access-count" id="accessCount"></div>
+    </div>
+    <div class="xp-badge">
+      <div class="xp-icon">⚡</div>
+      <div>
+        <div class="xp-label">XP Points</div>
+        <div class="xp-value" id="xpValue">—</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Session info bar ── -->
+  <div class="session-bar" id="sessionBar">
+    <div class="session-bar-item"><span class="session-dot"></span> <strong>Active session</strong></div>
+    <div class="session-bar-sep"></div>
+    <div class="session-bar-item"><i class="fa-solid fa-calendar-day"></i> <strong id="loginDate"></strong></div>
+    <div class="session-bar-sep"></div>
+    <div class="session-bar-item"><i class="fa-solid fa-clock"></i> Login at <strong id="loginTime"></strong></div>
+    <div class="session-expire" id="sessionExpire"></div>
+  </div>
+
+  <!-- ── Permitted apps ── -->
+  <div id="appsSection">
+    <div class="section-head">
+      <div class="section-title">Your apps</div>
+      <div class="section-count" id="appCountBadge"></div>
+    </div>
+    <div class="app-grid" id="appGrid"></div>
+  </div>
+
+  <!-- ── Locked apps (visible but non-clickable) ── -->
+  <div class="locked-section" id="lockedSection" style="display:none">
+    <div class="section-head">
+      <div class="section-title"><i class="fa-solid fa-lock" style="margin-right:6px;font-size:0.75rem"></i>Not available for your role</div>
+      <div class="section-count" id="lockedCountBadge"></div>
+    </div>
+    <div class="locked-grid" id="lockedGrid"></div>
+  </div>
+
+  <!-- ── Footer ── */
+  <footer class="hub-footer">
+    <p>SV Capital Staff Portal &nbsp;·&nbsp; <a href="login.html" onclick="StaffAuth.logout();return false;">Switch account</a> &nbsp;·&nbsp; Session valid for 8 hours</p>
+  </footer>
+
+</div><!-- /hub-wrap -->
+
+<div id="toast"><i class="fa-solid fa-circle-check" style="color:var(--teal)"></i> <span id="toastMsg"></span></div>
+
+<script src="../js/staff-auth.js?v=3"></script>
+<script>
+
+/* ── RBAC config (mirrors staff-auth.js APPS_REGISTRY) ── */
+const ROLE_COLORS = {
+  'CEO':                '#f59e0b',
+  'Operations Manager': '#00d4aa',
+  'Finance Manager':    '#e84393',
+  'Tech Lead':          '#06b6d4',
+  'Investment Analyst': '#7c5cfc',
+  'Compliance Officer': '#10b981',
+  'Client Relations':   '#fb923c',
+  'Marketing':          '#a855f7',
+  'Junior Analyst':     '#64748b',
+  'Admin':              '#64748b',
+};
+
+const LEVEL_LABELS = {
+  junior:    'Junior',
+  mid:       'Mid-Level',
+  senior:    'Senior',
+  lead:      'Lead',
+  executive: 'Executive',
+};
+
+/* ── App display data ── */
+const APP_META = {
+  employee: {
+    label:       'My Dashboard',
+    description: 'Your personal hub — KPIs, EVA payslip, learning paths, kudos, leave requests, journal & more.',
+    icon:        'fa-solid fa-user-circle',
+    color:       '#7c5cfc',
+    path:        'employee.html',
+    tags:        ['Personal', 'Required'],
+    primary:     true,
+  },
+  team: {
+    label:       'Team Dashboard',
+    description: 'Live EVA engine, team KPI scorecards, headcount analytics & performance leaderboard.',
+    icon:        'fa-solid fa-people-group',
+    color:       '#00d4aa',
+    path:        'index.html',
+    tags:        ['Management', 'EVA'],
+  },
+  fund: {
+    label:       'Fund Operations',
+    description: 'AUM tracking, fund returns calculator, investor exposure & operational reporting.',
+    icon:        'fa-solid fa-chart-line',
+    color:       '#f59e0b',
+    path:        '../fund/index.html',
+    tags:        ['Finance', 'AUM'],
+  },
+  admin: {
+    label:       'Admin Console',
+    description: 'Platform administration — investor management, compliance tools & system settings.',
+    icon:        'fa-solid fa-shield-halved',
+    color:       '#e84393',
+    path:        '../admin/index.html',
+    tags:        ['Admin', 'Compliance'],
+  },
+  ifa: {
+    label:       'IFA Portal',
+    description: 'Independent Financial Adviser tools — commissions, portfolio reviews & client reporting.',
+    icon:        'fa-solid fa-handshake',
+    color:       '#06b6d4',
+    path:        '../ifa/index.html',
+    tags:        ['IFA', 'Advisory'],
+  },
+  portal: {
+    label:       'Investor Portal',
+    description: 'Investor accounts, fund documents, performance statements & client communications.',
+    icon:        'fa-solid fa-building-columns',
+    color:       '#10b981',
+    path:        '../portal/index.html',
+    tags:        ['Investors', 'Client'],
+  },
+  director: {
+    label:       'Director Panel',
+    description: 'Super admin controls — create employees, manage onboarding journeys, platform oversight.',
+    icon:        'fa-solid fa-crown',
+    color:       '#f59e0b',
+    path:        'director.html',
+    tags:        ['Directors Only', 'Super Admin'],
+    badge:       'Super Admin',
+  },
+};
+
+/* ── Init ── */
+window.addEventListener('DOMContentLoaded', () => {
+  const session = StaffAuth.getSession();
+  if (!session) {
+    // JWT bypass — users logged in via /login.html (director/admin role)
+    try {
+      const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+      if (jwt) {
+        const p = JSON.parse(atob(jwt.split('.')[1]));
+        if (p && p.exp * 1000 > Date.now() &&
+            (p.role === 'director' || p.role === 'admin')) {
+          // Redirect JWT directors to their proper page rather than hub
+          window.location.replace('/admin/index.html');
+          return;
+        }
+      }
+    } catch(_) {}
+    window.location.replace('login.html');
+    return;
+  }
+
+  populateHero(session);
+  populateSession(session);
+  renderApps(session);
+  checkDeniedRedirect();
+
+  // Hide loader, show content
+  document.getElementById('globalLoader').style.display = 'none';
+  document.getElementById('hubContent').style.display   = 'block';
+});
+
+/* ── Hero section ── */
+function populateHero(session) {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  document.getElementById('heroGreeting').textContent = greeting;
+  document.getElementById('heroName').textContent     = session.firstName;
+  document.getElementById('roleName').textContent     = session.role;
+  document.getElementById('levelName').textContent    = LEVEL_LABELS[session.level] || session.level;
+  document.getElementById('xpValue').textContent      = (session.xpPoints || 0).toLocaleString() + ' XP';
+
+  const roleDot = document.getElementById('roleDot');
+  roleDot.style.background = ROLE_COLORS[session.role] || '#7c5cfc';
+
+  // Topbar
+  const topAvatar = document.getElementById('topAvatar');
+  topAvatar.textContent     = session.avatarInitials;
+  topAvatar.style.background = session.avatarColor || '#7c5cfc';
+  document.getElementById('topName').textContent = session.firstName + ' ' + session.lastName;
+  document.getElementById('topRole').textContent = session.role;
+
+  const allowed = StaffAuth.getAllowedApps(session);
+  const total   = Object.keys(APP_META).length;
+  document.getElementById('accessCount').innerHTML =
+    `You have access to <strong>${allowed.length}</strong> of ${total} available apps.`;
+}
+
+/* ── Session bar ── */
+function populateSession(session) {
+  const loginDt = new Date(session.loginTime);
+  const expDt   = new Date(session.expiresAt);
+  const minsLeft = Math.round((session.expiresAt - Date.now()) / 60000);
+  const hrsLeft  = Math.floor(minsLeft / 60);
+  const mLeft    = minsLeft % 60;
+
+  document.getElementById('loginDate').textContent    = loginDt.toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short' });
+  document.getElementById('loginTime').textContent    = loginDt.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('sessionExpire').textContent = `Expires in ${hrsLeft}h ${mLeft}m`;
+}
+
+/* ── Build app tiles ── */
+function renderApps(session) {
+  const allowed = StaffAuth.getAllowedApps(session);
+  const allKeys = Object.keys(APP_META);
+  const locked  = allKeys.filter(k => !allowed.includes(k));
+
+  // Permitted apps — primary tile first
+  document.getElementById('appCountBadge').textContent = allowed.length + ' apps';
+  const grid = document.getElementById('appGrid');
+  grid.innerHTML = '';
+
+  // Sort: employee first, director last, alphabetical in between
+  const sorted = [...allowed].sort((a,b) => {
+    if (a === 'employee') return -1;
+    if (b === 'employee') return  1;
+    if (a === 'director') return  1;
+    if (b === 'director') return -1;
+    return (APP_META[a]?.label||a).localeCompare(APP_META[b]?.label||b);
+  });
+
+  sorted.forEach(key => {
+    const meta = APP_META[key];
+    if (!meta) return;
+    const tile = buildTile(meta, key, false);
+    grid.appendChild(tile);
+  });
+
+  // Locked apps section
+  if (locked.length > 0) {
+    document.getElementById('lockedSection').style.display = 'block';
+    document.getElementById('lockedCountBadge').textContent = locked.length + ' apps';
+    const lockedGrid = document.getElementById('lockedGrid');
+    lockedGrid.innerHTML = '';
+    locked.forEach(key => {
+      const meta = APP_META[key];
+      if (!meta) return;
+      const el = document.createElement('div');
+      el.className = 'locked-tile';
+      el.innerHTML = `
+        <div class="locked-tile-icon"><i class="${meta.icon}"></i></div>
+        <div>
+          <div class="locked-tile-label">${meta.label}</div>
+          <div class="locked-tile-tag"><i class="fa-solid fa-lock"></i> Role restricted</div>
+        </div>
+      `;
+      lockedGrid.appendChild(el);
+    });
+  }
+}
+
+function buildTile(meta, key, isLocked) {
+  const isPrimary = meta.primary === true;
+  const isDirectorTile = key === 'director';
+  const a = document.createElement('a');
+  a.href = meta.path;
+  a.className = 'app-tile' + (isPrimary ? ' app-tile--primary' : '') + (isLocked ? ' app-tile--locked' : '') + (isDirectorTile ? ' app-tile--director' : '');
+  a.style.setProperty('--tile-color', meta.color);
+
+  const tagsHtml = (meta.tags || []).map((t,i) =>
+    `<span class="tile-tag ${i===0?'primary':''}">${t}</span>`
+  ).join('');
+
+  const badgeHtml = meta.badge
+    ? `<span style="position:absolute;top:14px;right:44px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:0.62rem;font-weight:800;padding:2px 8px;border-radius:20px;letter-spacing:0.04em;text-transform:uppercase">${meta.badge}</span>`
+    : '';
+
+  if (isPrimary) {
+    a.innerHTML = `
+      ${badgeHtml}
+      <div class="tile-icon-wrap"><i class="${meta.icon}"></i></div>
+      <div class="tile-body">
+        <div class="tile-label">${meta.label}</div>
+        <div class="tile-desc" style="margin:4px 0 10px">${meta.description}</div>
+        <div class="tile-footer">${tagsHtml}</div>
+      </div>
+      <i class="fa-solid fa-arrow-up-right tile-arrow"></i>
+    `;
+  } else {
+    a.innerHTML = `
+      ${badgeHtml}
+      <div class="tile-top">
+        <div class="tile-icon-wrap"><i class="${meta.icon}"></i></div>
+        <i class="fa-solid fa-arrow-up-right tile-arrow"></i>
+      </div>
+      <div>
+        <div class="tile-label">${meta.label}</div>
+        <div class="tile-desc" style="margin-top:6px">${meta.description}</div>
+      </div>
+      <div class="tile-footer">${tagsHtml}</div>
+    `;
+  }
+  return a;
+}
+
+/* ── Access-denied redirect handling ── */
+function checkDeniedRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const denied = params.get('denied');
+  if (!denied) return;
+
+  const meta = APP_META[denied];
+  const name = meta ? meta.label : denied;
+  document.getElementById('deniedMsg').innerHTML =
+    `<strong>Access restricted.</strong> You don't have permission to access <strong>${name}</strong> with your current role. ` +
+    `Contact your system administrator if you believe this is an error.`;
+  document.getElementById('deniedBanner').classList.add('show');
+
+  // Clean up URL
+  history.replaceState({}, '', '/team/hub.html');
+
+  showToast(`Access to ${name} is restricted for your role`);
+}
+
+/* ── Toast ── */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+</script>
+</body>
+</html>

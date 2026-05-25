@@ -1,0 +1,11 @@
+server/
+.git/
+.wrangler/
+node_modules/
+Dockerfile
+railway.toml
+README.md
+DEPLOY.md
+package.json
+package-lock.json
+test.html

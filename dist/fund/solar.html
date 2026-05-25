@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SV Capital — Solar Investment Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="css/fund.css">
+  <style>
+    /* ── Solar-specific palette override ── */
+    :root {
+      --sol-gold:   #f59e0b;
+      --sol-amber:  #d97706;
+      --sol-bg:     #0b0d10;
+      --sol-card:   #131720;
+      --sol-border: rgba(245,158,11,.18);
+    }
+
+    body { background: var(--sol-bg); }
+
+    /* Layout */
+    .solar-layout { display: flex; height: 100vh; overflow: hidden; }
+
+    /* Sidebar */
+    .sol-sidebar {
+      width: 240px; min-width: 240px;
+      background: #0d1117;
+      border-right: 1px solid rgba(255,255,255,.07);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+    }
+    .sol-brand {
+      padding: 20px 18px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+    }
+    .sol-brand-name { font-size: 15px; font-weight: 800; color: #fff; }
+    .sol-brand-sub  { font-size: 11px; color: var(--sol-gold); letter-spacing: .5px; margin-top: 2px; }
+    .sol-nav-label  {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+      color: rgba(255,255,255,.35); padding: 14px 18px 6px; font-weight: 700;
+    }
+    .sol-nav-btn {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 18px; font-size: 13px; font-weight: 500;
+      color: rgba(255,255,255,.65); background: none; border: none;
+      cursor: pointer; width: 100%; text-align: left;
+      transition: all .15s; border-left: 3px solid transparent;
+    }
+    .sol-nav-btn:hover { color: #fff; background: rgba(255,255,255,.05); }
+    .sol-nav-btn.active { color: var(--sol-gold); background: rgba(245,158,11,.08); border-left-color: var(--sol-gold); }
+    .sol-nav-btn i { width: 16px; text-align: center; }
+    .sol-sidebar-footer {
+      margin-top: auto; padding: 16px 18px;
+      border-top: 1px solid rgba(255,255,255,.07);
+    }
+    .sol-back-link {
+      font-size: 12px; color: rgba(255,255,255,.4); text-decoration: none;
+      display: flex; align-items: center; gap: 7px;
+      transition: color .15s;
+    }
+    .sol-back-link:hover { color: rgba(255,255,255,.8); }
+
+    /* Main */
+    .sol-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .sol-topbar {
+      padding: 16px 28px; border-bottom: 1px solid rgba(255,255,255,.07);
+      display: flex; align-items: center; justify-content: space-between;
+      background: #0d1117;
+    }
+    .sol-topbar-title { font-size: 18px; font-weight: 800; color: #fff; }
+    .sol-topbar-sub   { font-size: 12px; color: rgba(255,255,255,.4); margin-top: 2px; }
+    .sol-topbar-actions { display: flex; gap: 10px; }
+    .sol-content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+    /* Views */
+    .sol-view { display: none; }
+    .sol-view.active { display: block; }
+
+    /* NAV Hero */
+    .sol-nav-hero {
+      background: linear-gradient(135deg, #1a1200, #2a1f00);
+      border: 1px solid var(--sol-border);
+      border-radius: 16px; padding: 28px 32px; margin-bottom: 24px;
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 32px;
+      flex-wrap: wrap;
+    }
+    .sol-hero-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--sol-gold); opacity: .8; margin-bottom: 6px; }
+    .sol-hero-value { font-size: 38px; font-weight: 900; color: #fff; letter-spacing: -1px; line-height: 1; }
+    .sol-hero-sub   { font-size: 13px; color: rgba(255,255,255,.5); margin-top: 6px; }
+    .sol-hero-stats { display: flex; gap: 36px; }
+    .sol-hero-stat  { text-align: right; }
+    .sol-hero-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: rgba(255,255,255,.4); margin-bottom: 4px; }
+    .sol-hero-stat-val   { font-size: 22px; font-weight: 800; color: #fff; }
+    .sol-hero-stat-sub   { font-size: 11px; color: rgba(255,255,255,.4); }
+
+    /* KPI row */
+    .sol-kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+    .sol-kpi {
+      background: var(--sol-card); border: 1px solid rgba(255,255,255,.07);
+      border-radius: 12px; padding: 18px 20px;
+    }
+    .sol-kpi-label { font-size: 11px; color: rgba(255,255,255,.45); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px; }
+    .sol-kpi-value { font-size: 24px; font-weight: 800; color: #fff; }
+    .sol-kpi-sub   { font-size: 11px; color: rgba(255,255,255,.35); margin-top: 3px; }
+    .sol-kpi.gold  .sol-kpi-value { color: var(--sol-gold); }
+    .sol-kpi.green .sol-kpi-value { color: #74c69d; }
+    .sol-kpi.blue  .sol-kpi-value { color: #60a5fa; }
+    .sol-kpi.red   .sol-kpi-value { color: #f87171; }
+
+    /* Section card */
+    .sol-card {
+      background: var(--sol-card); border: 1px solid rgba(255,255,255,.07);
+      border-radius: 12px; margin-bottom: 20px; overflow: hidden;
+    }
+    .sol-card-hd {
+      padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,.06);
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .sol-card-title { font-size: 14px; font-weight: 700; color: #fff; }
+    .sol-card-body  { padding: 20px; }
+
+    /* Project cards grid */
+    .sol-projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+    .sol-proj-card {
+      background: #0f1419; border: 1px solid rgba(255,255,255,.08);
+      border-radius: 14px; overflow: hidden; transition: border-color .2s, transform .15s;
+    }
+    .sol-proj-card:hover { border-color: rgba(245,158,11,.3); transform: translateY(-2px); }
+    .sol-proj-hd {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid rgba(255,255,255,.05);
+      display: flex; justify-content: space-between; align-items: flex-start;
+    }
+    .sol-proj-name { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 3px; }
+    .sol-proj-loc  { font-size: 12px; color: rgba(255,255,255,.45); }
+    .sol-proj-body { padding: 16px 20px; }
+    .sol-proj-row  { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
+    .sol-proj-row-label { color: rgba(255,255,255,.45); }
+    .sol-proj-row-val   { color: #fff; font-weight: 600; }
+    .sol-proj-nav  {
+      margin: 12px 0 0; padding: 12px 0 0;
+      border-top: 1px solid rgba(255,255,255,.06);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .sol-proj-nav-label { font-size: 11px; color: rgba(255,255,255,.4); }
+    .sol-proj-nav-val   { font-size: 18px; font-weight: 800; }
+    .sol-proj-actions   { display: flex; gap: 8px; margin-top: 12px; }
+
+    /* Progress bar */
+    .sol-progress-wrap { background: rgba(255,255,255,.08); border-radius: 6px; height: 6px; margin: 8px 0 4px; }
+    .sol-progress-fill { height: 100%; border-radius: 6px; background: var(--sol-gold); transition: width .4s; }
+
+    /* Badge */
+    .sol-badge {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+      padding: 3px 9px; border-radius: 20px;
+    }
+    .sol-badge-active   { background: rgba(96,165,250,.15); color: #60a5fa; }
+    .sol-badge-matured  { background: rgba(116,198,157,.15); color: #74c69d; }
+    .sol-badge-pending  { background: rgba(245,158,11,.15); color: var(--sol-gold); }
+    .sol-badge-cancelled{ background: rgba(248,113,113,.15); color: #f87171; }
+
+    /* Product type pill */
+    .sol-term-pill {
+      font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 10px;
+      background: rgba(245,158,11,.12); color: var(--sol-gold); border: 1px solid rgba(245,158,11,.25);
+    }
+
+    /* Table */
+    .sol-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .sol-table th {
+      text-align: left; padding: 10px 14px; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .6px;
+      color: rgba(255,255,255,.4); border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .sol-table th.num { text-align: right; }
+    .sol-table td {
+      padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.04);
+      color: rgba(255,255,255,.85);
+    }
+    .sol-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .sol-table tbody tr:hover { background: rgba(255,255,255,.03); }
+    .sol-table tbody tr:last-child td { border-bottom: none; }
+
+    /* Filter bar */
+    .sol-filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+    .sol-search { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); border-radius: 8px; padding: 7px 12px; flex: 1; min-width: 200px; }
+    .sol-search input { background: none; border: none; outline: none; color: #fff; font-size: 13px; width: 100%; }
+    .sol-search i { color: rgba(255,255,255,.3); font-size: 12px; }
+    .sol-select {
+      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+      border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 13px; outline: none;
+    }
+    .sol-select option { background: #1a1f2e; }
+
+    /* Buttons */
+    .sol-btn {
+      padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 7px;
+      transition: all .15s;
+    }
+    .sol-btn-primary   { background: var(--sol-gold); color: #000; }
+    .sol-btn-primary:hover { background: #fbbf24; }
+    .sol-btn-secondary { background: rgba(255,255,255,.08); color: rgba(255,255,255,.8); border: 1px solid rgba(255,255,255,.12); }
+    .sol-btn-secondary:hover { background: rgba(255,255,255,.13); color: #fff; }
+    .sol-btn-sm { padding: 5px 11px; font-size: 12px; }
+    .sol-btn-danger    { background: rgba(248,113,113,.15); color: #f87171; border: 1px solid rgba(248,113,113,.2); }
+    .sol-btn-danger:hover { background: rgba(248,113,113,.25); }
+
+    /* Modal */
+    .sol-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.75);
+      backdrop-filter: blur(6px); z-index: 900;
+      display: none; align-items: center; justify-content: center; padding: 20px;
+    }
+    .sol-modal-overlay.open { display: flex; }
+    .sol-modal {
+      background: #131720; border: 1px solid rgba(255,255,255,.12);
+      border-radius: 16px; width: 100%; max-width: 680px;
+      max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 80px rgba(0,0,0,.6);
+    }
+    .sol-modal-hd {
+      padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,.08);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .sol-modal-title { font-size: 16px; font-weight: 800; color: #fff; flex: 1; }
+    .sol-modal-close {
+      background: rgba(255,255,255,.08); border: none; color: rgba(255,255,255,.6);
+      width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 14px;
+      display: flex; align-items: center; justify-content: center; transition: all .15s;
+    }
+    .sol-modal-close:hover { background: rgba(255,255,255,.15); color: #fff; }
+    .sol-modal-body { padding: 24px; }
+    .sol-modal-ft   { padding: 16px 24px; border-top: 1px solid rgba(255,255,255,.08); display: flex; justify-content: flex-end; gap: 10px; }
+
+    /* Form */
+    .sol-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
+    .sol-form-grid.col3 { grid-template-columns: 1fr 1fr 1fr; }
+    .sol-form-group { display: flex; flex-direction: column; gap: 6px; }
+    .sol-form-group label { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.6); }
+    .sol-form-group input,
+    .sol-form-group select,
+    .sol-form-group textarea {
+      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 8px; padding: 9px 12px; color: #fff; font-size: 13px;
+      outline: none; font-family: inherit; transition: border-color .15s;
+    }
+    .sol-form-group input:focus,
+    .sol-form-group select:focus,
+    .sol-form-group textarea:focus { border-color: var(--sol-gold); }
+    .sol-form-group select option { background: #1a1f2e; }
+    .sol-form-group .hint { font-size: 11px; color: rgba(255,255,255,.3); }
+    .sol-section-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px;
+      color: var(--sol-gold); opacity: .75; margin: 0 0 10px; display: flex; align-items: center; gap: 7px;
+    }
+    .sol-divider { border: none; border-top: 1px solid rgba(255,255,255,.07); margin: 18px 0; }
+
+    /* NAV Calculator */
+    .sol-calc-panel {
+      background: linear-gradient(135deg, #1a1200, #2a1f00);
+      border: 1px solid var(--sol-border); border-radius: 14px; padding: 24px;
+    }
+    .sol-calc-result { font-size: 32px; font-weight: 900; color: var(--sol-gold); }
+    .sol-calc-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.06); font-size: 13px; }
+    .sol-calc-row:last-child { border-bottom: none; }
+    .sol-calc-row-label { color: rgba(255,255,255,.5); }
+    .sol-calc-row-val   { color: #fff; font-weight: 600; }
+
+    /* Chart container */
+    .sol-chart-wrap { height: 280px; position: relative; }
+
+    /* Loading */
+    .sol-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; color: rgba(255,255,255,.4); gap: 12px; }
+    .sol-spinner { width: 32px; height: 32px; border: 3px solid rgba(245,158,11,.15); border-top-color: var(--sol-gold); border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast */
+    #solToastContainer { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .sol-toast {
+      background: #1e2531; border-radius: 10px; padding: 12px 18px;
+      display: flex; align-items: center; gap: 10px; font-size: 13px; color: #fff;
+      box-shadow: 0 8px 32px rgba(0,0,0,.4); min-width: 260px; max-width: 380px;
+      animation: slideIn .25s ease; border-left: 3px solid var(--sol-gold);
+    }
+    .sol-toast.error  { border-left-color: #f87171; }
+    .sol-toast.success{ border-left-color: #74c69d; }
+    @keyframes slideIn { from { opacity:0; transform: translateX(30px); } to { opacity:1; transform: translateX(0); } }
+
+    /* ── Docs Button ── */
+    .sol-doc-btn {
+      background: rgba(245,158,11,.12);
+      border: 1px solid rgba(245,158,11,.28);
+      color: var(--sol-gold);
+    }
+    .sol-doc-btn:hover { background: rgba(245,158,11,.22); color: #fbbf24; }
+
+    /* ── Docs Drawer ── */
+    .sol-drawer-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.62);
+      backdrop-filter: blur(4px); z-index: 800;
+      display: none; justify-content: flex-end;
+    }
+    .sol-drawer-overlay.open { display: flex; }
+    .sol-drawer {
+      width: 540px; max-width: 100vw; background: #0f1419;
+      border-left: 1px solid rgba(245,158,11,.18);
+      height: 100vh; display: flex; flex-direction: column;
+      box-shadow: -20px 0 60px rgba(0,0,0,.5);
+      animation: slideInRight .22s ease;
+    }
+    @keyframes slideInRight { from { transform: translateX(60px); opacity:0; } to { transform: translateX(0); opacity:1; } }
+    .sol-drawer-hd {
+      padding: 18px 22px; border-bottom: 1px solid rgba(255,255,255,.08);
+      display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+      background: #0d1117;
+    }
+    .sol-drawer-title { font-size: 14px; font-weight: 700; color: #fff; flex: 1; }
+    .sol-drawer-body  { padding: 18px 22px; flex: 1; overflow-y: auto; }
+
+    /* Upload zone */
+    .sol-doc-upload-zone {
+      border: 2px dashed rgba(245,158,11,.3); border-radius: 12px;
+      padding: 24px 20px; text-align: center; cursor: pointer;
+      transition: all .2s; background: rgba(245,158,11,.04);
+    }
+    .sol-doc-upload-zone:hover,
+    .sol-doc-upload-zone.drag-over {
+      border-color: var(--sol-gold); background: rgba(245,158,11,.08);
+    }
+
+    /* Doc list */
+    .sol-doc-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .sol-doc-item:last-child { border-bottom: none; }
+    .sol-doc-icon {
+      width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 15px;
+    }
+    .sol-doc-icon.pdf { background: rgba(248,113,113,.15); color: #f87171; }
+    .sol-doc-icon.img { background: rgba(245,158,11,.15);  color: var(--sol-gold); }
+    .sol-doc-info { flex: 1; min-width: 0; }
+    .sol-doc-name { font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sol-doc-meta { font-size: 11px; color: rgba(255,255,255,.4); margin-top: 3px; }
+    .sol-doc-notes { font-size: 11px; color: rgba(255,255,255,.35); font-style: italic; margin-top: 2px; }
+    .sol-doc-actions { display: flex; gap: 5px; flex-shrink: 0; }
+    .sol-doc-type-pill {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      background: rgba(245,158,11,.12); color: var(--sol-gold);
+      border: 1px solid rgba(245,158,11,.22); border-radius: 10px; padding: 1px 7px;
+    }
+    .sol-doc-select,
+    .sol-doc-input {
+      width: 100%; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 8px; padding: 8px 10px; color: #fff; font-size: 12px;
+      outline: none; font-family: inherit;
+    }
+    .sol-doc-select:focus, .sol-doc-input:focus { border-color: var(--sol-gold); }
+    .sol-doc-select option { background: #1a1f2e; }
+    .sol-doc-empty {
+      text-align: center; padding: 40px 20px;
+      color: rgba(255,255,255,.3); display: flex; flex-direction: column;
+      align-items: center; gap: 8px;
+    }
+    .sol-doc-empty i { font-size: 32px; opacity: .4; }
+
+    @media (max-width: 768px) {
+      .sol-sidebar { display: none; }
+      .sol-kpi-row { grid-template-columns: 1fr 1fr; }
+      .sol-hero-stats { gap: 16px; }
+      .sol-projects-grid { grid-template-columns: 1fr; }
+      .sol-drawer { width: 100vw; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="solar-layout">
+
+  <!-- ═══════ SIDEBAR ═══════ -->
+  <aside class="sol-sidebar">
+    <div class="sol-brand">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <i class="fa-solid fa-solar-panel" style="color:var(--sol-gold);font-size:20px"></i>
+        <div>
+          <div class="sol-brand-name">SV Capital</div>
+          <div class="sol-brand-sub">Solar Investment</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sol-nav-label">Overview</div>
+    <button class="sol-nav-btn active" data-view="dashboard" onclick="solNavigate('dashboard',this)">
+      <i class="fa-solid fa-gauge-high"></i> Dashboard
+    </button>
+
+    <div class="sol-nav-label">Portfolio</div>
+    <button class="sol-nav-btn" data-view="projects" onclick="solNavigate('projects',this)">
+      <i class="fa-solid fa-solar-panel"></i> All Projects
+    </button>
+    <button class="sol-nav-btn" data-view="add" onclick="solNavigate('add',this)">
+      <i class="fa-solid fa-plus-circle"></i> Add Project
+    </button>
+
+    <div class="sol-nav-label">Analytics</div>
+    <button class="sol-nav-btn" data-view="nav" onclick="solNavigate('nav',this)">
+      <i class="fa-solid fa-chart-line"></i> NAV Calculator
+    </button>
+
+    <div class="sol-sidebar-footer">
+      <a href="index.html" class="sol-back-link">
+        <i class="fa-solid fa-arrow-left"></i> Back to Fund Console
+      </a>
+    </div>
+  </aside>
+
+  <!-- ═══════ MAIN ═══════ -->
+  <div class="sol-main">
+    <header class="sol-topbar">
+      <div>
+        <div class="sol-topbar-title" id="solTopTitle">Dashboard</div>
+        <div class="sol-topbar-sub">Solar Finance Product · NAV Engine</div>
+      </div>
+      <div class="sol-topbar-actions">
+        <button class="sol-btn sol-btn-secondary sol-btn-sm" onclick="loadAll()">
+          <i class="fa-solid fa-rotate"></i> Refresh
+        </button>
+        <button class="sol-btn sol-btn-primary sol-btn-sm" onclick="openAddProjectModal()">
+          <i class="fa-solid fa-plus"></i> Add Project
+        </button>
+        <a href="index.html" class="sol-btn sol-btn-secondary sol-btn-sm" style="text-decoration:none">
+          <i class="fa-solid fa-arrow-left"></i> Fund Console
+        </a>
+      </div>
+    </header>
+
+    <div class="sol-content">
+
+      <!-- VIEW: DASHBOARD -->
+      <section class="sol-view active" id="sol-view-dashboard">
+        <div class="sol-loading"><div class="sol-spinner"></div> Loading…</div>
+      </section>
+
+      <!-- VIEW: ALL PROJECTS -->
+      <section class="sol-view" id="sol-view-projects">
+        <div class="sol-loading"><div class="sol-spinner"></div> Loading projects…</div>
+      </section>
+
+      <!-- VIEW: ADD PROJECT (inline form) -->
+      <section class="sol-view" id="sol-view-add">
+        <!-- rendered by JS -->
+      </section>
+
+      <!-- VIEW: NAV CALCULATOR -->
+      <section class="sol-view" id="sol-view-nav">
+        <!-- rendered by JS -->
+      </section>
+
+    </div>
+  </div>
+
+</div><!-- /solar-layout -->
+
+<!-- ═══════ DOCS DRAWER ═══════ -->
+<div class="sol-drawer-overlay" id="solDocsOverlay" onclick="if(event.target===this)closeSolarDocs()">
+  <div class="sol-drawer">
+    <div class="sol-drawer-hd">
+      <i class="fa-solid fa-folder-open" style="color:var(--sol-gold)"></i>
+      <span class="sol-drawer-title" id="solDocsTitle">Documents</span>
+      <button class="sol-modal-close" onclick="closeSolarDocs()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="sol-drawer-body" id="solDocsBody">
+      <div class="sol-loading"><div class="sol-spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ PROJECT FORM MODAL ═══════ -->
+<div class="sol-modal-overlay" id="solProjectModal" onclick="if(event.target===this)closeProjectModal()">
+  <div class="sol-modal">
+    <div class="sol-modal-hd">
+      <i class="fa-solid fa-solar-panel" style="color:var(--sol-gold)"></i>
+      <span class="sol-modal-title" id="solModalTitle">Add Solar Project</span>
+      <button class="sol-modal-close" onclick="closeProjectModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="sol-modal-body">
+      <input type="hidden" id="sol_form_id">
+      <form id="solProjectForm" onsubmit="event.preventDefault();saveProjectForm()">
+
+        <div class="sol-section-label"><i class="fa-solid fa-info-circle"></i> Project Information</div>
+        <div class="sol-form-grid" style="margin-bottom:18px">
+          <div class="sol-form-group">
+            <label>Project Name <span style="color:#f87171">*</span></label>
+            <input type="text" id="sp_name" placeholder="e.g. Limpopo Solar Farm — Phase 2" required>
+          </div>
+          <div class="sol-form-group">
+            <label>Location</label>
+            <input type="text" id="sp_location" placeholder="City, Province">
+          </div>
+          <div class="sol-form-group">
+            <label>Capacity (kW)</label>
+            <input type="number" id="sp_capacity" step="1" min="0" placeholder="e.g. 500">
+          </div>
+          <div class="sol-form-group">
+            <label>Investor Count</label>
+            <input type="number" id="sp_investors" step="1" min="0" placeholder="e.g. 12">
+          </div>
+        </div>
+
+        <hr class="sol-divider">
+        <div class="sol-section-label"><i class="fa-solid fa-coins"></i> Investment Terms</div>
+        <div class="sol-form-grid col3" style="margin-bottom:18px">
+          <div class="sol-form-group">
+            <label>Product Type</label>
+            <select id="sp_product_type">
+              <option value="5yr">5-Year Product</option>
+              <option value="6yr">6-Year Product</option>
+              <option value="7yr" selected>7-Year Product</option>
+            </select>
+          </div>
+          <div class="sol-form-group">
+            <label>Status</label>
+            <select id="sp_status">
+              <option value="active">Active</option>
+              <option value="pending">Pending</option>
+              <option value="matured">Matured</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div class="sol-form-group">
+            <label>Term (years)</label>
+            <input type="number" id="sp_term_years" min="1" max="30" placeholder="e.g. 7">
+          </div>
+          <div class="sol-form-group">
+            <label>Capital Deployed (R)</label>
+            <input type="number" id="sp_capital" step="0.01" min="0" placeholder="0.00">
+          </div>
+          <div class="sol-form-group">
+            <label>Annual Rate (%)</label>
+            <input type="number" id="sp_rate_pct" step="0.01" min="0" max="100" placeholder="e.g. 14.83">
+            <span class="hint">Enter as percentage e.g. 14.83</span>
+          </div>
+          <div class="sol-form-group">
+            <label>Contracted Return (R)</label>
+            <input type="number" id="sp_contracted_return" step="0.01" min="0" placeholder="Total contracted return">
+          </div>
+        </div>
+
+        <div class="sol-form-grid" style="margin-bottom:18px">
+          <div class="sol-form-group">
+            <label>Start Date</label>
+            <input type="date" id="sp_start_date">
+          </div>
+          <div class="sol-form-group">
+            <label>Maturity Date</label>
+            <input type="date" id="sp_maturity_date">
+          </div>
+        </div>
+
+        <hr class="sol-divider">
+        <div class="sol-section-label"><i class="fa-solid fa-check-circle"></i> Actual Returns</div>
+        <div class="sol-form-grid" style="margin-bottom:18px">
+          <div class="sol-form-group">
+            <label>Actual Return Received (R)</label>
+            <input type="number" id="sp_actual_return" step="0.01" min="0" placeholder="0.00">
+          </div>
+        </div>
+
+        <div class="sol-form-group">
+          <label>Notes</label>
+          <textarea id="sp_notes" rows="3" style="resize:vertical" placeholder="PPA details, off-taker, project notes…"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="sol-modal-ft">
+      <button class="sol-btn sol-btn-secondary" onclick="closeProjectModal()">Cancel</button>
+      <button class="sol-btn sol-btn-primary" id="solSaveBtn" onclick="saveProjectForm()">
+        <i class="fa-solid fa-save"></i> Save Project
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="solToastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="js/solar.js"></script>
+</body>
+</html>

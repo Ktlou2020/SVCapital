@@ -8,7 +8,8 @@
     "dev": "cd server && node index.js",
     "migrate": "cd server && node db/migrate.js",
     "seed": "cd server && node db/seed.js",
-    "setup": "cd server && npm install && node db/migrate.js && node db/seed.js"
+    "setup": "cd server && npm install && node db/migrate.js && node db/seed.js",
+    "pages:build": "rm -rf dist && mkdir -p dist && cp -r assets css js admin ifa fund portal team _data index.html login.html signup.html manifest.json dist/ && echo '[/api/*]\\nurl = https://svcapital-production.up.railway.app/api/:splat\\nstatus = 200' > dist/_redirects"
   },
   "engines": {
     "node": ">=18.0.0"

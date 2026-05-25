@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SV Capital — Director Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="css/director.css" />
+  <!-- Staff Auth guard — Directors only -->
+  <script src="../js/staff-auth.js?v=3"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const s = StaffAuth.getSession();
+      if (!s) {
+        // No staffSession — check for a valid svc_token JWT (issued by /login.html)
+        try {
+          const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+          if (jwt) {
+            const payload = JSON.parse(atob(jwt.split('.')[1]));
+            if (payload && payload.exp * 1000 > Date.now() &&
+                (payload.role === 'director' || payload.role === 'admin')) {
+              return; // Valid JWT with director/admin role — allow access
+            }
+          }
+        } catch (_) {}
+        window.location.replace('login.html');
+        return;
+      }
+      if (!StaffAuth.isDirector(s)) { window.location.replace('hub.html?denied=director'); return; }
+    });
+  </script>
+</head>
+<body>
+
+<!-- Global Loader -->
+<div id="dir-loader">
+  <div class="spin"></div>
+  <div style="font-size:0.82rem;color:#6b7280;font-weight:600">Loading Director Panel…</div>
+</div>
+
+<div class="dir-layout" id="dirApp" style="display:none">
+
+  <!-- ══════════ SIDEBAR ══════════ -->
+  <aside class="dir-sidebar">
+    <div class="dir-brand">
+      <div class="dir-brand-icon"><i class="fa-solid fa-crown"></i></div>
+      <div>
+        <div class="dir-brand-name">SV Capital</div>
+        <div class="dir-brand-sub">Director Panel</div>
+      </div>
+    </div>
+
+    <nav class="dir-nav">
+      <div class="dir-nav-group">
+        <div class="dir-nav-group-label">Overview</div>
+        <button class="dir-nav-btn active" data-view="overview" onclick="navTo('overview',this)">
+          <i class="fa-solid fa-gauge-high"></i> Dashboard
+        </button>
+      </div>
+      <div class="dir-nav-group">
+        <div class="dir-nav-group-label">People</div>
+        <button class="dir-nav-btn" data-view="employees" onclick="navTo('employees',this)">
+          <i class="fa-solid fa-users"></i> All Employees
+        </button>
+        <button class="dir-nav-btn" data-view="create" onclick="navTo('create',this)">
+          <i class="fa-solid fa-user-plus"></i> Add Employee
+        </button>
+        <button class="dir-nav-btn" data-view="onboarding" onclick="navTo('onboarding',this)">
+          <i class="fa-solid fa-rocket"></i> Onboarding
+          <span class="nav-badge" id="pending-ob-badge" style="display:none">0</span>
+        </button>
+      </div>
+      <div class="dir-nav-group">
+        <div class="dir-nav-group-label">Platform</div>
+        <button class="dir-nav-btn" data-view="access" onclick="navTo('access',this)">
+          <i class="fa-solid fa-key"></i> Access & Roles
+        </button>
+        <button class="dir-nav-btn" data-view="courses" onclick="navTo('courses',this)">
+          <i class="fa-solid fa-graduation-cap"></i> Course Library
+        </button>
+      </div>
+      <div class="dir-nav-group">
+        <div class="dir-nav-group-label">Navigate To</div>
+        <button class="dir-nav-btn" onclick="window.location.href='hub.html'">
+          <i class="fa-solid fa-grid-2"></i> App Hub
+        </button>
+        <button class="dir-nav-btn" onclick="window.location.href='employee.html'">
+          <i class="fa-solid fa-user-circle"></i> My Dashboard
+        </button>
+        <button class="dir-nav-btn" onclick="window.location.href='index.html'">
+          <i class="fa-solid fa-people-group"></i> Team Dashboard
+        </button>
+      </div>
+    </nav>
+
+    <div class="dir-sidebar-footer">
+      <div class="dir-user-avatar" id="sidebarAvatar"></div>
+      <div>
+        <div class="dir-user-name" id="sidebarName"></div>
+        <div class="dir-user-role" id="sidebarRole"></div>
+      </div>
+      <button class="dir-logout-btn" title="Sign out" onclick="StaffAuth.logout()">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ══════════ MAIN ══════════ -->
+  <div class="dir-main">
+
+    <!-- Topbar -->
+    <div class="dir-topbar">
+      <div>
+        <div class="dir-page-title" id="pageTitle">Dashboard</div>
+        <div class="dir-page-sub"  id="pageSub">Director Super Admin Panel</div>
+      </div>
+      <div class="dir-topbar-actions" id="topbarActions"></div>
+    </div>
+
+    <div class="dir-content">
+
+      <!-- ── OVERVIEW ── -->
+      <div class="dir-view active" id="view-overview">
+        <div class="dir-stats" id="overviewStats"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+          <div>
+            <div class="dir-sec-head">
+              <div class="dir-sec-title">Recent Employees</div>
+              <button class="btn btn--ghost btn--sm" onclick="navTo('employees',document.querySelector('[data-view=employees]'))">View all</button>
+            </div>
+            <div id="recentEmpsTable"></div>
+          </div>
+          <div>
+            <div class="dir-sec-head">
+              <div class="dir-sec-title">Active Onboarding</div>
+              <button class="btn btn--ghost btn--sm" onclick="navTo('onboarding',document.querySelector('[data-view=onboarding]'))">View all</button>
+            </div>
+            <div id="activeOnboardingList"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ALL EMPLOYEES ── -->
+      <div class="dir-view" id="view-employees">
+        <div class="dir-sec-head">
+          <div class="dir-sec-title">All Employees (<span id="empCount">0</span>)</div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <div class="dir-search">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="empSearch" placeholder="Search employees…" oninput="filterEmployees()"/>
+            </div>
+            <button class="btn btn--gold btn--sm" onclick="navTo('create',document.querySelector('[data-view=create]'))">
+              <i class="fa-solid fa-user-plus"></i> Add Employee
+            </button>
+          </div>
+        </div>
+        <div class="dir-table-wrap"><table class="dir-table" id="empTable">
+          <thead><tr>
+            <th>Employee</th><th>Role</th><th>Department</th><th>Level</th><th>Status</th><th>Onboarding</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="empTableBody"></tbody>
+        </table></div>
+      </div>
+
+      <!-- ── CREATE EMPLOYEE ── -->
+      <div class="dir-view" id="view-create">
+        <div class="dir-alert dir-alert--info">
+          <i class="fa-solid fa-circle-info"></i>
+          <div>When you create a new employee, an <strong>onboarding journey</strong> is automatically started — 3 mandatory courses on SV Capital, the platform, and compliance are auto-enrolled. A welcome message and buddy assignment can be set below.</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 380px;gap:24px">
+
+          <!-- Form -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px">
+            <div class="form-section">
+              <div class="form-section-title">Personal Information</div>
+              <div class="form-grid">
+                <div class="form-group"><label>First Name <span class="req">*</span></label><input id="c-fname" placeholder="Sipho" /></div>
+                <div class="form-group"><label>Last Name <span class="req">*</span></label><input id="c-lname" placeholder="Dlamini" /></div>
+                <div class="form-group"><label>Work Email <span class="req">*</span></label><input id="c-email" type="email" placeholder="sipho.dlamini@svcapital.co.za" /></div>
+                <div class="form-group"><label>Mobile Number</label><input id="c-phone" placeholder="+27 82 000 0000" /></div>
+                <div class="form-group"><label>Date of Birth</label><input id="c-dob" type="date" /></div>
+                <div class="form-group"><label>SA ID Number</label><input id="c-idnum" placeholder="9001015800086" /></div>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="form-section-title">Role & Position</div>
+              <div class="form-grid">
+                <div class="form-group"><label>Role <span class="req">*</span></label>
+                  <select id="c-role">
+                    <option value="">Select role…</option>
+                    <option>CEO</option><option>Operations Manager</option><option>Investment Analyst</option>
+                    <option>Client Relations</option><option>Compliance Officer</option><option>Marketing</option>
+                    <option>Tech Lead</option><option>Finance Manager</option><option>Junior Analyst</option><option>Admin</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Department <span class="req">*</span></label>
+                  <select id="c-dept">
+                    <option value="">Select department…</option>
+                    <option>Executive</option><option>Operations</option><option>Investments</option>
+                    <option>Client Services</option><option>Compliance</option><option>Marketing</option>
+                    <option>Technology</option><option>Finance</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Level</label>
+                  <select id="c-level">
+                    <option value="junior">Junior</option><option value="mid">Mid-Level</option>
+                    <option value="senior">Senior</option><option value="lead">Lead</option>
+                    <option value="executive">Executive</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Start Date</label><input id="c-start" type="date" /></div>
+                <div class="form-group"><label>Base Salary (ZAR)</label><input id="c-salary" type="number" placeholder="35000" /></div>
+                <div class="form-group"><label>EVA Weight</label>
+                  <select id="c-eva">
+                    <option value="0.5">0.5 — Support</option><option value="0.8">0.8 — Admin</option>
+                    <option value="1.0">1.0 — Standard</option><option value="1.2">1.2 — Senior</option>
+                    <option value="1.5">1.5 — Lead</option><option value="1.8">1.8 — Analyst</option>
+                    <option value="2.0">2.0 — Director</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group" style="margin-top:14px"><label>Short Bio</label>
+                <textarea id="c-bio" rows="2" placeholder="e.g. Experienced investment analyst with 5 years in alternative assets…"></textarea>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="form-section-title">Onboarding Settings</div>
+              <div class="form-grid">
+                <div class="form-group"><label>Onboarding Buddy</label>
+                  <select id="c-buddy"><option value="">None assigned</option></select>
+                  <span class="form-hint">A peer mentor who helps the new employee settle in.</span>
+                </div>
+                <div class="form-group"><label>Avatar Colour</label>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px" id="colorPicker">
+                    <div class="color-swatch selected" style="background:#7c5cfc" data-color="#7c5cfc" onclick="selectColor(this)"></div>
+                    <div class="color-swatch" style="background:#00d4aa" data-color="#00d4aa" onclick="selectColor(this)"></div>
+                    <div class="color-swatch" style="background:#e84393" data-color="#e84393" onclick="selectColor(this)"></div>
+                    <div class="color-swatch" style="background:#f59e0b" data-color="#f59e0b" onclick="selectColor(this)"></div>
+                    <div class="color-swatch" style="background:#06b6d4" data-color="#06b6d4" onclick="selectColor(this)"></div>
+                    <div class="color-swatch" style="background:#10b981" data-color="#10b981" onclick="selectColor(this)"></div>
+                    <div class="color-swatch" style="background:#fb923c" data-color="#fb923c" onclick="selectColor(this)"></div>
+                    <div class="color-swatch" style="background:#a855f7" data-color="#a855f7" onclick="selectColor(this)"></div>
+                  </div>
+                </div>
+                <div class="form-group full"><label>Welcome Message</label>
+                  <textarea id="c-welcome" rows="3" placeholder="Write a personalised welcome message for your new team member…"></textarea>
+                  <span class="form-hint">Shown to the employee on their first login under the Onboarding Journey banner.</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:12px;justify-content:flex-end">
+              <button class="btn btn--ghost" onclick="resetCreateForm()"><i class="fa-solid fa-rotate-left"></i> Reset</button>
+              <button class="btn btn--gold" id="createEmpBtn" onclick="createEmployee()">
+                <i class="fa-solid fa-user-plus"></i> Create Employee &amp; Start Onboarding
+              </button>
+            </div>
+          </div>
+
+          <!-- Preview card -->
+          <div>
+            <div class="dir-sec-title" style="margin-bottom:12px">Preview</div>
+            <div id="empPreviewCard" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden">
+              <div style="background:linear-gradient(135deg,#1a1c24,#111318);padding:24px;text-align:center;border-bottom:1px solid var(--border)">
+                <div id="prev-avatar" style="width:64px;height:64px;border-radius:50%;background:#7c5cfc;display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:800;color:#fff;margin:0 auto 12px">?</div>
+                <div id="prev-name" style="font-size:1.1rem;font-weight:800">New Employee</div>
+                <div id="prev-role" style="color:var(--gold);font-size:0.8rem;font-weight:600;margin-top:4px">Role</div>
+                <div id="prev-dept" style="color:var(--muted);font-size:0.75rem;margin-top:2px">Department</div>
+              </div>
+              <div style="padding:16px">
+                <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700;margin-bottom:10px">Onboarding Courses Auto-Enrolled</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;align-items:center;gap:10px;font-size:0.78rem"><span style="width:28px;height:28px;border-radius:7px;background:rgba(124,92,252,0.15);color:#7c5cfc;display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0"><i class="fa-solid fa-gem"></i></span><span>Welcome to SV Capital</span></div>
+                  <div style="display:flex;align-items:center;gap:10px;font-size:0.78rem"><span style="width:28px;height:28px;border-radius:7px;background:rgba(0,212,170,0.15);color:#00d4aa;display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0"><i class="fa-solid fa-laptop-code"></i></span><span>Platform Walkthrough</span></div>
+                  <div style="display:flex;align-items:center;gap:10px;font-size:0.78rem"><span style="width:28px;height:28px;border-radius:7px;background:rgba(232,67,147,0.15);color:#e84393;display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0"><i class="fa-solid fa-shield-halved"></i></span><span>Compliance &amp; FICA</span></div>
+                </div>
+                <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+                  <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700;margin-bottom:8px">Starting XP &amp; Level</div>
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <div style="font-size:1.4rem;font-weight:900;color:var(--purple)">0 XP</div>
+                    <div style="font-size:0.78rem;color:var(--muted)">Level 1 — Analyst</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px">
+              <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:700;margin-bottom:10px">Default PIN</div>
+              <div style="font-size:0.82rem;color:var(--muted2)">Last 4 digits of SA ID number. If no ID set, PIN defaults to <strong style="color:var(--gold)">1234</strong>.</div>
+              <div style="margin-top:8px;font-size:0.75rem;color:var(--muted)">Share login instructions with the new employee after creating their account.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ONBOARDING ── -->
+      <div class="dir-view" id="view-onboarding">
+        <div class="dir-sec-head">
+          <div class="dir-sec-title">Onboarding Journeys</div>
+          <div style="display:flex;gap:10px">
+            <select id="ob-filter" onchange="renderOnboardingView()" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:7px 12px;color:var(--text);font-size:0.8rem;font-family:inherit;outline:none">
+              <option value="all">All employees</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="not_started">Not Started</option>
+            </select>
+          </div>
+        </div>
+        <div id="onboardingList"></div>
+      </div>
+
+      <!-- ── ACCESS & ROLES ── -->
+      <div class="dir-view" id="view-access">
+        <div class="dir-sec-head">
+          <div class="dir-sec-title">Role-Based Access Control</div>
+        </div>
+        <div class="dir-alert dir-alert--info" style="margin-bottom:20px">
+          <i class="fa-solid fa-circle-info"></i>
+          <div>Access is determined by each employee's <strong>Role</strong> and <strong>Level</strong>. Executive-level employees always have full access regardless of role. Change an employee's role or level in the <strong>All Employees</strong> view to update their access.</div>
+        </div>
+        <div id="rbacMatrix"></div>
+      </div>
+
+      <!-- ── COURSE LIBRARY ── -->
+      <div class="dir-view" id="view-courses">
+        <div class="dir-sec-head">
+          <div class="dir-sec-title">Course Library (<span id="courseCount">0</span> courses)</div>
+        </div>
+        <div id="courseGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px"></div>
+      </div>
+
+    </div><!-- /dir-content -->
+  </div><!-- /dir-main -->
+</div><!-- /dir-layout -->
+
+<!-- ══════════ MODALS ══════════ -->
+
+<!-- Employee Detail Modal -->
+<div class="dir-modal-overlay" id="empDetailModal">
+  <div class="dir-modal" style="max-width:720px">
+    <div class="dir-modal-header">
+      <div class="modal-icon" style="background:rgba(124,92,252,0.1);color:#7c5cfc"><i class="fa-solid fa-user"></i></div>
+      <h3>Employee Details</h3>
+      <button class="btn btn--ghost btn--sm" onclick="closeModal('empDetailModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="dir-modal-body" id="empDetailBody"></div>
+    <div class="dir-modal-footer">
+      <button class="btn btn--danger btn--sm" id="modalDeactivateBtn">Deactivate</button>
+      <button class="btn btn--ghost" onclick="closeModal('empDetailModal')">Close</button>
+      <button class="btn btn--gold btn--sm" id="modalEditBtn">Edit Employee</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Employee Modal -->
+<div class="dir-modal-overlay" id="editEmpModal">
+  <div class="dir-modal">
+    <div class="dir-modal-header">
+      <div class="modal-icon" style="background:rgba(245,158,11,0.1);color:var(--gold)"><i class="fa-solid fa-pen"></i></div>
+      <h3>Edit Employee</h3>
+      <button class="btn btn--ghost btn--sm" onclick="closeModal('editEmpModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="dir-modal-body" id="editEmpBody"></div>
+    <div class="dir-modal-footer">
+      <button class="btn btn--ghost" onclick="closeModal('editEmpModal')">Cancel</button>
+      <button class="btn btn--gold" onclick="saveEmployeeEdit()"><i class="fa-solid fa-save"></i> Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Onboarding Detail Modal -->
+<div class="dir-modal-overlay" id="obDetailModal">
+  <div class="dir-modal" style="max-width:700px">
+    <div class="dir-modal-header">
+      <div class="modal-icon" style="background:rgba(245,158,11,0.1);color:var(--gold)"><i class="fa-solid fa-rocket"></i></div>
+      <h3>Onboarding Journey</h3>
+      <button class="btn btn--ghost btn--sm" onclick="closeModal('obDetailModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="dir-modal-body" id="obDetailBody"></div>
+    <div class="dir-modal-footer">
+      <button class="btn btn--ghost" onclick="closeModal('obDetailModal')">Close</button>
+      <button class="btn btn--gold btn--sm" id="obStartBtn">Start Journey</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="dir-toast"><i class="fa-solid fa-circle-check" style="color:var(--teal)"></i><span id="dir-toast-msg"></span></div>
+
+<!-- ── Help Button (floating) ── -->
+<button id="dirHelpBtn" onclick="toggleDirHelp()" title="Help & Guide"
+  style="position:fixed;bottom:28px;right:28px;width:52px;height:52px;border-radius:50%;
+         background:linear-gradient(135deg,#f59e0b,#d97706);border:none;color:#111;
+         font-size:1.15rem;cursor:pointer;z-index:7900;
+         box-shadow:0 4px 24px rgba(245,158,11,0.45);
+         display:flex;align-items:center;justify-content:center;
+         transition:transform 0.15s,box-shadow 0.15s"
+  onmouseover="this.style.transform='scale(1.1)';this.style.boxShadow='0 6px 32px rgba(245,158,11,0.65)'"
+  onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 4px 24px rgba(245,158,11,0.45)'">
+  <i class="fa-solid fa-circle-question"></i>
+</button>
+
+<!-- ── Help Panel ── -->
+<div id="dirHelpPanel"
+  style="position:fixed;right:-420px;top:0;bottom:0;width:400px;
+         background:#111318;border-left:1px solid rgba(255,255,255,0.08);
+         z-index:8500;overflow-y:auto;
+         transition:right 0.3s cubic-bezier(0.4,0,0.2,1);
+         box-shadow:-8px 0 40px rgba(0,0,0,0.5)">
+  <div style="position:sticky;top:0;background:#111318;border-bottom:1px solid rgba(255,255,255,0.08);
+              padding:16px 20px;display:flex;align-items:center;gap:12px;z-index:1">
+    <div style="width:32px;height:32px;border-radius:9px;background:rgba(245,158,11,0.15);
+                color:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:0.85rem">
+      <i class="fa-solid fa-crown"></i>
+    </div>
+    <div style="flex:1">
+      <div style="font-size:0.92rem;font-weight:800">Director Help</div>
+      <div id="dir-help-context" style="font-size:0.7rem;color:#6b7280">Platform guide</div>
+    </div>
+    <button onclick="toggleDirHelp()" style="background:none;border:none;color:#6b7280;cursor:pointer;font-size:0.9rem">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+  <div id="dirHelpBody" style="padding:20px"></div>
+</div>
+<div id="dirHelpOverlay" onclick="toggleDirHelp()"
+  style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);
+         z-index:8400;backdrop-filter:blur(2px)"></div>
+
+<style>
+  .color-swatch { width:28px;height:28px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform 0.15s,border-color 0.15s; }
+  .color-swatch:hover { transform:scale(1.15); }
+  .color-swatch.selected { border-color:#fff;transform:scale(1.1); }
+</style>
+
+<script src="js/director.js"></script>
+</body>
+</html>

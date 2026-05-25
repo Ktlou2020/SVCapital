@@ -1,0 +1,2 @@
+# Proxy all API calls to the Railway backend
+/api/*  https://svcapital-production.up.railway.app/api/:splat  200

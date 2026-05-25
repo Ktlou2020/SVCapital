@@ -30,6 +30,6 @@ Thumbs.db
 .idea/
 
 # Build artifacts
-dist/
+# dist/ is intentionally committed — it's the Cloudflare Pages build output
 build/
 .cache/

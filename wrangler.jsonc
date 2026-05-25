@@ -2,8 +2,5 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "svcapital",
   "compatibility_date": "2026-05-20",
-  "pages_build_output_dir": ".",
-  "observability": {
-    "enabled": true
-  }
+  "pages_build_output_dir": "dist"
 }

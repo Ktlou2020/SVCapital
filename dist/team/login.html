@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SV Capital — Staff Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0b0c10;
+      --surface:   #111318;
+      --surface2:  #1a1c24;
+      --border:    rgba(255,255,255,0.07);
+      --purple:    #7c5cfc;
+      --purple-h:  #6347e0;
+      --teal:      #00d4aa;
+      --text:      #e8eaf6;
+      --muted:     #6b7280;
+      --danger:    #ef4444;
+    }
+
+    html, body {
+      min-height: 100vh;
+      background: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    /* ── Animated background grid ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(124,92,252,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,92,252,0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+    }
+
+    /* Glowing orbs */
+    .orb {
+      position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.18; z-index: 0; pointer-events: none;
+    }
+    .orb--1 { width: 500px; height: 500px; background: #7c5cfc; top: -120px; left: -100px; animation: drift1 14s ease-in-out infinite alternate; }
+    .orb--2 { width: 360px; height: 360px; background: #00d4aa; bottom: -80px; right: -60px; animation: drift2 18s ease-in-out infinite alternate; }
+    .orb--3 { width: 280px; height: 280px; background: #e84393; top: 50%; right: 10%; animation: drift3 22s ease-in-out infinite alternate; }
+
+    @keyframes drift1 { from { transform: translate(0,0) scale(1); } to { transform: translate(40px, 60px) scale(1.1); } }
+    @keyframes drift2 { from { transform: translate(0,0); } to { transform: translate(-30px,-40px); } }
+    @keyframes drift3 { from { transform: translateY(0); } to { transform: translateY(-50px); } }
+
+    /* ── Layout ── */
+    .page {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    /* ── Left panel ── */
+    .left-panel {
+      display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
+      padding: 60px 64px;
+      border-right: 1px solid var(--border);
+    }
+
+    .brand-mark {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 64px;
+    }
+    .brand-icon {
+      width: 52px; height: 52px; border-radius: 14px;
+      background: linear-gradient(135deg, #7c5cfc 0%, #00d4aa 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; color: #fff;
+      box-shadow: 0 0 0 3px rgba(124,92,252,0.2);
+    }
+    .brand-text-wrap { line-height: 1.2; }
+    .brand-name { font-size: 1.3rem; font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
+    .brand-sub  { font-size: 0.78rem; color: var(--muted); font-weight: 500; }
+
+    .left-headline {
+      font-size: 2.6rem; font-weight: 900; line-height: 1.15;
+      letter-spacing: -0.03em; margin-bottom: 20px;
+    }
+    .left-headline em { font-style: normal; color: var(--purple); }
+    .left-desc { font-size: 1rem; color: var(--muted); line-height: 1.7; max-width: 420px; margin-bottom: 48px; }
+
+    /* App tiles preview */
+    .app-preview { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 440px; }
+    .app-preview-row { display: flex; gap: 12px; }
+    .app-chip {
+      flex: 1; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .app-chip-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; color: #fff; flex-shrink: 0;
+    }
+    .app-chip-label { font-size: 0.78rem; font-weight: 600; color: #c8cce0; }
+    .app-chip-desc  { font-size: 0.68rem; color: var(--muted); line-height: 1.3; }
+
+    /* ── Right panel (form) ── */
+    .right-panel {
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      padding: 60px 48px;
+    }
+
+    .login-card {
+      width: 100%; max-width: 420px;
+    }
+
+    .login-title { font-size: 1.6rem; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.02em; }
+    .login-subtitle { font-size: 0.88rem; color: var(--muted); margin-bottom: 36px; }
+
+    /* Step indicators */
+    .steps {
+      display: flex; align-items: center; gap: 0;
+      margin-bottom: 32px;
+    }
+    .step {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.75rem; font-weight: 600; color: var(--muted);
+      transition: color 0.2s;
+    }
+    .step.active { color: var(--text); }
+    .step.done   { color: var(--teal); }
+    .step-dot {
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 2px solid currentColor;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: 700;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .step.active .step-dot { background: var(--purple); border-color: var(--purple); color: #fff; }
+    .step.done .step-dot   { background: var(--teal); border-color: var(--teal); color: #fff; }
+    .step-line { flex: 1; height: 2px; background: var(--border); margin: 0 8px; min-width: 32px; }
+    .step-line.done { background: var(--teal); }
+
+    /* Form elements */
+    .form-group { margin-bottom: 20px; }
+    .form-label { display: block; font-size: 0.8rem; font-weight: 600; color: #9ca3af; margin-bottom: 7px; }
+    .form-input {
+      width: 100%; padding: 13px 16px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text);
+      font-size: 0.95rem; font-family: inherit;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+    .form-input:focus {
+      border-color: var(--purple);
+      box-shadow: 0 0 0 3px rgba(124,92,252,0.15);
+    }
+    .form-input.error { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(239,68,68,0.12); }
+
+    .input-wrap { position: relative; }
+    .input-icon {
+      position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+      color: var(--muted); font-size: 0.9rem; pointer-events: none;
+    }
+    .input-wrap .form-input { padding-left: 40px; }
+    .input-toggle {
+      position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+      color: var(--muted); cursor: pointer; font-size: 0.9rem;
+      background: none; border: none; outline: none;
+      transition: color 0.2s;
+    }
+    .input-toggle:hover { color: var(--text); }
+
+    /* Employee card (step 2 preview) */
+    .emp-preview-card {
+      display: none;
+      background: var(--surface2);
+      border: 1px solid rgba(124,92,252,0.3);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+      align-items: center;
+      gap: 14px;
+    }
+    .emp-preview-card.show { display: flex; }
+    .emp-avatar {
+      width: 46px; height: 46px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; font-weight: 700; color: #fff; flex-shrink: 0;
+    }
+    .emp-name { font-size: 1rem; font-weight: 700; }
+    .emp-role-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(124,92,252,0.12); border: 1px solid rgba(124,92,252,0.2);
+      border-radius: 20px; padding: 3px 10px;
+      font-size: 0.72rem; font-weight: 600; color: var(--purple);
+      margin-top: 3px;
+    }
+
+    .btn-primary {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, var(--purple), #5b3fd4);
+      border: none; border-radius: 10px;
+      color: #fff; font-size: 0.95rem; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
+      box-shadow: 0 4px 20px rgba(124,92,252,0.35);
+    }
+    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(124,92,252,0.5); }
+    .btn-primary:active:not(:disabled){ transform: translateY(0); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-ghost {
+      width: 100%; padding: 12px;
+      background: transparent; border: 1px solid var(--border);
+      border-radius: 10px; color: var(--muted);
+      font-size: 0.88rem; font-weight: 600; cursor: pointer; font-family: inherit;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: border-color 0.15s, color 0.15s;
+      margin-top: 10px;
+    }
+    .btn-ghost:hover { border-color: var(--purple); color: var(--text); }
+
+    .alert {
+      padding: 12px 14px; border-radius: 8px;
+      font-size: 0.82rem; font-weight: 600;
+      margin-bottom: 16px; display: none; gap: 8px; align-items: flex-start;
+    }
+    .alert.show { display: flex; }
+    .alert--error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); color: #fca5a5; }
+    .alert--success { background: rgba(0,212,170,0.1); border: 1px solid rgba(0,212,170,0.2); color: #6ee7d4; }
+
+    .divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
+    .divider-line { flex: 1; height: 1px; background: var(--border); }
+    .divider-text { font-size: 0.75rem; color: var(--muted); }
+
+    /* PIN input */
+    .pin-wrap { display: flex; gap: 10px; justify-content: center; margin-bottom: 4px; }
+    .pin-box {
+      width: 52px; height: 58px;
+      background: var(--surface2); border: 1.5px solid var(--border);
+      border-radius: 10px; text-align: center;
+      font-size: 1.3rem; font-weight: 800; color: var(--text);
+      font-family: inherit; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      caret-color: var(--purple);
+    }
+    .pin-box:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(124,92,252,0.15); }
+    .pin-box.filled { border-color: rgba(124,92,252,0.5); }
+    .pin-box.error  { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(239,68,68,0.12); }
+
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.25);
+      border-top-color: #fff;
+      border-radius: 50%; animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Shake animation on error */
+    @keyframes shake {
+      0%,100%{ transform: translateX(0); }
+      20%    { transform: translateX(-6px); }
+      40%    { transform: translateX(6px); }
+      60%    { transform: translateX(-4px); }
+      80%    { transform: translateX(4px); }
+    }
+    .shake { animation: shake 0.4s ease; }
+
+    /* ── Forgot PIN panel ── */
+    .forgot-panel { display: none; }
+    .forgot-panel.show { display: block; }
+
+    .back-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: none; border: none; color: var(--muted);
+      font-size: 0.82rem; font-weight: 600; cursor: pointer;
+      font-family: inherit; padding: 0; margin-bottom: 24px;
+      transition: color 0.15s;
+    }
+    .back-btn:hover { color: var(--text); }
+
+    .fp-success { display: none; text-align: center; padding: 20px 0; }
+    .fp-success.show { display: block; }
+    .fp-success-icon {
+      width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 14px;
+      background: rgba(0,212,170,.12); border: 1.5px solid rgba(0,212,170,.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; color: var(--teal);
+    }
+    .fp-success-title { font-size: 1.1rem; font-weight: 800; margin-bottom: 8px; }
+    .fp-success-sub   { font-size: 0.85rem; color: var(--muted); line-height: 1.6; margin-bottom: 18px; }
+    .fp-success-note  { font-size: 0.75rem; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 13px; margin-bottom: 20px; line-height: 1.5; text-align: left; }
+
+    /* Responsive */
+    @media (max-width: 860px) {
+      .page { grid-template-columns: 1fr; }
+      .left-panel { display: none; }
+      .right-panel { padding: 40px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Background orbs -->
+<div class="orb orb--1"></div>
+<div class="orb orb--2"></div>
+<div class="orb orb--3"></div>
+
+<div class="page">
+
+  <!-- ═══════════════ LEFT PANEL ═══════════════ -->
+  <div class="left-panel">
+
+    <div class="brand-mark">
+      <div class="brand-icon"><i class="fa-solid fa-gem"></i></div>
+      <div class="brand-text-wrap">
+        <div class="brand-name">SV Capital</div>
+        <div class="brand-sub">Staff Portal</div>
+      </div>
+    </div>
+
+    <h1 class="left-headline">
+      Your work,<br>
+      your <em>apps</em>,<br>
+      your way.
+    </h1>
+    <p class="left-desc">
+      One login unlocks the tools you need — personalised to your role and level. 
+      From KPIs to fund operations, everything in one place.
+    </p>
+
+    <div class="app-preview">
+      <div class="app-preview-row">
+        <div class="app-chip">
+          <div class="app-chip-icon" style="background:#7c5cfc"><i class="fa-solid fa-user-circle"></i></div>
+          <div><div class="app-chip-label">My Dashboard</div><div class="app-chip-desc">For every team member</div></div>
+        </div>
+        <div class="app-chip">
+          <div class="app-chip-icon" style="background:#00d4aa"><i class="fa-solid fa-people-group"></i></div>
+          <div><div class="app-chip-label">Team Dashboard</div><div class="app-chip-desc">EVA & team KPIs</div></div>
+        </div>
+      </div>
+      <div class="app-preview-row">
+        <div class="app-chip">
+          <div class="app-chip-icon" style="background:#f59e0b"><i class="fa-solid fa-chart-line"></i></div>
+          <div><div class="app-chip-label">Fund Operations</div><div class="app-chip-desc">AUM & returns</div></div>
+        </div>
+        <div class="app-chip">
+          <div class="app-chip-icon" style="background:#e84393"><i class="fa-solid fa-shield-halved"></i></div>
+          <div><div class="app-chip-label">Admin Console</div><div class="app-chip-desc">Platform management</div></div>
+        </div>
+      </div>
+      <div class="app-preview-row">
+        <div class="app-chip">
+          <div class="app-chip-icon" style="background:#06b6d4"><i class="fa-solid fa-handshake"></i></div>
+          <div><div class="app-chip-label">IFA Portal</div><div class="app-chip-desc">Adviser tools</div></div>
+        </div>
+        <div class="app-chip">
+          <div class="app-chip-icon" style="background:#10b981"><i class="fa-solid fa-building-columns"></i></div>
+          <div><div class="app-chip-label">Investor Portal</div><div class="app-chip-desc">Client accounts</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /left-panel -->
+
+  <!-- ═══════════════ RIGHT PANEL ═══════════════ -->
+  <div class="right-panel">
+    <div class="login-card">
+
+      <div class="login-title">Welcome back</div>
+      <div class="login-subtitle">Sign in to access your staff portal</div>
+
+      <!-- Step indicator -->
+      <div class="steps" id="stepIndicator">
+        <div class="step active" id="stepDot1">
+          <div class="step-dot">1</div>
+          <span>Email</span>
+        </div>
+        <div class="step-line" id="stepLine1"></div>
+        <div class="step" id="stepDot2">
+          <div class="step-dot">2</div>
+          <span>Verify</span>
+        </div>
+        <div class="step-line" id="stepLine2"></div>
+        <div class="step" id="stepDot3">
+          <div class="step-dot"><i class="fa-solid fa-check" style="font-size:0.6rem"></i></div>
+          <span>Access</span>
+        </div>
+      </div>
+
+      <!-- Alert box -->
+      <div class="alert alert--error" id="alertBox">
+        <i class="fa-solid fa-circle-exclamation" style="margin-top:1px;flex-shrink:0"></i>
+        <span id="alertMsg"></span>
+      </div>
+
+      <!-- ── STEP 1: Email ── -->
+      <div id="step1">
+        <div class="form-group">
+          <label class="form-label" for="emailInput">Work email address</label>
+          <div class="input-wrap">
+            <i class="fa-solid fa-envelope input-icon"></i>
+            <input type="email" id="emailInput" class="form-input"
+              placeholder="you@svcapital.co.za"
+              autocomplete="email" autocapitalize="off" />
+          </div>
+        </div>
+        <button type="button" class="btn-primary" id="btnContinue">
+          Continue&nbsp;<i class="fa-solid fa-arrow-right"></i>
+        </button>
+        <div style="text-align:center;margin-top:14px">
+          <button type="button" class="back-btn" id="btnForgotPin">
+            <i class="fa-solid fa-key" style="font-size:0.7rem"></i> Forgot your PIN?
+          </button>
+        </div>
+      </div>
+
+      <!-- ── STEP 2: PIN ── -->
+      <div id="step2" style="display:none">
+
+        <!-- Employee preview card -->
+        <div class="emp-preview-card show" id="empPreviewCard">
+          <div class="emp-avatar" id="empAvatar"></div>
+          <div>
+            <div class="emp-name" id="empName"></div>
+            <div class="emp-role-chip" id="empRoleChip"></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Enter your 4-digit PIN</label>
+          <div class="pin-wrap" id="pinWrap">
+            <input class="pin-box" id="p1" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
+            <input class="pin-box" id="p2" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
+            <input class="pin-box" id="p3" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
+            <input class="pin-box" id="p4" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
+          </div>
+          <div style="text-align:center;font-size:0.72rem;color:var(--muted);margin-top:8px">
+            Your PIN was set by your administrator
+          </div>
+        </div>
+
+        <button type="button" class="btn-primary" id="btnLogin" disabled>
+          Sign In&nbsp;<i class="fa-solid fa-right-to-bracket"></i>
+        </button>
+        <button type="button" class="btn-ghost" id="btnBackToEmail">
+          <i class="fa-solid fa-arrow-left"></i>&nbsp;Use a different email
+        </button>
+
+      </div>
+
+      <!-- ── FORGOT PIN PANEL ── -->
+      <div class="forgot-panel" id="forgotPinPanel">
+        <button type="button" class="back-btn" id="btnCloseForgot">
+          <i class="fa-solid fa-arrow-left" style="font-size:0.7rem"></i> Back to sign in
+        </button>
+
+        <div style="margin-bottom:24px">
+          <div style="font-size:1rem;font-weight:800;margin-bottom:6px">Reset Staff PIN</div>
+          <div style="font-size:0.85rem;color:var(--muted);line-height:1.5">Enter your work email and we'll send a PIN reset link to your registered address.</div>
+        </div>
+
+        <!-- Success -->
+        <div class="fp-success" id="fpSuccess">
+          <div class="fp-success-icon"><i class="fa-solid fa-envelope-circle-check"></i></div>
+          <div class="fp-success-title">Reset link sent!</div>
+          <div class="fp-success-sub">A PIN reset link has been sent to <strong id="fpEmailSent"></strong>.</div>
+          <div class="fp-success-note"><i class="fa-solid fa-circle-info" style="margin-right:5px;color:var(--teal)"></i> The link expires in 30 minutes. If you don't see it, check your spam or contact your system administrator.</div>
+          <button type="button" class="btn-primary" id="btnFpBackToLogin">Back to Sign In</button>
+        </div>
+
+        <!-- Form -->
+        <div id="fpFormState">
+          <div class="alert alert--error" id="fpAlert" style="display:none">
+            <i class="fa-solid fa-circle-exclamation" style="margin-top:1px;flex-shrink:0"></i>
+            <span id="fpAlertMsg">Please enter your work email address.</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="fpEmailInput">Work Email Address</label>
+            <div class="input-wrap">
+              <i class="fa-solid fa-envelope input-icon"></i>
+              <input type="email" id="fpEmailInput" class="form-input"
+                     placeholder="you@svcapital.co.za" autocomplete="email" />
+            </div>
+          </div>
+          <button type="button" class="btn-primary" id="fpBtn">
+            <span id="fpBtnContent"><i class="fa-solid fa-paper-plane" style="margin-right:8px"></i>Send Reset Link</span>
+          </button>
+        </div>
+      </div>
+
+    </div><!-- /login-card -->
+  </div><!-- /right-panel -->
+
+</div><!-- /page -->
+
+<script src="../js/staff-auth.js?v=3"></script>
+<script>
+/* ─── State ─────────────────────────────────────────── */
+let _foundEmployee = null;
+let _lookingUp     = false;  // guard against double-clicks
+
+/* ─── On load: redirect if already logged in ─────────── */
+window.addEventListener('DOMContentLoaded', () => {
+  // staffSession bypass — already logged in via team login
+  const s = StaffAuth.getSession();
+  if (s) { window.location.replace('hub.html'); return; }
+
+  // JWT bypass — if logged in via /login.html (JWT auth), redirect to admin
+  // (hub.html requires staffSession which JWT users don't have)
+  try {
+    const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+    if (jwt) {
+      const p = JSON.parse(atob(jwt.split('.')[1]));
+      if (p && p.exp * 1000 > Date.now()) {
+        window.location.replace('/admin/index.html');
+        return;
+      }
+    }
+  } catch(_) {}
+
+  wirePinBoxes();
+  wireButtons();
+});
+
+/* ─── Wire all button/input events (no inline onclick= attributes) ──────
+   CSP script-src-attr 'none' blocks onclick= / onkeydown= attributes.
+   All handlers must be attached here via addEventListener.
+   ──────────────────────────────────────────────────────────────────── */
+function wireButtons() {
+  // Step 1 — Continue button
+  document.getElementById('btnContinue').addEventListener('click', lookupEmail);
+
+  // Step 1 — Email Enter key
+  document.getElementById('emailInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') lookupEmail();
+  });
+
+  // Step 1 — Forgot PIN link
+  document.getElementById('btnForgotPin').addEventListener('click', showForgotPin);
+
+  // Step 2 — Sign In button
+  document.getElementById('btnLogin').addEventListener('click', attemptLogin);
+
+  // Step 2 — Back to email button
+  document.getElementById('btnBackToEmail').addEventListener('click', resetToStep1);
+
+  // Forgot PIN panel — Close/back button
+  document.getElementById('btnCloseForgot').addEventListener('click', closeForgotPin);
+
+  // Forgot PIN panel — Send reset link button
+  document.getElementById('fpBtn').addEventListener('click', submitFpReset);
+
+  // Forgot PIN panel — Back to Sign In (success state)
+  document.getElementById('btnFpBackToLogin').addEventListener('click', closeForgotPin);
+
+  // Forgot PIN panel — Enter key on email input
+  document.getElementById('fpEmailInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitFpReset();
+  });
+}
+
+/* ─── STEP 1 — Email lookup ─────────────────────────── */
+async function lookupEmail() {
+  if (_lookingUp) return;
+
+  const emailRaw = document.getElementById('emailInput').value.trim().toLowerCase();
+  if (!emailRaw)               { shakeInput('emailInput'); return showError('Please enter your work email address.'); }
+  if (!emailRaw.includes('@')) { shakeInput('emailInput'); return showError('Please enter a valid email address.'); }
+
+  _lookingUp = true;
+  hideError();
+
+  const btn     = document.getElementById('btnContinue');
+  const origHTML = btn.innerHTML;
+  btn.disabled  = true;
+  btn.innerHTML = '<div class="spinner"></div>&nbsp;Looking up…';
+
+  try {
+    const res  = await fetch('/api/auth/staff-lookup', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email: emailRaw }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      shakeInput('emailInput');
+      showError(data.error || 'No staff account found for that email address.');
+      btn.disabled  = false;
+      btn.innerHTML = origHTML;
+      _lookingUp    = false;
+      return;
+    }
+
+    _foundEmployee = data.employee;
+    showStep2(data.employee);
+
+  } catch(err) {
+    console.error('Staff lookup error:', err);
+    showError('Could not reach the server. Please check your connection and try again.');
+    btn.disabled  = false;
+    btn.innerHTML = origHTML;
+    _lookingUp    = false;
+  }
+}
+
+/* ─── STEP 2 — Show PIN screen ───────────────────────── */
+function showStep2(emp) {
+  _lookingUp = false;
+
+  // Update step indicator
+  document.getElementById('stepDot1').classList.remove('active');
+  document.getElementById('stepDot1').classList.add('done');
+  document.getElementById('stepLine1').classList.add('done');
+  document.getElementById('stepDot2').classList.add('active');
+
+  // Fill employee preview
+  const avatar = document.getElementById('empAvatar');
+  avatar.textContent = emp.avatar_initials || (emp.first_name[0] + emp.last_name[0]).toUpperCase();
+  avatar.style.background = emp.avatar_color || '#7c5cfc';
+
+  document.getElementById('empName').textContent = emp.first_name + ' ' + emp.last_name;
+  document.getElementById('empRoleChip').innerHTML =
+    `<i class="fa-solid fa-id-badge"></i> ${emp.role}`;
+
+  // Show/hide panels
+  document.getElementById('step1').style.display = 'none';
+  document.getElementById('step2').style.display  = 'block';
+
+  // Focus first PIN box
+  setTimeout(() => document.getElementById('p1').focus(), 100);
+}
+
+/* ─── STEP 2 — PIN validation ────────────────────────── */
+async function attemptLogin() {
+  const pin = ['p1','p2','p3','p4'].map(id => document.getElementById(id).value).join('');
+  if (pin.length < 4) return;
+
+  // Derive expected PIN: last 4 digits of SA ID number
+  const idNum  = (_foundEmployee.id_number || '').replace(/\D/g,'');
+  const expectedPin = idNum.slice(-4);
+
+  // Fallback: if no ID number seeded, use last 4 of bank account number
+  const bankAcc = (_foundEmployee.bank_account_number || '').replace(/\D/g,'');
+  const fallbackPin = bankAcc.slice(-4);
+
+  const valid =
+    pin === expectedPin   ||
+    (expectedPin === '' && pin === fallbackPin);
+
+  if (!valid) {
+    // Shake PIN boxes and show error
+    document.querySelectorAll('.pin-box').forEach(b => {
+      b.classList.add('error');
+      b.value = '';
+    });
+    const wrap = document.getElementById('pinWrap');
+    wrap.classList.add('shake');
+    setTimeout(() => { wrap.classList.remove('shake'); document.querySelectorAll('.pin-box').forEach(b=>b.classList.remove('error')); }, 500);
+    showError('Incorrect PIN. Please try again.');
+    document.getElementById('p1').focus();
+    return;
+  }
+
+  // ✅ Valid — create session and redirect
+  hideError();
+  const loginBtn = document.getElementById('btnLogin');
+  if (loginBtn) { loginBtn.disabled = true; loginBtn.innerHTML = '<div class="spinner"></div>&nbsp;Signing in…'; }
+
+  // Update step indicator
+  document.getElementById('stepDot2').classList.remove('active');
+  document.getElementById('stepDot2').classList.add('done');
+  document.getElementById('stepLine2').classList.add('done');
+  document.getElementById('stepDot3').classList.add('done');
+
+  // Write staffSession (for team/* pages)
+  StaffAuth.setSession(_foundEmployee);
+
+  // Exchange PIN for a real JWT so fund/admin/ifa API calls work without
+  // re-authentication. Fire-and-forget — redirect happens regardless.
+  try {
+    const tr = await fetch('/api/auth/staff-token', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email: _foundEmployee.email, pin }),
+    });
+    if (tr.ok) {
+      const td = await tr.json();
+      // Store JWT in localStorage so api.js Auth helpers and fund.js fetch calls
+      // can attach it as Bearer token. Also stored in httpOnly cookie by server.
+      localStorage.setItem('svc_token', td.token);
+      localStorage.setItem('svc_user', JSON.stringify({
+        id:        _foundEmployee.id,
+        email:     _foundEmployee.email,
+        role:      td.role,
+        firstName: _foundEmployee.first_name,
+        lastName:  _foundEmployee.last_name,
+        empId:     _foundEmployee.id,
+      }));
+    }
+  } catch (_) { /* non-blocking — staffSession still works for team pages */ }
+
+  // Redirect: check if there was a pending destination
+  const redirect = sessionStorage.getItem('staffLoginRedirect');
+  sessionStorage.removeItem('staffLoginRedirect');
+
+  setTimeout(() => {
+    if (redirect && redirect !== '/team/login.html' && redirect !== '/team/hub.html' && !redirect.includes('login.html') && !redirect.includes('hub.html')) {
+      window.location.replace(redirect);
+    } else {
+      window.location.replace('hub.html');
+    }
+  }, 600);
+}
+
+/* ─── Forgot PIN Flow ────────────────────────────────── */
+function showForgotPin() {
+  document.getElementById('step1').style.display = 'none';
+  document.getElementById('step2').style.display = 'none';
+  document.getElementById('stepIndicator').style.display = 'none';
+  document.getElementById('forgotPinPanel').classList.add('show');
+  document.getElementById('fpAlert').style.display = 'none';
+  document.getElementById('fpSuccess').classList.remove('show');
+  document.getElementById('fpFormState').style.display = 'block';
+  hideError();
+  setTimeout(() => document.getElementById('fpEmailInput')?.focus(), 80);
+}
+
+function closeForgotPin() {
+  document.getElementById('forgotPinPanel').classList.remove('show');
+  document.getElementById('stepIndicator').style.display = '';
+  document.getElementById('step1').style.display = 'block';
+  document.getElementById('step2').style.display = 'none';
+  if (document.getElementById('fpEmailInput')) document.getElementById('fpEmailInput').value = '';
+  document.getElementById('fpAlert').style.display = 'none';
+  hideError();
+}
+
+function submitFpReset() {
+  const emailEl = document.getElementById('fpEmailInput');
+  const alertEl = document.getElementById('fpAlert');
+  const alertMsg = document.getElementById('fpAlertMsg');
+  const btn     = document.getElementById('fpBtn');
+  const btnCnt  = document.getElementById('fpBtnContent');
+  const email   = emailEl.value.toLowerCase().trim();
+
+  alertEl.style.display = 'none';
+  if (!email || !email.includes('@') || !email.includes('.')) {
+    emailEl.classList.add('error');
+    alertMsg.textContent = 'Please enter a valid work email address.';
+    alertEl.style.display = 'flex';
+    setTimeout(() => emailEl.classList.remove('error'), 600);
+    return;
+  }
+
+  btn.disabled = true;
+  btnCnt.innerHTML = '<div class="spinner"></div> Sending…';
+
+  setTimeout(() => {
+    document.getElementById('fpFormState').style.display = 'none';
+    document.getElementById('fpEmailSent').textContent = email;
+    document.getElementById('fpSuccess').classList.add('show');
+    btn.disabled = false;
+    btnCnt.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:8px"></i>Send Reset Link';
+  }, 1200);
+}
+
+/* ─── Back to step 1 ─────────────────────────────────── */
+function resetToStep1() {
+  _foundEmployee = null;
+  ['p1','p2','p3','p4'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('step1').style.display = 'block';
+  document.getElementById('step2').style.display  = 'none';
+  document.getElementById('stepDot1').classList.add('active');
+  document.getElementById('stepDot1').classList.remove('done');
+  document.getElementById('stepLine1').classList.remove('done');
+  document.getElementById('stepDot2').classList.remove('active','done');
+  document.getElementById('btnContinue').disabled = false;
+  hideError();
+  setTimeout(() => document.getElementById('emailInput').focus(), 50);
+}
+
+/* ─── PIN box wiring: auto-advance, backspace ─────────── */
+function wirePinBoxes() {
+  const boxes = [
+    document.getElementById('p1'),
+    document.getElementById('p2'),
+    document.getElementById('p3'),
+    document.getElementById('p4'),
+  ];
+
+  boxes.forEach((box, i) => {
+    box.addEventListener('input', e => {
+      const v = e.target.value.replace(/\D/g,'');
+      e.target.value = v;
+      if (v) {
+        e.target.classList.add('filled');
+        if (i < 3) boxes[i+1].focus();
+      } else {
+        e.target.classList.remove('filled');
+      }
+      // Enable/disable Sign In button
+      const all4 = boxes.every(b => b.value.length === 1);
+      const btn  = document.getElementById('btnLogin');
+      if (btn) btn.disabled = !all4;
+      // Auto submit when all 4 filled
+      if (all4) setTimeout(() => attemptLogin(), 120);
+    });
+
+    box.addEventListener('keydown', e => {
+      if (e.key === 'Backspace' && !e.target.value && i > 0) {
+        boxes[i-1].focus();
+      }
+      if (e.key === 'Enter') attemptLogin();
+    });
+
+    // Allow paste of full 4-digit PIN into first box
+    if (i === 0) {
+      box.addEventListener('paste', e => {
+        const pasted = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g,'');
+        if (pasted.length >= 4) {
+          e.preventDefault();
+          boxes.forEach((b, j) => {
+            b.value = pasted[j] || '';
+            b.classList.toggle('filled', !!pasted[j]);
+          });
+          const btn = document.getElementById('btnLogin');
+          if (btn) btn.disabled = false;
+          setTimeout(() => attemptLogin(), 150);
+        }
+      });
+    }
+  });
+}
+
+/* ─── UI helpers ─────────────────────────────────────── */
+function showError(msg) {
+  const box = document.getElementById('alertBox');
+  document.getElementById('alertMsg').textContent = msg;
+  box.classList.add('show');
+  box.classList.remove('alert--success');
+  box.classList.add('alert--error');
+}
+
+function hideError() {
+  document.getElementById('alertBox').classList.remove('show');
+}
+
+function shakeInput(id) {
+  const el = document.getElementById(id);
+  el.classList.add('shake', 'error');
+  setTimeout(() => el.classList.remove('shake', 'error'), 600);
+}
+
+
+</script>
+</body>
+</html>
