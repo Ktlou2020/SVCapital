@@ -41,9 +41,11 @@ RUN addgroup -g 1001 -S nodejs && \
     adduser  -S nodejs -u 1001
 USER nodejs
 
-EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD wget -qO- http://localhost:3000/api/health || exit 1
+# Railway injects PORT at runtime (typically 8080).
+# EXPOSE is documentation only — use the $PORT env var.
+# Do NOT add a Docker HEALTHCHECK here: Railway uses healthcheckPath
+# from railway.toml and knows the correct port. A hardcoded Docker
+# HEALTHCHECK against port 3000 would fail and kill the container.
+EXPOSE 8080
 
 CMD ["node", "server/index.js"]
