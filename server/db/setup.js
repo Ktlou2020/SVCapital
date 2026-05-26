@@ -198,7 +198,11 @@ CREATE TABLE IF NOT EXISTS employees (
   status TEXT DEFAULT 'active', pin_hash TEXT, hire_date DATE, notes TEXT,
   permissions JSONB DEFAULT '{}',
   id_number TEXT, avatar_initials TEXT, avatar_color TEXT DEFAULT '#7c5cfc',
-  xp_points INT DEFAULT 0,
+  xp_points INT DEFAULT 0, streak_days INT DEFAULT 0,
+  eva_weight NUMERIC(6,2) DEFAULT 1.0,
+  base_salary NUMERIC(18,2) DEFAULT 0,
+  bio TEXT, birth_date DATE, bank_account_number TEXT,
+  badges JSONB DEFAULT '[]', start_date DATE,
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS employees_email_idx ON employees(email);
@@ -210,7 +214,58 @@ DO $$ BEGIN
   BEGIN ALTER TABLE employees ADD COLUMN avatar_initials TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE employees ADD COLUMN avatar_color TEXT DEFAULT '#7c5cfc'; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE employees ADD COLUMN xp_points INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN streak_days INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN eva_weight NUMERIC(6,2) DEFAULT 1.0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN base_salary NUMERIC(18,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN bio TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN birth_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN bank_account_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN badges JSONB DEFAULT '[]'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN start_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
+
+CREATE TABLE IF NOT EXISTS employee_onboarding (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT REFERENCES employees(id) ON DELETE CASCADE,
+  status TEXT DEFAULT 'not_started',
+  tasks_total INT DEFAULT 0, tasks_completed INT DEFAULT 0,
+  welcome_message TEXT, assigned_buddy TEXT, notes TEXT,
+  created_by TEXT, started_at TIMESTAMPTZ, completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS emp_onboarding_emp_idx ON employee_onboarding(employee_id);
+
+CREATE TABLE IF NOT EXISTS employee_courses (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL, description TEXT,
+  category TEXT DEFAULT 'general', level TEXT DEFAULT 'beginner',
+  duration_minutes INT DEFAULT 30, xp_reward INT DEFAULT 100,
+  is_required BOOLEAN DEFAULT false, is_active BOOLEAN DEFAULT true,
+  modules JSONB DEFAULT '[]', thumbnail_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS course_progress (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  employee_id TEXT REFERENCES employees(id) ON DELETE CASCADE,
+  course_id TEXT, status TEXT DEFAULT 'enrolled',
+  current_module INT DEFAULT 1, modules_completed JSONB DEFAULT '[]',
+  quiz_scores JSONB DEFAULT '[]', overall_quiz_score NUMERIC(6,2) DEFAULT 0,
+  xp_earned INT DEFAULT 0, kpi_applied BOOLEAN DEFAULT false,
+  started_at TIMESTAMPTZ, completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS course_progress_emp_idx ON course_progress(employee_id);
+
+CREATE TABLE IF NOT EXISTS activity_feed (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  employee_id TEXT REFERENCES employees(id) ON DELETE CASCADE,
+  type TEXT NOT NULL, title TEXT NOT NULL, body TEXT,
+  icon TEXT, color TEXT, xp_shown INT DEFAULT 0,
+  is_public BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS activity_feed_emp_idx ON activity_feed(employee_id);
 `;
 
 async function autoSetup() {

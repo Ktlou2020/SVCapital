@@ -559,40 +559,43 @@ async function createEmployee() {
       first_name:       fname,
       last_name:        lname,
       email:            email,
-      phone:            phone,
+      phone:            phone || null,
       role:             role,
       department:       dept,
       level:            level,
       avatar_initials:  initials,
       avatar_color:     _selectedColor,
-      base_salary:      salary,
-      start_date:       startDate,
-      birth_date:       dob,
-      id_number:        idNum,
-      bio:              bio,
+      base_salary:      salary || 0,
+      hire_date:        startDate,   // schema primary date column
+      start_date:       startDate,   // convenience alias (also in schema)
+      birth_date:       dob || null,
+      id_number:        idNum || null,
+      bio:              bio || null,
       status:           'active',
-      eva_weight:       evaWeight,
+      eva_weight:       evaWeight || 1.0,
       xp_points:        0,
       streak_days:      0,
-      badges:           [],
+      badges:           JSON.stringify([]),   // JSONB column — must be serialised
     });
     _employees.push(emp);
 
-    // 2. Auto-enrol in the 3 onboarding courses
+    // 2. Auto-enrol in the 3 onboarding courses (fire-and-forget — don't block employee creation)
     const onboardingCourses = ['CRS-OB-001','CRS-OB-002','CRS-OB-003'];
     for (const cid of onboardingCourses) {
-      await post('tables/course_progress', {
-        employee_id:      empId,
-        course_id:        cid,
-        status:           'enrolled',
-        current_module:   1,
-        modules_completed:[],
-        quiz_scores:      [],
-        overall_quiz_score: 0,
-        xp_earned:        0,
-        kpi_applied:      false,
-        started_at:       new Date().toISOString(),
-      });
+      try {
+        await post('tables/course_progress', {
+          employee_id:        empId,
+          course_id:          cid,
+          status:             'enrolled',
+          current_module:     1,
+          modules_completed:  JSON.stringify([]),
+          quiz_scores:        JSON.stringify([]),
+          overall_quiz_score: 0,
+          xp_earned:          0,
+          kpi_applied:        false,
+          started_at:         new Date().toISOString(),
+        });
+      } catch (_) { /* non-blocking — employee still created */ }
     }
 
     // 3. Create onboarding record with default task list

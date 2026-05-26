@@ -33,6 +33,10 @@ const ALLOWED_TABLES = {
   fund_notifications:    'id',
   cattle_costs:          'id',
   employees:             'id',
+  employee_onboarding:   'id',
+  employee_courses:      'id',
+  course_progress:       'id',
+  activity_feed:         'id',
   users:                 'id',   // limited, no password_hash exposed
 };
 
@@ -40,7 +44,8 @@ const ALLOWED_TABLES = {
 const ADMIN_ONLY_TABLES = new Set([
   'audit_events', 'fee_ledger', 'fund_notifications',
   'cattle_costs', 'return_schedules', 'investor_allocations',
-  'employees',
+  'employees', 'employee_onboarding', 'employee_courses',
+  'course_progress', 'activity_feed',
 ]);
 
 /* ─── Columns to strip from responses ─── */
