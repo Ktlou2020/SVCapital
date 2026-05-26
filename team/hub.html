@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SV Capital — Staff Hub</title>
@@ -74,10 +78,10 @@
     .topbar-brand { display: flex; align-items: center; gap: 12px; }
     .topbar-icon {
       width: 38px; height: 38px; border-radius: 10px;
-      background: linear-gradient(135deg, #7c5cfc, #00d4aa);
+      overflow: hidden; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
-      font-size: 1rem; color: #fff;
     }
+    .topbar-icon img { width: 38px; height: 38px; object-fit: contain; display: block; }
     .topbar-name { font-size: 1.05rem; font-weight: 800; letter-spacing: -0.02em; }
     .topbar-sub  { font-size: 0.72rem; color: var(--muted); }
 
@@ -351,7 +355,7 @@
   <!-- ── Topbar ── -->
   <header class="topbar">
     <div class="topbar-brand">
-      <div class="topbar-icon"><i class="fa-solid fa-gem"></i></div>
+      <div class="topbar-icon"><img src="../assets/logo.png" alt="SV Capital"></div>
       <div>
         <div class="topbar-name">SV Capital</div>
         <div class="topbar-sub">Staff Portal</div>
