@@ -222,43 +222,8 @@ app.use((err, req, res, _next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
-/* ─── Process-level crash guards ───────────────────────────────────────────
-   Node.js 15+ terminates the process on any unhandledRejection by default.
-   These handlers keep the container alive and log the real error so Railway
-   shows it in the deployment logs instead of a silent "Stopping Container".
-   ──────────────────────────────────────────────────────────────────────── */
-process.on('uncaughtException', (err) => {
-  console.error('💥 UNCAUGHT EXCEPTION — server will continue:', err);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('💥 UNHANDLED REJECTION at:', promise, '— reason:', reason);
-  // Do NOT call process.exit() — let Railway healthcheck confirm we're still up
-});
-
-/* ─── SIGTERM handler (graceful shutdown) ───────────────────────────────────
-   Railway sends SIGTERM before killing the container during redeploys.
-   Without this handler, Node exits immediately and open DB connections can
-   cause the next deploy's pool to stall until Railway recycles the TCP slot.
-   ──────────────────────────────────────────────────────────────────────── */
-let _server = null;
-
-process.on('SIGTERM', () => {
-  console.log('⚡ SIGTERM received — closing server gracefully…');
-  if (_server) {
-    _server.close(() => {
-      console.log('✅ Server closed. Exiting.');
-      process.exit(0);
-    });
-    // Force-exit after 10 s if connections are hanging
-    setTimeout(() => { console.warn('⏰ Force-exit after 10s SIGTERM timeout.'); process.exit(1); }, 10_000).unref();
-  } else {
-    process.exit(0);
-  }
-});
-
 /* ─── Start ─── */
-_server = app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
   console.log('');
   console.log('🚀 SV Capital server started');
@@ -269,24 +234,9 @@ _server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`   JWT Secret:  ${process.env.JWT_SECRET ? '✅ set' : '⚠️  using default (insecure)'}`);
   console.log('');
 
-  // Auto-create tables and seed demo data on first boot.
-  // Wrapped in an immediately-invoked async IIFE with its own try/catch so
-  // that any rejection here is caught locally and NEVER propagates to the
-  // event loop as an unhandledRejection (which would crash Node 15+).
-  (async () => {
-    try {
-      const autoSetup = require('./db/setup');
-      await autoSetup();
-    } catch (err) {
-      // autoSetup() has its own internal try/catch, but belt-and-suspenders:
-      console.error('❌ autoSetup threw unexpectedly:', err.message || err);
-    }
-  })();
-});
-
-_server.on('error', (err) => {
-  console.error('💥 Server listen error:', err.message);
-  process.exit(1);
+  // Auto-create tables and seed demo data on first boot
+  const autoSetup = require('./db/setup');
+  await autoSetup();
 });
 
 module.exports = app;
