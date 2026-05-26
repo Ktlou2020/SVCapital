@@ -6,11 +6,32 @@
 
 /* ─── API helpers ─────────────────────────────────────────────────── */
 const BASE   = '../';
-const get    = async p => { try { const r = await fetch(BASE+p); return r.ok ? r.json() : {data:[],total:0}; } catch { return {data:[],total:0}; } };
-const post   = async (p,b) => { const r = await fetch(BASE+p,{method:'POST',  headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
-const patch  = async (p,b) => { const r = await fetch(BASE+p,{method:'PATCH', headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
-const put    = async (p,b) => { const r = await fetch(BASE+p,{method:'PUT',   headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
-const del    = async p     => { await fetch(BASE+p,{method:'DELETE'}); };
+
+/** Return { Authorization: 'Bearer <token>' } if a token is stored, else {} */
+function _authHeader() {
+  const t = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+  return t ? { 'Authorization': 'Bearer ' + t } : {};
+}
+
+const get    = async p => {
+  try {
+    const r = await fetch(BASE+p, { credentials:'include', headers: _authHeader() });
+    return r.ok ? r.json() : {data:[],total:0};
+  } catch { return {data:[],total:0}; }
+};
+const post   = async (p,b) => {
+  const r = await fetch(BASE+p, { method:'POST',  credentials:'include', headers:{'Content-Type':'application/json', ..._authHeader()}, body:JSON.stringify(b) });
+  return r.json();
+};
+const patch  = async (p,b) => {
+  const r = await fetch(BASE+p, { method:'PATCH', credentials:'include', headers:{'Content-Type':'application/json', ..._authHeader()}, body:JSON.stringify(b) });
+  return r.json();
+};
+const put    = async (p,b) => {
+  const r = await fetch(BASE+p, { method:'PUT',   credentials:'include', headers:{'Content-Type':'application/json', ..._authHeader()}, body:JSON.stringify(b) });
+  return r.json();
+};
+const del    = async p => { await fetch(BASE+p, { method:'DELETE', credentials:'include', headers: _authHeader() }); };
 
 async function fetchAll(table) {
   let page=1, all=[];
@@ -68,21 +89,57 @@ let _currentView   = 'overview';
 /* ═══ INIT ════════════════════════════════════════════════════════ */
 window.addEventListener('DOMContentLoaded', async () => {
   _session = StaffAuth.getSession();
-  if (!_session || !StaffAuth.isDirector(_session)) return;
+
+  // ── JWT-only path: user logged in via /login.html (no staffSession) ──
+  // Build a synthetic _session from the JWT so sidebar still renders.
+  if (!_session) {
+    try {
+      const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+      if (jwt) {
+        const payload = JSON.parse(atob(jwt.split('.')[1]));
+        if (payload && payload.exp * 1000 > Date.now() &&
+            (payload.role === 'director' || payload.role === 'admin')) {
+          // Reconstruct a minimal session object from svc_user or JWT payload
+          let u = {};
+          try { u = JSON.parse(localStorage.getItem('svc_user') || '{}'); } catch (_) {}
+          _session = {
+            empId:          u.id || payload.id || '',
+            email:          u.email || payload.email || '',
+            firstName:      u.firstName || payload.firstName || 'Director',
+            lastName:       u.lastName  || payload.lastName  || '',
+            role:           u.role || payload.role || 'director',
+            level:          'executive',
+            avatarInitials: ((u.firstName||'D')[0] + (u.lastName||'')[0]).toUpperCase() || 'D',
+            avatarColor:    '#7c5cfc',
+          };
+        }
+      }
+    } catch (_) {}
+  }
+
+  // ── Guard: if still no valid session, redirect to login ──
+  if (!_session || !StaffAuth.isDirector(_session)) {
+    window.location.replace('login.html');
+    return;
+  }
 
   // Populate sidebar user info
   const av = document.getElementById('sidebarAvatar');
   if (av) { av.textContent = _session.avatarInitials; av.style.background = _session.avatarColor || '#7c5cfc'; }
-  document.getElementById('sidebarName').textContent = _session.firstName + ' ' + _session.lastName;
+  document.getElementById('sidebarName').textContent = (_session.firstName || '') + ' ' + (_session.lastName || '');
   document.getElementById('sidebarRole').textContent = _session.role;
 
   // Live preview wiring for create form
   wirePreviewListeners();
 
-  // Load data
-  await loadAll();
+  // Load data — wrapped so a fetch failure never leaves the spinner up
+  try {
+    await loadAll();
+  } catch (err) {
+    console.error('Director: loadAll failed:', err);
+  }
 
-  // Hide loader
+  // Hide loader and reveal app regardless of data-load outcome
   document.getElementById('dir-loader').style.display = 'none';
   document.getElementById('dirApp').style.display = 'flex';
 

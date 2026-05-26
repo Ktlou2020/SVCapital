@@ -66,10 +66,17 @@
   /* Level-based elevation (overrides role if level is executive) */
   const EXECUTIVE_APPS = ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director'];
 
-  /* Director-level check — CEO or executive level gets Director panel */
+  /* Director-level check — executive level, CEO/COO/CTO/CFO titles,
+     or a JWT role of 'director' or 'admin' all grant Director panel access */
   function isDirector(session) {
     if (!session) return false;
-    return session.role === 'CEO' || session.level === 'executive';
+    if (session.level === 'executive') return true;
+    // JWT-role check (synthetic sessions built from JWT payload)
+    if (session.role === 'director' || session.role === 'admin') return true;
+    // Role-title check — covers common C-suite variations
+    const r = (session.role || '').toLowerCase();
+    return r.includes('ceo') || r.includes('coo') || r.includes('cto') ||
+           r.includes('cfo') || r.includes('director') || r.includes('chief');
   }
 
   /* ─── App Registry ───────────────────────────────────────────

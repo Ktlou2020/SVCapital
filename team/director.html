@@ -9,26 +9,31 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <link rel="stylesheet" href="css/director.css" />
   <!-- Staff Auth guard — Directors only -->
-  <script src="../js/staff-auth.js?v=3"></script>
+  <script src="../js/staff-auth.js?v=4"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const s = StaffAuth.getSession();
-      if (!s) {
-        // No staffSession — check for a valid svc_token JWT (issued by /login.html)
-        try {
-          const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
-          if (jwt) {
-            const payload = JSON.parse(atob(jwt.split('.')[1]));
-            if (payload && payload.exp * 1000 > Date.now() &&
-                (payload.role === 'director' || payload.role === 'admin')) {
-              return; // Valid JWT with director/admin role — allow access
-            }
-          }
-        } catch (_) {}
-        window.location.replace('login.html');
-        return;
+      if (s) {
+        // staffSession present — use the shared isDirector() check
+        if (!StaffAuth.isDirector(s)) {
+          window.location.replace('hub.html?denied=director');
+        }
+        return; // authorised — let director.js take over
       }
-      if (!StaffAuth.isDirector(s)) { window.location.replace('hub.html?denied=director'); return; }
+      // No staffSession — accept a valid svc_token JWT with a qualifying role
+      try {
+        const tok = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+        if (tok) {
+          const payload = JSON.parse(atob(tok.split('.')[1]));
+          if (payload && payload.exp * 1000 > Date.now() &&
+              (payload.role === 'director' || payload.role === 'admin')) {
+            return; // Valid JWT — allow access; director.js will build synthetic session
+          }
+        }
+      } catch (_) {}
+      // Nothing valid — send to login
+      sessionStorage.setItem('staffLoginRedirect', window.location.pathname);
+      window.location.replace('login.html');
     });
   </script>
 </head>
