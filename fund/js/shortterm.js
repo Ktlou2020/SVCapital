@@ -6,7 +6,7 @@
 
 'use strict';
 
-const STL_BASE = '/api';
+const STL_BASE = '/api/';
 
 /* ── API HELPERS ──────────────────────────────────────────── */
 function _stlGetToken() {
