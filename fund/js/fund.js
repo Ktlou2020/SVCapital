@@ -4,7 +4,7 @@
 'use strict';
 
 /* ─── BASE URL for API (fund/ subdir needs ../) ─── */
-const BASE = '/api';
+const BASE = '/api'/;
 
 /* ─── STATE ─── */
 const S = {
