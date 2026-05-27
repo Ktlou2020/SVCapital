@@ -5,7 +5,7 @@
 'use strict';
 
 /* ─── API helpers ─────────────────────────────────────────────────── */
-const BASE   = '../';
+const BASE   = '/api/';
 
 /** Return { Authorization: 'Bearer <token>' } if a token is stored, else {} */
 function _authHeader() {
