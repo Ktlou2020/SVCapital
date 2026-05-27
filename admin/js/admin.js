@@ -174,13 +174,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ─── Require authentication ───
   if (typeof Auth !== 'undefined') {
+    // Staff PIN login users have a staffSession; email+password users do not.
+    const hasStaffSession = (() => {
+      try { const s = JSON.parse(localStorage.getItem('staffSession') || 'null'); return !!(s && s.empId && s.expiresAt > Date.now()); } catch (_) { return false; }
+    })();
+    const loginPage = hasStaffSession ? '/team/login.html' : '/login.html';
+
     if (!Auth.isLoggedIn()) {
-      window.location.href = '/team/login.html';
+      window.location.href = loginPage;
       return;
     }
     const user = Auth.getUser();
     if (user && !['admin','director'].includes(user.role)) {
-      window.location.href = '/team/login.html';
+      window.location.href = loginPage;
       return;
     }
     // ── Populate user identity from session ──────────────────────────

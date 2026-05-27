@@ -3,7 +3,7 @@
    Version: 1.0.0
 ═══════════════════════════════════════════════════════════════ */
 
-const CACHE_NAME  = 'svcapital-fund-v1';
+const CACHE_NAME  = 'svcapital-fund-v2';
 const STATIC_URLS = [
   '/fund/index.html',
   '/fund/cattle.html',
@@ -44,8 +44,8 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  /* Pass-through for API calls — never cache table data */
-  if (url.pathname.startsWith('/tables/') || url.pathname.includes('tables/')) {
+  /* Pass-through for API calls — never cache API responses */
+  if (url.pathname.startsWith('/api/')) {
     return; /* Let it fall through to network */
   }
 

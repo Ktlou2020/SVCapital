@@ -18,8 +18,9 @@ const cors         = require('cors');
 const rateLimit    = require('express-rate-limit');
 const path         = require('path');
 
-const app  = express();
-const PORT = process.env.PORT || 3000;
+const app     = express();
+const PORT    = process.env.PORT || 3000;
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 /* ─── Trust Railway/proxy headers ─── */
 app.set('trust proxy', 1);
@@ -29,15 +30,15 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:    ["'self'"],
-      scriptSrc:     ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com', '*.googleapis.com'],
+      scriptSrc:     ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com', '*.googleapis.com', 'js.paystack.co'],
       // Allow inline onclick=/onkeydown= event handler attributes.
       // helmet sets this to 'none' by default, overriding unsafe-inline in scriptSrc.
       scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc:      ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'cdnjs.cloudflare.com'],
       fontSrc:       ["'self'", 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com'],
       imgSrc:        ["'self'", 'data:', 'blob:', '*'],
-      connectSrc:    ["'self'", 'cdn.jsdelivr.net'],
-      frameSrc:      ["'none'"],
+      connectSrc:    ["'self'", 'cdn.jsdelivr.net', 'api.paystack.co', '*.paystack.co'],
+      frameSrc:      ["'self'", 'checkout.paystack.com'],
       objectSrc:     ["'none'"],
     },
   },
@@ -50,7 +51,13 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
 
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin || ALLOWED_ORIGINS.length === 0) return cb(null, true);
+    // Same-origin requests (no Origin header) are always allowed
+    if (!origin) return cb(null, true);
+    // If no whitelist is configured, allow all origins (dev/unconfig'd deployments)
+    if (ALLOWED_ORIGINS.length === 0) {
+      if (IS_PROD) console.warn('⚠️  CORS: ALLOWED_ORIGINS not set — all origins permitted. Set this env var in production.');
+      return cb(null, true);
+    }
     if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
     cb(new Error(`CORS: origin ${origin} not allowed`));
   },
@@ -189,7 +196,7 @@ app.get('/api/health', async (req, res) => {
 /* ─── Static Frontend Files ─── */
 const STATIC_DIR = path.join(__dirname, '..');
 app.use(express.static(STATIC_DIR, {
-  index: false,
+  index: 'index.html',
   setHeaders: (res, filePath) => {
     // HTML files: always revalidate
     if (/\.html$/.test(filePath)) {
@@ -208,7 +215,7 @@ app.use(express.static(STATIC_DIR, {
   }
 }));
 
-/* ─── SPA Fallback ─── */
+/* ─── Fallback: unknown paths with no extension → root index ─── */
 app.get('*', (req, res) => {
   if (path.extname(req.path)) {
     return res.status(404).send('Not found');
