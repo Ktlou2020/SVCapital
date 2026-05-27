@@ -4,7 +4,7 @@
 'use strict';
 
 /* ─── BASE URL for API (fund/ subdir needs ../) ─── */
-const BASE = '/api'/;
+const BASE = '/api/';
 
 /* ─── STATE ─── */
 const S = {
@@ -217,8 +217,10 @@ async function apiFetch(path, opts={}) {
   opts.credentials = 'include'; // also send httpOnly cookie as fallback
   const r = await fetch(BASE + path, opts);
   if (r.status === 401) {
-    // Session expired — send back to login
-    window.location.replace('/team/login.html');
+    // Session expired — send back to the correct login page
+    let loginTarget = '/login.html';
+    try { const s = JSON.parse(localStorage.getItem('staffSession') || 'null'); if (s && s.empId && s.expiresAt > Date.now()) loginTarget = '/team/login.html'; } catch (_) {}
+    window.location.replace(loginTarget);
     throw new Error('Session expired');
   }
   if (!r.ok) throw new Error(`${opts.method||'GET'} ${path} → ${r.status}`);

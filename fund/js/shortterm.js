@@ -20,7 +20,7 @@ async function stlFetch(path, opts = {}) {
   );
   opts.credentials = 'include';
   const r = await fetch(STL_BASE + path, opts);
-  if (r.status === 401) { window.location.replace('/team/login.html'); throw new Error('Session expired'); }
+  if (r.status === 401) { let l='/login.html'; try{const s=JSON.parse(localStorage.getItem('staffSession')||'null');if(s&&s.empId&&s.expiresAt>Date.now())l='/team/login.html';}catch(_){} window.location.replace(l); throw new Error('Session expired'); }
   if (!r.ok) { const t = await r.text().catch(() => ''); throw new Error(`API ${r.status}: ${t}`); }
   return r;
 }

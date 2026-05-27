@@ -707,6 +707,7 @@ async function attemptLogin() {
         firstName: _foundEmployee.first_name,
         lastName:  _foundEmployee.last_name,
         empId:     _foundEmployee.id,
+        _staffSso: true,
       }));
     }
   } catch (_) { /* non-blocking — staffSession still works for team pages */ }
