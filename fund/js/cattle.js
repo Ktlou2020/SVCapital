@@ -954,6 +954,7 @@ function handleAnimalsFile(file) {
     const topBreeds = Object.entries(breedCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
     const mortalities = rows.filter(r => r['Mortality'] && r['Mortality'].trim()).length;
     const sold        = rows.filter(r => (r['Sold']||'').toLowerCase()==='checked').length;
+    const preview3    = rows.slice(0, 3);
     document.getElementById('animalsImportPreview').innerHTML = `
       <div class="import-preview">
         <h4><i class="fa-solid fa-check-circle" style="color:var(--green-mid)"></i> File ready: ${escapeHtml(file.name)}</h4>
@@ -963,6 +964,25 @@ function handleAnimalsFile(file) {
           <div class="import-stat">Mortalities: <strong>${mortalities}</strong></div>
           ${topBreeds.map(([b,c])=>`<div class="import-stat">${escapeHtml(b)}: <strong>${c}</strong></div>`).join('')}
         </div>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:10px">Preview (first 3 rows):</p>
+        <table class="data-table" style="font-size:11px;margin-top:6px">
+          <thead><tr><th>Tag #</th><th>Batch No</th><th>Batch Name</th><th>Breed</th><th>Gender</th><th>Mass (kg)</th><th>Sold</th><th>Status</th></tr></thead>
+          <tbody>${preview3.map(r => {
+            const isMort = r['Mortality'] && r['Mortality'].trim();
+            const isSold = (r['Sold']||'').toLowerCase() === 'checked';
+            const status = isMort ? 'mortality' : isSold ? 'sold' : 'active';
+            return `<tr>
+              <td>${escapeHtml(r['Main tag number']||'—')}</td>
+              <td>${escapeHtml(r['Batch No']||'—')}</td>
+              <td>${escapeHtml(r['Name']||'—')}</td>
+              <td>${escapeHtml(r['Breed']||'—')}</td>
+              <td>${escapeHtml(r['Gender']||'—')}</td>
+              <td>${escapeHtml(r['Entry Mass']||'—')}</td>
+              <td>${isSold ? '✅' : '—'}</td>
+              <td>${status}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
       </div>`;
     document.getElementById('animalsImportActions').style.display = 'flex';
     document.getElementById('animalsImportActions').style.gap = '10px';
@@ -978,17 +998,23 @@ async function importAnimals() {
   prog.style.display = 'block';
   document.getElementById('animalsImportActions').style.display = 'none';
 
-  let imported = 0, errors = 0;
+  // Build a lookup from batch_name → cycle id so imported animals auto-link to their cycle
+  const cycleByName = {};
+  (S.cycles || []).forEach(c => { if (c.batch_name) cycleByName[c.batch_name.toLowerCase()] = c.id; });
+
+  let imported = 0, errors = 0, lastErr = '';
 
   for (let i = 0; i < _animalsData.length; i++) {
     const r  = _animalsData[i];
     try {
       const isMortality = r['Mortality'] && r['Mortality'].trim() !== '';
       const isSold      = (r['Sold']||'').toLowerCase() === 'checked';
+      const batchName   = r['Name'] || '';
       const record = {
         tag_number:      r['Main tag number'] || '',
         batch_no:        r['Batch No'] || '',
-        batch_name:      r['Name'] || '',
+        batch_name:      batchName,
+        cycle_id:        cycleByName[batchName.toLowerCase()] || null,
         entry_mass:      parseFloat(r['Entry Mass']) || null,
         gender:          r['Gender'] || '',
         breed:           r['Breed'] || '',
@@ -1001,10 +1027,9 @@ async function importAnimals() {
         sale_date:       cleanDate(r['Sale date']),
         notes:           r['Notes'] || ''
       };
-      // No ID sent
       await apiPost('tables/cattle_animals', record);
       imported++;
-    } catch(e) { errors++; }
+    } catch(e) { errors++; lastErr = e.message; }
     if (i % 10 === 0 || i === _animalsData.length - 1) {
       const pct = Math.round((i + 1) / _animalsData.length * 100);
       bar.style.width = pct + '%';
@@ -1014,7 +1039,10 @@ async function importAnimals() {
   }
 
   bar.style.width = '100%';
-  lbl.textContent = `✅ Done — ${imported} animals imported, ${errors} errors`;
+  const linked = Object.keys(cycleByName).length > 0 ? ' (auto-linked to cycles)' : '';
+  lbl.textContent = errors === 0
+    ? `✅ Done — ${imported} animals imported${linked}`
+    : `⚠️ Done — ${imported} imported, ${errors} errors${lastErr ? ': ' + lastErr : ''}`;
   CToast.show(`${imported} individual animals imported successfully`, 'success');
   _animalsData = [];
   await loadAnimals(); // refresh view
