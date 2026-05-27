@@ -6,7 +6,7 @@
 'use strict';
 
 /* ─── API Helpers ─────────────────────────────────────────────────────── */
-const API_BASE = '../';
+const API_BASE = '/api/';
 
 async function apiGet(path) {
   try {
