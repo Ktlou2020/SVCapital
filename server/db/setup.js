@@ -191,6 +191,36 @@ CREATE TABLE IF NOT EXISTS cattle_costs (
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS cattle_cycles (
+  id TEXT PRIMARY KEY,
+  batch_name TEXT, inv_no TEXT, invoice_date TIMESTAMPTZ,
+  cycle_start_date TIMESTAMPTZ, end_date TIMESTAMPTZ, sale_date TIMESTAMPTZ,
+  cycle_no TEXT, days_in_cycle INT, company TEXT,
+  no_purchased INT DEFAULT 0, mortalities INT DEFAULT 0,
+  no_live INT DEFAULT 0, no_sold INT DEFAULT 0, unsold_cattle INT DEFAULT 0,
+  avg_cattle_cost NUMERIC(18,4), purchase_value NUMERIC(18,2),
+  expected_sale_value NUMERIC(18,2), total_selling_price NUMERIC(18,2),
+  selling_price_per_head NUMERIC(18,4), svc_standing_fee NUMERIC(18,2),
+  net_return_pct NUMERIC(8,4), outstanding_invoice NUMERIC(18,2),
+  invoice_paid TEXT DEFAULT 'Pending',
+  status TEXT DEFAULT 'active', notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS cattle_cycles_status_idx ON cattle_cycles(status);
+
+CREATE TABLE IF NOT EXISTS cattle_animals (
+  id TEXT PRIMARY KEY,
+  tag_number TEXT, batch_no TEXT, batch_name TEXT,
+  cycle_id TEXT REFERENCES cattle_cycles(id) ON DELETE SET NULL,
+  entry_mass NUMERIC(10,2), gender TEXT, breed TEXT,
+  status TEXT DEFAULT 'active',
+  mortality BOOLEAN DEFAULT false, mortality_date DATE, mortality_report TEXT,
+  sold BOOLEAN DEFAULT false, sale_batch TEXT, sale_date DATE,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS cattle_animals_cycle_idx ON cattle_animals(cycle_id);
+
 CREATE TABLE IF NOT EXISTS employees (
   id TEXT PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL, phone TEXT,
