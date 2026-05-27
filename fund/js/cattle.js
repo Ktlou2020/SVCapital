@@ -6,7 +6,7 @@
 
 'use strict';
 
-const BASE = '/api';
+const BASE = '/api/';
 
 /* ── API HELPERS ──────────────────────────────────────────── */
 function _getAuthToken() {
