@@ -40,13 +40,26 @@ const ALLOWED_TABLES = {
   users:                 'id',   // limited, no password_hash exposed
 };
 
-/* ─── Tables that require admin/director role ─── */
+/* ─── Tables that require admin/director role for READ ─── */
 const ADMIN_ONLY_TABLES = new Set([
   'audit_events', 'fee_ledger', 'fund_notifications',
   'cattle_costs', 'return_schedules', 'investor_allocations',
   'employees', 'employee_onboarding', 'employee_courses',
   'course_progress', 'activity_feed',
 ]);
+
+/* ─── Tables that require admin/director role for WRITE (stricter than read) ─── */
+const ADMIN_WRITE_TABLES = new Set([
+  'fee_ledger', 'fund_notifications', 'cattle_costs',
+  'return_schedules', 'investor_allocations',
+  'employees', 'employee_courses',
+]);
+
+/* ─── Columns that must never be set via the generic API ─── */
+const PROTECTED_WRITE_COLS = {
+  employees: ['pin_hash'],
+  users:     ['password_hash', 'staff_pin'],
+};
 
 /* ─── Columns to strip from responses ─── */
 const STRIP_COLS = {
@@ -216,10 +229,14 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     // Protect sensitive tables
     if (['users','audit_events'].includes(table))
       return res.status(403).json({ error: `Use /api/auth or /api/users for table: ${table}` });
-    if (ADMIN_ONLY_TABLES.has(table) && !['admin','director','fund_manager','staff'].includes(req.user.role))
+    if (ADMIN_WRITE_TABLES.has(table) && !['admin','director','fund_manager'].includes(req.user.role))
       return res.status(403).json({ error: 'Forbidden.' });
 
     const body = { ...req.body };
+
+    // Strip columns that must never be set via the generic API (e.g. pin_hash, password_hash)
+    const protectedCols = PROTECTED_WRITE_COLS[table] || [];
+    protectedCols.forEach(c => delete body[c]);
 
     // Auto-generate ID if missing
     if (!body.id) {
@@ -338,9 +355,11 @@ router.delete('/:table/:id', requireAuth, validateTable, async (req, res) => {
     if (['audit_events'].includes(table))
       return res.status(403).json({ error: 'Audit events are immutable.' });
 
-    // Investors and pools require admin role
-    if (['investors','investment_pools'].includes(table) && !['admin','director'].includes(req.user.role))
-      return res.status(403).json({ error: 'Forbidden — admin only.' });
+    // Admin-only tables and investors/pools require admin/director role to delete
+    if (
+      (ADMIN_ONLY_TABLES.has(table) || ['investors','investment_pools'].includes(table)) &&
+      !['admin','director'].includes(req.user.role)
+    ) return res.status(403).json({ error: 'Forbidden — admin only.' });
 
     const result = await pool.query(
       `DELETE FROM ${table} WHERE ${key} = $1`,
