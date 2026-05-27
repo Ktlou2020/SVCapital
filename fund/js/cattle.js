@@ -803,7 +803,9 @@ function setupDropZone(zoneId, inputId, handler) {
 }
 
 function parseCSV(text) {
-  const lines = text.split(/\r?\n/);
+  // Strip UTF-8 BOM if present (Airtable exports include it)
+  const clean = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+  const lines = clean.split(/\r?\n/);
   if (!lines.length) return [];
   const headers = parseCSVLine(lines[0]);
   const rows = [];
@@ -839,7 +841,8 @@ function parseCSVLine(line) {
 
 function cleanZAR(val) {
   if (!val) return null;
-  let cleaned = val.toString().replace(/[R\s]/g, '').replace(',', '.');
+  // Remove R, spaces, then strip thousands-separator commas before parsing
+  let cleaned = val.toString().replace(/[R\s]/g, '').replace(/,(?=\d{3})/g, '');
   const n = parseFloat(cleaned);
   return isNaN(n) ? null : n;
 }

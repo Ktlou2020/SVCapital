@@ -32,6 +32,8 @@ const ALLOWED_TABLES = {
   fee_ledger:            'id',
   fund_notifications:    'id',
   cattle_costs:          'id',
+  cattle_cycles:         'id',
+  cattle_animals:        'id',
   employees:             'id',
   employee_onboarding:   'id',
   employee_courses:      'id',
@@ -43,14 +45,16 @@ const ALLOWED_TABLES = {
 /* ─── Tables that require admin/director role for READ ─── */
 const ADMIN_ONLY_TABLES = new Set([
   'audit_events', 'fee_ledger', 'fund_notifications',
-  'cattle_costs', 'return_schedules', 'investor_allocations',
+  'cattle_costs', 'cattle_cycles', 'cattle_animals',
+  'return_schedules', 'investor_allocations',
   'employees', 'employee_onboarding', 'employee_courses',
   'course_progress', 'activity_feed',
 ]);
 
 /* ─── Tables that require admin/director role for WRITE (stricter than read) ─── */
 const ADMIN_WRITE_TABLES = new Set([
-  'fee_ledger', 'fund_notifications', 'cattle_costs',
+  'fee_ledger', 'fund_notifications',
+  'cattle_costs', 'cattle_cycles', 'cattle_animals',
   'return_schedules', 'investor_allocations',
   'employees', 'employee_courses',
 ]);
@@ -256,6 +260,8 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         fee_ledger:            'FEE',
         fund_notifications:    'NOTIF',
         cattle_costs:          'CC',
+        cattle_cycles:         'CYC',
+        cattle_animals:        'ANM',
         employees:             'EMP',
       };
       const prefix = prefixMap[table] || 'REC';
