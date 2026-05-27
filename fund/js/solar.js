@@ -6,7 +6,7 @@
 
 'use strict';
 
-const SOL_BASE = '../';
+const SOL_BASE = '/api';
 
 /* ── API HELPERS ──────────────────────────────────────────── */
 function _solGetToken() {
