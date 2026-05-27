@@ -8,9 +8,14 @@
 /* ─── API Helpers ─────────────────────────────────────────────────────── */
 const API_BASE = '/api/';
 
+function _authHeader() {
+  const t = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+  return t ? { 'Authorization': 'Bearer ' + t } : {};
+}
+
 async function apiGet(path) {
   try {
-    const res = await fetch(API_BASE + path);
+    const res = await fetch(API_BASE + path, { credentials: 'include', headers: _authHeader() });
     if (!res.ok) return { data: [], total: 0 };
     return await res.json();
   } catch { return { data: [], total: 0 }; }
@@ -19,7 +24,8 @@ async function apiGet(path) {
 async function apiPost(path, body) {
   const res = await fetch(API_BASE + path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ..._authHeader() },
     body: JSON.stringify(body)
   });
   return await res.json();
@@ -28,7 +34,8 @@ async function apiPost(path, body) {
 async function apiPut(path, body) {
   const res = await fetch(API_BASE + path, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ..._authHeader() },
     body: JSON.stringify(body)
   });
   return await res.json();
@@ -37,14 +44,15 @@ async function apiPut(path, body) {
 async function apiPatch(path, body) {
   const res = await fetch(API_BASE + path, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ..._authHeader() },
     body: JSON.stringify(body)
   });
   return await res.json();
 }
 
 async function apiDelete(path) {
-  await fetch(API_BASE + path, { method: 'DELETE' });
+  await fetch(API_BASE + path, { method: 'DELETE', credentials: 'include', headers: _authHeader() });
 }
 
 async function fetchAll(table) {

@@ -27,7 +27,11 @@ const Auth = {
         localStorage.removeItem('svc_user');  sessionStorage.removeItem('svc_user');
         return null;
       }
-    } catch (_) {}
+    } catch (_) {
+      localStorage.removeItem('svc_token'); sessionStorage.removeItem('svc_token');
+      localStorage.removeItem('svc_user');  sessionStorage.removeItem('svc_user');
+      return null;
+    }
     return token;
   },
 

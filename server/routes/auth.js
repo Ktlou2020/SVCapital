@@ -19,6 +19,10 @@ const JWT_SECRET     = process.env.JWT_SECRET || 'svcapital-dev-secret-change-in
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
 const IS_PROD        = process.env.NODE_ENV === 'production';
 
+if (IS_PROD && !process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET env var is not set. All tokens are signed with a public default — set this in Railway immediately.');
+}
+
 function signToken(user) {
   return jwt.sign(
     {
@@ -299,6 +303,8 @@ router.post('/staff-token', async (req, res) => {
     const { email, pin } = req.body;
     if (!email || !pin) return res.status(400).json({ error: 'Email and PIN are required.' });
     if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be 4 digits.' });
+    if (!email.toLowerCase().trim().endsWith('@svcapital.co.za'))
+      return res.status(403).json({ error: 'Only @svcapital.co.za accounts may use PIN login.' });
 
     // Re-fetch employee to verify PIN server-side (last 4 of id_number)
     const { rows } = await pool.query(
