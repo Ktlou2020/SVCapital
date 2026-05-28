@@ -52,6 +52,11 @@ const ALLOWED_TABLES = {
   eva_periods:           'id',
   personal_notes:        'id',
   course_modules:        'id',
+  cattle_nav_settings:   'id',
+  shortterm_loans:       'id',
+  loan_documents:        'id',
+  solar_projects:        'id',
+  solar_documents:       'id',
   users:                 'id',   // limited, no password_hash exposed
 };
 
@@ -285,6 +290,10 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         learning_paths:        'LP',
         eva_periods:           'EVA',
         pulse_surveys:         'PULSE',
+        shortterm_loans:       'STL',
+        loan_documents:        'LDOC',
+        solar_projects:        'SOL',
+        solar_documents:       'SDOC',
       };
       const prefix = prefixMap[table] || 'REC';
       body.id = `${prefix}-${Date.now()}`;

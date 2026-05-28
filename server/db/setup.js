@@ -450,6 +450,63 @@ CREATE TABLE IF NOT EXISTS course_modules (
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS course_modules_course_idx ON course_modules(course_id);
+
+CREATE TABLE IF NOT EXISTS cattle_nav_settings (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  setting_key TEXT UNIQUE NOT NULL,
+  setting_value TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS shortterm_loans (
+  id TEXT PRIMARY KEY,
+  business_name TEXT NOT NULL, business_reg TEXT,
+  contact_name TEXT, contact_phone TEXT, loan_ref TEXT,
+  amount_disbursed NUMERIC(18,2) DEFAULT 0,
+  interest_rate NUMERIC(8,6) DEFAULT 0,
+  interest_amount NUMERIC(18,2) DEFAULT 0,
+  total_repayable NUMERIC(18,2) DEFAULT 0,
+  partial_repayments NUMERIC(18,2) DEFAULT 0,
+  status TEXT DEFAULT 'active',
+  disbursement_date TIMESTAMPTZ, repayment_date TIMESTAMPTZ,
+  actual_repayment_date TIMESTAMPTZ, notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS shortterm_loans_status_idx ON shortterm_loans(status);
+
+CREATE TABLE IF NOT EXISTS loan_documents (
+  id TEXT PRIMARY KEY,
+  loan_id TEXT REFERENCES shortterm_loans(id) ON DELETE CASCADE,
+  doc_type TEXT DEFAULT 'other', doc_name TEXT, doc_url TEXT,
+  file_size TEXT, mime_type TEXT,
+  uploaded_by TEXT, uploaded_at TIMESTAMPTZ DEFAULT NOW(), notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS loan_documents_loan_idx ON loan_documents(loan_id);
+
+CREATE TABLE IF NOT EXISTS solar_projects (
+  id TEXT PRIMARY KEY,
+  project_name TEXT NOT NULL, location TEXT,
+  capacity_kw NUMERIC(10,2), investor_count INT,
+  product_type TEXT DEFAULT '7yr',
+  status TEXT DEFAULT 'active',
+  term_years INT, capital_deployed NUMERIC(18,2) DEFAULT 0,
+  annual_rate NUMERIC(8,6) DEFAULT 0,
+  contracted_return NUMERIC(18,2), actual_return NUMERIC(18,2) DEFAULT 0,
+  start_date TIMESTAMPTZ, maturity_date TIMESTAMPTZ, notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS solar_projects_status_idx ON solar_projects(status);
+
+CREATE TABLE IF NOT EXISTS solar_documents (
+  id TEXT PRIMARY KEY,
+  project_id TEXT REFERENCES solar_projects(id) ON DELETE CASCADE,
+  doc_type TEXT DEFAULT 'other', doc_name TEXT, doc_url TEXT,
+  file_size BIGINT, mime_type TEXT,
+  uploaded_by TEXT, uploaded_at TIMESTAMPTZ DEFAULT NOW(), notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS solar_documents_project_idx ON solar_documents(project_id);
 `;
 
 async function autoSetup() {
