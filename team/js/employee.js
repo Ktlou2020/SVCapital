@@ -84,6 +84,7 @@ let _oneOnOnes   = [];
 let _learningPaths=[];
 let _activityFeed= [];
 let _notes       = [];
+let _payslips    = [];
 let _currentView = 'dashboard';
 
 // Reader state
@@ -146,6 +147,12 @@ async function init() {
   _leaveReqs    = leaves.filter(l=>l.employee_id===_emp.id);
   _checkins     = checkins.filter(c=>c.employee_id===_emp.id).sort((a,b)=>new Date(b.checkin_date)-new Date(a.checkin_date));
   _notes        = notes.filter(n=>n.employee_id===_emp.id);
+
+  // Load payslips for this employee
+  try {
+    const psRes = await get(`tables/payslips?employee_id=${_emp.id}&sort=pay_period&order=desc&limit=100`);
+    _payslips = (psRes.data || []).filter(p => p.employee_id === _emp.id);
+  } catch(_) { _payslips = []; }
 
   buildEmpSwitcher();
   renderTopbar();
@@ -2328,11 +2335,43 @@ function renderProfile() {
           ${profileRow('fa-circle-check','Profile Status',`<span class="chip ${hasBanking?'chip-green':'chip-gold'}">${hasBanking?'Complete':'Banking Pending'}</span>`)}
         </div>
       </div>
+    </div>
+
+    <!-- Payslips -->
+    <div style="margin-top:24px">
+      <div class="section-head"><i class="fa-solid fa-file-invoice-dollar"></i> My Payslips</div>
+      ${_payslips.length === 0
+        ? `<div class="chart-container" style="text-align:center;padding:28px;color:var(--muted)">
+             <i class="fa-solid fa-file-invoice-dollar" style="font-size:1.8rem;margin-bottom:10px;display:block;opacity:0.35"></i>
+             <div style="font-size:0.82rem">No payslips on record yet.</div>
+           </div>`
+        : `<div class="chart-container" style="padding:0">
+             ${_payslips.map(p => {
+               const [yr, mo] = p.pay_period.split('-');
+               const moLabel = ['January','February','March','April','May','June','July','August','September','October','November','December'][(parseInt(mo,10)||1)-1] || mo;
+               return `<div style="display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--border)">
+                 <div style="width:36px;height:36px;border-radius:9px;background:rgba(124,92,252,0.08);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                   <i class="fa-solid fa-file-invoice-dollar"></i>
+                 </div>
+                 <div style="flex:1">
+                   <div style="font-size:0.85rem;font-weight:700">${moLabel} ${yr}</div>
+                   <div style="font-size:0.72rem;color:var(--muted)">Nett pay: R ${Number(p.nett_pay||0).toLocaleString('en-ZA',{minimumFractionDigits:2})}</div>
+                 </div>
+                 <button class="btn btn--secondary btn--sm" id="dl-${p.id}">
+                   <i class="fa-solid fa-download"></i> Download
+                 </button>
+               </div>`;
+             }).join('')}
+           </div>`
+      }
     </div>`;
 
   document.getElementById('editProfileBtn')?.addEventListener('click', openProfileEditModal);
   document.getElementById('bankingDocInput')?.addEventListener('change', function() { handleBankingDocUpload(this); });
   document.getElementById('idDocInput')?.addEventListener('change', function() { handleIdDocUpload(this); });
+  _payslips.forEach(p => {
+    document.getElementById(`dl-${p.id}`)?.addEventListener('click', () => downloadPayslip(p.id));
+  });
 }
 
 function profileRow(icon, label, value) {
@@ -2384,6 +2423,114 @@ function handleIdDocUpload(input) {
     renderProfile();
     showToast(`ID document "${file.name}" uploaded successfully!`, 'success');
   });
+}
+
+function downloadPayslip(id) {
+  const p = _payslips.find(x => x.id === id);
+  if (!p || !_emp) { showToast('Payslip not found', 'error'); return; }
+  const w = window.open('', '_blank', 'width=900,height=720');
+  if (!w) { showToast('Allow pop-ups to download payslips', 'error'); return; }
+  w.document.write(buildEmpPayslipHTML(p, _emp));
+  w.document.close();
+  w.onload = () => w.print();
+}
+
+function buildEmpPayslipHTML(p, emp) {
+  const fmt = n => Number(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const rph = (Number(emp.base_salary||0) / 173.33).toFixed(5);
+  const payDateFmt = (p.pay_date||'').replace(/-/g,'/');
+  const startFmt   = emp.start_date ? emp.start_date.slice(0,10).replace(/-/g,'/') : '—';
+  const empCode    = emp.employee_number || emp.id;
+  const addrHtml   = [emp.address_line1, emp.address_line2, emp.address_city, emp.address_province, emp.address_postal_code].filter(Boolean).join('<br>') || '—';
+  const [yr, mo]   = (p.pay_period||'').split('-');
+  const moLabel    = ['January','February','March','April','May','June','July','August','September','October','November','December'][(parseInt(mo,10)||1)-1] || mo;
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/>
+<title>Payslip – ${emp.first_name} ${emp.last_name} – ${moLabel} ${yr}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#111;padding:28px 36px;max-width:820px;margin:0 auto}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:1.5px solid #333;margin-bottom:18px}
+  .co-name{font-size:12.5pt;font-weight:bold}
+  .co-addr{font-size:9.5pt;line-height:1.55;margin-top:3px;color:#333}
+  .logo{width:68px;height:68px;border-radius:50%;background:#1a3a4a;display:flex;align-items:center;justify-content:center;margin-top:8px;margin-left:auto}
+  .logo span{color:#fff;font-size:18pt;font-weight:900;letter-spacing:-1px}
+  .emp-block{display:grid;grid-template-columns:1fr 1fr;margin-bottom:16px}
+  .er{display:flex;padding:3px 0;font-size:9.5pt}
+  .el{font-weight:bold;min-width:132px;flex-shrink:0}
+  hr{border:none;border-top:1px solid #888;margin:10px 0}
+  table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:9.5pt}
+  th{background:#e8e8e8;border-bottom:1.5px solid #888;padding:6px 7px;text-align:left;font-size:8.5pt;font-weight:bold}
+  th.r,td.r{text-align:right}
+  td{padding:5px 7px;border-bottom:1px solid #ddd;vertical-align:top}
+  .tot td{font-weight:bold;border-top:1.5px solid #888;background:#f5f5f5;border-bottom:1.5px solid #888}
+  .nett td{font-weight:bold;font-size:11pt;border-bottom:1.5px solid #888}
+  .sage{text-align:right;font-size:9pt;color:#888;font-style:italic;margin-top:20px}
+  .print-btn{display:block;margin:20px auto 0;padding:10px 28px;background:#1a3a4a;color:#fff;border:none;border-radius:8px;font-size:10pt;cursor:pointer;font-family:Arial}
+  @media print{.print-btn{display:none}body{padding:12px 18px}}
+</style>
+</head><body>
+<div class="top">
+  <div>
+    <div class="co-name">Smartvest Capital (Pty) Ltd</div>
+    <div class="co-addr">The Station<br>63 Peter Place<br>Bryanston<br>Johannesburg<br>2191</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-weight:bold">Pay Date</div>
+    <div style="font-size:9.5pt">${payDateFmt}</div>
+    <div class="logo"><span>SV</span></div>
+  </div>
+</div>
+<div class="emp-block">
+  <div>
+    <div class="er"><span class="el">Employee</span>${emp.first_name} ${emp.last_name}</div>
+    <div class="er"><span class="el">Job title</span>${emp.role||'—'}</div>
+    <div class="er"><span class="el">Address</span><span>${addrHtml}</span></div>
+  </div>
+  <div>
+    <div class="er"><span class="el">Employee Code</span>${empCode}</div>
+    <div class="er"><span class="el">Identity Number</span>${emp.id_number||'—'}</div>
+    <div class="er"><span class="el">Employed from</span>${startFmt}</div>
+    <div class="er"><span class="el">Rate per hour</span>${rph}</div>
+  </div>
+</div>
+<hr/>
+<table>
+  <thead><tr>
+    <th style="width:32%">Earnings</th><th style="width:10%">Units</th>
+    <th class="r" style="width:15%">Amount</th><th style="width:25%">Deductions</th>
+    <th class="r" style="width:8%">Opening balance</th><th class="r" style="width:10%">Amount</th>
+  </tr></thead>
+  <tbody>
+    <tr><td>Basic salary</td><td></td><td class="r">${fmt(p.basic_salary)}</td><td>Tax</td><td></td><td class="r">${fmt(p.tax)}</td></tr>
+    ${Number(p.bonus||0)>0?`<tr><td>Bonus</td><td></td><td class="r">${fmt(p.bonus)}</td><td></td><td></td><td></td></tr>`:''}
+    ${Number(p.other_earnings||0)>0?`<tr><td>Other earnings</td><td></td><td class="r">${fmt(p.other_earnings)}</td><td></td><td></td><td></td></tr>`:''}
+    <tr><td></td><td></td><td></td><td>Unemployment insurance fund</td><td></td><td class="r">${fmt(p.uif_employee)}</td></tr>
+    ${Number(p.other_deductions||0)>0?`<tr><td></td><td></td><td></td><td>Other deductions</td><td></td><td class="r">${fmt(p.other_deductions)}</td></tr>`:''}
+  </tbody>
+  <tfoot>
+    <tr class="tot"><td>Total earnings</td><td></td><td class="r">${fmt(p.total_earnings)}</td><td>Total deductions</td><td></td><td class="r">${fmt(p.total_deductions)}</td></tr>
+    <tr class="nett"><td colspan="3"></td><td>Nett pay</td><td></td><td class="r">${fmt(p.nett_pay)}</td></tr>
+  </tfoot>
+</table>
+<hr/>
+<table>
+  <thead><tr>
+    <th style="width:30%">Company Contributions</th><th class="r" style="width:20%">Amount</th>
+    <th style="width:30%">YTD Totals</th><th class="r" style="width:20%">Amount</th>
+  </tr></thead>
+  <tbody>
+    <tr><td>Unemployment insurance fund</td><td class="r">${fmt(p.uif_company)}</td><td><b>Taxable earnings</b></td><td class="r"><b>${fmt(p.ytd_taxable_earnings)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Taxable company contributions</b></td><td class="r"><b>${fmt(p.ytd_taxable_company_contributions||0)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Taxable fringe benefits</b></td><td class="r"><b>${fmt(p.ytd_taxable_fringe_benefits||0)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Provision for tax on annual bonus</b></td><td class="r"><b>${fmt(p.ytd_provision_annual_bonus||0)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Tax paid</b></td><td class="r"><b>${fmt(p.ytd_tax_paid)}</b></td></tr>
+  </tbody>
+</table>
+<button class="print-btn" onclick="window.print()">&#128424; Save as PDF / Print</button>
+<div class="sage">Sage</div>
+</body></html>`;
 }
 
 function openProfileEditModal() {
@@ -2770,6 +2917,7 @@ window.openProfileEditModal = openProfileEditModal;
 window.saveProfile = saveProfile;
 window.handleBankingDocUpload = handleBankingDocUpload;
 window.handleIdDocUpload = handleIdDocUpload;
+window.downloadPayslip   = downloadPayslip;
 window.openKudosForBirthday = openKudosForBirthday;
 window.shiftCalMonth = shiftCalMonth;
 window.openCourse = openCourse;

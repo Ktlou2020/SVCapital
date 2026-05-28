@@ -35,6 +35,7 @@ const ALLOWED_TABLES = {
   cattle_cycles:         'id',
   cattle_animals:        'id',
   employees:             'id',
+  payslips:              'id',
   employee_onboarding:   'id',
   employee_courses:      'id',
   course_progress:       'id',
@@ -75,6 +76,7 @@ const ADMIN_WRITE_TABLES = new Set([
   'cattle_costs', 'cattle_cycles', 'cattle_animals',
   'return_schedules', 'investor_allocations',
   'employees', 'employee_courses',
+  'payslips',
   'eva_periods', 'pulse_surveys', 'learning_paths',
 ]);
 
