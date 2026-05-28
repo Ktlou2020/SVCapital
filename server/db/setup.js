@@ -233,6 +233,9 @@ CREATE TABLE IF NOT EXISTS employees (
   base_salary NUMERIC(18,2) DEFAULT 0,
   bio TEXT, birth_date DATE, bank_account_number TEXT,
   badges JSONB DEFAULT '[]', start_date DATE,
+  pin_set BOOLEAN DEFAULT false,
+  login_attempts INT DEFAULT 0, login_locked_until TIMESTAMPTZ,
+  totp_secret TEXT, totp_enabled BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS employees_email_idx ON employees(email);
@@ -252,6 +255,13 @@ DO $$ BEGIN
   BEGIN ALTER TABLE employees ADD COLUMN bank_account_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE employees ADD COLUMN badges JSONB DEFAULT '[]'; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE employees ADD COLUMN start_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- PIN setup columns
+  BEGIN ALTER TABLE employees ADD COLUMN pin_set BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN login_attempts INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN login_locked_until TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- TOTP 2FA columns (reserved for next phase)
+  BEGIN ALTER TABLE employees ADD COLUMN totp_secret TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN totp_enabled BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
 
 CREATE TABLE IF NOT EXISTS employee_onboarding (

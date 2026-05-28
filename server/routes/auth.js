@@ -258,13 +258,47 @@ router.post('/forgot-password', async (req, res) => {
   res.json({ success: true, message: 'If this email is registered, a reset link has been sent.' });
 });
 
-/* ─── POST /api/auth/staff-lookup ──────────────────────────────────────────
-   Public endpoint used by team/login.html to look up an employee by email.
-   Returns only non-sensitive display fields (no pin_hash, no id_number).
-   The PIN is validated entirely client-side using the id_number field which
-   IS returned here — this is intentional: the PIN is derived from the ID
-   number (last 4 digits), and the ID number is not itself a secret credential.
-   Rate-limited by the global API limiter (300 req / 15 min).
+/* ─── Shared helper ─── */
+function empToJwtRole(role, level) {
+  if (level === 'executive') return 'director';
+  if (!role) return 'staff';
+  const r = role.toLowerCase();
+  if (r.includes('ceo') || r.includes('director') || r.includes('coo') || r.includes('cto')) return 'director';
+  if (r.includes('admin') || r.includes('compliance') || r.includes('finance') ||
+      r.includes('operations') || r.includes('tech lead')) return 'admin';
+  if (r.includes('ifa') || r.includes('adviser') || r.includes('advisor')) return 'ifa';
+  return 'staff';
+}
+
+async function issueStaffJwt(emp, res) {
+  const jwtRole = empToJwtRole(emp.role, emp.level);
+  const { rows: userRows } = await pool.query(
+    'SELECT id FROM users WHERE email = $1 LIMIT 1', [emp.email]
+  );
+  const token = jwt.sign({
+    id:        userRows[0]?.id || emp.id,
+    email:     emp.email,
+    role:      jwtRole,
+    firstName: emp.first_name,
+    lastName:  emp.last_name,
+    empId:     emp.id,
+  }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  res.cookie('svc_token', token, {
+    httpOnly: true, secure: IS_PROD,
+    sameSite: IS_PROD ? 'none' : 'lax',
+    maxAge: 8 * 60 * 60 * 1000,
+  });
+  return { token, role: jwtRole };
+}
+
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_MINUTES    = 15;
+
+/* ─── POST /api/auth/staff-lookup ───────────────────────────────────────────
+   Returns employee display fields for the email-lookup step.
+   Does NOT return id_number or pin_hash — PIN validation is server-only.
+   Returns pin_set so the client knows whether to show "temp PIN" or "your PIN",
+   and locked/lockedSecsRemaining so the UI can show a countdown.
    ──────────────────────────────────────────────────────────────────────── */
 router.post('/staff-lookup', async (req, res) => {
   try {
@@ -273,16 +307,22 @@ router.post('/staff-lookup', async (req, res) => {
 
     const { rows } = await pool.query(
       `SELECT id, first_name, last_name, email, role, level, department,
-              status, avatar_initials, avatar_color, xp_points, id_number
+              status, avatar_initials, avatar_color, xp_points,
+              pin_set, login_locked_until
        FROM employees
        WHERE email = $1 AND status = 'active'
        LIMIT 1`,
       [email.toLowerCase().trim()]
     );
-
     if (!rows[0]) return res.status(404).json({ error: 'No staff account found for that email address.' });
 
-    res.json({ employee: rows[0] });
+    const emp = rows[0];
+    const locked = !!(emp.login_locked_until && new Date(emp.login_locked_until) > new Date());
+    const lockedSecsRemaining = locked
+      ? Math.ceil((new Date(emp.login_locked_until) - Date.now()) / 1000) : 0;
+
+    const { login_locked_until: _drop, ...safeEmp } = emp;
+    res.json({ employee: safeEmp, locked, lockedSecsRemaining });
   } catch (err) {
     console.error('Staff lookup error:', err.message);
     res.status(500).json({ error: 'Could not connect to the staff directory. Please try again.' });
@@ -290,83 +330,144 @@ router.post('/staff-lookup', async (req, res) => {
 });
 
 /* ─── POST /api/auth/staff-token ────────────────────────────────────────────
-   Called immediately after a successful PIN login on team/login.html.
-   Accepts the employee's email + PIN (last 4 of id_number) that have
-   already been validated client-side, verifies them server-side, then
-   issues a real JWT and sets the svc_token httpOnly cookie.
-   This gives PIN-login employees a proper Bearer token so they can call
-   authenticated API routes (fund, admin, ifa data endpoints).
-   Rate-limited by the global API limiter.
+   Validates a PIN submission. Two paths:
+     • pin_set = false (first login): validates against last 4 of id_number.
+       On success returns {requiresPinSetup: true, setupToken} — a 15-min JWT
+       that only authorises the /set-pin endpoint.
+     • pin_set = true  (returning):  validates against bcrypt pin_hash.
+       On success issues full JWT + sets httpOnly cookie.
+   Lockout: 5 failed attempts → 15-minute account lock.
    ──────────────────────────────────────────────────────────────────────── */
 router.post('/staff-token', async (req, res) => {
   try {
     const { email, pin } = req.body;
     if (!email || !pin) return res.status(400).json({ error: 'Email and PIN are required.' });
-    if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be 4 digits.' });
+    if (!/^\d{4,6}$/.test(pin)) return res.status(400).json({ error: 'PIN must be 4–6 digits.' });
     if (!email.toLowerCase().trim().endsWith('@svcapital.co.za'))
       return res.status(403).json({ error: 'Only @svcapital.co.za accounts may use PIN login.' });
 
-    // Re-fetch employee to verify PIN server-side (last 4 of id_number)
     const { rows } = await pool.query(
       `SELECT id, first_name, last_name, email, role, level, department,
-              status, avatar_initials, avatar_color, xp_points, id_number
-       FROM employees
-       WHERE email = $1 AND status = 'active'
-       LIMIT 1`,
+              status, avatar_initials, avatar_color, xp_points,
+              id_number, pin_hash, pin_set, login_attempts, login_locked_until
+       FROM employees WHERE email = $1 AND status = 'active' LIMIT 1`,
       [email.toLowerCase().trim()]
     );
     const emp = rows[0];
     if (!emp) return res.status(404).json({ error: 'Employee not found.' });
 
-    // Verify PIN against last 4 digits of id_number
-    const idDigits = (emp.id_number || '').replace(/\D/g, '');
-    const expectedPin = idDigits.slice(-4);
-    if (!expectedPin || pin !== expectedPin) {
-      return res.status(401).json({ error: 'Invalid PIN.' });
+    // Check lockout
+    if (emp.login_locked_until && new Date(emp.login_locked_until) > new Date()) {
+      const secsLeft = Math.ceil((new Date(emp.login_locked_until) - Date.now()) / 1000);
+      return res.status(429).json({
+        error: `Account locked after too many failed attempts. Try again in ${Math.ceil(secsLeft/60)} minute(s).`,
+        lockedSecsRemaining: secsLeft,
+      });
     }
 
-    // Map employee role/level → JWT role understood by requireRole middleware
-    function empToJwtRole(role, level) {
-      if (level === 'executive') return 'director';
-      if (!role) return 'staff';
-      const r = role.toLowerCase();
-      if (r.includes('ceo') || r.includes('director') || r.includes('coo') || r.includes('cto')) return 'director';
-      if (r.includes('admin') || r.includes('compliance') || r.includes('finance') ||
-          r.includes('operations') || r.includes('tech lead')) return 'admin';
-      if (r.includes('ifa') || r.includes('adviser') || r.includes('advisor')) return 'ifa';
-      return 'staff';
+    // Validate PIN
+    let valid = false;
+    if (!emp.pin_set) {
+      const idDigits = (emp.id_number || '').replace(/\D/g, '');
+      const tempPin  = idDigits.slice(-4);
+      valid = !!(tempPin && pin === tempPin);
+    } else {
+      valid = emp.pin_hash ? await bcrypt.compare(pin, emp.pin_hash) : false;
     }
-    const jwtRole = empToJwtRole(emp.role, emp.level);
 
-    // Look up the linked users row (if any) — purely for compatibility fields
-    const { rows: userRows } = await pool.query(
-      `SELECT id FROM users WHERE email = $1 LIMIT 1`,
-      [emp.email]
+    if (!valid) {
+      const newAttempts = (emp.login_attempts || 0) + 1;
+      if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
+        await pool.query(
+          `UPDATE employees SET login_attempts = 0,
+             login_locked_until = NOW() + INTERVAL '${LOCKOUT_MINUTES} minutes'
+           WHERE id = $1`, [emp.id]
+        );
+        return res.status(429).json({
+          error: `Too many failed attempts. Account locked for ${LOCKOUT_MINUTES} minutes.`,
+          lockedSecsRemaining: LOCKOUT_MINUTES * 60,
+        });
+      }
+      await pool.query('UPDATE employees SET login_attempts = $1 WHERE id = $2', [newAttempts, emp.id]);
+      const left = MAX_LOGIN_ATTEMPTS - newAttempts;
+      return res.status(401).json({
+        error: `Incorrect PIN. ${left} attempt${left !== 1 ? 's' : ''} remaining.`,
+        attemptsLeft: left,
+      });
+    }
+
+    // Clear failed attempts on success
+    await pool.query(
+      'UPDATE employees SET login_attempts = 0, login_locked_until = NULL WHERE id = $1', [emp.id]
     );
 
-    const tokenPayload = {
-      id:        userRows[0]?.id || emp.id,
-      email:     emp.email,
-      role:      jwtRole,
-      firstName: emp.first_name,
-      lastName:  emp.last_name,
-      empId:     emp.id,          // extra field — preserved through to client
-    };
+    // First-time login — return a short-lived setup token, not a full JWT
+    if (!emp.pin_set) {
+      const setupToken = jwt.sign(
+        { empId: emp.id, email: emp.email, type: 'pin-setup' },
+        JWT_SECRET, { expiresIn: '15m' }
+      );
+      return res.json({ requiresPinSetup: true, setupToken });
+    }
 
-    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-
-    // Set httpOnly cookie (same flags as main login)
-    res.cookie('svc_token', token, {
-      httpOnly: true,
-      secure:   IS_PROD,
-      sameSite: IS_PROD ? 'none' : 'lax',
-      maxAge:   8 * 60 * 60 * 1000,
-    });
-
-    res.json({ token, role: jwtRole, email: emp.email });
+    // Returning user — issue full JWT
+    const { token, role } = await issueStaffJwt(emp, res);
+    res.json({ token, role, email: emp.email });
   } catch (err) {
     console.error('Staff-token error:', err.message);
-    res.status(500).json({ error: 'Could not issue staff token.' });
+    res.status(500).json({ error: 'Could not verify PIN.' });
+  }
+});
+
+/* ─── POST /api/auth/set-pin ────────────────────────────────────────────────
+   Called after a successful first-login temp-PIN check.
+   Accepts the short-lived setupToken + the employee's chosen 6-digit PIN.
+   Validates, hashes (bcrypt 12), stores, then issues a full JWT.
+   PIN rules: exactly 6 digits, not all identical, not a simple sequence.
+   ──────────────────────────────────────────────────────────────────────── */
+router.post('/set-pin', async (req, res) => {
+  try {
+    const { setupToken, pin } = req.body;
+    if (!setupToken || !pin) return res.status(400).json({ error: 'setupToken and pin are required.' });
+    if (!/^\d{6}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 6 digits.' });
+
+    // Verify setup token
+    let payload;
+    try {
+      payload = jwt.verify(setupToken, JWT_SECRET);
+    } catch {
+      return res.status(401).json({ error: 'Setup session expired — please start over.' });
+    }
+    if (payload.type !== 'pin-setup')
+      return res.status(401).json({ error: 'Invalid token type.' });
+
+    // PIN strength rules
+    if (/^(\d)\1{5}$/.test(pin))
+      return res.status(400).json({ error: 'PIN cannot be all the same digit (e.g. 111111).' });
+    const ascending  = '0123456789';
+    const descending = '9876543210';
+    if (ascending.includes(pin) || descending.includes(pin))
+      return res.status(400).json({ error: 'PIN cannot be a simple sequence (e.g. 123456).' });
+
+    const pinHash = await bcrypt.hash(pin, 12);
+    await pool.query(
+      `UPDATE employees
+         SET pin_hash = $1, pin_set = true, login_attempts = 0, login_locked_until = NULL
+       WHERE id = $2`,
+      [pinHash, payload.empId]
+    );
+
+    const { rows } = await pool.query(
+      'SELECT id, first_name, last_name, email, role, level FROM employees WHERE id = $1',
+      [payload.empId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Employee not found.' });
+
+    const { token, role } = await issueStaffJwt(rows[0], res);
+    res.json({ token, role, email: rows[0].email });
+  } catch (err) {
+    console.error('Set-pin error:', err.message);
+    res.status(500).json({ error: 'Could not save PIN.' });
   }
 });
 
