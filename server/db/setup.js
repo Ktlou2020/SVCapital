@@ -231,7 +231,19 @@ CREATE TABLE IF NOT EXISTS employees (
   xp_points INT DEFAULT 0, streak_days INT DEFAULT 0,
   eva_weight NUMERIC(6,2) DEFAULT 1.0,
   base_salary NUMERIC(18,2) DEFAULT 0,
-  bio TEXT, birth_date DATE, bank_account_number TEXT,
+  bio TEXT, birth_date DATE,
+  -- Banking
+  bank_account_number TEXT, bank_name TEXT, bank_account_type TEXT,
+  bank_branch_code TEXT, bank_account_holder TEXT, proof_of_banking_url TEXT,
+  -- Emergency contact
+  emergency_contact_name TEXT, emergency_contact_phone TEXT,
+  -- Address
+  address_line1 TEXT, address_line2 TEXT, address_city TEXT,
+  address_province TEXT, address_postal_code TEXT,
+  -- Documents
+  proof_of_id_url TEXT,
+  -- Employee number (unique, admin-assignable)
+  employee_number TEXT UNIQUE,
   badges JSONB DEFAULT '[]', start_date DATE,
   pin_set BOOLEAN DEFAULT false,
   login_attempts INT DEFAULT 0, login_locked_until TIMESTAMPTZ,
@@ -262,6 +274,24 @@ DO $$ BEGIN
   -- TOTP 2FA columns (reserved for next phase)
   BEGIN ALTER TABLE employees ADD COLUMN totp_secret TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE employees ADD COLUMN totp_enabled BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Banking detail columns
+  BEGIN ALTER TABLE employees ADD COLUMN bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN bank_account_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN bank_branch_code TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN bank_account_holder TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN proof_of_banking_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Emergency contact
+  BEGIN ALTER TABLE employees ADD COLUMN emergency_contact_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN emergency_contact_phone TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Address
+  BEGIN ALTER TABLE employees ADD COLUMN address_line1 TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN address_line2 TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN address_city TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN address_province TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN address_postal_code TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Documents & employee number
+  BEGIN ALTER TABLE employees ADD COLUMN proof_of_id_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN employee_number TEXT UNIQUE; EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
 
 CREATE TABLE IF NOT EXISTS employee_onboarding (
