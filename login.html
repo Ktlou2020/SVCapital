@@ -311,49 +311,6 @@
       line-height: 1.5;
     }
 
-    /* Role selector */
-    .role-tabs {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-bottom: 24px;
-    }
-
-    .role-tab {
-      background: var(--bg);
-      border: 2px solid var(--border);
-      border-radius: var(--radius);
-      padding: 12px;
-      cursor: pointer;
-      text-align: center;
-      transition: all var(--ease);
-      position: relative;
-    }
-
-    .role-tab.active {
-      background: var(--orange-pale);
-      border-color: var(--orange);
-    }
-
-    .role-tab i {
-      font-size: 1.1rem;
-      color: var(--text-dim);
-      display: block;
-      margin-bottom: 6px;
-      transition: color var(--ease);
-    }
-
-    .role-tab.active i { color: var(--orange); }
-
-    .role-tab__name {
-      font-size: 0.78rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      transition: color var(--ease);
-    }
-
-    .role-tab.active .role-tab__name { color: var(--orange-dark); }
-
     /* Form fields */
     .form-group {
       margin-bottom: 18px;
@@ -638,19 +595,6 @@
         <p class="login-form-sub">Enter your credentials to access your SV Capital portfolio.</p>
       </div>
 
-      <!-- Role selector -->
-      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:10px">Access Level</div>
-      <div class="role-tabs" id="roleTabs">
-        <button type="button" class="role-tab active" id="roleInvestor" onclick="selectRole('investor')">
-          <i class="fa-solid fa-chart-pie"></i>
-          <span class="role-tab__name">Investor Portal</span>
-        </button>
-        <button type="button" class="role-tab" id="roleAdmin" onclick="selectRole('admin')">
-          <i class="fa-solid fa-shield-halved"></i>
-          <span class="role-tab__name">Admin Console</span>
-        </button>
-      </div>
-
       <!-- Error -->
       <div class="form-error" id="formError">
         <i class="fa-solid fa-triangle-exclamation"></i>
@@ -733,7 +677,7 @@
       <!-- Footer -->
       <div class="login-footer">
         <a href="index.html">www.svcapital.co.za</a>
-        <div class="login-footer__copy">© 2024 SmartVest Financial Services (Pty) Ltd. All rights reserved.</div>
+        <div class="login-footer__copy">© 2025 SmartVest Financial Services (Pty) Ltd. All rights reserved.</div>
       </div>
 
     </div>
@@ -744,8 +688,6 @@
 <script src="js/api.js?v=2"></script>
 <script>
   'use strict';
-
-  let selectedRole = 'investor';
 
   /* ─── If already logged in, redirect to correct portal ─── */
   (function checkExistingSession() {
@@ -835,15 +777,6 @@
     btnTxt.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:8px"></i>Send Reset Link';
   }
 
-  function selectRole(role) {
-    selectedRole = role;
-    document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
-    document.getElementById(`role${role.charAt(0).toUpperCase() + role.slice(1)}`).classList.add('active');
-
-    const emailEl = document.getElementById('emailInput');
-    emailEl.placeholder = role === 'admin' ? 'your@email.com' : 'your@email.com';
-  }
-
   function togglePassword() {
     const pw   = document.getElementById('passwordInput');
     const icon = document.getElementById('pwEyeIcon');
@@ -874,7 +807,6 @@
     e.preventDefault();
     const email    = document.getElementById('emailInput').value.toLowerCase().trim();
     const password = document.getElementById('passwordInput').value;
-    const remember = document.getElementById('rememberMe')?.checked !== false;
     const errorEl  = document.getElementById('formError');
     const btn      = document.getElementById('loginBtn');
     const btnText  = document.getElementById('loginBtnText');
@@ -898,9 +830,8 @@
       }
 
       /* Store token */
-      const store = remember ? localStorage : sessionStorage;
-      store.setItem('svc_token', data.token);
-      store.setItem('svc_user',  JSON.stringify(data.user));
+      localStorage.setItem('svc_token', data.token);
+      localStorage.setItem('svc_user',  JSON.stringify(data.user));
 
       btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
       setTimeout(() => {
