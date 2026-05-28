@@ -39,6 +39,19 @@ const ALLOWED_TABLES = {
   employee_courses:      'id',
   course_progress:       'id',
   activity_feed:         'id',
+  kpi_scores:            'id',
+  achievements:          'id',
+  daily_checkins:        'id',
+  leave_requests:        'id',
+  okrs:                  'id',
+  peer_feedback:         'id',
+  pulse_surveys:         'id',
+  pulse_responses:       'id',
+  one_on_ones:           'id',
+  learning_paths:        'id',
+  eva_periods:           'id',
+  personal_notes:        'id',
+  course_modules:        'id',
   users:                 'id',   // limited, no password_hash exposed
 };
 
@@ -57,6 +70,7 @@ const ADMIN_WRITE_TABLES = new Set([
   'cattle_costs', 'cattle_cycles', 'cattle_animals',
   'return_schedules', 'investor_allocations',
   'employees', 'employee_courses',
+  'eva_periods', 'pulse_surveys', 'learning_paths',
 ]);
 
 /* ─── Columns that must never be set via the generic API ─── */
@@ -263,6 +277,14 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         cattle_cycles:         'CYC',
         cattle_animals:        'ANM',
         employees:             'EMP',
+        kpi_scores:            'KPI',
+        achievements:          'ACH',
+        leave_requests:        'LVE',
+        okrs:                  'OKR',
+        one_on_ones:           'O1O',
+        learning_paths:        'LP',
+        eva_periods:           'EVA',
+        pulse_surveys:         'PULSE',
       };
       const prefix = prefixMap[table] || 'REC';
       body.id = `${prefix}-${Date.now()}`;

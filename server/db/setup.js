@@ -296,6 +296,160 @@ CREATE TABLE IF NOT EXISTS activity_feed (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS activity_feed_emp_idx ON activity_feed(employee_id);
+
+CREATE TABLE IF NOT EXISTS kpi_scores (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT REFERENCES employees(id) ON DELETE CASCADE,
+  period_month TEXT NOT NULL,
+  revenue_contribution NUMERIC(6,2) DEFAULT 0,
+  client_satisfaction NUMERIC(6,2) DEFAULT 0,
+  task_completion_rate NUMERIC(6,2) DEFAULT 0,
+  response_time_score NUMERIC(6,2) DEFAULT 0,
+  compliance_score NUMERIC(6,2) DEFAULT 0,
+  innovation_score NUMERIC(6,2) DEFAULT 0,
+  team_collaboration NUMERIC(6,2) DEFAULT 0,
+  attendance_score NUMERIC(6,2) DEFAULT 0,
+  overall_score NUMERIC(6,2) DEFAULT 0,
+  submitted_by TEXT, submitted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS kpi_scores_emp_idx ON kpi_scores(employee_id);
+
+CREATE TABLE IF NOT EXISTS achievements (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT REFERENCES employees(id) ON DELETE CASCADE,
+  badge_id TEXT NOT NULL, badge_name TEXT, badge_icon TEXT,
+  badge_color TEXT, category TEXT, description TEXT,
+  xp_awarded INT DEFAULT 0,
+  awarded_at TIMESTAMPTZ DEFAULT NOW(), awarded_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS achievements_emp_idx ON achievements(employee_id);
+
+CREATE TABLE IF NOT EXISTS daily_checkins (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  employee_id TEXT REFERENCES employees(id) ON DELETE CASCADE,
+  checkin_date DATE NOT NULL,
+  mood TEXT, tasks_planned TEXT, tasks_completed TEXT, notes TEXT,
+  xp_awarded INT DEFAULT 0, streak_contribution INT DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(employee_id, checkin_date)
+);
+CREATE INDEX IF NOT EXISTS daily_checkins_emp_idx ON daily_checkins(employee_id);
+
+CREATE TABLE IF NOT EXISTS leave_requests (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT REFERENCES employees(id) ON DELETE CASCADE,
+  leave_type TEXT NOT NULL, start_date DATE, end_date DATE,
+  days_requested INT DEFAULT 1, reason TEXT,
+  status TEXT DEFAULT 'pending',
+  eva_impact_pct NUMERIC(6,2) DEFAULT 0,
+  approved_by TEXT, approved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS leave_requests_emp_idx ON leave_requests(employee_id);
+
+CREATE TABLE IF NOT EXISTS okrs (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT REFERENCES employees(id) ON DELETE CASCADE,
+  period_month TEXT, objective TEXT NOT NULL,
+  kr1_text TEXT, kr2_text TEXT, kr3_text TEXT,
+  kr1_progress NUMERIC(6,2) DEFAULT 0,
+  kr2_progress NUMERIC(6,2) DEFAULT 0,
+  kr3_progress NUMERIC(6,2) DEFAULT 0,
+  kr1_target NUMERIC(6,2) DEFAULT 100,
+  kr2_target NUMERIC(6,2) DEFAULT 100,
+  kr3_target NUMERIC(6,2) DEFAULT 100,
+  overall_progress NUMERIC(6,2) DEFAULT 0,
+  kpi_dimension TEXT, kpi_boost_on_complete NUMERIC(6,2) DEFAULT 0,
+  status TEXT DEFAULT 'active', manager_notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS okrs_emp_idx ON okrs(employee_id);
+
+CREATE TABLE IF NOT EXISTS peer_feedback (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  from_employee_id TEXT REFERENCES employees(id) ON DELETE CASCADE,
+  to_employee_id TEXT REFERENCES employees(id) ON DELETE CASCADE,
+  type TEXT DEFAULT 'kudos', kpi_dimension TEXT, message TEXT,
+  rating INT, is_public BOOLEAN DEFAULT true,
+  period_month TEXT, xp_awarded INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS peer_feedback_to_idx   ON peer_feedback(to_employee_id);
+CREATE INDEX IF NOT EXISTS peer_feedback_from_idx ON peer_feedback(from_employee_id);
+
+CREATE TABLE IF NOT EXISTS pulse_surveys (
+  id TEXT PRIMARY KEY,
+  status TEXT DEFAULT 'active', week TEXT,
+  q1 TEXT, q2 TEXT, q3 TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS pulse_responses (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  survey_id TEXT REFERENCES pulse_surveys(id) ON DELETE CASCADE,
+  employee_id TEXT REFERENCES employees(id) ON DELETE CASCADE,
+  week TEXT, r1 TEXT, r2 TEXT, r3 TEXT,
+  enps INT, open_comment TEXT,
+  submitted_at TIMESTAMPTZ DEFAULT NOW(), created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(survey_id, employee_id)
+);
+CREATE INDEX IF NOT EXISTS pulse_responses_emp_idx ON pulse_responses(employee_id);
+
+CREATE TABLE IF NOT EXISTS one_on_ones (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT REFERENCES employees(id) ON DELETE CASCADE,
+  manager_id TEXT, scheduled_date DATE,
+  status TEXT DEFAULT 'scheduled',
+  agenda TEXT, employee_notes TEXT, manager_notes TEXT,
+  action_items JSONB DEFAULT '[]', mood_rating INT,
+  topics TEXT[], next_date DATE,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS one_on_ones_emp_idx ON one_on_ones(employee_id);
+
+CREATE TABLE IF NOT EXISTS learning_paths (
+  id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT,
+  role_target TEXT,
+  thumbnail_color TEXT DEFAULT '#7c5cfc',
+  thumbnail_icon TEXT DEFAULT 'fa-road',
+  course_ids JSONB DEFAULT '[]',
+  is_mandatory BOOLEAN DEFAULT false,
+  deadline_days INT, xp_bonus INT DEFAULT 0, badge_reward TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS eva_periods (
+  id TEXT PRIMARY KEY, period_month TEXT UNIQUE NOT NULL,
+  total_aum NUMERIC(18,2) DEFAULT 0,
+  gross_revenue NUMERIC(18,2) DEFAULT 0,
+  operational_costs NUMERIC(18,2) DEFAULT 0,
+  team_pool_pct NUMERIC(6,2) DEFAULT 50,
+  team_pool_amount NUMERIC(18,2) DEFAULT 0,
+  individual_split_pct NUMERIC(6,2) DEFAULT 60,
+  status TEXT DEFAULT 'draft',
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS personal_notes (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  employee_id TEXT REFERENCES employees(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT 'Untitled', content TEXT,
+  pinned BOOLEAN DEFAULT false, is_private BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS personal_notes_emp_idx ON personal_notes(employee_id);
+
+CREATE TABLE IF NOT EXISTS course_modules (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  course_id TEXT REFERENCES employee_courses(id) ON DELETE CASCADE,
+  module_index INT NOT NULL DEFAULT 1, title TEXT NOT NULL,
+  estimated_minutes INT DEFAULT 15, xp_reward INT DEFAULT 50,
+  content TEXT, key_points JSONB DEFAULT '[]', quiz JSONB DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS course_modules_course_idx ON course_modules(course_id);
 `;
 
 async function autoSetup() {
