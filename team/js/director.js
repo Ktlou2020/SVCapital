@@ -16,8 +16,15 @@ function _authHeader() {
 const get    = async p => {
   try {
     const r = await fetch(BASE+p, { credentials:'include', headers: _authHeader() });
-    return r.ok ? r.json() : {data:[],total:0};
-  } catch { return {data:[],total:0}; }
+    if (!r.ok) {
+      console.error(`[Director] API ${r.status} on GET ${p}`);
+      return {data:[],total:0,_error:r.status};
+    }
+    return r.json();
+  } catch(e) {
+    console.error(`[Director] Network error on GET ${p}:`, e.message);
+    return {data:[],total:0,_error:'network'};
+  }
 };
 const post   = async (p,b) => {
   const r = await fetch(BASE+p, { method:'POST',  credentials:'include', headers:{'Content-Type':'application/json', ..._authHeader()}, body:JSON.stringify(b) });
@@ -155,6 +162,17 @@ async function loadAll() {
   _employees  = emps;
   _onboarding = ob;
   _courses    = courses;
+
+  if (!emps.length) {
+    try {
+      const jwtRole = (() => { try { return JSON.parse(atob((localStorage.getItem('svc_token')||'').split('.')[1])).role; } catch{return 'n/a';} })();
+      const probe = await fetch(BASE + 'tables/employees?limit=1', { credentials:'include', headers: _authHeader() });
+      console.warn(`[Director] employees probe → HTTP ${probe.status}. JWT role: ${jwtRole}`);
+      if (probe.status === 403) showToast(`Permission denied loading employees — JWT role "${jwtRole}" needs admin/director.`, 'error');
+      else if (probe.status === 401) showToast('Session expired — please log in again.', 'error');
+      else if (!probe.ok) showToast(`Could not load employees (HTTP ${probe.status}) — open console for details.`, 'error');
+    } catch (_) {}
+  }
 
   // Populate buddy dropdown
   const buddySel = document.getElementById('c-buddy');
