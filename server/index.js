@@ -17,6 +17,7 @@ const cookieParser = require('cookie-parser');
 const cors         = require('cors');
 const rateLimit    = require('express-rate-limit');
 const path         = require('path');
+const fs           = require('fs');
 
 const app     = express();
 const PORT    = process.env.PORT || 3000;
@@ -193,6 +194,16 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
+/* ─── Redirect legacy .html URLs to clean equivalents ─── */
+// /login.html → /login  |  /fund/index.html → /fund  |  /team/director.html → /team/director
+app.use((req, res, next) => {
+  if (!req.path.endsWith('.html')) return next();
+  let clean = req.path.slice(0, -5); // strip .html
+  if (clean.endsWith('/index')) clean = clean.slice(0, -6); // /x/index → /x
+  if (!clean) clean = '/';
+  return res.redirect(301, clean + req.url.slice(req.path.length)); // preserve query string
+});
+
 /* ─── Static Frontend Files ─── */
 const STATIC_DIR = path.join(__dirname, '..');
 app.use(express.static(STATIC_DIR, {
@@ -215,11 +226,20 @@ app.use(express.static(STATIC_DIR, {
   }
 }));
 
-/* ─── Fallback: unknown paths with no extension → root index ─── */
+/* ─── Fallback: serve .html file for clean URLs, 404 for unknown assets ─── */
 app.get('*', (req, res) => {
-  if (path.extname(req.path)) {
-    return res.status(404).send('Not found');
-  }
+  const ext = path.extname(req.path);
+  if (ext) return res.status(404).send('Not found');
+
+  // /login → login.html  |  /team/director → team/director.html
+  const htmlFile = path.join(STATIC_DIR, req.path + '.html');
+  if (fs.existsSync(htmlFile)) return res.sendFile(htmlFile);
+
+  // /fund or /fund/ → fund/index.html  (express.static handles /fund/ already,
+  // this catches /fund without trailing slash when static doesn't redirect it)
+  const indexFile = path.join(STATIC_DIR, req.path, 'index.html');
+  if (fs.existsSync(indexFile)) return res.sendFile(indexFile);
+
   res.sendFile(path.join(STATIC_DIR, 'index.html'));
 });
 
