@@ -58,17 +58,26 @@ const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-ZA',{day:'nume
 
 /* ─── RBAC reference ─────────────────────────────────────────────── */
 const RBAC = {
-  'CEO':                ['employee','team','fund','admin','ifa','portal','director'],
-  'Operations Manager': ['employee','team','fund','admin'],
-  'Finance Manager':    ['employee','team','fund','admin'],
-  'Tech Lead':          ['employee','team','fund','admin'],
-  'Investment Analyst': ['employee','team','fund'],
-  'Compliance Officer': ['employee','admin'],
-  'Client Relations':   ['employee','portal'],
-  'Marketing':          ['employee'],
-  'Junior Analyst':     ['employee'],
-  'Admin':              ['employee'],
+  'CEO':                 ['employee','team','fund','admin','ifa','portal','director'],
+  'COO':                 ['employee','team','fund','admin','ifa','portal','director'],
+  'Operations Manager':  ['employee','team','fund','admin'],
+  'Finance Manager':     ['employee','team','fund','admin'],
+  'Tech Lead':           ['employee','team','fund','admin'],
+  'Investment Analyst':  ['employee','team','fund'],
+  'Compliance Officer':  ['employee','admin'],
+  'Internal Audit':      ['employee','admin'],
+  'Client Relations':    ['employee','portal'],
+  'Marketing':           ['employee'],
+  'Marketing Associate': ['employee'],
+  'Junior Analyst':      ['employee'],
+  'Admin':               ['employee'],
 };
+
+const ALL_ROLES = [
+  'CEO','COO','Operations Manager','Investment Analyst','Client Relations',
+  'Compliance Officer','Internal Audit','Marketing','Marketing Associate',
+  'Tech Lead','Finance Manager','Junior Analyst','Admin',
+];
 const APP_NAMES = {
   employee:'My Dashboard', team:'Team Dashboard', fund:'Fund Operations',
   admin:'Admin Console', ifa:'IFA Portal', portal:'Investor Portal', director:'Director Panel'
@@ -358,6 +367,14 @@ function openEmpDetail(empId) {
   const obPct = ob && ob.tasks_total > 0 ? Math.round((ob.tasks_completed||0)/ob.tasks_total*100) : 0;
   const allowedApps = (e.level === 'executive' ? Object.keys(APP_NAMES) : (RBAC[e.role]||['employee']));
 
+  const docBadge = (url, label) => url
+    ? `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:5px 12px;font-size:0.76rem;font-weight:600;color:#16a34a;text-decoration:none">
+        <i class="fa-solid fa-file-check"></i> View ${label}
+       </a>`
+    : `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:5px 12px;font-size:0.76rem;color:var(--muted)">
+        <i class="fa-solid fa-file-slash"></i> ${label} not uploaded
+       </span>`;
+
   document.getElementById('empDetailBody').innerHTML = `
     <div class="emp-detail-panel">
       <div class="emp-detail-header">
@@ -368,6 +385,7 @@ function openEmpDetail(empId) {
           <div class="emp-detail-meta">
             <span><i class="fa-solid fa-envelope"></i> ${e.email||'—'}</span>
             <span><i class="fa-solid fa-phone"></i> ${e.phone||'—'}</span>
+            ${e.employee_number ? `<span style="font-family:monospace;font-size:0.78rem"><i class="fa-solid fa-id-badge"></i> ${e.employee_number}</span>` : ''}
             ${e.start_date ? `<span><i class="fa-solid fa-calendar"></i> Started ${fmtDate(e.start_date)}</span>` : ''}
           </div>
         </div>
@@ -391,6 +409,23 @@ function openEmpDetail(empId) {
             <div style="font-size:0.75rem;color:var(--muted);margin-top:5px">${ob.tasks_completed||0} of ${ob.tasks_total||0} tasks complete</div>
           </div>
         ` : ''}
+
+        <!-- Documents section -->
+        <div style="margin-bottom:20px">
+          <div class="emp-detail-label" style="margin-bottom:10px"><i class="fa-solid fa-folder-open" style="margin-right:6px;color:var(--gold)"></i>Employee Documents</div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px">
+            ${docBadge(e.proof_of_id_url, 'Proof of ID')}
+            ${docBadge(e.proof_of_banking_url, 'Proof of Banking')}
+          </div>
+          ${e.bank_name ? `
+            <div style="margin-top:12px;font-size:0.78rem;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap">
+              <span><i class="fa-solid fa-building-columns"></i> ${e.bank_name}</span>
+              ${e.bank_account_number ? `<span><i class="fa-solid fa-credit-card"></i> ••••${String(e.bank_account_number).slice(-4)}</span>` : ''}
+              ${e.bank_account_type ? `<span>${e.bank_account_type}</span>` : ''}
+            </div>
+          ` : ''}
+        </div>
+
         <div>
           <div class="emp-detail-label" style="margin-bottom:10px">App Access (${allowedApps.length} apps)</div>
           <div style="display:flex;flex-wrap:wrap;gap:8px">
@@ -423,9 +458,10 @@ function openEmpEdit(empId) {
       <div class="form-group"><label>Last Name</label><input id="e-lname" value="${e.last_name||''}"/></div>
       <div class="form-group"><label>Email</label><input id="e-email" value="${e.email||''}"/></div>
       <div class="form-group"><label>Phone</label><input id="e-phone" value="${e.phone||''}"/></div>
+      <div class="form-group"><label>Employee Number</label><input id="e-empnum" value="${e.employee_number||''}" placeholder="e.g. SVC-2025-0001" style="font-family:monospace"/></div>
       <div class="form-group"><label>Role</label>
         <select id="e-role">
-          ${['CEO','Operations Manager','Investment Analyst','Client Relations','Compliance Officer','Marketing','Tech Lead','Finance Manager','Junior Analyst','Admin'].map(r=>`<option ${r===e.role?'selected':''}>${r}</option>`).join('')}
+          ${ALL_ROLES.map(r=>`<option ${r===e.role?'selected':''}>${r}</option>`).join('')}
         </select>
       </div>
       <div class="form-group"><label>Department</label>
@@ -454,17 +490,18 @@ function openEmpEdit(empId) {
 async function saveEmployeeEdit() {
   if (!_editingEmp) return;
   const updates = {
-    first_name:  document.getElementById('e-fname').value.trim(),
-    last_name:   document.getElementById('e-lname').value.trim(),
-    email:       document.getElementById('e-email').value.trim(),
-    phone:       document.getElementById('e-phone').value.trim(),
-    role:        document.getElementById('e-role').value,
-    department:  document.getElementById('e-dept').value,
-    level:       document.getElementById('e-level').value,
-    eva_weight:  parseFloat(document.getElementById('e-eva').value),
-    base_salary: Number(document.getElementById('e-salary').value) || null,
-    start_date:  document.getElementById('e-start').value || null,
-    bio:         document.getElementById('e-bio').value.trim(),
+    first_name:      document.getElementById('e-fname').value.trim(),
+    last_name:       document.getElementById('e-lname').value.trim(),
+    email:           document.getElementById('e-email').value.trim(),
+    phone:           document.getElementById('e-phone').value.trim(),
+    employee_number: document.getElementById('e-empnum').value.trim() || null,
+    role:            document.getElementById('e-role').value,
+    department:      document.getElementById('e-dept').value,
+    level:           document.getElementById('e-level').value,
+    eva_weight:      parseFloat(document.getElementById('e-eva').value),
+    base_salary:     Number(document.getElementById('e-salary').value) || null,
+    start_date:      document.getElementById('e-start').value || null,
+    bio:             document.getElementById('e-bio').value.trim(),
   };
   if (!updates.first_name || !updates.last_name) { showToast('First and last name are required', 'error'); return; }
 
@@ -525,7 +562,7 @@ function selectColor(el) {
 }
 
 function resetCreateForm() {
-  ['c-fname','c-lname','c-email','c-phone','c-dob','c-idnum','c-bio','c-welcome'].forEach(id => {
+  ['c-fname','c-lname','c-email','c-phone','c-dob','c-idnum','c-empnum','c-bio','c-welcome'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   ['c-role','c-dept'].forEach(id => { const el = document.getElementById(id); if (el) el.selectedIndex = 0; });
@@ -569,6 +606,9 @@ async function createEmployee() {
   const phone    = document.getElementById('c-phone').value.trim() || null;
   const bio      = document.getElementById('c-bio').value.trim() || null;
   const startDate= document.getElementById('c-start').value || new Date().toISOString().slice(0,10);
+  const empNumInput = (document.getElementById('c-empnum')?.value || '').trim();
+  const year     = new Date().getFullYear();
+  const empNumber = empNumInput || `SVC-${year}-${String(_employees.length + 1).padStart(4, '0')}`;
 
   try {
     // 1. Create employee record
@@ -588,6 +628,7 @@ async function createEmployee() {
       start_date:       startDate,   // convenience alias (also in schema)
       birth_date:       dob || null,
       id_number:        idNum || null,
+      employee_number:  empNumber,
       bio:              bio || null,
       status:           'active',
       eva_weight:       evaWeight || 1.0,

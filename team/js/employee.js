@@ -2217,11 +2217,14 @@ function renderProfile() {
   const bdFormatted = bd ? new Date(bd+'T12:00:00').toLocaleDateString('en-ZA',{day:'numeric',month:'long',year:'numeric'}) : 'Not set';
   const nextBday = bd ? getNextBirthday(bd) : null;
 
+  const addrParts = [_emp.address_line1, _emp.address_line2, _emp.address_city, _emp.address_province, _emp.address_postal_code].filter(Boolean);
+  const addrDisplay = addrParts.length ? addrParts.join(', ') : 'Not set';
+
   el.innerHTML = `
     <div class="view-header">
       <div><h1>My Profile</h1><div class="view-sub">Personal details, banking information &amp; documents</div></div>
       <div class="view-header-actions">
-        <button class="btn btn--primary" onclick="openProfileEditModal()"><i class="fa-solid fa-pen"></i> Edit Profile</button>
+        <button class="btn btn--primary" id="editProfileBtn"><i class="fa-solid fa-pen"></i> Edit Profile</button>
       </div>
     </div>
 
@@ -2231,6 +2234,7 @@ function renderProfile() {
         <div class="section-head"><i class="fa-solid fa-user"></i> Personal Information</div>
         <div class="chart-container" style="padding:0">
           ${profileRow('fa-id-card','Full Name',`${_emp.first_name} ${_emp.last_name}`)}
+          ${_emp.employee_number ? profileRow('fa-id-badge','Employee No.',`<span style="font-family:monospace">${_emp.employee_number}</span>`) : ''}
           ${profileRow('fa-envelope','Email',_emp.email||'—')}
           ${profileRow('fa-phone','Phone',_emp.phone||'—')}
           ${profileRow('fa-briefcase','Role',`${_emp.role||'—'} · ${_emp.department||'—'}`)}
@@ -2238,6 +2242,11 @@ function renderProfile() {
           ${profileRow('fa-id-badge','ID Number',_emp.id_number?maskId(_emp.id_number):'Not set')}
           ${profileRow('fa-phone-volume','Emergency Contact',_emp.emergency_contact_name?`${_emp.emergency_contact_name} · ${_emp.emergency_contact_phone||''}` :'Not set')}
           ${profileRow('fa-align-left','Bio',_emp.bio||'—')}
+        </div>
+
+        <div class="section-head mt-3"><i class="fa-solid fa-map-marker-alt"></i> Address</div>
+        <div class="chart-container" style="padding:0">
+          ${profileRow('fa-location-dot','Address',addrDisplay)}
         </div>
 
         <div class="section-head mt-3">
@@ -2250,7 +2259,7 @@ function renderProfile() {
         </div>
       </div>
 
-      <!-- Banking details -->
+      <!-- Banking details + Documents -->
       <div>
         <div class="section-head">
           <i class="fa-solid fa-building-columns"></i> Banking Information
@@ -2275,7 +2284,7 @@ function renderProfile() {
                   <div style="font-size:0.85rem;font-weight:600">${_emp.proof_of_banking_url.split('/').pop()}</div>
                   <div style="font-size:0.72rem;color:var(--muted)">Proof of banking on file</div>
                 </div>
-                <span class="chip chip-green"><i class="fa-solid fa-check"></i> Verified</span>
+                <span class="chip chip-green"><i class="fa-solid fa-check"></i> Uploaded</span>
               </div>`
             : `<div style="border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center">
                 <i class="fa-solid fa-cloud-upload" style="font-size:2rem;color:var(--muted);margin-bottom:10px;display:block"></i>
@@ -2283,7 +2292,30 @@ function renderProfile() {
                 <div style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Upload a bank confirmation letter, statement header, or cancelled cheque</div>
                 <label class="btn btn--secondary" style="cursor:pointer">
                   <i class="fa-solid fa-upload"></i> Upload Document
-                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleBankingDocUpload(this)" />
+                  <input id="bankingDocInput" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" />
+                </label>
+              </div>`
+          }
+        </div>
+
+        <div class="section-head mt-3"><i class="fa-solid fa-passport"></i> Proof of ID</div>
+        <div class="chart-container">
+          ${_emp.proof_of_id_url
+            ? `<div style="display:flex;align-items:center;gap:12px;padding:4px 0">
+                <i class="fa-solid fa-file-pdf" style="color:var(--danger);font-size:1.3rem"></i>
+                <div style="flex:1">
+                  <div style="font-size:0.85rem;font-weight:600">${_emp.proof_of_id_url.split('/').pop()}</div>
+                  <div style="font-size:0.72rem;color:var(--muted)">Proof of ID on file</div>
+                </div>
+                <span class="chip chip-green"><i class="fa-solid fa-check"></i> Uploaded</span>
+              </div>`
+            : `<div style="border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center">
+                <i class="fa-solid fa-id-card" style="font-size:2rem;color:var(--muted);margin-bottom:10px;display:block"></i>
+                <div style="font-size:0.85rem;font-weight:600;margin-bottom:4px">No ID document uploaded yet</div>
+                <div style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Upload a copy of your SA ID or passport</div>
+                <label class="btn btn--secondary" style="cursor:pointer">
+                  <i class="fa-solid fa-upload"></i> Upload ID Document
+                  <input id="idDocInput" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" />
                 </label>
               </div>`
           }
@@ -2297,6 +2329,10 @@ function renderProfile() {
         </div>
       </div>
     </div>`;
+
+  document.getElementById('editProfileBtn')?.addEventListener('click', openProfileEditModal);
+  document.getElementById('bankingDocInput')?.addEventListener('change', function() { handleBankingDocUpload(this); });
+  document.getElementById('idDocInput')?.addEventListener('change', function() { handleIdDocUpload(this); });
 }
 
 function profileRow(icon, label, value) {
@@ -2332,35 +2368,59 @@ function getNextBirthday(bdStr) {
 
 function handleBankingDocUpload(input) {
   const file = input.files[0]; if (!file) return;
-  // Simulate upload — store filename as proof_of_banking_url
   const fakePath = `uploads/banking/${_emp.id}_${file.name}`;
   patch(`tables/employees/${_emp.id}`, { proof_of_banking_url: fakePath }).then(r=>{
     _emp.proof_of_banking_url = fakePath;
     renderProfile();
-    showToast(`Document "${file.name}" uploaded successfully!`, 'success');
+    showToast(`Banking document "${file.name}" uploaded successfully!`, 'success');
+  });
+}
+
+function handleIdDocUpload(input) {
+  const file = input.files[0]; if (!file) return;
+  const fakePath = `uploads/id/${_emp.id}_${file.name}`;
+  patch(`tables/employees/${_emp.id}`, { proof_of_id_url: fakePath }).then(r=>{
+    _emp.proof_of_id_url = fakePath;
+    renderProfile();
+    showToast(`ID document "${file.name}" uploaded successfully!`, 'success');
   });
 }
 
 function openProfileEditModal() {
   const el = document.getElementById('generic-modal');
-  el.innerHTML = `<div class="modal" style="width:560px">
+  el.innerHTML = `<div class="modal" style="width:600px;max-height:90vh;display:flex;flex-direction:column">
     <div class="modal-header">
       <i class="fa-solid fa-user" style="color:var(--accent)"></i>
       <h3>Edit My Profile</h3>
-      <button class="btn btn--ghost btn--sm" style="margin-left:auto" onclick="closeModal('generic-modal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="btn btn--ghost btn--sm" style="margin-left:auto" id="profModalClose"><i class="fa-solid fa-xmark"></i></button>
     </div>
-    <div class="modal-body">
-      <div class="section-head" style="margin-top:0">Personal</div>
+    <div class="modal-body" style="overflow-y:auto;flex:1">
+      <div class="section-head" style="margin-top:0">Contact Information</div>
       <div class="form-row">
-        <div class="form-group"><label>Phone</label><input id="prof-phone" value="${_emp.phone||''}" placeholder="+27 82 000 0000" /></div>
+        <div class="form-group"><label>Phone</label><input id="prof-phone" value="${_emp.phone||''}" placeholder="+27 82 000 0000" inputmode="tel" /></div>
         <div class="form-group"><label>Date of Birth</label><input type="date" id="prof-dob" value="${_emp.birth_date||''}" /></div>
       </div>
-      <div class="form-group"><label>SA ID Number</label><input id="prof-idnum" value="${_emp.id_number||''}" placeholder="YYMMDD0000000" /></div>
+      <div class="form-group"><label>SA ID Number</label><input id="prof-idnum" value="${_emp.id_number||''}" placeholder="YYMMDD0000000" inputmode="numeric" /></div>
       <div class="form-group"><label>Bio</label><textarea id="prof-bio" rows="2">${_emp.bio||''}</textarea></div>
       <div class="form-row">
         <div class="form-group"><label>Emergency Contact Name</label><input id="prof-ecname" value="${_emp.emergency_contact_name||''}" /></div>
-        <div class="form-group"><label>Emergency Contact Phone</label><input id="prof-ecphone" value="${_emp.emergency_contact_phone||''}" /></div>
+        <div class="form-group"><label>Emergency Contact Phone</label><input id="prof-ecphone" value="${_emp.emergency_contact_phone||''}" placeholder="+27 82 000 0000" inputmode="tel" /></div>
       </div>
+
+      <div class="section-head">Address</div>
+      <div class="form-group"><label>Address Line 1</label><input id="prof-addr1" value="${_emp.address_line1||''}" placeholder="Street address" /></div>
+      <div class="form-group"><label>Address Line 2</label><input id="prof-addr2" value="${_emp.address_line2||''}" placeholder="Suburb / Complex (optional)" /></div>
+      <div class="form-row">
+        <div class="form-group"><label>City</label><input id="prof-city" value="${_emp.address_city||''}" /></div>
+        <div class="form-group"><label>Province</label>
+          <select id="prof-province">
+            <option value="">Select province…</option>
+            ${['Gauteng','Western Cape','KwaZulu-Natal','Eastern Cape','Free State','Limpopo','Mpumalanga','North West','Northern Cape'].map(p=>`<option value="${p}" ${_emp.address_province===p?'selected':''}>${p}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="max-width:200px"><label>Postal Code</label><input id="prof-postal" value="${_emp.address_postal_code||''}" placeholder="0000" inputmode="numeric" maxlength="4" /></div>
+
       <div class="section-head">Banking Details</div>
       <div class="form-group"><label>Bank Name</label>
         <select id="prof-bank">
@@ -2368,7 +2428,7 @@ function openProfileEditModal() {
         </select>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Account Number</label><input id="prof-accnum" value="${_emp.bank_account_number||''}" placeholder="Account number" /></div>
+        <div class="form-group"><label>Account Number</label><input id="prof-accnum" value="${_emp.bank_account_number||''}" placeholder="Account number" inputmode="numeric" /></div>
         <div class="form-group"><label>Account Type</label>
           <select id="prof-acctype">
             ${['Cheque','Savings','Transmission'].map(t=>`<option ${_emp.bank_account_type===t?'selected':''}>${t}</option>`).join('')}
@@ -2376,31 +2436,62 @@ function openProfileEditModal() {
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Branch Code</label><input id="prof-branch" value="${_emp.bank_branch_code||''}" placeholder="6-digit code" /></div>
+        <div class="form-group"><label>Branch Code</label><input id="prof-branch" value="${_emp.bank_branch_code||''}" placeholder="6-digit code" inputmode="numeric" /></div>
         <div class="form-group"><label>Account Holder Name</label><input id="prof-holder" value="${_emp.bank_account_holder||''}" placeholder="As on bank account" /></div>
+      </div>
+
+      <div class="section-head">Documents</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px">
+        <div>
+          <div style="font-size:0.78rem;font-weight:600;margin-bottom:6px;color:var(--muted)">Proof of Banking</div>
+          <label class="btn btn--secondary btn--sm" style="cursor:pointer;width:100%;justify-content:center">
+            <i class="fa-solid fa-upload"></i> ${_emp.proof_of_banking_url ? 'Replace' : 'Upload'}
+            <input id="prof-bankdoc" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" />
+          </label>
+          ${_emp.proof_of_banking_url ? `<div style="font-size:0.7rem;color:var(--success);margin-top:4px"><i class="fa-solid fa-check"></i> On file</div>` : ''}
+        </div>
+        <div>
+          <div style="font-size:0.78rem;font-weight:600;margin-bottom:6px;color:var(--muted)">Proof of ID</div>
+          <label class="btn btn--secondary btn--sm" style="cursor:pointer;width:100%;justify-content:center">
+            <i class="fa-solid fa-upload"></i> ${_emp.proof_of_id_url ? 'Replace' : 'Upload'}
+            <input id="prof-iddoc" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" />
+          </label>
+          ${_emp.proof_of_id_url ? `<div style="font-size:0.7rem;color:var(--success);margin-top:4px"><i class="fa-solid fa-check"></i> On file</div>` : ''}
+        </div>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn--secondary" onclick="closeModal('generic-modal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveProfile()"><i class="fa-solid fa-floppy-disk"></i> Save Profile</button>
+      <button class="btn btn--secondary" id="profModalCancel">Cancel</button>
+      <button class="btn btn--primary" id="profModalSave"><i class="fa-solid fa-floppy-disk"></i> Save Profile</button>
     </div>
   </div>`;
   el.classList.add('open');
+
+  document.getElementById('profModalClose').addEventListener('click', () => closeModal('generic-modal'));
+  document.getElementById('profModalCancel').addEventListener('click', () => closeModal('generic-modal'));
+  document.getElementById('profModalSave').addEventListener('click', saveProfile);
+  document.getElementById('prof-bankdoc').addEventListener('change', function() { handleBankingDocUpload(this); closeModal('generic-modal'); });
+  document.getElementById('prof-iddoc').addEventListener('change', function() { handleIdDocUpload(this); closeModal('generic-modal'); });
 }
 
 async function saveProfile() {
   const updates = {
-    phone:               document.getElementById('prof-phone').value,
-    birth_date:          document.getElementById('prof-dob').value,
-    id_number:           document.getElementById('prof-idnum').value,
-    bio:                 document.getElementById('prof-bio').value,
-    emergency_contact_name:  document.getElementById('prof-ecname').value,
-    emergency_contact_phone: document.getElementById('prof-ecphone').value,
-    bank_name:           document.getElementById('prof-bank').value,
-    bank_account_number: document.getElementById('prof-accnum').value,
-    bank_account_type:   document.getElementById('prof-acctype').value,
-    bank_branch_code:    document.getElementById('prof-branch').value,
-    bank_account_holder: document.getElementById('prof-holder').value,
+    phone:                   document.getElementById('prof-phone')?.value || '',
+    birth_date:              document.getElementById('prof-dob')?.value || '',
+    id_number:               document.getElementById('prof-idnum')?.value || '',
+    bio:                     document.getElementById('prof-bio')?.value || '',
+    emergency_contact_name:  document.getElementById('prof-ecname')?.value || '',
+    emergency_contact_phone: document.getElementById('prof-ecphone')?.value || '',
+    address_line1:           document.getElementById('prof-addr1')?.value || '',
+    address_line2:           document.getElementById('prof-addr2')?.value || '',
+    address_city:            document.getElementById('prof-city')?.value || '',
+    address_province:        document.getElementById('prof-province')?.value || '',
+    address_postal_code:     document.getElementById('prof-postal')?.value || '',
+    bank_name:               document.getElementById('prof-bank')?.value || '',
+    bank_account_number:     document.getElementById('prof-accnum')?.value || '',
+    bank_account_type:       document.getElementById('prof-acctype')?.value || '',
+    bank_branch_code:        document.getElementById('prof-branch')?.value || '',
+    bank_account_holder:     document.getElementById('prof-holder')?.value || '',
   };
   const r = await patch(`tables/employees/${_emp.id}`, updates);
   Object.assign(_emp, r);
@@ -2678,6 +2769,7 @@ window.navigate = navigate;
 window.openProfileEditModal = openProfileEditModal;
 window.saveProfile = saveProfile;
 window.handleBankingDocUpload = handleBankingDocUpload;
+window.handleIdDocUpload = handleIdDocUpload;
 window.openKudosForBirthday = openKudosForBirthday;
 window.shiftCalMonth = shiftCalMonth;
 window.openCourse = openCourse;
