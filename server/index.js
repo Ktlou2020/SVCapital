@@ -38,7 +38,7 @@ app.use(helmet({
       styleSrc:      ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'cdnjs.cloudflare.com'],
       fontSrc:       ["'self'", 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com'],
       imgSrc:        ["'self'", 'data:', 'blob:', '*'],
-      connectSrc:    ["'self'", 'cdn.jsdelivr.net', 'api.paystack.co', '*.paystack.co'],
+      connectSrc:    ["'self'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com', 'api.paystack.co', '*.paystack.co'],
       frameSrc:      ["'self'", 'checkout.paystack.com'],
       objectSrc:     ["'none'"],
     },
@@ -75,7 +75,7 @@ app.use(cookieParser());
 /* ─── Rate Limiting ─── */
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 2000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests — please try again in 15 minutes.' },
