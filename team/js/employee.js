@@ -173,6 +173,10 @@ function renderTopbar() {
     el.textContent = _emp.avatar_initials || (_emp.first_name||'?')[0];
     el.style.background = _emp.avatar_color || '#7c5cfc';
   }
+  const nameEl = document.getElementById('sidebar-profile-name');
+  if (nameEl) nameEl.textContent = `${_emp.first_name||''} ${_emp.last_name||''}`.trim();
+  const roleEl = document.getElementById('sidebar-profile-role');
+  if (roleEl) roleEl.textContent = _emp.role || _emp.department || '—';
   const xpEl = document.getElementById('xp-bar');
   if (xpEl) { xpEl.style.width = pr.pct + '%'; }
   const xpLbl = document.getElementById('xp-label');
@@ -948,6 +952,71 @@ function renderDashboard() {
       <button class="btn btn--ghost btn--sm mt-2" onclick="navigate('feed',document.querySelector('[data-view=feed]'))">
         View all activity <i class="fa-solid fa-arrow-right"></i>
       </button>
+    </div>
+
+    <!-- My Profile Summary -->
+    <div class="section-head" style="margin-top:28px"><i class="fa-solid fa-id-card"></i> My Profile</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+      <div class="chart-container" style="padding:20px">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+          <div style="width:52px;height:52px;border-radius:14px;background:${_emp.avatar_color||'#7c5cfc'};display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:800;color:#fff;flex-shrink:0">${_emp.avatar_initials||(_emp.first_name||'?')[0]}</div>
+          <div>
+            <div style="font-size:1rem;font-weight:700">${_emp.first_name} ${_emp.last_name}</div>
+            <div style="font-size:0.78rem;color:var(--muted)">${_emp.role||'—'} · ${_emp.department||'—'}</div>
+            ${_emp.employee_number ? `<div style="font-size:0.7rem;font-family:monospace;color:var(--accent);margin-top:2px">${_emp.employee_number}</div>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem">
+            <i class="fa-solid fa-envelope" style="color:var(--muted);width:14px;text-align:center"></i>
+            <span style="color:var(--muted);min-width:80px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Email</span>
+            <span style="color:var(--text)">${_emp.email||'—'}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem">
+            <i class="fa-solid fa-phone" style="color:var(--muted);width:14px;text-align:center"></i>
+            <span style="color:var(--muted);min-width:80px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Phone</span>
+            <span style="color:${_emp.phone?'var(--text)':'var(--muted)'}">${_emp.phone||'Not set'}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem">
+            <i class="fa-solid fa-location-dot" style="color:var(--muted);width:14px;text-align:center"></i>
+            <span style="color:var(--muted);min-width:80px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Address</span>
+            <span style="color:${_emp.address_city?'var(--text)':'var(--muted)'}">${_emp.address_city?[_emp.address_city,_emp.address_province].filter(Boolean).join(', '):'Not set'}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem">
+            <i class="fa-solid fa-id-badge" style="color:var(--muted);width:14px;text-align:center"></i>
+            <span style="color:var(--muted);min-width:80px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em">ID Number</span>
+            <span style="color:${_emp.id_number?'var(--text)':'var(--muted)'}">${_emp.id_number?'••••••••••••••':'Not uploaded'}</span>
+          </div>
+        </div>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+          <button class="btn btn--primary btn--sm" onclick="navigate('profile',document.querySelector('[data-view=profile]'))">
+            <i class="fa-solid fa-pen"></i> Edit My Profile
+          </button>
+        </div>
+      </div>
+
+      <div class="chart-container" style="padding:20px">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px">Account Status</div>
+        ${[
+          ['fa-building-columns','Banking Details', _emp.bank_account_number ? 'Configured' : 'Not set', !!_emp.bank_account_number],
+          ['fa-file-image','Proof of Banking', _emp.proof_of_banking_url ? 'Uploaded' : 'Missing', !!_emp.proof_of_banking_url],
+          ['fa-id-card','Proof of ID', _emp.proof_of_id_url ? 'Uploaded' : 'Not uploaded', !!_emp.proof_of_id_url],
+          ['fa-location-dot','Home Address', (_emp.address_line1||_emp.address_city) ? 'On file' : 'Not set', !!((_emp.address_line1||_emp.address_city))],
+          ['fa-file-invoice-dollar','Payslips', _payslips.length ? `${_payslips.length} on file` : 'None yet', _payslips.length > 0],
+        ].map(([icon,label,val,ok])=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+            <i class="fa-solid ${icon}" style="color:var(--muted);width:14px;text-align:center;font-size:0.82rem"></i>
+            <span style="flex:1;font-size:0.8rem;color:var(--text)">${label}</span>
+            <span style="font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:20px;${ok?'background:rgba(0,212,170,0.12);color:var(--accent2)':'background:rgba(255,91,91,0.1);color:var(--danger)'}">${val}</span>
+          </div>`).join('')}
+        <div style="margin-top:14px">
+          <button class="btn btn--ghost btn--sm" onclick="navigate('profile',document.querySelector('[data-view=profile]'))">
+            View full profile <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+
     </div>`;
 }
 

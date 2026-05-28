@@ -76,94 +76,113 @@
 <!-- Main Layout -->
 <div class="emp-layout">
 
-  <!-- ── Icon Sidebar ── -->
+  <!-- ── Sidebar ── -->
   <nav class="emp-sidebar">
-    <div class="sidebar-logo"><img src="../assets/logo.png" alt="SV Capital" style="width:40px;height:40px;object-fit:contain;display:block;"></div>
+    <div class="sidebar-logo">
+      <img src="../assets/logo.png" alt="SV Capital">
+      <div>
+        <div class="sidebar-logo-name">SV Capital</div>
+        <div class="sidebar-logo-sub">My Dashboard</div>
+      </div>
+    </div>
 
+    <!-- Home -->
     <button class="sidebar-nav-btn active" data-view="dashboard" onclick="navigate('dashboard',this)">
       <i class="fa-solid fa-house"></i>
-      <span class="tooltip">Dashboard</span>
+      <span class="nav-label">Dashboard</span>
     </button>
 
+    <!-- Learn -->
+    <div class="nav-section-label">Learn</div>
     <button class="sidebar-nav-btn" data-view="courses" onclick="navigate('courses',this)">
       <i class="fa-solid fa-book-open"></i>
-      <span class="tooltip">My Courses</span>
+      <span class="nav-label">My Courses</span>
     </button>
-
     <button class="sidebar-nav-btn" data-view="paths" onclick="navigate('paths',this)">
       <i class="fa-solid fa-road"></i>
-      <span class="tooltip">Learning Paths</span>
+      <span class="nav-label">Learning Paths</span>
     </button>
 
+    <!-- Performance -->
+    <div class="nav-section-label">Performance</div>
     <button class="sidebar-nav-btn" data-view="kpis" onclick="navigate('kpis',this)">
       <i class="fa-solid fa-chart-bar"></i>
-      <span class="tooltip">My KPIs</span>
+      <span class="nav-label">My KPIs</span>
     </button>
-
     <button class="sidebar-nav-btn" data-view="okrs" onclick="navigate('okrs',this)">
       <i class="fa-solid fa-bullseye"></i>
-      <span class="tooltip">My OKRs</span>
+      <span class="nav-label">My OKRs</span>
     </button>
-
     <button class="sidebar-nav-btn" data-view="feedback" onclick="navigate('feedback',this)">
       <i class="fa-solid fa-hands-clapping"></i>
-      <span class="tooltip">Feedback &amp; Kudos</span>
+      <span class="nav-label">Feedback &amp; Kudos</span>
     </button>
 
+    <!-- Wellbeing -->
+    <div class="nav-section-label">Wellbeing</div>
     <button class="sidebar-nav-btn" data-view="pulse" onclick="navigate('pulse',this)">
       <i class="fa-solid fa-poll"></i>
-      <span class="tooltip">Pulse Survey</span>
-      <span class="nav-dot" id="pulse-dot"></span>
+      <span class="nav-label">Pulse Survey</span>
+      <span class="nav-dot" id="pulse-dot" style="display:none"></span>
     </button>
-
     <button class="sidebar-nav-btn" data-view="oneonone" onclick="navigate('oneonone',this)">
       <i class="fa-solid fa-comments"></i>
-      <span class="tooltip">1-on-1s</span>
+      <span class="nav-label">1-on-1s</span>
     </button>
-
     <button class="sidebar-nav-btn" data-view="checkin" onclick="navigate('checkin',this)">
       <i class="fa-solid fa-sun"></i>
-      <span class="tooltip">Daily Check-in</span>
-      <span class="nav-dot" id="checkin-dot"></span>
+      <span class="nav-label">Daily Check-in</span>
+      <span class="nav-dot" id="checkin-dot" style="display:none"></span>
     </button>
 
+    <!-- My Work -->
+    <div class="nav-section-label">My Work</div>
     <button class="sidebar-nav-btn" data-view="leave" onclick="navigate('leave',this)">
-      <i class="fa-solid fa-calendar-days"></i>
-      <span class="tooltip">My Leave</span>
+      <i class="fa-solid fa-umbrella-beach"></i>
+      <span class="nav-label">My Leave</span>
     </button>
-
-    <button class="sidebar-nav-btn" data-view="achievements" onclick="navigate('achievements',this)">
-      <i class="fa-solid fa-trophy"></i>
-      <span class="tooltip">Achievements</span>
-    </button>
-
-    <button class="sidebar-nav-btn" data-view="feed" onclick="navigate('feed',this)">
-      <i class="fa-solid fa-bolt"></i>
-      <span class="tooltip">Activity Feed</span>
-    </button>
-
-    <button class="sidebar-nav-btn" data-view="journal" onclick="navigate('journal',this)">
-      <i class="fa-solid fa-pen-to-square"></i>
-      <span class="tooltip">Journal</span>
-    </button>
-
-    <button class="sidebar-nav-btn" data-view="eva" onclick="navigate('eva',this)">
-      <i class="fa-solid fa-money-bill-trend-up"></i>
-      <span class="tooltip">EVA Statement</span>
-    </button>
-
     <button class="sidebar-nav-btn" data-view="calendar" onclick="navigate('calendar',this)">
       <i class="fa-solid fa-calendar-days"></i>
-      <span class="tooltip">Leave Calendar</span>
+      <span class="nav-label">Leave Calendar</span>
+    </button>
+    <button class="sidebar-nav-btn" data-view="eva" onclick="navigate('eva',this)">
+      <i class="fa-solid fa-money-bill-trend-up"></i>
+      <span class="nav-label">EVA Statement</span>
     </button>
 
-    <button class="sidebar-nav-btn" data-view="profile" onclick="navigate('profile',this)">
-      <i class="fa-solid fa-id-card"></i>
-      <span class="tooltip">My Profile</span>
+    <!-- Grow -->
+    <div class="nav-section-label">Grow</div>
+    <button class="sidebar-nav-btn" data-view="achievements" onclick="navigate('achievements',this)">
+      <i class="fa-solid fa-trophy"></i>
+      <span class="nav-label">Achievements</span>
+    </button>
+    <button class="sidebar-nav-btn" data-view="feed" onclick="navigate('feed',this)">
+      <i class="fa-solid fa-bolt"></i>
+      <span class="nav-label">Activity Feed</span>
+    </button>
+    <button class="sidebar-nav-btn" data-view="journal" onclick="navigate('journal',this)">
+      <i class="fa-solid fa-pen-to-square"></i>
+      <span class="nav-label">Journal</span>
     </button>
 
     <div class="sidebar-spacer"></div>
-    <div class="sidebar-emp-avatar" id="sidebar-avatar" onclick="navigate('achievements',document.querySelector('[data-view=achievements]'))">?</div>
+    <div class="nav-divider"></div>
+
+    <!-- My Profile pinned at bottom -->
+    <button class="sidebar-nav-btn" data-view="profile" onclick="navigate('profile',this)" style="margin-bottom:4px">
+      <i class="fa-solid fa-id-card"></i>
+      <span class="nav-label">My Profile</span>
+    </button>
+
+    <!-- Avatar / profile card -->
+    <div class="sidebar-profile-btn" id="sidebar-profile-card" onclick="navigate('profile',document.querySelector('[data-view=profile]'))">
+      <div class="sidebar-emp-avatar" id="sidebar-avatar">?</div>
+      <div style="flex:1;min-width:0">
+        <div class="sidebar-profile-name" id="sidebar-profile-name">—</div>
+        <div class="sidebar-profile-role" id="sidebar-profile-role">—</div>
+      </div>
+      <i class="fa-solid fa-chevron-right" style="font-size:0.65rem;color:var(--muted)"></i>
+    </div>
   </nav>
 
   <!-- ── Main Content ── -->
