@@ -294,6 +294,33 @@ DO $$ BEGIN
   BEGIN ALTER TABLE employees ADD COLUMN employee_number TEXT UNIQUE; EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
 
+CREATE TABLE IF NOT EXISTS payslips (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  pay_period TEXT NOT NULL,
+  pay_date TEXT NOT NULL,
+  basic_salary NUMERIC(18,2) DEFAULT 0,
+  bonus NUMERIC(18,2) DEFAULT 0,
+  other_earnings NUMERIC(18,2) DEFAULT 0,
+  total_earnings NUMERIC(18,2) DEFAULT 0,
+  tax NUMERIC(18,2) DEFAULT 0,
+  uif_employee NUMERIC(18,2) DEFAULT 0,
+  other_deductions NUMERIC(18,2) DEFAULT 0,
+  total_deductions NUMERIC(18,2) DEFAULT 0,
+  nett_pay NUMERIC(18,2) DEFAULT 0,
+  uif_company NUMERIC(18,2) DEFAULT 0,
+  ytd_taxable_earnings NUMERIC(18,2) DEFAULT 0,
+  ytd_tax_paid NUMERIC(18,2) DEFAULT 0,
+  ytd_taxable_company_contributions NUMERIC(18,2) DEFAULT 0,
+  ytd_taxable_fringe_benefits NUMERIC(18,2) DEFAULT 0,
+  ytd_provision_annual_bonus NUMERIC(18,2) DEFAULT 0,
+  notes TEXT,
+  generated_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS payslips_emp_idx ON payslips(employee_id);
+CREATE UNIQUE INDEX IF NOT EXISTS payslips_emp_period_idx ON payslips(employee_id, pay_period);
+
 CREATE TABLE IF NOT EXISTS employee_onboarding (
   id TEXT PRIMARY KEY,
   employee_id TEXT REFERENCES employees(id) ON DELETE CASCADE,

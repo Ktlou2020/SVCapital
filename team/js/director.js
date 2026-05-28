@@ -98,6 +98,7 @@ let _session    = null;
 let _employees  = [];
 let _onboarding = [];
 let _courses    = [];
+let _payslips   = [];
 let _editingEmp = null;
 let _selectedColor = '#7c5cfc';
 let _currentView   = 'overview';
@@ -163,14 +164,16 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadAll() {
-  const [emps, ob, courses] = await Promise.all([
+  const [emps, ob, courses, payslips] = await Promise.all([
     fetchAll('employees'),
     fetchAll('employee_onboarding'),
     fetchAll('employee_courses'),
+    fetchAll('payslips'),
   ]);
   _employees  = emps;
   _onboarding = ob;
   _courses    = courses;
+  _payslips   = payslips;
 
   if (!emps.length) {
     try {
@@ -204,6 +207,7 @@ const PAGE_META = {
   onboarding: { title:'Onboarding',      sub:'Track new employee onboarding progress' },
   access:     { title:'Access & Roles',  sub:'Role-based access control matrix' },
   courses:    { title:'Course Library',  sub:'All available training courses' },
+  payslips:   { title:'Payslips',        sub:'Generate and manage employee payslips' },
 };
 
 function navTo(view, btn) {
@@ -232,6 +236,7 @@ function navTo(view, btn) {
     onboarding: renderOnboardingView,
     access:     renderAccessMatrix,
     courses:    renderCourseLibrary,
+    payslips:   renderPayslips,
   };
   if (renders[view]) renders[view]();
 }
@@ -818,8 +823,440 @@ function openObDetail(obId) {
   openModal('obDetailModal');
 }
 
+/* ═══ PAYSLIPS ══════════════════════════════════════════════════════ */
+
+function calcAnnualTax(annualIncome) {
+  const tiers = [
+    [0,       237100,   0,      0.18],
+    [237100,  370500,   42678,  0.26],
+    [370500,  512800,   77362,  0.31],
+    [512800,  673000,   121475, 0.36],
+    [673000,  857900,   179147, 0.39],
+    [857900,  1817000,  251258, 0.41],
+    [1817000, Infinity, 644489, 0.45],
+  ];
+  let tax = 0;
+  for (const [floor, ceil, base, rate] of tiers) {
+    if (annualIncome <= floor) break;
+    tax = base + (Math.min(annualIncome, ceil) - floor) * rate;
+    if (annualIncome <= ceil) break;
+  }
+  return Math.max(0, tax - 17235);
+}
+
+function calcMonthlyPAYE(monthly) {
+  return Math.round(calcAnnualTax(monthly * 12) / 12 * 100) / 100;
+}
+
+function calcUIF(gross) {
+  return Math.min(Math.round(gross * 0.01 * 100) / 100, 177.12);
+}
+
+function renderPayslips() {
+  const el = document.getElementById('payslipsContent');
+  const currentYear  = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  let periodOptions = '';
+  for (let i = 0; i < 24; i++) {
+    let m = currentMonth - i, y = currentYear;
+    while (m <= 0) { m += 12; y--; }
+    const val = `${y}-${String(m).padStart(2,'0')}`;
+    periodOptions += `<option value="${val}" ${i===0?'selected':''}>${MONTHS[m-1]} ${y}</option>`;
+  }
+
+  const empOptions = _employees
+    .filter(e => e.status === 'active')
+    .sort((a,b) => (a.first_name+a.last_name).localeCompare(b.first_name+b.last_name))
+    .map(e => `<option value="${e.id}">${e.first_name} ${e.last_name} · ${e.role||'—'}</option>`)
+    .join('');
+
+  const history = [..._payslips]
+    .sort((a,b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 50);
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px">
+        <div style="font-size:1rem;font-weight:800;margin-bottom:18px;display:flex;align-items:center;gap:10px">
+          <i class="fa-solid fa-file-invoice-dollar" style="color:var(--gold)"></i> Generate Payslip
+        </div>
+        <div class="form-grid">
+          <div class="form-group full"><label>Employee <span class="req">*</span></label>
+            <select id="ps-emp">${empOptions}</select>
+          </div>
+          <div class="form-group full"><label>Pay Period <span class="req">*</span></label>
+            <select id="ps-period">${periodOptions}</select>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+          <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Earnings</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Basic Salary (ZAR)</label>
+              <input id="ps-salary" type="number" placeholder="0.00"/>
+            </div>
+            <div class="form-group"><label>Bonus / Commission</label>
+              <input id="ps-bonus" type="number" placeholder="0.00"/>
+            </div>
+            <div class="form-group"><label>Other Earnings</label>
+              <input id="ps-other-earn" type="number" placeholder="0.00"/>
+            </div>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+          <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">
+            Deductions <span style="font-weight:400;text-transform:none;letter-spacing:0">(auto-calculated, editable)</span>
+          </div>
+          <div class="form-grid">
+            <div class="form-group"><label>PAYE Tax</label><input id="ps-tax" type="number" placeholder="auto"/></div>
+            <div class="form-group"><label>UIF (employee)</label><input id="ps-uif" type="number" placeholder="auto"/></div>
+            <div class="form-group"><label>Other Deductions</label><input id="ps-other-ded" type="number" placeholder="0.00"/></div>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+          <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Notes (optional)</div>
+          <textarea id="ps-notes" rows="2" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:var(--font);resize:none;outline:none"></textarea>
+        </div>
+        <div id="ps-preview" style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:10px;padding:14px;margin-top:16px">
+          <div style="font-size:0.7rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Preview</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.8rem">
+            <div style="color:var(--muted)">Total Earnings</div><div id="pv-earn" style="text-align:right;font-weight:600">R 0.00</div>
+            <div style="color:var(--muted)">Total Deductions</div><div id="pv-ded" style="text-align:right;font-weight:600">R 0.00</div>
+            <div style="font-weight:700;font-size:0.88rem">Nett Pay</div><div id="pv-nett" style="text-align:right;font-weight:800;font-size:0.88rem;color:var(--gold)">R 0.00</div>
+          </div>
+        </div>
+        <div style="margin-top:16px">
+          <button class="btn btn--gold" style="width:100%" id="psGenerateBtn">
+            <i class="fa-solid fa-file-circle-plus"></i> Generate &amp; Save
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:1rem;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:10px">
+          <i class="fa-solid fa-clock-rotate-left" style="color:var(--accent)"></i> Generated Payslips
+        </div>
+        <div id="ps-history">
+          ${history.length === 0
+            ? `<div class="dir-empty"><i class="fa-solid fa-file-invoice-dollar"></i><h3>No payslips yet</h3><p>Generate the first payslip using the form.</p></div>`
+            : history.map(p => {
+                const emp = _employees.find(e => e.id === p.employee_id);
+                const label = emp ? `${emp.first_name} ${emp.last_name}` : p.employee_id;
+                const [yr,mo] = p.pay_period.split('-');
+                const moLabel = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mo,10)-1] || mo;
+                return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px">
+                  <div style="width:40px;height:40px;border-radius:10px;background:rgba(245,158,11,0.1);color:var(--gold);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <i class="fa-solid fa-file-invoice-dollar"></i>
+                  </div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-weight:700;font-size:0.85rem">${label}</div>
+                    <div style="font-size:0.73rem;color:var(--muted)">${moLabel} ${yr} · Nett R ${Number(p.nett_pay||0).toLocaleString('en-ZA',{minimumFractionDigits:2})}</div>
+                  </div>
+                  <button class="btn btn--ghost btn--sm" onclick="printPayslip('${p.id}')"><i class="fa-solid fa-print"></i> Print</button>
+                  <button class="btn btn--danger btn--sm" style="opacity:0.7" onclick="deletePayslip('${p.id}')"><i class="fa-solid fa-trash"></i></button>
+                </div>`;
+              }).join('')
+          }
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Wire inputs → live preview
+  ['ps-salary','ps-bonus','ps-other-earn','ps-other-ded'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', _updatePayslipCalcs);
+  });
+
+  // Employee change → auto-fill salary
+  document.getElementById('ps-emp')?.addEventListener('change', () => {
+    const emp = _employees.find(e => e.id === document.getElementById('ps-emp').value);
+    if (emp?.base_salary) {
+      document.getElementById('ps-salary').value = Number(emp.base_salary).toFixed(2);
+      _updatePayslipCalcs();
+    }
+  });
+
+  // Generate button
+  document.getElementById('psGenerateBtn')?.addEventListener('click', generatePayslip);
+
+  // Pre-fill first employee's salary
+  const firstEmpId = document.getElementById('ps-emp')?.value;
+  const firstEmp = _employees.find(e => e.id === firstEmpId);
+  if (firstEmp?.base_salary) {
+    document.getElementById('ps-salary').value = Number(firstEmp.base_salary).toFixed(2);
+    _updatePayslipCalcs();
+  }
+}
+
+function _updatePayslipCalcs() {
+  const salary    = parseFloat(document.getElementById('ps-salary')?.value)    || 0;
+  const bonus     = parseFloat(document.getElementById('ps-bonus')?.value)     || 0;
+  const otherEarn = parseFloat(document.getElementById('ps-other-earn')?.value)|| 0;
+  const otherDed  = parseFloat(document.getElementById('ps-other-ded')?.value) || 0;
+
+  const totalEarnings = salary + bonus + otherEarn;
+  const tax = calcMonthlyPAYE(totalEarnings);
+  const uif = calcUIF(totalEarnings);
+
+  document.getElementById('ps-tax').value = tax.toFixed(2);
+  document.getElementById('ps-uif').value = uif.toFixed(2);
+
+  const totalDed = tax + uif + otherDed;
+  const nett     = totalEarnings - totalDed;
+  const fmt = n => `R ${n.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('pv-earn', fmt(totalEarnings));
+  set('pv-ded',  fmt(totalDed));
+  set('pv-nett', fmt(nett));
+}
+
+async function generatePayslip() {
+  const empId  = document.getElementById('ps-emp')?.value;
+  const period = document.getElementById('ps-period')?.value;
+  if (!empId || !period) { showToast('Select an employee and pay period', 'error'); return; }
+  if (_payslips.find(p => p.employee_id === empId && p.pay_period === period)) {
+    showToast('A payslip for this employee and period already exists', 'error'); return;
+  }
+
+  const salary    = parseFloat(document.getElementById('ps-salary').value)    || 0;
+  const bonus     = parseFloat(document.getElementById('ps-bonus').value)     || 0;
+  const otherEarn = parseFloat(document.getElementById('ps-other-earn').value)|| 0;
+  const tax       = parseFloat(document.getElementById('ps-tax').value)       || 0;
+  const uif       = parseFloat(document.getElementById('ps-uif').value)       || 0;
+  const otherDed  = parseFloat(document.getElementById('ps-other-ded').value) || 0;
+  const notes     = document.getElementById('ps-notes').value.trim();
+
+  const totalEarnings = salary + bonus + otherEarn;
+  const totalDed      = tax + uif + otherDed;
+  const nett          = totalEarnings - totalDed;
+  const uifCompany    = calcUIF(totalEarnings);
+
+  // YTD: sum all payslips for this employee in the same SA tax year (April–March)
+  const [yr, mo] = period.split('-').map(Number);
+  const taxYearStart = mo >= 4 ? `${yr}-04` : `${yr-1}-04`;
+  const prior = _payslips.filter(p => p.employee_id === empId && p.pay_period >= taxYearStart && p.pay_period < period);
+  const ytdEarnings = prior.reduce((s,p) => s + Number(p.total_earnings||0), 0) + totalEarnings;
+  const ytdTax      = prior.reduce((s,p) => s + Number(p.tax||0), 0) + tax;
+
+  // Pay date = last day of the pay period month
+  const [yr2, mo2] = period.split('-');
+  const payDate = `${yr2}-${mo2}-${new Date(Number(yr2), Number(mo2), 0).getDate()}`;
+
+  const btn = document.getElementById('psGenerateBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+
+  try {
+    const saved = await post('tables/payslips', {
+      id:                                 'PAY' + String(Date.now()).slice(-9),
+      employee_id:                        empId,
+      pay_period:                         period,
+      pay_date:                           payDate,
+      basic_salary:                       salary,
+      bonus,
+      other_earnings:                     otherEarn,
+      total_earnings:                     totalEarnings,
+      tax,
+      uif_employee:                       uif,
+      other_deductions:                   otherDed,
+      total_deductions:                   totalDed,
+      nett_pay:                           nett,
+      uif_company:                        uifCompany,
+      ytd_taxable_earnings:               ytdEarnings,
+      ytd_tax_paid:                       ytdTax,
+      ytd_taxable_company_contributions:  0,
+      ytd_taxable_fringe_benefits:        0,
+      ytd_provision_annual_bonus:         0,
+      notes,
+      generated_by: _session.empId,
+    });
+    _payslips.push(saved);
+    showToast('Payslip generated successfully!');
+    printPayslip(saved.id);
+    renderPayslips();
+  } catch(err) {
+    showToast('Failed to save payslip', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-file-circle-plus"></i> Generate &amp; Save';
+  }
+}
+
+async function deletePayslip(id) {
+  if (!confirm('Delete this payslip? This cannot be undone.')) return;
+  await del(`tables/payslips/${id}`);
+  _payslips = _payslips.filter(p => p.id !== id);
+  showToast('Payslip deleted');
+  renderPayslips();
+}
+
+function printPayslip(id) {
+  const p   = _payslips.find(x => x.id === id);
+  const emp = p ? _employees.find(e => e.id === p.employee_id) : null;
+  if (!p || !emp) { showToast('Payslip not found', 'error'); return; }
+  const w = window.open('', '_blank', 'width=900,height=720');
+  if (!w) { showToast('Allow pop-ups to print payslips', 'error'); return; }
+  w.document.write(buildPayslipHTML(p, emp));
+  w.document.close();
+  w.onload = () => w.print();
+}
+
+function buildPayslipHTML(p, emp) {
+  const fmt = n => Number(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const rph = (Number(emp.base_salary||0) / 173.33).toFixed(5);
+  const payDateFmt = (p.pay_date||'').replace(/-/g,'/');
+  const startFmt   = emp.start_date ? emp.start_date.slice(0,10).replace(/-/g,'/') : '—';
+  const empCode    = emp.employee_number || emp.id;
+  const addrHtml   = [emp.address_line1, emp.address_line2, emp.address_city, emp.address_province, emp.address_postal_code].filter(Boolean).join('<br>') || '—';
+  const [yr,mo]    = (p.pay_period||'').split('-');
+  const moLabel    = ['January','February','March','April','May','June','July','August','September','October','November','December'][(parseInt(mo,10)||1)-1] || mo;
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/>
+<title>Payslip – ${emp.first_name} ${emp.last_name} – ${moLabel} ${yr}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;color:#111;padding:28px 36px;max-width:820px;margin:0 auto}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:1.5px solid #333;margin-bottom:18px}
+  .co-name{font-size:12.5pt;font-weight:bold}
+  .co-addr{font-size:9.5pt;line-height:1.55;margin-top:3px;color:#333}
+  .logo{width:68px;height:68px;border-radius:50%;background:#1a3a4a;display:flex;align-items:center;justify-content:center;margin-top:8px;margin-left:auto}
+  .logo span{color:#fff;font-size:18pt;font-weight:900;letter-spacing:-1px}
+  .emp-block{display:grid;grid-template-columns:1fr 1fr;margin-bottom:16px}
+  .er{display:flex;padding:3px 0;font-size:9.5pt}
+  .el{font-weight:bold;min-width:132px;flex-shrink:0}
+  hr{border:none;border-top:1px solid #888;margin:10px 0}
+  table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:9.5pt}
+  th{background:#e8e8e8;border-bottom:1.5px solid #888;padding:6px 7px;text-align:left;font-size:8.5pt;font-weight:bold}
+  th.r,td.r{text-align:right}
+  td{padding:5px 7px;border-bottom:1px solid #ddd;vertical-align:top}
+  .tot td{font-weight:bold;border-top:1.5px solid #888;background:#f5f5f5;border-bottom:1.5px solid #888}
+  .nett td{font-weight:bold;font-size:11pt;border-bottom:1.5px solid #888}
+  .sage{text-align:right;font-size:9pt;color:#888;font-style:italic;margin-top:20px}
+  .print-btn{display:block;margin:20px auto 0;padding:10px 28px;background:#1a3a4a;color:#fff;border:none;border-radius:8px;font-size:10pt;cursor:pointer;font-family:Arial}
+  @media print{.print-btn{display:none}body{padding:12px 18px}}
+</style>
+</head><body>
+<div class="top">
+  <div>
+    <div class="co-name">Smartvest Capital (Pty) Ltd</div>
+    <div class="co-addr">The Station<br>63 Peter Place<br>Bryanston<br>Johannesburg<br>2191</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-weight:bold">Pay Date</div>
+    <div style="font-size:9.5pt">${payDateFmt}</div>
+    <div class="logo"><span>SV</span></div>
+  </div>
+</div>
+<div class="emp-block">
+  <div>
+    <div class="er"><span class="el">Employee</span>${emp.first_name} ${emp.last_name}</div>
+    <div class="er"><span class="el">Job title</span>${emp.role||'—'}</div>
+    <div class="er"><span class="el">Address</span><span>${addrHtml}</span></div>
+  </div>
+  <div>
+    <div class="er"><span class="el">Employee Code</span>${empCode}</div>
+    <div class="er"><span class="el">Identity Number</span>${emp.id_number||'—'}</div>
+    <div class="er"><span class="el">Employed from</span>${startFmt}</div>
+    <div class="er"><span class="el">Rate per hour</span>${rph}</div>
+  </div>
+</div>
+<hr/>
+<table>
+  <thead><tr>
+    <th style="width:32%">Earnings</th><th style="width:10%">Units</th>
+    <th class="r" style="width:15%">Amount</th><th style="width:25%">Deductions</th>
+    <th class="r" style="width:8%">Opening balance</th><th class="r" style="width:10%">Amount</th>
+  </tr></thead>
+  <tbody>
+    <tr><td>Basic salary</td><td></td><td class="r">${fmt(p.basic_salary)}</td><td>Tax</td><td></td><td class="r">${fmt(p.tax)}</td></tr>
+    ${Number(p.bonus||0)>0?`<tr><td>Bonus</td><td></td><td class="r">${fmt(p.bonus)}</td><td></td><td></td><td></td></tr>`:''}
+    ${Number(p.other_earnings||0)>0?`<tr><td>Other earnings</td><td></td><td class="r">${fmt(p.other_earnings)}</td><td></td><td></td><td></td></tr>`:''}
+    <tr><td></td><td></td><td></td><td>Unemployment insurance fund</td><td></td><td class="r">${fmt(p.uif_employee)}</td></tr>
+    ${Number(p.other_deductions||0)>0?`<tr><td></td><td></td><td></td><td>Other deductions</td><td></td><td class="r">${fmt(p.other_deductions)}</td></tr>`:''}
+  </tbody>
+  <tfoot>
+    <tr class="tot"><td>Total earnings</td><td></td><td class="r">${fmt(p.total_earnings)}</td><td>Total deductions</td><td></td><td class="r">${fmt(p.total_deductions)}</td></tr>
+    <tr class="nett"><td colspan="3"></td><td>Nett pay</td><td></td><td class="r">${fmt(p.nett_pay)}</td></tr>
+  </tfoot>
+</table>
+<hr/>
+<table>
+  <thead><tr>
+    <th style="width:30%">Company Contributions</th><th class="r" style="width:20%">Amount</th>
+    <th style="width:30%">YTD Totals</th><th class="r" style="width:20%">Amount</th>
+  </tr></thead>
+  <tbody>
+    <tr><td>Unemployment insurance fund</td><td class="r">${fmt(p.uif_company)}</td><td><b>Taxable earnings</b></td><td class="r"><b>${fmt(p.ytd_taxable_earnings)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Taxable company contributions</b></td><td class="r"><b>${fmt(p.ytd_taxable_company_contributions||0)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Taxable fringe benefits</b></td><td class="r"><b>${fmt(p.ytd_taxable_fringe_benefits||0)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Provision for tax on annual bonus</b></td><td class="r"><b>${fmt(p.ytd_provision_annual_bonus||0)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Tax paid</b></td><td class="r"><b>${fmt(p.ytd_tax_paid)}</b></td></tr>
+  </tbody>
+</table>
+<button class="print-btn" onclick="window.print()">&#128424; Save as PDF / Print</button>
+<div class="sage">Sage</div>
+</body></html>`;
+}
+
+window.updatePayslipCalcs = _updatePayslipCalcs;
+window.generatePayslip    = generatePayslip;
+window.deletePayslip      = deletePayslip;
+window.printPayslip       = printPayslip;
+
 /* ═══ ACCESS MATRIX ═════════════════════════════════════════════════ */
 function renderAccessMatrix() {
+  // Employee access list
+  const q = (document.getElementById('accessSearch')?.value || '').toLowerCase();
+  const filtered = _employees.filter(e =>
+    !q || `${e.first_name} ${e.last_name} ${e.role} ${e.email}`.toLowerCase().includes(q)
+  );
+
+  document.getElementById('empAccessList').innerHTML = `
+    <div class="dir-table-wrap">
+      <table class="dir-table">
+        <thead><tr>
+          <th>Employee</th><th>Role</th><th>Level</th>
+          ${Object.keys(APP_NAMES).map(k=>`<th style="text-align:center;font-size:0.65rem"><i class="fa-solid ${APP_ICONS[k]}" style="color:${APP_COLORS[k]}"></i><br>${APP_NAMES[k].replace(' ','<br>')}</th>`).join('')}
+          <th>Edit</th>
+        </tr></thead>
+        <tbody>
+          ${filtered.map(e => {
+            const apps = e.level === 'executive' ? Object.keys(APP_NAMES) : (RBAC[e.role] || []);
+            return `<tr>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="emp-row-avatar" style="background:${e.avatar_color||'#7c5cfc'};width:28px;height:28px;font-size:0.65rem">${e.avatar_initials||'?'}</div>
+                  <div>
+                    <div class="emp-row-name" style="font-size:0.8rem">${e.first_name} ${e.last_name}</div>
+                    <div class="emp-row-email" style="font-size:0.7rem">${e.email||''}</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="role-chip" style="font-size:0.72rem">${e.role||'—'}</span></td>
+              <td style="font-size:0.75rem;color:var(--muted)">${LEVEL_LABELS[e.level]||e.level||'—'}</td>
+              ${Object.keys(APP_NAMES).map(k=>`
+                <td style="text-align:center">
+                  ${apps.includes(k)
+                    ? `<i class="fa-solid fa-circle-check" style="color:#10b981;font-size:0.85rem"></i>`
+                    : `<i class="fa-solid fa-circle-xmark" style="color:var(--border2);font-size:0.85rem"></i>`
+                  }
+                </td>
+              `).join('')}
+              <td>
+                <button class="btn btn--ghost btn--sm" style="font-size:0.72rem" onclick="openEmpEdit('${e.id}')">
+                  <i class="fa-solid fa-pen"></i> Edit
+                </button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  // RBAC matrix
   const allApps = Object.keys(APP_NAMES);
   document.getElementById('rbacMatrix').innerHTML = `
     <div class="dir-table-wrap" style="overflow-x:auto">

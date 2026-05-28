@@ -89,6 +89,9 @@
         <button class="dir-nav-btn" data-view="courses" onclick="navTo('courses',this)">
           <i class="fa-solid fa-graduation-cap"></i> Course Library
         </button>
+        <button class="dir-nav-btn" data-view="payslips" onclick="navTo('payslips',this)">
+          <i class="fa-solid fa-file-invoice-dollar"></i> Payslips
+        </button>
       </div>
       <div class="dir-nav-group">
         <div class="dir-nav-group-label">Navigate To</div>
@@ -333,14 +336,18 @@
 
       <!-- ── ACCESS & ROLES ── -->
       <div class="dir-view" id="view-access">
-        <div class="dir-sec-head">
-          <div class="dir-sec-title">Role-Based Access Control</div>
+        <div class="dir-sec-head" style="margin-bottom:16px">
+          <div class="dir-sec-title">Employee Access</div>
+          <div class="dir-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="accessSearch" placeholder="Search employees…" oninput="renderAccessMatrix()"/>
+          </div>
         </div>
-        <div class="dir-alert dir-alert--info" style="margin-bottom:20px">
-          <i class="fa-solid fa-circle-info"></i>
-          <div>Access is determined by each employee's <strong>Role</strong> and <strong>Level</strong>. Executive-level employees always have full access regardless of role. Change an employee's role or level in the <strong>All Employees</strong> view to update their access.</div>
+        <div id="empAccessList"></div>
+        <div style="margin-top:28px">
+          <div class="dir-sec-head"><div class="dir-sec-title">Access Matrix by Role</div></div>
+          <div id="rbacMatrix"></div>
         </div>
-        <div id="rbacMatrix"></div>
       </div>
 
       <!-- ── COURSE LIBRARY ── -->
@@ -349,6 +356,11 @@
           <div class="dir-sec-title">Course Library (<span id="courseCount">0</span> courses)</div>
         </div>
         <div id="courseGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px"></div>
+      </div>
+
+      <!-- ── PAYSLIPS ── -->
+      <div class="dir-view" id="view-payslips">
+        <div id="payslipsContent"></div>
       </div>
 
     </div><!-- /dir-content -->
