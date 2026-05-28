@@ -51,7 +51,9 @@ self.addEventListener('fetch', event => {
 
   /* For same-origin GET requests: network-first with cache fallback */
   if (event.request.method !== 'GET') return;
-  if (!url.origin.includes(self.location.origin) && !url.origin.includes('jsdelivr') && !url.origin.includes('googleapis') && !url.origin.includes('fontawesome')) return;
+  /* Only intercept same-origin and specific CDN resources we want to cache.
+     Google Fonts (googleapis/gstatic) and fontawesome are handled natively. */
+  if (!url.origin.includes(self.location.origin) && !url.origin.includes('jsdelivr')) return;
 
   event.respondWith(
     fetch(event.request)
