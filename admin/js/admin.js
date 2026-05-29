@@ -18,6 +18,34 @@ let STATE = {
   charts: {}
 };
 
+/* ─── Admin Welcome Strip ─── */
+function _adminGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function _populateAdminWelcomeStrip(identity, pendingKyc, openTickets) {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const show = (id) => { const el = document.getElementById(id); if (el) el.style.display = ''; };
+
+  set('adminWelcomeGreeting', _adminGreeting());
+  set('adminWelcomeName', identity.name || 'Admin Console');
+
+  const roleLabelMap = { director: 'Director', admin: 'Administrator', staff: 'Staff', fund_manager: 'Fund Manager' };
+  set('adminChipRole', roleLabelMap[identity.role] || identity.role || 'Administrator');
+
+  if (pendingKyc > 0) {
+    set('adminChipKycVal', pendingKyc);
+    show('adminChipKyc');
+  }
+  if (openTickets > 0) {
+    set('adminChipTicketsVal', openTickets);
+    show('adminChipTickets');
+  }
+}
+
 /* ─── Admin Notifications ─── */
 function toggleAdminNotif() {
   const panel = document.getElementById('adminNotifPanel');
@@ -230,6 +258,35 @@ async function loadDashboard() {
     // Badge counts
     const pendingKyc = STATE.investors.filter(i => ['pending_fica', 'fica_submitted'].includes(i.status)).length;
     document.getElementById('kycBadge').textContent = pendingKyc;
+
+    // Fetch ticket count for welcome strip
+    let openTickets = 0;
+    try {
+      const tktRes = await API.tickets.list({ limit: 50 });
+      const tickets = tktRes.data || [];
+      openTickets = tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
+      const tktBadge = document.getElementById('ticketBadge');
+      if (tktBadge) tktBadge.textContent = openTickets;
+    } catch (_) {}
+
+    // Populate welcome strip
+    const jwtUser = (typeof Auth !== 'undefined') ? Auth.getUser() : null;
+    const wIdent  = { name: null, role: null };
+    try {
+      const raw = localStorage.getItem('staffSession');
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s && s.empId && s.expiresAt > Date.now()) {
+          wIdent.name = `${s.firstName || ''} ${s.lastName || ''}`.trim();
+          wIdent.role = s.role;
+        }
+      }
+    } catch (_) {}
+    if (!wIdent.name && jwtUser) {
+      wIdent.name = `${jwtUser.firstName || ''} ${jwtUser.lastName || ''}`.trim() || jwtUser.email || null;
+      wIdent.role = jwtUser.role;
+    }
+    _populateAdminWelcomeStrip(wIdent, pendingKyc, openTickets);
 
     renderRecentInvestments();
     renderOpenPoolsWidget();

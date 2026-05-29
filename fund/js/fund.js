@@ -276,7 +276,13 @@ function renderDashboard() {
   set('ds-pending',     pendingPayouts);
   set('ds-runs',        completedRuns);
   set('ds-active-runs', activeRuns);
-  set('ds-pools',       pools.filter(p=>p.status==='open'||p.status==='active'||p.status==='filling').length);
+  const activePools = pools.filter(p=>p.status==='open'||p.status==='active'||p.status==='filling').length;
+  set('ds-pools', activePools);
+
+  // Hero banner chips
+  set('heroAUM',   fmt.rand(totalAUM));
+  set('heroPools', activePools);
+  set('heroRuns',  activeRuns);
 
   renderDashboardRunsTable();
   renderUpcomingPayoutsWidget();
