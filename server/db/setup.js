@@ -574,6 +574,21 @@ CREATE TABLE IF NOT EXISTS solar_documents (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS solar_documents_project_idx ON solar_documents(project_id);
+
+CREATE TABLE IF NOT EXISTS fica_checks (
+  id                TEXT PRIMARY KEY,
+  investor_id       TEXT REFERENCES investors(id) ON DELETE CASCADE,
+  trigger           TEXT NOT NULL,
+  id_check_status   TEXT DEFAULT 'pending',
+  bank_check_status TEXT DEFAULT 'skipped',
+  overall_status    TEXT DEFAULT 'pending',
+  id_result         JSONB DEFAULT '{}',
+  bank_result       JSONB DEFAULT '{}',
+  check_date        TIMESTAMPTZ DEFAULT NOW(),
+  created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS fica_checks_investor_idx ON fica_checks(investor_id);
+CREATE INDEX IF NOT EXISTS fica_checks_date_idx     ON fica_checks(check_date);
 `;
 
 async function autoSetup() {
@@ -588,6 +603,15 @@ async function autoSetup() {
     // 1. Create all tables
     await pool.query(SCHEMA);
     console.log('✅ Schema ready.');
+
+    // 1b. Add new columns to existing tables (safe — IF NOT EXISTS)
+    await pool.query(`
+      DO $$ BEGIN
+        BEGIN ALTER TABLE investors ADD COLUMN last_auto_fica_check TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE investors ADD COLUMN fica_auto_status TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+      END $$
+    `);
+    console.log('✅ Investor FICA columns ready.');
 
     // 2. Check if the COO account already exists — if so, skip seeding entirely
     const { rows: existing } = await pool.query(

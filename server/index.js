@@ -95,6 +95,7 @@ app.use('/api/auth/', authLimiter);
 app.use('/api/auth',   require('./routes/auth'));
 app.use('/api/users',  require('./routes/users'));
 app.use('/api/tables', require('./routes/tables'));
+app.use('/api/fica',   require('./routes/fica'));
 
 /* ─── One-time Provision Endpoint ───────────────────────────────────────────
    GET /api/provision?secret=<PROVISION_SECRET>
@@ -264,6 +265,10 @@ app.listen(PORT, '0.0.0.0', async () => {
   // Auto-create tables and seed demo data on first boot
   const autoSetup = require('./db/setup');
   await autoSetup();
+
+  // Start FICA annual re-check cron (requires DATABASE_URL)
+  const { startFicaCron } = require('./jobs/ficaCron');
+  startFicaCron();
 });
 
 module.exports = app;

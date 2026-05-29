@@ -14,6 +14,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="../css/admin.css" />
   <link rel="stylesheet" href="../css/ci-theme.css" />
+  <link rel="stylesheet" href="../css/admin-premium.css" />
   <link rel="stylesheet" href="../css/sv-intelligence.css" />
   <!-- Staff Auth guard -->
   <script src="../js/staff-auth.js?v=3"></script>
@@ -168,6 +169,29 @@
            VIEW: DASHBOARD
       ══════════════════════════════════ -->
       <div class="view active" id="view-dashboard">
+
+        <!-- Admin Welcome Strip -->
+        <div class="admin-welcome-strip" id="adminWelcomeStrip">
+          <div class="admin-welcome-strip__left">
+            <div class="admin-welcome-strip__eyebrow" id="adminWelcomeGreeting">Good morning</div>
+            <div class="admin-welcome-strip__name" id="adminWelcomeName">Admin Console</div>
+            <div class="admin-welcome-strip__chips">
+              <span class="admin-chip admin-chip--orange"><i class="fa-solid fa-shield-halved"></i> <span id="adminChipRole">Administrator</span></span>
+              <span class="admin-chip admin-chip--teal" id="adminChipKyc" style="display:none"><i class="fa-solid fa-id-card"></i> <span id="adminChipKycVal">0</span> KYC pending</span>
+              <span class="admin-chip admin-chip--red" id="adminChipTickets" style="display:none"><i class="fa-solid fa-headset"></i> <span id="adminChipTicketsVal">0</span> open tickets</span>
+              <span class="admin-chip admin-chip--green"><i class="fa-solid fa-circle-check"></i> FSCA Regulated · FSP #52449</span>
+            </div>
+          </div>
+          <div class="admin-welcome-strip__right">
+            <button class="btn btn--sm btn--secondary" onclick="navigate('kyc', document.querySelector('[data-view=kyc]'))">
+              <i class="fa-solid fa-id-card"></i> KYC Queue
+            </button>
+            <button class="btn btn--primary btn--sm" onclick="navigate('investors', document.querySelector('[data-view=investors]'))">
+              <i class="fa-solid fa-users"></i> Investors
+            </button>
+          </div>
+        </div>
+
         <div class="stats-row" id="dashStats">
           <div class="stat-card stat-card--gold">
             <div class="stat-card__header">

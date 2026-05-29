@@ -69,6 +69,31 @@ function markAllRead() {
   if (dot) dot.classList.remove('has-unread');
 }
 
+/* ─── Time-based greeting ─── */
+function _timeGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+/* ─── Animated number ─── */
+function _animateNum(el, target, prefix = '', suffix = '', duration = 900) {
+  if (!el) return;
+  const start = parseFloat(el.dataset.animated || 0);
+  const startTime = performance.now();
+  const step = (now) => {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = start + (target - start) * eased;
+    el.textContent = prefix + Math.round(current).toLocaleString('en-ZA') + suffix;
+    if (progress < 1) requestAnimationFrame(step);
+    else { el.textContent = prefix + Math.round(target).toLocaleString('en-ZA') + suffix; el.dataset.animated = target; }
+  };
+  requestAnimationFrame(step);
+}
+
 /* ─── Navigation ─── */
 function navigate(view, btnEl) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -185,16 +210,106 @@ function renderOverview() {
   const inv = PORTAL.investor;
   if (!inv) return;
 
-  const totalValue = (inv.total_invested || 0) + (inv.wallet_balance || 0);
-  const returnPct = inv.total_invested ? ((inv.total_returns || 0) / inv.total_invested * 100).toFixed(1) : '0';
+  const totalValue  = (inv.total_invested || 0) + (inv.wallet_balance || 0);
+  const totalRet    = inv.total_returns || 0;
+  const returnPct   = inv.total_invested ? (totalRet / inv.total_invested * 100).toFixed(1) : '0';
   const activeCount = PORTAL.investments.filter(i => i.status === 'active').length;
+  const firstName   = inv.first_name || 'Investor';
 
-  document.getElementById('pov-total').textContent = Utils.rand(totalValue);
-  document.getElementById('pov-return').innerHTML = `<i class="fa-solid fa-arrow-trend-up"></i> <span>+${returnPct}% effective return · ${Utils.rand(inv.total_returns || 0)} earned</span>`;
-  document.getElementById('pov-invested').textContent = Utils.rand(inv.total_invested);
-  document.getElementById('pov-wallet').textContent = Utils.rand(inv.wallet_balance);
-  document.getElementById('pov-returns').textContent = Utils.rand(inv.total_returns);
+  // ── Topbar greeting ──────────────────────────────────────────
+  const greetEl = document.getElementById('topbarGreeting');
+  if (greetEl) greetEl.textContent = `${_timeGreeting()}, ${firstName} 👋`;
+
+  // ── Portfolio hero values ────────────────────────────────────
+  // Animate portfolio hero
+  const totEl = document.getElementById('pov-total');
+  if (totEl) _animateNum(totEl, totalValue, 'R ', '', 1100);
+
+  document.getElementById('pov-return').innerHTML = `<i class="fa-solid fa-arrow-trend-up"></i> <span>+${returnPct}% effective return · ${Utils.rand(totalRet)} earned</span>`;
+
+  const invEl = document.getElementById('pov-invested');
+  if (invEl) _animateNum(invEl, inv.total_invested || 0, 'R ', '', 900);
+  const walEl = document.getElementById('pov-wallet');
+  if (walEl) _animateNum(walEl, inv.wallet_balance || 0, 'R ', '', 800);
+  const retEl = document.getElementById('pov-returns');
+  if (retEl) _animateNum(retEl, totalRet, 'R ', '', 900);
   document.getElementById('pov-active').textContent = activeCount;
+
+  // ── Welcome banner ───────────────────────────────────────────
+  const initials = `${(inv.first_name || '')[0] || '?'}${(inv.last_name || '')[0] || ''}`.toUpperCase();
+  const avatarEl = document.getElementById('welcomeAvatar');
+  if (avatarEl) avatarEl.textContent = initials;
+  const nameEl = document.getElementById('welcomeName');
+  if (nameEl) nameEl.textContent = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || 'Investor';
+  const greetEl2 = document.getElementById('welcomeGreeting');
+  if (greetEl2) greetEl2.textContent = _timeGreeting();
+  const chipId = document.getElementById('wchipIdText');
+  if (chipId) chipId.textContent = inv.id || '—';
+
+  // Member since
+  if (inv.created_at || inv.registration_date) {
+    const since = new Date(inv.created_at || inv.registration_date);
+    const sinceEl = document.getElementById('wchipSinceText');
+    if (sinceEl) sinceEl.textContent = `Since ${since.toLocaleString('en-ZA', { month: 'short', year: 'numeric' })}`;
+  }
+
+  // FICA chip
+  const ficaEl = document.getElementById('wchipFica');
+  if (ficaEl && inv.fica_status === 'approved') ficaEl.style.display = 'inline-flex';
+
+  // Next maturity chip
+  const upcoming = PORTAL.investments
+    .filter(i => i.status === 'active' && i.maturity_date)
+    .sort((a, b) => new Date(a.maturity_date) - new Date(b.maturity_date));
+  if (upcoming.length) {
+    const days = Utils.daysRemaining(upcoming[0].maturity_date);
+    const nextEl = document.getElementById('wchipNext');
+    const nextTxt = document.getElementById('wchipNextText');
+    if (nextEl && nextTxt && days !== null) {
+      nextTxt.textContent = `Next maturity in ${days}d`;
+      nextEl.style.display = 'inline-flex';
+    }
+  }
+
+  // ── Sidebar user card ────────────────────────────────────────
+  const sAvatar = document.querySelector('.sidebar-user__avatar');
+  const sName   = document.querySelector('.user-name');
+  const sRole   = document.querySelector('.user-role');
+  if (sAvatar) sAvatar.textContent = initials;
+  if (sName)   sName.textContent   = `${inv.first_name || ''} ${inv.last_name || ''}`.trim();
+  if (sRole)   sRole.textContent   = `${inv.id || 'INV'} · ${inv.status === 'active' ? 'Active' : (inv.status || 'Investor')}`;
+
+  // ── FICA pending alert ───────────────────────────────────────
+  const ficaPending = inv.fica_status === 'pending' || inv.status === 'pending_fica' || inv.fica_status === 'submitted';
+  let ficaBanner = document.getElementById('ficaAlertBanner');
+  if (ficaPending && !ficaBanner) {
+    ficaBanner = document.createElement('div');
+    ficaBanner.id = 'ficaAlertBanner';
+    ficaBanner.className = 'fica-alert-banner';
+    ficaBanner.innerHTML = `
+      <div class="fica-alert-banner__icon"><i class="fa-solid fa-id-card"></i></div>
+      <div class="fica-alert-banner__body">
+        <div class="fica-alert-banner__title">FICA Verification Pending</div>
+        <div class="fica-alert-banner__sub">Your identity documents are under review (1–2 business days). You can invest once approved.</div>
+      </div>
+      <div class="fica-alert-banner__action">
+        <button class="btn btn--primary btn--sm" onclick="navigate('support', document.querySelector('[data-view=support]'))">
+          <i class="fa-solid fa-headset"></i> Contact Us
+        </button>
+      </div>`;
+    const welcomeBanner = document.getElementById('welcomeBanner');
+    if (welcomeBanner) welcomeBanner.after(ficaBanner);
+  }
+
+  // ── Performance panel ────────────────────────────────────────
+  const perfInvested = document.getElementById('perf-invested');
+  const perfReturns  = document.getElementById('perf-returns');
+  const perfRate     = document.getElementById('perf-rate');
+  const perfPools    = document.getElementById('perf-pools');
+  if (perfInvested) perfInvested.textContent = Utils.rand(inv.total_invested || 0);
+  if (perfReturns)  perfReturns.textContent  = '+' + Utils.rand(totalRet);
+  if (perfRate)     perfRate.textContent     = returnPct + '% p.a.';
+  if (perfPools)    perfPools.textContent    = activeCount + ' active';
 
   renderOverviewInvestments();
   renderOverviewTxns();

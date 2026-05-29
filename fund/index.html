@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="css/fund.css?v=2" />
+  <link rel="stylesheet" href="css/fund-premium.css" />
   <!-- Staff Auth (optional session widget — guard disabled for open access) -->
   <script src="../js/staff-auth.js?v=3"></script>
   <script>document.addEventListener('DOMContentLoaded',()=>{ StaffAuth.injectWidget(); });</script>
@@ -171,6 +172,31 @@
            DASHBOARD
       ════════════════════════════════ -->
       <div class="view active" id="view-dashboard">
+
+        <!-- Fund Hero Banner -->
+        <div class="fund-hero-banner">
+          <div class="fund-hero__left">
+            <div class="fund-hero__eyebrow">SV Capital · Operations Console</div>
+            <div class="fund-hero__title">Fund Management <span>Dashboard</span></div>
+            <div class="fund-hero__chips">
+              <span class="fund-hero__chip fund-hero__chip--gold"><i class="fa-solid fa-coins"></i> <span id="heroAUM">Live AUM</span></span>
+              <span class="fund-hero__chip fund-hero__chip--teal"><i class="fa-solid fa-layer-group"></i> <span id="heroPools">—</span> active pools</span>
+              <span class="fund-hero__chip fund-hero__chip--green"><i class="fa-solid fa-play-circle"></i> <span id="heroRuns">—</span> active runs</span>
+              <span class="fund-hero__chip fund-hero__chip--orange"><i class="fa-solid fa-shield-halved"></i> FSCA Regulated · FSP #52449</span>
+            </div>
+          </div>
+          <div class="fund-hero__right">
+            <a href="cattle.html" class="btn btn--sm" style="background:rgba(116,198,157,0.18);color:#74c69d;border:1px solid rgba(116,198,157,0.3)">
+              <i class="fa-solid fa-cow"></i> Cattle
+            </a>
+            <a href="solar.html" class="btn btn--sm" style="background:rgba(245,158,11,0.18);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)">
+              <i class="fa-solid fa-solar-panel"></i> Solar
+            </a>
+            <button class="btn btn--primary btn--sm" onclick="navigate('runs',document.querySelector('[data-view=runs]'));setTimeout(openNewRunModal,100)">
+              <i class="fa-solid fa-plus"></i> New Fund Run
+            </button>
+          </div>
+        </div>
 
         <div class="stats-grid stats-grid--4">
           <div class="kpi kpi--gold">

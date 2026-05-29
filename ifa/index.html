@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="css/ifa.css" />
+  <link rel="stylesheet" href="css/ifa-premium.css" />
   <!-- Staff Auth guard — IFA app key -->
   <script src="../js/staff-auth.js?v=3"></script>
   <script>document.addEventListener('DOMContentLoaded',()=>{ StaffAuth.guard('ifa'); StaffAuth.injectWidget(); });</script>
@@ -111,6 +112,29 @@
       ══════════════════════════════════ -->
       <div class="view active" id="view-dashboard">
 
+        <!-- Welcome Banner -->
+        <div class="ifa-welcome-banner" id="ifaWelcomeBanner">
+          <div class="ifa-welcome-avatar" id="ifaWelcomeAvatar">IFA</div>
+          <div class="ifa-welcome-info">
+            <div class="ifa-welcome-greeting" id="ifaWelcomeGreeting">Good morning</div>
+            <div class="ifa-welcome-name" id="ifaWelcomeName">Loading...</div>
+            <div class="ifa-welcome-chips">
+              <span class="ifa-chip ifa-chip--teal" id="ifaChipCompany" style="display:none"><i class="fa-solid fa-building"></i> <span id="ifaChipCompanyVal">—</span></span>
+              <span class="ifa-chip ifa-chip--gold" id="ifaChipCommission" style="display:none"><i class="fa-solid fa-percent"></i> <span id="ifaChipCommissionVal">—</span> commission</span>
+              <span class="ifa-chip ifa-chip--green" id="ifaChipStatus"><i class="fa-solid fa-circle-check"></i> Active Partner</span>
+              <span class="ifa-chip ifa-chip--gray" id="ifaChipLicense" style="display:none"><i class="fa-solid fa-shield-halved"></i> FSP <span id="ifaChipLicenseVal">—</span></span>
+            </div>
+          </div>
+          <div class="ifa-welcome-actions">
+            <button class="btn btn--primary btn--sm" onclick="navigate('clients', document.querySelector('[data-view=clients]'))">
+              <i class="fa-solid fa-users"></i> View Clients
+            </button>
+            <button class="btn btn--secondary btn--sm" onclick="navigate('support', document.querySelector('[data-view=support]'))">
+              <i class="fa-solid fa-headset"></i> Support
+            </button>
+          </div>
+        </div>
+
         <!-- Stats row -->
         <div class="stats-row">
           <div class="stat-card stat-card--teal">
@@ -163,6 +187,43 @@
 
           <!-- Right column -->
           <div style="display:flex;flex-direction:column;gap:18px">
+            <!-- Performance Panel -->
+            <div class="ifa-perf-panel">
+              <div class="ifa-perf-panel__header">
+                <span class="ifa-perf-panel__title"><i class="fa-solid fa-chart-line"></i> My Performance</span>
+              </div>
+              <div class="ifa-perf-panel__body">
+                <div class="ifa-perf-row">
+                  <span class="ifa-perf-row__label">
+                    <span style="width:24px;height:24px;border-radius:7px;background:rgba(212,175,55,0.12);display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;color:var(--gold)"><i class="fa-solid fa-coins"></i></span>
+                    Total Client AUM
+                  </span>
+                  <span class="ifa-perf-row__value gold" id="perf-aum">—</span>
+                </div>
+                <div class="ifa-perf-row">
+                  <span class="ifa-perf-row__label">
+                    <span style="width:24px;height:24px;border-radius:7px;background:rgba(34,197,94,0.12);display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;color:var(--green)"><i class="fa-solid fa-circle-dollar-to-slot"></i></span>
+                    Client Returns
+                  </span>
+                  <span class="ifa-perf-row__value positive" id="perf-returns">—</span>
+                </div>
+                <div class="ifa-perf-row">
+                  <span class="ifa-perf-row__label">
+                    <span style="width:24px;height:24px;border-radius:7px;background:rgba(255,130,21,0.12);display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;color:var(--orange)"><i class="fa-solid fa-percent"></i></span>
+                    Est. Commission
+                  </span>
+                  <span class="ifa-perf-row__value gold" id="perf-commission">—</span>
+                </div>
+                <div class="ifa-perf-row">
+                  <span class="ifa-perf-row__label">
+                    <span style="width:24px;height:24px;border-radius:7px;background:rgba(47,140,155,0.12);display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;color:var(--teal)"><i class="fa-solid fa-users"></i></span>
+                    Linked Clients
+                  </span>
+                  <span class="ifa-perf-row__value teal" id="perf-clients">—</span>
+                </div>
+              </div>
+            </div>
+
             <!-- Pending Actions -->
             <div class="panel" style="flex:1">
               <div class="panel__header">

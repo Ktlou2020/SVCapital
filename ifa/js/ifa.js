@@ -49,6 +49,79 @@ function signOut() {
   sessionStorage.removeItem('svc_ifa_session');
 }
 
+/* ─── Helpers ─── */
+function _ifaGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function _animateCounter(el, target, prefix = '', suffix = '', duration = 800) {
+  if (!el) return;
+  const startTime = performance.now();
+  const step = (now) => {
+    const elapsed = Math.min((now - startTime) / duration, 1);
+    const eased   = 1 - Math.pow(1 - elapsed, 3);
+    const current = Math.round(target * eased);
+    el.textContent = prefix + current.toLocaleString('en-ZA') + suffix;
+    if (elapsed < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function _populateWelcomeBanner(ifa) {
+  if (!ifa) return;
+  const name = (ifa.first_name || '') + ' ' + (ifa.last_name || '');
+  const greeting = _ifaGreeting();
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const show = (id) => { const el = document.getElementById(id); if (el) el.style.display = ''; };
+
+  set('ifaWelcomeGreeting', greeting);
+  set('ifaWelcomeName', name.trim() || 'IFA Partner');
+
+  const avatarEl = document.getElementById('ifaWelcomeAvatar');
+  if (avatarEl) avatarEl.textContent = Utils.initials(name);
+
+  if (ifa.company_name) {
+    set('ifaChipCompanyVal', ifa.company_name);
+    show('ifaChipCompany');
+  }
+  if (ifa.commission_rate) {
+    set('ifaChipCommissionVal', parseFloat(ifa.commission_rate).toFixed(1) + '%');
+    show('ifaChipCommission');
+  }
+  if (ifa.license_number) {
+    set('ifaChipLicenseVal', ifa.license_number);
+    show('ifaChipLicense');
+  }
+
+  const statusChip = document.getElementById('ifaChipStatus');
+  if (statusChip) {
+    if (ifa.status === 'active') {
+      statusChip.className = 'ifa-chip ifa-chip--green';
+      statusChip.innerHTML = '<i class="fa-solid fa-circle-check"></i> Active Partner';
+    } else if (ifa.status === 'suspended') {
+      statusChip.className = 'ifa-chip ifa-chip--orange';
+      statusChip.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Suspended';
+    }
+  }
+}
+
+function _populatePerfPanel(ifa, clients) {
+  const totalAUM    = clients.reduce((s, c) => s + (c.total_invested || 0), 0);
+  const totalRet    = clients.reduce((s, c) => s + (c.total_returns  || 0), 0);
+  const commRate    = ifa.commission_rate || 0;
+  const commission  = totalAUM * (commRate / 100);
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('perf-aum',        Utils.rand(totalAUM));
+  set('perf-returns',    Utils.rand(totalRet));
+  set('perf-commission', Utils.rand(commission));
+  set('perf-clients',    clients.length);
+}
+
 /* ─── State ─── */
 let STATE = {
   ifa: null,
@@ -171,6 +244,8 @@ async function loadDashboard() {
     STATE.tickets      = tickets;
     STATE.pools        = pools;
 
+    _populateWelcomeBanner(STATE.ifa);
+    _populatePerfPanel(STATE.ifa, clients);
     renderDashboardStats();
     renderRecentClientsWidget();
     renderActiveInvestmentsWidget();

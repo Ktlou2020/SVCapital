@@ -1,0 +1,193 @@
+/* ═══════════════════════════════════════════════
+   SV CAPITAL — Fund Management Premium Enhancements
+   ═══════════════════════════════════════════════ */
+
+/* ─── View transitions ─── */
+@keyframes fundViewIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+.view.active {
+  animation: fundViewIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ─── KPI cards — gold accent bar + lift ─── */
+.kpi {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+.kpi::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 3px;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+.kpi:hover { transform: translateY(-3px); box-shadow: 0 10px 32px rgba(0,0,0,0.13); }
+.kpi:hover::after { opacity: 1; }
+.kpi--gold::after    { background: linear-gradient(90deg, var(--gold), #f5c842); }
+.kpi--teal::after    { background: linear-gradient(90deg, var(--teal), #5ecfdc); }
+.kpi--green::after   { background: linear-gradient(90deg, var(--green), #4ade80); }
+.kpi--orange::after  { background: linear-gradient(90deg, var(--orange), #ff9b0c); }
+.kpi--purple::after  { background: linear-gradient(90deg, var(--purple), #c084fc); }
+.kpi--blue::after    { background: linear-gradient(90deg, var(--blue), #60a5fa); }
+.kpi--red::after     { background: linear-gradient(90deg, var(--red), #f87171); }
+
+/* ─── Dashboard hero banner ─── */
+.fund-hero-banner {
+  background: linear-gradient(135deg, #0f1e2b 0%, #162536 50%, #0c1820 100%);
+  border-radius: var(--radius-xl);
+  padding: 24px 28px;
+  margin-bottom: 24px;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  position: relative; overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+.fund-hero-banner::before {
+  content: '';
+  position: absolute; top: -100px; right: -60px;
+  width: 300px; height: 300px;
+  background: radial-gradient(circle, rgba(212,175,55,0.1) 0%, transparent 65%);
+  border-radius: 50%; pointer-events: none;
+}
+.fund-hero-banner::after {
+  content: '';
+  position: absolute; bottom: -80px; left: 30%;
+  width: 250px; height: 250px;
+  background: radial-gradient(circle, rgba(47,140,155,0.08) 0%, transparent 65%);
+  border-radius: 50%; pointer-events: none;
+}
+
+.fund-hero__left { position: relative; z-index: 1; }
+.fund-hero__eyebrow {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.14em; color: rgba(255,255,255,0.4);
+  margin-bottom: 6px;
+}
+.fund-hero__title {
+  font-size: 1.4rem; font-weight: 800; color: #fff;
+  letter-spacing: -0.02em; margin-bottom: 12px;
+}
+.fund-hero__title span {
+  background: linear-gradient(90deg, var(--gold), #f5c842);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.fund-hero__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.fund-hero__chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 50px;
+  font-size: 0.68rem; font-weight: 700; white-space: nowrap;
+}
+.fund-hero__chip--gold   { background: rgba(212,175,55,0.15); border: 1px solid rgba(212,175,55,0.35); color: #D4AF37; }
+.fund-hero__chip--teal   { background: rgba(47,140,155,0.15); border: 1px solid rgba(47,140,155,0.35); color: #5ecfdc; }
+.fund-hero__chip--green  { background: rgba(34,197,94,0.15);  border: 1px solid rgba(34,197,94,0.35);  color: #22c55e; }
+.fund-hero__chip--orange { background: rgba(255,130,21,0.15); border: 1px solid rgba(255,130,21,0.35); color: #FF8215; }
+
+.fund-hero__right {
+  display: flex; flex-direction: column; gap: 8px;
+  flex-shrink: 0; position: relative; z-index: 1;
+}
+
+/* ─── Panel enhancements ─── */
+.panel {
+  transition: box-shadow 0.22s ease, border-color 0.22s ease;
+}
+.panel:hover {
+  box-shadow: 0 6px 24px rgba(0,0,0,0.1);
+}
+
+/* ─── Data table ─── */
+.data-table tbody tr {
+  transition: background 0.14s;
+}
+.data-table tbody tr:hover td {
+  background: rgba(212,175,55,0.03);
+}
+
+/* ─── Nav items ─── */
+.nav-btn.active {
+  box-shadow: inset 0 0 0 1px rgba(212,175,55,0.2);
+}
+
+/* ─── Product cards ─── */
+.product-card {
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+.product-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 32px rgba(0,0,0,0.13);
+  border-color: rgba(212,175,55,0.3);
+}
+
+/* ─── Topbar gradient ─── */
+.topbar {
+  background: linear-gradient(to right, #fff 0%, #fafafa 100%);
+  border-bottom: 1px solid rgba(0,0,0,0.07);
+}
+
+/* ─── Sidebar brand glow ─── */
+.sidebar__brand {
+  background: linear-gradient(180deg, rgba(212,175,55,0.06) 0%, transparent 100%);
+}
+
+/* ─── Module badge pulse ─── */
+.module-badge {
+  border: 1px solid rgba(212,175,55,0.2);
+  transition: background 0.22s, border-color 0.22s;
+}
+.module-badge:hover {
+  background: rgba(212,175,55,0.12);
+  border-color: rgba(212,175,55,0.35);
+}
+
+/* ─── Trend badge ─── */
+.trend--up   { background: rgba(34,197,94,0.12);  color: #22c55e; }
+.trend--down { background: rgba(239,68,68,0.12);  color: #ef4444; }
+.trend--flat { background: rgba(100,116,139,0.12);color: #64748b; }
+
+/* ─── Intelligence view polish ─── */
+#view-intelligence .panel,
+#view-forecast .panel {
+  border-top: 3px solid rgba(168,85,247,0.3);
+}
+
+/* ─── Risk dashboard accent ─── */
+#view-risk .panel {
+  border-top: 3px solid rgba(239,68,68,0.3);
+}
+
+/* ─── Audit view accent ─── */
+#view-audit .panel {
+  border-top: 3px solid rgba(47,140,155,0.3);
+}
+
+/* ─── Badge animations ─── */
+@keyframes badgePop {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.15); }
+}
+.nav-badge:not(:empty) {
+  animation: badgePop 2s ease infinite;
+}
+
+/* ─── Empty state ─── */
+.empty-state i {
+  opacity: 0.18;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 900px) {
+  .fund-hero-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .fund-hero__right {
+    flex-direction: row;
+    width: 100%;
+  }
+  .fund-hero__right .btn { flex: 1; }
+}
