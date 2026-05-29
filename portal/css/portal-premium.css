@@ -1,0 +1,516 @@
+/* ═══════════════════════════════════════════════════════════════
+   SV CAPITAL — Investor Portal Premium Enhancements
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── 1. View Transition Animations ────────────────────────── */
+.view {
+  display: none;
+  animation: viewFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.view.active { display: block; }
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── 2. Welcome Banner ─────────────────────────────────────── */
+.welcome-banner {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.07);
+  border-radius: 18px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 14px rgba(0,0,0,0.05);
+  position: relative;
+  overflow: hidden;
+}
+.welcome-banner::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 200px; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,130,21,0.04));
+  pointer-events: none;
+}
+
+.welcome-avatar {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #FF9B0C, #FF5229);
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 6px 18px rgba(255,130,21,0.28);
+  letter-spacing: -0.02em;
+}
+
+.welcome-info { flex: 1; min-width: 0; }
+.welcome-greeting {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #FF8215;
+  margin-bottom: 2px;
+}
+.welcome-name {
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: #1a1a1a;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.welcome-chips {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.welcome-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 100px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.welcome-chip--green {
+  background: rgba(34,197,94,0.08);
+  border-color: rgba(34,197,94,0.25);
+  color: #16a34a;
+}
+.welcome-chip--orange {
+  background: rgba(255,130,21,0.08);
+  border-color: rgba(255,130,21,0.25);
+  color: #E56200;
+}
+.welcome-chip--teal {
+  background: rgba(47,140,155,0.08);
+  border-color: rgba(47,140,155,0.25);
+  color: #1E6E7A;
+}
+.welcome-chip--gray {
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.10);
+  color: #6b7280;
+}
+
+.welcome-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+@media (max-width: 680px) {
+  .welcome-banner { flex-wrap: wrap; }
+  .welcome-actions { width: 100%; }
+  .welcome-actions .btn { flex: 1; }
+}
+
+/* ─── 3. Portfolio Hero Polish ──────────────────────────────── */
+.portfolio-hero {
+  border-radius: 20px !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18) !important;
+}
+
+.portfolio-hero__value {
+  font-size: 3rem !important;
+  letter-spacing: -0.05em !important;
+  background: linear-gradient(135deg, #fff 60%, rgba(255,155,12,0.8));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.portfolio-hero__return {
+  font-size: 0.88rem !important;
+  padding: 5px 14px !important;
+}
+
+.ph-stat__value {
+  font-size: 1.1rem !important;
+  font-weight: 900 !important;
+}
+.ph-stat__value.text-green { color: #22c55e !important; }
+
+/* ─── 4. KPI Stat Cards ─────────────────────────────────────── */
+.stat-card {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease !important;
+  border-radius: 16px !important;
+}
+.stat-card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.10) !important;
+}
+.stat-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 0 0 16px 16px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.stat-card:hover::after { opacity: 1; }
+.stat-card--gold::after  { background: linear-gradient(90deg, #FF9B0C, #D4AF37); }
+.stat-card--green::after { background: linear-gradient(90deg, #22c55e, #16a34a); }
+.stat-card--blue::after  { background: linear-gradient(90deg, #3b82f6, #2F8C9B); }
+.stat-card--purple::after{ background: linear-gradient(90deg, #a855f7, #6366f1); }
+
+.stat-card__value {
+  font-size: 1.65rem !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.03em !important;
+}
+
+/* ─── 5. Investment Cards ───────────────────────────────────── */
+.my-inv-card {
+  border-radius: 16px !important;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease !important;
+  position: relative;
+  overflow: hidden;
+}
+.my-inv-card:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.12) !important;
+  border-color: rgba(255,130,21,0.30) !important;
+}
+.my-inv-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.my-inv-card:hover::before { opacity: 1; background: linear-gradient(90deg, #FF9B0C, #FF5229); }
+
+.mic-stat {
+  border-radius: 10px !important;
+  padding: 10px 8px !important;
+  transition: background 0.2s ease;
+}
+.my-inv-card:hover .mic-stat { background: rgba(255,130,21,0.05) !important; }
+
+.mic-stat__value--gold { color: #FF8215 !important; }
+.mic-stat__value--green { color: #22c55e !important; }
+
+/* ─── 6. Marketplace Pool Cards ─────────────────────────────── */
+.market-pool-card {
+  border-radius: 16px !important;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease !important;
+}
+.market-pool-card:hover {
+  transform: translateY(-5px) !important;
+  box-shadow: 0 14px 40px rgba(0,0,0,0.16) !important;
+  border-color: rgba(255,130,21,0.35) !important;
+}
+
+.market-pool-card__rate {
+  background: linear-gradient(135deg, #FF9B0C, #D4AF37);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── 7. Wallet Card Polish ─────────────────────────────────── */
+.wallet-card {
+  border-radius: 20px !important;
+  box-shadow: 0 8px 32px rgba(47,140,155,0.25) !important;
+}
+.wallet-card__value {
+  color: #fff !important;
+  font-size: 3.2rem !important;
+}
+.wallet-card__label { color: rgba(255,255,255,0.65) !important; }
+.wallet-card__sub   { color: rgba(255,255,255,0.55) !important; }
+
+/* ─── 8. Performance Panel ──────────────────────────────────── */
+.perf-panel {
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.07);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+}
+.perf-panel__header {
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  background: #F7F8FA;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.perf-panel__title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+.perf-panel__body { padding: 16px 18px; }
+
+.perf-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.perf-row:last-child { border-bottom: none; }
+.perf-row__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+.perf-row__label i {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  flex-shrink: 0;
+}
+.perf-row__value {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+.perf-row__value.positive { color: #16a34a; }
+.perf-row__value.neutral  { color: #6b7280; }
+.perf-row__value.warning  { color: #FF8215; }
+
+/* ─── 9. Next Maturity Chip ─────────────────────────────────── */
+.maturity-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 100px;
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.22);
+  color: #dc2626;
+}
+.maturity-countdown.days-30 {
+  background: rgba(255,130,21,0.08);
+  border-color: rgba(255,130,21,0.25);
+  color: #E56200;
+}
+.maturity-countdown.days-60 {
+  background: rgba(34,197,94,0.08);
+  border-color: rgba(34,197,94,0.22);
+  color: #16a34a;
+}
+
+/* ─── 10. Data table polish ─────────────────────────────────── */
+.data-table {
+  font-size: 0.82rem !important;
+}
+.data-table thead th {
+  font-size: 0.68rem !important;
+  letter-spacing: 0.06em !important;
+}
+.data-table tbody tr {
+  transition: background 0.15s ease;
+}
+.data-table tbody tr:hover {
+  background: rgba(255,130,21,0.03) !important;
+}
+
+/* ─── 11. Progress bar improvements ────────────────────────── */
+.progress-bar {
+  height: 5px !important;
+  border-radius: 4px !important;
+  overflow: hidden;
+}
+.progress-fill {
+  border-radius: 4px !important;
+  background: linear-gradient(90deg, #FF9B0C, #FF5229) !important;
+  transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+.progress-fill--green { background: linear-gradient(90deg, #22c55e, #16a34a) !important; }
+.progress-fill--blue  { background: linear-gradient(90deg, #3b82f6, #2F8C9B) !important; }
+
+/* ─── 12. Sidebar user card upgrade ────────────────────────── */
+.sidebar__footer { padding: 12px !important; }
+.sidebar-user {
+  background: rgba(255,130,21,0.05);
+  border: 1px solid rgba(255,130,21,0.12);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.sidebar-user:hover {
+  background: rgba(255,130,21,0.09);
+  border-color: rgba(255,130,21,0.25);
+}
+.sidebar-user__avatar {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+  font-size: 0.82rem !important;
+  font-weight: 900 !important;
+  flex-shrink: 0;
+  box-shadow: 0 3px 10px rgba(255,130,21,0.25) !important;
+}
+.user-name {
+  font-size: 0.82rem !important;
+  font-weight: 800 !important;
+}
+.user-role {
+  font-size: 0.65rem !important;
+}
+
+/* ─── 13. Referral section polish ───────────────────────────── */
+.referral-hero {
+  border-radius: 20px !important;
+  background: linear-gradient(135deg, #0d1829 0%, #1a2a1a 100%) !important;
+}
+.referral-code {
+  font-size: 2.8rem !important;
+  letter-spacing: 0.2em !important;
+  background: linear-gradient(135deg, #FF9B0C, #D4AF37);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── 14. Support ticket form ───────────────────────────────── */
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: #FF8215 !important;
+  box-shadow: 0 0 0 3px rgba(255,130,21,0.12) !important;
+}
+
+/* ─── 15. Panel animations ──────────────────────────────────── */
+.panel {
+  transition: box-shadow 0.25s ease;
+}
+.panel:hover {
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08) !important;
+}
+
+/* ─── 16. Badge polish ──────────────────────────────────────── */
+.badge {
+  font-size: 0.65rem !important;
+  font-weight: 700 !important;
+  padding: 3px 9px !important;
+  border-radius: 100px !important;
+}
+
+/* ─── 17. Mobile responsiveness ─────────────────────────────── */
+@media (max-width: 900px) {
+  .welcome-banner { flex-wrap: wrap; gap: 14px; }
+  .welcome-actions { width: 100%; }
+  .portfolio-hero__value { font-size: 2.2rem !important; }
+}
+@media (max-width: 640px) {
+  .portfolio-hero__value { font-size: 1.8rem !important; }
+  .ph-stat__value { font-size: 0.9rem !important; }
+}
+
+/* ─── 18. Topbar notification dot ──────────────────────────── */
+.notif-dot {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: transparent;
+  border: 2px solid #F7F8FA;
+  transition: background 0.2s ease;
+}
+.notif-dot.has-unread { background: #ef4444; }
+
+/* ─── 19. Topbar breadcrumb greeting ───────────────────────── */
+.topbar__breadcrumb {
+  font-size: 0.78rem !important;
+}
+
+/* ─── 20. Button hover improvements ────────────────────────── */
+.btn--primary {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease !important;
+}
+.btn--primary:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(255,130,21,0.30) !important;
+}
+.btn--primary:active { transform: scale(0.97) !important; }
+.btn--secondary:active { transform: scale(0.97) !important; }
+
+/* ─── 21. Maturity card polish ──────────────────────────────── */
+.maturity-card {
+  border-radius: 14px !important;
+  transition: transform 0.22s ease, box-shadow 0.22s ease !important;
+}
+.maturity-card:hover {
+  transform: translateX(4px) !important;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.09) !important;
+}
+
+/* ─── 22. Empty state polish ────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+}
+.empty-state i {
+  font-size: 2.5rem;
+  opacity: 0.25;
+  margin-bottom: 12px;
+  display: block;
+  color: #FF8215;
+}
+.empty-state p {
+  font-size: 0.88rem;
+  color: #9ca3af;
+  line-height: 1.6;
+}
+
+/* ─── 23. Loading skeleton ──────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #f0f2f5 25%, #e8eaed 50%, #f0f2f5 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+/* ─── 24. Profile view improvements ────────────────────────── */
+.form-input, .form-select, .form-textarea {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+  font-size: 0.88rem !important;
+}
+.form-label {
+  font-size: 0.68rem !important;
+  letter-spacing: 0.06em !important;
+}
+
+/* ─── 25. Statement view ────────────────────────────────────── */
+#statementPreview {
+  animation: viewFadeIn 0.4s ease;
+}

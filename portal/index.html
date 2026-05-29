@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="css/portal.css" />
   <link rel="stylesheet" href="../css/ci-theme.css" />
   <link rel="stylesheet" href="../css/sv-intelligence.css" />
+  <link rel="stylesheet" href="css/portal-premium.css" />
   <!-- Payment modal must retain dark theme — isolate from ci-theme overrides -->
   <style>
     #topUpModal.modal-overlay { background: rgba(0,0,0,0.82) !important; }
@@ -100,7 +101,7 @@
       <div class="topbar__left">
         <div>
           <div class="topbar__title" id="topbarTitle">Portfolio Overview</div>
-          <div class="topbar__breadcrumb">Good morning, Thabo 👋</div>
+          <div class="topbar__breadcrumb" id="topbarGreeting">Loading...</div>
         </div>
       </div>
       <div class="topbar__actions">
@@ -172,6 +173,37 @@
            VIEW: PORTFOLIO OVERVIEW
       ══════════════════════════════════ -->
       <div class="view active" id="view-overview">
+
+        <!-- Welcome Banner -->
+        <div class="welcome-banner" id="welcomeBanner">
+          <div class="welcome-avatar" id="welcomeAvatar">?</div>
+          <div class="welcome-info">
+            <div class="welcome-greeting" id="welcomeGreeting">Good morning</div>
+            <div class="welcome-name" id="welcomeName">Loading...</div>
+            <div class="welcome-chips">
+              <span class="welcome-chip welcome-chip--green" id="wchipFica" style="display:none">
+                <i class="fa-solid fa-shield-halved"></i> FICA Verified
+              </span>
+              <span class="welcome-chip welcome-chip--teal" id="wchipId">
+                <i class="fa-solid fa-id-card"></i> <span id="wchipIdText">—</span>
+              </span>
+              <span class="welcome-chip welcome-chip--orange" id="wchipSince">
+                <i class="fa-solid fa-calendar-star"></i> <span id="wchipSinceText">Member</span>
+              </span>
+              <span class="welcome-chip welcome-chip--gray" id="wchipNext" style="display:none">
+                <i class="fa-solid fa-hourglass-half"></i> <span id="wchipNextText">Next maturity</span>
+              </span>
+            </div>
+          </div>
+          <div class="welcome-actions">
+            <button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))">
+              <i class="fa-solid fa-plus"></i> Invest
+            </button>
+            <button class="btn btn--secondary btn--sm" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))">
+              <i class="fa-solid fa-wallet"></i> Top Up
+            </button>
+          </div>
+        </div>
 
         <!-- Hero KPI Banner -->
         <div class="portfolio-hero">
@@ -269,6 +301,44 @@
                 <button class="btn btn--secondary btn--full" onclick="navigate('support', document.querySelector('[data-view=support]'))">
                   <i class="fa-solid fa-headset"></i> Contact Support
                 </button>
+              </div>
+            </div>
+
+            <!-- Performance Panel -->
+            <div class="perf-panel mb-16" id="perfPanel">
+              <div class="perf-panel__header">
+                <span class="perf-panel__title">Performance</span>
+                <span style="font-size:0.68rem;color:#9ca3af">All time</span>
+              </div>
+              <div class="perf-panel__body" id="perfPanelBody">
+                <div class="perf-row">
+                  <div class="perf-row__label">
+                    <i style="background:rgba(255,130,21,0.1);color:#FF8215"><i class="fa-solid fa-coins fa-sm"></i></i>
+                    Total Invested
+                  </div>
+                  <span class="perf-row__value neutral" id="perf-invested">—</span>
+                </div>
+                <div class="perf-row">
+                  <div class="perf-row__label">
+                    <i style="background:rgba(34,197,94,0.1);color:#22c55e"><i class="fa-solid fa-chart-line fa-sm"></i></i>
+                    Returns Earned
+                  </div>
+                  <span class="perf-row__value positive" id="perf-returns">—</span>
+                </div>
+                <div class="perf-row">
+                  <div class="perf-row__label">
+                    <i style="background:rgba(47,140,155,0.1);color:#2F8C9B"><i class="fa-solid fa-percent fa-sm"></i></i>
+                    Effective Rate
+                  </div>
+                  <span class="perf-row__value positive" id="perf-rate">—</span>
+                </div>
+                <div class="perf-row">
+                  <div class="perf-row__label">
+                    <i style="background:rgba(168,85,247,0.1);color:#a855f7"><i class="fa-solid fa-layer-group fa-sm"></i></i>
+                    Active Pools
+                  </div>
+                  <span class="perf-row__value neutral" id="perf-pools">—</span>
+                </div>
               </div>
             </div>
 
