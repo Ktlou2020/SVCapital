@@ -58,6 +58,7 @@ const ALLOWED_TABLES = {
   loan_documents:        'id',
   solar_projects:        'id',
   solar_documents:       'id',
+  fica_checks:           'id',   // read-only via generic API; writes via /api/fica/*
   users:                 'id',   // limited, no password_hash exposed
 };
 
@@ -68,6 +69,7 @@ const ADMIN_ONLY_TABLES = new Set([
   'return_schedules', 'investor_allocations',
   'employees', 'employee_onboarding', 'employee_courses',
   'course_progress', 'activity_feed',
+  'fica_checks',
 ]);
 
 /* ─── Tables that require admin/director role for WRITE (stricter than read) ─── */
@@ -312,6 +314,34 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     );
     const [clean] = stripSensitive(table, rows);
     res.status(201).json(clean);
+
+    /* ── FICA deposit hook ──────────────────────────────────────────────
+       When a completed deposit transaction is created, trigger an
+       automated FICA check if the investor has never had one.
+       Fire-and-forget: errors are logged but don't affect the response.
+    ───────────────────────────────────────────────────────────────────── */
+    if (
+      table === 'transactions' &&
+      clean.type === 'deposit' &&
+      (clean.status === 'completed' || clean.status === 'pending') &&
+      clean.investor_id
+    ) {
+      setImmediate(async () => {
+        try {
+          const { rows: inv } = await pool.query(
+            'SELECT * FROM investors WHERE id = $1 AND last_auto_fica_check IS NULL',
+            [clean.investor_id]
+          );
+          if (inv.length > 0) {
+            const { runFicaCheck } = require('../services/ficaService');
+            await runFicaCheck(inv[0], 'first_deposit');
+          }
+        } catch (err) {
+          console.error('[FICA deposit hook] Error:', err.message);
+        }
+      });
+    }
+
   } catch (err) {
     console.error(`POST /${req.params.table}:`, err.message);
     res.status(500).json({ error: err.message });
