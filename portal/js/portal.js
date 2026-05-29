@@ -221,12 +221,19 @@ function renderOverview() {
   if (greetEl) greetEl.textContent = `${_timeGreeting()}, ${firstName} 👋`;
 
   // ── Portfolio hero values ────────────────────────────────────
-  document.getElementById('pov-total').textContent    = Utils.rand(totalValue);
-  document.getElementById('pov-return').innerHTML     = `<i class="fa-solid fa-arrow-trend-up"></i> <span>+${returnPct}% effective return · ${Utils.rand(totalRet)} earned</span>`;
-  document.getElementById('pov-invested').textContent = Utils.rand(inv.total_invested);
-  document.getElementById('pov-wallet').textContent   = Utils.rand(inv.wallet_balance);
-  document.getElementById('pov-returns').textContent  = Utils.rand(totalRet);
-  document.getElementById('pov-active').textContent   = activeCount;
+  // Animate portfolio hero
+  const totEl = document.getElementById('pov-total');
+  if (totEl) _animateNum(totEl, totalValue, 'R ', '', 1100);
+
+  document.getElementById('pov-return').innerHTML = `<i class="fa-solid fa-arrow-trend-up"></i> <span>+${returnPct}% effective return · ${Utils.rand(totalRet)} earned</span>`;
+
+  const invEl = document.getElementById('pov-invested');
+  if (invEl) _animateNum(invEl, inv.total_invested || 0, 'R ', '', 900);
+  const walEl = document.getElementById('pov-wallet');
+  if (walEl) _animateNum(walEl, inv.wallet_balance || 0, 'R ', '', 800);
+  const retEl = document.getElementById('pov-returns');
+  if (retEl) _animateNum(retEl, totalRet, 'R ', '', 900);
+  document.getElementById('pov-active').textContent = activeCount;
 
   // ── Welcome banner ───────────────────────────────────────────
   const initials = `${(inv.first_name || '')[0] || '?'}${(inv.last_name || '')[0] || ''}`.toUpperCase();
@@ -271,6 +278,28 @@ function renderOverview() {
   if (sAvatar) sAvatar.textContent = initials;
   if (sName)   sName.textContent   = `${inv.first_name || ''} ${inv.last_name || ''}`.trim();
   if (sRole)   sRole.textContent   = `${inv.id || 'INV'} · ${inv.status === 'active' ? 'Active' : (inv.status || 'Investor')}`;
+
+  // ── FICA pending alert ───────────────────────────────────────
+  const ficaPending = inv.fica_status === 'pending' || inv.status === 'pending_fica' || inv.fica_status === 'submitted';
+  let ficaBanner = document.getElementById('ficaAlertBanner');
+  if (ficaPending && !ficaBanner) {
+    ficaBanner = document.createElement('div');
+    ficaBanner.id = 'ficaAlertBanner';
+    ficaBanner.className = 'fica-alert-banner';
+    ficaBanner.innerHTML = `
+      <div class="fica-alert-banner__icon"><i class="fa-solid fa-id-card"></i></div>
+      <div class="fica-alert-banner__body">
+        <div class="fica-alert-banner__title">FICA Verification Pending</div>
+        <div class="fica-alert-banner__sub">Your identity documents are under review (1–2 business days). You can invest once approved.</div>
+      </div>
+      <div class="fica-alert-banner__action">
+        <button class="btn btn--primary btn--sm" onclick="navigate('support', document.querySelector('[data-view=support]'))">
+          <i class="fa-solid fa-headset"></i> Contact Us
+        </button>
+      </div>`;
+    const welcomeBanner = document.getElementById('welcomeBanner');
+    if (welcomeBanner) welcomeBanner.after(ficaBanner);
+  }
 
   // ── Performance panel ────────────────────────────────────────
   const perfInvested = document.getElementById('perf-invested');

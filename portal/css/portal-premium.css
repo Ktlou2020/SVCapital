@@ -514,3 +514,119 @@
 #statementPreview {
   animation: viewFadeIn 0.4s ease;
 }
+
+/* ─── 26. FICA pending alert banner ─────────────────────────── */
+.fica-alert-banner {
+  display: flex; align-items: center; gap: 16px;
+  background: linear-gradient(135deg, rgba(255,130,21,0.08) 0%, rgba(255,130,21,0.04) 100%);
+  border: 1px solid rgba(255,130,21,0.30);
+  border-radius: 14px; padding: 14px 20px;
+  margin-bottom: 18px;
+  animation: ficaAlertSlide 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes ficaAlertSlide {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: none; }
+}
+.fica-alert-banner__icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: rgba(255,130,21,0.12);
+  display: flex; align-items: center; justify-content: center;
+  color: #FF8215; font-size: 1rem; flex-shrink: 0;
+}
+.fica-alert-banner__body { flex: 1; min-width: 0; }
+.fica-alert-banner__title {
+  font-size: 0.85rem; font-weight: 800; color: #1a1a1a; margin-bottom: 2px;
+}
+.fica-alert-banner__sub {
+  font-size: 0.75rem; color: #6b7280; line-height: 1.5;
+}
+.fica-alert-banner__action {
+  flex-shrink: 0;
+}
+
+/* ─── 27. Portfolio hero animated value ─────────────────────── */
+.portfolio-hero__value {
+  transition: opacity 0.3s ease;
+}
+.portfolio-hero__value.counting { opacity: 0.85; }
+
+/* ─── 28. Sidebar user card — active state ──────────────────── */
+.sidebar-user:focus-within,
+.sidebar-user:focus {
+  outline: none;
+  background: rgba(255,130,21,0.11);
+  border-color: rgba(255,130,21,0.3);
+}
+
+/* ─── 29. Investment days remaining — urgent pulse ──────────── */
+@keyframes urgentDaysPulse {
+  0%, 100% { color: #dc2626; }
+  50%       { color: #f87171; }
+}
+.days-urgent { animation: urgentDaysPulse 2s ease infinite; }
+
+/* ─── 30. Table row hover accent ───────────────────────────── */
+.table-card .data-table tbody tr:hover {
+  background: rgba(255,130,21,0.025) !important;
+}
+
+/* ─── 31. Wallet card top-up glow on hover ──────────────────── */
+.wallet-card {
+  transition: box-shadow 0.3s ease !important;
+}
+.wallet-card:hover {
+  box-shadow: 0 12px 48px rgba(47,140,155,0.35) !important;
+}
+
+/* ─── 32. Pool card rate badge ─────────────────────────────── */
+.market-pool-card__rate-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(212,175,55,0.12);
+  border: 1px solid rgba(212,175,55,0.3);
+  color: #D4AF37;
+  font-size: 0.78rem; font-weight: 800;
+  padding: 4px 12px; border-radius: 50px;
+  letter-spacing: 0.02em;
+}
+
+/* ─── 33. Referral code copy ripple ─────────────────────────── */
+.referral-link-box {
+  border-radius: 10px !important;
+  border: 1.5px solid rgba(255,130,21,0.2) !important;
+  overflow: hidden;
+}
+.referral-link-box:hover {
+  border-color: rgba(255,130,21,0.4) !important;
+}
+
+/* ─── 34. FAQ quick items ───────────────────────────────────── */
+.faq-quick-item {
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.faq-quick-q {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 0; background: none; border: none; cursor: pointer;
+  font-size: 0.82rem; font-weight: 600; color: #1a1a1a;
+  font-family: 'Inter', sans-serif; text-align: left;
+  transition: color 0.2s;
+}
+.faq-quick-q:hover { color: #FF8215; }
+.faq-quick-q i { transition: transform 0.25s ease; color: #9ca3af; font-size: 0.72rem; }
+.faq-quick-q.open i { transform: rotate(180deg); color: #FF8215; }
+.faq-quick-a {
+  font-size: 0.79rem; color: #6b7280; line-height: 1.65;
+  padding: 0 0 12px; display: none;
+}
+.faq-quick-a.open { display: block; animation: viewFadeIn 0.2s ease; }
+
+/* ─── 35. Pool closed / full badge ─────────────────────────── */
+.market-pool-card.pool-full {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* ─── 36. Topbar gradient refinement ────────────────────────── */
+.topbar {
+  background: linear-gradient(to right, #fff 0%, #fafcfd 100%) !important;
+}
