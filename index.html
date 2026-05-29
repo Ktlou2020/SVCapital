@@ -26,6 +26,7 @@
 
   <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/home-ci.css" />
+  <link rel="stylesheet" href="css/premium.css" />
 </head>
 <body>
 
@@ -191,11 +192,91 @@
   </section>
 
   <!-- ═══════════════════════════════════════════════
+       STATS TICKER BAR
+  ═══════════════════════════════════════════════ -->
+  <div class="stats-ticker">
+    <div class="stats-ticker__track">
+      <div class="stats-ticker__item">
+        <i class="fa-solid fa-users"></i>
+        <strong>3,000+</strong> Active Investors
+      </div>
+      <div class="stats-ticker__sep"></div>
+      <div class="stats-ticker__item">
+        <i class="fa-solid fa-coins"></i>
+        <strong>R200M+</strong> Capital Deployed
+      </div>
+      <div class="stats-ticker__sep"></div>
+      <div class="stats-ticker__item">
+        <i class="fa-solid fa-arrow-trend-up"></i>
+        <strong>14.83%</strong> Avg. Cattle Return
+      </div>
+      <div class="stats-ticker__sep"></div>
+      <div class="stats-ticker__item">
+        <i class="fa-solid fa-solar-panel"></i>
+        <strong>21.40%</strong> Solar 7yr Return
+      </div>
+      <div class="stats-ticker__sep"></div>
+      <div class="stats-ticker__item">
+        <i class="fa-solid fa-person-digging"></i>
+        <strong>700+</strong> Jobs Created
+      </div>
+      <div class="stats-ticker__sep"></div>
+      <div class="stats-ticker__item">
+        <i class="fa-solid fa-shield-halved"></i>
+        <strong>FSCA</strong> Regulated · FSP 52449
+      </div>
+      <div class="stats-ticker__sep"></div>
+      <div class="stats-ticker__item">
+        <i class="fa-solid fa-calendar-check"></i>
+        <strong>9 Years</strong> Track Record
+      </div>
+      <div class="stats-ticker__sep"></div>
+      <!-- Duplicate for seamless loop -->
+      <div class="stats-ticker__item">
+        <i class="fa-solid fa-users"></i>
+        <strong>3,000+</strong> Active Investors
+      </div>
+      <div class="stats-ticker__sep"></div>
+      <div class="stats-ticker__item">
+        <i class="fa-solid fa-coins"></i>
+        <strong>R200M+</strong> Capital Deployed
+      </div>
+      <div class="stats-ticker__sep"></div>
+      <div class="stats-ticker__item">
+        <i class="fa-solid fa-arrow-trend-up"></i>
+        <strong>14.83%</strong> Avg. Cattle Return
+      </div>
+      <div class="stats-ticker__sep"></div>
+      <div class="stats-ticker__item">
+        <i class="fa-solid fa-solar-panel"></i>
+        <strong>21.40%</strong> Solar 7yr Return
+      </div>
+      <div class="stats-ticker__sep"></div>
+      <div class="stats-ticker__item">
+        <i class="fa-solid fa-person-digging"></i>
+        <strong>700+</strong> Jobs Created
+      </div>
+      <div class="stats-ticker__sep"></div>
+      <div class="stats-ticker__item">
+        <i class="fa-solid fa-shield-halved"></i>
+        <strong>FSCA</strong> Regulated · FSP 52449
+      </div>
+      <div class="stats-ticker__sep"></div>
+      <div class="stats-ticker__item">
+        <i class="fa-solid fa-calendar-check"></i>
+        <strong>9 Years</strong> Track Record
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-rule" />
+
+  <!-- ═══════════════════════════════════════════════
        PRODUCTS
   ═══════════════════════════════════════════════ -->
   <section class="products" id="products">
     <div class="container">
-      <div class="section-header">
+      <div class="section-header" data-reveal="up">
         <div class="section-eyebrow">Investment Products</div>
         <h2 class="section-title">Real assets. Real returns.</h2>
         <p class="section-sub">Choose from South Africa's most innovative asset-backed investment products. Every rand you invest is tied to a tangible, productive asset.</p>
@@ -204,7 +285,7 @@
       <div class="products-grid">
 
         <!-- Cattle Investment -->
-        <article class="product-card product-card--cattle" data-product="cattle">
+        <article class="product-card product-card--cattle" data-product="cattle" data-reveal="up" data-reveal-delay="100">
           <div class="product-card__bg"></div>
           <div class="product-card__badge-row">
             <span class="risk-badge risk-badge--moderate">Moderate Risk</span>
@@ -251,7 +332,7 @@
         </article>
 
         <!-- Solar 7-Year -->
-        <article class="product-card product-card--solar product-card--featured" data-product="solar">
+        <article class="product-card product-card--solar product-card--featured" data-product="solar" data-reveal="up" data-reveal-delay="200">
           <div class="product-card__bg"></div>
           <div class="product-card__featured-ribbon">Best Returns</div>
           <div class="product-card__badge-row">
@@ -298,7 +379,7 @@
         </article>
 
         <!-- Short-Term -->
-        <article class="product-card product-card--short" data-product="short">
+        <article class="product-card product-card--short" data-product="short" data-reveal="up" data-reveal-delay="300">
           <div class="product-card__bg"></div>
           <div class="product-card__badge-row">
             <span class="risk-badge risk-badge--aggressive">Aggressive</span>
@@ -345,7 +426,7 @@
         </article>
 
         <!-- Delivery Bike -->
-        <article class="product-card product-card--delivery" data-product="delivery">
+        <article class="product-card product-card--delivery" data-product="delivery" data-reveal="up" data-reveal-delay="350">
           <div class="product-card__bg"></div>
           <div class="product-card__badge-row">
             <span class="risk-badge risk-badge--aggressive">Aggressive</span>
@@ -452,7 +533,7 @@
       <div class="calc-orb calc-orb-2"></div>
     </div>
     <div class="container">
-      <div class="section-header section-header--light">
+      <div class="section-header section-header--light" data-reveal="up">
         <div class="section-eyebrow section-eyebrow--light">Investment Calculator</div>
         <h2 class="section-title section-title--light">See your money grow</h2>
         <p class="section-sub section-sub--light">Adjust the sliders and watch your wealth build in real time. No sign-up required.</p>
@@ -534,7 +615,7 @@
   ═══════════════════════════════════════════════ -->
   <section class="how-it-works" id="how-it-works">
     <div class="container">
-      <div class="section-header">
+      <div class="section-header" data-reveal="up">
         <div class="section-eyebrow">The Process</div>
         <h2 class="section-title">Simple. Transparent. Powerful.</h2>
         <p class="section-sub">From sign-up to payout in four straightforward steps.</p>
@@ -645,7 +726,7 @@
       <div class="impact-pattern"></div>
     </div>
     <div class="container">
-      <div class="section-header section-header--light">
+      <div class="section-header section-header--light" data-reveal="up">
         <div class="section-eyebrow section-eyebrow--light">Our Impact</div>
         <h2 class="section-title section-title--light">Numbers that matter.</h2>
         <p class="section-sub section-sub--light">Beyond returns — every investment creates real-world impact across South Africa.</p>
@@ -782,33 +863,37 @@
   ═══════════════════════════════════════════════ -->
   <section class="team-section" id="team">
     <div class="container">
-      <div class="section-header">
+      <div class="section-header" data-reveal="up">
         <div class="section-eyebrow">Leadership</div>
         <h2 class="section-title">Built by believers.</h2>
         <p class="section-sub">Two chartered finance professionals with a shared mission: democratise access to alternative investments in Africa.</p>
       </div>
 
       <div class="team-grid">
-        <div class="team-card">
+        <div class="team-card" data-reveal="up">
           <div class="team-card__avatar">
+            <div class="team-avatar-ring"></div>
             <div class="team-avatar-placeholder">AM</div>
           </div>
           <div class="team-card__content">
+            <span class="team-credential"><i class="fa-solid fa-certificate"></i> CA(SA) · Finance Pioneer</span>
             <h3>Ayanda Majola</h3>
-            <span class="team-card__role">Co-Founder & CEO</span>
+            <span class="team-card__role">Co-Founder &amp; CEO</span>
             <p>Chartered Accountant turned alternative investment pioneer. Ayanda's vision is to empower future generations and build generational wealth across Africa through transformative investment strategies.</p>
             <a href="https://za.linkedin.com/in/ayanda-majola-72350bb9" class="team-linkedin" target="_blank">
               <i class="fa-brands fa-linkedin"></i> LinkedIn Profile
             </a>
           </div>
         </div>
-        <div class="team-card">
+        <div class="team-card" data-reveal="up" data-reveal-delay="150">
           <div class="team-card__avatar">
+            <div class="team-avatar-ring"></div>
             <div class="team-avatar-placeholder">KT</div>
           </div>
           <div class="team-card__content">
+            <span class="team-credential"><i class="fa-solid fa-chart-line"></i> Finance Strategy · Operations</span>
             <h3>Kagiso Tloubatla</h3>
-            <span class="team-card__role">Co-Founder & COO</span>
+            <span class="team-card__role">Co-Founder &amp; COO</span>
             <p>Finance strategist driving operational excellence at SV Capital. Kagiso brings deep expertise in financial structures and a relentless focus on building systems that scale across the African continent.</p>
             <a href="https://za.linkedin.com/in/kagiso-tloubatla-b0097462" class="team-linkedin" target="_blank">
               <i class="fa-brands fa-linkedin"></i> LinkedIn Profile
@@ -824,41 +909,41 @@
   ═══════════════════════════════════════════════ -->
   <section class="testimonials-section">
     <div class="container">
-      <div class="section-header">
+      <div class="section-header" data-reveal="up">
         <div class="section-eyebrow">Investor Stories</div>
         <h2 class="section-title">Trusted by thousands.</h2>
       </div>
       <div class="testimonials-grid">
-        <div class="testimonial-card">
+        <div class="testimonial-card" data-reveal="up" data-reveal-delay="100">
           <div class="testimonial-stars">★★★★★</div>
           <p>"I started with R1,000 in the cattle investment three years ago. The consistent returns have helped me build an emergency fund I never had before. SV Capital made investing real for me."</p>
           <div class="testimonial-author">
             <div class="author-avatar">NM</div>
             <div>
               <strong>Nomsa M.</strong>
-              <span>Johannesburg · Cattle Investor since 2022</span>
+              <div class="testimonial-verified">Verified Investor · Cattle since 2022</div>
             </div>
           </div>
         </div>
-        <div class="testimonial-card testimonial-card--featured">
+        <div class="testimonial-card testimonial-card--featured" data-reveal="up" data-reveal-delay="200">
           <div class="testimonial-stars">★★★★★</div>
           <p>"As someone sceptical of 'alternative' investments, what won me over was the transparency. I can see exactly where my money goes, who manages the assets, and what the real risks are. That's rare."</p>
           <div class="testimonial-author">
             <div class="author-avatar">TK</div>
             <div>
               <strong>Thabo K.</strong>
-              <span>Cape Town · Solar + Cattle Investor</span>
+              <div class="testimonial-verified">Verified Investor · Solar + Cattle</div>
             </div>
           </div>
         </div>
-        <div class="testimonial-card">
+        <div class="testimonial-card" data-reveal="up" data-reveal-delay="300">
           <div class="testimonial-stars">★★★★★</div>
           <p>"The 7-year solar investment is a long commitment, but at 21.4% annualised, it's the best return I've found anywhere. My money is funding clean energy — that means something to me."</p>
           <div class="testimonial-author">
             <div class="author-avatar">LP</div>
             <div>
               <strong>Lerato P.</strong>
-              <span>Pretoria · Solar 7yr Investor</span>
+              <div class="testimonial-verified">Verified Investor · Solar 7yr</div>
             </div>
           </div>
         </div>
@@ -871,7 +956,7 @@
   ═══════════════════════════════════════════════ -->
   <section class="faq-section" id="faq">
     <div class="container">
-      <div class="section-header">
+      <div class="section-header" data-reveal="up">
         <div class="section-eyebrow">FAQ</div>
         <h2 class="section-title">Everything you need to know.</h2>
         <p class="section-sub">Transparent answers to the questions every investor should ask.</p>

@@ -643,49 +643,59 @@ document.addEventListener('keydown', (e) => {
    SCROLL ANIMATIONS
    ═══════════════════════════════════════════════ */
 function initScrollAnimations() {
-  // Add fade-up class to key elements
+  // Legacy fade-up classes
   const targets = [
-    '.section-header',
     '.product-card',
     '.step',
     '.stat-card',
-    '.team-card',
-    '.testimonial-card',
     '.award-card',
     '.compliance-item',
     '.compare-callout',
     '.app-cta',
+    '.calc-controls',
+    '.calc-results',
+    '.sdg-badge',
   ];
 
   targets.forEach(selector => {
     document.querySelectorAll(selector).forEach(el => {
-      if (!el.classList.contains('fade-up')) {
+      if (!el.classList.contains('fade-up') && !el.dataset.reveal) {
         el.classList.add('fade-up');
       }
     });
   });
 
-  const observer = new IntersectionObserver(
+  const fadeObserver = new IntersectionObserver(
     (entries) => {
-      entries.forEach((entry, i) => {
+      entries.forEach(entry => {
         if (entry.isIntersecting) {
-          // Stagger children of grid containers
-          const delay = entry.target.closest('.products-grid, .stats-grid, .team-grid, .testimonials-grid')
+          const delay = entry.target.closest('.products-grid, .stats-grid, .sdg-badges')
             ? Array.from(entry.target.parentElement.children).indexOf(entry.target) * 80
             : 0;
-
-          setTimeout(() => {
-            entry.target.classList.add('visible');
-          }, delay);
-
-          observer.unobserve(entry.target);
+          setTimeout(() => entry.target.classList.add('visible'), delay);
+          fadeObserver.unobserve(entry.target);
         }
       });
     },
-    { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+    { threshold: 0.08, rootMargin: '0px 0px -30px 0px' }
   );
 
-  document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+  document.querySelectorAll('.fade-up').forEach(el => fadeObserver.observe(el));
+
+  // Data-reveal system
+  const revealObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in-view');
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    },
+    { threshold: 0.1, rootMargin: '0px 0px -30px 0px' }
+  );
+
+  document.querySelectorAll('[data-reveal]').forEach(el => revealObserver.observe(el));
 }
 
 /* ═══════════════════════════════════════════════
