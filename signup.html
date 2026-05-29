@@ -743,6 +743,50 @@
     }
     .success-screen.visible { animation: successPop 0.5s cubic-bezier(0.22,1,0.36,1) both; }
     .success-confetti { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+
+    /* ─── Citizenship toggle ─── */
+    .citizen-toggle {
+      display: flex; border: 1.5px solid var(--border-md);
+      border-radius: 10px; overflow: hidden; margin-bottom: 16px;
+    }
+    .citizen-toggle__btn {
+      flex: 1; padding: 11px 8px;
+      background: var(--bg); border: none; font-family: var(--font);
+      font-size: 0.8rem; font-weight: 600; cursor: pointer;
+      color: var(--text-muted); transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .citizen-toggle__btn.active { background: linear-gradient(135deg, #FF9B0C, #FF5229); color: #fff; }
+    .citizen-toggle__btn:not(.active):hover { color: var(--orange); background: rgba(255,130,21,0.04); }
+
+    /* ─── Phone prefix ─── */
+    .phone-prefix-wrap { display: flex; }
+    .phone-prefix-select {
+      flex-shrink: 0; width: 100px;
+      padding: 11px 4px 11px 11px;
+      border: 1.5px solid var(--border-md); border-right: none;
+      border-radius: 9px 0 0 9px;
+      font-family: var(--font); font-size: 0.8rem; font-weight: 600;
+      color: var(--text-h); background: var(--bg);
+      outline: none; cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 6px center;
+      transition: border-color 0.2s;
+    }
+    .phone-prefix-wrap .form-input { border-radius: 0 9px 9px 0; flex: 1; }
+    .phone-prefix-wrap:focus-within .phone-prefix-select,
+    .phone-prefix-wrap:focus-within .form-input { border-color: var(--orange); }
+    .phone-prefix-wrap .form-input:focus { box-shadow: none; }
+    .phone-prefix-wrap:focus-within { box-shadow: 0 0 0 3px rgba(255,130,21,0.10); border-radius: 9px; }
+
+    /* ─── International client info ─── */
+    .intl-info-banner {
+      background: rgba(47,140,155,0.07); border: 1px solid rgba(47,140,155,0.22);
+      border-radius: 10px; padding: 11px 14px;
+      display: flex; gap: 10px; align-items: flex-start;
+      margin-bottom: 16px; font-size: 0.77rem; color: #1a3a4a; line-height: 1.5;
+    }
+    .intl-info-banner i { color: var(--teal); flex-shrink: 0; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -878,9 +922,24 @@
 
     <!-- ══ STEP 1: Personal Info ══ -->
     <div id="step1">
-      <div class="info-strip">
+
+      <!-- Citizenship selector -->
+      <div class="citizen-toggle">
+        <button type="button" class="citizen-toggle__btn active" id="btnCitizenSA">
+          🇿🇦 South African / SA Resident
+        </button>
+        <button type="button" class="citizen-toggle__btn" id="btnCitizenIntl">
+          🌍 International Client
+        </button>
+      </div>
+
+      <div class="info-strip" id="infoStripSA">
         <i class="fa-solid fa-circle-info"></i>
         <p>Your details are kept private and secure. We use them only for account verification and FSCA compliance.</p>
+      </div>
+      <div class="intl-info-banner" id="infoStripIntl" style="display:none">
+        <i class="fa-solid fa-earth-africa"></i>
+        <span>International clients are welcome. We accept passport-based KYC verification for non-SA residents. Your documents will be reviewed by our compliance team within 1–3 business days.</span>
       </div>
 
       <div class="form-grid">
@@ -904,21 +963,147 @@
 
       <div class="form-group">
         <label class="form-label" for="phone">Phone Number <span>*</span></label>
-        <div class="input-icon-wrap">
-          <i class="icon fa-solid fa-phone"></i>
-          <input type="tel" class="form-input" id="phone" placeholder="071 234 5678" autocomplete="tel" inputmode="tel" />
+        <div class="phone-prefix-wrap">
+          <select class="phone-prefix-select" id="phoneDialCode" aria-label="Country dial code">
+            <optgroup label="Southern Africa">
+              <option value="+27" selected>🇿🇦 +27</option>
+              <option value="+263">🇿🇼 +263</option>
+              <option value="+264">🇳🇦 +264</option>
+              <option value="+267">🇧🇼 +267</option>
+              <option value="+260">🇿🇲 +260</option>
+              <option value="+258">🇲🇿 +258</option>
+              <option value="+266">🇱🇸 +266</option>
+              <option value="+268">🇸🇿 +268</option>
+            </optgroup>
+            <optgroup label="Other Africa">
+              <option value="+254">🇰🇪 +254</option>
+              <option value="+234">🇳🇬 +234</option>
+              <option value="+233">🇬🇭 +233</option>
+              <option value="+255">🇹🇿 +255</option>
+              <option value="+256">🇺🇬 +256</option>
+              <option value="+250">🇷🇼 +250</option>
+              <option value="+251">🇪🇹 +251</option>
+              <option value="+20">🇪🇬 +20</option>
+              <option value="+212">🇲🇦 +212</option>
+            </optgroup>
+            <optgroup label="Europe">
+              <option value="+44">🇬🇧 +44</option>
+              <option value="+49">🇩🇪 +49</option>
+              <option value="+31">🇳🇱 +31</option>
+              <option value="+33">🇫🇷 +33</option>
+              <option value="+351">🇵🇹 +351</option>
+              <option value="+34">🇪🇸 +34</option>
+              <option value="+39">🇮🇹 +39</option>
+              <option value="+41">🇨🇭 +41</option>
+              <option value="+46">🇸🇪 +46</option>
+              <option value="+32">🇧🇪 +32</option>
+            </optgroup>
+            <optgroup label="Americas &amp; Pacific">
+              <option value="+1">🇺🇸 +1</option>
+              <option value="+61">🇦🇺 +61</option>
+              <option value="+64">🇳🇿 +64</option>
+            </optgroup>
+            <optgroup label="Middle East &amp; Asia">
+              <option value="+971">🇦🇪 +971</option>
+              <option value="+966">🇸🇦 +966</option>
+              <option value="+974">🇶🇦 +974</option>
+              <option value="+91">🇮🇳 +91</option>
+              <option value="+86">🇨🇳 +86</option>
+              <option value="+65">🇸🇬 +65</option>
+            </optgroup>
+          </select>
+          <input type="tel" class="form-input" id="phone" placeholder="71 234 5678" autocomplete="tel" inputmode="tel" />
+        </div>
+        <div class="field-hint" id="phoneHint">Enter your number without the leading 0 — e.g. 71 234 5678</div>
+      </div>
+
+      <!-- SA ID (for SA citizens / permanent residents) -->
+      <div id="saIdGroup">
+        <div class="form-group">
+          <label class="form-label" for="idNumber">South African ID Number <span>*</span></label>
+          <div class="input-icon-wrap">
+            <i class="icon fa-solid fa-id-card"></i>
+            <input type="text" class="form-input" id="idNumber" placeholder="8001015009087"
+                   maxlength="13" autocomplete="off" inputmode="numeric" />
+          </div>
+          <div id="idValidation" style="display:none"></div>
+          <div class="field-hint" id="idHint">Your 13-digit RSA ID number — required for FICA verification.</div>
         </div>
       </div>
 
-      <div class="form-group">
-        <label class="form-label" for="idNumber">South African ID Number <span>*</span></label>
-        <div class="input-icon-wrap">
-          <i class="icon fa-solid fa-id-card"></i>
-          <input type="text" class="form-input" id="idNumber" placeholder="8001015009087"
-                 maxlength="13" autocomplete="off" inputmode="numeric" />
+      <!-- Passport block (for international clients) -->
+      <div id="passportGroup" style="display:none">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="passportNumber">Passport Number <span>*</span></label>
+            <div class="input-icon-wrap">
+              <i class="icon fa-solid fa-passport"></i>
+              <input type="text" class="form-input" id="passportNumber" placeholder="e.g. A12345678"
+                     maxlength="20" autocomplete="off" style="text-transform:uppercase" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="passportExpiry">Passport Expiry <span>*</span></label>
+            <input type="date" class="form-input" id="passportExpiry" autocomplete="off" />
+            <div class="field-hint">Passport must not be expired.</div>
+          </div>
         </div>
-        <div id="idValidation" style="display:none"></div>
-        <div class="field-hint" id="idHint">Your 13-digit RSA ID number — required for FICA verification.</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="nationality">Nationality <span>*</span></label>
+            <select class="form-select" id="nationality">
+              <option value="">Select nationality</option>
+              <optgroup label="Southern Africa">
+                <option>Zimbabwean</option><option>Namibian</option><option>Batswana</option>
+                <option>Zambian</option><option>Mozambican</option><option>Basotho</option><option>Swazi</option>
+              </optgroup>
+              <optgroup label="Other Africa">
+                <option>Kenyan</option><option>Nigerian</option><option>Ghanaian</option>
+                <option>Tanzanian</option><option>Ugandan</option><option>Rwandan</option>
+                <option>Ethiopian</option><option>Egyptian</option><option>Moroccan</option>
+              </optgroup>
+              <optgroup label="Europe">
+                <option>British</option><option>German</option><option>Dutch</option><option>French</option>
+                <option>Portuguese</option><option>Spanish</option><option>Italian</option>
+                <option>Swiss</option><option>Swedish</option><option>Belgian</option>
+              </optgroup>
+              <optgroup label="Americas &amp; Pacific">
+                <option>American</option><option>Canadian</option><option>Australian</option><option>New Zealander</option>
+              </optgroup>
+              <optgroup label="Middle East &amp; Asia">
+                <option>Emirati</option><option>Saudi Arabian</option><option>Qatari</option>
+                <option>Indian</option><option>Chinese</option><option>Singaporean</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="countryResidence">Country of Residence <span>*</span></label>
+            <select class="form-select" id="countryResidence">
+              <option value="">Select country</option>
+              <optgroup label="Southern Africa">
+                <option>Zimbabwe</option><option>Namibia</option><option>Botswana</option>
+                <option>Zambia</option><option>Mozambique</option><option>Lesotho</option><option>Eswatini</option>
+              </optgroup>
+              <optgroup label="Other Africa">
+                <option>Kenya</option><option>Nigeria</option><option>Ghana</option><option>Tanzania</option>
+                <option>Uganda</option><option>Rwanda</option><option>Ethiopia</option>
+                <option>Egypt</option><option>Morocco</option>
+              </optgroup>
+              <optgroup label="Europe">
+                <option>United Kingdom</option><option>Germany</option><option>Netherlands</option>
+                <option>France</option><option>Portugal</option><option>Spain</option>
+                <option>Italy</option><option>Switzerland</option><option>Sweden</option><option>Belgium</option>
+              </optgroup>
+              <optgroup label="Americas &amp; Pacific">
+                <option>United States</option><option>Canada</option><option>Australia</option><option>New Zealand</option>
+              </optgroup>
+              <optgroup label="Middle East &amp; Asia">
+                <option>United Arab Emirates</option><option>Saudi Arabia</option><option>Qatar</option>
+                <option>India</option><option>China</option><option>Singapore</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
       </div>
 
       <div class="form-grid">
@@ -926,7 +1111,7 @@
           <label class="form-label" for="city">City</label>
           <input type="text" class="form-input" id="city" placeholder="Johannesburg" autocomplete="address-level2" />
         </div>
-        <div class="form-group">
+        <div class="form-group" id="saProvinceGroup">
           <label class="form-label" for="province">Province</label>
           <select class="form-select" id="province">
             <option value="">Select province</option>
@@ -940,6 +1125,10 @@
             <option>Free State</option>
             <option>Northern Cape</option>
           </select>
+        </div>
+        <div class="form-group" id="intlRegionGroup" style="display:none">
+          <label class="form-label" for="region">State / Region</label>
+          <input type="text" class="form-input" id="region" placeholder="State or Province (optional)" autocomplete="address-level1" />
         </div>
       </div>
 
@@ -1010,7 +1199,7 @@
       <label class="checkbox-group">
         <input type="checkbox" id="ficaConsentCheck" />
         <div class="checkbox-label">
-          I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.
+          <span id="ficaConsentText">I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.</span>
         </div>
       </label>
 
@@ -1335,6 +1524,7 @@
 
 let currentStep  = 1;
 let selectedRisk = 'moderate';
+let clientType   = 'sa'; // 'sa' | 'intl'
 
 const ficaFiles   = { id: null, address: null, selfie: null, bank: null, tax: null };
 const REQUIRED_DOCS = ['id', 'address', 'selfie'];
@@ -1344,6 +1534,21 @@ window.addEventListener('DOMContentLoaded', () => {
   prefillReferral();
   initSocialProofCounters();
   initReturnEstimate();
+
+  // Citizenship toggle
+  document.getElementById('btnCitizenSA').addEventListener('click',   () => toggleCitizenship('sa'));
+  document.getElementById('btnCitizenIntl').addEventListener('click', () => toggleCitizenship('intl'));
+
+  // Phone dial code — update placeholder + format hint
+  document.getElementById('phoneDialCode').addEventListener('change', e => {
+    const isSA = e.target.value === '+27';
+    const phoneInput = document.getElementById('phone');
+    if (phoneInput) phoneInput.placeholder = isSA ? '71 234 5678' : '1234 5678';
+    const hint = document.getElementById('phoneHint');
+    if (hint) hint.textContent = isSA
+      ? 'Enter your number without the leading 0 — e.g. 71 234 5678'
+      : 'Enter your local number without country code';
+  });
 
   // Hide broken logo image gracefully
   const logo = document.getElementById('brandLogoImg');
@@ -1485,8 +1690,47 @@ function validateSAID(id) {
     </div>`;
 }
 
+/* ── Citizenship toggle ── */
+function toggleCitizenship(type) {
+  clientType = type;
+  const isSA = type === 'sa';
+
+  document.getElementById('btnCitizenSA').classList.toggle('active', isSA);
+  document.getElementById('btnCitizenIntl').classList.toggle('active', !isSA);
+  document.getElementById('infoStripSA').style.display   = isSA ? '' : 'none';
+  document.getElementById('infoStripIntl').style.display = isSA ? 'none' : '';
+  document.getElementById('saIdGroup').style.display       = isSA ? '' : 'none';
+  document.getElementById('passportGroup').style.display   = isSA ? 'none' : '';
+  document.getElementById('saProvinceGroup').style.display = isSA ? '' : 'none';
+  document.getElementById('intlRegionGroup').style.display = isSA ? 'none' : '';
+
+  // Phone dial code: reset to +27 for SA
+  if (isSA) {
+    document.getElementById('phoneDialCode').value = '+27';
+    const ph = document.getElementById('phone');
+    if (ph) ph.placeholder = '71 234 5678';
+    const hint = document.getElementById('phoneHint');
+    if (hint) hint.textContent = 'Enter your number without the leading 0 — e.g. 71 234 5678';
+  }
+
+  // Update FICA consent text
+  const ct = document.getElementById('ficaConsentText');
+  if (ct) ct.textContent = isSA
+    ? 'I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.'
+    : 'I confirm that I consent to KYC (Know Your Customer) identity verification in accordance with applicable financial regulations. I understand my passport and identity will be verified by the compliance team.';
+
+  // Reset ID validation state
+  const idVal = document.getElementById('idValidation');
+  if (idVal) { idVal.style.display = 'none'; idVal.innerHTML = ''; }
+  const idHint = document.getElementById('idHint');
+  if (idHint) idHint.style.display = '';
+  hideError();
+}
+
 /* ── SA phone number formatter ── */
 function formatSAPhone(input) {
+  const dialCode = document.getElementById('phoneDialCode')?.value || '+27';
+  if (dialCode !== '+27') return; // no auto-format for international
   let raw = input.value.replace(/\D/g, '').slice(0, 10);
   if (raw.length > 6)      input.value = raw.slice(0, 3) + ' ' + raw.slice(3, 6) + ' ' + raw.slice(6);
   else if (raw.length > 3) input.value = raw.slice(0, 3) + ' ' + raw.slice(3);
@@ -1585,18 +1829,34 @@ function validateStep(n) {
 
   if (n === 1) {
     const firstName = v('firstName'), lastName = v('lastName'),
-          email     = v('email'),     phone    = v('phone'),
-          idNumber  = v('idNumber');
-    const idClean = idNumber.replace(/[\s\-]/g, '');
+          email     = v('email'),     phone    = v('phone');
 
     if (!firstName) return showError('Please enter your first name.');
     if (!lastName)  return showError('Please enter your last name.');
     if (!email || !email.includes('@') || !email.includes('.'))
       return showError('Please enter a valid email address.');
-    if (!phone || phone.replace(/\D/g, '').length < 9)
+    if (!phone || phone.replace(/\D/g, '').length < 6)
       return showError('Please enter a valid phone number.');
-    if (!idClean || idClean.length !== 13 || !/^\d{13}$/.test(idClean))
-      return showError('Please enter a valid 13-digit South African ID number.');
+
+    if (clientType === 'sa') {
+      const idNumber = v('idNumber');
+      const idClean  = idNumber.replace(/[\s\-]/g, '');
+      if (!idClean || idClean.length !== 13 || !/^\d{13}$/.test(idClean))
+        return showError('Please enter a valid 13-digit South African ID number.');
+    } else {
+      const passport = v('passportNumber');
+      const expiry   = v('passportExpiry');
+      const nat      = v('nationality');
+      const country  = v('countryResidence');
+      if (!passport || passport.length < 5)
+        return showError('Please enter a valid passport number.');
+      if (!expiry)
+        return showError('Please enter your passport expiry date.');
+      if (new Date(expiry) < new Date())
+        return showError('Your passport has expired — please use a valid, unexpired passport.');
+      if (!nat)     return showError('Please select your nationality.');
+      if (!country) return showError('Please select your country of residence.');
+    }
   }
 
   if (n === 2) {
@@ -1822,21 +2082,32 @@ async function _doSubmit(skippedFica) {
   spinner.style.display = 'inline-flex';
 
   const firstName = v('firstName'), lastName = v('lastName'),
-        email     = v('email'),     phone    = v('phone'),
-        password  = v('password'),  idNumber = v('idNumber'),
-        province  = v('province'),  referral = v('referralCode').toUpperCase();
+        email     = v('email'),     password  = v('password'),
+        referral  = v('referralCode').toUpperCase();
+
+  const dialCode   = document.getElementById('phoneDialCode')?.value || '+27';
+  const phoneRaw   = v('phone');
+  const fullPhone  = dialCode + ' ' + phoneRaw;
+
+  const isSA       = clientType === 'sa';
+  const idNumber   = isSA ? v('idNumber') : v('passportNumber');
+  const province   = isSA ? v('province') : (v('countryResidence') + (v('region') ? ', ' + v('region') : ''));
+  const docNotes   = isSA
+    ? `DocType: SA ID.`
+    : `DocType: Passport. Nationality: ${v('nationality')}. Country: ${v('countryResidence')}. Expiry: ${v('passportExpiry')}.`;
 
   const uploadedDocs = Object.entries(ficaFiles).filter(([, f]) => f !== null).map(([k]) => k);
 
   try {
     const regData = await Auth.register({
-      email, password, firstName, lastName, phone,
+      email, password, firstName, lastName,
+      phone: fullPhone,
       idNumber, province,
       occupation:  '',
       role:        'investor',
       referredBy:  referral || '',
       riskProfile: selectedRisk,
-      notes:       `Experience: ${v('investExp')}. Heard: ${v('hearAbout')}. FICA docs: ${uploadedDocs.join(', ') || 'none'}.`,
+      notes:       `${docNotes} Experience: ${v('investExp')}. Heard: ${v('hearAbout')}. FICA docs: ${uploadedDocs.join(', ') || 'none'}.`,
     });
 
     const assignedId = regData.user.investorId;
