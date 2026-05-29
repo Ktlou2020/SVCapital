@@ -80,16 +80,17 @@ function _timeGreeting() {
 /* ─── Animated number ─── */
 function _animateNum(el, target, prefix = '', suffix = '', duration = 900) {
   if (!el) return;
+  const safeTarget = (target == null || isNaN(Number(target))) ? 0 : Number(target);
   const start = parseFloat(el.dataset.animated || 0);
   const startTime = performance.now();
   const step = (now) => {
     const elapsed = now - startTime;
     const progress = Math.min(elapsed / duration, 1);
     const eased = 1 - Math.pow(1 - progress, 3);
-    const current = start + (target - start) * eased;
+    const current = start + (safeTarget - start) * eased;
     el.textContent = prefix + Math.round(current).toLocaleString('en-ZA') + suffix;
     if (progress < 1) requestAnimationFrame(step);
-    else { el.textContent = prefix + Math.round(target).toLocaleString('en-ZA') + suffix; el.dataset.animated = target; }
+    else { el.textContent = prefix + Math.round(safeTarget).toLocaleString('en-ZA') + suffix; el.dataset.animated = safeTarget; }
   };
   requestAnimationFrame(step);
 }
@@ -210,9 +211,10 @@ function renderOverview() {
   const inv = PORTAL.investor;
   if (!inv) return;
 
-  const totalValue  = (inv.total_invested || 0) + (inv.wallet_balance || 0);
-  const totalRet    = inv.total_returns || 0;
-  const returnPct   = inv.total_invested ? (totalRet / inv.total_invested * 100).toFixed(1) : '0';
+  const totalInvested = parseFloat(inv.total_invested) || 0;
+  const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0);
+  const totalRet      = parseFloat(inv.total_returns) || 0;
+  const returnPct     = totalInvested > 0 ? (totalRet / totalInvested * 100).toFixed(1) : '0';
   const activeCount = PORTAL.investments.filter(i => i.status === 'active').length;
   const firstName   = inv.first_name || 'Investor';
 
@@ -228,7 +230,7 @@ function renderOverview() {
   document.getElementById('pov-return').innerHTML = `<i class="fa-solid fa-arrow-trend-up"></i> <span>+${returnPct}% effective return · ${Utils.rand(totalRet)} earned</span>`;
 
   const invEl = document.getElementById('pov-invested');
-  if (invEl) _animateNum(invEl, inv.total_invested || 0, 'R ', '', 900);
+  if (invEl) _animateNum(invEl, totalInvested, 'R ', '', 900);
   const walEl = document.getElementById('pov-wallet');
   if (walEl) _animateNum(walEl, inv.wallet_balance || 0, 'R ', '', 800);
   const retEl = document.getElementById('pov-returns');
@@ -1471,7 +1473,7 @@ async function confirmInvestment(pool) {
     // Update investor wallet and totals
     await API.investors.update(DEMO_INVESTOR_ID, {
       wallet_balance: Math.max(0, wallet - amount),
-      total_invested: (PORTAL.investor.total_invested || 0) + amount
+      total_invested: (parseFloat(PORTAL.investor.total_invested) || 0) + amount
     });
 
     Toast.success(`Successfully invested ${Utils.rand(amount)} in ${pool.pool_name}!`);
