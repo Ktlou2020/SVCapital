@@ -133,9 +133,11 @@ function navigate(view, btnEl) {
    ═══════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
   Toast.init();
+  initDarkMode();
   await loadPortalData();
-  // Initialise notification dot based on actual unread items
   _syncNotifDot();
+  checkFirstDepositPrompt();
+  _checkAutoStartTour();
 });
 
 async function loadPortalData() {
@@ -3066,4 +3068,333 @@ function shareReferral(method) {
   } else {
     copyReferralLink();
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK MODE
+   ═══════════════════════════════════════════════════════════════ */
+function initDarkMode() {
+  const saved = localStorage.getItem('svc_dark_mode');
+  if (saved === 'dark') _applyDark(true);
+}
+
+function toggleDarkMode() {
+  const isDark = document.body.classList.contains('dark-mode');
+  _applyDark(!isDark);
+}
+
+function _applyDark(on) {
+  document.body.classList.toggle('dark-mode', on);
+  localStorage.setItem('svc_dark_mode', on ? 'dark' : 'light');
+  const icon = document.getElementById('darkModeIcon');
+  if (icon) {
+    icon.className = on ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   GUIDED TOUR
+   ═══════════════════════════════════════════════════════════════ */
+
+const TOUR_STEPS = [
+  {
+    id: 'welcome',
+    type: 'center',
+    icon: 'fa-hand-wave',
+    title: 'Welcome to your Investor Portal!',
+    body: 'Let us give you a quick tour of everything available to you. It takes about 2 minutes and you\'ll earn <strong>100 XP</strong> when you\'re done.',
+  },
+  {
+    id: 'portfolio_hero',
+    target: '.portfolio-hero',
+    position: 'bottom',
+    icon: 'fa-chart-simple',
+    title: 'Your Portfolio Overview',
+    body: 'This hero panel shows your <strong>total portfolio value</strong>, effective return %, and a live breakdown of invested, wallet, and returns earned.',
+  },
+  {
+    id: 'overview_investments',
+    target: '#overviewInvestmentsBody',
+    position: 'top',
+    icon: 'fa-list-check',
+    title: 'Active Investments',
+    body: 'Your current investments are listed here with product type, amount, expected return, and days remaining until maturity.',
+  },
+  {
+    id: 'nav_wallet',
+    target: '[data-view="wallet"]',
+    position: 'right',
+    icon: 'fa-wallet',
+    title: 'Fund Your Wallet',
+    body: 'Top up your wallet via EFT bank transfer or card. Your wallet balance is what you use to invest in pools.',
+  },
+  {
+    id: 'nav_marketplace',
+    target: '[data-view="marketplace"]',
+    position: 'right',
+    icon: 'fa-store',
+    title: 'Browse Investment Pools',
+    body: 'Explore open pools across solar, cattle, loans, and delivery bikes. Each shows its rate, term, and how much is still available.',
+  },
+  {
+    id: 'nav_maturity',
+    target: '[data-view="maturity"]',
+    position: 'right',
+    icon: 'fa-hourglass-end',
+    title: 'Maturity Instructions',
+    body: 'Tell us what to do when your investment matures — reinvest automatically, add to wallet, or transfer to your bank account.',
+  },
+  {
+    id: 'nav_quests',
+    target: '[data-view="quests"]',
+    position: 'right',
+    icon: 'fa-trophy',
+    title: 'Earn Rewards',
+    body: 'Complete quests and surveys to earn XP. Every time you level up, <strong>R50 is added to your wallet</strong>. There are 8 levels to reach.',
+  },
+  {
+    id: 'nav_learn',
+    target: '[data-view="learn"]',
+    position: 'right',
+    icon: 'fa-graduation-cap',
+    title: 'Learning Hub',
+    body: 'Educational modules tailored to your investment level. Complete them to earn XP and become a more confident investor.',
+  },
+  {
+    id: 'nav_referral',
+    target: '[data-view="referral"]',
+    position: 'right',
+    icon: 'fa-share-nodes',
+    title: 'Refer & Earn',
+    body: 'Share your unique referral link. When a friend joins and invests, you both benefit.',
+  },
+  {
+    id: 'complete',
+    type: 'center',
+    icon: 'fa-trophy',
+    title: 'You\'re all set! 🎉',
+    body: 'You now know your way around. Head to <strong>Earn Rewards</strong> to complete your first quest and start climbing the XP ladder.',
+    isLast: true,
+  },
+];
+
+let _tourStep = 0;
+let _tourActive = false;
+
+function _checkAutoStartTour() {
+  const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
+  const key = `svc_tour_done_${investorId}`;
+  if (!localStorage.getItem(key)) {
+    // Small delay so overview renders first
+    setTimeout(startTour, 1200);
+  }
+}
+
+function startTour() {
+  _tourActive = true;
+  _tourStep = 0;
+  document.getElementById('tourOverlay').style.display = 'block';
+  // Hide the pulsing badge on tour button
+  const pulse = document.querySelector('.tour-btn-pulse');
+  if (pulse) pulse.style.display = 'none';
+  _renderTourStep(_tourStep);
+}
+
+function skipTour() {
+  _endTour(false);
+}
+
+function nextTourStep() {
+  if (_tourStep >= TOUR_STEPS.length - 1) {
+    _endTour(true);
+  } else {
+    _tourStep++;
+    _renderTourStep(_tourStep);
+  }
+}
+
+function prevTourStep() {
+  if (_tourStep > 0) {
+    _tourStep--;
+    _renderTourStep(_tourStep);
+  }
+}
+
+function _endTour(completed) {
+  _tourActive = false;
+  document.getElementById('tourOverlay').style.display = 'none';
+
+  const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
+  localStorage.setItem(`svc_tour_done_${investorId}`, '1');
+
+  if (completed) {
+    // Award tour XP
+    _postQuestComplete('complete_tour', { completed: true }).then(result => {
+      if (result && !result.error) {
+        Toast.success(`Tour complete! +${result.xpAwarded} XP earned`);
+        if (PORTAL.quests) {
+          PORTAL.quests.xp  = result.newXP;
+          PORTAL.quests.completedIds = [...(PORTAL.quests.completedIds || []), 'complete_tour'];
+        }
+        if (result.leveledUp) _showLevelUpModal(result);
+        renderXPWidget();
+        _updateXPNavBadge();
+      }
+    }).catch(() => {});
+  }
+}
+
+function _renderTourStep(idx) {
+  const step    = TOUR_STEPS[idx];
+  const total   = TOUR_STEPS.length;
+  const isFirst = idx === 0;
+  const isLast  = idx === total - 1;
+
+  // Update text content
+  document.getElementById('tourStepBadge').textContent = `Step ${idx + 1} of ${total}`;
+  document.getElementById('tourTitle').textContent      = step.title;
+  document.getElementById('tourBody').innerHTML         = step.body;
+
+  // Icon
+  const iconEl = document.getElementById('tourIcon');
+  if (step.icon) {
+    iconEl.innerHTML = `<i class="fa-solid ${step.icon}"></i>`;
+    iconEl.style.display = 'flex';
+  } else {
+    iconEl.style.display = 'none';
+  }
+
+  // Dots
+  const dotsEl = document.getElementById('tourDots');
+  dotsEl.innerHTML = TOUR_STEPS.map((_, i) =>
+    `<span class="tour-dot ${i === idx ? 'active' : i < idx ? 'done' : ''}"></span>`
+  ).join('');
+
+  // Prev / Next buttons
+  document.getElementById('tourPrevBtn').style.display = isFirst ? 'none' : 'flex';
+  const nextBtn = document.getElementById('tourNextBtn');
+  if (isLast) {
+    nextBtn.innerHTML = '<i class="fa-solid fa-check"></i> Done — Earn 100 XP';
+    nextBtn.className = 'tour-next-btn tour-next-btn--done';
+  } else {
+    nextBtn.innerHTML = 'Next <i class="fa-solid fa-arrow-right"></i>';
+    nextBtn.className = 'tour-next-btn';
+  }
+
+  // Position spotlight + tooltip
+  _positionTour(step);
+}
+
+function _positionTour(step) {
+  const spotlight = document.getElementById('tourSpotlight');
+  const tooltip   = document.getElementById('tourTooltip');
+
+  if (step.type === 'center' || !step.target) {
+    // Centre: no spotlight, centred tooltip
+    spotlight.style.cssText = 'display:none';
+    tooltip.style.cssText   = `
+      display:flex; position:fixed;
+      top:50%; left:50%; transform:translate(-50%,-50%);
+      z-index:10002; max-width:440px; width:calc(100vw - 32px);`;
+    return;
+  }
+
+  const el = document.querySelector(step.target);
+  if (!el) {
+    // Element not visible — just centre
+    spotlight.style.cssText = 'display:none';
+    tooltip.style.cssText   = `
+      display:flex; position:fixed;
+      top:50%; left:50%; transform:translate(-50%,-50%);
+      z-index:10002; max-width:440px; width:calc(100vw - 32px);`;
+    return;
+  }
+
+  const pad  = 8;
+  const r    = el.getBoundingClientRect();
+  const vw   = window.innerWidth;
+  const vh   = window.innerHeight;
+
+  // Spotlight
+  spotlight.style.cssText = `
+    display:block; position:fixed;
+    left:${r.left - pad}px; top:${r.top - pad}px;
+    width:${r.width + pad * 2}px; height:${r.height + pad * 2}px;
+    border-radius:12px;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.72);
+    z-index:10001; pointer-events:none;
+    transition: all 0.4s cubic-bezier(0.22,1,0.36,1);`;
+
+  // Tooltip positioning
+  const ttW  = Math.min(340, vw - 32);
+  let left, top, transform = '';
+
+  if (step.position === 'right') {
+    left = Math.min(r.right + 16, vw - ttW - 8);
+    top  = r.top + r.height / 2;
+    transform = 'translateY(-50%)';
+  } else if (step.position === 'bottom') {
+    left = r.left + r.width / 2;
+    top  = r.bottom + 16;
+    transform = 'translateX(-50%)';
+    // If out of viewport bottom, flip up
+    if (top + 250 > vh) { top = r.top - 16; transform = 'translateX(-50%) translateY(-100%)'; }
+  } else if (step.position === 'top') {
+    left = r.left + r.width / 2;
+    top  = r.top - 16;
+    transform = 'translateX(-50%) translateY(-100%)';
+    if (top - 250 < 0) { top = r.bottom + 16; transform = 'translateX(-50%)'; }
+  } else {
+    left = r.left - ttW - 16;
+    top  = r.top + r.height / 2;
+    transform = 'translateY(-50%)';
+  }
+
+  // Clamp horizontally
+  left = Math.max(8, Math.min(left, vw - ttW - 8));
+
+  tooltip.style.cssText = `
+    display:flex; position:fixed;
+    left:${left}px; top:${top}px;
+    width:${ttW}px; max-width:${ttW}px;
+    transform:${transform};
+    z-index:10002;`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FIRST DEPOSIT PROMPT
+   ═══════════════════════════════════════════════════════════════ */
+function checkFirstDepositPrompt() {
+  const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
+  const neverKey   = `svc_deposit_never_${investorId}`;
+  const laterKey   = `svc_deposit_later_${investorId}`;
+
+  if (localStorage.getItem(neverKey)) return;  // permanently dismissed
+
+  const snoozeUntil = parseInt(localStorage.getItem(laterKey) || '0');
+  if (Date.now() < snoozeUntil) return;   // snoozed
+
+  const hasDeposit = PORTAL.transactions.some(t => t.type === 'deposit');
+  if (hasDeposit) return;  // already deposited
+
+  // Show with a short delay so overview loads first
+  setTimeout(() => {
+    document.getElementById('depositPromptModal').style.display = 'flex';
+  }, 2500);
+}
+
+function dismissDepositPrompt(never) {
+  document.getElementById('depositPromptModal').style.display = 'none';
+  const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
+  if (never) {
+    localStorage.setItem(`svc_deposit_never_${investorId}`, '1');
+  } else {
+    // Snooze for 24 hours
+    localStorage.setItem(`svc_deposit_later_${investorId}`, String(Date.now() + 86_400_000));
+  }
+}
+
+function goFundWallet() {
+  dismissDepositPrompt(false);
+  navigate('wallet', document.querySelector('[data-view="wallet"]'));
 }

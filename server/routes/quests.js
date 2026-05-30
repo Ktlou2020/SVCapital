@@ -127,6 +127,7 @@ const QUESTS = [
     ],
   },
   // Investment Milestones — auto-detected from investor data
+  { id: 'complete_tour',  title: 'Take the Platform Tour',    category: 'milestone', xp: 100, icon: 'fa-map',               color: '#2F8C9B', description: 'Complete the guided portal tour to learn your way around.' },
   { id: 'first_topup',    title: 'First Wallet Top-up',       category: 'milestone', xp: 50,  icon: 'fa-wallet',            color: '#2F8C9B', description: 'Fund your wallet for the first time.' },
   { id: 'first_investment', title: 'First Investment',        category: 'milestone', xp: 100, icon: 'fa-chart-line-up',     color: '#22c55e', description: 'Make your very first investment with SV Capital.' },
   { id: 'diversify',      title: 'Diversify Your Portfolio',  category: 'milestone', xp: 150, icon: 'fa-chart-pie',         color: '#FF8215', description: 'Invest across 2 or more different product types.' },

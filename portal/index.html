@@ -114,6 +114,13 @@
         </div>
       </div>
       <div class="topbar__actions">
+        <button class="topbar-btn" title="Take a tour" onclick="startTour()" id="tourBtn" style="position:relative">
+          <i class="fa-solid fa-map"></i>
+          <span class="tour-btn-pulse"></span>
+        </button>
+        <button class="topbar-btn dark-mode-toggle" title="Toggle dark mode" onclick="toggleDarkMode()" id="darkModeBtn">
+          <i class="fa-solid fa-moon" id="darkModeIcon"></i>
+        </button>
         <div style="position:relative">
           <button class="topbar-btn" title="Notifications" onclick="toggleNotifPanel()" id="notifBtn">
             <i class="fa-solid fa-bell"></i>
@@ -1377,6 +1384,61 @@
 </div>
 
 <div class="toast-container" id="toastContainer"></div>
+
+<!-- ══ TOUR OVERLAY ══ -->
+<div id="tourOverlay" style="display:none">
+  <div id="tourSpotlight"></div>
+  <div id="tourTooltip">
+    <div class="tour-tooltip-inner" id="tourTooltipInner">
+      <div class="tour-step-badge" id="tourStepBadge">Step 1 of 10</div>
+      <div class="tour-icon" id="tourIcon" style="display:none"><i class="fa-solid fa-hand-wave"></i></div>
+      <div class="tour-title" id="tourTitle">Welcome!</div>
+      <div class="tour-body"  id="tourBody">Let us show you around.</div>
+      <div class="tour-dots"  id="tourDots"></div>
+      <div class="tour-actions">
+        <button class="tour-skip-btn" onclick="skipTour()">Skip tour</button>
+        <div style="display:flex;gap:8px">
+          <button class="tour-prev-btn" id="tourPrevBtn" onclick="prevTourStep()" style="display:none">
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
+          <button class="tour-next-btn" id="tourNextBtn" onclick="nextTourStep()">
+            Next <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FIRST DEPOSIT PROMPT ══ -->
+<div class="modal-overlay" id="depositPromptModal" style="display:none">
+  <div class="deposit-prompt-box">
+    <button class="modal-close" onclick="dismissDepositPrompt(false)" style="position:absolute;top:14px;right:14px">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+    <div class="deposit-prompt-emoji">💰</div>
+    <div class="deposit-prompt-title">Start earning today</div>
+    <div class="deposit-prompt-sub">Fund your wallet to unlock access to all investment pools</div>
+    <div class="deposit-prompt-stats">
+      <div class="dp-stat"><div class="dp-stat__val">14–18%</div><div class="dp-stat__label">Returns p.a.</div></div>
+      <div class="dp-stat-divider"></div>
+      <div class="dp-stat"><div class="dp-stat__val">4+</div><div class="dp-stat__label">Products</div></div>
+      <div class="dp-stat-divider"></div>
+      <div class="dp-stat"><div class="dp-stat__val">R1,000</div><div class="dp-stat__label">Min. invest</div></div>
+    </div>
+    <div class="deposit-prompt-products">
+      <span><i class="fa-solid fa-solar-panel"></i> Solar</span>
+      <span><i class="fa-solid fa-cow"></i> Cattle</span>
+      <span><i class="fa-solid fa-file-invoice"></i> Loans</span>
+      <span><i class="fa-solid fa-motorcycle"></i> Delivery Bikes</span>
+    </div>
+    <button class="btn btn--primary deposit-prompt-cta" onclick="goFundWallet()">
+      <i class="fa-solid fa-wallet"></i> Fund My Wallet
+    </button>
+    <button class="deposit-prompt-later" onclick="dismissDepositPrompt(false)">Remind me later</button>
+    <button class="deposit-prompt-never" onclick="dismissDepositPrompt(true)">Don't show again</button>
+  </div>
+</div>
 
 <script src="../js/api.js?v=2"></script>
 <script src="js/portal.js"></script>

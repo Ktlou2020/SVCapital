@@ -1155,3 +1155,415 @@
   padding-top: 16px;
   border-top: 1px solid rgba(0,0,0,0.06);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   38. DARK MODE
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Base ────────────────────────────────────────────────────── */
+body.dark-mode { background: #0d1117 !important; color: #e2e8f0; }
+body.dark-mode .main-content { background: #0d1117 !important; }
+body.dark-mode .page-content  { background: #0d1117 !important; }
+
+/* ── Topbar ──────────────────────────────────────────────────── */
+body.dark-mode .topbar {
+  background: #161b27 !important;
+  border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+}
+body.dark-mode .topbar__title    { color: #e2e8f0 !important; }
+body.dark-mode .topbar__breadcrumb { color: #6b7280 !important; }
+body.dark-mode .topbar-btn       { color: #9ca3af !important; border-color: rgba(255,255,255,0.08) !important; }
+body.dark-mode .topbar-btn:hover { color: #fff !important; border-color: #FF8215 !important; }
+body.dark-mode .btn--secondary   { background: rgba(255,255,255,0.06) !important; color: #9ca3af !important; border-color: rgba(255,255,255,0.1) !important; }
+
+/* ── Cards & Panels ──────────────────────────────────────────── */
+body.dark-mode .panel,
+body.dark-mode .table-card,
+body.dark-mode .perf-panel,
+body.dark-mode .welcome-banner,
+body.dark-mode .xp-progress-bar-wrap,
+body.dark-mode .level-track,
+body.dark-mode .learn-track-tab,
+body.dark-mode .quest-card,
+body.dark-mode .learn-module-card {
+  background: #161b27 !important;
+  border-color: rgba(255,255,255,0.07) !important;
+}
+body.dark-mode .panel__header,
+body.dark-mode .table-card__header { border-color: rgba(255,255,255,0.06) !important; }
+body.dark-mode .panel__title,
+body.dark-mode .table-card__title  { color: #e2e8f0 !important; }
+
+/* ── Portfolio hero ──────────────────────────────────────────── */
+body.dark-mode .portfolio-hero__stats,
+body.dark-mode .ph-stat { background: rgba(255,255,255,0.04) !important; border-color: rgba(255,255,255,0.06) !important; }
+body.dark-mode .ph-stat__label { color: #6b7280 !important; }
+body.dark-mode .ph-stat__value { color: #e2e8f0 !important; }
+body.dark-mode .portfolio-hero__label { color: rgba(255,255,255,0.5) !important; }
+body.dark-mode .portfolio-hero__value { color: #fff !important; }
+
+/* ── Performance panel ───────────────────────────────────────── */
+body.dark-mode .perf-row { border-color: rgba(255,255,255,0.05) !important; }
+body.dark-mode .perf-row__label { color: #9ca3af !important; }
+body.dark-mode .perf-row__value { color: #e2e8f0 !important; }
+
+/* ── Tables ──────────────────────────────────────────────────── */
+body.dark-mode .data-table th {
+  background: rgba(255,255,255,0.04) !important;
+  color: #6b7280 !important;
+  border-color: rgba(255,255,255,0.06) !important;
+}
+body.dark-mode .data-table td { border-color: rgba(255,255,255,0.05) !important; color: #c8d0dc !important; }
+body.dark-mode .data-table tbody tr:hover { background: rgba(255,255,255,0.04) !important; }
+body.dark-mode .text-muted { color: #6b7280 !important; }
+
+/* ── Quick-action / welcome chip buttons ─────────────────────── */
+body.dark-mode .welcome-greeting { color: #FF8215 !important; }
+body.dark-mode .welcome-name     { color: #e2e8f0 !important; }
+body.dark-mode .welcome-chip     { border-color: rgba(255,255,255,0.12) !important; }
+body.dark-mode .welcome-chip--teal  { background: rgba(47,140,155,0.15) !important; color: #5BBFCE !important; }
+body.dark-mode .welcome-chip--orange { background: rgba(255,130,21,0.12) !important; color: #FF9B3A !important; }
+body.dark-mode .welcome-chip--gray  { background: rgba(255,255,255,0.06) !important; color: #9ca3af !important; }
+
+/* ── Forms & Inputs ──────────────────────────────────────────── */
+body.dark-mode input,
+body.dark-mode select,
+body.dark-mode textarea,
+body.dark-mode .form-input {
+  background: rgba(255,255,255,0.06) !important;
+  border-color: rgba(255,255,255,0.12) !important;
+  color: #e2e8f0 !important;
+}
+body.dark-mode input::placeholder,
+body.dark-mode .form-input::placeholder { color: #4b5563 !important; }
+body.dark-mode label { color: #9ca3af !important; }
+body.dark-mode .form-group label { color: #9ca3af !important; }
+
+/* ── Modals ──────────────────────────────────────────────────── */
+body.dark-mode .modal-box,
+body.dark-mode .survey-modal-box,
+body.dark-mode .levelup-modal-box {
+  background: #161b27 !important;
+  border-color: rgba(255,255,255,0.08) !important;
+}
+body.dark-mode .modal-box h3,
+body.dark-mode .modal-box h2 { color: #e2e8f0 !important; }
+body.dark-mode .survey-modal-title { color: #e2e8f0 !important; }
+body.dark-mode .survey-modal-sub   { color: #6b7280 !important; }
+body.dark-mode .survey-q__label    { color: #e2e8f0 !important; }
+body.dark-mode .survey-opt {
+  border-color: rgba(255,255,255,0.1) !important;
+  color: #c8d0dc !important;
+}
+body.dark-mode .survey-opt:hover { border-color: #FF8215 !important; background: rgba(255,130,21,0.08) !important; }
+body.dark-mode .levelup-level  { color: #e2e8f0 !important; }
+body.dark-mode .levelup-xp     { color: #6b7280 !important; }
+
+/* ── Quest + Learn UI ────────────────────────────────────────── */
+body.dark-mode .quest-category__title { color: #e2e8f0 !important; }
+body.dark-mode .quest-category__sub   { color: #6b7280 !important; }
+body.dark-mode .quest-category__count { color: #e2e8f0 !important; }
+body.dark-mode .quest-card__title     { color: #e2e8f0 !important; }
+body.dark-mode .quest-card__desc      { color: #6b7280 !important; }
+body.dark-mode .level-step__name      { color: #6b7280 !important; }
+body.dark-mode .level-step.done .level-step__name,
+body.dark-mode .level-step.current .level-step__name { color: #e2e8f0 !important; }
+
+body.dark-mode .learn-track-tab       { background: #161b27 !important; border-color: rgba(255,255,255,0.08) !important; }
+body.dark-mode .learn-track-tab.active { box-shadow: 0 4px 16px rgba(0,0,0,0.4) !important; }
+body.dark-mode .learn-tab-name        { color: #e2e8f0 !important; }
+body.dark-mode .learn-tab-sub         { color: #6b7280 !important; }
+body.dark-mode .learn-module-card__title { color: #e2e8f0 !important; }
+body.dark-mode .learn-module-body     { background: rgba(255,255,255,0.02) !important; border-color: rgba(255,255,255,0.06) !important; }
+body.dark-mode .learn-key-points      { background: rgba(47,140,155,0.08) !important; border-color: rgba(47,140,155,0.2) !important; }
+body.dark-mode .learn-key-points li   { color: #c8d0dc !important; }
+body.dark-mode .learn-content-text p  { color: #9ca3af !important; }
+body.dark-mode .learn-expand-btn      { background: rgba(255,255,255,0.06) !important; color: #9ca3af !important; }
+
+/* ── Misc ─────────────────────────────────────────────────────── */
+body.dark-mode .notif-item { border-color: rgba(255,255,255,0.06) !important; color: #c8d0dc !important; }
+body.dark-mode .notif-title { color: #e2e8f0 !important; }
+body.dark-mode .notif-sub   { color: #6b7280 !important; }
+body.dark-mode .xp-progress-next { color: #6b7280 !important; }
+body.dark-mode .xp-progress-right { color: #e2e8f0 !important; }
+body.dark-mode .learn-header__title { color: #e2e8f0 !important; }
+body.dark-mode .learn-header__sub   { color: #6b7280 !important; }
+body.dark-mode .market-pool-card    { background: #161b27 !important; border-color: rgba(255,255,255,0.07) !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   39. GUIDED TOUR
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Tour overlay container ────────────────────────────────────── */
+#tourOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+/* ── Spotlight ─────────────────────────────────────────────────── */
+#tourSpotlight {
+  position: fixed;
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.72);
+  z-index: 10001;
+  pointer-events: none;
+  transition: all 0.38s cubic-bezier(0.22,1,0.36,1);
+  outline: 2.5px solid rgba(255,130,21,0.55);
+  outline-offset: 2px;
+}
+
+/* ── Tooltip ───────────────────────────────────────────────────── */
+#tourTooltip {
+  position: fixed;
+  z-index: 10002;
+  pointer-events: all;
+  transition: top 0.35s cubic-bezier(0.22,1,0.36,1), left 0.35s cubic-bezier(0.22,1,0.36,1);
+}
+
+.tour-tooltip-inner {
+  background: #fff;
+  border-radius: 18px;
+  padding: 20px 20px 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.06);
+  width: 100%;
+  animation: tourPopIn 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+body.dark-mode .tour-tooltip-inner { background: #1e2433 !important; }
+@keyframes tourPopIn {
+  from { opacity:0; transform:scale(0.88) translateY(6px); }
+  to   { opacity:1; transform:scale(1) translateY(0); }
+}
+
+.tour-step-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #FF8215;
+  background: rgba(255,130,21,0.1);
+  padding: 2px 9px;
+  border-radius: 100px;
+  margin-bottom: 12px;
+}
+
+.tour-icon {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #FF9B0C, #FF5229);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 14px rgba(255,130,21,0.35);
+}
+
+.tour-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #1a1a1a;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+body.dark-mode .tour-title { color: #e2e8f0 !important; }
+
+.tour-body {
+  font-size: 0.82rem;
+  color: #4b5563;
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+body.dark-mode .tour-body { color: #9ca3af !important; }
+
+.tour-dots {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.tour-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.12);
+  transition: all 0.2s;
+}
+.tour-dot.active { background: #FF8215; width: 18px; border-radius: 3px; }
+.tour-dot.done   { background: rgba(255,130,21,0.4); }
+
+.tour-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tour-skip-btn {
+  font-size: 0.72rem;
+  color: #9ca3af;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  font-family: inherit;
+  transition: color 0.15s;
+}
+.tour-skip-btn:hover { color: #6b7280; }
+.tour-prev-btn {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.06);
+  border: none;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: #6b7280;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.tour-prev-btn:hover { background: rgba(0,0,0,0.1); }
+.tour-next-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #FF8215;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.tour-next-btn:hover { opacity: 0.88; transform: scale(1.02); }
+.tour-next-btn--done { background: linear-gradient(135deg, #22c55e, #16a34a); }
+
+/* ── Tour button pulse indicator ──────────────────────────────── */
+.tour-btn-pulse {
+  position: absolute;
+  top: 5px; right: 5px;
+  width: 7px; height: 7px;
+  background: #FF8215;
+  border-radius: 50%;
+  animation: pulseDot 2s infinite;
+}
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(1.5); }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   40. FIRST DEPOSIT PROMPT MODAL
+   ═══════════════════════════════════════════════════════════════ */
+.deposit-prompt-box {
+  background: #fff;
+  border-radius: 24px;
+  padding: 36px 28px 24px;
+  max-width: 400px;
+  width: calc(100vw - 32px);
+  text-align: center;
+  position: relative;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.15);
+  animation: viewFadeIn 0.4s cubic-bezier(0.22,1,0.36,1);
+}
+body.dark-mode .deposit-prompt-box { background: #161b27 !important; }
+
+.deposit-prompt-emoji {
+  font-size: 2.8rem;
+  margin-bottom: 12px;
+  animation: bounceIn 0.6s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes bounceIn {
+  from { opacity:0; transform:scale(0.5); }
+  to   { opacity:1; transform:scale(1); }
+}
+
+.deposit-prompt-title {
+  font-size: 1.4rem;
+  font-weight: 900;
+  color: #1a1a1a;
+  letter-spacing: -0.03em;
+  margin-bottom: 8px;
+}
+body.dark-mode .deposit-prompt-title { color: #e2e8f0 !important; }
+
+.deposit-prompt-sub {
+  font-size: 0.84rem;
+  color: #6b7280;
+  margin-bottom: 20px;
+  line-height: 1.55;
+}
+
+.deposit-prompt-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-radius: 14px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.dp-stat { flex: 1; text-align: center; }
+.dp-stat__val   { font-size: 1.2rem; font-weight: 900; color: #FF8215; }
+.dp-stat__label { font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+.dp-stat-divider {
+  width: 1px;
+  height: 32px;
+  background: rgba(255,255,255,0.1);
+  flex-shrink: 0;
+  margin: 0 8px;
+}
+
+.deposit-prompt-products {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.deposit-prompt-products span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #6b7280;
+  background: rgba(0,0,0,0.04);
+  padding: 4px 10px;
+  border-radius: 100px;
+  border: 1px solid rgba(0,0,0,0.07);
+}
+body.dark-mode .deposit-prompt-products span {
+  background: rgba(255,255,255,0.05) !important;
+  border-color: rgba(255,255,255,0.08) !important;
+  color: #9ca3af !important;
+}
+
+.deposit-prompt-cta {
+  width: 100%;
+  padding: 14px !important;
+  font-size: 0.95rem !important;
+  font-weight: 800 !important;
+  border-radius: 12px !important;
+  margin-bottom: 10px;
+}
+
+.deposit-prompt-later,
+.deposit-prompt-never {
+  display: block;
+  width: 100%;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  font-family: inherit;
+  transition: color 0.15s;
+}
+.deposit-prompt-later { margin-bottom: 2px; font-weight: 600; color: #6b7280; }
+.deposit-prompt-later:hover { color: #1a1a1a; }
+.deposit-prompt-never:hover { color: #ef4444; }
