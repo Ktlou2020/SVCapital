@@ -705,9 +705,14 @@ async function loadWallet() {
    Paystack public key (test): pk_test_72040393098052bb00477db9fb8f69f369193707
    ═══════════════════════════════════════════════ */
 
+// ⚠️  REPLACE WITH LIVE KEY before going live — pk_live_xxxxxxxxxxxxxxxx
+// Test key only works in Paystack's sandbox — real cards are declined
 const PAYSTACK_PUBLIC_KEY = 'pk_test_72040393098052bb00477db9fb8f69f369193707';
+
+// ⚠️  REPLACE with your real Ozow SiteCode from the Ozow merchant portal
+// Set IsTest=false in launchOzow() when going live
 const OZOW_SITE_CODE      = 'SMA-SMA-030';
-const TX_FEE_RATE         = 0.025;   // 2.5% — charged by gateway (Paystack & Ozow only)
+const TX_FEE_RATE         = 0.029;   // 2.9% + R1 flat — charged by gateway (Paystack & Ozow)
 
 // Internal state
 let _pmAmount       = 0;       // base deposit amount entered by investor (ZAR)
@@ -787,8 +792,8 @@ function setAmount(val) {
   updateAmountPreview();
 }
 
-/* Return the 2.5% fee amount for gateways that charge it */
-function _pmFee(baseAmount) { return Math.round(baseAmount * TX_FEE_RATE * 100) / 100; }
+/* Return the 2.9% + R1 fee amount for gateways that charge it */
+function _pmFee(baseAmount) { return Math.round((baseAmount * TX_FEE_RATE + 1) * 100) / 100; }
 /* Total charged to card/bank for non-EFT gateways */
 function _pmTotal(baseAmount) { return Math.round((baseAmount + _pmFee(baseAmount)) * 100) / 100; }
 
@@ -821,7 +826,7 @@ function _pmUpdateFeeSummary() {
       <span style="color:#f0f4ff;font-weight:600;font-size:0.78rem">R${_pmAmount.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.07)">
-      <span style="color:#9ca3af;font-size:0.78rem">Gateway fee (2.5%)</span>
+      <span style="color:#9ca3af;font-size:0.78rem">Gateway fee (2.9% + R1)</span>
       <span style="color:#f59e0b;font-weight:600;font-size:0.78rem">+ R${fee.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:8px 0">
@@ -830,7 +835,7 @@ function _pmUpdateFeeSummary() {
     </div>
     <div style="font-size:0.69rem;color:#6b7280;margin-top:2px">
       <i class="fa-solid fa-circle-info" style="color:#6b7280"></i>
-      The 2.5% fee is charged by the payment gateway provider and does not form part of your wallet credit.
+      The 2.9% + R1 fee is charged by the payment gateway provider and does not form part of your wallet credit.
     </div>
   `;
 }
@@ -891,12 +896,15 @@ function launchPaystack() {
   _pmSetProgress(100);
   _pmSetStepLabel('Step 3 of 3 — Paystack');
 
-  // The investor deposits _pmAmount; the total charged to their card includes the 2.5% fee
+  // The investor deposits _pmAmount; the total charged to their card includes the 2.9% + R1 fee
   const totalCharged = _pmTotal(_pmAmount);
 
   // Small delay so the spinner shows before the popup blocks the thread
   setTimeout(() => {
     try {
+      if (typeof PaystackPop === 'undefined') {
+        throw new Error('Paystack JS library did not load. Check your internet connection and try again.');
+      }
       const handler = PaystackPop.setup({
         key:       PAYSTACK_PUBLIC_KEY,
         email:     _pmInvestorEmail(),
@@ -958,7 +966,7 @@ function launchOzow() {
   _pmEl('pmProcessingSubtitle').textContent = 'You will be taken to the Ozow secure payment page';
 
   const ref          = `SVC-OZ-${Date.now()}`;
-  // The total charged to the client includes the 2.5% gateway fee
+  // The total charged to the client includes the 2.9% + R1 gateway fee
   const totalCharged = _pmTotal(_pmAmount);
   const baseUrl      = window.location.href.split('?')[0];
   const successUrl   = encodeURIComponent(`${baseUrl}?payment=success&ref=${ref}&gw=ozow`);
@@ -985,7 +993,7 @@ function launchOzow() {
     `&CancelUrl=${cancelUrl}`,
     `&ErrorUrl=${errorUrl}`,
     `&SuccessUrl=${successUrl}`,
-    `&IsTest=true`,
+    `&IsTest=false`,   // ⚠️ Change to true while testing in Ozow sandbox
   ].join('');
 
   // Pre-record a pending deposit (base amount only — fee stays with gateway)
@@ -1137,7 +1145,7 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
         amount:           -fee,
         status:           status,
         reference:        `FEE-${reference}`,
-        description:      `Gateway fee (2.5%) — ${gatewayLabel} · charged by payment provider`,
+        description:      `Gateway fee (2.9% + R1) — ${gatewayLabel} · charged by payment provider`,
         transaction_date: new Date().toISOString(),
       });
     }
