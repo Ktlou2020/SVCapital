@@ -705,6 +705,8 @@ async function loadWallet() {
    Paystack public key (test): pk_test_72040393098052bb00477db9fb8f69f369193707
    ═══════════════════════════════════════════════ */
 
+// ⚠️  REPLACE WITH LIVE KEY before production — pk_live_xxxxxxxxxxxxxxxx
+// Test key only works in Paystack's sandbox — real cards are declined
 const PAYSTACK_PUBLIC_KEY = 'pk_test_72040393098052bb00477db9fb8f69f369193707';
 const OZOW_SITE_CODE      = 'SMA-SMA-030';
 const TX_FEE_RATE         = 0.025;   // 2.5% — charged by gateway (Paystack & Ozow only)
@@ -897,6 +899,9 @@ function launchPaystack() {
   // Small delay so the spinner shows before the popup blocks the thread
   setTimeout(() => {
     try {
+      if (typeof PaystackPop === 'undefined') {
+        throw new Error('Paystack JS library did not load. Check your internet connection and try again.');
+      }
       const handler = PaystackPop.setup({
         key:       PAYSTACK_PUBLIC_KEY,
         email:     _pmInvestorEmail(),
