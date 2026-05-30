@@ -589,6 +589,17 @@ CREATE TABLE IF NOT EXISTS fica_checks (
 );
 CREATE INDEX IF NOT EXISTS fica_checks_investor_idx ON fica_checks(investor_id);
 CREATE INDEX IF NOT EXISTS fica_checks_date_idx     ON fica_checks(check_date);
+
+CREATE TABLE IF NOT EXISTS quest_completions (
+  id           TEXT PRIMARY KEY,
+  investor_id  TEXT REFERENCES investors(id) ON DELETE CASCADE,
+  quest_id     TEXT NOT NULL,
+  xp_awarded   INT DEFAULT 0,
+  data         JSONB DEFAULT '{}',
+  completed_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS quest_inv_quest_uidx ON quest_completions(investor_id, quest_id);
+CREATE INDEX        IF NOT EXISTS quest_inv_idx        ON quest_completions(investor_id);
 `;
 
 async function autoSetup() {
@@ -609,9 +620,12 @@ async function autoSetup() {
       DO $$ BEGIN
         BEGIN ALTER TABLE investors ADD COLUMN last_auto_fica_check TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE investors ADD COLUMN fica_auto_status TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE investors ADD COLUMN xp_points INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE investors ADD COLUMN xp_level TEXT DEFAULT 'seed'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE investors ADD COLUMN investor_profile JSONB DEFAULT '{}'; EXCEPTION WHEN duplicate_column THEN NULL; END;
       END $$
     `);
-    console.log('✅ Investor FICA columns ready.');
+    console.log('✅ Investor FICA + gamification columns ready.');
 
     // 2. Check if the COO account already exists — if so, skip seeding entirely
     const { rows: existing } = await pool.query(

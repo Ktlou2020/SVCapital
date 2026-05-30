@@ -69,6 +69,15 @@
         <i class="fa-solid fa-hourglass-end"></i> Maturity Instructions
       </button>
 
+      <div class="nav-section-label">Grow</div>
+      <button class="nav-item" data-view="quests" onclick="navigate('quests', this)" id="navQuests">
+        <i class="fa-solid fa-trophy"></i> Earn Rewards
+        <span class="xp-nav-badge" id="xpNavBadge" style="display:none"></span>
+      </button>
+      <button class="nav-item" data-view="learn" onclick="navigate('learn', this)">
+        <i class="fa-solid fa-graduation-cap"></i> Learning Hub
+      </button>
+
       <div class="nav-section-label">Account</div>
       <button class="nav-item" data-view="profile" onclick="navigate('profile', this)">
         <i class="fa-solid fa-user-circle"></i> My Profile
@@ -105,6 +114,13 @@
         </div>
       </div>
       <div class="topbar__actions">
+        <button class="topbar-btn" title="Take a tour" onclick="startTour()" id="tourBtn" style="position:relative">
+          <i class="fa-solid fa-map"></i>
+          <span class="tour-btn-pulse"></span>
+        </button>
+        <button class="topbar-btn dark-mode-toggle" title="Toggle dark mode" onclick="toggleDarkMode()" id="darkModeBtn">
+          <i class="fa-solid fa-moon" id="darkModeIcon"></i>
+        </button>
         <div style="position:relative">
           <button class="topbar-btn" title="Notifications" onclick="toggleNotifPanel()" id="notifBtn">
             <i class="fa-solid fa-bell"></i>
@@ -203,6 +219,18 @@
               <i class="fa-solid fa-wallet"></i> Top Up
             </button>
           </div>
+        </div>
+
+        <!-- XP Progress Bar (below welcome banner) -->
+        <div class="xp-progress-bar-wrap" id="xpProgressWrap" onclick="navigate('quests', document.querySelector('[data-view=quests]'))" style="cursor:pointer;display:none">
+          <div class="xp-progress-left">
+            <span class="xp-level-pill" id="xpLevelPill"><i class="fa-solid fa-seedling"></i> Seed</span>
+          </div>
+          <div class="xp-progress-track">
+            <div class="xp-progress-fill" id="xpProgressFill" style="width:0%"></div>
+          </div>
+          <div class="xp-progress-right" id="xpProgressLabel">0 XP</div>
+          <div class="xp-progress-next" id="xpProgressNext"></div>
         </div>
 
         <!-- Hero KPI Banner -->
@@ -934,6 +962,81 @@
 
       </div><!-- end view-statement -->
 
+      <!-- ══════════════════════════════════
+           VIEW: EARN REWARDS (QUESTS)
+      ══════════════════════════════════ -->
+      <div class="view" id="view-quests">
+        <!-- XP Hero -->
+        <div class="xp-hero" id="questXpHero">
+          <div class="xp-hero__left">
+            <div class="xp-hero__level-icon" id="questLevelIcon"><i class="fa-solid fa-seedling"></i></div>
+            <div>
+              <div class="xp-hero__level-name" id="questLevelName">Seed</div>
+              <div class="xp-hero__xp" id="questXpVal">0 XP</div>
+            </div>
+          </div>
+          <div class="xp-hero__center">
+            <div class="xp-hero__track-wrap">
+              <div class="xp-hero__track-bar" id="questXpBar" style="width:0%"></div>
+            </div>
+            <div class="xp-hero__track-label" id="questXpTrackLabel">0 XP to next level</div>
+          </div>
+          <div class="xp-hero__right">
+            <div class="xp-hero__earned">
+              <div class="xp-hero__earned-label">Rewards Earned</div>
+              <div class="xp-hero__earned-val" id="questRewardsEarned">R0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Level Track -->
+        <div class="level-track" id="levelTrack">
+          <!-- rendered by JS -->
+        </div>
+
+        <!-- Quest Categories -->
+        <div id="questCategories">
+          <!-- rendered by JS -->
+        </div>
+      </div><!-- end view-quests -->
+
+      <!-- ══════════════════════════════════
+           VIEW: LEARNING HUB
+      ══════════════════════════════════ -->
+      <div class="view" id="view-learn">
+        <div class="learn-header">
+          <div>
+            <div class="learn-header__title">Learning Hub</div>
+            <div class="learn-header__sub" id="learnTrackLabel">Your personalised learning track</div>
+          </div>
+          <div class="learn-header__xp-note">Complete modules to earn <strong>+50 XP</strong> each</div>
+        </div>
+        <div id="learnContent">
+          <!-- rendered by JS -->
+        </div>
+      </div><!-- end view-learn -->
+
+      <!-- ══ SURVEY MODAL ══ -->
+      <div class="modal-overlay" id="surveyModal" style="display:none" onclick="if(event.target===this)closeSurveyModal()">
+        <div class="modal-box survey-modal-box" id="surveyModalBox">
+          <button class="modal-close" onclick="closeSurveyModal()"><i class="fa-solid fa-xmark"></i></button>
+          <div id="surveyModalContent"></div>
+        </div>
+      </div>
+
+      <!-- ══ LEVEL-UP CELEBRATION MODAL ══ -->
+      <div class="modal-overlay" id="levelUpModal" style="display:none">
+        <div class="modal-box levelup-modal-box" id="levelUpBox">
+          <div class="levelup-confetti" id="levelupConfetti"></div>
+          <div class="levelup-icon" id="levelupIcon"><i class="fa-solid fa-trophy"></i></div>
+          <div class="levelup-title">Level Up!</div>
+          <div class="levelup-level" id="levelupLevel">Sprout</div>
+          <div class="levelup-reward" id="levelupReward">You've earned <strong>R50</strong> added to your wallet!</div>
+          <div class="levelup-xp" id="levelupXP"></div>
+          <button class="btn btn--primary" onclick="closeLevelUpModal()">Awesome! 🎉</button>
+        </div>
+      </div>
+
     </main>
   </div>
 </div>
@@ -1281,6 +1384,61 @@
 </div>
 
 <div class="toast-container" id="toastContainer"></div>
+
+<!-- ══ TOUR OVERLAY ══ -->
+<div id="tourOverlay" style="display:none">
+  <div id="tourSpotlight"></div>
+  <div id="tourTooltip">
+    <div class="tour-tooltip-inner" id="tourTooltipInner">
+      <div class="tour-step-badge" id="tourStepBadge">Step 1 of 10</div>
+      <div class="tour-icon" id="tourIcon" style="display:none"><i class="fa-solid fa-hand-wave"></i></div>
+      <div class="tour-title" id="tourTitle">Welcome!</div>
+      <div class="tour-body"  id="tourBody">Let us show you around.</div>
+      <div class="tour-dots"  id="tourDots"></div>
+      <div class="tour-actions">
+        <button class="tour-skip-btn" onclick="skipTour()">Skip tour</button>
+        <div style="display:flex;gap:8px">
+          <button class="tour-prev-btn" id="tourPrevBtn" onclick="prevTourStep()" style="display:none">
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
+          <button class="tour-next-btn" id="tourNextBtn" onclick="nextTourStep()">
+            Next <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FIRST DEPOSIT PROMPT ══ -->
+<div class="modal-overlay" id="depositPromptModal" style="display:none">
+  <div class="deposit-prompt-box">
+    <button class="modal-close" onclick="dismissDepositPrompt(false)" style="position:absolute;top:14px;right:14px">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+    <div class="deposit-prompt-emoji">💰</div>
+    <div class="deposit-prompt-title">Start earning today</div>
+    <div class="deposit-prompt-sub">Fund your wallet to unlock access to all investment pools</div>
+    <div class="deposit-prompt-stats">
+      <div class="dp-stat"><div class="dp-stat__val">14–18%</div><div class="dp-stat__label">Returns p.a.</div></div>
+      <div class="dp-stat-divider"></div>
+      <div class="dp-stat"><div class="dp-stat__val">4+</div><div class="dp-stat__label">Products</div></div>
+      <div class="dp-stat-divider"></div>
+      <div class="dp-stat"><div class="dp-stat__val">R1,000</div><div class="dp-stat__label">Min. invest</div></div>
+    </div>
+    <div class="deposit-prompt-products">
+      <span><i class="fa-solid fa-solar-panel"></i> Solar</span>
+      <span><i class="fa-solid fa-cow"></i> Cattle</span>
+      <span><i class="fa-solid fa-file-invoice"></i> Loans</span>
+      <span><i class="fa-solid fa-motorcycle"></i> Delivery Bikes</span>
+    </div>
+    <button class="btn btn--primary deposit-prompt-cta" onclick="goFundWallet()">
+      <i class="fa-solid fa-wallet"></i> Fund My Wallet
+    </button>
+    <button class="deposit-prompt-later" onclick="dismissDepositPrompt(false)">Remind me later</button>
+    <button class="deposit-prompt-never" onclick="dismissDepositPrompt(true)">Don't show again</button>
+  </div>
+</div>
 
 <script src="../js/api.js?v=2"></script>
 <script src="js/portal.js"></script>

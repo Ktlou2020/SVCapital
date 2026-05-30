@@ -59,6 +59,7 @@ const ALLOWED_TABLES = {
   solar_projects:        'id',
   solar_documents:       'id',
   fica_checks:           'id',   // read-only via generic API; writes via /api/fica/*
+  quest_completions:     'id',   // read via generic API; writes via /api/quests/*
   users:                 'id',   // limited, no password_hash exposed
 };
 
