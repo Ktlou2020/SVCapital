@@ -600,6 +600,35 @@ CREATE TABLE IF NOT EXISTS quest_completions (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS quest_inv_quest_uidx ON quest_completions(investor_id, quest_id);
 CREATE INDEX        IF NOT EXISTS quest_inv_idx        ON quest_completions(investor_id);
+
+CREATE TABLE IF NOT EXISTS sub_accounts (
+  id                   TEXT PRIMARY KEY,
+  parent_investor_id   TEXT REFERENCES investors(id) ON DELETE CASCADE,
+  account_type         TEXT NOT NULL,
+  name                 TEXT NOT NULL,
+  wallet_balance       NUMERIC(18,2) DEFAULT 0,
+  total_invested       NUMERIC(18,2) DEFAULT 0,
+  total_returns        NUMERIC(18,2) DEFAULT 0,
+  kyc_status           TEXT DEFAULT 'pending',
+  status               TEXT DEFAULT 'active',
+  registration_number  TEXT,
+  vat_number           TEXT,
+  trust_number         TEXT,
+  trustee_name         TEXT,
+  stokvel_reg_number   TEXT,
+  member_count         INT DEFAULT 0,
+  date_of_birth        TEXT,
+  id_number            TEXT,
+  relationship         TEXT,
+  email                TEXT,
+  phone                TEXT,
+  savings_goal         NUMERIC(18,2) DEFAULT 0,
+  savings_goal_label   TEXT,
+  notes                TEXT,
+  created_at           TIMESTAMPTZ DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS sub_accounts_parent_idx ON sub_accounts(parent_investor_id);
 `;
 
 async function autoSetup() {
@@ -628,6 +657,9 @@ async function autoSetup() {
         BEGIN ALTER TABLE support_tickets ADD COLUMN admin_response TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE support_tickets ADD COLUMN proof_attached BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE support_tickets ADD COLUMN proof_filename TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE kyc_documents ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE transactions ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE investments ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
       END $$
     `);
     console.log('✅ Investor FICA + gamification columns ready.');

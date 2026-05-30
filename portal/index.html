@@ -62,6 +62,11 @@
         <i class="fa-solid fa-wallet"></i> Wallet
       </button>
 
+      <button class="nav-item" data-view="subaccounts" onclick="navigate('subaccounts', this)">
+        <i class="fa-solid fa-layer-group"></i> My Accounts
+        <span class="nav-badge" id="subacctsBadge" style="display:none"></span>
+      </button>
+
       <div class="nav-section-label">Invest</div>
       <button class="nav-item" data-view="marketplace" onclick="navigate('marketplace', this)">
         <i class="fa-solid fa-store"></i> Browse Pools
@@ -1053,6 +1058,51 @@
         </div>
       </div><!-- end view-learn -->
 
+      <!-- ══════════════════════════════════
+           VIEW: SUB ACCOUNTS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-subaccounts">
+        <div class="sa-view-header">
+          <div>
+            <div class="sa-view-title">My Accounts</div>
+            <div class="sa-view-sub">Business · Trust · Stokvel · Minor — each with their own wallet, investments and FICA</div>
+          </div>
+          <button class="btn btn--primary" onclick="openCreateSubAccountModal()">
+            <i class="fa-solid fa-plus"></i> Add Account
+          </button>
+        </div>
+
+        <!-- Empty state — type showcase -->
+        <div id="subacctsEmpty">
+          <div class="sa-empty-intro">You don't have any sub-accounts yet. Choose a type to get started:</div>
+          <div class="sa-type-showcase">
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#2f8c9b;--tile-bg:linear-gradient(135deg,#1a3d42,#2f8c9b)">
+              <i class="fa-solid fa-building sa-type-tile__icon"></i>
+              <div class="sa-type-tile__label">Business</div>
+              <div class="sa-type-tile__desc">Invest through your registered company</div>
+            </div>
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#7c5cfc;--tile-bg:linear-gradient(135deg,#2d1d6e,#7c5cfc)">
+              <i class="fa-solid fa-scale-balanced sa-type-tile__icon"></i>
+              <div class="sa-type-tile__label">Trust</div>
+              <div class="sa-type-tile__desc">Grow assets in a family or business trust</div>
+            </div>
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#22c55e;--tile-bg:linear-gradient(135deg,#064e1e,#22c55e)">
+              <i class="fa-solid fa-people-group sa-type-tile__icon"></i>
+              <div class="sa-type-tile__label">Stokvel</div>
+              <div class="sa-type-tile__desc">Community savings club investing together</div>
+            </div>
+            <div class="sa-type-tile sa-type-tile--minor" onclick="openCreateSubAccountModal()" style="--tile-color:#ff9b0c;--tile-bg:linear-gradient(135deg,#ff5229,#ff9b0c)">
+              <i class="fa-solid fa-child-reaching sa-type-tile__icon"></i>
+              <div class="sa-type-tile__label">Minor 🌟</div>
+              <div class="sa-type-tile__desc">Start your child's investment journey today</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Account cards grid -->
+        <div id="subacctsGrid" class="sa-cards-grid" style="display:none"></div>
+      </div><!-- end view-subaccounts -->
+
       <!-- ══ SURVEY MODAL ══ -->
       <div class="modal-overlay" id="surveyModal" style="display:none" onclick="if(event.target===this)closeSurveyModal()">
         <div class="modal-box survey-modal-box" id="surveyModalBox">
@@ -1474,6 +1524,188 @@
     </button>
     <button class="deposit-prompt-later" onclick="dismissDepositPrompt(false)">Remind me later</button>
     <button class="deposit-prompt-never" onclick="dismissDepositPrompt(true)">Don't show again</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SUB ACCOUNTS MODALS
+     ═══════════════════════════════════════════════ -->
+
+<!-- Create Sub Account Modal -->
+<div class="modal-overlay" id="createSaModal" onclick="if(event.target===this)Modal.close('createSaModal')">
+  <div class="modal modal--lg">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title">Open a Sub-Account</span>
+        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px" id="saCreateStepLbl">Step 1 of 3</div>
+      </div>
+      <button class="modal__close" onclick="Modal.close('createSaModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="sa-create-progress"><div class="sa-create-progress__fill" id="saCreateProg" style="width:33%"></div></div>
+
+    <!-- Step 1: Choose type -->
+    <div id="saStep1" class="modal__body">
+      <div class="sa-step-title">What type of account do you need?</div>
+      <div class="sa-type-grid">
+        <button class="sa-type-btn" data-type="business" onclick="saSelectType('business')">
+          <i class="fa-solid fa-building" style="color:#2f8c9b"></i>
+          <strong>Business</strong>
+          <span>Invest through your registered company or CC</span>
+        </button>
+        <button class="sa-type-btn" data-type="trust" onclick="saSelectType('trust')">
+          <i class="fa-solid fa-scale-balanced" style="color:#7c5cfc"></i>
+          <strong>Trust</strong>
+          <span>Family or business trust investments</span>
+        </button>
+        <button class="sa-type-btn" data-type="stokvel" onclick="saSelectType('stokvel')">
+          <i class="fa-solid fa-people-group" style="color:#22c55e"></i>
+          <strong>Stokvel</strong>
+          <span>Community savings club account</span>
+        </button>
+        <button class="sa-type-btn sa-type-btn--minor" data-type="minor" onclick="saSelectType('minor')">
+          <i class="fa-solid fa-child-reaching" style="color:#ff9b0c"></i>
+          <strong>Minor 🌟</strong>
+          <span>Investment account for a child (under 18)</span>
+        </button>
+      </div>
+    </div>
+    <div class="modal__footer" id="saStep1Footer">
+      <button class="btn btn--secondary" onclick="Modal.close('createSaModal')">Cancel</button>
+      <button class="btn btn--primary" id="saStep1Next" disabled onclick="saStep1Next()">Next <i class="fa-solid fa-arrow-right"></i></button>
+    </div>
+
+    <!-- Step 2: Details -->
+    <div id="saStep2" class="modal__body" style="display:none">
+      <div class="sa-step-title" id="saStep2TypeLabel">Account Details</div>
+      <div class="sa-step-subtitle"><i class="fa-solid" id="saStep2TypeIcon"></i> Please fill in the details below</div>
+      <div id="saStep2Fields"></div>
+    </div>
+    <div class="modal__footer" id="saStep2Footer" style="display:none">
+      <button class="btn btn--secondary" onclick="_saShowCreateStep(1)"><i class="fa-solid fa-arrow-left"></i> Back</button>
+      <button class="btn btn--primary" onclick="saStep2Next()">Review <i class="fa-solid fa-arrow-right"></i></button>
+    </div>
+
+    <!-- Step 3: Review & confirm -->
+    <div id="saStep3" class="modal__body" style="display:none">
+      <div class="sa-step-title">Review & Confirm</div>
+      <div id="saStep3Review"></div>
+    </div>
+    <div class="modal__footer" id="saStep3Footer" style="display:none">
+      <button class="btn btn--secondary" onclick="_saShowCreateStep(2)"><i class="fa-solid fa-arrow-left"></i> Back</button>
+      <button class="btn btn--primary" id="saCreateBtn" onclick="saConfirmCreate()"><i class="fa-solid fa-check"></i> Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sub Account Detail Modal -->
+<div class="modal-overlay" id="saDetailModal" onclick="if(event.target===this)Modal.close('saDetailModal')">
+  <div class="modal modal--lg">
+    <div class="modal__header">
+      <span class="modal__title" id="saDetailTitle">Account Details</span>
+      <button class="modal__close" onclick="Modal.close('saDetailModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="saDetailBody" style="padding:0"></div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('saDetailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sub Account Deposit Modal -->
+<div class="modal-overlay" id="saDepositModal" onclick="if(event.target===this)Modal.close('saDepositModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title" id="saDepositTitle">Deposit</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)" id="saDepositSubtitle"></div>
+      </div>
+      <button class="modal__close" onclick="Modal.close('saDepositModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="saDepositSaId" />
+      <div class="info-row mb-16"><span class="info-row__label">Current Balance</span><span class="info-row__value text-gold" id="saDepositBalanceLbl">—</span></div>
+      <div class="form-group">
+        <label class="form-label">Deposit Amount (R) <span style="color:#ef4444">*</span></label>
+        <input type="number" class="form-input" id="saDepositAmount" placeholder="e.g. 5000" min="100" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bank Reference (optional)</label>
+        <input type="text" class="form-input" id="saDepositRef" placeholder="Your bank reference or proof of payment reference" />
+      </div>
+      <div class="info-box" style="background:rgba(255,155,12,0.08);border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:12px 14px;font-size:0.8rem;color:var(--text-muted)">
+        <i class="fa-solid fa-circle-info" style="color:#ff9b0c"></i>
+        EFT deposits are recorded as pending and credited once the admin team confirms receipt. Please use the account name as your payment reference.
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('saDepositModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="confirmSaDeposit()"><i class="fa-solid fa-paper-plane"></i> Submit Deposit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sub Account FICA Upload Modal -->
+<div class="modal-overlay" id="saFicaModal" onclick="if(event.target===this)Modal.close('saFicaModal')">
+  <div class="modal modal--lg">
+    <div class="modal__header">
+      <span class="modal__title">Upload FICA Document</span>
+      <button class="modal__close" onclick="Modal.close('saFicaModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="sa-section-title mb-8">Account: <strong id="saFicaAccountName"></strong></div>
+      <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:16px">Required documents for this account type:</div>
+      <ul class="sa-fica-doc-list" id="saFicaDocList" style="margin:0 0 20px;padding-left:18px;font-size:0.82rem;color:var(--text-muted);line-height:1.9"></ul>
+      <div class="form-group">
+        <label class="form-label">Document Type <span style="color:#ef4444">*</span></label>
+        <select class="form-select" id="saFicaDocType">
+          <option value="">Select document type…</option>
+          <option value="registration_certificate">Registration Certificate</option>
+          <option value="tax_clearance">Tax Clearance Certificate</option>
+          <option value="trust_deed">Trust Deed</option>
+          <option value="letters_of_authority">Letters of Authority</option>
+          <option value="stokvel_constitution">Stokvel Constitution</option>
+          <option value="birth_certificate">Birth Certificate</option>
+          <option value="id_document">ID Document</option>
+          <option value="proof_of_guardianship">Proof of Guardianship</option>
+          <option value="bank_statement">Bank Statement</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Upload File (PDF, JPG, PNG — max 5 MB)</label>
+        <input type="file" class="form-input" id="saFicaFileInput" accept=".pdf,.jpg,.jpeg,.png" onchange="saFicaFileChange(this)" />
+        <div id="saFicaFilePreview" style="display:none;margin-top:8px;font-size:0.82rem;color:#22c55e;font-weight:600"></div>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('saFicaModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="submitSaFica()"><i class="fa-solid fa-upload"></i> Submit Document</button>
+    </div>
+  </div>
+</div>
+
+<!-- Savings Goal Modal -->
+<div class="modal-overlay" id="saGoalModal" onclick="if(event.target===this)Modal.close('saGoalModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title">Set Savings Goal 🎯</span>
+      <button class="modal__close" onclick="Modal.close('saGoalModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="saGoalSaId" />
+      <div class="form-group">
+        <label class="form-label">Goal Amount (R)</label>
+        <input type="number" class="form-input" id="saGoalAmount" placeholder="e.g. 50000" min="100" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">What are they saving for?</label>
+        <input type="text" class="form-input" id="saGoalLabel" placeholder="e.g. University, First Car, Gap Year…" />
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('saGoalModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveSaGoal()"><i class="fa-solid fa-flag"></i> Save Goal</button>
+    </div>
   </div>
 </div>
 
