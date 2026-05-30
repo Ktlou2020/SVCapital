@@ -38,7 +38,7 @@ app.use(helmet({
       styleSrc:      ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'cdnjs.cloudflare.com'],
       fontSrc:       ["'self'", 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com'],
       imgSrc:        ["'self'", 'data:', 'blob:', '*'],
-      connectSrc:    ["'self'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com', 'api.paystack.co', '*.paystack.co'],
+      connectSrc:    ["'self'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com', 'api.paystack.co', '*.paystack.co', 'pay.ozow.com'],
       frameSrc:      ["'self'", 'checkout.paystack.com'],
       objectSrc:     ["'none'"],
     },
@@ -92,10 +92,11 @@ app.use('/api/', apiLimiter);
 app.use('/api/auth/', authLimiter);
 
 /* ─── API Routes ─── */
-app.use('/api/auth',   require('./routes/auth'));
-app.use('/api/users',  require('./routes/users'));
-app.use('/api/tables', require('./routes/tables'));
-app.use('/api/fica',   require('./routes/fica'));
+app.use('/api/auth',     require('./routes/auth'));
+app.use('/api/users',    require('./routes/users'));
+app.use('/api/tables',   require('./routes/tables'));
+app.use('/api/fica',     require('./routes/fica'));
+app.use('/api/payments', require('./routes/payments'));
 
 /* ─── One-time Provision Endpoint ───────────────────────────────────────────
    GET /api/provision?secret=<PROVISION_SECRET>

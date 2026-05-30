@@ -959,50 +959,76 @@ function launchPaystack() {
  *                  TransactionReference, BankReference, Customer,
  *                  CancelUrl, ErrorUrl, SuccessUrl, IsTest
  */
-function launchOzow() {
+async function launchOzow() {
   _pmShowOnly('pmStep3Processing');
   _pmSetProgress(100);
   _pmSetStepLabel('Step 3 of 3 — Ozow');
-  _pmEl('pmProcessingTitle').textContent    = 'Redirecting to Ozow…';
-  _pmEl('pmProcessingSubtitle').textContent = 'You will be taken to the Ozow secure payment page';
+  _pmEl('pmProcessingTitle').textContent    = 'Preparing Ozow payment…';
+  _pmEl('pmProcessingSubtitle').textContent = 'Securing your session — please wait';
 
   const ref          = `SVC-OZ-${Date.now()}`;
-  // The total charged to the client includes the 2.9% + R1 gateway fee
   const totalCharged = _pmTotal(_pmAmount);
   const baseUrl      = window.location.href.split('?')[0];
-  const successUrl   = encodeURIComponent(`${baseUrl}?payment=success&ref=${ref}&gw=ozow`);
-  const cancelUrl    = encodeURIComponent(`${baseUrl}?payment=cancelled&gw=ozow`);
-  const errorUrl     = encodeURIComponent(`${baseUrl}?payment=error&gw=ozow`);
+  const successUrl   = `${baseUrl}?payment=success&ref=${ref}&gw=ozow`;
+  const cancelUrl    = `${baseUrl}?payment=cancelled&gw=ozow`;
+  const errorUrl     = `${baseUrl}?payment=error&gw=ozow`;
   const amountFmt    = totalCharged.toFixed(2);
+  const isTest       = 'false'; // ⚠️ Change to 'true' while testing in Ozow sandbox
 
-  // ── Persist amount to sessionStorage so it survives the redirect ──
+  // Persist amount to sessionStorage so it survives the redirect
   try {
     sessionStorage.setItem('svc_ozow_amount', String(_pmAmount));
     sessionStorage.setItem('svc_ozow_ref',    ref);
     sessionStorage.setItem('svc_ozow_inv_id', _pmInvestorId());
   } catch (_) { /* private-mode browsers may block sessionStorage */ }
 
-  const ozowUrl = [
-    'https://pay.ozow.com/',
-    `?SiteCode=${OZOW_SITE_CODE}`,
-    `&CountryCode=ZA`,
-    `&CurrencyCode=ZAR`,
-    `&Amount=${amountFmt}`,
-    `&TransactionReference=${ref}`,
-    `&BankReference=${_pmInvestorId()}`,
-    `&Customer=${encodeURIComponent(_pmInvestorName())}`,
-    `&CancelUrl=${cancelUrl}`,
-    `&ErrorUrl=${errorUrl}`,
-    `&SuccessUrl=${successUrl}`,
-    `&IsTest=false`,   // ⚠️ Change to true while testing in Ozow sandbox
-  ].join('');
+  try {
+    // Get the server-generated HMAC-SHA512 hash (private key never touches the frontend)
+    const hashRes = await API._fetch('POST', 'payments/ozow-hash', {
+      siteCode:       OZOW_SITE_CODE,
+      countryCode:    'ZA',
+      currencyCode:   'ZAR',
+      amount:         amountFmt,
+      transactionRef: ref,
+      bankRef:        _pmInvestorId(),
+      cancelUrl,
+      errorUrl,
+      successUrl,
+      isTest,
+    });
+    const hash = hashRes.hash;
+    if (!hash) throw new Error('No hash returned from server');
 
-  // Pre-record a pending deposit (base amount only — fee stays with gateway)
-  _recordDeposit('ozow', ref, 'pending', false);
+    // Pre-record a pending deposit (base amount — fee stays with gateway)
+    await _recordDeposit('ozow', ref, 'pending', false);
 
-  setTimeout(() => {
-    window.location.href = ozowUrl;
-  }, 1200);
+    _pmEl('pmProcessingTitle').textContent    = 'Redirecting to Ozow…';
+    _pmEl('pmProcessingSubtitle').textContent = 'You will be taken to the Ozow secure payment page';
+
+    const ozowUrl = [
+      'https://pay.ozow.com/',
+      `?SiteCode=${encodeURIComponent(OZOW_SITE_CODE)}`,
+      `&CountryCode=ZA`,
+      `&CurrencyCode=ZAR`,
+      `&Amount=${amountFmt}`,
+      `&TransactionReference=${encodeURIComponent(ref)}`,
+      `&BankReference=${encodeURIComponent(_pmInvestorId())}`,
+      `&Customer=${encodeURIComponent(_pmInvestorName())}`,
+      `&CancelUrl=${encodeURIComponent(cancelUrl)}`,
+      `&ErrorUrl=${encodeURIComponent(errorUrl)}`,
+      `&SuccessUrl=${encodeURIComponent(successUrl)}`,
+      `&IsTest=${isTest}`,
+      `&HashCheck=${hash}`,
+    ].join('');
+
+    setTimeout(() => { window.location.href = ozowUrl; }, 800);
+  } catch (err) {
+    console.error('Ozow launch error:', err);
+    Toast.error('Could not initialise Ozow payment. Please try another payment method or contact support.');
+    _pmShowOnly('pmStep2');
+    _pmSetProgress(66);
+    _pmSetStepLabel('Step 2 of 3 — Choose Payment Method');
+  }
 }
 
 /* ── EFT (manual) ───────────────────────────── */
@@ -1748,7 +1774,7 @@ function renderMyTickets() {
         <span class="my-ticket-subject">${t.subject}</span>
         ${Utils.statusBadge(t.status)}
       </div>
-      <div class="my-ticket-meta">${Utils.date(t.created_date)} · ${t.category?.replace(/_/g, ' ')}</div>
+      <div class="my-ticket-meta">${Utils.date(t.created_at)} · ${t.category?.replace(/_/g, ' ')}</div>
       ${t.admin_response ? `<div class="my-ticket-response"><strong>Admin:</strong> ${t.admin_response}</div>` : ''}
     </div>
   `).join('');
@@ -1797,20 +1823,17 @@ async function submitTicket() {
 
   try {
     await API.tickets.create({
-      id: Utils.genId('TKT'),
-      investor_id: DEMO_INVESTOR_ID,
-      investor_name: `${PORTAL.investor?.first_name || 'Thabo'} ${PORTAL.investor?.last_name || 'Khumalo'}`,
+      id:             Utils.genId('TKT'),
+      investor_id:    DEMO_INVESTOR_ID,
+      investor_name:  `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim(),
       investor_email: PORTAL.investor?.email || '',
       subject,
-      category: document.getElementById('tktCategory').value,
-      priority: document.getElementById('tktPriority').value,
-      message: message + attachmentInfo,
+      category:       document.getElementById('tktCategory').value,
+      priority:       document.getElementById('tktPriority').value,
+      message:        message + attachmentInfo,
       proof_attached: !!_tktAttachFile,
       proof_filename: _tktAttachFile ? _tktAttachFile.name : '',
-      attachment_data: _tktAttachBase64 || '',
-      status: 'open',
-      admin_response: '',
-      created_date: new Date().toISOString()
+      status:         'open',
     });
     Toast.success('Support ticket submitted. We\'ll respond within 1 business day.');
     document.getElementById('tktSubject').value = '';

@@ -625,7 +625,7 @@ async function viewInvestor(id) {
           <td class="${t.amount > 0 ? 'td-green' : 'td-red'} fw-700">${t.amount > 0 ? '+' : ''}${Utils.rand(t.amount)}</td>
           <td>${Utils.statusBadge(t.status)}</td>
           <td class="td-muted">${t.reference || '—'}</td>
-          <td class="td-muted">${Utils.date(t.transaction_date)}</td>
+          <td class="td-muted">${Utils.date(t.created_at)}</td>
         </tr>
       `).join('')}</tbody>
     </table>
@@ -648,17 +648,16 @@ async function depositToInvestor(investorId, investorName, currentBalance) {
   const amount = parseFloat(amtStr);
   if (!amount || amount <= 0) { Toast.error('Invalid amount'); return; }
   try {
-    await API.investors.update(investorId, { wallet_balance: currentBalance + amount });
+    const newBalance = Math.round((currentBalance + amount) * 100) / 100;
+    await API.investors.update(investorId, { wallet_balance: newBalance });
     await API.transactions.create({
-      id: Utils.genId('TXN'),
+      id:          Utils.genId('TXN'),
       investor_id: investorId,
-      investor_name: investorName,
-      type: 'deposit',
+      type:        'deposit',
       amount,
-      status: 'completed',
-      reference: `ADMIN-DEP-${Date.now()}`,
-      description: `Admin deposit — wallet top-up`,
-      transaction_date: new Date().toISOString()
+      status:      'completed',
+      reference:   `ADMIN-DEP-${Date.now()}`,
+      description: `Admin manual deposit — wallet top-up for ${investorName}`,
     });
     Toast.success(`${Utils.rand(amount)} added to ${investorName}'s wallet`);
     Modal.close('investorDetailModal');
@@ -1163,16 +1162,14 @@ async function payoutInvestment(id) {
       payout_date: new Date().toISOString()
     });
     await API.transactions.create({
-      id: Utils.genId('TXN'),
+      id:          Utils.genId('TXN'),
       investor_id: inv.investor_id || '',
-      investor_name: inv.investor_name,
-      type: 'payout',
-      amount: inv.amount + actualReturn,
-      status: 'completed',
-      reference: `PAYOUT-${Date.now()}`,
-      description: `Maturity payout for ${inv.pool_name}`,
-      pool_name: inv.pool_name,
-      transaction_date: new Date().toISOString()
+      type:        'payout',
+      amount:      inv.amount + actualReturn,
+      status:      'completed',
+      reference:   `PAYOUT-${Date.now()}`,
+      description: `Maturity payout for ${inv.pool_name || inv.pool_id}`,
+      pool_id:     inv.pool_id || '',
     });
     Toast.success(`Payout processed: ${Utils.rand(inv.amount + actualReturn)} → ${inv.investor_name}`);
     Modal.close('investorDetailModal');
@@ -1232,8 +1229,12 @@ let filteredTxns = [];
 
 async function loadTransactions() {
   try {
-    const res = await API.transactions.list({ limit: 200 });
-    STATE.transactions = res.data || [];
+    const [txnRes, invRes] = await Promise.all([
+      API.transactions.list({ limit: 500 }),
+      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 200 })
+    ]);
+    STATE.transactions = txnRes.data || [];
+    if (!STATE.investors.length) STATE.investors = invRes.data || [];
     filteredTxns = [...STATE.transactions];
     renderTxnStats();
     renderTxnTable();
@@ -1249,10 +1250,15 @@ function renderTxnStats() {
   document.getElementById('txn-count').textContent = d.length;
 }
 
+function _txnInvName(t) {
+  const inv = STATE.investors.find(i => i.id === t.investor_id);
+  return inv ? `${inv.first_name} ${inv.last_name}` : (t.investor_id || '—');
+}
+
 function renderTxnTable() {
   const body = document.getElementById('txnBody');
   const start = (txnPage - 1) * TXN_PG_SIZE;
-  const page = filteredTxns.sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date)).slice(start, start + TXN_PG_SIZE);
+  const page = filteredTxns.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(start, start + TXN_PG_SIZE);
 
   document.getElementById('txnFooter').textContent = `${start + 1}–${Math.min(start + TXN_PG_SIZE, filteredTxns.length)} of ${filteredTxns.length}`;
 
@@ -1271,21 +1277,22 @@ function renderTxnTable() {
          </select>`
       : Utils.statusBadge(t.status);
 
-    // Show EFT proof attachment if present
     const proofLink = (t.proof_attached && t.proof_filename)
       ? `<a href="#" onclick="viewEftProof('${t.id}')" style="display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;color:#FF8215;font-weight:600;margin-top:2px"><i class="fa-solid fa-paperclip"></i> ${t.proof_filename}</a>`
       : '';
 
+    const invName = _txnInvName(t);
+
     return `<tr>
-      <td><div class="td-strong">${t.investor_name}</div></td>
+      <td><div class="td-strong">${invName}</div></td>
       <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ') || '—'}</span></td>
       <td class="${t.amount > 0 ? 'td-green' : 'td-red'} fw-700">${t.amount > 0 ? '+' : ''}${Utils.rand(t.amount)}</td>
       <td>${statusCell}</td>
       <td class="td-muted" style="font-size:0.75rem">${t.reference || '—'}</td>
       <td class="td-muted" style="font-size:0.75rem;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.description || '—'}${proofLink}</td>
-      <td class="td-muted">${Utils.date(t.transaction_date)}</td>
+      <td class="td-muted">${Utils.date(t.created_at)}</td>
       <td>
-        ${isPendingDeposit ? `<button class="btn btn--success btn--sm" onclick="changeTxnStatus('${t.id}', 'completed', '${t.investor_id}', ${t.amount})" title="Approve deposit"><i class="fa-solid fa-check"></i></button>` : ''}
+        ${isPendingDeposit ? `<button class="btn btn--success btn--sm" onclick="changeTxnStatus('${t.id}', 'completed', '${t.investor_id}', ${t.amount})" title="Approve deposit — credits wallet"><i class="fa-solid fa-check"></i> Approve</button>` : ''}
       </td>
     </tr>`;
   }).join('');
@@ -1304,7 +1311,8 @@ function setupTxnFilters() {
     const q = search.value.toLowerCase();
     const tp = type.value;
     filteredTxns = STATE.transactions.filter(t => {
-      const mq = !q || `${t.investor_name} ${t.reference}`.toLowerCase().includes(q);
+      const invName = _txnInvName(t);
+      const mq = !q || `${invName} ${t.reference} ${t.description}`.toLowerCase().includes(q);
       const mt = !tp || t.type === tp;
       return mq && mt;
     });
@@ -1360,25 +1368,46 @@ async function viewEftProof(txnId) {
   }
 }
 
-function openAddTxnModal() { Modal.open('addTxnModal'); }
+function openAddTxnModal() {
+  const sel = document.getElementById('txnInvestorSelect');
+  if (sel) {
+    sel.innerHTML = '<option value="">Select investor…</option>' +
+      [...STATE.investors]
+        .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
+        .map(i => `<option value="${i.id}">${i.first_name} ${i.last_name} (${i.id})</option>`)
+        .join('');
+  }
+  Modal.open('addTxnModal');
+}
 
 async function saveNewTxn() {
-  const name = document.getElementById('txnInvestorName').value.trim();
-  const amount = parseFloat(document.getElementById('txnAmount').value);
-  const type = document.getElementById('txnType').value;
-  if (!name || !amount) { Toast.error('Investor name and amount required'); return; }
+  const investorId = document.getElementById('txnInvestorSelect').value;
+  const amount     = parseFloat(document.getElementById('txnAmount').value);
+  const type       = document.getElementById('txnType').value;
+  const status     = document.getElementById('txnStatus').value;
+  if (!investorId || !amount) { Toast.error('Investor and amount required'); return; }
+
+  const investor = STATE.investors.find(i => i.id === investorId);
 
   try {
     await API.transactions.create({
-      id: Utils.genId('TXN'),
-      investor_name: name, investor_id: '',
-      type, amount: type === 'investment' || type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
-      status: document.getElementById('txnStatus').value,
-      reference: document.getElementById('txnRef').value.trim(),
+      id:          Utils.genId('TXN'),
+      investor_id: investorId,
+      type,
+      amount:      type === 'investment' || type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
+      status,
+      reference:   document.getElementById('txnRef').value.trim(),
       description: document.getElementById('txnDesc').value.trim(),
-      transaction_date: new Date().toISOString()
     });
-    Toast.success('Transaction recorded');
+
+    // Credit wallet immediately for completed deposits
+    if (status === 'completed' && type === 'deposit' && investor) {
+      const newBal = Math.round(((investor.wallet_balance || 0) + Math.abs(amount)) * 100) / 100;
+      await API.investors.update(investorId, { wallet_balance: newBal });
+      Toast.success(`Transaction recorded — R${amount.toLocaleString('en-ZA', {minimumFractionDigits:2})} added to ${investor.first_name} ${investor.last_name}'s wallet`);
+    } else {
+      Toast.success('Transaction recorded');
+    }
     Modal.close('addTxnModal');
     await loadTransactions();
   } catch (e) { Toast.error('Failed to record transaction'); }
@@ -1389,8 +1418,12 @@ async function saveNewTxn() {
    ═══════════════════════════════════════════════ */
 async function loadSupport() {
   try {
-    const res = await API.tickets.list({ limit: 100 });
-    STATE.tickets = res.data || [];
+    const [tktRes, invRes] = await Promise.all([
+      API.tickets.list({ limit: 200 }),
+      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 200 })
+    ]);
+    STATE.tickets = tktRes.data || [];
+    if (!STATE.investors.length) STATE.investors = invRes.data || [];
     renderTicketStats();
     renderTicketsTable();
     setupTicketFilters();
@@ -1414,18 +1447,24 @@ function renderTicketsTable() {
 
   if (!items.length) { body.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:32px">No tickets found</td></tr>'; return; }
 
-  body.innerHTML = items.map(t => `<tr>
-    <td><div class="td-strong">${t.investor_name}</div><div class="td-muted">${t.investor_email}</div></td>
-    <td class="td-strong" style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.subject}</td>
-    <td><span class="badge badge--gray">${t.category?.replace(/_/g, ' ') || '—'}</span></td>
-    <td>${Utils.priorityBadge(t.priority)}</td>
-    <td>${Utils.statusBadge(t.status)}</td>
-    <td class="td-muted">${t.assigned_to || '—'}</td>
-    <td class="td-muted">${Utils.date(t.created_date)}</td>
-    <td>
-      <button class="btn btn--secondary btn--sm" onclick='viewTicket(${JSON.stringify(t.id)})'><i class="fa-solid fa-eye"></i> View</button>
-    </td>
-  </tr>`).join('');
+  body.innerHTML = items.map(t => {
+    const inv      = STATE.investors.find(i => i.id === t.investor_id);
+    const invName  = t.investor_name || (inv ? `${inv.first_name} ${inv.last_name}` : t.investor_id || '—');
+    const invEmail = t.investor_email || inv?.email || '';
+    const needsReply = !t.admin_response && t.status === 'open';
+    return `<tr ${needsReply ? 'style="background:rgba(255,155,12,0.05)"' : ''}>
+      <td><div class="td-strong">${invName}</div><div class="td-muted">${invEmail}</div></td>
+      <td class="td-strong" style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.subject}</td>
+      <td><span class="badge badge--gray">${t.category?.replace(/_/g, ' ') || '—'}</span></td>
+      <td>${Utils.priorityBadge(t.priority)}</td>
+      <td>${Utils.statusBadge(t.status)}</td>
+      <td class="td-muted">${t.assigned_to || '—'}</td>
+      <td class="td-muted">${Utils.date(t.created_at)}</td>
+      <td>
+        <button class="btn btn--${needsReply ? 'primary' : 'secondary'} btn--sm" onclick='viewTicket(${JSON.stringify(t.id)})'><i class="fa-solid fa-${needsReply ? 'reply' : 'eye'}"></i> ${needsReply ? 'Reply' : 'View'}</button>
+      </td>
+    </tr>`;
+  }).join('');
 }
 
 function setupTicketFilters() {
@@ -1437,17 +1476,22 @@ async function viewTicket(id) {
   const tkt = STATE.tickets.find(t => t.id === id);
   if (!tkt) return;
 
+  const tktInv     = STATE.investors.find(i => i.id === tkt.investor_id);
+  const tktInvName = tkt.investor_name || (tktInv ? `${tktInv.first_name} ${tktInv.last_name}` : tkt.investor_id || '—');
+  const tktEmail   = tkt.investor_email || tktInv?.email || '';
   document.getElementById('ticketModalTitle').textContent = `Ticket #${tkt.id} — ${tkt.subject}`;
   document.getElementById('ticketModalBody').innerHTML = `
     <div class="grid-2 mb-16" style="gap:12px">
-      <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value">${tkt.investor_name}</span></div>
+      <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value">${tktInvName}${tktEmail ? ` <span style="color:var(--text-muted);font-size:0.78rem">&lt;${tktEmail}&gt;</span>` : ''}</span></div>
       <div class="info-row"><span class="info-row__label">Category</span><span class="info-row__value">${tkt.category?.replace(/_/g, ' ')}</span></div>
       <div class="info-row"><span class="info-row__label">Priority</span><span class="info-row__value">${Utils.priorityBadge(tkt.priority)}</span></div>
       <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value">${Utils.statusBadge(tkt.status)}</span></div>
+      <div class="info-row"><span class="info-row__label">Submitted</span><span class="info-row__value td-muted">${Utils.date(tkt.created_at)}</span></div>
+      ${tkt.responded_at ? `<div class="info-row"><span class="info-row__label">Last Response</span><span class="info-row__value td-muted">${Utils.date(tkt.responded_at)}</span></div>` : ''}
     </div>
     <div class="panel mb-12" style="background:var(--dark-3)">
       <div class="panel__header"><span class="panel__title">Investor Message</span></div>
-      <div class="panel__body" style="font-size:0.85rem;color:var(--text-muted)">${tkt.message || '—'}</div>
+      <div class="panel__body" style="font-size:0.85rem;color:var(--text-muted);white-space:pre-wrap">${tkt.message || '—'}</div>
     </div>
     <div class="form-group">
       <label class="form-label">Admin Response</label>
@@ -1473,13 +1517,14 @@ async function viewTicket(id) {
 
   document.getElementById('ticketSaveBtn').onclick = async () => {
     try {
+      const newStatus = document.getElementById('ticketStatusUpdate').value;
       await API.tickets.update(id, {
         admin_response: document.getElementById('ticketResponse').value,
-        status: document.getElementById('ticketStatusUpdate').value,
-        assigned_to: document.getElementById('ticketAssigned').value,
-        resolved_date: ['resolved', 'closed'].includes(document.getElementById('ticketStatusUpdate').value) ? new Date().toISOString() : ''
+        status:         newStatus,
+        assigned_to:    document.getElementById('ticketAssigned').value,
+        responded_at:   new Date().toISOString(),
       });
-      Toast.success('Ticket updated');
+      Toast.success('Response saved — investor will see this in their portal');
       Modal.close('ticketModal');
       await loadSupport();
     } catch (e) { Toast.error('Failed to update ticket'); }
