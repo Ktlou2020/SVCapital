@@ -1748,7 +1748,7 @@ function renderMyTickets() {
         <span class="my-ticket-subject">${t.subject}</span>
         ${Utils.statusBadge(t.status)}
       </div>
-      <div class="my-ticket-meta">${Utils.date(t.created_date)} · ${t.category?.replace(/_/g, ' ')}</div>
+      <div class="my-ticket-meta">${Utils.date(t.created_at)} · ${t.category?.replace(/_/g, ' ')}</div>
       ${t.admin_response ? `<div class="my-ticket-response"><strong>Admin:</strong> ${t.admin_response}</div>` : ''}
     </div>
   `).join('');
@@ -1797,20 +1797,17 @@ async function submitTicket() {
 
   try {
     await API.tickets.create({
-      id: Utils.genId('TKT'),
-      investor_id: DEMO_INVESTOR_ID,
-      investor_name: `${PORTAL.investor?.first_name || 'Thabo'} ${PORTAL.investor?.last_name || 'Khumalo'}`,
+      id:             Utils.genId('TKT'),
+      investor_id:    DEMO_INVESTOR_ID,
+      investor_name:  `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim(),
       investor_email: PORTAL.investor?.email || '',
       subject,
-      category: document.getElementById('tktCategory').value,
-      priority: document.getElementById('tktPriority').value,
-      message: message + attachmentInfo,
+      category:       document.getElementById('tktCategory').value,
+      priority:       document.getElementById('tktPriority').value,
+      message:        message + attachmentInfo,
       proof_attached: !!_tktAttachFile,
       proof_filename: _tktAttachFile ? _tktAttachFile.name : '',
-      attachment_data: _tktAttachBase64 || '',
-      status: 'open',
-      admin_response: '',
-      created_date: new Date().toISOString()
+      status:         'open',
     });
     Toast.success('Support ticket submitted. We\'ll respond within 1 business day.');
     document.getElementById('tktSubject').value = '';
