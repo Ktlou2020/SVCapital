@@ -23,6 +23,7 @@ const ALLOWED_TABLES = {
   kyc_documents:         'id',
   maturity_instructions: 'id',
   support_tickets:       'id',
+  sub_accounts:          'id',
   platform_settings:     'key',
   ifas:                  'id',
   fund_runs:             'id',
@@ -299,6 +300,7 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         loan_documents:        'LDOC',
         solar_projects:        'SOL',
         solar_documents:       'SDOC',
+        sub_accounts:          'SUBACC',
       };
       const prefix = prefixMap[table] || 'REC';
       body.id = `${prefix}-${Date.now()}`;
