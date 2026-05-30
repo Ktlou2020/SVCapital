@@ -985,9 +985,9 @@ async function launchOzow() {
   } catch (_) { /* private-mode browsers may block sessionStorage */ }
 
   try {
-    // Get the server-generated HMAC-SHA512 hash (private key never touches the frontend)
+    // Server generates the SHA-512 hash using OZOW_PRIVATE_KEY (never leaves server).
+    // Server also returns the OZOW_SITE_CODE so the frontend doesn't need it hardcoded.
     const hashRes = await API._fetch('POST', 'payments/ozow-hash', {
-      siteCode:       OZOW_SITE_CODE,
       countryCode:    'ZA',
       currencyCode:   'ZAR',
       amount:         amountFmt,
@@ -998,8 +998,9 @@ async function launchOzow() {
       successUrl,
       isTest,
     });
-    const hash = hashRes.hash;
-    if (!hash) throw new Error('No hash returned from server');
+    const hash     = hashRes.hash;
+    const siteCode = hashRes.siteCode;
+    if (!hash || !siteCode) throw new Error('Invalid response from payment server');
 
     // Pre-record a pending deposit (base amount — fee stays with gateway)
     await _recordDeposit('ozow', ref, 'pending', false);
@@ -1009,7 +1010,7 @@ async function launchOzow() {
 
     const ozowUrl = [
       'https://pay.ozow.com/',
-      `?SiteCode=${encodeURIComponent(OZOW_SITE_CODE)}`,
+      `?SiteCode=${encodeURIComponent(siteCode)}`,
       `&CountryCode=ZA`,
       `&CurrencyCode=ZAR`,
       `&Amount=${amountFmt}`,
@@ -1026,7 +1027,8 @@ async function launchOzow() {
     setTimeout(() => { window.location.href = ozowUrl; }, 800);
   } catch (err) {
     console.error('Ozow launch error:', err);
-    Toast.error('Could not initialise Ozow payment. Please try another payment method or contact support.');
+    const msg = err.message?.includes('not configured') ? err.message : 'Could not initialise Ozow payment — please contact support.';
+    Toast.error(msg);
     _pmShowOnly('pmStep2');
     _pmSetProgress(66);
     _pmSetStepLabel('Step 2 of 3 — Choose Payment Method');
