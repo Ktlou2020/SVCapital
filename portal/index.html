@@ -9,7 +9,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SV Capital — Investor Portal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://js.paystack.co/v1/inline.js"></script>
@@ -23,7 +24,7 @@
     #topUpModal.modal-overlay { background: rgba(0,0,0,0.82) !important; }
     #paymentModalBox {
       background: #1a2235 !important;
-      border: 1px solid rgba(255,130,21,0.25) !important;
+      border: 1px solid rgba(255,155,12,0.25) !important;
       box-shadow: 0 24px 64px rgba(0,0,0,0.55) !important;
       color: var(--white, #f0f4ff) !important;
     }
@@ -130,11 +131,11 @@
           <div id="notifPanel" style="display:none;position:absolute;top:calc(100% + 8px);right:0;width:320px;background:#fff;border:1px solid rgba(0,0,0,0.09);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.13);z-index:999;overflow:hidden">
             <div style="padding:14px 18px 10px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between">
               <span style="font-size:0.88rem;font-weight:800;color:#1a1a1a">Notifications</span>
-              <button onclick="markAllRead()" style="font-size:0.7rem;color:#FF8215;font-weight:700;background:none;border:none;cursor:pointer">Mark all read</button>
+              <button onclick="markAllRead()" style="font-size:0.7rem;color:#ff9b0c;font-weight:700;background:none;border:none;cursor:pointer">Mark all read</button>
             </div>
             <div id="notifList" style="max-height:340px;overflow-y:auto">
               <div class="notif-item unread" data-id="n1">
-                <div class="notif-icon" style="background:rgba(255,130,21,0.1)"><i class="fa-solid fa-wallet" style="color:#FF8215"></i></div>
+                <div class="notif-icon" style="background:rgba(255,155,12,0.1)"><i class="fa-solid fa-wallet" style="color:#ff9b0c"></i></div>
                 <div class="notif-body">
                   <div class="notif-title">Wallet top-up reminder</div>
                   <div class="notif-sub">Your wallet balance is below R500. Top up to keep investing.</div>
@@ -167,7 +168,7 @@
               </div>
             </div>
             <div style="padding:10px 18px;border-top:1px solid rgba(0,0,0,0.07);text-align:center">
-              <button onclick="navigate('support', document.querySelector('[data-view=support]'));toggleNotifPanel()" style="font-size:0.78rem;color:#FF8215;font-weight:600;background:none;border:none;cursor:pointer">View all in Support →</button>
+              <button onclick="navigate('support', document.querySelector('[data-view=support]'));toggleNotifPanel()" style="font-size:0.78rem;color:#ff9b0c;font-weight:600;background:none;border:none;cursor:pointer">View all in Support →</button>
             </div>
           </div>
         </div>
@@ -341,7 +342,7 @@
               <div class="perf-panel__body" id="perfPanelBody">
                 <div class="perf-row">
                   <div class="perf-row__label">
-                    <i style="background:rgba(255,130,21,0.1);color:#FF8215"><i class="fa-solid fa-coins fa-sm"></i></i>
+                    <i style="background:rgba(255,155,12,0.1);color:#ff9b0c"><i class="fa-solid fa-coins fa-sm"></i></i>
                     Total Invested
                   </div>
                   <span class="perf-row__value neutral" id="perf-invested">—</span>
@@ -371,12 +372,12 @@
             </div>
 
             <!-- FSCA badge -->
-            <div class="panel" style="background:rgba(255,130,21,0.04);border-color:rgba(255,130,21,0.20)">
+            <div class="panel" style="background:rgba(255,155,12,0.04);border-color:rgba(255,155,12,0.20)">
               <div class="panel__body text-center" style="padding:16px">
                 <i class="fa-solid fa-shield-halved" style="font-size:1.5rem;color:var(--gold);margin-bottom:8px;display:block"></i>
                 <div style="font-size:0.78rem;font-weight:700;color:#1a1a1a;margin-bottom:4px">FSCA Regulated</div>
                 <div style="font-size:0.7rem;color:#6b7280">SmartVest Financial Services</div>
-                <div style="font-size:0.7rem;color:#FF8215;font-weight:700">FSP License #52449</div>
+                <div style="font-size:0.7rem;color:#ff9b0c;font-weight:700">FSP License #52449</div>
               </div>
             </div>
           </div>
@@ -584,7 +585,7 @@
            VIEW: MATURITY INSTRUCTIONS
       ══════════════════════════════════ -->
       <div class="view" id="view-maturity">
-        <div class="panel mb-20" style="background:rgba(255,130,21,0.05);border-color:rgba(255,130,21,0.25)">
+        <div class="panel mb-20" style="background:rgba(255,155,12,0.05);border-color:rgba(255,155,12,0.25)">
           <div class="panel__body" style="display:flex;align-items:flex-start;gap:16px">
             <i class="fa-solid fa-triangle-exclamation" style="color:var(--gold);font-size:1.3rem;margin-top:2px"></i>
             <div>
@@ -720,8 +721,8 @@
                 <!-- Attachment -->
                 <div class="form-group">
                   <label class="form-label"><i class="fa-solid fa-paperclip" style="color:var(--gold)"></i> Attachment (optional)</label>
-                  <label for="tktAttachFile" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--ci-bg-light,#F0F2F5);border:1.5px dashed rgba(0,0,0,0.15);border-radius:8px;cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor='rgba(255,130,21,0.5)'" onmouseout="this.style.borderColor='rgba(0,0,0,0.15)'">
-                    <i class="fa-solid fa-cloud-arrow-up" style="color:#FF8215;font-size:1.1rem"></i>
+                  <label for="tktAttachFile" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--ci-bg-light,#F0F2F5);border:1.5px dashed rgba(0,0,0,0.15);border-radius:8px;cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor='rgba(255,155,12,0.5)'" onmouseout="this.style.borderColor='rgba(0,0,0,0.15)'">
+                    <i class="fa-solid fa-cloud-arrow-up" style="color:#ff9b0c;font-size:1.1rem"></i>
                     <div>
                       <div style="font-size:0.82rem;font-weight:700;color:#303030">Upload a file</div>
                       <div style="font-size:0.7rem;color:#6b7280">PNG, JPG, PDF, DOC — max 10 MB</div>
@@ -827,7 +828,7 @@
               </div>
             </div>
 
-            <div class="panel" style="background:rgba(255,130,21,0.04);border-color:rgba(255,130,21,0.20)">
+            <div class="panel" style="background:rgba(255,155,12,0.04);border-color:rgba(255,155,12,0.20)">
               <div class="panel__header"><span class="panel__title">Terms & Conditions</span></div>
               <div class="panel__body" style="font-size:0.75rem;color:#6b7280;line-height:1.7">
                 <ul style="list-style:disc;padding-left:16px;display:flex;flex-direction:column;gap:6px">
@@ -876,11 +877,11 @@
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
                   <div>
                     <label style="display:block;font-size:0.78rem;font-weight:600;color:#6b7280;margin-bottom:5px">From</label>
-                    <input type="date" id="stmtFrom" style="width:100%;padding:9px 12px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;color:#1a1a1a;background:#fff;outline:none;font-family:inherit" onfocus="this.style.borderColor='#FF8215'" onblur="this.style.borderColor='rgba(0,0,0,0.12)'" />
+                    <input type="date" id="stmtFrom" style="width:100%;padding:9px 12px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;color:#1a1a1a;background:#fff;outline:none;font-family:inherit" onfocus="this.style.borderColor='#ff9b0c'" onblur="this.style.borderColor='rgba(0,0,0,0.12)'" />
                   </div>
                   <div>
                     <label style="display:block;font-size:0.78rem;font-weight:600;color:#6b7280;margin-bottom:5px">To</label>
-                    <input type="date" id="stmtTo" style="width:100%;padding:9px 12px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;color:#1a1a1a;background:#fff;outline:none;font-family:inherit" onfocus="this.style.borderColor='#FF8215'" onblur="this.style.borderColor='rgba(0,0,0,0.12)'" />
+                    <input type="date" id="stmtTo" style="width:100%;padding:9px 12px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;color:#1a1a1a;background:#fff;outline:none;font-family:inherit" onfocus="this.style.borderColor='#ff9b0c'" onblur="this.style.borderColor='rgba(0,0,0,0.12)'" />
                   </div>
                 </div>
               </div>
@@ -889,20 +890,20 @@
               <div>
                 <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;margin-bottom:10px">Include Sections</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-                  <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid rgba(0,0,0,0.08);border-radius:8px;background:#F7F8FA;transition:border-color 0.2s" onmouseover="this.style.borderColor='#FF8215'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(0,0,0,0.08)'">
-                    <input type="checkbox" id="stmtIncPortfolio" checked style="accent-color:#FF8215;width:15px;height:15px;flex-shrink:0">
+                  <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid rgba(0,0,0,0.08);border-radius:8px;background:#F7F8FA;transition:border-color 0.2s" onmouseover="this.style.borderColor='#ff9b0c'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(0,0,0,0.08)'">
+                    <input type="checkbox" id="stmtIncPortfolio" checked style="accent-color:#ff9b0c;width:15px;height:15px;flex-shrink:0">
                     <span style="font-size:0.82rem;font-weight:600;color:#303030">Portfolio Summary</span>
                   </label>
-                  <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid rgba(0,0,0,0.08);border-radius:8px;background:#F7F8FA;transition:border-color 0.2s" onmouseover="this.style.borderColor='#FF8215'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(0,0,0,0.08)'">
-                    <input type="checkbox" id="stmtIncInvestments" checked style="accent-color:#FF8215;width:15px;height:15px;flex-shrink:0">
+                  <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid rgba(0,0,0,0.08);border-radius:8px;background:#F7F8FA;transition:border-color 0.2s" onmouseover="this.style.borderColor='#ff9b0c'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(0,0,0,0.08)'">
+                    <input type="checkbox" id="stmtIncInvestments" checked style="accent-color:#ff9b0c;width:15px;height:15px;flex-shrink:0">
                     <span style="font-size:0.82rem;font-weight:600;color:#303030">Investment Details</span>
                   </label>
-                  <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid rgba(0,0,0,0.08);border-radius:8px;background:#F7F8FA;transition:border-color 0.2s" onmouseover="this.style.borderColor='#FF8215'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(0,0,0,0.08)'">
-                    <input type="checkbox" id="stmtIncTransactions" checked style="accent-color:#FF8215;width:15px;height:15px;flex-shrink:0">
+                  <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid rgba(0,0,0,0.08);border-radius:8px;background:#F7F8FA;transition:border-color 0.2s" onmouseover="this.style.borderColor='#ff9b0c'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(0,0,0,0.08)'">
+                    <input type="checkbox" id="stmtIncTransactions" checked style="accent-color:#ff9b0c;width:15px;height:15px;flex-shrink:0">
                     <span style="font-size:0.82rem;font-weight:600;color:#303030">Transaction Ledger</span>
                   </label>
-                  <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid rgba(0,0,0,0.08);border-radius:8px;background:#F7F8FA;transition:border-color 0.2s" onmouseover="this.style.borderColor='#FF8215'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(0,0,0,0.08)'">
-                    <input type="checkbox" id="stmtIncPerformance" checked style="accent-color:#FF8215;width:15px;height:15px;flex-shrink:0">
+                  <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid rgba(0,0,0,0.08);border-radius:8px;background:#F7F8FA;transition:border-color 0.2s" onmouseover="this.style.borderColor='#ff9b0c'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(0,0,0,0.08)'">
+                    <input type="checkbox" id="stmtIncPerformance" checked style="accent-color:#ff9b0c;width:15px;height:15px;flex-shrink:0">
                     <span style="font-size:0.82rem;font-weight:600;color:#303030">Performance Analysis</span>
                   </label>
                 </div>
@@ -918,10 +919,10 @@
 
               <!-- Action buttons -->
               <div style="display:flex;gap:10px;padding-top:4px">
-                <button onclick="generateStatement()" style="flex:1;padding:13px 20px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(255,130,21,0.28);transition:all 0.2s" onmouseover="this.style.opacity='0.9';this.style.transform='translateY(-1px)'" onmouseout="this.style.opacity='1';this.style.transform='none'">
+                <button onclick="generateStatement()" style="flex:1;padding:13px 20px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(255,155,12,0.28);transition:all 0.2s" onmouseover="this.style.opacity='0.9';this.style.transform='translateY(-1px)'" onmouseout="this.style.opacity='1';this.style.transform='none'">
                   <i class="fa-solid fa-file-arrow-down"></i> Generate &amp; Preview
                 </button>
-                <button onclick="printStatement()" title="Print / Save as PDF" style="padding:13px 16px;background:#fff;color:#303030;border:1.5px solid rgba(0,0,0,0.12);border-radius:10px;font-size:0.9rem;cursor:pointer;transition:all 0.2s" onmouseover="this.style.borderColor='#FF8215';this.style.color='#FF8215'" onmouseout="this.style.borderColor='rgba(0,0,0,0.12)';this.style.color='#303030'">
+                <button onclick="printStatement()" title="Print / Save as PDF" style="padding:13px 16px;background:#fff;color:#303030;border:1.5px solid rgba(0,0,0,0.12);border-radius:10px;font-size:0.9rem;cursor:pointer;transition:all 0.2s" onmouseover="this.style.borderColor='#ff9b0c';this.style.color='#FF8215'" onmouseout="this.style.borderColor='rgba(0,0,0,0.12)';this.style.color='#303030'">
                   <i class="fa-solid fa-print"></i>
                 </button>
               </div>
@@ -959,8 +960,8 @@
             </div>
 
             <!-- Tips -->
-            <div style="background:rgba(255,130,21,0.05);border:1px solid rgba(255,130,21,0.18);border-radius:12px;padding:16px">
-              <div style="font-size:0.78rem;font-weight:800;color:#E56200;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+            <div style="background:rgba(255,155,12,0.05);border:1px solid rgba(255,155,12,0.18);border-radius:12px;padding:16px">
+              <div style="font-size:0.78rem;font-weight:800;color:#ff5229;margin-bottom:10px;display:flex;align-items:center;gap:6px">
                 <i class="fa-solid fa-lightbulb"></i> Pro Tips
               </div>
               <ul style="font-size:0.75rem;color:#6b7280;line-height:1.6;padding-left:14px">
@@ -977,15 +978,15 @@
         <div id="statementPreview" style="display:none;margin-top:32px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:16px 20px;background:#fff;border:1px solid rgba(0,0,0,0.07);border-radius:12px">
             <div style="display:flex;align-items:center;gap:10px">
-              <i class="fa-solid fa-file-invoice" style="color:#FF8215;font-size:1.1rem"></i>
+              <i class="fa-solid fa-file-invoice" style="color:#ff9b0c;font-size:1.1rem"></i>
               <span style="font-size:0.95rem;font-weight:800;color:#1a1a1a">Statement Preview</span>
               <span style="font-size:0.72rem;background:rgba(34,197,94,0.1);color:#16a34a;padding:3px 10px;border-radius:20px;font-weight:700;border:1px solid rgba(34,197,94,0.25)">Ready</span>
             </div>
             <div style="display:flex;gap:8px">
-              <button onclick="printStatement()" style="padding:8px 16px;background:#fff;color:#303030;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.2s" onmouseover="this.style.borderColor='#FF8215';this.style.color='#FF8215'" onmouseout="this.style.borderColor='rgba(0,0,0,0.12)';this.style.color='#303030'">
+              <button onclick="printStatement()" style="padding:8px 16px;background:#fff;color:#303030;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.2s" onmouseover="this.style.borderColor='#ff9b0c';this.style.color='#FF8215'" onmouseout="this.style.borderColor='rgba(0,0,0,0.12)';this.style.color='#303030'">
                 <i class="fa-solid fa-print"></i> Print / Save PDF
               </button>
-              <button onclick="generateStatement()" style="padding:8px 16px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 3px 10px rgba(255,130,21,0.25)" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+              <button onclick="generateStatement()" style="padding:8px 16px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 3px 10px rgba(255,155,12,0.25)" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
                 <i class="fa-solid fa-rotate"></i> Refresh
               </button>
             </div>
@@ -1091,7 +1092,7 @@
      Step 3 — Processing / confirmation
 ════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="topUpModal" onclick="if(event.target===this)closePaymentModal()">
-  <div id="paymentModalBox" style="max-width:520px;width:min(520px,95vw);background:#1a1d23;border:1px solid rgba(255,130,21,0.25);border-radius:16px;padding:0;overflow-y:auto;max-height:90vh;position:relative;box-shadow:0 24px 60px rgba(0,0,0,0.55);transform:scale(1) translateY(0)">
+  <div id="paymentModalBox" style="max-width:520px;width:min(520px,95vw);background:#1a1d23;border:1px solid rgba(255,155,12,0.25);border-radius:16px;padding:0;overflow-y:auto;max-height:90vh;position:relative;box-shadow:0 24px 60px rgba(0,0,0,0.55);transform:scale(1) translateY(0)">
 
     <!-- ── Modal header ── -->
     <div style="padding:20px 24px 16px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;background:#141720;border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2">
@@ -1146,7 +1147,7 @@
         <span>Funds are credited to your SV Capital wallet. You can invest immediately after successful payment. All transactions are secured and FSCA regulated.</span>
       </div>
 
-      <button onclick="goToStep2()" style="width:100%;padding:14px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.95rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(255,130,21,0.28);transition:opacity 0.2s" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+      <button onclick="goToStep2()" style="width:100%;padding:14px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.95rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(255,155,12,0.28);transition:opacity 0.2s" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
         Continue <i class="fa-solid fa-arrow-right"></i>
       </button>
     </div>
@@ -1177,7 +1178,7 @@
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
             <span style="background:rgba(34,197,94,0.12);color:#22c55e;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(34,197,94,0.25)">INSTANT</span>
-            <span style="background:rgba(255,130,21,0.1);color:var(--gold);font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(255,130,21,0.2)">RECOMMENDED</span>
+            <span style="background:rgba(255,155,12,0.1);color:var(--gold);font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(255,155,12,0.2)">RECOMMENDED</span>
           </div>
         </div>
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.07);display:flex;gap:8px;flex-wrap:wrap">
@@ -1223,13 +1224,13 @@
       </div>
 
       <!-- Fee breakdown strip (shown dynamically for Paystack / Ozow) -->
-      <div id="pmFeeSummary" style="display:none;background:#141720;border:1px solid rgba(255,130,21,0.2);border-radius:10px;padding:12px 14px;margin-bottom:16px;margin-top:16px"></div>
+      <div id="pmFeeSummary" style="display:none;background:#141720;border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:12px 14px;margin-bottom:16px;margin-top:16px"></div>
 
       <div style="display:flex;gap:10px;margin-top:16px">
         <button onclick="goToStep1()" style="padding:12px 20px;background:#252933;color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:0.85rem;font-weight:600;cursor:pointer;transition:all 0.2s" onmouseover="this.style.color='#f0f4ff'" onmouseout="this.style.color='#9ca3af'">
           <i class="fa-solid fa-arrow-left"></i> Back
         </button>
-        <button onclick="proceedPayment()" id="pmProceedBtn" style="flex:1;padding:12px 20px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(255,130,21,0.25);transition:opacity 0.2s" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+        <button onclick="proceedPayment()" id="pmProceedBtn" style="flex:1;padding:12px 20px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(255,155,12,0.25);transition:opacity 0.2s" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
           <i class="fa-solid fa-lock"></i> Proceed to Payment
         </button>
       </div>
@@ -1282,7 +1283,7 @@
         <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#9ca3af;margin-bottom:8px">
           <i class="fa-solid fa-paperclip" style="color:#FF9B0C"></i> Attach Proof of Payment (optional but recommended)
         </div>
-        <label for="eftProofFile" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:#252933;border:1.5px dashed rgba(255,255,255,0.15);border-radius:10px;cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor='rgba(255,130,21,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)'">
+        <label for="eftProofFile" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:#252933;border:1.5px dashed rgba(255,255,255,0.15);border-radius:10px;cursor:pointer;transition:border-color 0.2s" onmouseover="this.style.borderColor='rgba(255,155,12,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)'">
           <i class="fa-solid fa-cloud-arrow-up" style="color:#FF9B0C;font-size:1.2rem"></i>
           <div>
             <div style="font-size:0.82rem;font-weight:700;color:#f0f4ff">Upload proof of payment</div>
@@ -1299,7 +1300,7 @@
         <button onclick="goToStep2()" style="padding:12px 20px;background:#252933;color:#9ca3af;border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:0.85rem;font-weight:600;cursor:pointer" onmouseover="this.style.color='#f0f4ff'" onmouseout="this.style.color='#9ca3af'">
           <i class="fa-solid fa-arrow-left"></i> Back
         </button>
-        <button onclick="confirmEftDeposit()" style="flex:1;padding:12px 20px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(255,130,21,0.25)">
+        <button onclick="confirmEftDeposit()" style="flex:1;padding:12px 20px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(255,155,12,0.25)">
           <i class="fa-solid fa-check"></i> I've Made the Transfer
         </button>
       </div>
@@ -1307,7 +1308,7 @@
 
     <!-- ══ STEP 3: Processing spinner ══ -->
     <div id="pmStep3Processing" style="display:none;padding:48px 24px;text-align:center;background:#1a1d23">
-      <div style="width:64px;height:64px;border:3px solid #252933;border-top-color:#FF8215;border-radius:50%;animation:pmSpin 0.8s linear infinite;margin:0 auto 20px"></div>
+      <div style="width:64px;height:64px;border:3px solid #252933;border-top-color:#ff9b0c;border-radius:50%;animation:pmSpin 0.8s linear infinite;margin:0 auto 20px"></div>
       <div style="font-size:1rem;font-weight:800;color:#f0f4ff;margin-bottom:8px" id="pmProcessingTitle">Processing payment…</div>
       <div style="font-size:0.82rem;color:#9ca3af" id="pmProcessingSubtitle">Please wait, do not close this window</div>
     </div>
@@ -1320,7 +1321,7 @@
       <div style="font-size:1.2rem;font-weight:900;color:#f0f4ff;margin-bottom:8px">Payment Successful!</div>
       <div style="font-size:0.85rem;color:#9ca3af;margin-bottom:6px" id="pmSuccessAmount"></div>
       <div style="font-size:0.78rem;color:#6b7280;margin-bottom:28px" id="pmSuccessRef"></div>
-      <button onclick="closePaymentModal()" style="width:100%;padding:13px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.9rem;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(255,130,21,0.25)">
+      <button onclick="closePaymentModal()" style="width:100%;padding:13px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.9rem;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(255,155,12,0.25)">
         Done — View Wallet
       </button>
     </div>
@@ -1335,8 +1336,8 @@
 #paymentModalBox .info-row__value { color: #f0f4ff !important; }
 #paymentModalBox .info-list .info-row { border-color: rgba(255,255,255,0.06) !important; }
 #paymentModalBox .pm-gateway-card { background: #252933 !important; border-color: rgba(255,255,255,0.1) !important; }
-#paymentModalBox .pm-gateway-card:hover { background: #2e3340 !important; border-color: rgba(255,130,21,0.4) !important; }
-#paymentModalBox .pm-gateway-card.selected { background: rgba(255,130,21,0.07) !important; border-color: #FF8215 !important; box-shadow: 0 0 0 1px rgba(255,130,21,0.3) !important; }
+#paymentModalBox .pm-gateway-card:hover { background: #2e3340 !important; border-color: rgba(255,155,12,0.4) !important; }
+#paymentModalBox .pm-gateway-card.selected { background: rgba(255,155,12,0.07) !important; border-color: #ff9b0c !important; box-shadow: 0 0 0 1px rgba(255,155,12,0.3) !important; }
 #paymentModalBox .pm-method-pill { color: #9ca3af !important; background: #1a1d23 !important; border-color: rgba(255,255,255,0.08) !important; }
 .pm-chip {
   padding: 8px 4px;
@@ -1351,8 +1352,8 @@
   font-family: inherit;
 }
 .pm-chip:hover, .pm-chip.active {
-  background: rgba(255,130,21,0.10);
-  border-color: rgba(255,130,21,0.35);
+  background: rgba(255,155,12,0.10);
+  border-color: rgba(255,155,12,0.35);
   color: #FF9B0C;
 }
 .pm-gateway-card {
@@ -1364,13 +1365,13 @@
   transition: border-color 0.2s, background 0.2s;
 }
 .pm-gateway-card:hover {
-  border-color: rgba(255,130,21,0.4);
+  border-color: rgba(255,155,12,0.4);
   background: #2e3340;
 }
 .pm-gateway-card.selected {
-  border-color: #FF8215;
-  background: rgba(255,130,21,0.07);
-  box-shadow: 0 0 0 1px rgba(255,130,21,0.3);
+  border-color: #ff9b0c;
+  background: rgba(255,155,12,0.07);
+  box-shadow: 0 0 0 1px rgba(255,155,12,0.3);
 }
 .pm-method-pill {
   display: inline-flex;
