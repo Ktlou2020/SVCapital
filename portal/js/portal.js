@@ -1125,29 +1125,25 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
   try {
     // 1. Record the deposit transaction (base wallet-credit amount)
     await API.transactions.create({
-      id:               Utils.genId('TXN'),
-      investor_id:      _pmInvestorId(),
-      investor_name:    _pmInvestorName(),
-      type:             'deposit',
-      amount:           _pmAmount,
-      status:           status,
-      reference:        reference,
-      description:      depositDesc,
-      transaction_date: new Date().toISOString(),
+      id:          Utils.genId('TXN'),
+      investor_id: _pmInvestorId(),
+      type:        'deposit',
+      amount:      _pmAmount,
+      status:      status,
+      reference:   reference,
+      description: depositDesc,
     });
 
     // 2. Record the gateway fee as a separate fee transaction (transparency)
     if (isGateway && fee > 0) {
       await API.transactions.create({
-        id:               Utils.genId('TXN'),
-        investor_id:      _pmInvestorId(),
-        investor_name:    _pmInvestorName(),
-        type:             'fee',
-        amount:           -fee,
-        status:           status,
-        reference:        `FEE-${reference}`,
-        description:      `Gateway fee (2.9% + R1) — ${gatewayLabel} · charged by payment provider`,
-        transaction_date: new Date().toISOString(),
+        id:          Utils.genId('TXN'),
+        investor_id: _pmInvestorId(),
+        type:        'fee',
+        amount:      -fee,
+        status:      status,
+        reference:   `FEE-${reference}`,
+        description: `Gateway fee (2.9% + R1) — ${gatewayLabel} · charged by payment provider`,
       });
     }
 
@@ -1565,16 +1561,14 @@ async function confirmInvestment(pool) {
 
     // Record transaction
     await API.transactions.create({
-      id: Utils.genId('TXN'),
+      id:          Utils.genId('TXN'),
       investor_id: DEMO_INVESTOR_ID,
-      investor_name: `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
-      type: 'investment',
-      amount: -amount,
-      status: 'completed',
-      reference: `INVST-${Date.now()}`,
+      type:        'investment',
+      amount:      -amount,
+      status:      'completed',
+      reference:   `INVST-${Date.now()}`,
       description: `Investment into ${pool.pool_name}`,
-      pool_name: pool.pool_name,
-      transaction_date: new Date().toISOString()
+      pool_id:     pool.id,
     });
 
     // Update investor wallet and totals
