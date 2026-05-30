@@ -1317,6 +1317,13 @@ function filterMarket(type, btn) {
   renderMarketplace();
 }
 
+const _POOL_META = {
+  solar:         { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
+  cattle:        { blurb: 'Invests in livestock purchasing, management, and resale cycles.',   risk: 'Medium-High',  riskColor: '#FF8215' },
+  short_term:    { blurb: 'Short-duration bridging finance to vetted borrowers. High liquidity.', risk: 'Medium',   riskColor: '#f59e0b' },
+  delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',   risk: 'Low-Medium',   riskColor: '#22c55e' },
+};
+
 function renderMarketplace() {
   const grid = document.getElementById('marketplaceGrid');
   const openPools = PORTAL.pools.filter(p => p.status === 'open');
@@ -1327,48 +1334,87 @@ function renderMarketplace() {
         return p.product_type === PORTAL.marketFilter;
       });
 
+  // Update wallet strip
+  const strip = document.getElementById('mktWalletStrip');
+  const walletBal = parseFloat(PORTAL.investor?.wallet_balance) || 0;
+  if (strip) {
+    strip.style.display = 'flex';
+    const balEl = document.getElementById('mktWalletBal');
+    if (balEl) {
+      balEl.textContent = Utils.rand(walletBal);
+      balEl.style.color = walletBal >= 500 ? 'var(--green)' : 'var(--gold)';
+    }
+  }
+
   if (!filtered.length) {
     grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="fa-solid fa-layer-group"></i><p>No open pools in this category right now.</p></div>';
     return;
   }
 
   grid.innerHTML = filtered.map(pool => {
-    const pi = Utils.productInfo(pool.product_type);
-    const pct = Utils.poolFillPct(pool);
+    const pi   = Utils.productInfo(pool.product_type);
+    const pct  = Utils.poolFillPct(pool);
     const days = Utils.daysRemaining(pool.close_date);
+    const meta = _POOL_META[pool.product_type] || { blurb: '', risk: 'Medium', riskColor: '#f59e0b' };
+    const canInvest = walletBal >= pool.min_investment;
+    const urgency   = days !== null && days <= 7;
 
     return `
       <div class="market-pool-card">
         <div class="flex-between">
-          <div class="market-pool-card__icon" style="color:${pi.color}"><i class="fa-solid ${pi.icon}"></i></div>
-          ${Utils.statusBadge(pool.status)}
+          <div class="market-pool-card__icon" style="background:${pi.color}18;color:${pi.color}"><i class="fa-solid ${pi.icon}"></i></div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span class="pool-risk-badge" style="background:${meta.riskColor}18;color:${meta.riskColor}">${meta.risk} risk</span>
+            ${urgency ? `<span class="pool-urgency-badge"><i class="fa-solid fa-fire"></i> Closing soon</span>` : Utils.statusBadge(pool.status)}
+          </div>
         </div>
+
         <div>
           <div class="market-pool-card__title">${pool.pool_name}</div>
-          <div class="market-pool-card__partner">Partner: ${pool.partner_name}</div>
+          <div class="market-pool-card__blurb">${meta.blurb}</div>
         </div>
-        <div>
-          <div class="market-pool-card__rate">${Utils.pct(pool.benchmark_rate)}</div>
-          <div class="market-pool-card__rate-label">per annum · ${pool.term_months} month term</div>
+
+        <div class="pool-rate-row">
+          <div>
+            <div class="market-pool-card__rate">${Utils.pct(pool.benchmark_rate)}</div>
+            <div class="market-pool-card__rate-label">per annum</div>
+          </div>
+          <div class="pool-rate-divider"></div>
+          <div>
+            <div class="market-pool-card__rate" style="font-size:1.4rem">${pool.term_months}mo</div>
+            <div class="market-pool-card__rate-label">fixed term</div>
+          </div>
+          <div class="pool-rate-divider"></div>
+          <div>
+            <div class="market-pool-card__rate" style="font-size:1.4rem">${Utils.rand(pool.min_investment)}</div>
+            <div class="market-pool-card__rate-label">minimum</div>
+          </div>
         </div>
 
         <div class="market-pool-stats">
-          <div class="mps"><span class="mps__label">Min. Invest</span><span class="mps__value">${Utils.rand(pool.min_investment)}</span></div>
-          <div class="mps"><span class="mps__label">Investors</span><span class="mps__value">${pool.investor_count}</span></div>
-          <div class="mps"><span class="mps__label">Closes in</span><span class="mps__value">${days !== null ? days + 'd' : '—'}</span></div>
+          <div class="mps"><span class="mps__label"><i class="fa-solid fa-users" style="font-size:0.65rem"></i> Investors</span><span class="mps__value">${pool.investor_count}</span></div>
+          <div class="mps"><span class="mps__label"><i class="fa-solid fa-clock" style="font-size:0.65rem"></i> Closes in</span><span class="mps__value" style="${urgency?'color:var(--gold)':''}">${days !== null ? days + 'd' : '—'}</span></div>
+          <div class="mps"><span class="mps__label"><i class="fa-solid fa-building-columns" style="font-size:0.65rem"></i> Partner</span><span class="mps__value" style="font-size:0.72rem">${pool.partner_name}</span></div>
         </div>
 
         <div>
           <div class="pool-card__progress-label">
             <span>${Utils.rand(pool.raised_amount)} raised</span>
-            <span>${pct}% of ${Utils.rand(pool.target_amount)}</span>
+            <span>${pct}% funded</span>
           </div>
           <div class="progress-bar"><div class="progress-fill${pool.product_type.includes('solar') ? ' progress-fill--green' : pool.product_type === 'short_term' ? ' progress-fill--blue' : ''}" style="width:${pct}%"></div></div>
         </div>
 
-        <button class="btn btn--primary btn--full" onclick='openInvestModal(${JSON.stringify(pool.id)})'>
-          <i class="fa-solid fa-coins"></i> Invest Now
-        </button>
+        ${canInvest
+          ? `<button class="btn btn--primary btn--full" onclick='openInvestModal(${JSON.stringify(pool.id)})'>
+               <i class="fa-solid fa-coins"></i> Invest Now
+             </button>`
+          : `<div class="pool-card__need-topup">
+               <i class="fa-solid fa-wallet"></i>
+               <span>Need ${Utils.rand(pool.min_investment - walletBal)} more in wallet</span>
+               <button class="btn btn--ghost btn--sm" onclick="navigate('wallet',document.querySelector('[data-view=wallet]'))">Top Up</button>
+             </div>`
+        }
       </div>
     `;
   }).join('');
@@ -1378,60 +1424,102 @@ function openInvestModal(poolId) {
   const pool = PORTAL.pools.find(p => p.id === poolId);
   if (!pool) return;
 
-  const walletBal = PORTAL.investor?.wallet_balance || 0;
+  const walletBal  = parseFloat(PORTAL.investor?.wallet_balance) || 0;
+  const pi         = Utils.productInfo(pool.product_type);
+  const meta       = _POOL_META[pool.product_type] || { risk: 'Medium', riskColor: '#f59e0b' };
+  const maturityDt = new Date();
+  maturityDt.setMonth(maturityDt.getMonth() + pool.term_months);
+  const maturityStr = maturityDt.toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric' });
+
   document.getElementById('investModalTitle').textContent = `Invest in ${pool.pool_name}`;
 
   document.getElementById('investModalBody').innerHTML = `
-    <div class="info-list mb-16">
-      <div class="info-row"><span class="info-row__label">Product</span><span class="info-row__value">${pool.pool_name}</span></div>
-      <div class="info-row"><span class="info-row__label">Return Rate</span><span class="info-row__value text-gold">${Utils.pct(pool.benchmark_rate)} p.a.</span></div>
-      <div class="info-row"><span class="info-row__label">Term</span><span class="info-row__value">${pool.term_months} months</span></div>
-      <div class="info-row"><span class="info-row__label">Min. Investment</span><span class="info-row__value">${Utils.rand(pool.min_investment)}</span></div>
-      <div class="info-row"><span class="info-row__label">Your Wallet</span><span class="info-row__value text-gold">${Utils.rand(walletBal)} available</span></div>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Investment Amount (R) *</label>
-      <input type="number" class="form-input" id="investAmount" placeholder="Minimum ${Utils.rand(pool.min_investment)}" min="${pool.min_investment}" />
-    </div>
-
-    <div id="investCalcPreview" style="background:var(--dark-3);border-radius:var(--radius);padding:14px;margin-top:8px;display:none">
-      <div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:8px">ESTIMATED RETURN</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
-        <div><div style="font-size:0.65rem;color:var(--text-dim)">Invested</div><div id="ic-invested" style="font-size:0.9rem;font-weight:800;color:var(--white)">—</div></div>
-        <div><div style="font-size:0.65rem;color:var(--text-dim)">Returns</div><div id="ic-returns" style="font-size:0.9rem;font-weight:800;color:var(--green)">—</div></div>
-        <div><div style="font-size:0.65rem;color:var(--text-dim)">Total</div><div id="ic-total" style="font-size:0.9rem;font-weight:800;color:var(--gold)">—</div></div>
+    <!-- Pool summary card -->
+    <div class="invest-modal-pool-card">
+      <div class="invest-modal-pool-icon" style="background:${pi.color}20;color:${pi.color}">
+        <i class="fa-solid ${pi.icon}"></i>
+      </div>
+      <div class="invest-modal-pool-info">
+        <div class="invest-modal-pool-name">${pool.pool_name}</div>
+        <div class="invest-modal-pool-meta">
+          <span style="color:${pi.color};font-weight:700">${Utils.pct(pool.benchmark_rate)} p.a.</span>
+          <span>·</span>
+          <span>${pool.term_months}-month term</span>
+          <span>·</span>
+          <span class="pool-risk-badge" style="background:${meta.riskColor}18;color:${meta.riskColor}">${meta.risk} risk</span>
+        </div>
       </div>
     </div>
 
-    <div style="font-size:0.72rem;color:var(--text-dim);margin-top:12px;line-height:1.6">
-      <i class="fa-solid fa-lock" style="color:var(--gold)"></i> 
-      Your funds will be locked for <strong>${pool.term_months} months</strong>. Early withdrawals are not permitted. Returns are not guaranteed.
+    <!-- Wallet balance indicator -->
+    <div class="invest-wallet-indicator ${walletBal >= pool.min_investment ? 'invest-wallet-ok' : 'invest-wallet-low'}">
+      <i class="fa-solid fa-wallet"></i>
+      <span>Your wallet: <strong>${Utils.rand(walletBal)}</strong></span>
+      ${walletBal < pool.min_investment
+        ? `<button class="btn btn--ghost btn--sm" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))">
+             <i class="fa-solid fa-plus"></i> Top Up
+           </button>`
+        : `<span class="invest-wallet-ok-badge"><i class="fa-solid fa-circle-check"></i> Sufficient</span>`}
+    </div>
+
+    <!-- Quick-pick amount buttons -->
+    <div class="form-group" style="margin-top:14px">
+      <label class="form-label">How much would you like to invest?</label>
+      <div class="invest-quickpick mb-8">
+        ${[pool.min_investment, 5000, 10000, 25000].filter(v => v <= walletBal || v === pool.min_investment).map(v =>
+          `<button class="invest-qp-btn" onclick="document.getElementById('investAmount').value=${v};_updateInvestCalc(${v},${pool.benchmark_rate},${pool.term_months},${pool.min_investment})">${Utils.rand(v)}</button>`
+        ).join('')}
+      </div>
+      <input type="number" class="form-input" id="investAmount"
+        placeholder="Enter amount (min ${Utils.rand(pool.min_investment)})"
+        min="${pool.min_investment}" max="${walletBal}" oninput="_updateInvestCalc(parseFloat(this.value)||0,${pool.benchmark_rate},${pool.term_months},${pool.min_investment})" />
+    </div>
+
+    <!-- Live return calculator -->
+    <div id="investCalcPreview" class="invest-calc-box">
+      <div class="invest-calc-label">Estimated return at maturity</div>
+      <div class="invest-calc-grid">
+        <div><div class="invest-calc-caption">Invested</div><div class="invest-calc-val" id="ic-invested">—</div></div>
+        <div class="invest-calc-plus">+</div>
+        <div><div class="invest-calc-caption">Returns</div><div class="invest-calc-val" id="ic-returns" style="color:var(--green)">—</div></div>
+        <div class="invest-calc-equals">=</div>
+        <div><div class="invest-calc-caption">Total payout</div><div class="invest-calc-val invest-calc-total" id="ic-total">—</div></div>
+      </div>
+      <div class="invest-calc-date" id="ic-maturity">Maturity date: <strong>${maturityStr}</strong></div>
+    </div>
+
+    <!-- What happens next timeline -->
+    <div class="invest-next-steps">
+      <div class="ins-step"><div class="ins-dot ins-dot--active"></div><div class="ins-label"><b>Now</b> — funds deducted from wallet</div></div>
+      <div class="ins-step"><div class="ins-dot"></div><div class="ins-label"><b>Ongoing</b> — returns accrue daily</div></div>
+      <div class="ins-step"><div class="ins-dot"></div><div class="ins-label"><b>${maturityStr}</b> — payout to your wallet</div></div>
+    </div>
+
+    <div class="invest-lock-note">
+      <i class="fa-solid fa-lock" style="color:var(--gold)"></i>
+      Capital is locked for <strong>${pool.term_months} months</strong>. Early withdrawal is not available. Returns are not guaranteed.
     </div>
   `;
 
-  // Live calculation preview
-  setTimeout(() => {
-    const amtInput = document.getElementById('investAmount');
-    if (amtInput) {
-      amtInput.addEventListener('input', () => {
-        const amt = parseFloat(amtInput.value);
-        const preview = document.getElementById('investCalcPreview');
-        if (amt >= pool.min_investment) {
-          const ret = amt * pool.benchmark_rate * (pool.term_months / 12);
-          document.getElementById('ic-invested').textContent = Utils.rand(Math.round(amt));
-          document.getElementById('ic-returns').textContent = '+' + Utils.rand(Math.round(ret));
-          document.getElementById('ic-total').textContent = Utils.rand(Math.round(amt + ret));
-          preview.style.display = 'block';
-        } else {
-          preview.style.display = 'none';
-        }
-      });
-    }
-  }, 100);
-
   document.getElementById('investConfirmBtn').onclick = () => confirmInvestment(pool);
   Modal.open('investModal');
+}
+
+function _updateInvestCalc(amt, rate, termMonths, minInvest) {
+  const preview = document.getElementById('investCalcPreview');
+  if (!preview) return;
+  if (amt >= minInvest) {
+    const ret = amt * rate * (termMonths / 12);
+    document.getElementById('ic-invested').textContent = Utils.rand(Math.round(amt));
+    document.getElementById('ic-returns').textContent  = '+' + Utils.rand(Math.round(ret));
+    document.getElementById('ic-total').textContent    = Utils.rand(Math.round(amt + ret));
+    preview.classList.add('invest-calc-box--visible');
+  } else {
+    document.getElementById('ic-invested').textContent = '—';
+    document.getElementById('ic-returns').textContent  = '—';
+    document.getElementById('ic-total').textContent    = '—';
+    preview.classList.remove('invest-calc-box--visible');
+  }
 }
 
 async function confirmInvestment(pool) {
@@ -2525,42 +2613,92 @@ function renderQuestView() {
     first_referral: false,
   };
 
-  catEl.innerHTML = categories.map(cat => {
+  // ── Helper: build a single quest card HTML
+  function _qCard(quest, cat) {
+    const isDone  = completed.has(quest.id);
+    const isReady = !isDone && (
+      cat === 'profile'   ? true :
+      cat === 'milestone' ? milestones[quest.id] === true :
+      cat === 'learning'  ? true : false
+    );
+    return `
+      <div class="quest-card ${isDone ? 'quest-card--done' : isReady ? 'quest-card--ready' : ''}" id="qcard-${quest.id}">
+        <div class="quest-card__icon" style="background:${quest.color}22;color:${quest.color}">
+          <i class="fa-solid ${quest.icon}"></i>
+        </div>
+        <div class="quest-card__body">
+          <div class="quest-card__title">${quest.title}</div>
+          ${quest.description ? `<div class="quest-card__desc">${quest.description}</div>` : ''}
+        </div>
+        <div class="quest-card__right">
+          <div class="quest-card__xp" style="color:${quest.color}">+${quest.xp} XP</div>
+          ${isDone
+            ? `<div class="quest-card__done-badge"><i class="fa-solid fa-circle-check"></i> Done</div>`
+            : isReady
+              ? (cat === 'milestone'
+                  ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="claimMilestoneQuest('${quest.id}')">Claim</button>`
+                  : cat === 'learning'
+                    ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="navigate('learn', document.querySelector('[data-view=learn]'))">Start</button>`
+                    : `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="openSurveyModal('${quest.id}')">Start</button>`)
+              : `<div class="quest-card__locked"><i class="fa-solid fa-lock-open"></i> Available</div>`
+          }
+        </div>
+      </div>`;
+  }
+
+  // ── "What to do next" pending section ─────────────────
+  const claimable  = q.quests.filter(quest => quest.category === 'milestone' && !completed.has(quest.id) && milestones[quest.id] === true);
+  const quickWins  = q.quests.filter(quest => quest.category === 'profile'   && !completed.has(quest.id));
+  const learnReady = q.quests.filter(quest => quest.category === 'learning'  && !completed.has(quest.id));
+  const totalPending = claimable.length + quickWins.length + learnReady.length;
+
+  let pendingHtml = '';
+  if (totalPending > 0) {
+    const pendingXP = [...claimable, ...quickWins, ...learnReady].reduce((s, qst) => s + qst.xp, 0);
+    const nextLvlXp = next ? (next.min - xp) : 0;
+
+    let pendingGroups = '';
+    if (claimable.length) {
+      pendingGroups += `
+        <div class="pending-group">
+          <div class="pending-group__label"><i class="fa-solid fa-gift" style="color:#22c55e"></i> Ready to claim — milestone reached!</div>
+          <div class="quest-cards-grid">${claimable.map(qst => _qCard(qst, 'milestone')).join('')}</div>
+        </div>`;
+    }
+    if (quickWins.length) {
+      pendingGroups += `
+        <div class="pending-group">
+          <div class="pending-group__label"><i class="fa-solid fa-bolt" style="color:#FF8215"></i> Quick wins — complete a short survey</div>
+          <div class="quest-cards-grid">${quickWins.map(qst => _qCard(qst, 'profile')).join('')}</div>
+        </div>`;
+    }
+    if (learnReady.length) {
+      pendingGroups += `
+        <div class="pending-group">
+          <div class="pending-group__label"><i class="fa-solid fa-graduation-cap" style="color:#2F8C9B"></i> Learning modules — earn XP & knowledge</div>
+          <div class="quest-cards-grid">${learnReady.map(qst => _qCard(qst, 'learning')).join('')}</div>
+        </div>`;
+    }
+
+    pendingHtml = `
+      <div class="pending-section mb-28">
+        <div class="pending-section__header">
+          <div class="pending-section__title-row">
+            <div>
+              <div class="pending-section__title"><i class="fa-solid fa-list-check"></i> What to do next</div>
+              <div class="pending-section__sub">${totalPending} reward${totalPending !== 1 ? 's' : ''} waiting for you · <span style="color:var(--gold)">${pendingXP} XP available</span>${nextLvlXp > 0 ? ` · <span style="color:#22c55e">${nextLvlXp} XP to next level (+R50)</span>` : ''}</div>
+            </div>
+          </div>
+        </div>
+        ${pendingGroups}
+      </div>`;
+  }
+
+  // ── Full category breakdown ──────────────────────────
+  const categoryHtml = categories.map(cat => {
     const catQuests = q.quests.filter(quest => quest.category === cat.key);
     const doneCount = catQuests.filter(quest => completed.has(quest.id)).length;
-
-    const questCards = catQuests.map(quest => {
-      const isDone   = completed.has(quest.id);
-      const isReady  = !isDone && (
-        cat.key === 'profile'   ? true :
-        cat.key === 'milestone' ? milestones[quest.id] === true :
-        cat.key === 'learning'  ? true : false
-      );
-
-      return `
-        <div class="quest-card ${isDone ? 'quest-card--done' : isReady ? 'quest-card--ready' : ''}" id="qcard-${quest.id}">
-          <div class="quest-card__icon" style="background:${quest.color}22;color:${quest.color}">
-            <i class="fa-solid ${quest.icon}"></i>
-          </div>
-          <div class="quest-card__body">
-            <div class="quest-card__title">${quest.title}</div>
-            ${quest.description ? `<div class="quest-card__desc">${quest.description}</div>` : ''}
-          </div>
-          <div class="quest-card__right">
-            <div class="quest-card__xp" style="color:${quest.color}">+${quest.xp} XP</div>
-            ${isDone
-              ? `<div class="quest-card__done-badge"><i class="fa-solid fa-circle-check"></i> Done</div>`
-              : isReady
-                ? (cat.key === 'milestone'
-                    ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="claimMilestoneQuest('${quest.id}')">Claim</button>`
-                    : cat.key === 'learning'
-                      ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="navigate('learn', document.querySelector('[data-view=learn]'))">Start</button>`
-                      : `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="openSurveyModal('${quest.id}')">Start</button>`)
-                : `<div class="quest-card__locked"><i class="fa-solid fa-lock-open"></i> Available</div>`
-            }
-          </div>
-        </div>`;
-    }).join('');
+    const questCards = catQuests.map(quest => _qCard(quest, cat.key)).join('');
 
     return `
       <div class="quest-category mb-24">
@@ -2580,6 +2718,8 @@ function renderQuestView() {
         <div class="quest-cards-grid">${questCards}</div>
       </div>`;
   }).join('');
+
+  catEl.innerHTML = pendingHtml + categoryHtml;
 }
 
 /* ─── Claim a milestone quest via button ─────────────────── */

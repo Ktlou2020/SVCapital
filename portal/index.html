@@ -519,7 +519,7 @@
            VIEW: MARKETPLACE (Browse Pools)
       ══════════════════════════════════ -->
       <div class="view" id="view-marketplace">
-        <div class="section-banner mb-20">
+        <div class="section-banner mb-16">
           <div>
             <h2 class="section-banner__title">Open Investment Pools</h2>
             <p class="section-banner__sub">Invest in real, asset-backed opportunities. All investments are FSCA-regulated via SmartVest Financial Services (FSP 52449).</p>
@@ -531,6 +531,42 @@
             <button class="tab-btn" onclick="filterMarket('short_term', this)">Short-Term</button>
             <button class="tab-btn" onclick="filterMarket('delivery_bike', this)">Delivery</button>
           </div>
+        </div>
+
+        <!-- How to Invest steps -->
+        <div class="invest-guide-strip mb-16">
+          <div class="igs-step">
+            <div class="igs-num">1</div>
+            <i class="fa-solid fa-wallet igs-icon"></i>
+            <div class="igs-text"><b>Fund Wallet</b><span>Top up via Ozow or EFT</span></div>
+          </div>
+          <i class="fa-solid fa-chevron-right igs-arrow"></i>
+          <div class="igs-step igs-step--active">
+            <div class="igs-num">2</div>
+            <i class="fa-solid fa-layer-group igs-icon"></i>
+            <div class="igs-text"><b>Choose a Pool</b><span>Browse open opportunities below</span></div>
+          </div>
+          <i class="fa-solid fa-chevron-right igs-arrow"></i>
+          <div class="igs-step">
+            <div class="igs-num">3</div>
+            <i class="fa-solid fa-coins igs-icon"></i>
+            <div class="igs-text"><b>Confirm Amount</b><span>Set your investment size</span></div>
+          </div>
+          <i class="fa-solid fa-chevron-right igs-arrow"></i>
+          <div class="igs-step">
+            <div class="igs-num">4</div>
+            <i class="fa-solid fa-chart-line igs-icon"></i>
+            <div class="igs-text"><b>Earn Returns</b><span>Track in My Investments</span></div>
+          </div>
+        </div>
+
+        <!-- Wallet balance strip -->
+        <div class="mkt-wallet-strip mb-16" id="mktWalletStrip" style="display:none">
+          <i class="fa-solid fa-wallet"></i>
+          <span>Wallet available: <strong id="mktWalletBal">—</strong></span>
+          <button class="btn btn--ghost btn--sm" onclick="navigate('wallet',document.querySelector('[data-view=wallet]'))">
+            <i class="fa-solid fa-plus"></i> Top Up
+          </button>
         </div>
 
         <div class="grid-3" id="marketplaceGrid">

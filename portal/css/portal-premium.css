@@ -1567,3 +1567,236 @@ body.dark-mode .deposit-prompt-products span {
 .deposit-prompt-later { margin-bottom: 2px; font-weight: 600; color: #6b7280; }
 .deposit-prompt-later:hover { color: #1a1a1a; }
 .deposit-prompt-never:hover { color: #ef4444; }
+
+/* ═══════════════════════════════════════════════════════
+   §41 — MARKETPLACE IMPROVEMENTS
+   ═══════════════════════════════════════════════════════ */
+
+/* How-to-invest guide strip */
+.invest-guide-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(47,140,155,0.06) 0%, rgba(255,130,21,0.06) 100%);
+  border: 1px solid rgba(47,140,155,0.18);
+  border-radius: 14px;
+  padding: 14px 20px;
+  flex-wrap: wrap;
+}
+.igs-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 140px;
+}
+.igs-step--active .igs-num { background: #2F8C9B; color: #fff; }
+.igs-step--active .igs-icon { color: #2F8C9B; }
+.igs-step--active .igs-text b { color: #2F8C9B; }
+.igs-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: rgba(47,140,155,0.15); color: #2F8C9B;
+  font-size: 0.72rem; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.igs-icon { font-size: 1.1rem; color: #9ca3af; flex-shrink: 0; }
+.igs-text { display: flex; flex-direction: column; }
+.igs-text b { font-size: 0.78rem; font-weight: 700; color: #1a1a1a; line-height: 1.2; }
+.igs-text span { font-size: 0.68rem; color: #9ca3af; }
+.igs-arrow { color: #d1d5db; font-size: 0.7rem; flex-shrink: 0; }
+
+/* Wallet balance strip */
+.mkt-wallet-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel-bg, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 0.82rem;
+  color: var(--text-dim, #6b7280);
+}
+.mkt-wallet-strip i { color: #2F8C9B; }
+.mkt-wallet-strip .btn--sm { margin-left: auto; }
+
+/* Enhanced pool card extras */
+.pool-risk-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.pool-urgency-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: rgba(239,68,68,0.1);
+  color: #ef4444;
+  white-space: nowrap;
+}
+.market-pool-card__blurb {
+  font-size: 0.73rem;
+  color: #9ca3af;
+  margin-top: 3px;
+  line-height: 1.5;
+}
+.pool-rate-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: rgba(47,140,155,0.05);
+  border-radius: 10px;
+  padding: 10px 0;
+  text-align: center;
+}
+.pool-rate-row > div { flex: 1; }
+.pool-rate-divider { width: 1px; height: 32px; background: var(--border-color, #e5e7eb); flex-shrink: 0; }
+.pool-card__need-topup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,130,21,0.06);
+  border: 1px dashed rgba(255,130,21,0.3);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.76rem;
+  color: #FF8215;
+}
+.pool-card__need-topup .btn { margin-left: auto; }
+
+/* ─── Invest modal improvements ─── */
+.invest-modal-pool-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--dark-3, #f9fafb);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.invest-modal-pool-icon {
+  width: 44px; height: 44px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem; flex-shrink: 0;
+}
+.invest-modal-pool-name { font-size: 0.95rem; font-weight: 800; color: #1a1a1a; }
+.invest-modal-pool-meta { display: flex; align-items: center; gap: 6px; font-size: 0.73rem; color: #9ca3af; margin-top: 4px; flex-wrap: wrap; }
+
+.invest-wallet-indicator {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-radius: 10px;
+  font-size: 0.8rem; font-weight: 600;
+  margin-bottom: 4px;
+}
+.invest-wallet-ok { background: rgba(34,197,94,0.08); color: #15803d; border: 1px solid rgba(34,197,94,0.2); }
+.invest-wallet-low { background: rgba(255,130,21,0.08); color: #c2410c; border: 1px solid rgba(255,130,21,0.2); }
+.invest-wallet-ok-badge { font-size: 0.72rem; color: #22c55e; margin-left: auto; font-weight: 700; }
+
+.invest-quickpick { display: flex; gap: 6px; flex-wrap: wrap; }
+.invest-qp-btn {
+  font-size: 0.72rem; font-weight: 700;
+  padding: 5px 12px; border-radius: 20px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--panel-bg, #fff);
+  color: #1a1a1a; cursor: pointer;
+  transition: all 0.15s;
+}
+.invest-qp-btn:hover { background: #2F8C9B; border-color: #2F8C9B; color: #fff; }
+
+.invest-calc-box {
+  background: var(--dark-3, #f9fafb);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 12px;
+  padding: 14px;
+  margin-top: 10px;
+  opacity: 0.4;
+  transition: opacity 0.25s;
+}
+.invest-calc-box--visible { opacity: 1; }
+.invest-calc-label { font-size: 0.65rem; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+.invest-calc-grid {
+  display: flex; align-items: center; gap: 8px; justify-content: center; text-align: center;
+  flex-wrap: wrap;
+}
+.invest-calc-caption { font-size: 0.6rem; color: #9ca3af; }
+.invest-calc-val { font-size: 1rem; font-weight: 800; color: #1a1a1a; }
+.invest-calc-total { color: var(--gold, #D4AF37) !important; font-size: 1.15rem !important; }
+.invest-calc-plus, .invest-calc-equals { font-size: 1rem; font-weight: 700; color: #9ca3af; }
+.invest-calc-date { font-size: 0.72rem; color: #9ca3af; margin-top: 10px; text-align: center; }
+
+.invest-next-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  margin-top: 14px;
+}
+.ins-step { display: flex; align-items: center; gap: 10px; }
+.ins-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--border-color, #e5e7eb); flex-shrink: 0;
+}
+.ins-dot--active { background: #2F8C9B; box-shadow: 0 0 0 3px rgba(47,140,155,0.2); }
+.ins-label { font-size: 0.75rem; color: #6b7280; }
+.ins-label b { color: #1a1a1a; }
+
+.invest-lock-note {
+  font-size: 0.72rem; color: #9ca3af; margin-top: 12px; line-height: 1.6;
+  background: rgba(212,175,55,0.06);
+  border-radius: 8px; padding: 8px 12px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   §42 — QUEST PENDING SECTION
+   ═══════════════════════════════════════════════════════ */
+
+.pending-section {
+  background: linear-gradient(135deg, rgba(255,130,21,0.04) 0%, rgba(47,140,155,0.04) 100%);
+  border: 1.5px solid rgba(255,130,21,0.2);
+  border-radius: 16px;
+  padding: 20px;
+}
+.pending-section__header { margin-bottom: 18px; }
+.pending-section__title-row { display: flex; align-items: flex-start; gap: 12px; }
+.pending-section__title {
+  font-size: 1rem; font-weight: 800; color: #1a1a1a;
+  display: flex; align-items: center; gap: 8px;
+}
+.pending-section__title i { color: #FF8215; }
+.pending-section__sub { font-size: 0.76rem; color: #6b7280; margin-top: 4px; }
+
+.pending-group { margin-bottom: 18px; }
+.pending-group:last-child { margin-bottom: 0; }
+.pending-group__label {
+  font-size: 0.72rem; font-weight: 700; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 10px;
+}
+
+/* Dark mode overrides for new elements */
+body.dark-mode .invest-guide-strip {
+  background: linear-gradient(135deg, rgba(47,140,155,0.1) 0%, rgba(255,130,21,0.08) 100%) !important;
+  border-color: rgba(47,140,155,0.25) !important;
+}
+body.dark-mode .igs-text b { color: #e5e7eb !important; }
+body.dark-mode .mkt-wallet-strip { background: #1e2530 !important; border-color: rgba(255,255,255,0.08) !important; color: #9ca3af !important; }
+body.dark-mode .invest-modal-pool-card { background: #1e2530 !important; }
+body.dark-mode .invest-modal-pool-name { color: #e5e7eb !important; }
+body.dark-mode .invest-calc-box { background: #1e2530 !important; border-color: rgba(255,255,255,0.08) !important; }
+body.dark-mode .invest-calc-val { color: #e5e7eb !important; }
+body.dark-mode .invest-next-steps { border-top-color: rgba(255,255,255,0.08) !important; }
+body.dark-mode .ins-label { color: #9ca3af !important; }
+body.dark-mode .ins-label b { color: #e5e7eb !important; }
+body.dark-mode .invest-qp-btn { background: #1e2530 !important; border-color: rgba(255,255,255,0.12) !important; color: #e5e7eb !important; }
+body.dark-mode .pool-rate-row { background: rgba(47,140,155,0.08) !important; }
+body.dark-mode .pool-rate-divider { background: rgba(255,255,255,0.08) !important; }
+body.dark-mode .pending-section { background: linear-gradient(135deg, rgba(255,130,21,0.06) 0%, rgba(47,140,155,0.06) 100%) !important; border-color: rgba(255,130,21,0.25) !important; }
+body.dark-mode .pending-section__title { color: #e5e7eb !important; }
+body.dark-mode .pending-section__sub { color: #9ca3af !important; }
