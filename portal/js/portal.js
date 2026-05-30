@@ -1319,7 +1319,7 @@ function filterMarket(type, btn) {
 
 const _POOL_META = {
   solar:         { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  cattle:        { blurb: 'Invests in livestock purchasing, management, and resale cycles.',   risk: 'Medium-High',  riskColor: '#FF8215' },
+  cattle:        { blurb: 'Invests in livestock purchasing, management, and resale cycles.',   risk: 'Medium-High',  riskColor: '#ff9b0c' },
   short_term:    { blurb: 'Short-duration bridging finance to vetted borrowers. High liquidity.', risk: 'Medium',   riskColor: '#f59e0b' },
   delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',   risk: 'Low-Medium',   riskColor: '#22c55e' },
 };
@@ -2034,12 +2034,12 @@ function buildStatementHTML(opts) {
   if (incPortfolio) {
     sections += `
       <section style="margin-bottom:36px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #FF8215">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #ff9b0c">
           <div style="width:4px;height:22px;background:linear-gradient(180deg,#FF9B0C,#FF5229);border-radius:2px"></div>
           <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Portfolio Summary</h3>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px">
-          ${stmtKPIBox('Total Portfolio Value', fmtNum(totalValue), '#FF8215')}
+          ${stmtKPIBox('Total Portfolio Value', fmtNum(totalValue), '#ff9b0c')}
           ${stmtKPIBox('Capital Deployed', fmtNum(totalInvested), '#2F8C9B')}
           ${stmtKPIBox('Returns Earned', fmtNum(totalReturns), '#22C55E')}
           ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#A855F7')}
@@ -2086,7 +2086,7 @@ function buildStatementHTML(opts) {
         <td style="padding:8px 10px;font-size:11px;color:#6b7280;text-align:center">${d.count}</td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right;font-weight:600">${fmtNum(d.capital)}</td>
         <td style="padding:8px 10px;font-size:11px;color:#22C55E;text-align:right;font-weight:700">${fmtNum(d.returns)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#FF8215;text-align:right;font-weight:700">${pct}%</td>
+        <td style="padding:8px 10px;font-size:11px;color:#ff9b0c;text-align:right;font-weight:700">${pct}%</td>
       </tr>`;
     }).join('');
 
@@ -2112,7 +2112,7 @@ function buildStatementHTML(opts) {
               <td colspan="2" style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a">TOTAL</td>
               <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a;text-align:right">${fmtNum(totalInvested)}</td>
               <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#22C55E;text-align:right">${fmtNum(totalReturns)}</td>
-              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#FF8215;text-align:right">${totalInvested>0?((totalReturns/totalInvested)*100).toFixed(2):0}%</td>
+              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#ff9b0c;text-align:right">${totalInvested>0?((totalReturns/totalInvested)*100).toFixed(2):0}%</td>
             </tr>
           </tfoot>
         </table>
@@ -2133,7 +2133,7 @@ function buildStatementHTML(opts) {
           <span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em">${info.label}</span>
         </td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right;font-weight:700">${fmtNum(inv.amount)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#FF8215;text-align:right;font-weight:700">${rate}%</td>
+        <td style="padding:8px 10px;font-size:11px;color:#ff9b0c;text-align:right;font-weight:700">${rate}%</td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${fmtDate(inv.investment_date)}</td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${maturity}</td>
         <td style="padding:8px 10px">
@@ -2205,7 +2205,7 @@ function buildStatementHTML(opts) {
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
           ${stmtMiniBox('Total Deposits', fmtNum(totalDeposits), '#22C55E')}
           ${stmtMiniBox('Total Invested', fmtNum(totalWithdrawals), '#2F8C9B')}
-          ${stmtMiniBox('Returns Received', fmtNum(totalReturnsTxn), '#FF8215')}
+          ${stmtMiniBox('Returns Received', fmtNum(totalReturnsTxn), '#ff9b0c')}
         </div>
         <div style="overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:600px">
@@ -2239,14 +2239,14 @@ function buildStatementHTML(opts) {
           </div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:16px;font-weight:800;color:#FF8215;letter-spacing:0.04em">ACCOUNT STATEMENT</div>
+          <div style="font-size:16px;font-weight:800;color:#ff9b0c;letter-spacing:0.04em">ACCOUNT STATEMENT</div>
           <div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:4px"># ${statementNumber}</div>
           <div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:2px">Generated: ${generatedAt}</div>
         </div>
       </div>
 
       <!-- Period Banner -->
-      <div style="background:linear-gradient(90deg,rgba(255,130,21,0.08),rgba(47,140,155,0.06));border-top:3px solid #FF8215;border-bottom:1px solid rgba(0,0,0,0.06);padding:12px 40px;display:flex;align-items:center;justify-content:space-between">
+      <div style="background:linear-gradient(90deg,rgba(255,155,12,0.08),rgba(47,140,155,0.06));border-top:3px solid #ff9b0c;border-bottom:1px solid rgba(0,0,0,0.06);padding:12px 40px;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em">Statement Period:</span>
           <span style="font-size:12px;font-weight:800;color:#1a1a1a">${fmtDate(from)} — ${fmtDate(to)}</span>
@@ -2254,7 +2254,7 @@ function buildStatementHTML(opts) {
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em">Investor:</span>
           <span style="font-size:12px;font-weight:800;color:#1a1a1a">${fullName}</span>
-          <span style="background:rgba(255,130,21,0.1);color:#E56200;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(255,130,21,0.2);margin-left:4px">${investorId}</span>
+          <span style="background:rgba(255,155,12,0.1);color:#ff5229;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(255,155,12,0.2);margin-left:4px">${investorId}</span>
         </div>
       </div>
 
@@ -2371,7 +2371,7 @@ const XP_LEVELS = [
   { id: 'sprout',     label: 'Sprout',     min: 100,  icon: 'fa-leaf',             color: '#22c55e' },
   { id: 'grower',     label: 'Grower',     min: 300,  icon: 'fa-tree',             color: '#16a34a' },
   { id: 'cultivator', label: 'Cultivator', min: 600,  icon: 'fa-spa',              color: '#2F8C9B' },
-  { id: 'harvester',  label: 'Harvester',  min: 1000, icon: 'fa-wheat-awn',        color: '#FF8215' },
+  { id: 'harvester',  label: 'Harvester',  min: 1000, icon: 'fa-wheat-awn',        color: '#ff9b0c' },
   { id: 'pioneer',    label: 'Pioneer',    min: 1500, icon: 'fa-compass',          color: '#f59e0b' },
   { id: 'architect',  label: 'Architect',  min: 2500, icon: 'fa-building-columns', color: '#a855f7' },
   { id: 'luminary',   label: 'Luminary',   min: 5000, icon: 'fa-crown',            color: '#D4AF37' },
@@ -2668,7 +2668,7 @@ function renderQuestView() {
     if (quickWins.length) {
       pendingGroups += `
         <div class="pending-group">
-          <div class="pending-group__label"><i class="fa-solid fa-bolt" style="color:#FF8215"></i> Quick wins — complete a short survey</div>
+          <div class="pending-group__label"><i class="fa-solid fa-bolt" style="color:#ff9b0c"></i> Quick wins — complete a short survey</div>
           <div class="quest-cards-grid">${quickWins.map(qst => _qCard(qst, 'profile')).join('')}</div>
         </div>`;
     }
@@ -2703,8 +2703,8 @@ function renderQuestView() {
     return `
       <div class="quest-category mb-24">
         <div class="quest-category__header">
-          <div class="quest-category__icon-wrap" style="background:rgba(255,130,21,0.1)">
-            <i class="fa-solid ${cat.icon}" style="color:#FF8215"></i>
+          <div class="quest-category__icon-wrap" style="background:rgba(255,155,12,0.1)">
+            <i class="fa-solid ${cat.icon}" style="color:#ff9b0c"></i>
           </div>
           <div>
             <div class="quest-category__title">${cat.label}</div>
@@ -2887,7 +2887,7 @@ function _launchConfettiParticles() {
   const container = document.getElementById('levelupConfetti');
   if (!container) return;
   container.innerHTML = '';
-  const colors = ['#FF8215', '#22c55e', '#2F8C9B', '#D4AF37', '#a855f7'];
+  const colors = ['#ff9b0c', '#22c55e', '#2F8C9B', '#D4AF37', '#a855f7'];
   for (let i = 0; i < 40; i++) {
     const p = document.createElement('span');
     p.style.cssText = `
@@ -2976,7 +2976,7 @@ Short-term business loans are secured against verifiable collateral (trading ass
   {
     id: 'learn_diversification', track: 'explorer', order: 5,
     title: 'Diversification 101', readTime: 6, xp: 50,
-    icon: 'fa-chart-pie', color: '#FF8215',
+    icon: 'fa-chart-pie', color: '#ff9b0c',
     keyPoints: [
       'Spreading capital across products reduces exposure to any single risk',
       'Different products have different maturity timelines, creating natural liquidity',
@@ -3044,7 +3044,7 @@ Note that SV Capital does not deduct tax at source — you are responsible for d
   {
     id: 'learn_yield_opt', track: 'strategist', order: 1,
     title: 'Yield Optimisation', readTime: 10, xp: 50,
-    icon: 'fa-chart-line-up', color: '#FF8215',
+    icon: 'fa-chart-line-up', color: '#ff9b0c',
     keyPoints: [
       'Blending high-rate short-term products with stable long-term ones maximises risk-adjusted yield',
       'Entry timing and reinvestment speed have a significant impact on effective annualised returns',

@@ -32,7 +32,7 @@
   position: absolute;
   top: 0; right: 0;
   width: 200px; height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,130,21,0.04));
+  background: linear-gradient(90deg, transparent, rgba(255,155,12,0.04));
   pointer-events: none;
 }
 
@@ -48,7 +48,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 6px 18px rgba(255,130,21,0.28);
+  box-shadow: 0 6px 18px rgba(255,155,12,0.28);
   letter-spacing: -0.02em;
 }
 
@@ -58,7 +58,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #FF8215;
+  color: var(--ci-orange, #ff9b0c);
   margin-bottom: 2px;
 }
 .welcome-name {
@@ -94,9 +94,9 @@
   color: #16a34a;
 }
 .welcome-chip--orange {
-  background: rgba(255,130,21,0.08);
-  border-color: rgba(255,130,21,0.25);
-  color: #E56200;
+  background: rgba(255,155,12,0.08);
+  border-color: rgba(255,155,12,0.25);
+  color: var(--ci-orange-dark, #ff5229);
 }
 .welcome-chip--teal {
   background: rgba(47,140,155,0.08);
@@ -188,7 +188,7 @@
 .my-inv-card:hover {
   transform: translateY(-4px) !important;
   box-shadow: 0 12px 36px rgba(0,0,0,0.12) !important;
-  border-color: rgba(255,130,21,0.30) !important;
+  border-color: rgba(255,155,12,0.30) !important;
 }
 .my-inv-card::before {
   content: '';
@@ -205,9 +205,9 @@
   padding: 10px 8px !important;
   transition: background 0.2s ease;
 }
-.my-inv-card:hover .mic-stat { background: rgba(255,130,21,0.05) !important; }
+.my-inv-card:hover .mic-stat { background: rgba(255,155,12,0.05) !important; }
 
-.mic-stat__value--gold { color: #FF8215 !important; }
+.mic-stat__value--gold { color: var(--ci-orange, #ff9b0c) !important; }
 .mic-stat__value--green { color: #22c55e !important; }
 
 /* ─── 6. Marketplace Pool Cards ─────────────────────────────── */
@@ -218,7 +218,7 @@
 .market-pool-card:hover {
   transform: translateY(-5px) !important;
   box-shadow: 0 14px 40px rgba(0,0,0,0.16) !important;
-  border-color: rgba(255,130,21,0.35) !important;
+  border-color: rgba(255,155,12,0.35) !important;
 }
 
 .market-pool-card__rate {
@@ -296,7 +296,7 @@
 }
 .perf-row__value.positive { color: #16a34a; }
 .perf-row__value.neutral  { color: #6b7280; }
-.perf-row__value.warning  { color: #FF8215; }
+.perf-row__value.warning  { color: var(--ci-orange, #ff9b0c); }
 
 /* ─── 9. Next Maturity Chip ─────────────────────────────────── */
 .maturity-countdown {
@@ -312,9 +312,9 @@
   color: #dc2626;
 }
 .maturity-countdown.days-30 {
-  background: rgba(255,130,21,0.08);
-  border-color: rgba(255,130,21,0.25);
-  color: #E56200;
+  background: rgba(255,155,12,0.08);
+  border-color: rgba(255,155,12,0.25);
+  color: var(--ci-orange-dark, #ff5229);
 }
 .maturity-countdown.days-60 {
   background: rgba(34,197,94,0.08);
@@ -334,7 +334,7 @@
   transition: background 0.15s ease;
 }
 .data-table tbody tr:hover {
-  background: rgba(255,130,21,0.03) !important;
+  background: rgba(255,155,12,0.03) !important;
 }
 
 /* ─── 11. Progress bar improvements ────────────────────────── */
@@ -354,8 +354,8 @@
 /* ─── 12. Sidebar user card upgrade ────────────────────────── */
 .sidebar__footer { padding: 12px !important; }
 .sidebar-user {
-  background: rgba(255,130,21,0.05);
-  border: 1px solid rgba(255,130,21,0.12);
+  background: rgba(255,155,12,0.05);
+  border: 1px solid rgba(255,155,12,0.12);
   border-radius: 12px;
   padding: 12px;
   display: flex;
@@ -365,8 +365,8 @@
   transition: background 0.2s ease, border-color 0.2s ease;
 }
 .sidebar-user:hover {
-  background: rgba(255,130,21,0.09);
-  border-color: rgba(255,130,21,0.25);
+  background: rgba(255,155,12,0.09);
+  border-color: rgba(255,155,12,0.25);
 }
 .sidebar-user__avatar {
   width: 36px !important;
@@ -375,7 +375,7 @@
   font-size: 0.82rem !important;
   font-weight: 900 !important;
   flex-shrink: 0;
-  box-shadow: 0 3px 10px rgba(255,130,21,0.25) !important;
+  box-shadow: 0 3px 10px rgba(255,155,12,0.25) !important;
 }
 .user-name {
   font-size: 0.82rem !important;
@@ -401,8 +401,8 @@
 
 /* ─── 14. Support ticket form ───────────────────────────────── */
 .form-input:focus, .form-select:focus, .form-textarea:focus {
-  border-color: #FF8215 !important;
-  box-shadow: 0 0 0 3px rgba(255,130,21,0.12) !important;
+  border-color: var(--ci-orange, #ff9b0c) !important;
+  box-shadow: 0 0 0 3px rgba(255,155,12,0.12) !important;
 }
 
 /* ─── 15. Panel animations ──────────────────────────────────── */
@@ -455,7 +455,7 @@
 }
 .btn--primary:hover {
   transform: translateY(-1px) !important;
-  box-shadow: 0 6px 20px rgba(255,130,21,0.30) !important;
+  box-shadow: 0 6px 20px rgba(255,155,12,0.30) !important;
 }
 .btn--primary:active { transform: scale(0.97) !important; }
 .btn--secondary:active { transform: scale(0.97) !important; }
@@ -480,7 +480,7 @@
   opacity: 0.25;
   margin-bottom: 12px;
   display: block;
-  color: #FF8215;
+  color: var(--ci-orange, #ff9b0c);
 }
 .empty-state p {
   font-size: 0.88rem;
@@ -518,8 +518,8 @@
 /* ─── 26. FICA pending alert banner ─────────────────────────── */
 .fica-alert-banner {
   display: flex; align-items: center; gap: 16px;
-  background: linear-gradient(135deg, rgba(255,130,21,0.08) 0%, rgba(255,130,21,0.04) 100%);
-  border: 1px solid rgba(255,130,21,0.30);
+  background: linear-gradient(135deg, rgba(255,155,12,0.08) 0%, rgba(255,155,12,0.04) 100%);
+  border: 1px solid rgba(255,155,12,0.30);
   border-radius: 14px; padding: 14px 20px;
   margin-bottom: 18px;
   animation: ficaAlertSlide 0.4s cubic-bezier(0.22, 1, 0.36, 1);
@@ -530,9 +530,9 @@
 }
 .fica-alert-banner__icon {
   width: 40px; height: 40px; border-radius: 10px;
-  background: rgba(255,130,21,0.12);
+  background: rgba(255,155,12,0.12);
   display: flex; align-items: center; justify-content: center;
-  color: #FF8215; font-size: 1rem; flex-shrink: 0;
+  color: var(--ci-orange, #ff9b0c); font-size: 1rem; flex-shrink: 0;
 }
 .fica-alert-banner__body { flex: 1; min-width: 0; }
 .fica-alert-banner__title {
@@ -555,8 +555,8 @@
 .sidebar-user:focus-within,
 .sidebar-user:focus {
   outline: none;
-  background: rgba(255,130,21,0.11);
-  border-color: rgba(255,130,21,0.3);
+  background: rgba(255,155,12,0.11);
+  border-color: rgba(255,155,12,0.3);
 }
 
 /* ─── 29. Investment days remaining — urgent pulse ──────────── */
@@ -568,7 +568,7 @@
 
 /* ─── 30. Table row hover accent ───────────────────────────── */
 .table-card .data-table tbody tr:hover {
-  background: rgba(255,130,21,0.025) !important;
+  background: rgba(255,155,12,0.025) !important;
 }
 
 /* ─── 31. Wallet card top-up glow on hover ──────────────────── */
@@ -593,11 +593,11 @@
 /* ─── 33. Referral code copy ripple ─────────────────────────── */
 .referral-link-box {
   border-radius: 10px !important;
-  border: 1.5px solid rgba(255,130,21,0.2) !important;
+  border: 1.5px solid rgba(255,155,12,0.2) !important;
   overflow: hidden;
 }
 .referral-link-box:hover {
-  border-color: rgba(255,130,21,0.4) !important;
+  border-color: rgba(255,155,12,0.4) !important;
 }
 
 /* ─── 34. FAQ quick items ───────────────────────────────────── */
@@ -611,9 +611,9 @@
   font-family: 'Inter', sans-serif; text-align: left;
   transition: color 0.2s;
 }
-.faq-quick-q:hover { color: #FF8215; }
+.faq-quick-q:hover { color: var(--ci-orange, #ff9b0c); }
 .faq-quick-q i { transition: transform 0.25s ease; color: #9ca3af; font-size: 0.72rem; }
-.faq-quick-q.open i { transform: rotate(180deg); color: #FF8215; }
+.faq-quick-q.open i { transform: rotate(180deg); color: var(--ci-orange, #ff9b0c); }
 .faq-quick-a {
   font-size: 0.79rem; color: #6b7280; line-height: 1.65;
   padding: 0 0 12px; display: none;
@@ -673,7 +673,7 @@
 .xp-progress-fill {
   height: 100%;
   border-radius: 100px;
-  background: #FF8215;
+  background: var(--ci-orange, #ff9b0c);
   transition: width 1s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .xp-progress-right {
@@ -697,7 +697,7 @@
   height: 18px;
   padding: 0 5px;
   border-radius: 100px;
-  background: #FF8215;
+  background: var(--ci-orange, #ff9b0c);
   color: #fff;
   font-size: 0.65rem;
   font-weight: 900;
@@ -722,7 +722,7 @@
   position: absolute;
   top: -30px; right: -30px;
   width: 180px; height: 180px;
-  background: radial-gradient(circle, rgba(255,130,21,0.15) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(255,155,12,0.15) 0%, transparent 70%);
   pointer-events: none;
 }
 .xp-hero__left { display: flex; align-items: center; gap: 14px; }
@@ -822,7 +822,7 @@
 }
 .quest-cat-bar__fill {
   height: 100%; border-radius: 100px;
-  background: #FF8215;
+  background: var(--ci-orange, #ff9b0c);
   transition: width 0.8s ease;
 }
 
@@ -844,8 +844,8 @@
 }
 .quest-card:hover { box-shadow: 0 3px 12px rgba(0,0,0,0.07); }
 .quest-card--ready {
-  border-color: rgba(255,130,21,0.3);
-  background: rgba(255,130,21,0.03);
+  border-color: rgba(255,155,12,0.3);
+  background: rgba(255,155,12,0.03);
 }
 .quest-card--done { background: rgba(34,197,94,0.04); border-color: rgba(34,197,94,0.2); }
 .quest-card__icon {
@@ -934,9 +934,9 @@
   font-weight: 500;
   transition: border-color 0.15s, background 0.15s;
 }
-.survey-opt:hover { border-color: #FF8215; background: rgba(255,130,21,0.04); }
-.survey-opt input[type=radio] { accent-color: #FF8215; flex-shrink: 0; }
-.survey-opt:has(input:checked) { border-color: #FF8215; background: rgba(255,130,21,0.06); }
+.survey-opt:hover { border-color: var(--ci-orange, #ff9b0c); background: rgba(255,155,12,0.04); }
+.survey-opt input[type=radio] { accent-color: var(--ci-orange, #ff9b0c); flex-shrink: 0; }
+.survey-opt:has(input:checked) { border-color: var(--ci-orange, #ff9b0c); background: rgba(255,155,12,0.06); }
 
 .survey-footer {
   display: flex;
@@ -978,7 +978,7 @@
 .levelup-title {
   font-size: 0.75rem; font-weight: 800;
   text-transform: uppercase; letter-spacing: 0.1em;
-  color: #FF8215; margin-bottom: 6px;
+  color: var(--ci-orange, #ff9b0c); margin-bottom: 6px;
   position: relative; z-index: 1;
 }
 .levelup-level {
@@ -1020,8 +1020,8 @@
 .learn-header__sub   { font-size: 0.8rem; color: #6b7280; margin-top: 2px; }
 .learn-header__xp-note {
   font-size: 0.78rem; color: #6b7280;
-  background: rgba(255,130,21,0.07);
-  border: 1px solid rgba(255,130,21,0.2);
+  background: rgba(255,155,12,0.07);
+  border: 1px solid rgba(255,155,12,0.2);
   padding: 6px 14px;
   border-radius: 100px;
 }
@@ -1056,7 +1056,7 @@
   display: inline-block;
   font-size: 0.6rem; font-weight: 800;
   text-transform: uppercase; letter-spacing: 0.06em;
-  background: #FF8215; color: #fff;
+  background: var(--ci-orange, #ff9b0c); color: #fff;
   padding: 2px 7px; border-radius: 100px;
   margin-left: auto;
   white-space: nowrap;
@@ -1173,7 +1173,7 @@ body.dark-mode .topbar {
 body.dark-mode .topbar__title    { color: #e2e8f0 !important; }
 body.dark-mode .topbar__breadcrumb { color: #6b7280 !important; }
 body.dark-mode .topbar-btn       { color: #9ca3af !important; border-color: rgba(255,255,255,0.08) !important; }
-body.dark-mode .topbar-btn:hover { color: #fff !important; border-color: #FF8215 !important; }
+body.dark-mode .topbar-btn:hover { color: #fff !important; border-color: var(--ci-orange, #ff9b0c) !important; }
 body.dark-mode .btn--secondary   { background: rgba(255,255,255,0.06) !important; color: #9ca3af !important; border-color: rgba(255,255,255,0.1) !important; }
 
 /* ── Cards & Panels ──────────────────────────────────────────── */
@@ -1218,11 +1218,11 @@ body.dark-mode .data-table tbody tr:hover { background: rgba(255,255,255,0.04) !
 body.dark-mode .text-muted { color: #6b7280 !important; }
 
 /* ── Quick-action / welcome chip buttons ─────────────────────── */
-body.dark-mode .welcome-greeting { color: #FF8215 !important; }
+body.dark-mode .welcome-greeting { color: var(--ci-orange, #ff9b0c) !important; }
 body.dark-mode .welcome-name     { color: #e2e8f0 !important; }
 body.dark-mode .welcome-chip     { border-color: rgba(255,255,255,0.12) !important; }
 body.dark-mode .welcome-chip--teal  { background: rgba(47,140,155,0.15) !important; color: #5BBFCE !important; }
-body.dark-mode .welcome-chip--orange { background: rgba(255,130,21,0.12) !important; color: #FF9B3A !important; }
+body.dark-mode .welcome-chip--orange { background: rgba(255,155,12,0.12) !important; color: #FF9B3A !important; }
 body.dark-mode .welcome-chip--gray  { background: rgba(255,255,255,0.06) !important; color: #9ca3af !important; }
 
 /* ── Forms & Inputs ──────────────────────────────────────────── */
@@ -1255,7 +1255,7 @@ body.dark-mode .survey-opt {
   border-color: rgba(255,255,255,0.1) !important;
   color: #c8d0dc !important;
 }
-body.dark-mode .survey-opt:hover { border-color: #FF8215 !important; background: rgba(255,130,21,0.08) !important; }
+body.dark-mode .survey-opt:hover { border-color: var(--ci-orange, #ff9b0c) !important; background: rgba(255,155,12,0.08) !important; }
 body.dark-mode .levelup-level  { color: #e2e8f0 !important; }
 body.dark-mode .levelup-xp     { color: #6b7280 !important; }
 
@@ -1310,7 +1310,7 @@ body.dark-mode .market-pool-card    { background: #161b27 !important; border-col
   z-index: 10001;
   pointer-events: none;
   transition: all 0.38s cubic-bezier(0.22,1,0.36,1);
-  outline: 2.5px solid rgba(255,130,21,0.55);
+  outline: 2.5px solid rgba(255,155,12,0.55);
   outline-offset: 2px;
 }
 
@@ -1342,8 +1342,8 @@ body.dark-mode .tour-tooltip-inner { background: #1e2433 !important; }
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #FF8215;
-  background: rgba(255,130,21,0.1);
+  color: var(--ci-orange, #ff9b0c);
+  background: rgba(255,155,12,0.1);
   padding: 2px 9px;
   border-radius: 100px;
   margin-bottom: 12px;
@@ -1357,7 +1357,7 @@ body.dark-mode .tour-tooltip-inner { background: #1e2433 !important; }
   display: flex; align-items: center; justify-content: center;
   font-size: 1.1rem;
   margin-bottom: 12px;
-  box-shadow: 0 4px 14px rgba(255,130,21,0.35);
+  box-shadow: 0 4px 14px rgba(255,155,12,0.35);
 }
 
 .tour-title {
@@ -1390,8 +1390,8 @@ body.dark-mode .tour-body { color: #9ca3af !important; }
   background: rgba(0,0,0,0.12);
   transition: all 0.2s;
 }
-.tour-dot.active { background: #FF8215; width: 18px; border-radius: 3px; }
-.tour-dot.done   { background: rgba(255,130,21,0.4); }
+.tour-dot.active { background: var(--ci-orange, #ff9b0c); width: 18px; border-radius: 3px; }
+.tour-dot.done   { background: rgba(255,155,12,0.4); }
 
 .tour-actions {
   display: flex;
@@ -1427,7 +1427,7 @@ body.dark-mode .tour-body { color: #9ca3af !important; }
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: #FF8215;
+  background: var(--ci-orange, #ff9b0c);
   color: #fff;
   border: none;
   border-radius: 10px;
@@ -1445,7 +1445,7 @@ body.dark-mode .tour-body { color: #9ca3af !important; }
   position: absolute;
   top: 5px; right: 5px;
   width: 7px; height: 7px;
-  background: #FF8215;
+  background: var(--ci-orange, #ff9b0c);
   border-radius: 50%;
   animation: pulseDot 2s infinite;
 }
@@ -1507,7 +1507,7 @@ body.dark-mode .deposit-prompt-title { color: #e2e8f0 !important; }
   margin-bottom: 16px;
 }
 .dp-stat { flex: 1; text-align: center; }
-.dp-stat__val   { font-size: 1.2rem; font-weight: 900; color: #FF8215; }
+.dp-stat__val   { font-size: 1.2rem; font-weight: 900; color: var(--ci-orange, #ff9b0c); }
 .dp-stat__label { font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
 .dp-stat-divider {
   width: 1px;
@@ -1577,7 +1577,7 @@ body.dark-mode .deposit-prompt-products span {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: linear-gradient(135deg, rgba(47,140,155,0.06) 0%, rgba(255,130,21,0.06) 100%);
+  background: linear-gradient(135deg, rgba(47,140,155,0.06) 0%, rgba(255,155,12,0.06) 100%);
   border: 1px solid rgba(47,140,155,0.18);
   border-radius: 14px;
   padding: 14px 20px;
@@ -1660,12 +1660,12 @@ body.dark-mode .deposit-prompt-products span {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255,130,21,0.06);
-  border: 1px dashed rgba(255,130,21,0.3);
+  background: rgba(255,155,12,0.06);
+  border: 1px dashed rgba(255,155,12,0.3);
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 0.76rem;
-  color: #FF8215;
+  color: var(--ci-orange, #ff9b0c);
 }
 .pool-card__need-topup .btn { margin-left: auto; }
 
@@ -1694,7 +1694,7 @@ body.dark-mode .deposit-prompt-products span {
   margin-bottom: 4px;
 }
 .invest-wallet-ok { background: rgba(34,197,94,0.08); color: #15803d; border: 1px solid rgba(34,197,94,0.2); }
-.invest-wallet-low { background: rgba(255,130,21,0.08); color: #c2410c; border: 1px solid rgba(255,130,21,0.2); }
+.invest-wallet-low { background: rgba(255,155,12,0.08); color: #c2410c; border: 1px solid rgba(255,155,12,0.2); }
 .invest-wallet-ok-badge { font-size: 0.72rem; color: #22c55e; margin-left: auto; font-weight: 700; }
 
 .invest-quickpick { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -1757,8 +1757,8 @@ body.dark-mode .deposit-prompt-products span {
    ═══════════════════════════════════════════════════════ */
 
 .pending-section {
-  background: linear-gradient(135deg, rgba(255,130,21,0.04) 0%, rgba(47,140,155,0.04) 100%);
-  border: 1.5px solid rgba(255,130,21,0.2);
+  background: linear-gradient(135deg, rgba(255,155,12,0.04) 0%, rgba(47,140,155,0.04) 100%);
+  border: 1.5px solid rgba(255,155,12,0.2);
   border-radius: 16px;
   padding: 20px;
 }
@@ -1768,7 +1768,7 @@ body.dark-mode .deposit-prompt-products span {
   font-size: 1rem; font-weight: 800; color: #1a1a1a;
   display: flex; align-items: center; gap: 8px;
 }
-.pending-section__title i { color: #FF8215; }
+.pending-section__title i { color: var(--ci-orange, #ff9b0c); }
 .pending-section__sub { font-size: 0.76rem; color: #6b7280; margin-top: 4px; }
 
 .pending-group { margin-bottom: 18px; }
@@ -1782,7 +1782,7 @@ body.dark-mode .deposit-prompt-products span {
 
 /* Dark mode overrides for new elements */
 body.dark-mode .invest-guide-strip {
-  background: linear-gradient(135deg, rgba(47,140,155,0.1) 0%, rgba(255,130,21,0.08) 100%) !important;
+  background: linear-gradient(135deg, rgba(47,140,155,0.1) 0%, rgba(255,155,12,0.08) 100%) !important;
   border-color: rgba(47,140,155,0.25) !important;
 }
 body.dark-mode .igs-text b { color: #e5e7eb !important; }
@@ -1797,7 +1797,7 @@ body.dark-mode .ins-label b { color: #e5e7eb !important; }
 body.dark-mode .invest-qp-btn { background: #1e2530 !important; border-color: rgba(255,255,255,0.12) !important; color: #e5e7eb !important; }
 body.dark-mode .pool-rate-row { background: rgba(47,140,155,0.08) !important; }
 body.dark-mode .pool-rate-divider { background: rgba(255,255,255,0.08) !important; }
-body.dark-mode .pending-section { background: linear-gradient(135deg, rgba(255,130,21,0.06) 0%, rgba(47,140,155,0.06) 100%) !important; border-color: rgba(255,130,21,0.25) !important; }
+body.dark-mode .pending-section { background: linear-gradient(135deg, rgba(255,155,12,0.06) 0%, rgba(47,140,155,0.06) 100%) !important; border-color: rgba(255,155,12,0.25) !important; }
 body.dark-mode .pending-section__title { color: #e5e7eb !important; }
 body.dark-mode .pending-section__sub { color: #9ca3af !important; }
 
@@ -1870,10 +1870,10 @@ body {
 }
 .nav-item.active {
   color: #ffffff !important;
-  background: linear-gradient(135deg, rgba(255,130,21,0.22) 0%, rgba(255,70,41,0.18) 100%) !important;
-  border-color: rgba(255,130,21,0.28) !important;
+  background: linear-gradient(135deg, rgba(255,155,12,0.22) 0%, rgba(255,70,41,0.18) 100%) !important;
+  border-color: rgba(255,155,12,0.28) !important;
   font-weight: 700 !important;
-  box-shadow: 0 2px 12px rgba(255,130,21,0.15) !important;
+  box-shadow: 0 2px 12px rgba(255,155,12,0.15) !important;
 }
 .nav-item i {
   width: 16px !important;
@@ -1944,7 +1944,7 @@ body {
   position: absolute !important;
   top: -80px; right: -40px !important;
   width: 320px; height: 320px !important;
-  background: radial-gradient(circle, rgba(255,130,21,0.10) 0%, transparent 68%) !important;
+  background: radial-gradient(circle, rgba(255,155,12,0.10) 0%, transparent 68%) !important;
   pointer-events: none !important;
 }
 .portfolio-hero::after {
@@ -2037,7 +2037,7 @@ body {
   background: linear-gradient(135deg, #FF9B0C 0%, #FF4D2B 100%) !important;
   font-size: 1.15rem !important;
   font-weight: 900 !important;
-  box-shadow: 0 8px 24px rgba(255,130,21,0.30) !important;
+  box-shadow: 0 8px 24px rgba(255,155,12,0.30) !important;
 }
 .welcome-name {
   font-size: 1.18rem !important;
@@ -2049,7 +2049,7 @@ body {
   font-size: 0.68rem !important;
   font-weight: 700 !important;
   letter-spacing: 0.09em !important;
-  color: #FF8215 !important;
+  color: var(--ci-orange, #ff9b0c) !important;
 }
 
 /* ─── PANEL / CARD ─── */
@@ -2077,7 +2077,7 @@ body {
 .btn--primary {
   background: linear-gradient(135deg, #FF9B0C 0%, #FF5229 100%) !important;
   border: none !important;
-  box-shadow: 0 4px 16px rgba(255,130,21,0.28) !important;
+  box-shadow: 0 4px 16px rgba(255,155,12,0.28) !important;
   color: #ffffff !important;
   font-weight: 700 !important;
   border-radius: 10px !important;
@@ -2086,7 +2086,7 @@ body {
 }
 .btn--primary:hover {
   transform: translateY(-1px) !important;
-  box-shadow: 0 8px 32px rgba(255,130,21,0.42) !important;
+  box-shadow: 0 8px 32px rgba(255,155,12,0.42) !important;
   background: linear-gradient(135deg, #FFAC20 0%, #FF6040 100%) !important;
 }
 .btn--primary:active { transform: translateY(0) scale(0.99) !important; }
@@ -2166,7 +2166,7 @@ body {
 .market-pool-card:hover {
   transform: translateY(-6px) !important;
   box-shadow: 0 24px 56px rgba(0,0,0,0.13) !important;
-  border-color: rgba(255,130,21,0.18) !important;
+  border-color: rgba(255,155,12,0.18) !important;
 }
 .market-pool-card__icon {
   width: 48px !important; height: 48px !important;
@@ -2210,7 +2210,7 @@ body {
 .my-inv-card:hover {
   transform: translateY(-4px) !important;
   box-shadow: 0 16px 44px rgba(0,0,0,0.10) !important;
-  border-color: rgba(255,130,21,0.18) !important;
+  border-color: rgba(255,155,12,0.18) !important;
 }
 .mic-stat { background: #F7F8FA !important; border-radius: 10px !important; padding: 10px !important; }
 
@@ -2442,3 +2442,121 @@ body.dark-mode .invest-guide-strip { border-color: rgba(47,140,155,0.2) !importa
 body.dark-mode .igs-text b { color: #e5e7eb !important; }
 body.dark-mode .pool-rate-row { background: rgba(47,140,155,0.08) !important; }
 body.dark-mode .pool-rate-divider { background: rgba(255,255,255,0.08) !important; }
+
+/* ═══════════════════════════════════════════════════════
+   §44 — CI MANUAL COMPLIANCE
+   SmartVest Capital brand identity — exact colors & Poppins font
+   Source: SmartVest_Capital_Corporate_Identity_Manual.pdf
+   ═══════════════════════════════════════════════════════ */
+
+/* ─── CI Brand Tokens (exact from manual) ─── */
+:root {
+  --ci-brand-1: #ff9b0c;
+  --ci-brand-2: #ff5229;
+  --ci-warm-yellow: #ffe86a;
+  --ci-salmon: #ffb782;
+  --ci-amber: #fec24f;
+  --ci-lilac: #eda5ff;
+  --ci-vivid-green: #65ed00;
+  --ci-blue: #0096ff;
+  --ci-body-dark: #303030;
+  --ci-mid-grey: #656565;
+  --gold: #ff9b0c !important;
+  --gold-light: #ffb782 !important;
+  --gold-dark: #ff5229 !important;
+  --border-gold: rgba(255,155,12,0.25) !important;
+  --font: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+/* ─── Apply Poppins everywhere except icons ─── */
+body { font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important; font-weight: 400 !important; }
+input, button, select, textarea, label, span, div, p, h1, h2, h3, h4, h5, h6, a, td, th {
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+/* ─── Keep DM Serif Display for financial numbers ─── */
+.portfolio-hero__value,
+.wallet-card__value,
+.stat-card__value,
+.market-pool-card__rate,
+.ph-stat__value {
+  font-family: 'DM Serif Display', Georgia, serif !important;
+}
+
+/* ─── CI Poppins weight rules ─── */
+p, .mps__label, .info-row__label, .section-banner__sub, .market-pool-card__blurb, .quest-card__desc { font-weight: 500 !important; }
+h1, h2, h3, .section-banner__title, .modal__title, .welcome-name, .panel__title, .quest-category__title, .pending-section__title { font-weight: 700 !important; }
+
+/* ─── CI-correct primary: #ff9b0c → #ff5229 gradient ─── */
+.btn--primary {
+  background: linear-gradient(135deg, #ff9b0c 0%, #ff5229 100%) !important;
+  box-shadow: 0 4px 18px rgba(255,155,12,0.30) !important;
+}
+.btn--primary:hover {
+  background: linear-gradient(135deg, #ffac24 0%, #ff6440 100%) !important;
+  box-shadow: 0 8px 32px rgba(255,155,12,0.44) !important;
+}
+
+/* ─── CI brand gradient on avatar elements ─── */
+.welcome-avatar, .sidebar-user__avatar {
+  background: linear-gradient(135deg, #ff9b0c 0%, #ff5229 100%) !important;
+}
+
+/* ─── Portfolio hero number uses CI warm palette ─── */
+.portfolio-hero__value {
+  background: linear-gradient(135deg, #ffffff 40%, #ffb782) !important;
+  -webkit-background-clip: text !important; background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+/* ─── Pool rate uses CI orange-amber ─── */
+.market-pool-card__rate {
+  background: linear-gradient(135deg, #ff9b0c, #fec24f) !important;
+  -webkit-background-clip: text !important; background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+/* ─── CI orange for active nav ─── */
+.nav-item.active {
+  background: linear-gradient(135deg, rgba(255,155,12,0.22) 0%, rgba(255,82,41,0.18) 100%) !important;
+  border-color: rgba(255,155,12,0.30) !important;
+  box-shadow: 0 2px 12px rgba(255,155,12,0.16) !important;
+}
+.welcome-greeting { color: #ff9b0c !important; }
+
+/* ─── CI blue (#0096ff) for ghost/teal buttons ─── */
+.btn--ghost { color: #0096ff !important; border-color: rgba(0,150,255,0.22) !important; }
+.btn--ghost:hover { background: rgba(0,150,255,0.06) !important; }
+
+/* ─── CI text colors ─── */
+.topbar__title { color: #303030 !important; }
+.topbar__breadcrumb { color: #656565 !important; }
+
+/* ─── CI orange focus ring ─── */
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: #ff9b0c !important;
+  box-shadow: 0 0 0 3px rgba(255,155,12,0.15) !important;
+}
+
+/* ─── CI vivid green on progress fills ─── */
+.progress-fill--green { background: linear-gradient(90deg, #22c55e, #65ed00) !important; }
+
+/* ─── Tab bar active CI orange ─── */
+.tab-btn.active { color: #ff9b0c !important; font-weight: 700 !important; }
+
+/* ─── Quest/XP CI orange ─── */
+.quest-category__icon-wrap { background: rgba(255,155,12,0.10) !important; }
+.quest-category__icon-wrap i { color: #ff9b0c !important; }
+.pending-section { border-color: rgba(255,155,12,0.22) !important; }
+.pending-section__title i { color: #ff9b0c !important; }
+
+/* ─── Invest guide step ─── */
+.igs-step--active .igs-num { background: #ff9b0c !important; }
+.igs-step--active .igs-icon, .igs-step--active .igs-text b { color: #ff9b0c !important; }
+.igs-num { background: rgba(255,155,12,0.15) !important; color: #ff9b0c !important; }
+
+/* ─── Dark mode CI ─── */
+body.dark-mode .topbar__title { color: #f3f4f6 !important; }
+body.dark-mode .topbar__breadcrumb { color: #9ca3af !important; }
+body.dark-mode .welcome-greeting { color: #ff9b0c !important; }
+body.dark-mode .tab-btn.active { color: #ff9b0c !important; }
