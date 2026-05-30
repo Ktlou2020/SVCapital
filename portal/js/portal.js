@@ -26,6 +26,7 @@ let PORTAL = {
   charts: {},
   myInvFilter: 'all',
   marketFilter: 'all',
+  quests: null,       // { xp, level, currentLevel, nextLevel, completedIds, quests, levels, profile }
 };
 
 /* ─── Notifications ─── */
@@ -108,7 +109,8 @@ function navigate(view, btnEl) {
     overview: 'Portfolio Overview', investments: 'My Investments',
     transactions: 'Transactions', wallet: 'Wallet', marketplace: 'Browse Pools',
     maturity: 'Maturity Instructions', profile: 'My Profile',
-    support: 'Support', referral: 'Refer & Earn', statement: 'Account Statement'
+    support: 'Support', referral: 'Refer & Earn', statement: 'Account Statement',
+    quests: 'Earn Rewards', learn: 'Learning Hub',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
 
@@ -120,6 +122,8 @@ function navigate(view, btnEl) {
     maturity: loadMaturity,
     support: loadSupport,
     statement: initStatementView,
+    quests: renderQuestView,
+    learn: renderLearnView,
   };
   if (loaders[view]) loaders[view]();
 }
@@ -198,6 +202,9 @@ async function loadPortalData() {
 
     renderOverview();
     updateStmtQuickStats();
+
+    // Load gamification data (non-blocking — don't fail portal if quests fail)
+    loadQuestData().catch(err => console.warn('[Quests] load error:', err.message));
   } catch (e) {
     Toast.error('Failed to load portfolio data');
     console.error('loadPortalData error:', e);
@@ -317,6 +324,7 @@ function renderOverview() {
   renderOverviewTxns();
   renderPortfolioTrendChart();
   renderAllocationChart();
+  renderXPWidget();
 }
 
 function renderOverviewInvestments() {
@@ -2262,6 +2270,793 @@ function saveProfile() { Toast.success('Profile updated successfully'); }
 function copyReferralLink() {
   const link = document.getElementById('referralLink').textContent;
   navigator.clipboard.writeText(link).then(() => Toast.success('Link copied to clipboard!')).catch(() => Toast.error('Copy failed'));
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   GAMIFICATION — XP, Quests & Learning Hub
+   ═══════════════════════════════════════════════════════════════ */
+
+const XP_LEVELS = [
+  { id: 'seed',       label: 'Seed',       min: 0,    icon: 'fa-seedling',         color: '#9ca3af' },
+  { id: 'sprout',     label: 'Sprout',     min: 100,  icon: 'fa-leaf',             color: '#22c55e' },
+  { id: 'grower',     label: 'Grower',     min: 300,  icon: 'fa-tree',             color: '#16a34a' },
+  { id: 'cultivator', label: 'Cultivator', min: 600,  icon: 'fa-spa',              color: '#2F8C9B' },
+  { id: 'harvester',  label: 'Harvester',  min: 1000, icon: 'fa-wheat-awn',        color: '#FF8215' },
+  { id: 'pioneer',    label: 'Pioneer',    min: 1500, icon: 'fa-compass',          color: '#f59e0b' },
+  { id: 'architect',  label: 'Architect',  min: 2500, icon: 'fa-building-columns', color: '#a855f7' },
+  { id: 'luminary',   label: 'Luminary',   min: 5000, icon: 'fa-crown',            color: '#D4AF37' },
+];
+
+function _getLevelForXP(xp) {
+  let level = XP_LEVELS[0];
+  for (const l of XP_LEVELS) {
+    if (xp >= l.min) level = l;
+    else break;
+  }
+  return level;
+}
+
+function _getNextLevel(xp) {
+  return XP_LEVELS.find(l => l.min > xp) || null;
+}
+
+/* ─── Fetch quest data from server ─────────────────────── */
+async function loadQuestData() {
+  try {
+    const token = Auth.getToken();
+    if (!token) return;
+    const res  = await fetch('/api/quests/my', {
+      headers: { 'Authorization': `Bearer ${token}` },
+      credentials: 'include',
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    PORTAL.quests = data;
+
+    // Auto-detect and claim milestone quests silently
+    await _autoClaimMilestones();
+
+    renderXPWidget();
+    _updateXPNavBadge();
+  } catch (e) {
+    console.warn('[Quests] loadQuestData failed:', e.message);
+  }
+}
+
+/* ─── Check milestone conditions and auto-claim if met ─── */
+async function _autoClaimMilestones() {
+  if (!PORTAL.quests || !PORTAL.investor) return;
+  const completed = new Set(PORTAL.quests.completedIds || []);
+  const inv       = PORTAL.investor;
+  const invests   = PORTAL.investments;
+  const txns      = PORTAL.transactions;
+  const totalInvested = parseFloat(inv.total_invested) || 0;
+
+  const productTypes = new Set(invests.filter(i => i.status === 'active' || i.status === 'paid_out')
+    .map(i => i.product_type).filter(Boolean));
+
+  const milestoneConditions = {
+    first_topup:    txns.some(t => t.type === 'deposit'),
+    first_investment: invests.length > 0,
+    diversify:      productTypes.size >= 2,
+    milestone_10k:  totalInvested >= 10000,
+    milestone_50k:  totalInvested >= 50000,
+    milestone_100k: totalInvested >= 100000,
+  };
+
+  for (const [questId, met] of Object.entries(milestoneConditions)) {
+    if (met && !completed.has(questId)) {
+      try {
+        const result = await _postQuestComplete(questId, {});
+        if (result && !result.error) {
+          completed.add(questId);
+          PORTAL.quests.completedIds = [...completed];
+          PORTAL.quests.xp   = result.newXP;
+          PORTAL.quests.xpToNext = result.xpToNext;
+          if (result.leveledUp) _showLevelUpModal(result);
+        }
+      } catch (_) {}
+    }
+  }
+}
+
+/* ─── POST to complete a quest ──────────────────────────── */
+async function _postQuestComplete(questId, data) {
+  const token = Auth.getToken();
+  if (!token) return null;
+  const res = await fetch('/api/quests/complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    credentials: 'include',
+    body: JSON.stringify({ questId, data }),
+  });
+  return res.json();
+}
+
+/* ─── XP bar widget in overview ─────────────────────────── */
+function renderXPWidget() {
+  const q = PORTAL.quests;
+  if (!q) return;
+
+  const xp    = q.xp || 0;
+  const lvl   = _getLevelForXP(xp);
+  const next  = _getNextLevel(xp);
+  const pct   = next ? Math.round(((xp - lvl.min) / (next.min - lvl.min)) * 100) : 100;
+
+  const wrap = document.getElementById('xpProgressWrap');
+  if (wrap) wrap.style.display = 'flex';
+
+  const pill = document.getElementById('xpLevelPill');
+  if (pill) {
+    pill.innerHTML = `<i class="fa-solid ${lvl.icon}"></i> ${lvl.label}`;
+    pill.style.background = lvl.color;
+  }
+
+  const fill = document.getElementById('xpProgressFill');
+  if (fill) fill.style.width = pct + '%';
+
+  const label = document.getElementById('xpProgressLabel');
+  if (label) label.textContent = xp.toLocaleString('en-ZA') + ' XP';
+
+  const nextEl = document.getElementById('xpProgressNext');
+  if (nextEl) nextEl.textContent = next ? `+${(next.min - xp).toLocaleString('en-ZA')} to ${next.label}` : 'Max level!';
+}
+
+/* ─── Update sidebar XP badge with pending quest count ─── */
+function _updateXPNavBadge() {
+  const q = PORTAL.quests;
+  if (!q) return;
+
+  const completed = new Set(q.completedIds || []);
+  const inv       = PORTAL.investor;
+  const invests   = PORTAL.investments;
+  const txns      = PORTAL.transactions;
+  const totalInvested = parseFloat(inv?.total_invested) || 0;
+
+  const productTypes = new Set(invests.filter(i => i.status === 'active' || i.status === 'paid_out')
+    .map(i => i.product_type).filter(Boolean));
+
+  const milestones = {
+    first_topup:    txns.some(t => t.type === 'deposit'),
+    first_investment: invests.length > 0,
+    diversify:      productTypes.size >= 2,
+    milestone_10k:  totalInvested >= 10000,
+    milestone_50k:  totalInvested >= 50000,
+    milestone_100k: totalInvested >= 100000,
+  };
+
+  const readyCount = q.quests.filter(quest => {
+    if (completed.has(quest.id)) return false;
+    if (quest.category === 'milestone') return milestones[quest.id] === true;
+    if (quest.category === 'profile' || quest.category === 'learning') return true;
+    return false;
+  }).length;
+
+  const badge = document.getElementById('xpNavBadge');
+  if (badge) {
+    if (readyCount > 0) {
+      badge.textContent = readyCount;
+      badge.style.display = 'inline-flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+}
+
+/* ═════════════════════════════════════════════════════════
+   QUEST VIEW
+   ═════════════════════════════════════════════════════════ */
+function renderQuestView() {
+  if (!PORTAL.quests) {
+    loadQuestData().then(renderQuestView);
+    return;
+  }
+
+  const q         = PORTAL.quests;
+  const xp        = q.xp || 0;
+  const lvl       = _getLevelForXP(xp);
+  const next      = _getNextLevel(xp);
+  const completed = new Set(q.completedIds || []);
+
+  // ── Hero
+  const heroIcon = document.getElementById('questLevelIcon');
+  if (heroIcon) { heroIcon.innerHTML = `<i class="fa-solid ${lvl.icon}"></i>`; heroIcon.style.background = lvl.color; }
+  const heroName = document.getElementById('questLevelName');
+  if (heroName) heroName.textContent = lvl.label;
+  const heroXP = document.getElementById('questXpVal');
+  if (heroXP) heroXP.textContent = xp.toLocaleString('en-ZA') + ' XP';
+  const heroBar = document.getElementById('questXpBar');
+  if (heroBar) {
+    const pct = next ? Math.round(((xp - lvl.min) / (next.min - lvl.min)) * 100) : 100;
+    heroBar.style.width = pct + '%';
+    heroBar.style.background = lvl.color;
+  }
+  const heroTrackLabel = document.getElementById('questXpTrackLabel');
+  if (heroTrackLabel) heroTrackLabel.textContent = next ? `${(next.min - xp).toLocaleString('en-ZA')} XP to ${next.label} (+R50)` : 'Maximum level reached!';
+
+  // ── Rewards earned (levels passed × R50)
+  const levelsEarned = XP_LEVELS.filter(l => l.min > 0 && xp >= l.min).length;
+  const rewardsEl = document.getElementById('questRewardsEarned');
+  if (rewardsEl) rewardsEl.textContent = `R${levelsEarned * 50}`;
+
+  // ── Level track
+  const trackEl = document.getElementById('levelTrack');
+  if (trackEl) {
+    trackEl.innerHTML = XP_LEVELS.map(l => {
+      const isDone    = xp >= l.min;
+      const isCurrent = lvl.id === l.id;
+      return `
+        <div class="level-step ${isDone ? 'done' : ''} ${isCurrent ? 'current' : ''}">
+          <div class="level-step__icon" style="${isCurrent ? `background:${l.color};color:#fff;box-shadow:0 4px 14px ${l.color}55` : isDone ? `background:${l.color}22;color:${l.color};border:2px solid ${l.color}` : ''}">
+            <i class="fa-solid ${l.icon}"></i>
+          </div>
+          <div class="level-step__name">${l.label}</div>
+          ${l.min > 0 ? `<div class="level-step__reward" style="color:${isCurrent||isDone?l.color:'#9ca3af'}">+R50</div>` : ''}
+        </div>`;
+    }).join('');
+  }
+
+  // ── Quest categories
+  const categories = [
+    { key: 'profile',   label: 'Profile & Compliance', icon: 'fa-user-check',      desc: 'Help us know you better. Each survey unlocks better investment recommendations.' },
+    { key: 'milestone', label: 'Investment Milestones', icon: 'fa-trophy',          desc: 'Earn XP for reaching investment goals. Milestones are auto-detected.' },
+    { key: 'learning',  label: 'Learning Modules',      icon: 'fa-graduation-cap',  desc: 'Earn XP for completing educational modules in the Learning Hub.' },
+  ];
+
+  const catEl = document.getElementById('questCategories');
+  if (!catEl) return;
+
+  const inv       = PORTAL.investor;
+  const invests   = PORTAL.investments;
+  const txns      = PORTAL.transactions;
+  const totalInv  = parseFloat(inv?.total_invested) || 0;
+  const productTypes = new Set(invests.filter(i => i.status === 'active' || i.status === 'paid_out').map(i => i.product_type).filter(Boolean));
+
+  const milestones = {
+    first_topup:    txns.some(t => t.type === 'deposit'),
+    first_investment: invests.length > 0,
+    diversify:      productTypes.size >= 2,
+    milestone_10k:  totalInv >= 10000,
+    milestone_50k:  totalInv >= 50000,
+    milestone_100k: totalInv >= 100000,
+    set_maturity:   false,   // can't auto-detect without loading maturity_instructions
+    first_referral: false,
+  };
+
+  catEl.innerHTML = categories.map(cat => {
+    const catQuests = q.quests.filter(quest => quest.category === cat.key);
+    const doneCount = catQuests.filter(quest => completed.has(quest.id)).length;
+
+    const questCards = catQuests.map(quest => {
+      const isDone   = completed.has(quest.id);
+      const isReady  = !isDone && (
+        cat.key === 'profile'   ? true :
+        cat.key === 'milestone' ? milestones[quest.id] === true :
+        cat.key === 'learning'  ? true : false
+      );
+
+      return `
+        <div class="quest-card ${isDone ? 'quest-card--done' : isReady ? 'quest-card--ready' : ''}" id="qcard-${quest.id}">
+          <div class="quest-card__icon" style="background:${quest.color}22;color:${quest.color}">
+            <i class="fa-solid ${quest.icon}"></i>
+          </div>
+          <div class="quest-card__body">
+            <div class="quest-card__title">${quest.title}</div>
+            ${quest.description ? `<div class="quest-card__desc">${quest.description}</div>` : ''}
+          </div>
+          <div class="quest-card__right">
+            <div class="quest-card__xp" style="color:${quest.color}">+${quest.xp} XP</div>
+            ${isDone
+              ? `<div class="quest-card__done-badge"><i class="fa-solid fa-circle-check"></i> Done</div>`
+              : isReady
+                ? (cat.key === 'milestone'
+                    ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="claimMilestoneQuest('${quest.id}')">Claim</button>`
+                    : cat.key === 'learning'
+                      ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="navigate('learn', document.querySelector('[data-view=learn]'))">Start</button>`
+                      : `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="openSurveyModal('${quest.id}')">Start</button>`)
+                : `<div class="quest-card__locked"><i class="fa-solid fa-lock-open"></i> Available</div>`
+            }
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="quest-category mb-24">
+        <div class="quest-category__header">
+          <div class="quest-category__icon-wrap" style="background:rgba(255,130,21,0.1)">
+            <i class="fa-solid ${cat.icon}" style="color:#FF8215"></i>
+          </div>
+          <div>
+            <div class="quest-category__title">${cat.label}</div>
+            <div class="quest-category__sub">${cat.desc}</div>
+          </div>
+          <div class="quest-category__progress ml-auto">
+            <div class="quest-category__count">${doneCount}/${catQuests.length}</div>
+            <div class="quest-cat-bar"><div class="quest-cat-bar__fill" style="width:${Math.round((doneCount/catQuests.length)*100)}%"></div></div>
+          </div>
+        </div>
+        <div class="quest-cards-grid">${questCards}</div>
+      </div>`;
+  }).join('');
+}
+
+/* ─── Claim a milestone quest via button ─────────────────── */
+async function claimMilestoneQuest(questId) {
+  const btn = document.querySelector(`#qcard-${questId} .quest-claim-btn`);
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+
+  try {
+    const result = await _postQuestComplete(questId, {});
+    if (result.error) {
+      if (result.error.includes('already completed')) {
+        Toast.info('Already claimed!');
+      } else {
+        Toast.error(result.error);
+      }
+    } else {
+      Toast.success(`+${result.xpAwarded} XP earned!`);
+      if (PORTAL.quests) {
+        PORTAL.quests.xp  = result.newXP;
+        PORTAL.quests.xpToNext = result.xpToNext;
+        PORTAL.quests.completedIds = [...(PORTAL.quests.completedIds || []), questId];
+      }
+      if (result.leveledUp) _showLevelUpModal(result);
+      renderQuestView();
+      renderXPWidget();
+      _updateXPNavBadge();
+    }
+  } catch (e) {
+    Toast.error('Failed to claim reward. Try again.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Claim'; }
+  }
+}
+
+/* ─── Survey Modal ───────────────────────────────────────── */
+function openSurveyModal(questId) {
+  const q = PORTAL.quests?.quests?.find(q => q.id === questId);
+  if (!q) return;
+
+  const answers = {};
+  const questionsHtml = (q.questions || []).map((ques, i) => {
+    if (ques.type === 'choice') {
+      return `
+        <div class="survey-q" data-qid="${ques.id}">
+          <div class="survey-q__label">${i + 1}. ${ques.label}</div>
+          <div class="survey-q__options">
+            ${ques.options.map((opt, j) => `
+              <label class="survey-opt">
+                <input type="radio" name="sq_${questId}_${i}" value="${opt}">
+                <span>${opt}</span>
+              </label>`).join('')}
+          </div>
+        </div>`;
+    }
+    // text input
+    return `
+      <div class="survey-q" data-qid="${ques.id}">
+        <div class="survey-q__label">${i + 1}. ${ques.label}</div>
+        <input class="form-input" type="text" placeholder="${ques.placeholder || ''}" data-sqid="${questId}-${ques.id}">
+      </div>`;
+  }).join('');
+
+  document.getElementById('surveyModalContent').innerHTML = `
+    <div class="survey-modal-header">
+      <div class="survey-modal-icon" style="background:${q.color}22;color:${q.color}">
+        <i class="fa-solid ${q.icon}"></i>
+      </div>
+      <div>
+        <div class="survey-modal-title">${q.title}</div>
+        <div class="survey-modal-sub">${q.description || ''}</div>
+      </div>
+      <div class="survey-modal-xp" style="color:${q.color}">+${q.xp} XP</div>
+    </div>
+    <div class="survey-body">${questionsHtml}</div>
+    <div class="survey-footer">
+      <button class="btn btn--secondary" onclick="closeSurveyModal()">Cancel</button>
+      <button class="btn btn--primary survey-submit-btn" onclick="submitSurvey('${questId}')">
+        <i class="fa-solid fa-paper-plane"></i> Submit &amp; Earn XP
+      </button>
+    </div>`;
+
+  document.getElementById('surveyModal').style.display = 'flex';
+}
+
+function closeSurveyModal() {
+  document.getElementById('surveyModal').style.display = 'none';
+}
+
+async function submitSurvey(questId) {
+  const q = PORTAL.quests?.quests?.find(q => q.id === questId);
+  if (!q) return;
+
+  const data = {};
+  let allAnswered = true;
+
+  (q.questions || []).forEach((ques, i) => {
+    if (ques.type === 'choice') {
+      const checked = document.querySelector(`input[name="sq_${questId}_${i}"]:checked`);
+      if (checked) data[ques.id] = checked.value;
+      else allAnswered = false;
+    } else {
+      const inp = document.querySelector(`input[data-sqid="${questId}-${ques.id}"]`);
+      if (inp && inp.value.trim()) data[ques.id] = inp.value.trim();
+      else allAnswered = false;
+    }
+  });
+
+  if (!allAnswered) {
+    Toast.error('Please answer all questions before submitting.');
+    return;
+  }
+
+  const btn = document.querySelector('.survey-submit-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting...'; }
+
+  try {
+    const result = await _postQuestComplete(questId, data);
+    if (result.error) {
+      Toast.error(result.error.includes('already') ? 'Already completed!' : result.error);
+      closeSurveyModal();
+    } else {
+      closeSurveyModal();
+      Toast.success(`+${result.xpAwarded} XP earned!`);
+      if (PORTAL.quests) {
+        PORTAL.quests.xp  = result.newXP;
+        PORTAL.quests.xpToNext = result.xpToNext;
+        PORTAL.quests.completedIds = [...(PORTAL.quests.completedIds || []), questId];
+      }
+      if (result.leveledUp) _showLevelUpModal(result);
+      renderQuestView();
+      renderXPWidget();
+      _updateXPNavBadge();
+    }
+  } catch (e) {
+    Toast.error('Submission failed. Please try again.');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit & Earn XP'; }
+  }
+}
+
+/* ─── Level-up Celebration Modal ────────────────────────── */
+function _showLevelUpModal(result) {
+  const lvl = XP_LEVELS.find(l => l.id === result.newLevel) || XP_LEVELS[0];
+
+  document.getElementById('levelupIcon').innerHTML    = `<i class="fa-solid ${lvl.icon}"></i>`;
+  document.getElementById('levelupIcon').style.background = lvl.color;
+  document.getElementById('levelupLevel').textContent = lvl.label;
+  document.getElementById('levelupXP').textContent    = `${result.newXP.toLocaleString('en-ZA')} XP total`;
+
+  const rewardEl = document.getElementById('levelupReward');
+  if (result.rewardGiven > 0) {
+    rewardEl.innerHTML = `<strong>R${result.rewardGiven}</strong> has been added to your wallet! 🎉`;
+    rewardEl.style.display = 'block';
+  } else {
+    rewardEl.style.display = 'none';
+  }
+
+  document.getElementById('levelUpModal').style.display = 'flex';
+  _launchConfettiParticles();
+}
+
+function closeLevelUpModal() {
+  document.getElementById('levelUpModal').style.display = 'none';
+}
+
+function _launchConfettiParticles() {
+  const container = document.getElementById('levelupConfetti');
+  if (!container) return;
+  container.innerHTML = '';
+  const colors = ['#FF8215', '#22c55e', '#2F8C9B', '#D4AF37', '#a855f7'];
+  for (let i = 0; i < 40; i++) {
+    const p = document.createElement('span');
+    p.style.cssText = `
+      position:absolute;
+      width:${6 + Math.random()*8}px;height:${6 + Math.random()*8}px;
+      background:${colors[Math.floor(Math.random()*colors.length)]};
+      border-radius:${Math.random()>0.5?'50%':'2px'};
+      top:0;left:${Math.random()*100}%;
+      animation:confettiFall ${0.8 + Math.random()*1.2}s ease-in ${Math.random()*0.5}s forwards;
+      opacity:0;
+    `;
+    container.appendChild(p);
+  }
+}
+
+/* ═════════════════════════════════════════════════════════
+   LEARNING HUB
+   ═════════════════════════════════════════════════════════ */
+
+const LEARN_MODULES = [
+  // ── Explorer Track (getting started) ───────────────────
+  {
+    id: 'learn_what_is_svc', track: 'explorer', order: 1,
+    title: 'What is SV Capital?', readTime: 5, xp: 50,
+    icon: 'fa-building-columns', color: '#2F8C9B',
+    keyPoints: [
+      'SV Capital pools investor capital into tangible South African alternative assets',
+      'Products include solar projects, cattle farming, short-term loans, and delivery bikes',
+      'Each product has a defined term, return rate, and maturity date',
+      'All investments are backed by real, income-generating assets',
+    ],
+    content: `SV Capital is a South African alternative investment platform that connects investors with real-economy projects generating above-inflation returns. Unlike unit trusts or share portfolios, your money is put to work in tangible assets — solar panels generating electricity, cattle being raised and sold at market, or secured loans to operating businesses.
+
+Each investment has a clearly defined term (typically 6–36 months) and a fixed annual rate of return, so you know exactly what to expect. Your capital is tracked in real time on this portal, and returns are credited directly to your wallet on maturity.
+
+The platform charges no entry fees and no monthly platform fees. Our revenue comes from structuring fees on the underlying transactions, so your quoted return is your net return.`,
+  },
+  {
+    id: 'learn_how_returns', track: 'explorer', order: 2,
+    title: 'How Your Returns Work', readTime: 7, xp: 50,
+    icon: 'fa-percent', color: '#22c55e',
+    keyPoints: [
+      'Returns are expressed as an annual percentage rate (p.a.)',
+      'Your actual payout = capital × annual rate × (term in days ÷ 365)',
+      'Reinvesting your returns compounds your growth over time',
+      'Effective return % accounts for the full term, not just one year',
+    ],
+    content: `When you invest with SV Capital, you earn a return based on two factors: the annual rate and the term. For example, R10,000 invested at 14% p.a. for 12 months returns R11,400 — the R10,000 original capital plus R1,400 in returns.
+
+Shorter-term products like cattle cycles (150–180 days) work the same way, but on a pro-rated basis. A 14% annual rate for 150 days pays roughly R575 on a R10,000 investment.
+
+The "effective return" you see on your dashboard is the annualised figure, allowing you to compare products fairly regardless of their term length.`,
+  },
+  {
+    id: 'learn_solar', track: 'explorer', order: 3,
+    title: 'Solar Energy Investing', readTime: 8, xp: 50,
+    icon: 'fa-solar-panel', color: '#f59e0b',
+    keyPoints: [
+      'SV Capital funds solar panel installations for South African businesses',
+      'Businesses pay structured lease or energy purchase agreements',
+      'Returns typically range from 14–18% p.a. over 24–36 month terms',
+      'Solar projects benefit from long-term, predictable contractual cash flows',
+    ],
+    content: `Solar projects work by financing the installation of commercial-scale photovoltaic (PV) systems for verified South African businesses. Once installed, the business pays a set monthly amount — either as an energy purchase agreement (EPA) or a finance lease — providing predictable monthly revenue.
+
+SV Capital aggregates these returns and passes them to investors net of all structuring costs. Solar assets are long-duration, making them ideal for capital you do not need access to for 2–3 years. Loadshedding in South Africa has significantly increased demand for behind-the-meter solar, providing strong deal flow for this product.
+
+Each solar project undergoes technical assessment, legal review, and business viability checks before being made available to investors.`,
+  },
+  {
+    id: 'learn_cattle', track: 'explorer', order: 4,
+    title: 'Cattle & Short-term Loans', readTime: 8, xp: 50,
+    icon: 'fa-cow', color: '#a855f7',
+    keyPoints: [
+      'Cattle are purchased at auction, raised on commercial farms, and resold',
+      'Each cycle typically runs 150–180 days with 12–16% p.a. returns',
+      'Short-term loans are made to businesses with real collateral',
+      'These shorter terms allow for reinvestment and capital recycling',
+    ],
+    content: `SV Capital's cattle product funds the purchase of commercial beef cattle at verified South African livestock auctions. The cattle are placed on contracted farms where they are fed and managed under professional supervision, then sold at market at the end of the cycle.
+
+Returns are driven by weight gain and market price at sale. SV Capital hedges execution risk through diversified lots and vetted farming partners. Each batch is tracked and reported on in real time via the admin platform.
+
+Short-term business loans are secured against verifiable collateral (trading assets, debtor books, or property bonds) and carry slightly lower rates than cattle due to their fixed repayment structure. Both products offer higher liquidity than solar, with capital recycling every 5–6 months.`,
+  },
+  {
+    id: 'learn_diversification', track: 'explorer', order: 5,
+    title: 'Diversification 101', readTime: 6, xp: 50,
+    icon: 'fa-chart-pie', color: '#FF8215',
+    keyPoints: [
+      'Spreading capital across products reduces exposure to any single risk',
+      'Different products have different maturity timelines, creating natural liquidity',
+      'A blended portfolio smooths your overall return over time',
+      'Diversification is not just by product — also consider term length and entry date',
+    ],
+    content: `Diversification means not putting all your eggs in one basket — a principle that applies as much to alternative investments as to traditional ones. By spreading your capital across solar, cattle, and loans, you reduce the impact if any single investment underperforms.
+
+Equally important is timeline diversification. If all your investments mature at the same time, you face reinvestment risk. Staggering your investments across different start dates means you always have capital returning, which can be reinvested into new opportunities.
+
+Our data shows that investors with 3+ active product types consistently achieve smoother returns and higher portfolio satisfaction than those concentrated in a single product.`,
+  },
+
+  // ── Builder Track (growing investor) ───────────────────
+  {
+    id: 'learn_risk', track: 'builder', order: 1,
+    title: 'Risk vs Return', readTime: 8, xp: 50,
+    icon: 'fa-scale-balanced', color: '#a855f7',
+    keyPoints: [
+      'Higher potential returns always come with higher risk — there are no exceptions',
+      'Risk in alternative investments includes liquidity risk, operational risk, and market risk',
+      'Your risk profile determines the right mix of products for you',
+      'Diversification reduces but cannot eliminate all risk',
+    ],
+    content: `Every investment involves a trade-off between risk and return. At SV Capital, solar projects carry the lowest operational risk (contractual cash flows) but require the longest capital commitment. Cattle farming offers higher potential returns but involves biological and market variables that solar does not.
+
+Understanding your own risk tolerance is critical. If you might need access to your capital within 12 months, short-term products are more appropriate than 36-month solar commitments. If you can commit capital for longer and tolerate some variability, the blended portfolio approach tends to deliver the best long-term outcomes.
+
+The risk profile survey in the Earn Rewards section helps us calibrate your portfolio recommendations to your personal risk appetite.`,
+  },
+  {
+    id: 'learn_compounding', track: 'builder', order: 2,
+    title: 'The Compounding Effect', readTime: 7, xp: 50,
+    icon: 'fa-chart-line', color: '#22c55e',
+    keyPoints: [
+      'Compounding means earning returns on your returns, not just your original capital',
+      'The longer your investment horizon, the more powerful compounding becomes',
+      'Reinvesting at maturity is the single most impactful decision you can make',
+      'A 14% p.a. return, reinvested over 5 years, nearly doubles your capital',
+    ],
+    content: `Albert Einstein reportedly called compound interest the "eighth wonder of the world." In practice, compounding means that after your first investment matures, you reinvest both the original capital and the returns — so in the next cycle, you earn returns on a larger base.
+
+At 14% p.a., R10,000 grows to R11,400 after year 1. Reinvested, it becomes R12,996 after year 2 — not R12,800. The difference compounds every year. After 5 years, R10,000 compounding at 14% p.a. becomes approximately R19,254 — nearly double.
+
+The key to unlocking compounding is acting quickly at maturity. Capital sitting idle in your wallet earns nothing. Set your maturity instructions to reinvest, and let time do the work.`,
+  },
+  {
+    id: 'learn_tax', track: 'builder', order: 3,
+    title: 'Investment Tax in South Africa', readTime: 9, xp: 50,
+    icon: 'fa-receipt', color: '#64748b',
+    keyPoints: [
+      'Investment returns from SV Capital are generally treated as ordinary income in South Africa',
+      'You are required to declare investment returns in your annual tax return (ITR12)',
+      'SV Capital issues statements to assist with your tax declarations',
+      'Consult a registered tax practitioner for personalised advice',
+    ],
+    content: `In South Africa, income earned from investments is generally subject to income tax at your marginal rate. This applies to the returns (interest or profit share) you earn through SV Capital products. Your original capital returned at maturity is not taxable — only the profit portion is.
+
+SARS requires you to disclose all South African and foreign income on your annual return (ITR12). Your SV Capital account statement (available under "My Statement") provides a breakdown of all returns earned in each tax year, which you or your accountant can use for tax submissions.
+
+Note that SV Capital does not deduct tax at source — you are responsible for declaring and paying tax on returns earned. If your total investment income exceeds R23,800 per year (the annual interest exemption for individuals under 65), the excess is taxable. We strongly recommend consulting a registered tax practitioner.`,
+  },
+
+  // ── Strategist Track (advanced) ────────────────────────
+  {
+    id: 'learn_yield_opt', track: 'strategist', order: 1,
+    title: 'Yield Optimisation', readTime: 10, xp: 50,
+    icon: 'fa-chart-line-up', color: '#FF8215',
+    keyPoints: [
+      'Blending high-rate short-term products with stable long-term ones maximises risk-adjusted yield',
+      'Entry timing and reinvestment speed have a significant impact on effective annualised returns',
+      'Laddering (staggered maturity dates) ensures continuous capital deployment',
+      'Idle wallet balances are a hidden drag on your portfolio performance',
+    ],
+    content: `Yield optimisation is about maximising your effective annualised return across your whole portfolio — not just picking the highest individual rate. A sophisticated investor uses a laddering strategy: starting multiple investments with staggered maturity dates so capital is always being deployed or reinvested.
+
+Equally, minimise idle time. Capital sitting in your wallet between investments earns 0%. Even a 2-week idle period on R50,000 costs you approximately R380 in lost returns at 14% p.a. The fastest investors reinvest within 48 hours of maturity.
+
+The optimal blend for most SV Capital investors in 2025 is approximately 40% solar (stable base), 40% cattle/loans (higher rate, shorter term), and 20% in reserve for opportunistic reinvestment when high-rate pools open.`,
+  },
+  {
+    id: 'learn_estate', track: 'strategist', order: 2,
+    title: 'Protecting Your Investment Wealth', readTime: 12, xp: 50,
+    icon: 'fa-people-roof', color: '#22c55e',
+    keyPoints: [
+      'South African law requires all assets to go through the estate when you die',
+      'Naming a beneficiary ensures your family knows where your investments are',
+      'SV Capital stores your beneficiary details securely in your profile',
+      'A will that references your investment accounts speeds up estate administration',
+    ],
+    content: `Many investors focus on growing wealth but neglect protecting it for the next generation. In South Africa, all assets — including investments on platforms like SV Capital — form part of your deceased estate and must go through the Master of the High Court unless specifically structured otherwise.
+
+The most important first step is ensuring your beneficiary details are on file with SV Capital (add them via the "Complete Your Profile" quest), and that your will references your investment accounts. Without clear documentation, your family may wait months or years to access funds.
+
+For larger portfolios (R500,000+), consider consulting an estate planner about structuring investments via a trust or company to minimise estate duty and executor's fees. Estate duty in South Africa is charged at 20% on dutiable estates above R3.5 million.`,
+  },
+];
+
+const LEARN_TRACKS = [
+  { id: 'explorer',   label: 'Explorer',   desc: 'New to investing — start here',        icon: 'fa-compass',          color: '#2F8C9B',  minInvested: 0 },
+  { id: 'builder',    label: 'Builder',    desc: 'Growing your portfolio',                icon: 'fa-hammer',           color: '#22c55e',  minInvested: 5000 },
+  { id: 'strategist', label: 'Strategist', desc: 'Advanced portfolio management',         icon: 'fa-chess-knight',     color: '#a855f7',  minInvested: 50000 },
+];
+
+let _learnActiveTrack = null;
+
+function renderLearnView() {
+  const completed = new Set(PORTAL.quests?.completedIds || []);
+  const totalInv  = parseFloat(PORTAL.investor?.total_invested) || 0;
+
+  // Auto-select recommended track based on invested amount
+  const recommended = [...LEARN_TRACKS].reverse().find(t => totalInv >= t.minInvested) || LEARN_TRACKS[0];
+  if (!_learnActiveTrack) _learnActiveTrack = recommended.id;
+
+  // Update header sub label
+  const sub = document.getElementById('learnTrackLabel');
+  if (sub) sub.textContent = `Recommended for you: ${recommended.label} track`;
+
+  const container = document.getElementById('learnContent');
+  if (!container) return;
+
+  // Track tabs
+  const tabs = LEARN_TRACKS.map(t => `
+    <button class="learn-track-tab ${_learnActiveTrack === t.id ? 'active' : ''}"
+            onclick="_setLearnTrack('${t.id}')"
+            style="${_learnActiveTrack === t.id ? `border-color:${t.color};color:${t.color}` : ''}">
+      <i class="fa-solid ${t.icon}"></i>
+      <div>
+        <div class="learn-tab-name">${t.label}</div>
+        <div class="learn-tab-sub">${t.desc}</div>
+      </div>
+      ${t.id === recommended.id ? `<span class="learn-tab-recommended">Recommended</span>` : ''}
+    </button>`).join('');
+
+  const activeTrack = LEARN_TRACKS.find(t => t.id === _learnActiveTrack) || LEARN_TRACKS[0];
+  const modules = LEARN_MODULES.filter(m => m.track === _learnActiveTrack)
+    .sort((a, b) => a.order - b.order);
+
+  const moduleCards = modules.map(mod => {
+    const isDone = completed.has(mod.id);
+    return `
+      <div class="learn-module-card ${isDone ? 'learn-module-card--done' : ''}" id="lmod-${mod.id}">
+        <div class="learn-module-card__header">
+          <div class="learn-module-card__icon" style="background:${mod.color}22;color:${mod.color}">
+            <i class="fa-solid ${mod.icon}"></i>
+          </div>
+          <div class="learn-module-card__meta">
+            <div class="learn-module-card__title">${mod.title}</div>
+            <div class="learn-module-card__info">
+              <span><i class="fa-regular fa-clock"></i> ${mod.readTime} min</span>
+              <span style="color:${mod.color}"><i class="fa-solid fa-star"></i> +${mod.xp} XP</span>
+            </div>
+          </div>
+          ${isDone
+            ? `<div class="learn-done-badge"><i class="fa-solid fa-circle-check"></i> Completed</div>`
+            : `<button class="learn-expand-btn" onclick="_toggleModule('${mod.id}')">
+                 <i class="fa-solid fa-chevron-down" id="lchev-${mod.id}"></i>
+               </button>`
+          }
+        </div>
+        <div class="learn-module-body" id="lbody-${mod.id}" style="display:none">
+          <div class="learn-key-points">
+            <div class="learn-key-points__title"><i class="fa-solid fa-list-check"></i> Key Takeaways</div>
+            <ul>${mod.keyPoints.map(p => `<li>${p}</li>`).join('')}</ul>
+          </div>
+          <div class="learn-content-text">${mod.content.split('\n\n').map(p => `<p>${p.trim()}</p>`).join('')}</div>
+          <div class="learn-module-footer">
+            <button class="btn btn--primary" onclick="markModuleComplete('${mod.id}')">
+              <i class="fa-solid fa-check"></i> Mark Complete — Earn ${mod.xp} XP
+            </button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="learn-track-tabs">${tabs}</div>
+    <div class="learn-modules-list">${moduleCards}</div>`;
+}
+
+function _setLearnTrack(trackId) {
+  _learnActiveTrack = trackId;
+  renderLearnView();
+}
+
+function _toggleModule(modId) {
+  const body = document.getElementById(`lbody-${modId}`);
+  const chev = document.getElementById(`lchev-${modId}`);
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (chev) chev.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
+async function markModuleComplete(modId) {
+  const btn = document.querySelector(`#lmod-${modId} .btn--primary`);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...'; }
+
+  try {
+    const result = await _postQuestComplete(modId, { source: 'learning_hub' });
+    if (result.error) {
+      if (result.error.includes('already')) {
+        Toast.info('Already completed!');
+      } else {
+        Toast.error(result.error);
+      }
+    } else {
+      Toast.success(`Module complete! +${result.xpAwarded} XP`);
+      if (PORTAL.quests) {
+        PORTAL.quests.xp  = result.newXP;
+        PORTAL.quests.xpToNext = result.xpToNext;
+        PORTAL.quests.completedIds = [...(PORTAL.quests.completedIds || []), modId];
+      }
+      if (result.leveledUp) _showLevelUpModal(result);
+      renderLearnView();
+      renderXPWidget();
+      _updateXPNavBadge();
+    }
+  } catch (e) {
+    Toast.error('Could not save completion. Try again.');
+    if (btn) { btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-check"></i> Mark Complete — Earn ${LEARN_MODULES.find(m=>m.id===modId)?.xp||50} XP`; }
+  }
 }
 
 function shareReferral(method) {
