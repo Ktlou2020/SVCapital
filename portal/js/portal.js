@@ -890,32 +890,34 @@ function proceedPayment() {
   else if (_pmGateway === 'eft')     showEftDetails();
 }
 
-/* ── Paystack inline popup ──────────────────── */
+/* ── Paystack inline popup (v2 API) ─────────────── */
 function launchPaystack() {
   _pmShowOnly('pmStep3Processing');
   _pmSetProgress(100);
   _pmSetStepLabel('Step 3 of 3 — Paystack');
 
-  // The investor deposits _pmAmount; the total charged to their card includes the 2.9% + R1 fee
+  // Total charged to card = base amount + 2.9% + R1 gateway fee
   const totalCharged = _pmTotal(_pmAmount);
 
-  // Small delay so the spinner shows before the popup blocks the thread
   setTimeout(() => {
     try {
       if (typeof PaystackPop === 'undefined') {
         throw new Error('Paystack JS library did not load. Check your internet connection and try again.');
       }
-      const handler = PaystackPop.setup({
-        key:       PAYSTACK_PUBLIC_KEY,
-        email:     _pmInvestorEmail(),
-        amount:    Math.round(totalCharged * 100),   // Paystack expects cents
-        currency:  'ZAR',
-        ref:       `SVC-PS-${Date.now()}`,
+
+      // Paystack v2 API — replaces deprecated PaystackPop.setup() + openIframe()
+      const popup = new PaystackPop();
+      popup.newTransaction({
+        key:      PAYSTACK_PUBLIC_KEY,
+        email:    _pmInvestorEmail(),
+        amount:   Math.round(totalCharged * 100),   // Paystack expects kobo/cents
+        currency: 'ZAR',
+        ref:      `SVC-PS-${Date.now()}`,
         metadata: {
-          investor_id:    _pmInvestorId(),
-          investor_name:  _pmInvestorName(),
-          wallet_credit:  _pmAmount,
-          gateway_fee:    _pmFee(_pmAmount),
+          investor_id:   _pmInvestorId(),
+          investor_name: _pmInvestorName(),
+          wallet_credit: _pmAmount,
+          gateway_fee:   _pmFee(_pmAmount),
           custom_fields: [
             { display_name: 'Investor ID',    variable_name: 'investor_id',   value: _pmInvestorId() },
             { display_name: 'Investor Name',  variable_name: 'investor_name', value: _pmInvestorName() },
@@ -923,22 +925,21 @@ function launchPaystack() {
             { display_name: 'Gateway Fee',    variable_name: 'gateway_fee',   value: `R${_pmFee(_pmAmount)}` },
           ]
         },
-        callback: function(response) {
-          // Payment authorised — credit wallet with base amount (fee stays with gateway)
-          _recordDeposit('paystack', response.reference, 'completed');
+        onSuccess: function(transaction) {
+          // Payment authorised — credit wallet with base amount only (fee stays with gateway)
+          _recordDeposit('paystack', transaction.reference, 'completed');
         },
-        onClose: function() {
-          // User closed popup without paying — return to step 2
+        onCancel: function() {
+          // User closed the Paystack popup without completing payment
           _pmShowOnly('pmStep2');
           _pmSetProgress(66);
           _pmSetStepLabel('Step 2 of 3 — Choose payment method');
-          Toast.info('Payment cancelled — you can try again anytime');
+          Toast.info('Payment cancelled — you can try again anytime.');
         }
       });
-      handler.openIframe();
     } catch (err) {
       console.error('Paystack error:', err);
-      Toast.error('Could not launch Paystack. Please try another method.');
+      Toast.error(err.message || 'Could not launch Paystack. Please try another method.');
       _pmShowOnly('pmStep2');
       _pmSetProgress(66);
       _pmSetStepLabel('Step 2 of 3 — Choose payment method');
