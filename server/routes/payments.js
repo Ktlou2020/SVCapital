@@ -27,8 +27,9 @@ const { requireAuth } = require('../middleware/auth');
  * Returns: { hash, siteCode }  — frontend uses the returned siteCode.
  */
 router.post('/ozow-hash', requireAuth, (req, res) => {
-  const siteCode   = process.env.OZOW_SITE_CODE;
-  const privateKey = process.env.OZOW_PRIVATE_KEY;
+  // .trim() guards against accidental trailing newlines/spaces when copy-pasting into Railway env vars
+  const siteCode   = (process.env.OZOW_SITE_CODE   || '').trim();
+  const privateKey = (process.env.OZOW_PRIVATE_KEY || '').trim();
 
   if (!siteCode) {
     console.error('Ozow: OZOW_SITE_CODE env var not set');
@@ -55,8 +56,21 @@ router.post('/ozow-hash', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'amount, transactionRef and successUrl are required.' });
   }
 
-  // Ozow spec: lowercase all values, concatenate, SHA-512, lowercase the hex result
-  const payload = [
+  // Ozow HashCheck spec:
+  //   lowercase(SHA512(siteCode + countryCode + currencyCode + amount +
+  //     transactionRef + bankRef + cancelUrl + errorUrl + successUrl + isTest + privateKey))
+  // Every value lowercased individually before concatenation.
+  // Private key NOT included in the debug log below.
+  const fields = [
+    siteCode, countryCode, currencyCode, amount,
+    transactionRef, bankRef, cancelUrl, errorUrl, successUrl, String(isTest),
+  ];
+  const payload = [...fields, privateKey].map(v => String(v).toLowerCase()).join('');
+
+  const hash = crypto.createHash('sha512').update(payload).digest('hex').toLowerCase();
+
+  // Debug — visible in Railway logs; helps diagnose hash mismatches without exposing the key
+  console.log('[Ozow] hash inputs:', {
     siteCode,
     countryCode,
     currencyCode,
@@ -66,13 +80,11 @@ router.post('/ozow-hash', requireAuth, (req, res) => {
     cancelUrl,
     errorUrl,
     successUrl,
-    String(isTest),
-    privateKey,
-  ].map(v => String(v).toLowerCase()).join('');
+    isTest: String(isTest),
+    privateKeyLen: privateKey.length,
+    hash,
+  });
 
-  const hash = crypto.createHash('sha512').update(payload).digest('hex').toLowerCase();
-
-  console.log(`Ozow hash generated for ref ${transactionRef} (site: ${siteCode})`);
   return res.json({ hash, siteCode });
 });
 
