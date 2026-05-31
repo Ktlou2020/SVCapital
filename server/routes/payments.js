@@ -56,20 +56,23 @@ router.post('/ozow-hash', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'amount, transactionRef and successUrl are required.' });
   }
 
-  // Ozow HashCheck spec:
-  //   lowercase(SHA512(siteCode + countryCode + currencyCode + amount +
-  //     transactionRef + bankRef + cancelUrl + errorUrl + successUrl + isTest + privateKey))
-  // Every value lowercased individually before concatenation.
-  // Private key NOT included in the debug log below.
-  const fields = [
-    siteCode, countryCode, currencyCode, amount,
-    transactionRef, bankRef, cancelUrl, errorUrl, successUrl, String(isTest),
-  ];
-  const payload = [...fields, privateKey].map(v => String(v).toLowerCase()).join('');
+  // Ozow HashCheck spec (per official PHP SDK):
+  //   lowercase(SHA512(
+  //     lowercase(siteCode) + lowercase(countryCode) + lowercase(currencyCode) +
+  //     lowercase(amount) + lowercase(transactionRef) + lowercase(bankRef) +
+  //     lowercase(cancelUrl) + lowercase(errorUrl) + lowercase(successUrl) +
+  //     lowercase(isTest) + privateKey   ← private key appended as-is, NOT lowercased
+  //   ))
+  const lc = v => String(v).toLowerCase();
+  const payload =
+    lc(siteCode) + lc(countryCode) + lc(currencyCode) +
+    lc(amount) + lc(transactionRef) + lc(bankRef) +
+    lc(cancelUrl) + lc(errorUrl) + lc(successUrl) +
+    lc(String(isTest)) + privateKey;  // privateKey used verbatim
 
   const hash = crypto.createHash('sha512').update(payload).digest('hex').toLowerCase();
 
-  // Debug — visible in Railway logs; helps diagnose hash mismatches without exposing the key
+  // Debug — visible in Railway logs to diagnose mismatches (private key not logged)
   console.log('[Ozow] hash inputs:', {
     siteCode,
     countryCode,
