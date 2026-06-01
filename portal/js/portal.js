@@ -1625,12 +1625,12 @@ function openInvestModal(poolId) {
       <label class="form-label">How much would you like to invest?</label>
       <div class="invest-quickpick mb-8">
         ${[pool.min_investment, 5000, 10000, 25000].filter(v => v <= walletBal || v === pool.min_investment).map(v =>
-          `<button class="invest-qp-btn" onclick="document.getElementById('investAmount').value=${v};_updateInvestCalc(${v},${pool.benchmark_rate},${pool.term_months},${pool.min_investment})">${Utils.rand(v)}</button>`
+          `<button class="invest-qp-btn" onclick="document.getElementById('investAmount').value=${v};_updateInvestCalc(${v},${pool.annual_rate},${pool.term_months},${pool.min_investment})">${Utils.rand(v)}</button>`
         ).join('')}
       </div>
       <input type="number" class="form-input" id="investAmount"
         placeholder="Enter amount (min ${Utils.rand(pool.min_investment)})"
-        min="${pool.min_investment}" max="${walletBal}" oninput="_updateInvestCalc(parseFloat(this.value)||0,${pool.benchmark_rate},${pool.term_months},${pool.min_investment})" />
+        min="${pool.min_investment}" max="${walletBal}" oninput="_updateInvestCalc(parseFloat(this.value)||0,${pool.annual_rate},${pool.term_months},${pool.min_investment})" />
     </div>
 
     <!-- Live return calculator -->
@@ -4236,21 +4236,7 @@ function _saTipGo(idx) {
   document.querySelectorAll('.minor-tip-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
 }
 
-/* ── Deposit to sub account ─────────────────────────────────── */
-function openSaDeposit(saId) {
-  const sa   = PORTAL.subAccounts.find(a => a.id === saId);
-  if (!sa) return;
-  const meta = SA_TYPE_META[sa.account_type] || SA_TYPE_META.business;
-  const isMinor = sa.account_type === 'minor';
-
-  document.getElementById('saDepositTitle').textContent  = isMinor ? `Add to ${sa.name}'s Jar 🐷` : `Deposit — ${sa.name}`;
-  document.getElementById('saDepositSubtitle').textContent = `${meta.label} Account`;
-  document.getElementById('saDepositBalanceLbl').textContent = Utils.rand(sa.wallet_balance);
-  document.getElementById('saDepositSaId').value  = saId;
-  document.getElementById('saDepositAmount').value = '';
-  document.getElementById('saDepositRef').value    = '';
-  Modal.open('saDepositModal');
-}
+/* ── Deposit to sub account — handled by openSaDeposit() near line 2511 ── */
 
 async function confirmSaDeposit() {
   const saId    = document.getElementById('saDepositSaId').value;

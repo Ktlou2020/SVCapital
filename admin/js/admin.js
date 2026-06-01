@@ -609,9 +609,9 @@ async function viewInvestor(id) {
           <td class="td-strong">${i.pool_name}</td>
           <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
           <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
-          <td class="td-green">${Utils.pct(i.expected_return_rate)}</td>
+          <td class="td-green">${Utils.pct(i.annual_rate)}</td>
           <td>${Utils.statusBadge(i.status)}</td>
-          <td class="td-muted">${Utils.date(i.maturity_date)}</td>
+          <td class="td-muted">${Utils.date(i.end_date)}</td>
         </tr>`;
       }).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:16px">No investments</td></tr>'}</tbody>
     </table>
@@ -1062,9 +1062,9 @@ function renderInvestmentsTable() {
       <td class="td-strong">${i.pool_name}</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
-      <td class="td-green">${Utils.rand(i.expected_return_amount)}</td>
+      <td class="td-green">${Utils.rand(i.expected_return)}</td>
       <td>${Utils.statusBadge(i.status)}</td>
-      <td class="td-muted">${Utils.date(i.maturity_date)}</td>
+      <td class="td-muted">${Utils.date(i.end_date)}</td>
       <td>
         <button class="btn btn--secondary btn--sm" onclick='viewInvestmentDetail(${JSON.stringify(i.id)})'><i class="fa-solid fa-eye"></i></button>
       </td>
@@ -1114,11 +1114,11 @@ function viewInvestmentDetail(id) {
       <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${inv.pool_name}</span></div>
       <div class="info-row"><span class="info-row__label">Product</span><span class="info-row__value"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></span></div>
       <div class="info-row"><span class="info-row__label">Invested Amount</span><span class="info-row__value td-gold fw-700">${Utils.rand(inv.amount)}</span></div>
-      <div class="info-row"><span class="info-row__label">Expected Return</span><span class="info-row__value td-green">${Utils.rand(inv.expected_return_amount)}</span></div>
-      <div class="info-row"><span class="info-row__label">Return Rate</span><span class="info-row__value">${Utils.pct(inv.expected_return_rate)} p.a.</span></div>
+      <div class="info-row"><span class="info-row__label">Expected Return</span><span class="info-row__value td-green">${Utils.rand(inv.expected_return)}</span></div>
+      <div class="info-row"><span class="info-row__label">Return Rate</span><span class="info-row__value">${Utils.pct(inv.annual_rate)} p.a.</span></div>
       <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value">${Utils.statusBadge(inv.status)}</span></div>
-      <div class="info-row"><span class="info-row__label">Investment Date</span><span class="info-row__value td-muted">${Utils.date(inv.investment_date)}</span></div>
-      <div class="info-row"><span class="info-row__label">Maturity Date</span><span class="info-row__value td-muted">${Utils.date(inv.maturity_date)}</span></div>
+      <div class="info-row"><span class="info-row__label">Investment Date</span><span class="info-row__value td-muted">${Utils.date(inv.start_date)}</span></div>
+      <div class="info-row"><span class="info-row__label">Maturity Date</span><span class="info-row__value td-muted">${Utils.date(inv.end_date)}</span></div>
       <div class="info-row"><span class="info-row__label">Payout Date</span><span class="info-row__value td-muted">${Utils.date(inv.payout_date) || 'Pending'}</span></div>
       <div class="info-row"><span class="info-row__label">Maturity Instruction</span><span class="info-row__value">${Utils.statusBadge(inv.maturity_instruction || 'pending')}</span></div>
     </div>
@@ -1149,15 +1149,15 @@ async function markInvestmentMatured(id) {
 async function payoutInvestment(id) {
   const inv = STATE.investments.find(i => i.id === id);
   if (!inv) return;
-  const actualRate = prompt(`Enter actual return rate achieved (e.g. 0.1561 for 15.61%):`, inv.expected_return_rate);
+  const actualRate = prompt(`Enter actual return rate achieved (e.g. 0.1561 for 15.61%):`, inv.annual_rate);
   if (!actualRate) return;
   const rate = parseFloat(actualRate);
-  const actualReturn = Math.round(inv.amount * rate * ((new Date(inv.maturity_date) - new Date(inv.investment_date)) / (365 * 86400000)));
+  const actualReturn = Math.round(inv.amount * rate * ((new Date(inv.end_date) - new Date(inv.start_date)) / (365 * 86400000)));
 
   try {
     await API.investments.update(id, {
       status: 'paid_out',
-      actual_return_amount: actualReturn,
+      actual_return: actualReturn,
       payout_date: new Date().toISOString()
     });
     await API.transactions.create({
