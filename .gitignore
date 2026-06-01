@@ -29,6 +29,9 @@ Thumbs.db
 .vscode/settings.json
 .idea/
 
+# Claude Code internal state
+.claude/
+
 # Build artifacts
 # dist/ is intentionally committed — it's the Cloudflare Pages build output
 build/
