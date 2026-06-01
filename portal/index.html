@@ -419,6 +419,7 @@
               <div class="wallet-card__sub">Funds are available to invest immediately</div>
               <div class="wallet-card__actions">
                 <button class="btn btn--primary" onclick="openTopUpModal()"><i class="fa-solid fa-plus"></i> Top Up</button>
+                <button class="btn btn--secondary" onclick="openWithdrawalModal()"><i class="fa-solid fa-arrow-up-from-bracket"></i> Withdraw</button>
                 <button class="btn btn--secondary" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-chart-line"></i> Invest Now</button>
               </div>
             </div>
@@ -636,15 +637,13 @@
               </div>
             </div>
 
-            <div class="panel mb-16">
-              <div class="panel__header"><span class="panel__title">Linked Bank Account</span></div>
-              <div class="panel__body">
-                <div class="info-list">
-                  <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">First National Bank</span></div>
-                  <div class="info-row"><span class="info-row__label">Account</span><span class="info-row__value">••••••1234</span></div>
-                  <div class="info-row"><span class="info-row__label">Type</span><span class="info-row__value">Cheque Account</span></div>
-                </div>
-                <button class="btn btn--secondary btn--full mt-12" onclick="Toast.info('Bank account update — contact support')"><i class="fa-solid fa-pen"></i> Update Bank Details</button>
+            <div class="panel mb-16" id="bankDetailsPanelWrapper">
+              <div class="panel__header">
+                <span class="panel__title">Linked Bank Account</span>
+                <button class="btn btn--ghost btn--sm" onclick="openBankDetailsModal()"><i class="fa-solid fa-pen"></i> Update</button>
+              </div>
+              <div class="panel__body" id="bankDetailsPanel">
+                <div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:12px 0">Loading bank details…</div>
               </div>
             </div>
 
@@ -1671,6 +1670,90 @@
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('saGoalModal')">Cancel</button>
       <button class="btn btn--primary" onclick="saveSaGoal()"><i class="fa-solid fa-flag"></i> Save Goal</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bank Details Modal -->
+<div class="modal-overlay" id="bankDetailsModal" onclick="if(event.target===this)Modal.close('bankDetailsModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title">Linked Bank Account</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Your payout bank account — must be in your name</div>
+      </div>
+      <button class="modal__close" onclick="Modal.close('bankDetailsModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="info-box" style="background:rgba(255,155,12,0.08);border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:12px 14px;font-size:0.8rem;color:var(--text-muted);margin-bottom:16px">
+        <i class="fa-solid fa-circle-info" style="color:#ff9b0c"></i>
+        Bank details must be verified by our team before withdrawals can be processed. You will be notified once approved.
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group">
+          <label class="form-label">Bank Name <span style="color:#ef4444">*</span></label>
+          <select class="form-select" id="bdBankName">
+            <option value="">Select bank…</option>
+            <option>ABSA</option>
+            <option>Capitec Bank</option>
+            <option>First National Bank</option>
+            <option>Investec</option>
+            <option>Nedbank</option>
+            <option>Standard Bank</option>
+            <option>TymeBank</option>
+            <option>African Bank</option>
+            <option>Discovery Bank</option>
+            <option>Bidvest Bank</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Account Type <span style="color:#ef4444">*</span></label>
+          <select class="form-select" id="bdAccountType">
+            <option value="current">Cheque / Current</option>
+            <option value="savings">Savings</option>
+            <option value="transmission">Transmission</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Account Holder Name <span style="color:#ef4444">*</span></label>
+        <input type="text" class="form-input" id="bdAccountHolder" placeholder="Full name as it appears on bank account" />
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group">
+          <label class="form-label">Account Number <span style="color:#ef4444">*</span></label>
+          <input type="text" class="form-input" id="bdAccountNumber" placeholder="e.g. 62012345678" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Branch Code <span style="color:#ef4444">*</span></label>
+          <input type="text" class="form-input" id="bdBranchCode" placeholder="e.g. 632005" />
+        </div>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('bankDetailsModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveBankDetails()"><i class="fa-solid fa-floppy-disk"></i> Save Bank Details</button>
+    </div>
+  </div>
+</div>
+
+<!-- Withdrawal Modal -->
+<div class="modal-overlay" id="withdrawalModal" onclick="if(event.target===this)Modal.close('withdrawalModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title">Withdraw Funds</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Transfer your wallet balance to your bank account</div>
+      </div>
+      <button class="modal__close" onclick="Modal.close('withdrawalModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div id="withdrawalModalContent">Loading…</div>
+    </div>
+    <div class="modal__footer" id="withdrawalModalFooter" style="display:none">
+      <button class="btn btn--secondary" onclick="Modal.close('withdrawalModal')">Cancel</button>
+      <button class="btn btn--primary" id="withdrawalConfirmBtn" onclick="confirmWithdrawal()"><i class="fa-solid fa-paper-plane"></i> Request Withdrawal</button>
     </div>
   </div>
 </div>

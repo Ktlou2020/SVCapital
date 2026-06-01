@@ -70,6 +70,9 @@
       <button class="nav-item" data-view="transactions" onclick="navigate('transactions', this)">
         <i class="fa-solid fa-arrows-rotate"></i> Transactions
       </button>
+      <button class="nav-item" data-view="withdrawals" onclick="navigate('withdrawals', this)">
+        <i class="fa-solid fa-arrow-up-from-bracket"></i> Withdrawals
+      </button>
 
       <div class="nav-section-label">Operations</div>
       <button class="nav-item" data-view="support" onclick="navigate('support', this)">
@@ -600,6 +603,31 @@
           <div class="table-card__footer">
             <span id="txnFooter">—</span>
             <div class="pagination" id="txnPagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: WITHDRAWALS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-withdrawals">
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Withdrawal Requests</div>
+              <div style="font-size:0.78rem;color:var(--text-muted)">Process or reject pending investor withdrawal requests</div>
+            </div>
+            <button class="btn btn--secondary btn--sm" onclick="loadWithdrawals()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>Investor</th><th>Amount</th><th>Bank</th><th>Status</th><th>Requested</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="withdrawalsTableBody">
+                <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
