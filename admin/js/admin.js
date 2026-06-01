@@ -806,6 +806,100 @@ async function confirmDeleteInvestor(id) {
   } catch (e) { Toast.error('Failed to delete investor'); }
 }
 
+async function approveBankAccount(investorId) {
+  if (!confirm('Approve this bank account for withdrawals?')) return;
+  try {
+    await API.investors.update(investorId, {
+      bank_account_status: 'approved',
+      bank_account_notes: '',
+    });
+    Toast.success('Bank account approved — investor notified by email');
+    Modal.close('investorDetailModal');
+    await loadInvestors();
+  } catch (e) { Toast.error('Failed to approve bank account'); }
+}
+
+async function rejectBankAccount(investorId) {
+  const reason = prompt('Reason for rejection (shown to investor):');
+  if (!reason) return;
+  try {
+    await API.investors.update(investorId, {
+      bank_account_status: 'rejected',
+      bank_account_notes: reason,
+    });
+    Toast.success('Bank account rejected — investor notified');
+    Modal.close('investorDetailModal');
+    await loadInvestors();
+  } catch (e) { Toast.error('Failed to reject bank account'); }
+}
+
+async function loadWithdrawals() {
+  try {
+    const res = await API.transactions.list({ limit: 200 });
+    const withdrawals = (res.data || []).filter(t => t.type === 'withdrawal' && t.status === 'pending');
+    renderWithdrawalsTable(withdrawals);
+  } catch (e) { console.error('loadWithdrawals error:', e); }
+}
+
+function renderWithdrawalsTable(withdrawals) {
+  const container = document.getElementById('withdrawalsList');
+  if (!container) return;
+
+  if (!withdrawals.length) {
+    container.innerHTML = '<div class="text-center text-muted" style="padding:24px">No pending withdrawals</div>';
+    return;
+  }
+
+  container.innerHTML = `<table class="data-table">
+    <thead><tr>
+      <th>Investor</th><th>Amount</th><th>Bank</th><th>Reference</th><th>Requested</th><th>Actions</th>
+    </tr></thead>
+    <tbody>
+      ${withdrawals.map(w => {
+        const inv = STATE.investors.find(i => i.id === w.investor_id);
+        const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id;
+        const bank = inv ? `${inv.bank_name || '—'} ••••${String(inv.bank_account_number || '').slice(-4)}` : '—';
+        return `<tr>
+          <td><div class="td-strong">${name}</div><div class="td-muted" style="font-size:0.75rem">${w.investor_id}</div></td>
+          <td class="td-gold fw-700">${Utils.rand(Math.abs(w.amount))}</td>
+          <td style="font-size:0.82rem">${bank}</td>
+          <td class="td-muted" style="font-size:0.78rem">${w.reference || w.id}</td>
+          <td class="td-muted" style="font-size:0.78rem">${Utils.date(w.created_at)}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn--success btn--sm" style="margin-right:6px" onclick='processWithdrawal(${JSON.stringify(w.id)})'>
+              <i class="fa-solid fa-check"></i> Process
+            </button>
+            <button class="btn btn--danger btn--sm" onclick='rejectWithdrawal(${JSON.stringify(w.id)})'>
+              <i class="fa-solid fa-xmark"></i> Reject
+            </button>
+          </td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function processWithdrawal(txnId) {
+  if (!confirm('Mark this withdrawal as processed (funds sent to investor)?')) return;
+  try {
+    await API.transactions.update(txnId, { status: 'completed' });
+    Toast.success('Withdrawal marked as processed — investor notified by email');
+    await loadWithdrawals();
+    await loadTransactions();
+  } catch (e) { Toast.error('Failed to process withdrawal'); }
+}
+
+async function rejectWithdrawal(txnId) {
+  const reason = prompt('Reason for rejection (will be emailed to investor):');
+  if (!reason) return;
+  try {
+    await API.transactions.update(txnId, { status: 'rejected', description: `Rejected: ${reason}` });
+    Toast.success('Withdrawal rejected — investor wallet refunded and notified');
+    await loadWithdrawals();
+    await loadTransactions();
+  } catch (e) { Toast.error('Failed to reject withdrawal'); }
+}
+
 function openAddInvestorModal() { Modal.open('addInvestorModal'); }
 
 async function saveNewInvestor() {
