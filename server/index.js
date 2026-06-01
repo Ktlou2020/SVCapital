@@ -270,6 +270,10 @@ app.listen(PORT, '0.0.0.0', async () => {
   // Start FICA annual re-check cron (requires DATABASE_URL)
   const { startFicaCron } = require('./jobs/ficaCron');
   startFicaCron();
+
+  // Start maturity alert cron (daily 08:00 SAST)
+  const { startMaturityCron } = require('./jobs/maturityCron');
+  startMaturityCron();
 });
 
 module.exports = app;

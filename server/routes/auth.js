@@ -14,6 +14,7 @@ const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const pool    = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
+const emailService = require('../services/email');
 
 const JWT_SECRET     = process.env.JWT_SECRET || 'svcapital-dev-secret-change-in-production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
@@ -168,6 +169,13 @@ router.post('/register', async (req, res) => {
       // Link investor_id on user
       await pool.query('UPDATE users SET investor_id = $1 WHERE id = $2', [invId, newUser.id]);
       newUser.investor_id = invId;
+
+      // Fire-and-forget welcome email
+      setImmediate(() => emailService.sendWelcome({
+        id: invId,
+        email: email.toLowerCase().trim(),
+        first_name: firstName.trim(),
+      }).catch(err => console.error('[email] welcome failed:', err.message)));
     }
 
     const token = signToken({ ...newUser, investor_id: newUser.investor_id });
@@ -253,9 +261,62 @@ router.put('/change-password', requireAuth, async (req, res) => {
 
 /* ─── POST /api/auth/forgot-password ─── */
 router.post('/forgot-password', async (req, res) => {
-  const { email } = req.body;
-  if (email) console.log(`Password reset requested for: ${email}`);
-  res.json({ success: true, message: 'If this email is registered, a reset link has been sent.' });
+  const { email: rawEmail } = req.body;
+  if (!rawEmail) return res.status(400).json({ error: 'Email is required.' });
+  const emailAddr = rawEmail.toLowerCase().trim();
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.email, i.first_name
+       FROM users u
+       LEFT JOIN investors i ON i.email = u.email
+       WHERE u.email = $1`,
+      [emailAddr]
+    );
+    // Always return success to avoid email enumeration
+    if (rows.length > 0) {
+      const user = rows[0];
+      const token = jwt.sign(
+        { sub: user.id, purpose: 'password_reset' },
+        process.env.JWT_SECRET,
+        { expiresIn: '30m' }
+      );
+      const resetLink = `${process.env.BASE_URL || 'https://platform.svcapital.co.za'}/reset-password.html?token=${token}`;
+      setImmediate(() => emailService.sendPasswordReset(user.email, user.first_name, resetLink)
+        .catch(err => console.error('[email] reset failed:', err.message)));
+    }
+    res.json({ success: true, message: 'If this email is registered, a reset link has been sent.' });
+  } catch (err) {
+    console.error('/forgot-password error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+/* ─── POST /api/auth/reset-password ─── */
+router.post('/reset-password', async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ error: 'Token and new password are required.' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (payload.purpose !== 'password_reset') return res.status(400).json({ error: 'Invalid reset token.' });
+
+    const hash = await bcrypt.hash(password, 12);
+    const { rows } = await pool.query(
+      'UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING email',
+      [hash, payload.sub]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'User not found.' });
+
+    console.log(`[auth] password reset for ${rows[0].email}`);
+    res.json({ success: true, message: 'Password updated successfully. You can now log in.' });
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') return res.status(400).json({ error: 'Reset link has expired. Please request a new one.' });
+    if (err.name === 'JsonWebTokenError') return res.status(400).json({ error: 'Invalid reset link.' });
+    console.error('/reset-password error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
 });
 
 /* ─── Shared helper ─── */
