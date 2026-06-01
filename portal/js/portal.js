@@ -97,6 +97,110 @@ function _animateNum(el, target, prefix = '', suffix = '', duration = 900) {
   requestAnimationFrame(step);
 }
 
+function loadNotifications() {
+  const list = document.getElementById('notifList');
+  if (!list) return;
+
+  const notifs = [];
+  const inv = PORTAL.investor;
+
+  // 1. Low wallet balance
+  if (inv && parseFloat(inv.wallet_balance) < 500) {
+    notifs.push({
+      icon: 'fa-wallet', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
+      title: 'Low wallet balance',
+      sub: `Your balance is ${Utils.rand(parseFloat(inv.wallet_balance) || 0)}. Top up to keep investing.`,
+      time: 'Now',
+      action: "openTopUpModal()",
+      unread: true,
+    });
+  }
+
+  // 2. Investments maturing within 60 days
+  const now = new Date();
+  const soon = PORTAL.investments.filter(i => {
+    if (i.status !== 'active') return false;
+    const end = new Date(i.end_date || i.maturity_date);
+    if (!end || isNaN(end)) return false;
+    const days = Math.round((end - now) / 86400000);
+    return days >= 0 && days <= 60;
+  });
+  if (soon.length) {
+    const s = soon[0];
+    const daysLeft = Math.round((new Date(s.end_date || s.maturity_date) - now) / 86400000);
+    notifs.push({
+      icon: 'fa-coins', iconBg: 'rgba(34,197,94,0.1)', iconColor: '#22c55e',
+      title: 'Investment maturing soon',
+      sub: `${s.pool_name || 'An investment'} matures in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Submit your maturity instruction.`,
+      time: `${daysLeft}d away`,
+      action: "navigate('investments',document.querySelector('[data-view=investments]'))",
+      unread: true,
+    });
+  }
+
+  // 3. Admin response to support ticket
+  const answered = PORTAL.tickets.filter(t => t.admin_response && t.admin_response.trim());
+  if (answered.length) {
+    notifs.push({
+      icon: 'fa-reply', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#2F8C9B',
+      title: 'Support ticket response',
+      sub: `Your ticket "${answered[0].subject}" has been answered by the team.`,
+      time: answered[0].responded_at ? Utils.timeAgo(answered[0].responded_at) : 'Recently',
+      action: "navigate('support',document.querySelector('[data-view=support]'))",
+      unread: true,
+    });
+  }
+
+  // 4. New pools opened in last 14 days
+  const newPools = PORTAL.pools.filter(p => {
+    if (p.status !== 'open') return false;
+    const created = new Date(p.created_at);
+    return (now - created) < 14 * 86400000;
+  });
+  if (newPools.length) {
+    const np = newPools[0];
+    notifs.push({
+      icon: 'fa-chart-line', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#2F8C9B',
+      title: 'New investment pool open',
+      sub: `${np.name || np.pool_name} is now open — ${Utils.pct(np.annual_rate || np.benchmark_rate)} p.a. for ${np.term_months} months.`,
+      time: Utils.timeAgo(np.created_at),
+      action: "navigate('marketplace',document.querySelector('[data-view=marketplace]'))",
+      unread: false,
+    });
+  }
+
+  // 5. FICA approved
+  if (inv && inv.fica_status === 'approved') {
+    notifs.push({
+      icon: 'fa-shield-halved', iconBg: 'rgba(168,85,247,0.1)', iconColor: '#a855f7',
+      title: 'FICA verification approved',
+      sub: 'Your identity has been verified. You can now invest in all available pools.',
+      time: inv.fica_verified_at ? Utils.timeAgo(inv.fica_verified_at) : 'Previously',
+      action: null,
+      unread: false,
+    });
+  }
+
+  if (!notifs.length) {
+    list.innerHTML = '<div style="padding:24px 18px;text-align:center;color:#999;font-size:0.82rem">You\'re all caught up!</div>';
+    _syncNotifDot();
+    return;
+  }
+
+  list.innerHTML = notifs.map((n, i) => `
+    <div class="notif-item${n.unread ? ' unread' : ''}" data-id="n${i}" ${n.action ? `onclick="${n.action};toggleNotifPanel()" style="cursor:pointer"` : ''}>
+      <div class="notif-icon" style="background:${n.iconBg}"><i class="fa-solid ${n.icon}" style="color:${n.iconColor}"></i></div>
+      <div class="notif-body">
+        <div class="notif-title">${n.title}</div>
+        <div class="notif-sub">${n.sub}</div>
+        <div class="notif-time">${n.time}</div>
+      </div>
+    </div>
+  `).join('');
+
+  _syncNotifDot();
+}
+
 /* ─── Navigation ─── */
 function navigate(view, btnEl) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -137,7 +241,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   Toast.init();
   initDarkMode();
   await loadPortalData();
-  _syncNotifDot();
+  // Generate notifications from real data
+  loadNotifications();
   checkFirstDepositPrompt();
   _checkAutoStartTour();
 });
@@ -719,6 +824,7 @@ const TX_FEE_RATE         = 0.029;   // 2.9% + R1 flat — charged by gateway (P
 // Internal state
 let _pmAmount       = 0;       // base deposit amount entered by investor (ZAR)
 let _pmGateway      = null;    // 'paystack' | 'ozow' | 'eft'
+let _pmSaId         = null;    // null = main wallet; saId = credit sub-account instead
 
 /* ── helpers ─────────────────────────────────── */
 function _pmEl(id) { return document.getElementById(id); }
@@ -765,6 +871,7 @@ function _pmInvestorId() {
 function openTopUpModal(gateway) {
   _pmAmount  = 0;
   _pmGateway = null;
+  _pmSaId    = null;
 
   // Reset to step 1
   _pmEl('pmAmount').value = '';
@@ -1155,13 +1262,16 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
   try {
     // 1. Record the deposit transaction (base wallet-credit amount)
     await API.transactions.create({
-      id:          Utils.genId('TXN'),
-      investor_id: _pmInvestorId(),
-      type:        'deposit',
-      amount:      _pmAmount,
-      status:      status,
-      reference:   reference,
-      description: depositDesc,
+      id:               Utils.genId('TXN'),
+      investor_id:      _pmInvestorId(),
+      investor_name:    _pmInvestorName(),
+      type:             'deposit',
+      amount:           _pmAmount,
+      status:           status,
+      reference:        reference,
+      description:      depositDesc,
+      sub_account_id:   _pmSaId || undefined,
+      transaction_date: new Date().toISOString(),
     });
 
     // 2. Record the gateway fee as a separate fee transaction (transparency)
@@ -1201,6 +1311,18 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
       _refreshWalletUI(newBalance);
     }
 
+    // If this is a sub-account deposit, also update the sub-account wallet
+    if (status === 'completed' && _pmSaId) {
+      try {
+        const saIdx = PORTAL.subAccounts.findIndex(s => s.id === _pmSaId);
+        if (saIdx !== -1) {
+          const newSaBal = Math.round(((parseFloat(PORTAL.subAccounts[saIdx].wallet_balance) || 0) + _pmAmount) * 100) / 100;
+          await API._fetch('PATCH', `tables/sub_accounts/${_pmSaId}`, { wallet_balance: newSaBal });
+          PORTAL.subAccounts[saIdx].wallet_balance = newSaBal;
+        }
+      } catch (saErr) { console.warn('Sub-account wallet update failed:', saErr); }
+    }
+
     if (showSuccess) {
       _pmShowOnly('pmStep3Success');
       _pmSetProgress(100);
@@ -1227,6 +1349,7 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
     console.error('recordDeposit error:', err);
     Toast.error('Failed to record deposit — please contact support if funds were deducted');
   }
+  _pmSaId = null;
 }
 
 /* ── modal close ────────────────────────────── */
@@ -1389,7 +1512,7 @@ function renderMarketplace() {
   grid.innerHTML = filtered.map(pool => {
     const pi   = Utils.productInfo(pool.product_type);
     const pct  = Utils.poolFillPct(pool);
-    const days = Utils.daysRemaining(pool.close_date);
+    const days = Utils.daysRemaining(pool.end_date);
     const meta = _POOL_META[pool.product_type] || { blurb: '', risk: 'Medium', riskColor: '#f59e0b' };
     const canInvest = walletBal >= pool.min_investment;
     const urgency   = days !== null && days <= 7;
@@ -1405,13 +1528,13 @@ function renderMarketplace() {
         </div>
 
         <div>
-          <div class="market-pool-card__title">${pool.pool_name}</div>
+          <div class="market-pool-card__title">${pool.name}</div>
           <div class="market-pool-card__blurb">${meta.blurb}</div>
         </div>
 
         <div class="pool-rate-row">
           <div>
-            <div class="market-pool-card__rate">${Utils.pct(pool.benchmark_rate)}</div>
+            <div class="market-pool-card__rate">${Utils.pct(pool.annual_rate)}</div>
             <div class="market-pool-card__rate-label">per annum</div>
           </div>
           <div class="pool-rate-divider"></div>
@@ -1466,7 +1589,7 @@ function openInvestModal(poolId) {
   maturityDt.setMonth(maturityDt.getMonth() + pool.term_months);
   const maturityStr = maturityDt.toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric' });
 
-  document.getElementById('investModalTitle').textContent = `Invest in ${pool.pool_name}`;
+  document.getElementById('investModalTitle').textContent = `Invest in ${pool.name}`;
 
   document.getElementById('investModalBody').innerHTML = `
     <!-- Pool summary card -->
@@ -1475,9 +1598,9 @@ function openInvestModal(poolId) {
         <i class="fa-solid ${pi.icon}"></i>
       </div>
       <div class="invest-modal-pool-info">
-        <div class="invest-modal-pool-name">${pool.pool_name}</div>
+        <div class="invest-modal-pool-name">${pool.name}</div>
         <div class="invest-modal-pool-meta">
-          <span style="color:${pi.color};font-weight:700">${Utils.pct(pool.benchmark_rate)} p.a.</span>
+          <span style="color:${pi.color};font-weight:700">${Utils.pct(pool.annual_rate)} p.a.</span>
           <span>·</span>
           <span>${pool.term_months}-month term</span>
           <span>·</span>
@@ -1565,7 +1688,7 @@ async function confirmInvestment(pool) {
   if (amount > wallet) { Toast.error('Insufficient wallet balance. Please top up first.'); return; }
 
   try {
-    const expectedReturn = amount * pool.benchmark_rate * (pool.term_months / 12);
+    const expectedReturn = amount * pool.annual_rate * (pool.term_months / 12);
     const maturityDate = new Date();
     maturityDate.setMonth(maturityDate.getMonth() + pool.term_months);
 
@@ -1575,30 +1698,31 @@ async function confirmInvestment(pool) {
       investor_id: DEMO_INVESTOR_ID,
       pool_id: pool.id,
       product_type: pool.product_type,
-      pool_name: pool.pool_name,
-      investor_name: `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
-      investor_email: PORTAL.investor.email,
+      pool_name: pool.name,
       amount,
-      expected_return_rate: pool.benchmark_rate,
-      expected_return_amount: Math.round(expectedReturn),
-      actual_return_amount: 0,
+      annual_rate: pool.annual_rate,
+      expected_return: Math.round(expectedReturn),
+      actual_return: 0,
       status: 'active',
-      maturity_instruction: 'pending',
-      investment_date: new Date().toISOString(),
-      maturity_date: maturityDate.toISOString(),
-      payout_date: ''
+      start_date: new Date().toISOString().split('T')[0],
+      end_date: maturityDate.toISOString().split('T')[0],
+      term_months: pool.term_months,
+      payout_option: 'reinvest',
+      sub_account_id: _pmSaId || undefined,
     });
 
     // Record transaction
     await API.transactions.create({
       id:          Utils.genId('TXN'),
       investor_id: DEMO_INVESTOR_ID,
-      type:        'investment',
-      amount:      -amount,
-      status:      'completed',
-      reference:   `INVST-${Date.now()}`,
-      description: `Investment into ${pool.pool_name}`,
-      pool_id:     pool.id,
+      investor_name:    `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
+      type:             'investment',
+      amount:           -amount,
+      status:           'completed',
+      reference:        `INVST-${Date.now()}`,
+      description:      `Investment into ${pool.name}`,
+      pool_id:          pool.id,
+      transaction_date: new Date().toISOString(),
     });
 
     // Update investor wallet and totals
@@ -1607,7 +1731,7 @@ async function confirmInvestment(pool) {
       total_invested: (parseFloat(PORTAL.investor.total_invested) || 0) + amount
     });
 
-    Toast.success(`Successfully invested ${Utils.rand(amount)} in ${pool.pool_name}!`);
+    Toast.success(`Successfully invested ${Utils.rand(amount)} in ${pool.name}!`);
     Modal.close('investModal');
 
     // Reload data
@@ -2381,6 +2505,13 @@ function printStatement() {
 </body>
 </html>`);
   printWin.document.close();
+}
+
+/* ── Sub-account deposit ─────────────────────── */
+function openSaDeposit(saId) {
+  _pmSaId = saId;
+  Modal.close('saDetailModal'); // close detail view if open
+  openTopUpModal();
 }
 
 /* ─── Profile ─── */

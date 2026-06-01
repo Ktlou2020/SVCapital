@@ -2623,7 +2623,7 @@ body.dark-mode .tab-btn.active { color: #ff9b0c !important; }
 .sa-card__name  { font-size:1rem;font-weight:800;color:var(--white);margin-bottom:12px; }
 .sa-card__stats { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px; }
 .sa-stat        { background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px; }
-.sa-stat__label { font-size:0.65rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:.4px; }
+.sa-stat__label { font-size:0.65rem;text-transform:uppercase;color:rgba(255,255,255,0.8);letter-spacing:.4px; }
 .sa-stat__value { font-size:0.95rem;font-weight:800;color:var(--white);margin-top:2px; }
 
 .sa-card__actions { padding:10px 18px 16px;display:flex;gap:8px;flex-wrap:wrap; }
@@ -2728,7 +2728,7 @@ body.dark-mode .tab-btn.active { color: #ff9b0c !important; }
 .minor-stat:last-child { border-right:none; }
 .minor-stat__icon  { font-size:1.3rem;margin-bottom:4px; }
 .minor-stat__value { font-size:1rem;font-weight:900;color:#fff; }
-.minor-stat__label { font-size:0.66rem;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:.4px;margin-top:2px; }
+.minor-stat__label { font-size:0.66rem;color:rgba(255,255,255,0.85);text-transform:uppercase;letter-spacing:.4px;margin-top:2px; }
 
 /* ── Savings Jar ── */
 .minor-jar-section {
@@ -2815,7 +2815,7 @@ body.dark-mode .tab-btn.active { color: #ff9b0c !important; }
 @keyframes tipFadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
 .minor-tip-card__emoji { font-size:2rem;margin-bottom:8px; }
 .minor-tip-card__title { font-size:0.85rem;font-weight:800;color:#ff9b0c;margin-bottom:6px; }
-.minor-tip-card__body  { font-size:0.78rem;color:rgba(255,255,255,0.75);line-height:1.55; }
+.minor-tip-card__body  { font-size:0.78rem;color:rgba(255,255,255,0.9);line-height:1.55; }
 
 .minor-tips-dots { display:flex;justify-content:center;gap:6px;margin-top:12px; }
 .minor-tip-dot {
