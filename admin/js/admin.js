@@ -333,7 +333,7 @@ function renderOpenPoolsWidget() {
     const pct = Utils.poolFillPct(p);
     return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
       <div class="flex-between mb-4">
-        <span style="font-size:0.82rem;font-weight:700;color:var(--white)">${p.pool_name}</span>
+        <span style="font-size:0.82rem;font-weight:700;color:var(--white)">${p.name}</span>
         <span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span>
       </div>
       <div class="pool-card__progress-label">
@@ -341,7 +341,7 @@ function renderOpenPoolsWidget() {
         <span>${pct}% of ${Utils.rand(p.target_amount)}</span>
       </div>
       <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-      <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">${p.investor_count} investors · Closes ${Utils.date(p.close_date)}</div>
+      <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">${p.investor_count} investors · Closes ${Utils.date(p.end_date)}</div>
     </div>`;
   }).join('');
 }
@@ -609,9 +609,9 @@ async function viewInvestor(id) {
           <td class="td-strong">${i.pool_name}</td>
           <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
           <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
-          <td class="td-green">${Utils.pct(i.expected_return_rate)}</td>
+          <td class="td-green">${Utils.pct(i.annual_rate)}</td>
           <td>${Utils.statusBadge(i.status)}</td>
-          <td class="td-muted">${Utils.date(i.maturity_date)}</td>
+          <td class="td-muted">${Utils.date(i.end_date)}</td>
         </tr>`;
       }).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:16px">No investments</td></tr>'}</tbody>
     </table>
@@ -885,7 +885,7 @@ function renderPoolsGrid() {
       <div class="pool-card">
         <div class="pool-card__header">
           <div>
-            <div class="pool-card__name">${p.pool_name}</div>
+            <div class="pool-card__name">${p.name}</div>
             <div class="pool-card__partner">${p.partner_name}</div>
           </div>
           <div class="flex-center gap-8">
@@ -895,7 +895,7 @@ function renderPoolsGrid() {
         </div>
 
         <div class="pool-card__stats">
-          <div class="pool-stat"><span class="pool-stat__label">Rate</span><span class="pool-stat__value pool-stat__value--gold">${Utils.pct(p.benchmark_rate)}</span></div>
+          <div class="pool-stat"><span class="pool-stat__label">Rate</span><span class="pool-stat__value pool-stat__value--gold">${Utils.pct(p.annual_rate)}</span></div>
           <div class="pool-stat"><span class="pool-stat__label">Investors</span><span class="pool-stat__value">${p.investor_count}</span></div>
           <div class="pool-stat"><span class="pool-stat__label">Term</span><span class="pool-stat__value">${p.term_months}mo</span></div>
         </div>
@@ -907,8 +907,8 @@ function renderPoolsGrid() {
         <div class="progress-bar"><div class="progress-fill${p.product_type.includes('solar') ? ' progress-fill--green' : p.product_type === 'short_term' ? ' progress-fill--blue' : ''}" style="width:${pct}%"></div></div>
 
         <div style="font-size:0.7rem;color:var(--text-dim);margin-top:8px;display:flex;justify-content:space-between">
-          <span>Opens: ${Utils.date(p.open_date)}</span>
-          <span>Matures: ${Utils.date(p.maturity_date)}</span>
+          <span>Opens: ${Utils.date(p.start_date)}</span>
+          <span>Matures: ${Utils.date(p.end_date)}</span>
         </div>
 
         <div class="pool-card__actions">
@@ -927,19 +927,19 @@ async function saveNewPool() {
   const name = document.getElementById('newPoolName').value.trim();
   const type = document.getElementById('newPoolType').value;
   const target = parseFloat(document.getElementById('newPoolTarget').value);
-  if (!name || !target) { Toast.error('Pool name and target amount required'); return; }
+  if (!name) { Toast.error('Pool name is required'); return; }
   try {
     await API.pools.create({
       id: `POOL-${type.toUpperCase().slice(0,3)}-${Date.now()}`,
-      pool_name: name, product_type: type,
-      target_amount: target, raised_amount: 0,
+      name: name, product_type: type,
+      target_amount: target || 0, raised_amount: 0,
       min_investment: parseFloat(document.getElementById('newPoolMin').value) || 500,
       term_months: parseInt(document.getElementById('newPoolTerm').value) || 12,
-      benchmark_rate: parseFloat(document.getElementById('newPoolRate').value) || 0.13,
+      annual_rate: parseFloat(document.getElementById('newPoolRate').value) || 0.13,
       partner_name: document.getElementById('newPoolPartner').value.trim(),
-      open_date: document.getElementById('newPoolOpenDate').value ? new Date(document.getElementById('newPoolOpenDate').value).toISOString() : new Date().toISOString(),
-      close_date: document.getElementById('newPoolCloseDate').value ? new Date(document.getElementById('newPoolCloseDate').value).toISOString() : '',
-      status: 'open', investor_count: 0, actual_rate: 0,
+      start_date: document.getElementById('newPoolOpenDate').value ? new Date(document.getElementById('newPoolOpenDate').value).toISOString() : new Date().toISOString(),
+      end_date: document.getElementById('newPoolCloseDate').value ? new Date(document.getElementById('newPoolCloseDate').value).toISOString() : '',
+      status: 'open', investor_count: 0,
     });
     Toast.success('Pool created');
     Modal.close('addPoolModal');
@@ -968,21 +968,21 @@ function editPool(id) {
   if (!pool) return;
 
   document.getElementById('editPoolId').value          = pool.id;
-  document.getElementById('editPoolName').value        = pool.pool_name || '';
+  document.getElementById('editPoolName').value        = pool.name || '';
   document.getElementById('editPoolStatus').value      = pool.status || 'open';
   document.getElementById('editPoolType').value        = pool.product_type || 'cattle';
   document.getElementById('editPoolTerm').value        = pool.term_months || 12;
   document.getElementById('editPoolTarget').value      = pool.target_amount || 0;
   document.getElementById('editPoolRaised').value      = pool.raised_amount || 0;
   document.getElementById('editPoolMin').value         = pool.min_investment || 500;
-  document.getElementById('editPoolRate').value        = pool.benchmark_rate || 0;
+  document.getElementById('editPoolRate').value        = pool.annual_rate || 0;
   document.getElementById('editPoolActualRate').value  = pool.actual_rate || 0;
   document.getElementById('editPoolPartner').value     = pool.partner_name || '';
   document.getElementById('editPoolInvCount').value    = pool.investor_count || 0;
   // Convert ISO dates to YYYY-MM-DD for date inputs
   const toDateVal = iso => { try { return iso ? new Date(iso).toISOString().split('T')[0] : ''; } catch { return ''; } };
-  document.getElementById('editPoolOpenDate').value    = toDateVal(pool.open_date);
-  document.getElementById('editPoolCloseDate').value   = toDateVal(pool.maturity_date || pool.close_date);
+  document.getElementById('editPoolOpenDate').value    = toDateVal(pool.start_date);
+  document.getElementById('editPoolCloseDate').value   = toDateVal(pool.end_date);
 
   Modal.open('editPoolModal');
 }
@@ -994,23 +994,22 @@ async function saveEditPool() {
   const toISO = val => { try { return val ? new Date(val).toISOString() : ''; } catch { return ''; } };
 
   const updates = {
-    pool_name:      document.getElementById('editPoolName').value.trim(),
+    name:           document.getElementById('editPoolName').value.trim(),
     status:         document.getElementById('editPoolStatus').value,
     product_type:   document.getElementById('editPoolType').value,
     term_months:    parseInt(document.getElementById('editPoolTerm').value) || 12,
     target_amount:  parseFloat(document.getElementById('editPoolTarget').value) || 0,
     raised_amount:  parseFloat(document.getElementById('editPoolRaised').value) || 0,
     min_investment: parseFloat(document.getElementById('editPoolMin').value) || 500,
-    benchmark_rate: parseFloat(document.getElementById('editPoolRate').value) || 0,
+    annual_rate:    parseFloat(document.getElementById('editPoolRate').value) || 0,
     actual_rate:    parseFloat(document.getElementById('editPoolActualRate').value) || 0,
     partner_name:   document.getElementById('editPoolPartner').value.trim(),
     investor_count: parseInt(document.getElementById('editPoolInvCount').value) || 0,
-    open_date:      toISO(document.getElementById('editPoolOpenDate').value),
-    maturity_date:  toISO(document.getElementById('editPoolCloseDate').value),
-    close_date:     toISO(document.getElementById('editPoolCloseDate').value),
+    start_date:     toISO(document.getElementById('editPoolOpenDate').value),
+    end_date:       toISO(document.getElementById('editPoolCloseDate').value),
   };
 
-  if (!updates.pool_name) { Toast.error('Pool name is required'); return; }
+  if (!updates.name) { Toast.error('Pool name is required'); return; }
 
   try {
     await API.pools.update(id, updates);
@@ -1063,9 +1062,9 @@ function renderInvestmentsTable() {
       <td class="td-strong">${i.pool_name}</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
-      <td class="td-green">${Utils.rand(i.expected_return_amount)}</td>
+      <td class="td-green">${Utils.rand(i.expected_return)}</td>
       <td>${Utils.statusBadge(i.status)}</td>
-      <td class="td-muted">${Utils.date(i.maturity_date)}</td>
+      <td class="td-muted">${Utils.date(i.end_date)}</td>
       <td>
         <button class="btn btn--secondary btn--sm" onclick='viewInvestmentDetail(${JSON.stringify(i.id)})'><i class="fa-solid fa-eye"></i></button>
       </td>
@@ -1115,11 +1114,11 @@ function viewInvestmentDetail(id) {
       <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${inv.pool_name}</span></div>
       <div class="info-row"><span class="info-row__label">Product</span><span class="info-row__value"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></span></div>
       <div class="info-row"><span class="info-row__label">Invested Amount</span><span class="info-row__value td-gold fw-700">${Utils.rand(inv.amount)}</span></div>
-      <div class="info-row"><span class="info-row__label">Expected Return</span><span class="info-row__value td-green">${Utils.rand(inv.expected_return_amount)}</span></div>
-      <div class="info-row"><span class="info-row__label">Return Rate</span><span class="info-row__value">${Utils.pct(inv.expected_return_rate)} p.a.</span></div>
+      <div class="info-row"><span class="info-row__label">Expected Return</span><span class="info-row__value td-green">${Utils.rand(inv.expected_return)}</span></div>
+      <div class="info-row"><span class="info-row__label">Return Rate</span><span class="info-row__value">${Utils.pct(inv.annual_rate)} p.a.</span></div>
       <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value">${Utils.statusBadge(inv.status)}</span></div>
-      <div class="info-row"><span class="info-row__label">Investment Date</span><span class="info-row__value td-muted">${Utils.date(inv.investment_date)}</span></div>
-      <div class="info-row"><span class="info-row__label">Maturity Date</span><span class="info-row__value td-muted">${Utils.date(inv.maturity_date)}</span></div>
+      <div class="info-row"><span class="info-row__label">Investment Date</span><span class="info-row__value td-muted">${Utils.date(inv.start_date)}</span></div>
+      <div class="info-row"><span class="info-row__label">Maturity Date</span><span class="info-row__value td-muted">${Utils.date(inv.end_date)}</span></div>
       <div class="info-row"><span class="info-row__label">Payout Date</span><span class="info-row__value td-muted">${Utils.date(inv.payout_date) || 'Pending'}</span></div>
       <div class="info-row"><span class="info-row__label">Maturity Instruction</span><span class="info-row__value">${Utils.statusBadge(inv.maturity_instruction || 'pending')}</span></div>
     </div>
@@ -1150,15 +1149,15 @@ async function markInvestmentMatured(id) {
 async function payoutInvestment(id) {
   const inv = STATE.investments.find(i => i.id === id);
   if (!inv) return;
-  const actualRate = prompt(`Enter actual return rate achieved (e.g. 0.1561 for 15.61%):`, inv.expected_return_rate);
+  const actualRate = prompt(`Enter actual return rate achieved (e.g. 0.1561 for 15.61%):`, inv.annual_rate);
   if (!actualRate) return;
   const rate = parseFloat(actualRate);
-  const actualReturn = Math.round(inv.amount * rate * ((new Date(inv.maturity_date) - new Date(inv.investment_date)) / (365 * 86400000)));
+  const actualReturn = Math.round(inv.amount * rate * ((new Date(inv.end_date) - new Date(inv.start_date)) / (365 * 86400000)));
 
   try {
     await API.investments.update(id, {
       status: 'paid_out',
-      actual_return_amount: actualReturn,
+      actual_return: actualReturn,
       payout_date: new Date().toISOString()
     });
     await API.transactions.create({

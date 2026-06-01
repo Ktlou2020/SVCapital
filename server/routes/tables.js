@@ -13,6 +13,7 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const { v4: uuidv4 } = require('uuid');
 const { requireAuth } = require('../middleware/auth');
+const emailService = require('../services/email');
 
 /* ─── Whitelist of allowed tables and their primary key column ─── */
 const ALLOWED_TABLES = {
@@ -345,6 +346,29 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       });
     }
 
+    // ── Email hooks (fire-and-forget) ──────────────────────────────────────
+    setImmediate(async () => {
+      try {
+        const created = rows[0];
+
+        // New investment → email investor
+        if (table === 'investments' && created.investor_id) {
+          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [created.investor_id]);
+          if (inv[0]) {
+            await emailService.sendInvestmentCreated(inv[0], {
+              poolName:       created.pool_name || created.pool_id || 'Investment Pool',
+              amount:         created.amount,
+              annualRate:     created.annual_rate,
+              termMonths:     created.term_months,
+              expectedReturn: created.expected_return,
+              endDate:        created.end_date,
+            });
+          }
+        }
+      } catch (hookErr) {
+        console.error('[email hook POST] error:', hookErr.message);
+      }
+    });
   } catch (err) {
     console.error(`POST /${req.params.table}:`, err.message);
     res.status(500).json({ error: err.message });
@@ -410,6 +434,49 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     if (!rows[0]) return res.status(404).json({ error: 'Record not found.' });
     const [clean] = stripSensitive(table, rows);
     res.json(clean);
+
+    // ── Email hooks (fire-and-forget) ──────────────────────────────────────
+    setImmediate(async () => {
+      try {
+        const updated = rows[0];
+
+        // Deposit confirmed → email investor
+        if (table === 'transactions' && body.status === 'completed' && updated.type === 'deposit' && updated.investor_id) {
+          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
+          if (inv[0]) {
+            const gateway = updated.description?.includes('Paystack') ? 'Paystack'
+                          : updated.description?.includes('Ozow')     ? 'Ozow'
+                          : 'EFT';
+            await emailService.sendDepositConfirmed(inv[0], updated.amount, updated.reference || updated.id, gateway);
+          }
+        }
+
+        // Support ticket response → email investor
+        if (table === 'support_tickets' && body.admin_response && updated.investor_id) {
+          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
+          if (inv[0]) {
+            await emailService.sendTicketResponse(inv[0], {
+              subject:       updated.subject,
+              adminResponse: updated.admin_response,
+            });
+          }
+        }
+
+        // Investment paid out → email investor
+        if (table === 'investments' && body.status === 'paid_out' && updated.investor_id) {
+          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
+          if (inv[0]) {
+            await emailService.sendInvestmentMatured(inv[0], {
+              poolName:     updated.pool_name || updated.pool_id || 'your investment',
+              amount:       updated.amount,
+              actualReturn: updated.actual_return || 0,
+            });
+          }
+        }
+      } catch (hookErr) {
+        console.error('[email hook PATCH] error:', hookErr.message);
+      }
+    });
   } catch (err) {
     console.error(`PATCH /${req.params.table}/${req.params.id}:`, err.message);
     res.status(500).json({ error: err.message });
