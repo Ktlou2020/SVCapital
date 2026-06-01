@@ -70,6 +70,10 @@
       <button class="nav-item" data-view="transactions" onclick="navigate('transactions', this)">
         <i class="fa-solid fa-arrows-rotate"></i> Transactions
       </button>
+      <button class="nav-item" data-view="withdrawals" onclick="navigate('withdrawals', this)">
+        <i class="fa-solid fa-arrow-up-from-bracket"></i> Withdrawals
+        <span class="nav-badge" id="withdrawalsBadge" style="display:none"></span>
+      </button>
 
       <div class="nav-section-label">Operations</div>
       <button class="nav-item" data-view="support" onclick="navigate('support', this)">
@@ -601,6 +605,23 @@
             <span id="txnFooter">—</span>
             <div class="pagination" id="txnPagination"></div>
           </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: WITHDRAWALS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-withdrawals" style="display:none">
+        <div class="page-header">
+          <h1 class="page-title">Pending Withdrawals</h1>
+          <p class="page-sub">Review and process investor withdrawal requests</p>
+        </div>
+        <div class="panel">
+          <div class="panel__header">
+            <span class="panel__title">Pending Withdrawal Requests</span>
+            <button class="btn btn--ghost btn--sm" onclick="loadWithdrawals()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          </div>
+          <div id="withdrawalsList" style="padding:8px">Loading…</div>
         </div>
       </div>
 

@@ -473,6 +473,45 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
             });
           }
         }
+
+        // Withdrawal processed → email investor
+        if (table === 'transactions' && body.status === 'completed' && updated.type === 'withdrawal' && updated.investor_id) {
+          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
+          if (inv[0]) {
+            await emailService.sendWithdrawalProcessed(inv[0], {
+              amount:        Math.abs(updated.amount),
+              bankName:      inv[0].bank_name,
+              accountNumber: inv[0].bank_account_number,
+              reference:     updated.reference || updated.id,
+            });
+          }
+        }
+
+        // Withdrawal rejected → refund wallet + email
+        if (table === 'transactions' && body.status === 'rejected' && updated.type === 'withdrawal' && updated.investor_id) {
+          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
+          if (inv[0]) {
+            // Refund the wallet
+            const refundAmt = Math.abs(updated.amount);
+            const newBal = Math.round(((parseFloat(inv[0].wallet_balance) || 0) + refundAmt) * 100) / 100;
+            await pool.query('UPDATE investors SET wallet_balance = $1, updated_at = NOW() WHERE id = $2', [newBal, updated.investor_id]);
+            await emailService.sendWithdrawalRejected(inv[0], {
+              amount: refundAmt,
+              reason: body.description || updated.description || 'See support for details',
+            });
+          }
+        }
+
+        // Bank account approved → email investor
+        if (table === 'investors' && body.bank_account_status === 'approved') {
+          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [req.params.id]);
+          if (inv[0]?.email) {
+            await emailService.sendBankAccountApproved(inv[0], {
+              bankName:      inv[0].bank_name,
+              accountNumber: inv[0].bank_account_number,
+            });
+          }
+        }
       } catch (hookErr) {
         console.error('[email hook PATCH] error:', hookErr.message);
       }

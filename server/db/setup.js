@@ -297,6 +297,13 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investments ADD COLUMN pool_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN payout_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN maturity_alert_sent_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN bank_account_holder TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN bank_account_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN bank_branch_code TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN bank_account_type TEXT DEFAULT 'current'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN bank_account_status TEXT DEFAULT 'none'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN bank_account_notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
 
 CREATE TABLE IF NOT EXISTS payslips (

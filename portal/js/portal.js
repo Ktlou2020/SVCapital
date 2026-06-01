@@ -790,7 +790,7 @@ async function loadWallet() {
   const activity = document.getElementById('walletActivity');
   const deposits = PORTAL.transactions.filter(t => ['deposit', 'return', 'payout', 'referral_bonus'].includes(t.type)).slice(0, 5);
 
-  if (!deposits.length) { activity.innerHTML = '<div class="empty-state" style="padding:16px"><i class="fa-solid fa-wallet"></i><p>No wallet activity yet.</p></div>'; return; }
+  if (!deposits.length) { activity.innerHTML = '<div class="empty-state" style="padding:16px"><i class="fa-solid fa-wallet"></i><p>No wallet activity yet.</p></div>'; _renderBankDetailsPanel(); return; }
 
   activity.innerHTML = deposits.map(t => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
@@ -801,6 +801,7 @@ async function loadWallet() {
       <span style="font-weight:700;color:#22c55e">+${Utils.rand(Math.abs(t.amount))}</span>
     </div>
   `).join('');
+  _renderBankDetailsPanel();
 }
 
 /* ═══════════════════════════════════════════════
@@ -4359,4 +4360,195 @@ async function saveSaGoal() {
     Modal.close('saGoalModal');
     await loadSubAccounts();
   } catch (e) { Toast.error('Failed to save goal'); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   WITHDRAWALS & BANK DETAILS
+   ══════════════════════════════════════════════════════════ */
+
+function _renderBankDetailsPanel() {
+  const inv    = PORTAL.investor;
+  const body   = document.getElementById('bankDetailsBody');
+  const wBtn   = document.getElementById('walletWithdrawBtn');
+  const editBtn = document.getElementById('bankEditBtn');
+  if (!body || !inv) return;
+
+  const status = inv.bank_account_status || 'none';
+  const statusMap = {
+    none:     { label: 'Not set',   color: '#9ca3af', bg: '#f3f4f6' },
+    pending:  { label: 'Pending verification', color: '#f59e0b', bg: '#fffbeb' },
+    approved: { label: 'Verified',  color: '#22c55e', bg: '#f0fdf4' },
+    rejected: { label: 'Rejected',  color: '#ef4444', bg: '#fef2f2' },
+  };
+  const s = statusMap[status] || statusMap.none;
+
+  if (status === 'none') {
+    body.innerHTML = `<div style="text-align:center;padding:20px 0;color:#aaa;font-size:0.85rem">
+      <i class="fa-solid fa-building-columns" style="font-size:1.5rem;margin-bottom:8px;display:block"></i>
+      No bank account on record.<br>
+      <button class="btn btn--primary btn--sm" style="margin-top:12px" onclick="openBankDetailsModal()">
+        <i class="fa-solid fa-plus"></i> Add Bank Details
+      </button>
+    </div>`;
+    if (wBtn) wBtn.style.display = 'none';
+    if (editBtn) editBtn.style.display = 'none';
+    return;
+  }
+
+  const last4 = String(inv.bank_account_number || '').slice(-4).padStart(4, '•');
+  body.innerHTML = `
+    <div class="info-list">
+      <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">${inv.bank_name || '—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Account Holder</span><span class="info-row__value">${inv.bank_account_holder || '—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Account Number</span><span class="info-row__value">••••${last4}</span></div>
+      <div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value">${inv.bank_branch_code || '—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Account Type</span><span class="info-row__value" style="text-transform:capitalize">${inv.bank_account_type || 'Current'}</span></div>
+      <div class="info-row"><span class="info-row__label">Status</span>
+        <span class="info-row__value" style="background:${s.bg};color:${s.color};padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:700">${s.label}</span>
+      </div>
+      ${status === 'rejected' && inv.bank_account_notes ? `<div class="info-row"><span class="info-row__label">Note</span><span class="info-row__value" style="color:#ef4444">${inv.bank_account_notes}</span></div>` : ''}
+    </div>
+    ${status === 'approved'
+      ? '<p style="font-size:0.78rem;color:#22c55e;margin-top:10px"><i class="fa-solid fa-circle-check"></i> Your account is verified. You can withdraw funds at any time.</p>'
+      : status === 'pending'
+      ? '<p style="font-size:0.78rem;color:#f59e0b;margin-top:10px"><i class="fa-solid fa-clock"></i> Verification in progress — usually within 1 business day.</p>'
+      : '<p style="font-size:0.78rem;color:#ef4444;margin-top:10px"><i class="fa-solid fa-circle-xmark"></i> Details rejected. Please update and resubmit.</p>'
+    }
+  `;
+  if (wBtn) wBtn.style.display = status === 'approved' ? 'inline-flex' : 'none';
+  if (editBtn) editBtn.style.display = 'inline-flex';
+}
+
+function openBankDetailsModal() {
+  const inv = PORTAL.investor;
+  if (inv) {
+    document.getElementById('bdBankName').value      = inv.bank_name || '';
+    document.getElementById('bdAccountHolder').value = inv.bank_account_holder || '';
+    document.getElementById('bdAccountNumber').value = inv.bank_account_number || '';
+    document.getElementById('bdBranchCode').value    = inv.bank_branch_code || '';
+    document.getElementById('bdAccountType').value   = inv.bank_account_type || 'current';
+  }
+  Modal.open('bankDetailsModal');
+}
+
+async function saveBankDetails() {
+  const bankName   = document.getElementById('bdBankName').value.trim();
+  const holder     = document.getElementById('bdAccountHolder').value.trim();
+  const accNum     = document.getElementById('bdAccountNumber').value.trim();
+  const branch     = document.getElementById('bdBranchCode').value.trim();
+  const accType    = document.getElementById('bdAccountType').value;
+
+  if (!bankName || !holder || !accNum) {
+    Toast.error('Bank name, account holder and account number are required');
+    return;
+  }
+  if (!/^\d{6,16}$/.test(accNum.replace(/\s/g,''))) {
+    Toast.error('Account number must be 6–16 digits');
+    return;
+  }
+
+  try {
+    const updated = await API.investors.update(DEMO_INVESTOR_ID, {
+      bank_name:             bankName,
+      bank_account_holder:   holder,
+      bank_account_number:   accNum.replace(/\s/g,''),
+      bank_branch_code:      branch,
+      bank_account_type:     accType,
+      bank_account_status:   'pending',
+      bank_account_notes:    '',
+    });
+    PORTAL.investor = { ...PORTAL.investor, ...updated };
+    Modal.close('bankDetailsModal');
+    _renderBankDetailsPanel();
+    Toast.success('Bank details saved — pending verification by our team');
+  } catch (e) {
+    Toast.error('Failed to save bank details');
+  }
+}
+
+function openWithdrawalModal() {
+  const inv = PORTAL.investor;
+  if (!inv) return;
+  if (inv.bank_account_status !== 'approved') {
+    Toast.error('Your bank account must be verified before you can withdraw');
+    return;
+  }
+  const balance = parseFloat(inv.wallet_balance) || 0;
+  if (balance < 50) {
+    Toast.error('Minimum withdrawal is R50');
+    return;
+  }
+
+  const last4 = String(inv.bank_account_number || '').slice(-4).padStart(4, '•');
+  document.getElementById('withdrawBankInfo').innerHTML = `
+    <div style="font-size:0.85rem">
+      <div style="font-weight:700;color:#1a2235;margin-bottom:4px">${inv.bank_name}</div>
+      <div style="color:#555">${inv.bank_account_holder} &nbsp;·&nbsp; ••••${last4}</div>
+      <div style="color:#888;font-size:0.78rem;margin-top:2px;text-transform:capitalize">${inv.bank_account_type || 'Current'} account</div>
+    </div>
+  `;
+  document.getElementById('withdrawAmount').value = '';
+  document.getElementById('withdrawHint').textContent = `Available: ${Utils.rand(balance)}`;
+  document.getElementById('withdrawHint').style.color = '#888';
+  Modal.open('withdrawalModal');
+}
+
+function _withdrawCalc() {
+  const inv     = PORTAL.investor;
+  const balance = parseFloat(inv?.wallet_balance) || 0;
+  const amount  = parseFloat(document.getElementById('withdrawAmount').value) || 0;
+  const hint    = document.getElementById('withdrawHint');
+  if (amount > balance) {
+    hint.textContent = `Exceeds available balance of ${Utils.rand(balance)}`;
+    hint.style.color = '#ef4444';
+  } else if (amount > 0 && amount < 50) {
+    hint.textContent = 'Minimum withdrawal is R50';
+    hint.style.color = '#ef4444';
+  } else {
+    hint.textContent = `Available: ${Utils.rand(balance)}`;
+    hint.style.color = '#888';
+  }
+}
+
+async function confirmWithdrawal() {
+  const inv     = PORTAL.investor;
+  const amount  = parseFloat(document.getElementById('withdrawAmount').value);
+  const balance = parseFloat(inv?.wallet_balance) || 0;
+
+  if (!amount || amount < 50)  { Toast.error('Minimum withdrawal is R50'); return; }
+  if (amount > balance)        { Toast.error('Amount exceeds your wallet balance'); return; }
+  if (inv.bank_account_status !== 'approved') { Toast.error('Bank account not verified'); return; }
+
+  const ref = `WD-${Date.now()}`;
+  try {
+    // 1. Create pending withdrawal transaction
+    await API.transactions.create({
+      id:          Utils.genId('TXN'),
+      investor_id: DEMO_INVESTOR_ID,
+      type:        'withdrawal',
+      amount:      -amount,
+      status:      'pending',
+      reference:   ref,
+      description: `Withdrawal to ${inv.bank_name} ••••${String(inv.bank_account_number || '').slice(-4)}`,
+    });
+
+    // 2. Debit wallet immediately
+    const newBal = Math.round((balance - amount) * 100) / 100;
+    await API.investors.update(DEMO_INVESTOR_ID, { wallet_balance: newBal });
+    PORTAL.investor.wallet_balance = newBal;
+
+    // 3. Refresh UI
+    const balEl = document.getElementById('walletBalance');
+    if (balEl) balEl.textContent = Utils.rand(newBal);
+
+    Modal.close('withdrawalModal');
+    Toast.success(`Withdrawal of ${Utils.rand(amount)} requested — you'll receive confirmation by email`);
+
+    // Refresh transactions
+    PORTAL.transactions = [];
+    await loadWallet();
+  } catch (e) {
+    Toast.error('Failed to submit withdrawal request');
+    console.error('withdrawal error:', e);
+  }
 }

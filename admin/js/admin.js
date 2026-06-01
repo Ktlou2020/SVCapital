@@ -96,7 +96,8 @@ function navigate(view, btnEl) {
   const titles = {
     dashboard: 'Dashboard', investors: 'Investor Management', ifa: 'IFA Management', kyc: 'KYC / FICA',
     pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
-    transactions: 'Transactions', support: 'Support Tickets', analytics: 'Analytics', settings: 'Settings'
+    transactions: 'Transactions', support: 'Support Tickets', analytics: 'Analytics', settings: 'Settings',
+    withdrawals: 'Pending Withdrawals',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -113,6 +114,7 @@ function navigate(view, btnEl) {
     support: loadSupport,
     analytics: loadAnalytics,
     settings: loadSettings,
+    withdrawals: loadWithdrawals,
   };
   if (loaders[view]) loaders[view]();
 }
@@ -630,6 +632,45 @@ async function viewInvestor(id) {
       `).join('')}</tbody>
     </table>
 
+    ${(() => {
+      const bankStatus = inv.bank_account_status || 'none';
+      const bankStatusColors = { none:'#9ca3af', pending:'#f59e0b', approved:'#22c55e', rejected:'#ef4444' };
+      if (bankStatus === 'none') {
+        return `<div style="margin-top:20px;padding-top:16px;border-top:1px solid #eee">
+          <div style="font-size:0.88rem;font-weight:700;color:var(--white);margin-bottom:12px">
+            <i class="fa-solid fa-building-columns" style="color:var(--gold)"></i> Bank Account
+          </div>
+          <p style="font-size:0.82rem;color:#aaa">No bank details on record.</p>
+        </div>`;
+      }
+      return `<div style="margin-top:20px;padding-top:16px;border-top:1px solid #eee">
+        <div style="font-size:0.88rem;font-weight:700;color:var(--white);margin-bottom:12px">
+          <i class="fa-solid fa-building-columns" style="color:var(--gold)"></i> Bank Account
+        </div>
+        <div class="info-list" style="margin-bottom:12px">
+          <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">${inv.bank_name || '—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Holder</span><span class="info-row__value">${inv.bank_account_holder || '—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Account</span><span class="info-row__value">${inv.bank_account_number || '—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Branch</span><span class="info-row__value">${inv.bank_branch_code || '—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Type</span><span class="info-row__value" style="text-transform:capitalize">${inv.bank_account_type || 'current'}</span></div>
+          <div class="info-row"><span class="info-row__label">Status</span>
+            <span class="info-row__value" style="color:${bankStatusColors[bankStatus]};font-weight:700;text-transform:capitalize">${bankStatus}</span>
+          </div>
+          ${inv.bank_account_notes ? `<div class="info-row"><span class="info-row__label">Notes</span><span class="info-row__value" style="color:#ef4444">${inv.bank_account_notes}</span></div>` : ''}
+        </div>
+        ${bankStatus === 'pending' ? `
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn--success btn--sm" onclick="approveBankAccount('${inv.id}')">
+            <i class="fa-solid fa-check"></i> Approve
+          </button>
+          <button class="btn btn--danger btn--sm" onclick="rejectBankAccount('${inv.id}')">
+            <i class="fa-solid fa-xmark"></i> Reject
+          </button>
+        </div>` : ''}
+        ${bankStatus === 'approved' ? '<span style="font-size:0.78rem;color:#22c55e"><i class="fa-solid fa-circle-check"></i> Verified — investor can withdraw</span>' : ''}
+      </div>`;
+    })()}
+
     <div class="flex-between mt-16" style="flex-wrap:wrap;gap:8px">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn--success btn--sm" onclick='depositToInvestor(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, ${inv.wallet_balance || 0})'><i class="fa-solid fa-wallet"></i> Add Funds</button>
@@ -683,6 +724,100 @@ async function confirmDeleteInvestor(id) {
     Modal.closeAll();
     await loadInvestors();
   } catch (e) { Toast.error('Failed to delete investor'); }
+}
+
+async function approveBankAccount(investorId) {
+  if (!confirm('Approve this bank account for withdrawals?')) return;
+  try {
+    await API.investors.update(investorId, {
+      bank_account_status: 'approved',
+      bank_account_notes: '',
+    });
+    Toast.success('Bank account approved — investor notified by email');
+    Modal.close('investorDetailModal');
+    await loadInvestors();
+  } catch (e) { Toast.error('Failed to approve bank account'); }
+}
+
+async function rejectBankAccount(investorId) {
+  const reason = prompt('Reason for rejection (shown to investor):');
+  if (!reason) return;
+  try {
+    await API.investors.update(investorId, {
+      bank_account_status: 'rejected',
+      bank_account_notes: reason,
+    });
+    Toast.success('Bank account rejected — investor notified');
+    Modal.close('investorDetailModal');
+    await loadInvestors();
+  } catch (e) { Toast.error('Failed to reject bank account'); }
+}
+
+async function loadWithdrawals() {
+  try {
+    const res = await API.transactions.list({ limit: 200 });
+    const withdrawals = (res.data || []).filter(t => t.type === 'withdrawal' && t.status === 'pending');
+    renderWithdrawalsTable(withdrawals);
+  } catch (e) { console.error('loadWithdrawals error:', e); }
+}
+
+function renderWithdrawalsTable(withdrawals) {
+  const container = document.getElementById('withdrawalsList');
+  if (!container) return;
+
+  if (!withdrawals.length) {
+    container.innerHTML = '<div class="text-center text-muted" style="padding:24px">No pending withdrawals</div>';
+    return;
+  }
+
+  container.innerHTML = `<table class="data-table">
+    <thead><tr>
+      <th>Investor</th><th>Amount</th><th>Bank</th><th>Reference</th><th>Requested</th><th>Actions</th>
+    </tr></thead>
+    <tbody>
+      ${withdrawals.map(w => {
+        const inv = STATE.investors.find(i => i.id === w.investor_id);
+        const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id;
+        const bank = inv ? `${inv.bank_name || '—'} ••••${String(inv.bank_account_number || '').slice(-4)}` : '—';
+        return `<tr>
+          <td><div class="td-strong">${name}</div><div class="td-muted" style="font-size:0.75rem">${w.investor_id}</div></td>
+          <td class="td-gold fw-700">${Utils.rand(Math.abs(w.amount))}</td>
+          <td style="font-size:0.82rem">${bank}</td>
+          <td class="td-muted" style="font-size:0.78rem">${w.reference || w.id}</td>
+          <td class="td-muted" style="font-size:0.78rem">${Utils.date(w.created_at)}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn--success btn--sm" style="margin-right:6px" onclick='processWithdrawal(${JSON.stringify(w.id)})'>
+              <i class="fa-solid fa-check"></i> Process
+            </button>
+            <button class="btn btn--danger btn--sm" onclick='rejectWithdrawal(${JSON.stringify(w.id)})'>
+              <i class="fa-solid fa-xmark"></i> Reject
+            </button>
+          </td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function processWithdrawal(txnId) {
+  if (!confirm('Mark this withdrawal as processed (funds sent to investor)?')) return;
+  try {
+    await API.transactions.update(txnId, { status: 'completed' });
+    Toast.success('Withdrawal marked as processed — investor notified by email');
+    await loadWithdrawals();
+    await loadTransactions();
+  } catch (e) { Toast.error('Failed to process withdrawal'); }
+}
+
+async function rejectWithdrawal(txnId) {
+  const reason = prompt('Reason for rejection (will be emailed to investor):');
+  if (!reason) return;
+  try {
+    await API.transactions.update(txnId, { status: 'rejected', description: `Rejected: ${reason}` });
+    Toast.success('Withdrawal rejected — investor wallet refunded and notified');
+    await loadWithdrawals();
+    await loadTransactions();
+  } catch (e) { Toast.error('Failed to reject withdrawal'); }
 }
 
 function openAddInvestorModal() { Modal.open('addInvestorModal'); }

@@ -228,6 +228,99 @@ function sendPasswordReset(email, firstName, resetLink) {
   });
 }
 
+/* ── 8. Withdrawal requested ──────────────────────────────── */
+function sendWithdrawalRequested(investor, { amount, bankName, accountNumber, reference }) {
+  const { email, first_name } = investor;
+  const last4 = String(accountNumber || '').slice(-4).padStart(4, '•');
+  return _send({
+    to: email,
+    subject: `Withdrawal request received — ${_fmt(amount)}`,
+    html: _wrap(`
+      <h2>Withdrawal Request Received 📤</h2>
+      <p>Hi ${first_name}, we've received your withdrawal request and it is being processed.</p>
+      <span class="big">${_fmt(amount)}</span>
+      <div class="box">
+        <div class="row"><span class="lbl">Amount</span><span class="val">${_fmt(amount)}</span></div>
+        <div class="row"><span class="lbl">Bank</span><span class="val">${bankName || '—'}</span></div>
+        <div class="row"><span class="lbl">Account</span><span class="val">••••${last4}</span></div>
+        <div class="row"><span class="lbl">Reference</span><span class="val">${reference}</span></div>
+        <div class="row"><span class="lbl">Status</span><span class="val" style="color:#f59e0b">Pending Processing</span></div>
+      </div>
+      <p>Transfers are processed within 1–3 business days. You will receive a confirmation once the funds have been sent.</p>
+      <a href="${BASE_URL}/portal/" class="btn">View My Wallet →</a>
+    `),
+    text: `Hi ${first_name}, your withdrawal of ${_fmt(amount)} to ••••${last4} (${bankName}) has been received (ref: ${reference}). Allow 1–3 business days.`,
+  });
+}
+
+/* ── 9. Withdrawal processed ─────────────────────────────── */
+function sendWithdrawalProcessed(investor, { amount, bankName, accountNumber, reference }) {
+  const { email, first_name } = investor;
+  const last4 = String(accountNumber || '').slice(-4).padStart(4, '•');
+  return _send({
+    to: email,
+    subject: `Withdrawal processed — ${_fmt(amount)} sent to your bank`,
+    html: _wrap(`
+      <h2>Withdrawal Processed ✅</h2>
+      <p>Hi ${first_name}, your withdrawal has been processed and the funds are on their way to your bank account.</p>
+      <span class="big">${_fmt(amount)}</span>
+      <div class="box">
+        <div class="row"><span class="lbl">Amount</span><span class="val green">${_fmt(amount)}</span></div>
+        <div class="row"><span class="lbl">Bank</span><span class="val">${bankName || '—'}</span></div>
+        <div class="row"><span class="lbl">Account</span><span class="val">••••${last4}</span></div>
+        <div class="row"><span class="lbl">Reference</span><span class="val">${reference}</span></div>
+        <div class="row"><span class="lbl">Status</span><span class="val green">Processed</span></div>
+      </div>
+      <p>Please allow 1–3 business days for the funds to reflect in your account.</p>
+      <a href="${BASE_URL}/portal/" class="btn">View My Wallet →</a>
+    `),
+    text: `Hi ${first_name}, your withdrawal of ${_fmt(amount)} to ••••${last4} (${bankName}) has been processed (ref: ${reference}).`,
+  });
+}
+
+/* ── 10. Withdrawal rejected ─────────────────────────────── */
+function sendWithdrawalRejected(investor, { amount, reason }) {
+  const { email, first_name } = investor;
+  return _send({
+    to: email,
+    subject: `Withdrawal request declined — ${_fmt(amount)}`,
+    html: _wrap(`
+      <h2>Withdrawal Request Declined ❌</h2>
+      <p>Hi ${first_name}, unfortunately your withdrawal request could not be processed.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Amount</span><span class="val">${_fmt(amount)}</span></div>
+        <div class="row"><span class="lbl">Reason</span><span class="val" style="color:#ef4444">${reason || 'Contact support for details'}</span></div>
+        <div class="row"><span class="lbl">Refunded</span><span class="val green">Yes — back in your wallet</span></div>
+      </div>
+      <p>The ${_fmt(amount)} has been refunded to your wallet. Please contact support if you have questions.</p>
+      <a href="${BASE_URL}/portal/" class="btn">Contact Support →</a>
+    `),
+    text: `Hi ${first_name}, your withdrawal of ${_fmt(amount)} was declined: ${reason || 'contact support'}. Funds refunded to your wallet.`,
+  });
+}
+
+/* ── 11. Bank account approved ───────────────────────────── */
+function sendBankAccountApproved(investor, { bankName, accountNumber }) {
+  const { email, first_name } = investor;
+  const last4 = String(accountNumber || '').slice(-4).padStart(4, '•');
+  return _send({
+    to: email,
+    subject: 'Your bank account has been verified ✅',
+    html: _wrap(`
+      <h2>Bank Account Verified ✅</h2>
+      <p>Hi ${first_name}, your bank account has been verified and approved for withdrawals.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Bank</span><span class="val">${bankName || '—'}</span></div>
+        <div class="row"><span class="lbl">Account</span><span class="val">••••${last4}</span></div>
+        <div class="row"><span class="lbl">Status</span><span class="val green">Approved</span></div>
+      </div>
+      <p>You can now request withdrawals from your wallet to this account at any time.</p>
+      <a href="${BASE_URL}/portal/" class="btn">Go to My Wallet →</a>
+    `),
+    text: `Hi ${first_name}, your bank account ••••${last4} (${bankName}) has been approved for withdrawals.`,
+  });
+}
+
 module.exports = {
   sendWelcome,
   sendDepositConfirmed,
@@ -236,4 +329,8 @@ module.exports = {
   sendInvestmentMatured,
   sendTicketResponse,
   sendPasswordReset,
+  sendWithdrawalRequested,
+  sendWithdrawalProcessed,
+  sendWithdrawalRejected,
+  sendBankAccountApproved,
 };
