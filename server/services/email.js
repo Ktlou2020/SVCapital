@@ -228,6 +228,96 @@ function sendPasswordReset(email, firstName, resetLink) {
   });
 }
 
+/* ── 8. Withdrawal requested (investor notification) ────────── */
+function sendWithdrawalRequested(investor, { amount, reference }) {
+  const { email, first_name } = investor;
+  return _send({
+    to: email,
+    subject: `Withdrawal request received — ${_fmt(amount)}`,
+    html: _wrap(`
+      <h2>Withdrawal Request Received 📤</h2>
+      <p>Hi ${first_name}, we've received your withdrawal request and it is being processed by our team.</p>
+      <span class="big">${_fmt(amount)}</span>
+      <div class="box">
+        <div class="row"><span class="lbl">Amount Requested</span><span class="val gold">${_fmt(amount)}</span></div>
+        <div class="row"><span class="lbl">Reference</span><span class="val">${reference}</span></div>
+        <div class="row"><span class="lbl">Status</span><span class="val" style="color:#f59e0b">Pending Review</span></div>
+      </div>
+      <p>Funds will be transferred to your verified bank account on record once our team has processed the request. This typically takes 1–2 business days.</p>
+      <a href="${BASE_URL}/portal/" class="btn">View Wallet →</a>
+    `),
+    text: `Hi ${first_name}, your withdrawal request of ${_fmt(amount)} (ref: ${reference}) has been received and is pending processing.`,
+  });
+}
+
+/* ── 9. Withdrawal processed (payment sent) ─────────────────── */
+function sendWithdrawalProcessed(investor, { amount, reference, bankName }) {
+  const { email, first_name } = investor;
+  return _send({
+    to: email,
+    subject: `Withdrawal processed — ${_fmt(amount)} sent to your bank`,
+    html: _wrap(`
+      <h2>Withdrawal Processed ✅</h2>
+      <p>Hi ${first_name}, your withdrawal has been processed and the funds have been sent to your bank account.</p>
+      <span class="big">${_fmt(amount)}</span>
+      <div class="box">
+        <div class="row"><span class="lbl">Amount Sent</span><span class="val green">${_fmt(amount)}</span></div>
+        <div class="row"><span class="lbl">Bank</span><span class="val">${bankName || 'Registered bank account'}</span></div>
+        <div class="row"><span class="lbl">Reference</span><span class="val">${reference}</span></div>
+        <div class="row"><span class="lbl">Status</span><span class="val green">Completed</span></div>
+      </div>
+      <p>Funds typically appear in your bank account within 1 business day. Please contact support if you do not receive the funds within 2 business days.</p>
+      <a href="${BASE_URL}/portal/" class="btn">View Portfolio →</a>
+    `),
+    text: `Hi ${first_name}, your withdrawal of ${_fmt(amount)} (ref: ${reference}) has been processed and sent to your bank.`,
+  });
+}
+
+/* ── 10. Withdrawal rejected (funds returned to wallet) ─────── */
+function sendWithdrawalRejected(investor, { amount, reference, reason }) {
+  const { email, first_name } = investor;
+  return _send({
+    to: email,
+    subject: `Withdrawal request declined — ${_fmt(amount)} returned to wallet`,
+    html: _wrap(`
+      <h2>Withdrawal Request Declined ⚠️</h2>
+      <p>Hi ${first_name}, unfortunately your withdrawal request could not be processed at this time.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Amount</span><span class="val gold">${_fmt(amount)}</span></div>
+        <div class="row"><span class="lbl">Reference</span><span class="val">${reference}</span></div>
+        <div class="row"><span class="lbl">Status</span><span class="val" style="color:#ef4444">Declined</span></div>
+        ${reason ? `<div class="row"><span class="lbl">Reason</span><span class="val">${reason}</span></div>` : ''}
+      </div>
+      <p><strong>${_fmt(amount)} has been returned to your SV Capital wallet.</strong></p>
+      <p>If you believe this is an error or need further assistance, please contact our support team by raising a ticket.</p>
+      <a href="${BASE_URL}/portal/" class="btn">Contact Support →</a>
+    `),
+    text: `Hi ${first_name}, your withdrawal of ${_fmt(amount)} (ref: ${reference}) was declined and the funds have been returned to your wallet.${reason ? ' Reason: ' + reason : ''} Contact support if you need help.`,
+  });
+}
+
+/* ── 11. Bank account approved ───────────────────────────────── */
+function sendBankAccountApproved(investor, { bankName, accountNumber }) {
+  const { email, first_name } = investor;
+  const masked = accountNumber ? '••••••' + String(accountNumber).slice(-4) : '—';
+  return _send({
+    to: email,
+    subject: 'Your bank account has been verified ✅',
+    html: _wrap(`
+      <h2>Bank Account Verified ✅</h2>
+      <p>Hi ${first_name}, great news! Your linked bank account has been verified and approved by our team.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Bank</span><span class="val">${bankName}</span></div>
+        <div class="row"><span class="lbl">Account Number</span><span class="val">${masked}</span></div>
+        <div class="row"><span class="lbl">Status</span><span class="val green">Approved</span></div>
+      </div>
+      <p>You can now request wallet withdrawals to this bank account at any time from your portal.</p>
+      <a href="${BASE_URL}/portal/" class="btn">Withdraw Funds →</a>
+    `),
+    text: `Hi ${first_name}, your bank account (${bankName} — ${masked}) has been verified. You can now withdraw funds from your SV Capital wallet.`,
+  });
+}
+
 module.exports = {
   sendWelcome,
   sendDepositConfirmed,
@@ -236,4 +326,8 @@ module.exports = {
   sendInvestmentMatured,
   sendTicketResponse,
   sendPasswordReset,
+  sendWithdrawalRequested,
+  sendWithdrawalProcessed,
+  sendWithdrawalRejected,
+  sendBankAccountApproved,
 };

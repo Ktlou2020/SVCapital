@@ -96,7 +96,7 @@ function navigate(view, btnEl) {
   const titles = {
     dashboard: 'Dashboard', investors: 'Investor Management', ifa: 'IFA Management', kyc: 'KYC / FICA',
     pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
-    transactions: 'Transactions', support: 'Support Tickets', analytics: 'Analytics', settings: 'Settings'
+    transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics', settings: 'Settings'
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -113,6 +113,7 @@ function navigate(view, btnEl) {
     support: loadSupport,
     analytics: loadAnalytics,
     settings: loadSettings,
+    withdrawals: loadWithdrawals,
   };
   if (loaders[view]) loaders[view]();
 }
@@ -630,6 +631,32 @@ async function viewInvestor(id) {
       `).join('')}</tbody>
     </table>
 
+    ${(() => {
+      const statusMap = { none: 'Not added', pending: 'Pending verification', approved: 'Verified', rejected: 'Rejected' };
+      const statusCls = { none: 'badge--grey', pending: 'badge--yellow', approved: 'badge--green', rejected: 'badge--red' };
+      const bStatus = inv.bank_account_status || 'none';
+      const masked  = inv.bank_account_number ? '••••••' + String(inv.bank_account_number).slice(-4) : '—';
+      return `
+    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:var(--white)">Bank Account</div>
+    <div class="panel mb-16" style="background:var(--dark-3)">
+      <div class="panel__body">
+        <div class="info-list">
+          <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">${inv.bank_name || '—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Account Holder</span><span class="info-row__value">${inv.bank_account_holder || '—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Account Number</span><span class="info-row__value">${masked}</span></div>
+          <div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value">${inv.bank_branch_code || '—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Type</span><span class="info-row__value" style="text-transform:capitalize">${inv.bank_account_type || '—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Verification Status</span><span class="info-row__value"><span class="badge ${statusCls[bStatus]}">${statusMap[bStatus]}</span></span></div>
+        </div>
+        ${bStatus === 'pending' ? `
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-check"></i> Approve Account</button>
+          <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-xmark"></i> Reject Account</button>
+        </div>` : (bStatus === 'approved' ? `<div style="margin-top:8px;font-size:0.78rem;color:#22c55e"><i class="fa-solid fa-check-circle"></i> Account verified — withdrawals are enabled</div>` : '')}
+      </div>
+    </div>`;
+    })()}
+
     <div class="flex-between mt-16" style="flex-wrap:wrap;gap:8px">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn--success btn--sm" onclick='depositToInvestor(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, ${inv.wallet_balance || 0})'><i class="fa-solid fa-wallet"></i> Add Funds</button>
@@ -673,6 +700,100 @@ async function approveInvestorFica(investorId) {
     Modal.close('investorDetailModal');
     await loadInvestors();
   } catch (e) { Toast.error('Failed to approve FICA'); }
+}
+
+async function approveBankAccount(investorId) {
+  if (!confirm('Approve this investor\'s bank account? This will enable wallet withdrawals and send a confirmation email.')) return;
+  try {
+    await API._fetch('PATCH', `tables/investors/${investorId}`, { bank_account_status: 'approved', bank_account_notes: null });
+    Toast.success('Bank account approved — investor can now request withdrawals');
+    Modal.close('investorDetailModal');
+    await loadInvestors();
+  } catch (e) { Toast.error('Failed to approve bank account'); }
+}
+
+async function rejectBankAccount(investorId) {
+  const reason = prompt('Reason for rejection (will be visible to investor):');
+  if (reason === null) return;
+  try {
+    await API._fetch('PATCH', `tables/investors/${investorId}`, {
+      bank_account_status: 'rejected',
+      bank_account_notes:  reason || 'Bank account details could not be verified.',
+    });
+    Toast.success('Bank account rejected');
+    Modal.close('investorDetailModal');
+    await loadInvestors();
+  } catch (e) { Toast.error('Failed to reject bank account'); }
+}
+
+/* ═══════════════════════════════════════════════
+   WITHDRAWALS
+   ═══════════════════════════════════════════════ */
+async function loadWithdrawals() {
+  try {
+    const res = await API._fetch('GET', 'tables/transactions', null, { limit: 200 });
+    const all  = (res.data || []).filter(t => t.type === 'withdrawal');
+    STATE.withdrawals = all;
+    renderWithdrawalsTable();
+  } catch (e) {
+    Toast.error('Failed to load withdrawals');
+    console.error(e);
+  }
+}
+
+function renderWithdrawalsTable() {
+  const tbody = document.getElementById('withdrawalsTableBody');
+  if (!tbody) return;
+  const withdrawals = STATE.withdrawals || [];
+  const pending = withdrawals.filter(w => w.status === 'pending');
+  const rest    = withdrawals.filter(w => w.status !== 'pending');
+  const all     = [...pending, ...rest];
+
+  if (!all.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No withdrawal requests</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = all.map(w => {
+    const inv = STATE.investors.find(i => i.id === w.investor_id);
+    const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id || '—';
+    const bank = inv?.bank_name || '—';
+    return `<tr>
+      <td class="td-strong">${name}</td>
+      <td class="td-gold fw-700">${Utils.rand(w.amount)}</td>
+      <td>${bank}</td>
+      <td>${Utils.statusBadge(w.status)}</td>
+      <td class="td-muted">${Utils.date(w.created_at)}</td>
+      <td>
+        ${w.status === 'pending' ? `
+          <button class="btn btn--success btn--sm" onclick='processWithdrawal(${JSON.stringify(w.id)})'><i class="fa-solid fa-check"></i> Process</button>
+          <button class="btn btn--danger btn--sm" onclick='rejectWithdrawal(${JSON.stringify(w.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+        ` : '—'}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function processWithdrawal(txnId) {
+  if (!confirm('Mark this withdrawal as processed? This will notify the investor by email.')) return;
+  try {
+    await API._fetch('PATCH', `tables/transactions/${txnId}`, { status: 'completed' });
+    Toast.success('Withdrawal marked as processed — investor notified');
+    await loadWithdrawals();
+  } catch (e) { Toast.error('Failed to process withdrawal'); }
+}
+
+async function rejectWithdrawal(txnId) {
+  const reason = prompt('Reason for rejection (optional — will be included in the email):');
+  if (reason === null) return;
+  try {
+    await API._fetch('PATCH', `tables/transactions/${txnId}`, {
+      status:      'rejected',
+      description: reason || undefined,
+    });
+    Toast.success('Withdrawal rejected — funds returned to investor wallet');
+    await loadWithdrawals();
+  } catch (e) { Toast.error('Failed to reject withdrawal'); }
 }
 
 async function confirmDeleteInvestor(id) {

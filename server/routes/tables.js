@@ -365,6 +365,17 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
             });
           }
         }
+
+        // New pending withdrawal → email investor
+        if (table === 'transactions' && created.type === 'withdrawal' && created.status === 'pending' && created.investor_id) {
+          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [created.investor_id]);
+          if (inv[0]) {
+            await emailService.sendWithdrawalRequested(inv[0], {
+              amount:    created.amount,
+              reference: created.reference || created.id,
+            });
+          }
+        }
       } catch (hookErr) {
         console.error('[email hook POST] error:', hookErr.message);
       }
@@ -472,6 +483,42 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
               actualReturn: updated.actual_return || 0,
             });
           }
+        }
+
+        // Withdrawal completed → email investor
+        if (table === 'transactions' && body.status === 'completed' && updated.type === 'withdrawal' && updated.investor_id) {
+          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
+          if (inv[0]) {
+            await emailService.sendWithdrawalProcessed(inv[0], {
+              amount:    updated.amount,
+              reference: updated.reference || updated.id,
+              bankName:  inv[0].bank_name,
+            });
+          }
+        }
+
+        // Withdrawal rejected → refund wallet + email investor
+        if (table === 'transactions' && body.status === 'rejected' && updated.type === 'withdrawal' && updated.investor_id) {
+          await pool.query(
+            'UPDATE investors SET wallet_balance = wallet_balance + $1 WHERE id = $2',
+            [updated.amount, updated.investor_id]
+          );
+          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
+          if (inv[0]) {
+            await emailService.sendWithdrawalRejected(inv[0], {
+              amount:    updated.amount,
+              reference: updated.reference || updated.id,
+              reason:    updated.description,
+            });
+          }
+        }
+
+        // Bank account approved → email investor
+        if (table === 'investors' && body.bank_account_status === 'approved') {
+          await emailService.sendBankAccountApproved(updated, {
+            bankName:      updated.bank_name,
+            accountNumber: updated.bank_account_number,
+          });
         }
       } catch (hookErr) {
         console.error('[email hook PATCH] error:', hookErr.message);
