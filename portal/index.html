@@ -942,6 +942,28 @@
               </ul>
             </div>
 
+            <div class="panel mt-16">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-file-invoice" style="color:#22c55e"></i> SARS Tax Certificate (IT3b)</span>
+              </div>
+              <div class="panel__body">
+                <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">
+                  Download your annual interest income certificate for your SARS tax return. Covers the South African tax year (1 March – 28 February).
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Tax Year (ending February)</label>
+                  <select class="form-select" id="taxYearSelect">
+                    <option value="2025">March 2024 – February 2025</option>
+                    <option value="2024">March 2023 – February 2024</option>
+                    <option value="2023">March 2022 – February 2023</option>
+                  </select>
+                </div>
+                <button class="btn btn--success btn--full" onclick="generateTaxCertificate()">
+                  <i class="fa-solid fa-file-arrow-down"></i> Download Tax Certificate (IT3b)
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
 
