@@ -104,6 +104,7 @@ app.use('/api/users',    require('./routes/users'));
 app.use('/api/tables',   require('./routes/tables'));
 app.use('/api/fica',     require('./routes/fica'));
 app.use('/api/payments', require('./routes/payments'));
+app.use('/api/admin',    require('./routes/broadcast'));
 
 /* ─── One-time Provision Endpoint ───────────────────────────────────────────
    GET /api/provision?secret=<PROVISION_SECRET>
@@ -281,6 +282,14 @@ app.listen(PORT, '0.0.0.0', async () => {
   // Start maturity alert cron (daily 08:00 SAST)
   const { startMaturityCron } = require('./jobs/maturityCron');
   startMaturityCron();
+
+  // Start monthly interest crediting cron (1st of month, 06:00 SAST)
+  const { startInterestCron } = require('./jobs/interestCron');
+  startInterestCron();
+
+  // Start automated payout cron (daily 07:30 SAST)
+  const { startPayoutCron } = require('./jobs/payoutCron');
+  startPayoutCron();
 
   // Start monthly statement cron (1st of month, 07:00 SAST)
   const { startStatementCron } = require('./jobs/statementCron');

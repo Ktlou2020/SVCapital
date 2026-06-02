@@ -14,6 +14,7 @@ const { requireAuth } = require('../middleware/auth');
 const emailService = require('../services/email');
 const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
+const aml          = require('../services/aml');
 
 /* ──────────────────────────────────────────────────────────
    GET /api/payments/config
@@ -112,6 +113,7 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
     console.warn('[payments] PAYSTACK_SECRET_KEY not set — processing without server verification');
     try {
       const result = await creditWallet(resolvedInvestorId, Number(walletCredit), reference, req.user?.email);
+      aml.checkDeposit(pool, resolvedInvestorId, Number(walletCredit), reference).catch(e => console.error('[aml]', e.message));
       return res.json({ success: true, verified: false, ...result });
     } catch (err) {
       console.error('[payments] creditWallet error:', err.message);
@@ -141,6 +143,7 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
     const psInvestorId = psData.data.metadata?.investor_id || resolvedInvestorId;
 
     const result = await creditWallet(psInvestorId, creditAmount, reference, req.user?.email);
+    aml.checkDeposit(pool, psInvestorId, creditAmount, reference).catch(e => console.error('[aml]', e.message));
     return res.json({ success: true, verified: true, ...result });
 
   } catch (err) {
@@ -189,6 +192,7 @@ router.post('/paystack/webhook', async (req, res) => {
     const result = await creditWallet(investorId, creditAmt, reference, null, 'webhook');
     if (!result.alreadyProcessed) {
       console.log(`[payments/webhook] charge.success — credited R${creditAmt} to ${investorId}`);
+      aml.checkDeposit(pool, investorId, creditAmt, reference).catch(e => console.error('[aml]', e.message));
     }
   } catch (err) {
     console.error('[payments/webhook] creditWallet error:', err.message);

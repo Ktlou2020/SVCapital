@@ -84,6 +84,120 @@ function adminMarkAllRead() {
   if (dot) dot.classList.remove('has-unread');
 }
 
+/* ── Dynamic admin notification panel ─────────────────────────────────────
+   Builds real-time alerts from already-loaded STATE data.
+   Called at the end of loadDashboard() once investors, transactions
+   and tickets are in memory.
+─────────────────────────────────────────────────────────────────────────── */
+function loadAdminNotifications(investors, transactions, tickets) {
+  const body = document.getElementById('adminNotifBody');
+  if (!body) return;
+
+  const now    = new Date();
+  const notifs = [];
+
+  // 1. Pending KYC / FICA
+  const pendingKyc = investors.filter(i =>
+    i.kyc_status === 'pending' || i.fica_status === 'pending' ||
+    i.status === 'pending_fica' || i.status === 'fica_submitted'
+  );
+  if (pendingKyc.length) {
+    notifs.push({
+      icon: 'fa-user-clock', iconBg: 'rgba(239,68,68,0.1)', iconColor: '#ef4444',
+      title: `${pendingKyc.length} KYC ${pendingKyc.length === 1 ? 'application' : 'applications'} pending`,
+      sub: `${pendingKyc.slice(0,2).map(i => i.first_name).join(', ')}${pendingKyc.length > 2 ? ` +${pendingKyc.length - 2} more` : ''} awaiting FICA review.`,
+      action: "navigate('kyc',document.querySelector('[data-view=kyc]'));toggleAdminNotif()",
+      unread: true,
+    });
+  }
+
+  // 2. Bank accounts awaiting verification
+  const pendingBank = investors.filter(i => i.bank_account_status === 'pending');
+  if (pendingBank.length) {
+    notifs.push({
+      icon: 'fa-building-columns', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#6366f1',
+      title: `${pendingBank.length} bank account${pendingBank.length === 1 ? '' : 's'} to verify`,
+      sub: `${pendingBank.slice(0,2).map(i => `${i.first_name} ${i.last_name}`).join(', ')}${pendingBank.length > 2 ? ` +${pendingBank.length - 2} more` : ''}.`,
+      action: "navigate('investors',document.querySelector('[data-view=investors]'));toggleAdminNotif()",
+      unread: true,
+    });
+  }
+
+  // 3. Pending withdrawals
+  const pendingWith = transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending');
+  if (pendingWith.length) {
+    const total = pendingWith.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+    notifs.push({
+      icon: 'fa-money-bill-transfer', iconBg: 'rgba(239,68,68,0.1)', iconColor: '#ef4444',
+      title: `${pendingWith.length} withdrawal${pendingWith.length === 1 ? '' : 's'} pending`,
+      sub: `${Utils.rand(total)} total awaiting processing.`,
+      action: "navigate('transactions',document.querySelector('[data-view=transactions]'));toggleAdminNotif()",
+      unread: true,
+    });
+  }
+
+  // 4. Bank verification support tickets
+  const bankTkts = tickets.filter(t => t.category === 'bank_verification' && t.status === 'open');
+  if (bankTkts.length) {
+    notifs.push({
+      icon: 'fa-file-invoice', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
+      title: `${bankTkts.length} bank verification ticket${bankTkts.length === 1 ? '' : 's'}`,
+      sub: `${bankTkts.slice(0,2).map(t => t.investor_name || 'Investor').join(', ')} submitted bank details.`,
+      action: "navigate('support',document.querySelector('[data-view=support]'));toggleAdminNotif()",
+      unread: true,
+    });
+  }
+
+  // 5. Other open support tickets (unanswered)
+  const openTkts = tickets.filter(t => t.status === 'open' && t.category !== 'bank_verification' && !t.admin_response);
+  if (openTkts.length) {
+    const urgent = openTkts.filter(t => t.priority === 'high' || t.priority === 'urgent');
+    notifs.push({
+      icon: 'fa-headset', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#2F8C9B',
+      title: `${openTkts.length} open ticket${openTkts.length === 1 ? '' : 's'} awaiting reply`,
+      sub: urgent.length
+        ? `${urgent.length} high-priority — "${urgent[0].subject}"`
+        : `"${openTkts[0].subject}"`,
+      action: "navigate('support',document.querySelector('[data-view=support]'));toggleAdminNotif()",
+      unread: true,
+    });
+  }
+
+  // 6. Recent deposits (last 24 h) — informational
+  const recentDeps = transactions.filter(t => {
+    if (t.type !== 'deposit' || t.status !== 'completed') return false;
+    return (now - new Date(t.created_at || t.transaction_date || 0)) < 86400000;
+  });
+  if (recentDeps.length) {
+    const total = recentDeps.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+    notifs.push({
+      icon: 'fa-wallet', iconBg: 'rgba(34,197,94,0.1)', iconColor: '#22c55e',
+      title: `${recentDeps.length} deposit${recentDeps.length === 1 ? '' : 's'} received today`,
+      sub: `${Utils.rand(total)} credited in the last 24 hours.`,
+      action: "navigate('transactions',document.querySelector('[data-view=transactions]'));toggleAdminNotif()",
+      unread: false,
+    });
+  }
+
+  if (!notifs.length) {
+    body.innerHTML = '<div style="padding:24px 18px;text-align:center;color:#888;font-size:0.82rem"><i class="fa-solid fa-circle-check" style="color:#22c55e;margin-right:6px"></i>No pending actions — all clear!</div>';
+    document.getElementById('adminNotifDot')?.classList.remove('has-unread');
+    return;
+  }
+
+  body.innerHTML = notifs.map(n => `
+    <div class="notif-item${n.unread ? ' unread' : ''}" ${n.action ? `onclick="${n.action}" style="cursor:pointer"` : ''}>
+      <div class="notif-icon" style="background:${n.iconBg}"><i class="fa-solid ${n.icon}" style="color:${n.iconColor}"></i></div>
+      <div class="notif-body">
+        <div class="notif-title">${n.title}</div>
+        <div class="notif-sub">${n.sub}</div>
+      </div>
+    </div>
+  `).join('');
+
+  _syncAdminNotifDot();
+}
+
 /* ─── Navigation ─── */
 function navigate(view, btnEl) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -97,7 +211,7 @@ function navigate(view, btnEl) {
     dashboard: 'Dashboard', investors: 'Investor Management', ifa: 'IFA Management', kyc: 'KYC / FICA',
     pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
     transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
-    auditlog: 'Audit Log', settings: 'Settings'
+    auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications'
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -116,6 +230,7 @@ function navigate(view, btnEl) {
     auditlog: loadAuditLog,
     settings: loadSettings,
     withdrawals: loadWithdrawals,
+    comms: loadComms,
   };
   if (loaders[view]) loaders[view]();
 }
@@ -271,6 +386,9 @@ async function loadDashboard() {
       const tktBadge = document.getElementById('ticketBadge');
       if (tktBadge) tktBadge.textContent = openTickets;
     } catch (_) {}
+
+    // Build dynamic notification panel
+    loadAdminNotifications(STATE.investors, STATE.transactions, tickets);
 
     // Populate welcome strip
     const jwtUser = (typeof Auth !== 'undefined') ? Auth.getUser() : null;
@@ -2588,4 +2706,249 @@ function renderAuditTable() {
   if (pag) pag.innerHTML = Array.from({ length: Math.min(pages, 10) }, (_, i) =>
     `<button class="page-btn ${i + 1 === _auditPage ? 'active' : ''}" onclick="_auditPage=${i+1};renderAuditTable()">${i+1}</button>`
   ).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   BROADCAST COMMUNICATIONS (Feature 9)
+   ═══════════════════════════════════════════════ */
+let _broadcastHistory = [];
+
+function loadComms() {
+  // Populate pool options in segment select from STATE.pools
+  const seg = document.getElementById('broadcastSegment');
+  if (seg) {
+    // Remove any old pool options first
+    Array.from(seg.querySelectorAll('option[data-pool]')).forEach(o => o.remove());
+    STATE.pools.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.dataset.pool = '1';
+      opt.textContent = `Pool: ${p.name}`;
+      seg.appendChild(opt);
+    });
+  }
+
+  toggleBroadcastSubject();
+  updateBroadcastPreview();
+  _renderBroadcastHistory();
+}
+
+function toggleBroadcastSubject() {
+  const channel = document.querySelector('input[name="broadcastChannel"]:checked')?.value || 'email';
+  const group = document.getElementById('broadcastSubjectGroup');
+  if (group) group.style.display = channel === 'sms' ? 'none' : '';
+}
+
+async function updateBroadcastPreview() {
+  const seg = document.getElementById('broadcastSegment')?.value || 'all';
+  const countEl = document.getElementById('broadcastPreviewCount');
+  if (countEl) countEl.textContent = '…';
+  try {
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+    const res = await fetch(`/api/admin/broadcast/preview?segment=${encodeURIComponent(seg)}`, {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (countEl) countEl.textContent = data.count ?? '—';
+    } else {
+      if (countEl) countEl.textContent = '—';
+    }
+  } catch (_) {
+    if (countEl) countEl.textContent = '—';
+  }
+}
+
+async function sendBroadcast() {
+  const channel  = document.querySelector('input[name="broadcastChannel"]:checked')?.value || 'email';
+  const segment  = document.getElementById('broadcastSegment')?.value || 'all';
+  const subject  = document.getElementById('broadcastSubject')?.value?.trim() || '';
+  const message  = document.getElementById('broadcastMessage')?.value?.trim() || '';
+
+  if (!message) { Toast.error('Please write a message before sending'); return; }
+  if ((channel === 'email' || channel === 'both') && !subject) {
+    Toast.error('Please enter a subject line for email broadcasts');
+    return;
+  }
+
+  const segLabel = document.getElementById('broadcastSegment')?.selectedOptions[0]?.text || segment;
+  const previewCount = document.getElementById('broadcastPreviewCount')?.textContent || '?';
+
+  const confirmed = confirm(`Send ${channel.toUpperCase()} broadcast to ${previewCount} recipients in segment "${segLabel}"?\n\nSubject: ${subject || '(SMS — no subject)'}\n\nThis cannot be undone.`);
+  if (!confirmed) return;
+
+  const btn = document.getElementById('broadcastSendBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending…'; }
+
+  try {
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+
+    const res = await fetch('/api/admin/broadcast', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ subject, message, channel, segment }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      Toast.error(data.error || 'Broadcast failed');
+      return;
+    }
+
+    const { sent = 0, failed = 0, total = 0 } = data;
+    Toast.success(`Broadcast sent! ${sent} of ${total} delivered${failed > 0 ? ` (${failed} failed)` : ''}`);
+
+    // Record in history
+    _broadcastHistory.unshift({
+      date: new Date().toISOString(),
+      subject: subject || '(SMS)',
+      message: message.slice(0, 80) + (message.length > 80 ? '…' : ''),
+      channel,
+      segment: segLabel,
+      sent,
+      failed,
+      total,
+    });
+    _renderBroadcastHistory();
+
+    // Clear form
+    const msgEl = document.getElementById('broadcastMessage');
+    const subEl = document.getElementById('broadcastSubject');
+    if (msgEl) msgEl.value = '';
+    if (subEl) subEl.value = '';
+    updateBroadcastPreview();
+  } catch (err) {
+    Toast.error('Broadcast failed: ' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Broadcast'; }
+  }
+}
+
+function _renderBroadcastHistory() {
+  const body  = document.getElementById('broadcastHistoryBody');
+  const count = document.getElementById('broadcastHistoryCount');
+  if (count) count.textContent = `${_broadcastHistory.length} broadcast${_broadcastHistory.length !== 1 ? 's' : ''}`;
+
+  if (!body) return;
+  if (!_broadcastHistory.length) {
+    body.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-dim)">
+      <i class="fa-solid fa-inbox" style="font-size:2rem;opacity:0.3;display:block;margin-bottom:8px"></i>
+      No broadcasts sent yet
+    </div>`;
+    return;
+  }
+
+  const chIcon = { email: 'fa-envelope', sms: 'fa-mobile-screen', both: 'fa-paper-plane' };
+
+  body.innerHTML = _broadcastHistory.map(h => `
+    <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:0.82rem;font-weight:700;color:var(--white)">${h.subject || '(SMS)'}</span>
+        <span style="font-size:0.7rem;color:var(--text-dim)">${Utils.date(h.date)}</span>
+      </div>
+      <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:6px">${h.message}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span class="badge badge--blue"><i class="fa-solid ${chIcon[h.channel] || 'fa-paper-plane'}"></i> ${h.channel}</span>
+        <span class="badge badge--gray">${h.segment}</span>
+        <span class="badge badge--green"><i class="fa-solid fa-check"></i> ${h.sent} sent</span>
+        ${h.failed > 0 ? `<span class="badge badge--red"><i class="fa-solid fa-xmark"></i> ${h.failed} failed</span>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   NAV / AUM REPORT EXPORT (Feature 11)
+   ═══════════════════════════════════════════════ */
+async function exportAumReport() {
+  // Ensure we have data
+  if (!STATE.investors.length) {
+    Toast.info('Loading investor data…');
+    try {
+      const [invRes, poolRes, invstRes] = await Promise.all([
+        API.investors.list({ limit: 200 }),
+        API.pools.list({ limit: 100 }),
+        API.investments.list({ limit: 200 }),
+      ]);
+      STATE.investors   = invRes.data   || [];
+      STATE.pools       = poolRes.data  || [];
+      STATE.investments = invstRes.data || [];
+    } catch (e) {
+      Toast.error('Failed to load data for export');
+      return;
+    }
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const now   = new Date().toLocaleString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  // Aggregate totals
+  const totalWallet   = STATE.investors.reduce((s, i) => s + (i.wallet_balance  || 0), 0);
+  const totalInvested = STATE.investors.reduce((s, i) => s + (i.total_invested  || 0), 0);
+  const totalReturns  = STATE.investors.reduce((s, i) => s + (i.total_returns   || 0), 0);
+  const activeInvCount = STATE.investments.filter(i => i.status === 'active').length;
+  const totalAUM      = totalWallet + totalInvested;
+
+  const fmt  = v => 'R' + Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtD = v => v ? new Date(v).toLocaleDateString('en-ZA') : '';
+
+  // Build rows
+  const rows = [];
+
+  // Section 1: Summary
+  rows.push(['SV Capital — AUM Report', `Generated: ${now}`]);
+  rows.push(['', '']);
+  rows.push(['Total AUM', fmt(totalAUM)]);
+  rows.push(['Total Investors', STATE.investors.length]);
+  rows.push(['Active Investments', activeInvCount]);
+  rows.push(['Total Returns Paid', fmt(totalReturns)]);
+  rows.push(['', '']);
+
+  // Section 2: Investor detail
+  rows.push([
+    'Investor ID', 'Name', 'Email', 'Wallet Balance', 'Total Invested',
+    'Total Returns', 'Active Investments', 'FICA Status', 'KYC Status', 'Date Joined'
+  ]);
+
+  STATE.investors.forEach(inv => {
+    const activeInvts = STATE.investments.filter(i => i.investor_id === inv.id && i.status === 'active').length;
+    rows.push([
+      inv.id || '',
+      `${inv.first_name || ''} ${inv.last_name || ''}`.trim(),
+      inv.email || '',
+      fmt(inv.wallet_balance),
+      fmt(inv.total_invested),
+      fmt(inv.total_returns),
+      activeInvts,
+      inv.fica_status || '',
+      inv.kyc_status  || '',
+      fmtD(inv.date_joined),
+    ]);
+  });
+
+  _downloadCSV(rows, `SVC-AUM-Report-${today}.csv`);
+  Toast.success(`AUM report exported — ${STATE.investors.length} investors`);
+
+  // Optionally generate PDF if jsPDF is available
+  if (window.jspdf) {
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: 'landscape' });
+      doc.setFontSize(18);
+      doc.text('SV Capital — AUM Report', 14, 18);
+      doc.setFontSize(10);
+      doc.text(`Generated: ${now}`, 14, 26);
+      doc.text(`Total AUM: ${fmt(totalAUM)}`, 14, 34);
+      doc.text(`Total Investors: ${STATE.investors.length}`, 14, 40);
+      doc.text(`Active Investments: ${activeInvCount}`, 14, 46);
+      doc.text(`Total Returns Paid: ${fmt(totalReturns)}`, 14, 52);
+      doc.save(`SVC-AUM-Report-${today}.pdf`);
+      Toast.success('PDF report also exported');
+    } catch (_) { /* jsPDF not fully available */ }
+  }
 }
