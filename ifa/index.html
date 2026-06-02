@@ -755,6 +755,60 @@
   </div>
 </div>
 
+<!-- New Support Ticket Modal -->
+<div class="modal-overlay" id="newTicketModal" onclick="if(event.target===this)Modal.close('newTicketModal')">
+  <div class="modal modal--md">
+    <div class="modal__header">
+      <span class="modal__title"><i class="fa-solid fa-plus"></i> New Support Ticket</span>
+      <button class="modal__close" onclick="Modal.close('newTicketModal')">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="modal__body">
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div>
+          <label style="font-size:0.8rem;font-weight:600;color:var(--text-h);display:block;margin-bottom:6px">Category</label>
+          <select class="tbl-filter" id="ticketCategory" style="width:100%;padding:9px 12px">
+            <option value="general">General Enquiry</option>
+            <option value="client_query">Client Query</option>
+            <option value="commission_query">Commission Query</option>
+            <option value="onboarding">Onboarding Assistance</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.8rem;font-weight:600;color:var(--text-h);display:block;margin-bottom:6px">Priority</label>
+          <select class="tbl-filter" id="ticketPriority" style="width:100%;padding:9px 12px">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.8rem;font-weight:600;color:var(--text-h);display:block;margin-bottom:6px">Subject <span style="color:#ef4444">*</span></label>
+          <input type="text" id="ticketSubject" placeholder="Brief description of your issue..."
+            style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:0.84rem;color:var(--text-body);background:#fff;box-sizing:border-box" />
+        </div>
+        <div>
+          <label style="font-size:0.8rem;font-weight:600;color:var(--text-h);display:block;margin-bottom:6px">Message <span style="color:#ef4444">*</span></label>
+          <textarea id="ticketMessage" rows="5" placeholder="Please describe your issue in detail..."
+            style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:0.84rem;color:var(--text-body);background:#fff;resize:vertical;box-sizing:border-box"></textarea>
+        </div>
+        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-size:0.78rem;color:var(--text-muted)">
+          <i class="fa-solid fa-circle-info" style="color:var(--teal)"></i>
+          This ticket will be submitted on behalf of your IFA account. SV Capital will respond within 1–2 business days.
+        </div>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('newTicketModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="submitNewTicket()" id="submitTicketBtn">
+        <i class="fa-solid fa-paper-plane"></i> Submit Ticket
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast Container -->
 <div class="toast-container" id="toastContainer"></div>
 
