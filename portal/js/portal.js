@@ -230,6 +230,7 @@ function navigate(view, btnEl) {
     quests: renderQuestView,
     learn: renderLearnView,
     subaccounts: loadSubAccounts,
+    referral: loadReferralDashboard,
   };
   if (loaders[view]) loaders[view]();
 }
@@ -245,6 +246,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadNotifications();
   checkFirstDepositPrompt();
   _checkAutoStartTour();
+  load2FAStatus();
+  renderOnboardingChecklist();
 });
 
 async function loadPortalData() {
@@ -484,36 +487,52 @@ function renderPortfolioTrendChart() {
   const canvas = document.getElementById('portfolioTrendChart');
   if (!canvas) return;
 
-  // ── Build last-6-months labels ───────────────────────────────
-  const now    = new Date();
-  const months = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(d.toLocaleString('en-ZA', { month: 'short', year: '2-digit' }));
+  // ── Build last-12-months buckets ────────────────────────────
+  const now = new Date();
+  const buckets = [];
+  for (let i = 11; i >= 0; i--) {
+    const d    = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const next = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+    buckets.push({ label: d.toLocaleString('en-ZA', { month: 'short', year: '2-digit' }), from: d, to: next, net: 0 });
   }
 
-  // ── Derive realistic trend data from actual investor totals ──
-  const base     = Math.max(parseFloat(PORTAL.investor?.total_invested) || 0, 1000);
-  const wallet   = parseFloat(PORTAL.investor?.wallet_balance) || 0;
-  const totalNow = base + wallet;
-  const seed     = totalNow * 0.82;                    // ~18% lower 6 months ago
+  // ── Compute net value change per month from real transactions ─
+  // Deposits/returns add value; withdrawals/fees reduce value.
+  // 'investment' moves wallet→investment: no net portfolio change.
+  const valueImpact = t => {
+    const amt = parseFloat(t.amount) || 0;
+    if (['deposit', 'return', 'payout', 'referral_bonus'].includes(t.type)) return amt;
+    if (['withdrawal', 'fee'].includes(t.type)) return -amt;
+    return 0;
+  };
 
-  const data = months.map((_, i) => {
-    const trend = seed + (totalNow - seed) * (i / 5);
-    const jitter = (Math.random() - 0.35) * (totalNow * 0.012);
-    return Math.max(0, Math.round(trend + jitter));
-  });
-  data[5] = Math.round(totalNow);                      // pin last point to actual value
-
-  // ── Y-axis nice min/max so bars don't hug the edges ─────────
-  const yMin = Math.max(0, Math.floor(Math.min(...data) * 0.94 / 1000) * 1000);
-  const yMax = Math.ceil(Math.max(...data) * 1.06 / 1000) * 1000;
-
-  // ── Destroy previous instance if it exists ───────────────────
-  if (PORTAL.charts.trend) {
-    PORTAL.charts.trend.destroy();
-    PORTAL.charts.trend = null;
+  for (const t of (PORTAL.transactions || [])) {
+    const d = new Date(t.created_at || t.transaction_date || 0);
+    if (isNaN(d.getTime())) continue;
+    for (const b of buckets) {
+      if (d >= b.from && d < b.to) { b.net += valueImpact(t); break; }
+    }
   }
+
+  // ── Backward-reconstruct: start from today's actual value ───
+  const currentValue = Math.max(0,
+    (parseFloat(PORTAL.investor?.wallet_balance) || 0) +
+    (parseFloat(PORTAL.investor?.total_invested)  || 0)
+  );
+  const dataRev = []; let val = currentValue;
+  // Buckets are ordered oldest→newest; iterate newest→oldest
+  for (let i = buckets.length - 1; i >= 0; i--) {
+    dataRev.push(Math.max(0, Math.round(val)));
+    val -= buckets[i].net;
+  }
+  const data   = dataRev.reverse();
+  const months = buckets.map(b => b.label);
+
+  // ── Y-axis nice min/max ──────────────────────────────────────
+  const yMin = Math.max(0, Math.floor(Math.min(...data) * 0.92 / 1000) * 1000);
+  const yMax = Math.ceil(Math.max(...data) * 1.08 / 1000) * 1000;
+
+  if (PORTAL.charts.trend) { PORTAL.charts.trend.destroy(); PORTAL.charts.trend = null; }
 
   PORTAL.charts.trend = new Chart(canvas, {
     type: 'line',
@@ -532,7 +551,7 @@ function renderPortfolioTrendChart() {
           return g;
         },
         tension:              0.42,
-        pointRadius:          4,
+        pointRadius:          3,
         pointBackgroundColor: '#FF9B0C',
         pointBorderColor:     'rgba(255,255,255,0.9)',
         pointBorderWidth:     2,
@@ -550,64 +569,35 @@ function renderPortfolioTrendChart() {
         legend: { display: false },
         tooltip: {
           backgroundColor:  'rgba(13,17,23,0.96)',
-          titleColor:       '#9ca3af',
-          bodyColor:        '#f0f4ff',
-          borderColor:      'rgba(255,155,12,0.35)',
+          titleColor:       '#FF9B0C',
+          bodyColor:        '#e5e7eb',
+          borderColor:      'rgba(255,155,12,0.3)',
           borderWidth:      1,
           padding:          12,
-          displayColors:    false,
+          cornerRadius:     10,
           callbacks: {
-            title: items => items[0].label,
-            label: c    => '  Portfolio: ' + Utils.rand(c.parsed.y),
-          }
-        }
+            label: ctx => `  Portfolio: ${Utils.rand(ctx.parsed.y)}`,
+          },
+        },
       },
       scales: {
         x: {
-          display: true,
-          offset:  true,
-          grid: {
-            display:    false,
-            drawBorder: false,
-          },
-          ticks: {
-            color:       'rgba(255,255,255,0.70)',
-            font:        { size: 10, weight: '500', family: 'Inter, sans-serif' },
-            maxRotation: 0,
-            padding:     4,
-          },
-          border: {
-            display: true,
-            color:   'rgba(255,255,255,0.15)',
-          },
+          grid:   { display: false },
+          border: { display: false },
+          ticks:  { color: '#6b7280', font: { size: 10 } },
         },
         y: {
-          display:  true,
-          position: 'left',
-          min:      yMin,
-          max:      yMax,
-          grid: {
-            color:      'rgba(255,255,255,0.07)',
-            drawBorder: false,
+          min:    yMin,
+          max:    yMax,
+          grid:   { color: 'rgba(255,255,255,0.04)' },
+          border: { display: false },
+          ticks:  {
+            color: '#6b7280', font: { size: 10 },
+            callback: v => v >= 1000 ? `R${(v/1000).toFixed(0)}k` : `R${v}`,
           },
-          ticks: {
-            color:         'rgba(255,255,255,0.70)',
-            font:          { size: 10, weight: '500', family: 'Inter, sans-serif' },
-            maxTicksLimit: 5,
-            padding:       6,
-            callback: v => {
-              if (v >= 1_000_000) return 'R' + (v / 1_000_000).toFixed(1) + 'M';
-              if (v >= 1_000)     return 'R' + (v / 1_000).toFixed(0) + 'k';
-              return 'R' + v;
-            }
-          },
-          border: {
-            display: true,
-            color:   'rgba(255,255,255,0.15)',
-          },
-        }
-      }
-    }
+        },
+      },
+    },
   });
 }
 
@@ -722,9 +712,14 @@ function renderMyInvestmentCards() {
             <i class="fa-solid fa-hourglass-end"></i> Submit Maturity Instruction
           </button>
         ` : ''}
+        ${inv.status === 'active' ? `
+          <button class="btn btn--secondary btn--full btn--sm" onclick='openEarlyRedemptionModal(${JSON.stringify(inv.id)})' style="margin-top:6px;font-size:0.76rem;color:var(--text-muted);border-color:rgba(0,0,0,0.12)">
+            <i class="fa-solid fa-right-from-bracket"></i> Request Early Redemption
+          </button>
+        ` : ''}
         ${isPaidOut ? `
           <div style="font-size:0.75rem;color:var(--text-muted);text-align:center">
-            <i class="fa-solid fa-check-circle" style="color:var(--green)"></i> 
+            <i class="fa-solid fa-check-circle" style="color:var(--green)"></i>
             Paid out ${Utils.date(inv.payout_date)} — Total: ${Utils.rand(inv.amount + inv.actual_return_amount)}
           </div>
         ` : ''}
@@ -4578,5 +4573,491 @@ async function confirmWithdrawal() {
     console.error(e);
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Request Withdrawal'; }
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   TAX CERTIFICATE — SARS Interest Income
+   ═══════════════════════════════════════════════ */
+function generateTaxCertificate() {
+  if (!PORTAL.investor) { Toast.error('Portfolio data still loading — please wait'); return; }
+
+  const inv = PORTAL.investor;
+  const taxYearEl = document.getElementById('taxYearSelect');
+  const taxYear = taxYearEl ? parseInt(taxYearEl.value) : new Date().getFullYear();
+
+  // SA tax year: 1 March to 28/29 Feb
+  const from = new Date(taxYear - 1, 2, 1);   // 1 March (year-1)
+  const to   = new Date(taxYear,     1, 28, 23, 59, 59); // 28 Feb (year)
+
+  // Total interest = returns + payouts in the tax year
+  const interestTxns = (PORTAL.transactions || []).filter(t => {
+    if (!['return', 'payout'].includes(t.type)) return false;
+    const d = new Date(t.created_at || t.transaction_date || 0);
+    return d >= from && d <= to;
+  });
+  const totalInterest = interestTxns.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+
+  const certNumber = `SVCIT-${taxYear}-${String(inv.id).replace(/\D/g,'').slice(-6) || Math.floor(Math.random()*900000+100000)}`;
+  const generatedAt = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
+  const fromLabel = from.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
+  const toLabel   = to.toLocaleDateString('en-ZA',   { day: 'numeric', month: 'long', year: 'numeric' });
+
+  const html = `
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+@page{size:A4;margin:20mm}
+@media print{.no-print{display:none!important}}
+.no-print{position:fixed;top:0;left:0;right:0;background:#1a2235;padding:10px 24px;display:flex;justify-content:space-between;align-items:center;z-index:99}
+.no-print span{color:#fff;font-size:13px;font-weight:600}
+.no-print button{background:#FF9B0C;color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
+.wrap{max-width:700px;margin:60px auto 32px;padding:40px}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #1a2235}
+.logo{font-size:1.6rem;font-weight:800;color:#1a2235;letter-spacing:-0.5px}
+.logo span{color:#FF9B0C}
+.cert-badge{background:#1a2235;color:#fff;padding:8px 16px;border-radius:6px;font-size:0.75rem;font-weight:700;text-align:right}
+.cert-badge small{display:block;color:#9ca3af;font-size:0.65rem;font-weight:400}
+h1{font-size:1.25rem;font-weight:800;color:#1a2235;margin:0 0 4px}
+.subtitle{font-size:0.82rem;color:#6b7280;margin-bottom:28px}
+.interest-box{background:#f0fdf4;border:2px solid #22c55e;border-radius:12px;padding:24px 28px;margin-bottom:28px;text-align:center}
+.interest-lbl{font-size:0.8rem;color:#166534;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px}
+.interest-amt{font-size:2.4rem;font-weight:800;color:#15803d}
+.interest-sub{font-size:0.78rem;color:#166534;margin-top:4px}
+table{width:100%;border-collapse:collapse;margin-bottom:24px;font-size:0.85rem}
+th{text-align:left;padding:8px 12px;background:#f1f5f9;color:#374151;font-weight:600;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.05em}
+td{padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151}
+td:last-child{text-align:right;font-weight:600}
+.footer{border-top:1px solid #e5e7eb;padding-top:18px;font-size:0.73rem;color:#6b7280;line-height:1.6}
+.footer strong{color:#374151}
+.stamp{display:inline-block;border:2px solid #1a2235;color:#1a2235;padding:6px 14px;border-radius:4px;font-size:0.72rem;font-weight:700;letter-spacing:0.12em;margin-top:16px;text-transform:uppercase}
+</style></head><body>
+<div class="no-print">
+  <span>SV Capital — IT3(b) Tax Certificate ${taxYear}</span>
+  <button onclick="window.print()">⬇ Save as PDF / Print</button>
+</div>
+<div class="wrap">
+  <div class="hdr">
+    <div>
+      <div class="logo">SV <span>Capital</span></div>
+      <div style="font-size:0.75rem;color:#6b7280;margin-top:4px">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSCA Regulated</div>
+    </div>
+    <div class="cert-badge">
+      IT3(b) INTEREST INCOME CERTIFICATE
+      <small>Cert No: ${certNumber}</small>
+      <small>Generated: ${generatedAt}</small>
+    </div>
+  </div>
+
+  <h1>IT3(b) Interest Income Certificate</h1>
+  <div class="subtitle">Tax Year: 1 March ${taxYear - 1} – 28 February ${taxYear} &nbsp;|&nbsp; For submission to SARS</div>
+
+  <div class="interest-box">
+    <div class="interest-lbl">Total Interest Received</div>
+    <div class="interest-amt">${Utils.rand(totalInterest)}</div>
+    <div class="interest-sub">For the period ${fromLabel} – ${toLabel}</div>
+  </div>
+
+  <table>
+    <thead><tr><th>Account Holder Details</th><th></th></tr></thead>
+    <tbody>
+      <tr><td>Full Name</td><td>${inv.first_name || ''} ${inv.last_name || ''}</td></tr>
+      <tr><td>Email Address</td><td>${inv.email || '—'}</td></tr>
+      <tr><td>SA ID / Passport</td><td>${inv.id_number || '—'}</td></tr>
+      <tr><td>Investor Account</td><td>${inv.id || '—'}</td></tr>
+    </tbody>
+  </table>
+
+  ${interestTxns.length > 0 ? `
+  <table>
+    <thead><tr><th>Date</th><th>Description</th><th>Amount</th></tr></thead>
+    <tbody>
+      ${interestTxns.map(t => `
+      <tr>
+        <td>${new Date(t.created_at || t.transaction_date).toLocaleDateString('en-ZA')}</td>
+        <td>${t.description || (t.type === 'return' ? 'Investment return' : 'Payout')}</td>
+        <td>${Utils.rand(t.amount)}</td>
+      </tr>`).join('')}
+      <tr style="background:#f8fafc"><td colspan="2" style="font-weight:700;text-align:right">TOTAL INTEREST</td><td style="color:#15803d;font-weight:800">${Utils.rand(totalInterest)}</td></tr>
+    </tbody>
+  </table>
+  ` : `<div style="text-align:center;padding:24px;background:#f8fafc;border-radius:10px;color:#6b7280;font-size:0.85rem;margin-bottom:24px">No interest income recorded for this tax year.</div>`}
+
+  <div class="footer">
+    <strong>SV Capital (Pty) Ltd</strong> is a registered financial services provider regulated by the Financial Sector Conduct Authority (FSCA).<br>
+    This certificate is generated in accordance with Section 11(j) of the Income Tax Act No. 58 of 1962.<br>
+    Interest declared above must be included in your annual tax return (ITR12) under "Local interest income".<br>
+    The IT3(b) exemption threshold for individuals under 65 is <strong>R23,800</strong> per annum (2024 tax year).
+    <br><br>
+    <strong>Certificate No:</strong> ${certNumber} &nbsp;·&nbsp; <strong>Date Issued:</strong> ${generatedAt}<br>
+    This certificate is computer generated and does not require a signature.
+    <br>
+    <div class="stamp">SV Capital — IT3(b)</div>
+  </div>
+</div>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=820,height=900');
+  if (!win) { Toast.error('Pop-up blocked — please allow pop-ups for this site'); return; }
+  win.document.write(html);
+  win.document.close();
+}
+
+/* ═══════════════════════════════════════════════
+   TWO-FACTOR AUTHENTICATION (TOTP)
+   ═══════════════════════════════════════════════ */
+let _2faSecret = null; // temp storage during setup flow
+
+async function load2FAStatus() {
+  try {
+    const data = await API._fetch('GET', 'auth/2fa/status');
+    const label = document.getElementById('twoFAToggleLabel');
+    if (label) label.textContent = data.enabled ? 'Disable 2FA' : 'Enable 2FA';
+    const btn = document.getElementById('twoFAToggleBtn');
+    if (btn) {
+      btn.className = data.enabled
+        ? 'btn btn--danger btn--full'
+        : 'btn btn--secondary btn--full';
+    }
+    return data.enabled;
+  } catch (e) {
+    const label = document.getElementById('twoFAToggleLabel');
+    if (label) label.textContent = 'Enable 2FA';
+  }
+}
+
+async function toggle2FA() {
+  const enabled = await load2FAStatus();
+  if (enabled) {
+    document.getElementById('disable2FACode').value = '';
+    Modal.open('disable2FAModal');
+  } else {
+    await open2FASetupModal();
+  }
+}
+
+async function open2FASetupModal() {
+  const body   = document.getElementById('twoFAModalBody');
+  const footer = document.getElementById('twoFAModalFooter');
+  body.innerHTML = '<div style="text-align:center;padding:20px"><i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem;color:#ff9b0c"></i><p style="margin-top:10px;color:var(--text-muted);font-size:0.85rem">Generating your secret…</p></div>';
+  footer.innerHTML = '';
+  Modal.open('twoFAModal');
+  try {
+    const data = await API._fetch('POST', 'auth/2fa/setup');
+    _2faSecret = data.secret;
+    body.innerHTML = `
+      <div style="text-align:center;margin-bottom:18px">
+        <p style="font-size:0.84rem;color:var(--text-muted);margin-bottom:14px">
+          1. Install <strong>Google Authenticator</strong>, <strong>Authy</strong>, or any TOTP app.<br>
+          2. Scan the QR code below, or enter the key manually.<br>
+          3. Enter the 6-digit code to confirm setup.
+        </p>
+        <div id="qrCodeCanvas" style="display:inline-block;background:#fff;padding:14px;border-radius:12px;margin-bottom:12px"></div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px">Or enter this key manually:</div>
+        <div style="font-family:monospace;font-size:0.85rem;font-weight:700;background:rgba(255,155,12,0.08);padding:8px 14px;border-radius:8px;letter-spacing:0.08em;word-break:break-all">${data.secret}</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Verification Code <span style="color:#ef4444">*</span></label>
+        <input type="text" class="form-input" id="totpVerifyInput" inputmode="numeric" maxlength="6" placeholder="000000" style="text-align:center;font-size:1.3rem;letter-spacing:0.2em;font-weight:700" />
+        <div id="totpVerifyError" style="display:none;color:#ef4444;font-size:0.78rem;margin-top:6px"></div>
+      </div>
+    `;
+    footer.innerHTML = `
+      <button class="btn btn--secondary" onclick="Modal.close('twoFAModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="confirm2FASetup()"><i class="fa-solid fa-check"></i> Enable 2FA</button>
+    `;
+    // Render QR code
+    if (typeof QRCode !== 'undefined') {
+      new QRCode(document.getElementById('qrCodeCanvas'), { text: data.uri, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+    } else {
+      document.getElementById('qrCodeCanvas').innerHTML = '<div style="font-size:0.78rem;color:#ef4444">QR library not loaded — use the manual key above</div>';
+    }
+  } catch (e) {
+    body.innerHTML = '<div style="color:#ef4444;text-align:center;padding:20px">Failed to generate 2FA secret. Please try again.</div>';
+    Toast.error('Could not set up 2FA');
+  }
+}
+
+async function confirm2FASetup() {
+  const code  = (document.getElementById('totpVerifyInput')?.value || '').replace(/\s/g, '');
+  const errEl = document.getElementById('totpVerifyError');
+  if (!/^\d{6}$/.test(code)) {
+    if (errEl) { errEl.textContent = 'Please enter your 6-digit code.'; errEl.style.display = 'block'; }
+    return;
+  }
+  if (errEl) errEl.style.display = 'none';
+  try {
+    await API._fetch('POST', 'auth/2fa/enable', { secret: _2faSecret, token: code });
+    _2faSecret = null;
+    Toast.success('Two-factor authentication is now enabled! Your account is secured.');
+    Modal.close('twoFAModal');
+    await load2FAStatus();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message || 'Invalid code — please try again.'; errEl.style.display = 'block'; }
+  }
+}
+
+async function confirmDisable2FA() {
+  const code  = (document.getElementById('disable2FACode')?.value || '').replace(/\s/g, '');
+  if (!/^\d{6}$/.test(code)) { Toast.error('Please enter your 6-digit authenticator code'); return; }
+  try {
+    await API._fetch('POST', 'auth/2fa/disable', { token: code });
+    Toast.success('Two-factor authentication disabled.');
+    Modal.close('disable2FAModal');
+    await load2FAStatus();
+  } catch (e) { Toast.error(e.message || 'Invalid code'); }
+}
+
+function openChangePasswordModal() {
+  Toast.info('Use the Change Password option in your account settings.');
+}
+
+function renderOnboardingChecklist() {
+  if (!PORTAL.investor) return;
+  const inv = PORTAL.investor;
+
+  const steps = [
+    {
+      id: 'fica',
+      label: 'Complete your FICA verification',
+      desc: 'Submit your ID document and proof of address.',
+      done: inv.fica_status === 'approved',
+      action: "navigate('kyc', document.querySelector('[data-view=kyc]'))",
+      actionLabel: 'Go to KYC',
+    },
+    {
+      id: 'wallet',
+      label: 'Fund your wallet',
+      desc: 'Make your first deposit to start investing.',
+      done: Number(inv.wallet_balance || 0) > 0 || Number(inv.total_invested || 0) > 0,
+      action: "navigate('wallet', document.querySelector('[data-view=wallet]'))",
+      actionLabel: 'Fund Wallet',
+    },
+    {
+      id: 'invest',
+      label: 'Make your first investment',
+      desc: 'Choose a pool and put your money to work.',
+      done: Number(inv.total_invested || 0) > 0,
+      action: "navigate('marketplace', document.querySelector('[data-view=marketplace]'))",
+      actionLabel: 'Browse Pools',
+    },
+  ];
+
+  const allDone = steps.every(s => s.done);
+  const wrap = document.getElementById('onboardingChecklist');
+  if (!wrap) return;
+  if (allDone) { wrap.style.display = 'none'; return; }
+
+  const doneCount = steps.filter(s => s.done).length;
+  const progEl = document.getElementById('onboardingProgress');
+  if (progEl) progEl.textContent = `${doneCount} / ${steps.length} complete`;
+
+  const stepsEl = document.getElementById('onboardingSteps');
+  if (stepsEl) {
+    stepsEl.innerHTML = steps.map(s => `
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:8px;background:${s.done ? 'rgba(16,185,129,0.08)' : 'var(--dark-3)'}">
+        <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.75rem;background:${s.done ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.06)'};color:${s.done ? '#10b981' : 'var(--text-muted)'}">
+          <i class="fa-solid ${s.done ? 'fa-check' : 'fa-circle-dot'}"></i>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.82rem;font-weight:600;color:${s.done ? '#10b981' : 'var(--white)'}${s.done ? ';text-decoration:line-through;opacity:0.7' : ''}">${s.label}</div>
+          ${!s.done ? `<div style="font-size:0.73rem;color:var(--text-muted)">${s.desc}</div>` : ''}
+        </div>
+        ${!s.done ? `<button class="btn btn--primary btn--sm" onclick="${s.action}" style="white-space:nowrap">${s.actionLabel}</button>` : ''}
+      </div>
+    `).join('');
+  }
+
+  wrap.style.display = '';
+}
+
+async function downloadMyData() {
+  try {
+    Toast.info('Preparing your data export…');
+    const [invRes, invstRes, txnRes, kycRes, ticketRes] = await Promise.all([
+      API.investors.list({ limit: 1 }),
+      API.investments.list({ limit: 500 }),
+      API.transactions.list({ limit: 500 }),
+      API._fetch('GET', 'tables/kyc_documents', null, { investor_id: PORTAL.investor?.id, limit: 100 }),
+      API._fetch('GET', 'tables/support_tickets', null, { investor_id: PORTAL.investor?.id, limit: 100 }),
+    ]);
+
+    const inv = PORTAL.investor || {};
+    // Strip sensitive server fields before export
+    const safeInvestor = { ...inv };
+    delete safeInvestor.password_hash;
+    delete safeInvestor.totp_secret;
+
+    const exportData = {
+      exported_at: new Date().toISOString(),
+      notice: 'This data is provided under POPIA Section 23. Handle securely.',
+      personal_information: safeInvestor,
+      investments: invstRes.data || [],
+      transactions: txnRes.data || [],
+      kyc_documents: (kycRes.data || []).map(d => ({ id: d.id, doc_type: d.doc_type, status: d.status, uploaded_at: d.created_at })),
+      support_tickets: ticketRes.data || [],
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SV_Capital_My_Data_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    Toast.success('Your data has been downloaded.');
+  } catch (e) {
+    Toast.error('Failed to export data. Please try again.');
+    console.error(e);
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   INVESTMENT CALCULATOR
+   ═══════════════════════════════════════════════ */
+let _calcPoolId = null;
+
+function openCalcModal() {
+  const sel = document.getElementById('calcPoolSelect');
+  if (sel) {
+    sel.innerHTML = '<option value="">— Custom values —</option>' +
+      (PORTAL.pools || []).filter(p => p.status === 'open').map(p =>
+        `<option value="${p.id}" data-rate="${p.annual_rate}" data-term="${p.term_months}">${p.name} — ${Utils.pct(p.annual_rate)} p.a.</option>`
+      ).join('');
+  }
+  _calcPoolId = null;
+  document.getElementById('calcCTABar').style.display = 'none';
+  updateCalc();
+  Modal.open('calcModal');
+}
+
+function calcLoadPool() {
+  const sel = document.getElementById('calcPoolSelect');
+  const opt = sel?.options[sel.selectedIndex];
+  if (!opt?.value) { _calcPoolId = null; document.getElementById('calcCTABar').style.display = 'none'; return; }
+  _calcPoolId = opt.value;
+  document.getElementById('calcRate').value = opt.dataset.rate || '';
+  document.getElementById('calcTerm').value = opt.dataset.term || '';
+  document.getElementById('calcCTABar').style.display = 'block';
+  updateCalc();
+}
+
+function updateCalc() {
+  const principal = parseFloat(document.getElementById('calcAmount')?.value)  || 0;
+  const rate      = parseFloat(document.getElementById('calcRate')?.value)    || 0;
+  const term      = parseInt(document.getElementById('calcTerm')?.value)      || 0;
+  const compound  = document.getElementById('calcCompound')?.value || 'simple';
+
+  let total = principal;
+  if (principal > 0 && rate > 0 && term > 0) {
+    if      (compound === 'simple')  total = principal * (1 + (rate / 100) * (term / 12));
+    else if (compound === 'monthly') total = principal * Math.pow(1 + (rate / 100) / 12, term);
+    else                             total = principal * Math.pow(1 + (rate / 100), term / 12);
+  }
+
+  const earned   = total - principal;
+  const monthly  = term > 0 ? earned / term : 0;
+  const effYield = principal > 0 ? (earned / principal) * 100 : 0;
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('calcReturn',  Utils.rand(earned));
+  set('calcTotal',   Utils.rand(total));
+  set('calcMonthly', Utils.rand(monthly));
+  set('calcYield',   effYield.toFixed(2) + '%');
+}
+
+function calcGoInvest() {
+  if (_calcPoolId) openInvestModal(_calcPoolId);
+  Modal.close('calcModal');
+}
+
+/* ═══════════════════════════════════════════════
+   LIVE REFERRAL DASHBOARD
+   ═══════════════════════════════════════════════ */
+async function loadReferralDashboard() {
+  if (!PORTAL.investor) await loadPortalData();
+  const inv  = PORTAL.investor;
+  const code = inv?.referral_code || '';
+
+  // Show real referral code + link
+  const codeEl = document.getElementById('referralCode');
+  const linkEl = document.getElementById('referralLink');
+  if (codeEl) codeEl.textContent = code || '—';
+  if (linkEl) linkEl.textContent = code ? `https://svcapital.co.za?ref=${code}` : '—';
+
+  // Find who referred by this investor's code
+  const all      = PORTAL.investors || [];
+  const referred = code ? all.filter(i => i.referred_by === code) : [];
+  const approved = referred.filter(i => !['pending_fica', 'suspended'].includes(i.status));
+  const invested = referred.filter(i => (i.total_invested || 0) > 0);
+  const bonuses  = (PORTAL.transactions || []).filter(t => t.type === 'referral_bonus');
+  const totalBonus = bonuses.reduce((s, t) => s + (t.amount || 0), 0);
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('refStatTotal',    referred.length);
+  set('refStatApproved', approved.length);
+  set('refStatInvested', invested.length);
+  set('refStatBonuses',  Utils.rand(totalBonus));
+
+  const body = document.getElementById('referredInvestorsBody');
+  if (!body) return;
+  if (!referred.length) {
+    body.innerHTML = `<tr><td colspan="4" class="text-center text-muted" style="padding:16px">No referrals yet — share your code to get started <i class="fa-solid fa-arrow-up-right-from-square" style="margin-left:4px"></i></td></tr>`;
+    return;
+  }
+  body.innerHTML = referred.map(r => `
+    <tr>
+      <td><div style="font-weight:600;font-size:0.82rem;color:#1a1a1a">${r.first_name} ${r.last_name}</div></td>
+      <td>${Utils.statusBadge(r.fica_status || r.status)}</td>
+      <td>${(r.total_invested || 0) > 0
+        ? `<span class="badge badge--green">Invested</span>`
+        : `<span class="badge badge--gray">Not yet</span>`}</td>
+      <td style="font-size:0.75rem;color:#6b7280">${Utils.date(r.date_joined)}</td>
+    </tr>
+  `).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   EARLY REDEMPTION REQUEST
+   ═══════════════════════════════════════════════ */
+let _earlyRedemptionInvId = null;
+
+function openEarlyRedemptionModal(invId) {
+  _earlyRedemptionInvId = invId;
+  const inv = PORTAL.investments.find(i => i.id === invId);
+  if (!inv) return;
+  const titleEl = document.getElementById('earlyRedemptionTitle');
+  const infoEl  = document.getElementById('earlyRedemptionInfo');
+  if (titleEl) titleEl.textContent = `Early Redemption — ${inv.pool_name}`;
+  if (infoEl)  infoEl.textContent  = `${Utils.rand(inv.amount)} invested · Matures ${Utils.date(inv.maturity_date)}`;
+  const reason = document.getElementById('earlyRedemptionReason');
+  if (reason) reason.value = '';
+  Modal.open('earlyRedemptionModal');
+}
+
+async function submitEarlyRedemption() {
+  const reason = (document.getElementById('earlyRedemptionReason')?.value || '').trim();
+  if (!reason) { Toast.error('Please provide a reason for your request'); return; }
+  if (!_earlyRedemptionInvId) return;
+  const inv = PORTAL.investments.find(i => i.id === _earlyRedemptionInvId);
+  try {
+    await API.tables.post('support_tickets', {
+      investor_id:   PORTAL.investor.id,
+      investor_name: `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
+      subject:       `Early Redemption Request — ${inv?.pool_name || 'Investment'}`,
+      message:       reason,
+      status:        'open',
+      priority:      'high',
+      category:      'early_redemption',
+    });
+    Toast.success('Request submitted. Our team will review it and contact you within 2 business days.');
+    Modal.close('earlyRedemptionModal');
+    _earlyRedemptionInvId = null;
+  } catch (e) {
+    Toast.error(e.message || 'Failed to submit request. Please try again.');
   }
 }

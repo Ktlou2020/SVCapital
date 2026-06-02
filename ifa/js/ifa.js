@@ -151,7 +151,8 @@ function navigate(view, btnEl) {
     investments:  'Client Investments',
     transactions: 'Transactions',
     support:      'Support Tickets',
-    profile:      'My Profile'
+    profile:      'My Profile',
+    commission:   'Commission'
   };
 
   const el = document.getElementById('topbarTitle');
@@ -164,7 +165,8 @@ function navigate(view, btnEl) {
     investments:  loadInvestments,
     transactions: loadTransactions,
     support:      loadSupport,
-    profile:      loadProfile
+    profile:      loadProfile,
+    commission:   loadCommission
   };
   if (loaders[view]) loaders[view]();
 }
@@ -793,6 +795,140 @@ function renderTicketsTable(filterStatus = '') {
       <td class="td-muted">${Utils.date(t.created_at || t.date_opened)}</td>
     </tr>`;
   }).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   COMMISSION VIEW
+═══════════════════════════════════════════════ */
+function loadCommission() {
+  const ifa     = STATE.ifa;
+  const clients = STATE.clients;
+  const rate    = parseFloat(ifa?.commission_rate || 0);
+  const totalAUM     = clients.reduce((s, c) => s + (c.total_invested || 0), 0);
+  const totalCommission = totalAUM * (rate / 100);
+  const billingClients = clients.filter(c => (c.total_invested || 0) > 0).length;
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('comm-rate',    rate.toFixed(2) + '%');
+  set('comm-aum',     Utils.rand(totalAUM));
+  set('comm-owed',    Utils.rand(totalCommission));
+  set('comm-clients', billingClients);
+  if (document.getElementById('commissionSubTitle')) {
+    document.getElementById('commissionSubTitle').textContent =
+      `Rate: ${rate.toFixed(2)}% p.a. on AUM. ${clients.length} total clients.`;
+  }
+
+  const body = document.getElementById('commissionBody');
+  if (!body) return;
+  if (!clients.length) {
+    body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:20px">No clients linked to your account</td></tr>';
+    document.getElementById('commissionFooter').textContent = '—';
+    return;
+  }
+
+  const sorted = [...clients].sort((a, b) => (b.total_invested || 0) - (a.total_invested || 0));
+  body.innerHTML = sorted.map(c => {
+    const clientAUM  = c.total_invested || 0;
+    const clientComm = clientAUM * (rate / 100);
+    return `<tr>
+      <td><div style="font-weight:600">${c.first_name} ${c.last_name}</div><div style="font-size:0.72rem;color:var(--text-muted)">${c.email}</div></td>
+      <td>${Utils.statusBadge(c.fica_status || c.status)}</td>
+      <td class="fw-700 td-gold">${Utils.rand(clientAUM)}</td>
+      <td class="fw-700 td-green">${Utils.rand(clientComm)}</td>
+      <td>${Utils.rand(c.total_returns || 0)}</td>
+      <td class="td-muted">${Utils.date(c.date_joined)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('commissionFooter').textContent =
+    `${clients.length} clients · Total AUM ${Utils.rand(totalAUM)} · Est. commission ${Utils.rand(totalCommission)}`;
+}
+
+function exportCommissionCSV() {
+  const ifa     = STATE.ifa;
+  const clients = STATE.clients;
+  const rate    = parseFloat(ifa?.commission_rate || 0);
+  const headers = ['Client','Email','FICA Status','AUM','Commission','Total Returns','Joined'];
+  const rows = [headers, ...clients.map(c => [
+    `${c.first_name} ${c.last_name}`, c.email, c.fica_status || c.status,
+    c.total_invested || 0,
+    ((c.total_invested || 0) * rate / 100).toFixed(2),
+    c.total_returns || 0,
+    c.date_joined ? new Date(c.date_joined).toLocaleDateString('en-ZA') : '',
+  ])];
+  const csv = rows.map(r => r.map(cell => {
+    const s = String(cell ?? '').replace(/"/g,'""');
+    return /[,"\n]/.test(s) ? `"${s}"` : s;
+  }).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `commission-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ═══════════════════════════════════════════════
+   COMMISSION VIEW
+═══════════════════════════════════════════════ */
+function loadCommission() {
+  const ifa     = STATE.ifa;
+  const clients = STATE.clients;
+  const rate    = parseFloat(ifa?.commission_rate || 0);
+  const totalAUM        = clients.reduce((s, c) => s + (c.total_invested || 0), 0);
+  const totalCommission = totalAUM * (rate / 100);
+  const billingClients  = clients.filter(c => (c.total_invested || 0) > 0).length;
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('comm-rate',    rate.toFixed(2) + '%');
+  set('comm-aum',     Utils.rand(totalAUM));
+  set('comm-owed',    Utils.rand(totalCommission));
+  set('comm-clients', billingClients);
+  const sub = document.getElementById('commissionSubTitle');
+  if (sub) sub.textContent = `Rate: ${rate.toFixed(2)}% p.a. on AUM · ${clients.length} total clients`;
+
+  const body = document.getElementById('commissionBody');
+  if (!body) return;
+  if (!clients.length) {
+    body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:20px">No clients linked to your account</td></tr>';
+    return;
+  }
+
+  const sorted = [...clients].sort((a, b) => (b.total_invested || 0) - (a.total_invested || 0));
+  body.innerHTML = sorted.map(c => {
+    const clientAUM  = c.total_invested || 0;
+    const clientComm = clientAUM * (rate / 100);
+    return `<tr>
+      <td><div style="font-weight:600">${c.first_name} ${c.last_name}</div><div style="font-size:0.72rem;color:var(--text-muted)">${c.email}</div></td>
+      <td>${Utils.statusBadge(c.fica_status || c.status)}</td>
+      <td class="fw-700 td-gold">${Utils.rand(clientAUM)}</td>
+      <td class="fw-700 td-green">${Utils.rand(clientComm)}</td>
+      <td>${Utils.rand(c.total_returns || 0)}</td>
+      <td class="td-muted">${Utils.date(c.date_joined)}</td>
+    </tr>`;
+  }).join('');
+
+  const footer = document.getElementById('commissionFooter');
+  if (footer) footer.textContent = `${clients.length} clients · Total AUM ${Utils.rand(totalAUM)} · Est. commission ${Utils.rand(totalCommission)}`;
+}
+
+function exportCommissionCSV() {
+  const ifa     = STATE.ifa;
+  const clients = STATE.clients;
+  const rate    = parseFloat(ifa?.commission_rate || 0);
+  const headers = ['Client', 'Email', 'FICA Status', 'AUM', 'Commission', 'Total Returns', 'Joined'];
+  const rows    = [headers, ...clients.map(c => [
+    `${c.first_name} ${c.last_name}`, c.email, c.fica_status || c.status,
+    c.total_invested || 0,
+    ((c.total_invested || 0) * rate / 100).toFixed(2),
+    c.total_returns || 0,
+    c.date_joined ? new Date(c.date_joined).toLocaleDateString('en-ZA') : '',
+  ])];
+  const csv  = rows.map(r => r.map(cell => { const s = String(cell ?? '').replace(/"/g, '""'); return /[,"\n]/.test(s) ? `"${s}"` : s; }).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `commission-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /* ═══════════════════════════════════════════════

@@ -96,7 +96,8 @@ function navigate(view, btnEl) {
   const titles = {
     dashboard: 'Dashboard', investors: 'Investor Management', ifa: 'IFA Management', kyc: 'KYC / FICA',
     pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
-    transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics', settings: 'Settings'
+    transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
+    auditlog: 'Audit Log', settings: 'Settings'
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -112,6 +113,7 @@ function navigate(view, btnEl) {
     transactions: loadTransactions,
     support: loadSupport,
     analytics: loadAnalytics,
+    auditlog: loadAuditLog,
     settings: loadSettings,
     withdrawals: loadWithdrawals,
   };
@@ -597,7 +599,15 @@ async function viewInvestor(id) {
             </div>
           </div>
         </div>
-        ${inv.notes ? `<div class="panel mt-12" style="background:var(--dark-3)"><div class="panel__header"><span class="panel__title">Admin Notes</span></div><div class="panel__body" style="font-size:0.82rem;color:var(--text-muted)">${inv.notes}</div></div>` : ''}
+        <div class="panel mt-12" style="background:var(--dark-3)">
+          <div class="panel__header">
+            <span class="panel__title">Admin Notes</span>
+            <button class="btn btn--primary btn--sm" onclick="saveInvestorNotes('${inv.id}')"><i class="fa-solid fa-save"></i> Save</button>
+          </div>
+          <div class="panel__body">
+            <textarea id="investorNotesTA" class="form-input" style="width:100%;min-height:90px;font-size:0.82rem;resize:vertical" placeholder="Internal notes visible only to admins…"></textarea>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -667,6 +677,9 @@ async function viewInvestor(id) {
     </div>
   `;
   Modal.open('investorDetailModal');
+  // Set textarea value after innerHTML to avoid XSS via template literals
+  const ta = document.getElementById('investorNotesTA');
+  if (ta) ta.value = inv.notes || '';
 }
 
 async function depositToInvestor(investorId, investorName, currentBalance) {
@@ -700,6 +713,17 @@ async function approveInvestorFica(investorId) {
     Modal.close('investorDetailModal');
     await loadInvestors();
   } catch (e) { Toast.error('Failed to approve FICA'); }
+}
+
+async function saveInvestorNotes(investorId) {
+  const ta = document.getElementById('investorNotesTA');
+  if (!ta) return;
+  try {
+    await API._fetch('PATCH', `tables/investors/${investorId}`, { notes: ta.value.trim() });
+    const inv = STATE.investors.find(i => i.id === investorId);
+    if (inv) inv.notes = ta.value.trim();
+    Toast.success('Notes saved');
+  } catch (e) { Toast.error('Failed to save notes'); }
 }
 
 async function approveBankAccount(investorId) {
@@ -872,8 +896,14 @@ function renderKYCTable() {
 
   if (!items.length) { body.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:32px">No documents found</td></tr>'; return; }
 
-  body.innerHTML = items.map(k => `
+  const allCb2 = document.getElementById('kycSelectAll');
+  if (allCb2) allCb2.checked = false;
+
+  body.innerHTML = items.map(k => {
+    const canSelect = ['pending', 'under_review'].includes(k.status);
+    return `
     <tr>
+      <td><input type="checkbox" class="kyc-cb" value="${k.id}" ${!canSelect ? 'disabled' : ''} ${_kycSelected.has(k.id) ? 'checked' : ''} onchange="toggleKycRow('${k.id}', this.checked)" style="${canSelect ? 'cursor:pointer;width:16px;height:16px;accent-color:#FF9B0C' : 'opacity:0.3;width:16px;height:16px'}"></td>
       <td><div class="td-strong">${k.investor_name}</div><div class="td-muted">${k.investor_id}</div></td>
       <td>${k.document_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—'}</td>
       <td class="td-muted">${k.file_name || 'Not uploaded'}</td>
@@ -899,7 +929,7 @@ function renderKYCTable() {
         </button>
       </td>
     </tr>
-  `).join('');
+  `}).join('');
 }
 
 function viewFicaDocument(kycId) {
@@ -1679,6 +1709,7 @@ async function loadAnalytics() {
   renderProvinceChart();
   renderRiskChart();
   renderTxnFlowChart();
+  renderConversionFunnel();
 }
 
 function renderProductVolChart() {
@@ -1769,6 +1800,82 @@ function renderTxnFlowChart() {
       }
     }
   });
+}
+
+function renderConversionFunnel() {
+  const panel = document.getElementById('funnelPanel');
+  if (!panel) return;
+
+  const total = STATE.investors.length;
+  if (!total) { panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">No investor data</div>'; return; }
+
+  // Compute each stage
+  const ficaSubmitted = STATE.investors.filter(i =>
+    ['fica_submitted', 'active'].includes(i.status) ||
+    ['fica_submitted', 'approved'].includes(i.fica_status)
+  ).length;
+
+  const ficaApproved = STATE.investors.filter(i =>
+    i.status === 'active' || i.fica_status === 'approved'
+  ).length;
+
+  // Investors with at least one completed deposit
+  const depositedIds = new Set(
+    STATE.transactions
+      .filter(t => t.type === 'deposit' && t.status === 'completed')
+      .map(t => t.investor_id)
+  );
+  const deposited = STATE.investors.filter(i => depositedIds.has(i.id)).length;
+
+  // Investors with at least one investment
+  const investedIds = new Set(STATE.investments.map(i => i.investor_id));
+  const invested = STATE.investors.filter(i => investedIds.has(i.id)).length;
+
+  const stages = [
+    { label: 'Signed Up',        count: total,         color: '#6366f1' },
+    { label: 'FICA Submitted',   count: ficaSubmitted,  color: '#3b82f6' },
+    { label: 'FICA Approved',    count: ficaApproved,   color: '#FF9B0C' },
+    { label: 'First Deposit',    count: deposited,      color: '#22c55e' },
+    { label: 'First Investment', count: invested,       color: '#D4AF37' },
+  ];
+
+  panel.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0">
+      ${stages.map((s, i) => {
+        const pct     = total > 0 ? Math.round(s.count / total * 100) : 0;
+        const dropOff = i > 0 ? Math.round((1 - s.count / (stages[i-1].count || 1)) * 100) : 0;
+        return `
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="width:10px;height:10px;border-radius:50%;background:${s.color};flex-shrink:0"></div>
+                <span style="font-size:0.82rem;font-weight:600;color:var(--white)">${s.label}</span>
+                ${i > 0 && dropOff > 0 ? `<span style="font-size:0.7rem;color:#ef4444;background:rgba(239,68,68,0.12);padding:1px 6px;border-radius:4px">−${dropOff}% drop</span>` : ''}
+              </div>
+              <div style="display:flex;gap:12px;align-items:center">
+                <span style="font-size:0.9rem;font-weight:700;color:var(--white)">${s.count.toLocaleString()}</span>
+                <span style="font-size:0.78rem;color:var(--text-muted);min-width:36px;text-align:right">${pct}%</span>
+              </div>
+            </div>
+            <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:${s.color};border-radius:4px;transition:width 0.6s ease"></div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:24px;flex-wrap:wrap">
+      <div style="font-size:0.78rem;color:var(--text-muted)">
+        <span style="font-weight:600;color:#22c55e">${invested > 0 ? Math.round(invested/total*100) : 0}%</span> end-to-end conversion
+      </div>
+      <div style="font-size:0.78rem;color:var(--text-muted)">
+        <span style="font-weight:600;color:#FF9B0C">${total}</span> total investors
+      </div>
+      <div style="font-size:0.78rem;color:var(--text-muted)">
+        <span style="font-weight:600;color:#D4AF37">${invested}</span> active investors
+      </div>
+    </div>
+  `;
 }
 
 /* ═══════════════════════════════════════════════
@@ -2306,4 +2413,220 @@ function setupGlobalSearch() {
       }, 300);
     }
   });
+}
+
+/* ═══════════════════════════════════════════════
+   CSV EXPORT
+   ═══════════════════════════════════════════════ */
+function _downloadCSV(rows, filename) {
+  const csv = rows.map(r => r.map(cell => {
+    const s = String(cell == null ? '' : cell).replace(/"/g, '""');
+    return /[,"\n\r]/.test(s) ? `"${s}"` : s;
+  }).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportInvestorsCSV() {
+  if (!STATE.investors.length) { Toast.error('Load investors first'); return; }
+  const headers = ['ID','First Name','Last Name','Email','Phone','FICA Status','Wallet Balance','Total Invested','Total Returns','Date Joined'];
+  const rows = [headers, ...STATE.investors.map(i => [
+    i.id, i.first_name, i.last_name, i.email, i.phone || '',
+    i.fica_status, i.wallet_balance || 0, i.total_invested || 0, i.total_returns || 0,
+    i.date_joined ? new Date(i.date_joined).toLocaleDateString('en-ZA') : '',
+  ])];
+  _downloadCSV(rows, `investors-${new Date().toISOString().slice(0,10)}.csv`);
+  Toast.success(`Exported ${STATE.investors.length} investors`);
+}
+
+function exportTransactionsCSV() {
+  if (!STATE.transactions.length) { Toast.error('Load transactions first'); return; }
+  const headers = ['ID','Investor','Type','Amount','Status','Reference','Description','Date'];
+  const rows = [headers, ...STATE.transactions.map(t => [
+    t.id, _txnInvName(t), t.type, t.amount, t.status,
+    t.reference || '', t.description || '',
+    t.created_at ? new Date(t.created_at).toLocaleDateString('en-ZA') : '',
+  ])];
+  _downloadCSV(rows, `transactions-${new Date().toISOString().slice(0,10)}.csv`);
+  Toast.success(`Exported ${STATE.transactions.length} transactions`);
+}
+
+function exportKYCCSV() {
+  if (!STATE.kyc.length) { Toast.error('Load KYC data first'); return; }
+  const headers = ['ID','Investor','Investor ID','Document Type','File','Status','Submitted','Reviewed'];
+  const rows = [headers, ...STATE.kyc.map(k => [
+    k.id, k.investor_name, k.investor_id, k.document_type || '', k.file_name || '',
+    k.status,
+    k.submitted_date ? new Date(k.submitted_date).toLocaleDateString('en-ZA') : '',
+    k.reviewed_date  ? new Date(k.reviewed_date).toLocaleDateString('en-ZA')  : '',
+  ])];
+  _downloadCSV(rows, `kyc-${new Date().toISOString().slice(0,10)}.csv`);
+  Toast.success(`Exported ${STATE.kyc.length} KYC records`);
+}
+
+/* ═══════════════════════════════════════════════
+   BULK KYC OPERATIONS
+   ═══════════════════════════════════════════════ */
+let _kycSelected = new Set();
+
+function _kycUpdateBulkBar() {
+  const bar   = document.getElementById('kycBulkBar');
+  const count = document.getElementById('kycBulkCount');
+  if (!bar) return;
+  if (_kycSelected.size > 0) {
+    bar.style.display = 'flex';
+    count.textContent = `${_kycSelected.size} selected`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function toggleKycRow(id, checked) {
+  if (checked) _kycSelected.add(id);
+  else _kycSelected.delete(id);
+  _kycUpdateBulkBar();
+}
+
+function toggleAllKyc(checked) {
+  const filter = document.getElementById('kycStatusFilter').value;
+  const items  = filter ? STATE.kyc.filter(k => k.status === filter) : STATE.kyc;
+  const actionable = items.filter(k => ['pending', 'under_review'].includes(k.status));
+  if (checked) actionable.forEach(k => _kycSelected.add(k.id));
+  else _kycSelected.clear();
+  _kycUpdateBulkBar();
+  document.querySelectorAll('.kyc-cb').forEach(cb => {
+    if (actionable.find(k => k.id == cb.value)) cb.checked = checked;
+  });
+}
+
+function clearKycSelection() {
+  _kycSelected.clear();
+  _kycUpdateBulkBar();
+  document.querySelectorAll('.kyc-cb').forEach(cb => { cb.checked = false; });
+  const all = document.getElementById('kycSelectAll');
+  if (all) all.checked = false;
+}
+
+async function bulkApproveKyc() {
+  if (!_kycSelected.size) return;
+  const ids = [..._kycSelected];
+  if (!confirm(`Approve ${ids.length} document(s)?`)) return;
+  try {
+    for (const id of ids) {
+      await API.kyc.update(id, { status: 'approved', reviewed_by: 'Admin', reviewed_date: new Date().toISOString() });
+    }
+    _kycSelected.clear();
+    Toast.success(`${ids.length} document(s) approved`);
+    await loadKYC();
+  } catch (e) { Toast.error('Bulk approve failed'); }
+}
+
+async function bulkRejectKyc() {
+  if (!_kycSelected.size) return;
+  const reason = prompt(`Rejection reason for ${_kycSelected.size} document(s):`);
+  if (reason === null) return;
+  const ids = [..._kycSelected];
+  try {
+    for (const id of ids) {
+      await API.kyc.update(id, { status: 'rejected', rejection_reason: reason, reviewed_by: 'Admin', reviewed_date: new Date().toISOString() });
+    }
+    _kycSelected.clear();
+    Toast.success(`${ids.length} document(s) rejected`);
+    await loadKYC();
+  } catch (e) { Toast.error('Bulk reject failed'); }
+}
+
+/* ═══════════════════════════════════════════════
+   AUDIT LOG
+   ═══════════════════════════════════════════════ */
+let _auditEvents = [];
+let _auditPage   = 1;
+const AUDIT_PG   = 50;
+
+async function loadAuditLog() {
+  try {
+    const res = await API.tables.list('audit_events', { limit: 500, order: 'created_at', direction: 'desc' });
+    _auditEvents = res.data || [];
+    renderAuditTable();
+    document.getElementById('auditTypeFilter')?.addEventListener('change', () => { _auditPage = 1; renderAuditTable(); });
+  } catch (e) { Toast.error('Failed to load audit log'); }
+}
+
+function renderAuditTable() {
+  const body   = document.getElementById('auditBody');
+  const filter = document.getElementById('auditTypeFilter')?.value || '';
+  const items  = filter ? _auditEvents.filter(e => e.event_type?.includes(filter)) : _auditEvents;
+  const start  = (_auditPage - 1) * AUDIT_PG;
+  const page   = items.slice(start, start + AUDIT_PG);
+
+  document.getElementById('auditFooter').textContent = `${start + 1}–${Math.min(start + AUDIT_PG, items.length)} of ${items.length} events`;
+
+  if (!page.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No audit events found</td></tr>'; return; }
+
+  const actionColor = { 'user.login': 'blue', 'kyc.approved': 'green', 'kyc.rejected': 'red', 'transaction.completed': 'green', 'transaction.rejected': 'red', 'investment.paid_out': 'gold' };
+
+  body.innerHTML = page.map(e => `<tr>
+    <td class="td-muted" style="white-space:nowrap;font-size:0.75rem">${Utils.datetime ? Utils.datetime(e.created_at) : Utils.date(e.created_at)}</td>
+    <td><span class="badge badge--${actionColor[e.event_type] || 'gray'}" style="font-size:0.7rem">${e.event_type || '—'}</span></td>
+    <td><div style="font-size:0.78rem;font-weight:600">${e.user_email || '—'}</div></td>
+    <td class="td-muted" style="font-size:0.75rem">${e.entity_type ? `${e.entity_type}#${e.entity_id || ''}` : '—'}</td>
+    <td style="font-size:0.78rem;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.description || '—'}</td>
+    <td class="td-muted" style="font-size:0.72rem">${e.ip_address || '—'}</td>
+  </tr>`).join('');
+
+  const pages = Math.ceil(items.length / AUDIT_PG);
+  document.getElementById('auditPagination').innerHTML = Array.from({ length: Math.min(pages, 10) }, (_, i) =>
+    `<button class="page-btn ${i + 1 === _auditPage ? 'active' : ''}" onclick="_auditPage=${i+1};renderAuditTable()">${i+1}</button>`
+  ).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   AUDIT LOG
+   ═══════════════════════════════════════════════ */
+let _auditEvents = [];
+let _auditPage   = 1;
+const AUDIT_PG   = 50;
+
+async function loadAuditLog() {
+  try {
+    const res = await API.tables.list('audit_events', { limit: 500, order: 'created_at', direction: 'desc' });
+    _auditEvents = res.data || [];
+    renderAuditTable();
+    const filter = document.getElementById('auditTypeFilter');
+    if (filter) filter.addEventListener('change', () => { _auditPage = 1; renderAuditTable(); });
+  } catch (e) { Toast.error('Failed to load audit log'); }
+}
+
+function renderAuditTable() {
+  const body   = document.getElementById('auditBody');
+  if (!body) return;
+  const filter = document.getElementById('auditTypeFilter')?.value || '';
+  const items  = filter ? _auditEvents.filter(e => (e.event_type || '').includes(filter)) : _auditEvents;
+  const start  = (_auditPage - 1) * AUDIT_PG;
+  const page   = items.slice(start, start + AUDIT_PG);
+
+  const footer = document.getElementById('auditFooter');
+  if (footer) footer.textContent = `${start + 1}–${Math.min(start + AUDIT_PG, items.length)} of ${items.length} events`;
+
+  if (!page.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No audit events found</td></tr>'; return; }
+
+  const actionColor = { 'user.login': 'blue', 'kyc.approved': 'green', 'kyc.rejected': 'red', 'transaction.completed': 'green', 'transaction.rejected': 'red', 'investment.paid_out': 'gold' };
+
+  body.innerHTML = page.map(e => `<tr>
+    <td class="td-muted" style="white-space:nowrap;font-size:0.75rem">${Utils.date(e.created_at)}</td>
+    <td><span class="badge badge--${actionColor[e.event_type] || 'gray'}" style="font-size:0.7rem">${e.event_type || '—'}</span></td>
+    <td><div style="font-size:0.78rem;font-weight:600">${e.user_email || '—'}</div></td>
+    <td class="td-muted" style="font-size:0.75rem">${e.entity_type ? `${e.entity_type}#${(e.entity_id||'').slice(0,8)}` : '—'}</td>
+    <td style="font-size:0.78rem;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.description || '—'}</td>
+    <td class="td-muted" style="font-size:0.72rem">${e.ip_address || '—'}</td>
+  </tr>`).join('');
+
+  const pages = Math.ceil(items.length / AUDIT_PG);
+  const pag   = document.getElementById('auditPagination');
+  if (pag) pag.innerHTML = Array.from({ length: Math.min(pages, 10) }, (_, i) =>
+    `<button class="page-btn ${i + 1 === _auditPage ? 'active' : ''}" onclick="_auditPage=${i+1};renderAuditTable()">${i+1}</button>`
+  ).join('');
 }

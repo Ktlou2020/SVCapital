@@ -307,6 +307,14 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investors ADD COLUMN bank_account_notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- sub_account_id on transactions for sub-account deposits
   BEGIN ALTER TABLE transactions ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- TOTP 2FA columns for users table
+  BEGIN ALTER TABLE users ADD COLUMN totp_secret TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Auto-maturity processing tracking
+  BEGIN ALTER TABLE investments ADD COLUMN maturity_processed_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- IFA commission invoice tracking
+  BEGIN ALTER TABLE ifas ADD COLUMN last_invoice_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE ifas ADD COLUMN total_commission_paid NUMERIC(18,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
 
 CREATE TABLE IF NOT EXISTS payslips (

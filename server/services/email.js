@@ -318,6 +318,117 @@ function sendBankAccountApproved(investor, { bankName, accountNumber }) {
   });
 }
 
+/* ── 12. Monthly portfolio statement ─────────────────────── */
+function sendMonthlyStatement(investor, { investments, recentTransactions }) {
+  const { email, first_name, last_name, wallet_balance, total_invested, total_returns } = investor;
+  if (!email) return Promise.resolve();
+
+  const now = new Date();
+  const monthName = now.toLocaleString('en-ZA', { month: 'long', year: 'numeric' });
+  const rand = (n) => 'R' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const pct = (r) => (Number(r || 0) * 100).toFixed(2) + '%';
+  const fmtDate = (s) => s ? new Date(s).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  const statusColor = (s) => ({ active: '#10b981', matured: '#7c5cfc', pending: '#f59e0b', cancelled: '#ef4444' }[s] || '#6b7280');
+
+  const activeInvestments = investments.filter(i => i.status === 'active');
+  const effectiveReturn = Number(total_invested) > 0 ? ((Number(total_returns) / Number(total_invested)) * 100).toFixed(2) + '%' : '—';
+
+  const investmentRows = activeInvestments.length
+    ? activeInvestments.map(i => `
+      <tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#e5e7eb">${i.pool_name}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#FF9B0C;font-weight:600">${rand(i.amount)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#10b981">${pct(i.annual_rate)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#9ca3af">${fmtDate(i.end_date)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a"><span style="background:${statusColor(i.status)}22;color:${statusColor(i.status)};padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600">${i.status}</span></td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" style="padding:16px;text-align:center;color:#6b7280">No active investments</td></tr>';
+
+  const txnRows = recentTransactions.length
+    ? recentTransactions.slice(0, 5).map(t => `
+      <tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#e5e7eb;text-transform:capitalize">${t.type}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:${Number(t.amount) >= 0 ? '#10b981' : '#ef4444'};font-weight:600">${Number(t.amount) >= 0 ? '+' : ''}${rand(t.amount)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#9ca3af">${fmtDate(t.created_at)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="3" style="padding:16px;text-align:center;color:#6b7280">No transactions in the past 30 days</td></tr>';
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0d0d0d;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
+<div style="max-width:600px;margin:0 auto;padding:40px 20px">
+  <div style="text-align:center;margin-bottom:32px">
+    <div style="font-size:28px;font-weight:900;color:#FF9B0C;letter-spacing:-0.5px">SV Capital</div>
+    <div style="font-size:13px;color:#6b7280;margin-top:4px">Monthly Statement — ${monthName}</div>
+  </div>
+
+  <div style="background:#161616;border:1px solid #262626;border-radius:16px;padding:28px;margin-bottom:20px">
+    <div style="font-size:16px;font-weight:700;color:#f9fafb;margin-bottom:4px">Hi ${first_name || 'Investor'},</div>
+    <div style="font-size:13px;color:#9ca3af">Here is your portfolio summary for ${monthName}.</div>
+  </div>
+
+  <div style="display:grid;gap:12px;margin-bottom:20px">
+    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td width="32%" style="background:#161616;border:1px solid #262626;border-radius:12px;padding:20px;text-align:center">
+        <div style="font-size:11px;color:#6b7280;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Total Invested</div>
+        <div style="font-size:22px;font-weight:800;color:#FF9B0C">${rand(total_invested)}</div>
+      </td>
+      <td width="4%"></td>
+      <td width="32%" style="background:#161616;border:1px solid #262626;border-radius:12px;padding:20px;text-align:center">
+        <div style="font-size:11px;color:#6b7280;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Total Returns</div>
+        <div style="font-size:22px;font-weight:800;color:#10b981">${rand(total_returns)}</div>
+      </td>
+      <td width="4%"></td>
+      <td width="32%" style="background:#161616;border:1px solid #262626;border-radius:12px;padding:20px;text-align:center">
+        <div style="font-size:11px;color:#6b7280;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Wallet Balance</div>
+        <div style="font-size:22px;font-weight:800;color:#f9fafb">${rand(wallet_balance)}</div>
+      </td>
+    </tr></table>
+  </div>
+
+  <div style="background:#161616;border:1px solid #262626;border-radius:16px;margin-bottom:20px;overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid #262626">
+      <span style="font-size:14px;font-weight:700;color:#f9fafb">Active Investments (${activeInvestments.length})</span>
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <thead><tr style="background:#1a1a1a">
+        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase">Pool</th>
+        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase">Amount</th>
+        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase">Rate</th>
+        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase">Matures</th>
+        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase">Status</th>
+      </tr></thead>
+      <tbody>${investmentRows}</tbody>
+    </table>
+  </div>
+
+  <div style="background:#161616;border:1px solid #262626;border-radius:16px;margin-bottom:24px;overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid #262626">
+      <span style="font-size:14px;font-weight:700;color:#f9fafb">Recent Transactions (last 30 days)</span>
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <thead><tr style="background:#1a1a1a">
+        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase">Type</th>
+        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase">Amount</th>
+        <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase">Date</th>
+      </tr></thead>
+      <tbody>${txnRows}</tbody>
+    </table>
+  </div>
+
+  <div style="text-align:center;margin-bottom:24px">
+    <a href="${process.env.PORTAL_URL || 'https://svcapital.co.za/portal'}" style="display:inline-block;background:linear-gradient(135deg,#FF9B0C,#e07a00);color:#000;font-weight:700;font-size:14px;padding:14px 32px;border-radius:10px;text-decoration:none">View Full Portfolio →</a>
+  </div>
+
+  <div style="text-align:center;font-size:11px;color:#4b5563;line-height:1.6">
+    <p>SV Capital (Pty) Ltd · Registered Investment Manager · FSP Number XXXXX</p>
+    <p>This statement is for information purposes only and does not constitute financial advice.</p>
+    <p>Effective overall return: <strong style="color:#10b981">${effectiveReturn}</strong></p>
+  </div>
+</div></body></html>`;
+
+  return _send({ to: email, subject: `Your SV Capital Statement — ${monthName}`, html });
+}
+
 module.exports = {
   sendWelcome,
   sendDepositConfirmed,
@@ -330,4 +441,5 @@ module.exports = {
   sendWithdrawalProcessed,
   sendWithdrawalRejected,
   sendBankAccountApproved,
+  sendMonthlyStatement,
 };

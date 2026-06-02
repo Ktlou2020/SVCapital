@@ -82,6 +82,9 @@
       <button class="nav-item" data-view="analytics" onclick="navigate('analytics', this)">
         <i class="fa-solid fa-chart-pie"></i> Analytics
       </button>
+      <button class="nav-item" data-view="auditlog" onclick="navigate('auditlog', this)">
+        <i class="fa-solid fa-shield-halved"></i> Audit Log
+      </button>
       <button class="nav-item" data-view="settings" onclick="navigate('settings', this)">
         <i class="fa-solid fa-gear"></i> Settings
       </button>
@@ -337,6 +340,9 @@
               <button class="btn btn--primary btn--sm" onclick="openAddInvestorModal()">
                 <i class="fa-solid fa-plus"></i> Add Investor
               </button>
+              <button class="btn btn--secondary btn--sm" onclick="exportInvestorsCSV()">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
+              </button>
             </div>
           </div>
           <div style="overflow-x:auto">
@@ -445,12 +451,22 @@
               <button class="btn btn--primary btn--sm" onclick="openKycUploadModal('','')">
                 <i class="fa-solid fa-upload"></i> Upload Document
               </button>
+              <button class="btn btn--secondary btn--sm" onclick="exportKYCCSV()">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
+              </button>
             </div>
+          </div>
+          <div id="kycBulkBar" style="display:none;background:rgba(255,155,12,0.08);border:1px solid rgba(255,155,12,0.25);border-radius:10px;padding:10px 16px;margin:0 16px 12px;align-items:center;gap:12px">
+            <span id="kycBulkCount" style="font-size:0.85rem;font-weight:600;color:#1a2235">0 selected</span>
+            <div style="flex:1"></div>
+            <button class="btn btn--success btn--sm" onclick="bulkApproveKyc()"><i class="fa-solid fa-check-double"></i> Bulk Approve</button>
+            <button class="btn btn--danger btn--sm" onclick="bulkRejectKyc()"><i class="fa-solid fa-xmark"></i> Bulk Reject</button>
+            <button class="btn btn--secondary btn--sm" onclick="clearKycSelection()"><i class="fa-solid fa-times"></i> Clear</button>
           </div>
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>Investor</th><th>Document Type</th><th>File</th><th>Status</th><th>Submitted</th><th>Document</th><th>Actions</th><th></th>
+                <th style="width:36px"><input type="checkbox" id="kycSelectAll" onchange="toggleAllKyc(this.checked)" style="cursor:pointer;width:16px;height:16px;accent-color:#FF9B0C" title="Select all actionable"></th><th>Investor</th><th>Document Type</th><th>File</th><th>Status</th><th>Submitted</th><th>Document</th><th>Actions</th><th></th>
               </tr></thead>
               <tbody id="kycBody">
                 <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
@@ -588,6 +604,9 @@
               <button class="btn btn--primary btn--sm" onclick="openAddTxnModal()">
                 <i class="fa-solid fa-plus"></i> Record Transaction
               </button>
+              <button class="btn btn--secondary btn--sm" onclick="exportTransactionsCSV()">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
+              </button>
             </div>
           </div>
           <div style="overflow-x:auto">
@@ -698,6 +717,16 @@
           </div>
         </div>
 
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title">Investor Conversion Funnel</span>
+            <span style="font-size:0.75rem;color:var(--text-muted)">Signup → FICA → Deposit → Investment</span>
+          </div>
+          <div class="panel__body" id="funnelPanel">
+            <div class="text-center text-muted" style="padding:20px">Loading…</div>
+          </div>
+        </div>
+
         <div class="grid-2 mt-16">
           <div class="panel">
             <div class="panel__header"><span class="panel__title">Risk Profile Breakdown</span></div>
@@ -706,6 +735,44 @@
           <div class="panel">
             <div class="panel__header"><span class="panel__title">Transaction Flow (Last 6 Months)</span></div>
             <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="txnFlowChart"></canvas></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: AUDIT LOG
+      ══════════════════════════════════ -->
+      <div class="view" id="view-auditlog">
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Audit Log</div>
+              <div class="table-card__sub">Immutable record of all significant actions</div>
+            </div>
+            <div class="table-card__controls">
+              <select class="tbl-filter" id="auditTypeFilter">
+                <option value="">All Events</option>
+                <option value="user.login">Logins</option>
+                <option value="kyc">KYC Actions</option>
+                <option value="transaction">Transactions</option>
+                <option value="investment">Investments</option>
+              </select>
+              <button class="btn btn--secondary btn--sm" onclick="loadAuditLog()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>When</th><th>Action</th><th>Actor</th><th>Entity</th><th>Description</th><th>IP</th>
+              </tr></thead>
+              <tbody id="auditBody">
+                <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-card__footer">
+            <span id="auditFooter">—</span>
+            <div class="pagination" id="auditPagination"></div>
           </div>
         </div>
       </div>

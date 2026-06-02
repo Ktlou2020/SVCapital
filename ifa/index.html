@@ -67,6 +67,11 @@
         <i class="fa-solid fa-headset"></i> Support Tickets
       </button>
 
+      <div class="nav-section-label">Finance</div>
+      <button class="nav-item" data-view="commission" onclick="navigate('commission', this)">
+        <i class="fa-solid fa-percent"></i> Commission
+      </button>
+
       <div class="nav-section-label">Account</div>
       <button class="nav-item" data-view="profile" onclick="navigate('profile', this)">
         <i class="fa-solid fa-id-badge"></i> My Profile
@@ -592,6 +597,59 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: COMMISSION
+      ══════════════════════════════════ -->
+      <div class="view" id="view-commission">
+        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat-card stat-card--gold">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div>
+            <div class="stat-card__value" id="comm-rate">—</div>
+            <div class="stat-card__label">Commission Rate</div>
+          </div>
+          <div class="stat-card stat-card--blue">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div>
+            <div class="stat-card__value" id="comm-aum">—</div>
+            <div class="stat-card__label">Total Client AUM</div>
+          </div>
+          <div class="stat-card stat-card--green">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-circle-dollar-to-slot"></i></div></div>
+            <div class="stat-card__value" id="comm-owed">—</div>
+            <div class="stat-card__label">Commission Owed</div>
+          </div>
+          <div class="stat-card stat-card--purple">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-calendar-check"></i></div></div>
+            <div class="stat-card__value" id="comm-clients">—</div>
+            <div class="stat-card__label">Billing Clients</div>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Commission Breakdown by Client</div>
+              <div class="table-card__sub" id="commissionSubTitle">Commission is calculated as AUM × your agreed rate</div>
+            </div>
+            <button class="btn btn--secondary btn--sm" onclick="exportCommissionCSV()">
+              <i class="fa-solid fa-file-csv"></i> Export CSV
+            </button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>Client</th><th>FICA Status</th><th>AUM</th><th>Est. Commission</th><th>Total Returns</th><th>Joined</th>
+              </tr></thead>
+              <tbody id="commissionBody">
+                <tr><td colspan="6" class="text-center text-muted" style="padding:24px">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-card__footer">
+            <span id="commissionFooter">—</span>
           </div>
         </div>
       </div>
