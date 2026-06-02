@@ -247,6 +247,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   checkFirstDepositPrompt();
   _checkAutoStartTour();
   load2FAStatus();
+  renderOnboardingChecklist();
 });
 
 async function loadPortalData() {
@@ -4811,6 +4812,108 @@ async function confirmDisable2FA() {
 
 function openChangePasswordModal() {
   Toast.info('Use the Change Password option in your account settings.');
+}
+
+function renderOnboardingChecklist() {
+  if (!PORTAL.investor) return;
+  const inv = PORTAL.investor;
+
+  const steps = [
+    {
+      id: 'fica',
+      label: 'Complete your FICA verification',
+      desc: 'Submit your ID document and proof of address.',
+      done: inv.fica_status === 'approved',
+      action: "navigate('kyc', document.querySelector('[data-view=kyc]'))",
+      actionLabel: 'Go to KYC',
+    },
+    {
+      id: 'wallet',
+      label: 'Fund your wallet',
+      desc: 'Make your first deposit to start investing.',
+      done: Number(inv.wallet_balance || 0) > 0 || Number(inv.total_invested || 0) > 0,
+      action: "navigate('wallet', document.querySelector('[data-view=wallet]'))",
+      actionLabel: 'Fund Wallet',
+    },
+    {
+      id: 'invest',
+      label: 'Make your first investment',
+      desc: 'Choose a pool and put your money to work.',
+      done: Number(inv.total_invested || 0) > 0,
+      action: "navigate('marketplace', document.querySelector('[data-view=marketplace]'))",
+      actionLabel: 'Browse Pools',
+    },
+  ];
+
+  const allDone = steps.every(s => s.done);
+  const wrap = document.getElementById('onboardingChecklist');
+  if (!wrap) return;
+  if (allDone) { wrap.style.display = 'none'; return; }
+
+  const doneCount = steps.filter(s => s.done).length;
+  const progEl = document.getElementById('onboardingProgress');
+  if (progEl) progEl.textContent = `${doneCount} / ${steps.length} complete`;
+
+  const stepsEl = document.getElementById('onboardingSteps');
+  if (stepsEl) {
+    stepsEl.innerHTML = steps.map(s => `
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:8px;background:${s.done ? 'rgba(16,185,129,0.08)' : 'var(--dark-3)'}">
+        <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.75rem;background:${s.done ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.06)'};color:${s.done ? '#10b981' : 'var(--text-muted)'}">
+          <i class="fa-solid ${s.done ? 'fa-check' : 'fa-circle-dot'}"></i>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.82rem;font-weight:600;color:${s.done ? '#10b981' : 'var(--white)'}${s.done ? ';text-decoration:line-through;opacity:0.7' : ''}">${s.label}</div>
+          ${!s.done ? `<div style="font-size:0.73rem;color:var(--text-muted)">${s.desc}</div>` : ''}
+        </div>
+        ${!s.done ? `<button class="btn btn--primary btn--sm" onclick="${s.action}" style="white-space:nowrap">${s.actionLabel}</button>` : ''}
+      </div>
+    `).join('');
+  }
+
+  wrap.style.display = '';
+}
+
+async function downloadMyData() {
+  try {
+    Toast.info('Preparing your data export…');
+    const [invRes, invstRes, txnRes, kycRes, ticketRes] = await Promise.all([
+      API.investors.list({ limit: 1 }),
+      API.investments.list({ limit: 500 }),
+      API.transactions.list({ limit: 500 }),
+      API._fetch('GET', 'tables/kyc_documents', null, { investor_id: PORTAL.investor?.id, limit: 100 }),
+      API._fetch('GET', 'tables/support_tickets', null, { investor_id: PORTAL.investor?.id, limit: 100 }),
+    ]);
+
+    const inv = PORTAL.investor || {};
+    // Strip sensitive server fields before export
+    const safeInvestor = { ...inv };
+    delete safeInvestor.password_hash;
+    delete safeInvestor.totp_secret;
+
+    const exportData = {
+      exported_at: new Date().toISOString(),
+      notice: 'This data is provided under POPIA Section 23. Handle securely.',
+      personal_information: safeInvestor,
+      investments: invstRes.data || [],
+      transactions: txnRes.data || [],
+      kyc_documents: (kycRes.data || []).map(d => ({ id: d.id, doc_type: d.doc_type, status: d.status, uploaded_at: d.created_at })),
+      support_tickets: ticketRes.data || [],
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SV_Capital_My_Data_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    Toast.success('Your data has been downloaded.');
+  } catch (e) {
+    Toast.error('Failed to export data. Please try again.');
+    console.error(e);
+  }
 }
 
 /* ═══════════════════════════════════════════════

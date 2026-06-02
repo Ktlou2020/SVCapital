@@ -274,6 +274,10 @@ app.listen(PORT, '0.0.0.0', async () => {
   // Start maturity alert cron (daily 08:00 SAST)
   const { startMaturityCron } = require('./jobs/maturityCron');
   startMaturityCron();
+
+  // Start monthly statement cron (1st of month, 07:00 SAST)
+  const { startStatementCron } = require('./jobs/statementCron');
+  startStatementCron();
 });
 
 module.exports = app;

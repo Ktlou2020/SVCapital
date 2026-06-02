@@ -599,7 +599,15 @@ async function viewInvestor(id) {
             </div>
           </div>
         </div>
-        ${inv.notes ? `<div class="panel mt-12" style="background:var(--dark-3)"><div class="panel__header"><span class="panel__title">Admin Notes</span></div><div class="panel__body" style="font-size:0.82rem;color:var(--text-muted)">${inv.notes}</div></div>` : ''}
+        <div class="panel mt-12" style="background:var(--dark-3)">
+          <div class="panel__header">
+            <span class="panel__title">Admin Notes</span>
+            <button class="btn btn--primary btn--sm" onclick="saveInvestorNotes('${inv.id}')"><i class="fa-solid fa-save"></i> Save</button>
+          </div>
+          <div class="panel__body">
+            <textarea id="investorNotesTA" class="form-input" style="width:100%;min-height:90px;font-size:0.82rem;resize:vertical" placeholder="Internal notes visible only to admins…"></textarea>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -669,6 +677,9 @@ async function viewInvestor(id) {
     </div>
   `;
   Modal.open('investorDetailModal');
+  // Set textarea value after innerHTML to avoid XSS via template literals
+  const ta = document.getElementById('investorNotesTA');
+  if (ta) ta.value = inv.notes || '';
 }
 
 async function depositToInvestor(investorId, investorName, currentBalance) {
@@ -702,6 +713,17 @@ async function approveInvestorFica(investorId) {
     Modal.close('investorDetailModal');
     await loadInvestors();
   } catch (e) { Toast.error('Failed to approve FICA'); }
+}
+
+async function saveInvestorNotes(investorId) {
+  const ta = document.getElementById('investorNotesTA');
+  if (!ta) return;
+  try {
+    await API._fetch('PATCH', `tables/investors/${investorId}`, { notes: ta.value.trim() });
+    const inv = STATE.investors.find(i => i.id === investorId);
+    if (inv) inv.notes = ta.value.trim();
+    Toast.success('Notes saved');
+  } catch (e) { Toast.error('Failed to save notes'); }
 }
 
 async function approveBankAccount(investorId) {

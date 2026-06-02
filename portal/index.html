@@ -212,6 +212,18 @@
           <div class="xp-progress-next" id="xpProgressNext"></div>
         </div>
 
+        <!-- Onboarding Checklist -->
+        <div id="onboardingChecklist" class="panel mb-16" style="display:none;border:1px solid rgba(255,155,12,0.25);background:rgba(255,155,12,0.04)">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-rocket" style="color:var(--gold)"></i> Getting Started</span>
+            <span id="onboardingProgress" style="font-size:0.75rem;color:var(--text-muted)">0 / 3 complete</span>
+          </div>
+          <div class="panel__body">
+            <div style="display:flex;flex-direction:column;gap:10px" id="onboardingSteps"></div>
+            <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted)">Complete these steps to unlock your full investment potential.</div>
+          </div>
+        </div>
+
         <!-- Hero KPI Banner -->
         <div class="portfolio-hero">
           <div class="portfolio-hero__left">
@@ -660,11 +672,19 @@
               </div>
             </div>
 
-            <div class="panel">
+            <div class="panel mb-16">
               <div class="panel__header"><span class="panel__title">Security</span></div>
               <div class="panel__body" style="display:flex;flex-direction:column;gap:8px">
                 <button class="btn btn--secondary btn--full" onclick="openChangePasswordModal()"><i class="fa-solid fa-key"></i> Change Password</button>
                 <button class="btn btn--secondary btn--full" id="twoFAToggleBtn" onclick="toggle2FA()"><i class="fa-solid fa-mobile"></i> <span id="twoFAToggleLabel">Loading…</span></button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel__header"><span class="panel__title">Privacy & Data</span></div>
+              <div class="panel__body">
+                <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px">In terms of POPIA, you have the right to access all personal data we hold about you. Download a complete copy below.</div>
+                <button class="btn btn--secondary btn--full" onclick="downloadMyData()"><i class="fa-solid fa-download"></i> Download My Data</button>
               </div>
             </div>
           </div>
