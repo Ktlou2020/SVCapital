@@ -451,7 +451,36 @@ function sendKycApproved(investor) {
   });
 }
 
-/* ── 14. KYC / FICA rejected ─────────────────────────────── */
+/* ── 14. Login anomaly alert ─────────────────────────────── */
+function sendLoginAlert(recipient, { ip, time }) {
+  // recipient can be an investor row (email, first_name) or a user row (email, first_name)
+  const email      = recipient.email;
+  const firstName  = recipient.first_name || 'there';
+  const fmtTime    = time ? new Date(time).toLocaleString('en-ZA', {
+    day: 'numeric', month: 'long', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+  }) : 'Unknown time';
+  return _send({
+    to: email,
+    subject: 'New login to your SV Capital account',
+    html: _wrap(`
+      <h2>New Login Detected 🔔</h2>
+      <p>Hi ${firstName}, we detected a login to your SV Capital account from a new location.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">IP Address</span><span class="val">${ip || 'Unknown'}</span></div>
+        <div class="row"><span class="lbl">Time</span><span class="val">${fmtTime}</span></div>
+      </div>
+      <p>If this was you, no action is needed.</p>
+      <p><strong>If this wasn't you</strong>, please contact us immediately at
+         <a href="mailto:support@svcapital.co.za">support@svcapital.co.za</a>
+         or change your password right away.</p>
+      <a href="${BASE_URL}/portal/" class="btn">Change My Password →</a>
+    `),
+    text: `Hi ${firstName}, a login was detected from a new location (IP: ${ip || 'Unknown'}) at ${fmtTime}. If this wasn't you, contact us at support@svcapital.co.za or change your password immediately.`,
+  });
+}
+
+/* ── 15. KYC / FICA rejected ─────────────────────────────── */
 function sendKycRejected(investor, { reason, notes } = {}) {
   const { email, first_name } = investor;
   if (!email) return Promise.resolve();
@@ -488,4 +517,5 @@ module.exports = {
   sendMonthlyStatement,
   sendKycApproved,
   sendKycRejected,
+  sendLoginAlert,
 };

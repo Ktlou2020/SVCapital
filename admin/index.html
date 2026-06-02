@@ -79,6 +79,10 @@
         <i class="fa-solid fa-headset"></i> Support Tickets
         <span class="nav-badge" id="ticketBadge">0</span>
       </button>
+      <button class="nav-item" data-view="aml" onclick="navigate('aml', this)">
+        <i class="fa-solid fa-shield-halved"></i><span>AML Review</span>
+        <span class="nav-badge" id="amlBadge" style="display:none">0</span>
+      </button>
       <button class="nav-item" data-view="comms" onclick="navigate('comms', this)">
         <i class="fa-solid fa-paper-plane"></i><span>Communications</span>
       </button>
@@ -86,7 +90,7 @@
         <i class="fa-solid fa-chart-pie"></i> Analytics
       </button>
       <button class="nav-item" data-view="auditlog" onclick="navigate('auditlog', this)">
-        <i class="fa-solid fa-shield-halved"></i> Audit Log
+        <i class="fa-solid fa-scroll"></i> Audit Log
       </button>
       <button class="nav-item" data-view="settings" onclick="navigate('settings', this)">
         <i class="fa-solid fa-gear"></i> Settings
@@ -333,6 +337,9 @@
               </select>
               <button class="btn btn--primary btn--sm" onclick="openAddInvestorModal()">
                 <i class="fa-solid fa-plus"></i> Add Investor
+              </button>
+              <button class="btn btn--secondary btn--sm" onclick="openManualAdjModal()">
+                <i class="fa-solid fa-sliders"></i> Manual Adjustment
               </button>
               <button class="btn btn--secondary btn--sm" onclick="exportInvestorsCSV()">
                 <i class="fa-solid fa-file-csv"></i> Export CSV
@@ -624,20 +631,40 @@
            VIEW: WITHDRAWALS
       ══════════════════════════════════ -->
       <div class="view" id="view-withdrawals">
-        <div class="table-card">
+        <!-- Pending Withdrawals -->
+        <div class="table-card mb-20">
           <div class="table-card__header">
             <div>
-              <div class="table-card__title">Withdrawal Requests</div>
-              <div style="font-size:0.78rem;color:var(--text-muted)">Process or reject pending investor withdrawal requests</div>
+              <div class="table-card__title">Pending Withdrawals</div>
+              <div style="font-size:0.78rem;color:var(--text-muted)">Approve or reject pending investor withdrawal requests</div>
             </div>
             <button class="btn btn--secondary btn--sm" onclick="loadWithdrawals()"><i class="fa-solid fa-rotate"></i> Refresh</button>
           </div>
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>Investor</th><th>Amount</th><th>Bank</th><th>Status</th><th>Requested</th><th>Actions</th>
+                <th>Date</th><th>Investor</th><th>Amount</th><th>Bank</th><th>Reference</th><th>Actions</th>
               </tr></thead>
-              <tbody id="withdrawalsTableBody">
+              <tbody id="withdrawalsPendingBody">
+                <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- Completed / Rejected Withdrawals -->
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Completed &amp; Rejected</div>
+              <div style="font-size:0.78rem;color:var(--text-muted)">Historical processed withdrawals</div>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>Date</th><th>Investor</th><th>Amount</th><th>Bank</th><th>Reference</th><th>Status</th>
+              </tr></thead>
+              <tbody id="withdrawalsCompletedBody">
                 <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
               </tbody>
             </table>
@@ -690,9 +717,66 @@
       </div>
 
       <!-- ══════════════════════════════════
+           VIEW: AML COMPLIANCE
+      ══════════════════════════════════ -->
+      <div class="view" id="view-aml">
+        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)" id="amlStats">
+          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-flag"></i></div></div><div class="stat-card__value" id="aml-total">—</div><div class="stat-card__label">Total Flags</div></div>
+          <div class="stat-card stat-card--red" style="--red:#ef4444"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i></div></div><div class="stat-card__value" id="aml-open">—</div><div class="stat-card__label">Open</div></div>
+          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-triangle-exclamation"></i></div></div><div class="stat-card__value" id="aml-high">—</div><div class="stat-card__label">High Priority</div></div>
+          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-circle"></i></div></div><div class="stat-card__value" id="aml-resolved">—</div><div class="stat-card__label">Resolved This Month</div></div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">AML Compliance Review</div>
+              <div class="table-card__sub">Flagged transactions and investor activity requiring AML review</div>
+            </div>
+            <button class="btn btn--secondary btn--sm" onclick="loadAML()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>Date</th><th>Investor</th><th>Amount</th><th>Reason</th><th>Priority</th><th>Status</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="amlTableBody">
+                <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
            VIEW: ANALYTICS
       ══════════════════════════════════ -->
       <div class="view" id="view-analytics">
+
+        <!-- Real-data charts row 1 -->
+        <div class="grid-2 mb-16">
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title">AUM Over Time (Deposits)</span></div>
+            <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="anAumChart"></canvas></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title">New Investors Per Month</span></div>
+            <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="anNewInvChart"></canvas></div></div>
+          </div>
+        </div>
+
+        <!-- Real-data charts row 2 -->
+        <div class="grid-2 mb-16">
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title">Returns Distributed Per Month</span></div>
+            <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="anReturnsChart"></canvas></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title">Investment Status Breakdown</span></div>
+            <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="anStatusChart"></canvas></div></div>
+          </div>
+        </div>
+
         <div class="stats-row">
           <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div><div class="stat-card__value">14.83%</div><div class="stat-card__label">Avg Cattle Return</div></div>
           <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-bolt"></i></div></div><div class="stat-card__value">R500</div><div class="stat-card__label">Lowest Min. Investment</div></div>
@@ -1270,6 +1354,51 @@
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('linkClientModal')">Cancel</button>
       <button class="btn btn--primary" onclick="confirmLinkClient()"><i class="fa-solid fa-link"></i> Link Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manual Adjustment Modal -->
+<div class="modal-overlay" id="manualAdjModal" onclick="if(event.target===this)Modal.close('manualAdjModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title">Manual Adjustment</span>
+      <button class="modal__close" onclick="Modal.close('manualAdjModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="form-group">
+        <label class="form-label">Investor *</label>
+        <select class="form-select" id="adjInvestorSelect"><option value="">Select investor…</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Type *</label>
+        <div style="display:flex;gap:20px;margin-top:6px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
+            <input type="radio" name="adjType" value="credit" id="adjCredit" checked style="accent-color:#22c55e;width:16px;height:16px"> <span style="color:#22c55e;font-weight:600">Credit (add funds)</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
+            <input type="radio" name="adjType" value="debit" id="adjDebit" style="accent-color:#ef4444;width:16px;height:16px"> <span style="color:#ef4444;font-weight:600">Debit (remove funds)</span>
+          </label>
+        </div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group">
+          <label class="form-label">Amount (R) *</label>
+          <input type="number" class="form-input" id="adjAmount" placeholder="1000" min="0.01" step="0.01" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Reference</label>
+          <input type="text" class="form-input" id="adjReference" readonly />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description *</label>
+        <input type="text" class="form-input" id="adjDescription" placeholder="Reason for adjustment…" />
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('manualAdjModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveManualAdj()"><i class="fa-solid fa-sliders"></i> Apply Adjustment</button>
     </div>
   </div>
 </div>
