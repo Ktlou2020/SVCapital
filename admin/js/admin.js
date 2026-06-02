@@ -2542,47 +2542,6 @@ async function bulkRejectKyc() {
 /* ═══════════════════════════════════════════════
    AUDIT LOG
    ═══════════════════════════════════════════════ */
-let _auditEvents = [];
-let _auditPage   = 1;
-const AUDIT_PG   = 50;
-
-async function loadAuditLog() {
-  try {
-    const res = await API.tables.list('audit_events', { limit: 500, order: 'created_at', direction: 'desc' });
-    _auditEvents = res.data || [];
-    renderAuditTable();
-    document.getElementById('auditTypeFilter')?.addEventListener('change', () => { _auditPage = 1; renderAuditTable(); });
-  } catch (e) { Toast.error('Failed to load audit log'); }
-}
-
-function renderAuditTable() {
-  const body   = document.getElementById('auditBody');
-  const filter = document.getElementById('auditTypeFilter')?.value || '';
-  const items  = filter ? _auditEvents.filter(e => e.event_type?.includes(filter)) : _auditEvents;
-  const start  = (_auditPage - 1) * AUDIT_PG;
-  const page   = items.slice(start, start + AUDIT_PG);
-
-  document.getElementById('auditFooter').textContent = `${start + 1}–${Math.min(start + AUDIT_PG, items.length)} of ${items.length} events`;
-
-  if (!page.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No audit events found</td></tr>'; return; }
-
-  const actionColor = { 'user.login': 'blue', 'kyc.approved': 'green', 'kyc.rejected': 'red', 'transaction.completed': 'green', 'transaction.rejected': 'red', 'investment.paid_out': 'gold' };
-
-  body.innerHTML = page.map(e => `<tr>
-    <td class="td-muted" style="white-space:nowrap;font-size:0.75rem">${Utils.datetime ? Utils.datetime(e.created_at) : Utils.date(e.created_at)}</td>
-    <td><span class="badge badge--${actionColor[e.event_type] || 'gray'}" style="font-size:0.7rem">${e.event_type || '—'}</span></td>
-    <td><div style="font-size:0.78rem;font-weight:600">${e.user_email || '—'}</div></td>
-    <td class="td-muted" style="font-size:0.75rem">${e.entity_type ? `${e.entity_type}#${e.entity_id || ''}` : '—'}</td>
-    <td style="font-size:0.78rem;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.description || '—'}</td>
-    <td class="td-muted" style="font-size:0.72rem">${e.ip_address || '—'}</td>
-  </tr>`).join('');
-
-  const pages = Math.ceil(items.length / AUDIT_PG);
-  document.getElementById('auditPagination').innerHTML = Array.from({ length: Math.min(pages, 10) }, (_, i) =>
-    `<button class="page-btn ${i + 1 === _auditPage ? 'active' : ''}" onclick="_auditPage=${i+1};renderAuditTable()">${i+1}</button>`
-  ).join('');
-}
-
 /* ═══════════════════════════════════════════════
    AUDIT LOG
    ═══════════════════════════════════════════════ */

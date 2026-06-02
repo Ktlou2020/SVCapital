@@ -9,6 +9,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="../js/staff-auth.js?v=3"></script>
   <script>document.addEventListener('DOMContentLoaded',()=>{ StaffAuth.guard('accounting'); StaffAuth.injectWidget(); });</script>
   <style>
@@ -1309,10 +1311,11 @@ function refreshFinancials() {
     const netProfit = totalRev - totalExp;
 
     body.innerHTML = `
-      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-        <button class="btn btn-secondary btn-sm" onclick="exportIncomeCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px">
+        <button class="btn btn-secondary btn-sm" onclick="exportIncomeCSV()"><i class="fa-solid fa-file-csv"></i> CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="downloadFSPdf('income')"><i class="fa-solid fa-file-pdf"></i> PDF</button>
       </div>
-      <div class="tbl-wrap"><table class="stmt-table">
+      <div class="tbl-wrap"><table class="stmt-table" id="fs-income-table">
         <thead><tr><th colspan="2" style="background:var(--surface2);padding:12px;font-size:0.82rem">Income Statement</th></tr></thead>
         <tbody>
           <tr><td colspan="2" class="stmt-section">Revenue</td></tr>
@@ -1344,10 +1347,11 @@ function refreshFinancials() {
     const totalLE = totalLiabs + totalEquity + retained;
 
     body.innerHTML = `
-      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-        <button class="btn btn-secondary btn-sm" onclick="exportBalanceCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px">
+        <button class="btn btn-secondary btn-sm" onclick="exportBalanceCSV()"><i class="fa-solid fa-file-csv"></i> CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="downloadFSPdf('balance')"><i class="fa-solid fa-file-pdf"></i> PDF</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px" id="fs-balance-wrap">
         <div class="tbl-wrap"><table class="stmt-table">
           <thead><tr><th colspan="2" style="background:var(--surface2);padding:12px">Assets</th></tr></thead>
           <tbody>
@@ -1385,10 +1389,11 @@ function refreshFinancials() {
     const netCash = totalIn - totalOut;
 
     body.innerHTML = `
-      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-        <button class="btn btn-secondary btn-sm" onclick="exportCashCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px">
+        <button class="btn btn-secondary btn-sm" onclick="exportCashCSV()"><i class="fa-solid fa-file-csv"></i> CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="downloadFSPdf('cashflow')"><i class="fa-solid fa-file-pdf"></i> PDF</button>
       </div>
-      <div class="tbl-wrap"><table class="stmt-table">
+      <div class="tbl-wrap"><table class="stmt-table" id="fs-cashflow-table">
         <thead><tr><th colspan="2" style="background:var(--surface2);padding:12px">Cash Flow Statement</th></tr></thead>
         <tbody>
           <tr><td colspan="2" class="stmt-section">Cash Receipts (Inflows)</td></tr>
@@ -1410,7 +1415,9 @@ function renderMgmt(bid, biz) {
   const currency = biz.currency||'ZAR';
   const now = new Date();
   const tb = document.getElementById('topbar-actions');
-  tb.innerHTML = `<button class="btn btn-secondary btn-sm" onclick="exportMgmtCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>`;
+  tb.innerHTML = `
+    <button class="btn btn-secondary btn-sm" onclick="exportMgmtCSV()"><i class="fa-solid fa-file-csv"></i> CSV</button>
+    <button class="btn btn-primary btn-sm" onclick="downloadMgmtPdf()"><i class="fa-solid fa-file-pdf"></i> PDF</button>`;
   const content = document.getElementById('acct-content');
   content.innerHTML = `
     <div class="period-bar">
@@ -1478,7 +1485,7 @@ function refreshMgmt() {
 
   document.getElementById('mgmt-body').innerHTML = `
     <div class="tbl-wrap">
-      <table>
+      <table id="mgmt-table">
         <thead><tr>
           <th>Account</th>
           <th class="text-right">Budget</th>
@@ -1754,6 +1761,296 @@ function seedDemoData(bid) {
                    a.code==='6300'?15000:a.code==='6400'?10000:5000),
   }));
   lsSet('acct_budgets_'+bid, budgets);
+}
+
+/* ═══════════════════════════════════════════════════
+   PDF EXPORT
+═══════════════════════════════════════════════════ */
+
+function _pdfInit(title, subtitle) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const biz = getActiveBiz();
+  const bizName = biz ? biz.name : 'SV Capital';
+  const W = doc.internal.pageSize.getWidth();
+
+  // Header bar
+  doc.setFillColor(26, 34, 53);
+  doc.rect(0, 0, W, 28, 'F');
+
+  // Brand
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(255, 155, 12);
+  doc.text('SV Capital', 14, 11);
+  doc.setFontSize(8);
+  doc.setTextColor(180, 180, 180);
+  doc.text('Accounting', 14, 17);
+
+  // Business name right-aligned
+  doc.setFontSize(9);
+  doc.setTextColor(220, 220, 220);
+  doc.text(bizName, W - 14, 11, { align: 'right' });
+
+  // Title
+  doc.setFontSize(14);
+  doc.setTextColor(30, 30, 30);
+  doc.setFont('helvetica', 'bold');
+  doc.text(title, 14, 40);
+
+  if (subtitle) {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 100, 100);
+    doc.text(subtitle, 14, 47);
+  }
+
+  return { doc, startY: subtitle ? 54 : 48, W, bizName };
+}
+
+function _pdfFooter(doc) {
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const pages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(220, 220, 220);
+    doc.line(14, H - 14, W - 14, H - 14);
+    doc.setFontSize(7);
+    doc.setTextColor(150, 150, 150);
+    doc.text(`Generated ${new Date().toLocaleDateString('en-ZA')} · SV Capital Accounting`, 14, H - 8);
+    doc.text(`Page ${i} of ${pages}`, W - 14, H - 8, { align: 'right' });
+  }
+}
+
+function _pdfTable(doc, head, body, startY, opts = {}) {
+  doc.autoTable({
+    head,
+    body,
+    startY,
+    theme: 'striped',
+    headStyles: {
+      fillColor: [26, 34, 53],
+      textColor: [255, 155, 12],
+      fontSize: 8,
+      fontStyle: 'bold',
+      halign: 'left',
+    },
+    bodyStyles: { fontSize: 8, textColor: [40, 40, 40] },
+    alternateRowStyles: { fillColor: [248, 249, 252] },
+    columnStyles: opts.columnStyles || {},
+    margin: { left: 14, right: 14 },
+    didParseCell: opts.didParseCell,
+  });
+  return doc.lastAutoTable.finalY + 6;
+}
+
+function _getPeriodLabel() {
+  const year = document.getElementById('fs-year')?.value || new Date().getFullYear();
+  const period = document.getElementById('fs-period')?.value || 'full';
+  if (period === 'full') return `Year ${year}`;
+  return `${MONTHS[parseInt(period) - 1]} ${year}`;
+}
+
+function downloadFSPdf(type) {
+  if (!window.jspdf) { showToast('PDF library not loaded yet — try again in a moment', 'error'); return; }
+  const bid = getActiveId();
+  const biz = getActiveBiz();
+  if (!bid) return;
+  const currency = biz?.currency || 'ZAR';
+  const coa = getCoa(bid);
+  const year = parseInt(document.getElementById('fs-year')?.value || new Date().getFullYear());
+  const period = document.getElementById('fs-period')?.value || 'full';
+  const periodLabel = _getPeriodLabel();
+
+  const txns = getTransactions(bid).filter(t => {
+    const d = new Date(t.date);
+    if (d.getFullYear() !== year) return false;
+    if (period !== 'full' && d.getMonth() + 1 !== parseInt(period)) return false;
+    return true;
+  });
+
+  function accBal(acc) {
+    let b = acc.balance || 0;
+    txns.filter(t => t.accountId === acc.id).forEach(t => { b += t.type === 'credit' ? t.amount : -t.amount; });
+    return b;
+  }
+
+  if (type === 'income') {
+    const { doc, startY } = _pdfInit('Income Statement', periodLabel);
+    const revAccts = coa.filter(a => a.type === 'revenue');
+    const expAccts = coa.filter(a => a.type === 'expense');
+    const totalRev = revAccts.reduce((s, a) => s + accBal(a), 0);
+    const totalExp = expAccts.reduce((s, a) => s + Math.abs(accBal(a)), 0);
+    const netProfit = totalRev - totalExp;
+
+    const body = [
+      [{ content: 'REVENUE', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [240, 242, 255], textColor: [60, 60, 60] } }],
+      ...revAccts.map(a => [a.code + ' — ' + a.name, fmt(accBal(a), currency)]),
+      [{ content: 'Total Revenue', styles: { fontStyle: 'bold' } }, { content: fmt(totalRev, currency), styles: { fontStyle: 'bold' } }],
+      [{ content: 'EXPENSES', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [240, 242, 255], textColor: [60, 60, 60] } }],
+      ...expAccts.map(a => [a.code + ' — ' + a.name, fmt(Math.abs(accBal(a)), currency)]),
+      [{ content: 'Total Expenses', styles: { fontStyle: 'bold' } }, { content: fmt(totalExp, currency), styles: { fontStyle: 'bold' } }],
+      [
+        { content: 'Net Profit / (Loss)', styles: { fontStyle: 'bold', fontSize: 9 } },
+        { content: fmt(netProfit, currency), styles: { fontStyle: 'bold', fontSize: 9, textColor: netProfit >= 0 ? [34, 197, 94] : [239, 68, 68] } },
+      ],
+    ];
+    _pdfTable(doc, [['Account', 'Amount']], body, startY, { columnStyles: { 1: { halign: 'right' } } });
+    _pdfFooter(doc);
+    doc.save(`Income_Statement_${periodLabel.replace(/\s/g, '_')}.pdf`);
+
+  } else if (type === 'balance') {
+    const { doc, startY, W } = _pdfInit('Balance Sheet', periodLabel + ' (as at end of period)');
+    const allTxns = getTransactions(bid);
+    function fullBal(acc) {
+      let b = acc.balance || 0;
+      allTxns.filter(t => t.accountId === acc.id).forEach(t => { b += t.type === 'credit' ? t.amount : -t.amount; });
+      return b;
+    }
+    const assets  = coa.filter(a => a.type === 'asset');
+    const liabs   = coa.filter(a => a.type === 'liability');
+    const equity  = coa.filter(a => a.type === 'equity');
+    const totalAssets = assets.reduce((s, a) => s + fullBal(a), 0);
+    const totalLiabs  = liabs.reduce((s, a) => s + fullBal(a), 0);
+    const totalEquity = equity.reduce((s, a) => s + fullBal(a), 0);
+    const retained = coa.filter(a=>a.type==='revenue').reduce((s,a)=>s+fullBal(a),0) -
+                     coa.filter(a=>a.type==='expense').reduce((s,a)=>s+Math.abs(fullBal(a)),0);
+
+    // Assets table
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
+    doc.text('ASSETS', 14, startY - 2);
+    const assetBody = [
+      [{ content: 'Current Assets', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [240, 242, 255] } }],
+      ...assets.filter(a => a.category === 'current').map(a => [a.code + ' — ' + a.name, fmt(fullBal(a), currency)]),
+      [{ content: 'Fixed Assets', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [240, 242, 255] } }],
+      ...assets.filter(a => a.category === 'fixed').map(a => [a.code + ' — ' + a.name, fmt(fullBal(a), currency)]),
+      [{ content: 'Total Assets', styles: { fontStyle: 'bold' } }, { content: fmt(totalAssets, currency), styles: { fontStyle: 'bold' } }],
+    ];
+    const afterAssets = _pdfTable(doc, [['Account', 'Balance']], assetBody, startY, { columnStyles: { 1: { halign: 'right' } } });
+
+    // Liabilities & Equity table
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.text('LIABILITIES & EQUITY', 14, afterAssets + 2);
+    const leBody = [
+      [{ content: 'Current Liabilities', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [240, 242, 255] } }],
+      ...liabs.filter(a => a.category === 'current').map(a => [a.code + ' — ' + a.name, fmt(fullBal(a), currency)]),
+      [{ content: 'Long-term Liabilities', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [240, 242, 255] } }],
+      ...liabs.filter(a => a.category === 'long_term').map(a => [a.code + ' — ' + a.name, fmt(fullBal(a), currency)]),
+      [{ content: 'Total Liabilities', styles: { fontStyle: 'bold' } }, { content: fmt(totalLiabs, currency), styles: { fontStyle: 'bold' } }],
+      [{ content: 'Equity', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [240, 242, 255] } }],
+      ...equity.map(a => [a.code + ' — ' + a.name, fmt(fullBal(a), currency)]),
+      ['Retained Earnings', { content: fmt(retained, currency), styles: { textColor: retained >= 0 ? [34, 197, 94] : [239, 68, 68] } }],
+      [{ content: 'Total Liabilities & Equity', styles: { fontStyle: 'bold' } }, { content: fmt(totalLiabs + totalEquity + retained, currency), styles: { fontStyle: 'bold' } }],
+    ];
+    _pdfTable(doc, [['Account', 'Balance']], leBody, afterAssets + 8, { columnStyles: { 1: { halign: 'right' } } });
+    _pdfFooter(doc);
+    doc.save(`Balance_Sheet_${periodLabel.replace(/\s/g, '_')}.pdf`);
+
+  } else if (type === 'cashflow') {
+    const { doc, startY } = _pdfInit('Cash Flow Statement', periodLabel);
+    const cashAcct = coa.find(a => a.code === '1000');
+    if (!cashAcct) { showToast('No Cash account (1000) found', 'error'); return; }
+    const cashTxns = txns.filter(t => t.accountId === cashAcct.id);
+    const receipts = cashTxns.filter(t => t.type === 'credit');
+    const payments = cashTxns.filter(t => t.type === 'debit');
+    const totalIn  = receipts.reduce((s, t) => s + t.amount, 0);
+    const totalOut = payments.reduce((s, t) => s + t.amount, 0);
+    const netCash  = totalIn - totalOut;
+
+    const body = [
+      [{ content: 'CASH RECEIPTS (INFLOWS)', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [240, 242, 255] } }],
+      ...receipts.map(t => [fmtDate(t.date) + ' — ' + t.description, { content: '+' + fmt(t.amount, currency), styles: { textColor: [34, 197, 94] } }]),
+      ...(receipts.length ? [] : [['No receipts in this period', '']]),
+      [{ content: 'Total Inflows', styles: { fontStyle: 'bold' } }, { content: fmt(totalIn, currency), styles: { fontStyle: 'bold' } }],
+      [{ content: 'CASH PAYMENTS (OUTFLOWS)', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [240, 242, 255] } }],
+      ...payments.map(t => [fmtDate(t.date) + ' — ' + t.description, { content: '-' + fmt(t.amount, currency), styles: { textColor: [239, 68, 68] } }]),
+      ...(payments.length ? [] : [['No payments in this period', '']]),
+      [{ content: 'Total Outflows', styles: { fontStyle: 'bold' } }, { content: fmt(totalOut, currency), styles: { fontStyle: 'bold' } }],
+      [
+        { content: 'Net Cash Flow', styles: { fontStyle: 'bold', fontSize: 9 } },
+        { content: fmt(netCash, currency), styles: { fontStyle: 'bold', fontSize: 9, textColor: netCash >= 0 ? [34, 197, 94] : [239, 68, 68] } },
+      ],
+    ];
+    _pdfTable(doc, [['Description', 'Amount']], body, startY, { columnStyles: { 1: { halign: 'right', cellWidth: 45 } } });
+    _pdfFooter(doc);
+    doc.save(`Cash_Flow_${periodLabel.replace(/\s/g, '_')}.pdf`);
+  }
+}
+
+function downloadMgmtPdf() {
+  if (!window.jspdf) { showToast('PDF library not loaded yet — try again in a moment', 'error'); return; }
+  const bid = getActiveId();
+  const biz = getActiveBiz();
+  if (!bid) return;
+  const currency = biz?.currency || 'ZAR';
+  const coa = getCoa(bid);
+  const budgets = getBudgets(bid);
+  const year = parseInt(document.getElementById('mgmt-year')?.value || new Date().getFullYear());
+  const month = parseInt(document.getElementById('mgmt-month')?.value || new Date().getMonth() + 1);
+  const monthName = MONTHS[month - 1] + ' ' + year;
+
+  const txns = getTransactions(bid).filter(t => {
+    const d = new Date(t.date);
+    return d.getFullYear() === year && d.getMonth() + 1 === month;
+  });
+  function actual(acc) {
+    let b = 0;
+    txns.filter(t => t.accountId === acc.id).forEach(t => { b += t.type === 'credit' ? t.amount : -t.amount; });
+    return Math.abs(b);
+  }
+  function budget(acc) {
+    const b = budgets.find(b => b.accountId === acc.id && b.year === year && b.month === month);
+    return b ? b.budgetAmount : 0;
+  }
+
+  const { doc, startY } = _pdfInit('Management Accounts', monthName);
+  const rvAccts = coa.filter(a => a.type === 'revenue');
+  const exAccts = coa.filter(a => a.type === 'expense');
+
+  function rows(accts, isExp) {
+    return accts.map(a => {
+      const bgt = budget(a), act = actual(a);
+      const variance = isExp ? bgt - act : act - bgt;
+      const varPct = bgt ? (variance / bgt * 100).toFixed(1) + '%' : '—';
+      const favourable = variance >= 0;
+      return [
+        a.code + ' — ' + a.name,
+        fmt(bgt, currency),
+        fmt(act, currency),
+        { content: fmt(variance, currency), styles: { textColor: favourable ? [34, 197, 94] : [239, 68, 68] } },
+        { content: varPct, styles: { textColor: favourable ? [34, 197, 94] : [239, 68, 68] } },
+      ];
+    });
+  }
+
+  const totalRevBgt = rvAccts.reduce((s, a) => s + budget(a), 0);
+  const totalRevAct = rvAccts.reduce((s, a) => s + actual(a), 0);
+  const totalExpBgt = exAccts.reduce((s, a) => s + budget(a), 0);
+  const totalExpAct = exAccts.reduce((s, a) => s + actual(a), 0);
+
+  const body = [
+    [{ content: 'REVENUE', colSpan: 5, styles: { fontStyle: 'bold', fillColor: [240, 242, 255] } }],
+    ...rows(rvAccts, false),
+    [{ content: 'Total Revenue', styles: { fontStyle: 'bold' } }, fmt(totalRevBgt, currency), fmt(totalRevAct, currency),
+     { content: fmt(totalRevAct - totalRevBgt, currency), styles: { fontStyle: 'bold', textColor: totalRevAct >= totalRevBgt ? [34, 197, 94] : [239, 68, 68] } },
+     { content: totalRevBgt ? ((totalRevAct - totalRevBgt) / totalRevBgt * 100).toFixed(1) + '%' : '—', styles: { fontStyle: 'bold', textColor: totalRevAct >= totalRevBgt ? [34, 197, 94] : [239, 68, 68] } }],
+    [{ content: 'EXPENSES', colSpan: 5, styles: { fontStyle: 'bold', fillColor: [240, 242, 255] } }],
+    ...rows(exAccts, true),
+    [{ content: 'Total Expenses', styles: { fontStyle: 'bold' } }, fmt(totalExpBgt, currency), fmt(totalExpAct, currency),
+     { content: fmt(totalExpBgt - totalExpAct, currency), styles: { fontStyle: 'bold', textColor: totalExpAct <= totalExpBgt ? [34, 197, 94] : [239, 68, 68] } },
+     { content: totalExpBgt ? ((totalExpBgt - totalExpAct) / totalExpBgt * 100).toFixed(1) + '%' : '—', styles: { fontStyle: 'bold', textColor: totalExpAct <= totalExpBgt ? [34, 197, 94] : [239, 68, 68] } }],
+    [{ content: 'Net Profit', styles: { fontStyle: 'bold', fontSize: 9 } },
+     { content: fmt(totalRevBgt - totalExpBgt, currency), styles: { fontStyle: 'bold' } },
+     { content: fmt(totalRevAct - totalExpAct, currency), styles: { fontStyle: 'bold' } },
+     { content: fmt((totalRevAct - totalExpAct) - (totalRevBgt - totalExpBgt), currency), styles: { fontStyle: 'bold', textColor: (totalRevAct - totalExpAct) >= (totalRevBgt - totalExpBgt) ? [34, 197, 94] : [239, 68, 68] } },
+     ''],
+  ];
+  _pdfTable(doc, [['Account', 'Budget', 'Actual', 'Variance', 'Var %']], body, startY, {
+    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+  });
+  _pdfFooter(doc);
+  doc.save(`Management_Accounts_${monthName.replace(/\s/g, '_')}.pdf`);
 }
 
 /* ═══════════════════════════════════════════════════
