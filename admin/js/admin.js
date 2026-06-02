@@ -3043,3 +3043,413 @@ async function exportAumReport() {
     } catch (_) { /* jsPDF not fully available */ }
   }
 }
+
+/* ═══════════════════════════════════════════════
+   FEATURE 1: AML COMPLIANCE DASHBOARD
+   ═══════════════════════════════════════════════ */
+async function loadAML() {
+  try {
+    const [flagRes, invRes] = await Promise.all([
+      API._fetch('GET', 'tables/support_tickets', null, { category: 'aml_review', limit: 200 }),
+      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 200 })
+    ]);
+    STATE.amlFlags = flagRes.data || [];
+    if (!STATE.investors.length) STATE.investors = invRes.data || [];
+    renderAMLStats();
+    renderAMLTable();
+
+    // Update nav badge
+    const badge = document.getElementById('amlBadge');
+    const openCount = STATE.amlFlags.filter(f => f.status === 'open' || f.status === 'in_review').length;
+    if (badge) {
+      badge.textContent = openCount;
+      badge.style.display = openCount > 0 ? '' : 'none';
+    }
+  } catch (e) {
+    Toast.error('Failed to load AML flags');
+    console.error(e);
+  }
+}
+
+function renderAMLStats() {
+  const flags = STATE.amlFlags;
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const total      = flags.length;
+  const open       = flags.filter(f => f.status === 'open' || f.status === 'in_review').length;
+  const highPri    = flags.filter(f => f.priority === 'high' || f.priority === 'urgent').length;
+  const resolvedMo = flags.filter(f => f.status === 'resolved' && new Date(f.updated_at || f.resolved_at || f.created_at) >= startOfMonth).length;
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('aml-total',    total);
+  set('aml-open',     open);
+  set('aml-high',     highPri);
+  set('aml-resolved', resolvedMo);
+}
+
+function renderAMLTable() {
+  const tbody = document.getElementById('amlTableBody');
+  if (!tbody) return;
+  const flags = STATE.amlFlags;
+
+  if (!flags.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-shield-check" style="color:var(--green);font-size:1.5rem;margin-bottom:8px;display:block"></i>No AML flags found</td></tr>';
+    return;
+  }
+
+  const statusBadge = s => {
+    const map = { open: 'badge--red', in_review: 'badge--yellow', resolved: 'badge--green', closed: 'badge--gray' };
+    return `<span class="badge ${map[s] || 'badge--gray'}">${s ? s.replace(/_/g, ' ') : '—'}</span>`;
+  };
+
+  tbody.innerHTML = flags.map(f => {
+    const inv      = STATE.investors.find(i => i.id === f.investor_id);
+    const invName  = f.investor_name || (inv ? `${inv.first_name} ${inv.last_name}` : f.investor_id || '—');
+    const amount   = f.amount || f.transaction_amount || '';
+    const canResolve = f.status !== 'resolved' && f.status !== 'closed';
+    return `<tr>
+      <td class="td-muted">${Utils.date(f.created_at)}</td>
+      <td>
+        <div class="td-strong">${invName}</div>
+        <div class="td-muted" style="font-size:0.72rem">${f.investor_id || ''}</div>
+      </td>
+      <td class="td-gold fw-700">${amount ? Utils.rand(amount) : '—'}</td>
+      <td style="max-width:200px;font-size:0.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.subject || f.reason || f.message || '—'}</td>
+      <td>${Utils.priorityBadge ? Utils.priorityBadge(f.priority) : `<span class="badge">${f.priority || '—'}</span>`}</td>
+      <td>${statusBadge(f.status)}</td>
+      <td>
+        <div class="flex-center gap-6">
+          <button class="btn btn--secondary btn--sm" onclick='navigate("investors", document.querySelector("[data-view=investors]"));setTimeout(()=>{document.getElementById("investorSearch").value=${JSON.stringify(invName)};document.getElementById("investorSearch").dispatchEvent(new Event("input"))},350)'><i class="fa-solid fa-eye"></i> Investor</button>
+          ${canResolve ? `<button class="btn btn--success btn--sm" onclick='resolveAMLFlag(${JSON.stringify(f.id)})'><i class="fa-solid fa-check"></i> Resolve</button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function resolveAMLFlag(id) {
+  if (!confirm('Mark this AML flag as resolved?')) return;
+  try {
+    await API._fetch('PATCH', `tables/support_tickets/${id}`, {
+      status: 'resolved',
+      resolved_at: new Date().toISOString(),
+      admin_response: `Resolved by admin on ${new Date().toLocaleDateString('en-ZA')}`
+    });
+    Toast.success('AML flag resolved');
+    await loadAML();
+  } catch (e) { Toast.error('Failed to resolve AML flag'); }
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE 2: INVESTOR NOTES
+   ═══════════════════════════════════════════════ */
+async function loadInvestorNotes(investorId) {
+  const listEl  = document.getElementById('invNotesList');
+  const countEl = document.getElementById('invNotesCount');
+  if (!listEl) return;
+
+  try {
+    const res = await API._fetch('GET', 'tables/investor_notes', null, { investor_id: investorId, limit: 50 });
+    const notes = (res.data || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    if (countEl) countEl.textContent = `${notes.length} note${notes.length !== 1 ? 's' : ''}`;
+
+    if (!notes.length) {
+      listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem">No notes yet — add the first note below.</div>';
+      return;
+    }
+
+    listEl.innerHTML = notes.map(n => {
+      const authorShort = n.admin_email ? n.admin_email.replace(/@.*$/, '') : 'Admin';
+      return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:0.75rem;font-weight:700;color:var(--orange)">${authorShort}</span>
+          <span style="font-size:0.7rem;color:var(--text-dim)">${Utils.date(n.created_at)}</span>
+        </div>
+        <div style="font-size:0.82rem;color:var(--text);white-space:pre-wrap">${n.note || '—'}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    if (listEl) listEl.innerHTML = '<div style="padding:16px;color:var(--text-dim);font-size:0.8rem">Could not load notes.</div>';
+    if (countEl) countEl.textContent = '—';
+  }
+}
+
+async function addInvestorNote(investorId) {
+  const ta = document.getElementById('invNewNoteTA');
+  if (!ta) return;
+  const noteText = ta.value.trim();
+  if (!noteText) { Toast.error('Please enter a note'); return; }
+
+  const adminEmail = STATE.adminEmail || 'admin@svcapital.co.za';
+
+  try {
+    await API._fetch('POST', 'tables/investor_notes', {
+      id:          `NOTE-${Date.now()}`,
+      investor_id: investorId,
+      admin_email: adminEmail,
+      note:        noteText,
+      created_at:  new Date().toISOString()
+    });
+    ta.value = '';
+    Toast.success('Note added');
+    await loadInvestorNotes(investorId);
+  } catch (e) { Toast.error('Failed to save note'); }
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE 3: ANALYTICS CHARTS (Real Data)
+   ═══════════════════════════════════════════════ */
+
+// Helper: get last N month labels (e.g. ["Jul 25", "Aug 25", ...])
+function _lastNMonths(n) {
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const result = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    result.push({ label: `${months[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`, year: d.getFullYear(), month: d.getMonth() });
+  }
+  return result;
+}
+
+function _chartDefaults() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: '#7a92a8', font: { size: 10 }, boxWidth: 10, padding: 8 } },
+      tooltip: { backgroundColor: 'rgba(13,17,23,0.95)', titleColor: '#e8edf2', bodyColor: '#7a92a8', borderColor: 'rgba(212,175,55,0.3)', borderWidth: 1 }
+    },
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', font: { size: 10 } } },
+      y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', font: { size: 10 } } }
+    }
+  };
+}
+
+function renderAnAumChart() {
+  const ctx = document.getElementById('anAumChart');
+  if (!ctx) return;
+
+  const buckets = _lastNMonths(12);
+  // Running cumulative sum of deposit transactions
+  const monthTotals = buckets.map(b => {
+    return STATE.transactions
+      .filter(t => {
+        if (t.type !== 'deposit' || t.status !== 'completed') return false;
+        const d = new Date(t.created_at || t.transaction_date || 0);
+        return d.getFullYear() === b.year && d.getMonth() === b.month;
+      })
+      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+  });
+
+  // Running cumulative AUM
+  let running = 0;
+  const aumData = monthTotals.map(v => { running += v; return running; });
+
+  if (STATE.charts.anAum) STATE.charts.anAum.destroy();
+  const opts = _chartDefaults();
+  opts.plugins.tooltip.callbacks = { label: c => ` ${Utils.rand(c.parsed.y)}` };
+  opts.scales.y.ticks.callback = v => 'R' + (v / 1000).toFixed(0) + 'k';
+
+  STATE.charts.anAum = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: buckets.map(b => b.label),
+      datasets: [{
+        label: 'Cumulative AUM (deposits)',
+        data: aumData,
+        borderColor: '#D4AF37',
+        backgroundColor: (c) => {
+          const g = c.chart.ctx.createLinearGradient(0, 0, 0, 220);
+          g.addColorStop(0, 'rgba(212,175,55,0.2)');
+          g.addColorStop(1, 'rgba(212,175,55,0)');
+          return g;
+        },
+        fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: '#D4AF37'
+      }]
+    },
+    options: opts
+  });
+}
+
+function renderAnNewInvChart() {
+  const ctx = document.getElementById('anNewInvChart');
+  if (!ctx) return;
+
+  const buckets = _lastNMonths(12);
+  const counts = buckets.map(b =>
+    STATE.investors.filter(i => {
+      const d = new Date(i.date_joined || i.created_at || 0);
+      return d.getFullYear() === b.year && d.getMonth() === b.month;
+    }).length
+  );
+
+  if (STATE.charts.anNewInv) STATE.charts.anNewInv.destroy();
+  const opts = _chartDefaults();
+  opts.plugins.tooltip.callbacks = { label: c => ` ${c.parsed.y} investors` };
+
+  STATE.charts.anNewInv = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: buckets.map(b => b.label),
+      datasets: [{
+        label: 'New Investors',
+        data: counts,
+        backgroundColor: 'rgba(99,102,241,0.7)',
+        borderRadius: 5
+      }]
+    },
+    options: opts
+  });
+}
+
+function renderAnReturnsChart() {
+  const ctx = document.getElementById('anReturnsChart');
+  if (!ctx) return;
+
+  const buckets = _lastNMonths(12);
+  const data = buckets.map(b =>
+    STATE.transactions
+      .filter(t => {
+        if (t.type !== 'return') return false;
+        const d = new Date(t.created_at || t.transaction_date || 0);
+        return d.getFullYear() === b.year && d.getMonth() === b.month;
+      })
+      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0)
+  );
+
+  if (STATE.charts.anReturns) STATE.charts.anReturns.destroy();
+  const opts = _chartDefaults();
+  opts.plugins.tooltip.callbacks = { label: c => ` ${Utils.rand(c.parsed.y)}` };
+  opts.scales.y.ticks.callback = v => 'R' + (v / 1000).toFixed(0) + 'k';
+
+  STATE.charts.anReturns = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: buckets.map(b => b.label),
+      datasets: [{
+        label: 'Returns Distributed',
+        data,
+        backgroundColor: 'rgba(34,197,94,0.7)',
+        borderRadius: 5
+      }]
+    },
+    options: opts
+  });
+}
+
+function renderAnStatusChart() {
+  const ctx = document.getElementById('anStatusChart');
+  if (!ctx) return;
+
+  const statuses = ['active', 'matured', 'paid_out', 'pending'];
+  const counts = statuses.map(s => STATE.investments.filter(i => i.status === s).length);
+  const labels = ['Active', 'Matured', 'Paid Out', 'Pending'];
+  const colors = ['#22c55e', '#a855f7', '#D4AF37', '#f97316'];
+
+  if (STATE.charts.anStatus) STATE.charts.anStatus.destroy();
+
+  STATE.charts.anStatus = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data: counts, backgroundColor: colors, borderColor: 'var(--dark-2)', borderWidth: 3, hoverOffset: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#7a92a8', font: { size: 10 }, boxWidth: 10, padding: 10 } },
+        tooltip: { backgroundColor: 'rgba(13,17,23,0.95)', titleColor: '#e8edf2', bodyColor: '#7a92a8', callbacks: { label: c => ` ${c.label}: ${c.parsed}` } }
+      }
+    }
+  });
+}
+
+// Wrap the existing loadAnalytics to also render the new charts
+const _origLoadAnalytics = loadAnalytics;
+async function loadAnalytics() {
+  await _origLoadAnalytics();
+  renderAnAumChart();
+  renderAnNewInvChart();
+  renderAnReturnsChart();
+  renderAnStatusChart();
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE 4: MANUAL INTEREST / ADJUSTMENT
+   ═══════════════════════════════════════════════ */
+function openManualAdjModal() {
+  const sel = document.getElementById('adjInvestorSelect');
+  if (sel) {
+    sel.innerHTML = '<option value="">Select investor…</option>' +
+      [...STATE.investors]
+        .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
+        .map(i => `<option value="${i.id}">${i.first_name} ${i.last_name} (${i.id})</option>`)
+        .join('');
+  }
+  const refEl = document.getElementById('adjReference');
+  if (refEl) refEl.value = `ADJ-${Date.now()}`;
+  const amtEl = document.getElementById('adjAmount');
+  if (amtEl) amtEl.value = '';
+  const descEl = document.getElementById('adjDescription');
+  if (descEl) descEl.value = '';
+  // Default to credit
+  const creditRad = document.getElementById('adjCredit');
+  if (creditRad) creditRad.checked = true;
+  Modal.open('manualAdjModal');
+}
+
+async function saveManualAdj() {
+  const investorId  = document.getElementById('adjInvestorSelect').value;
+  const adjType     = document.querySelector('input[name="adjType"]:checked')?.value || 'credit';
+  const rawAmount   = parseFloat(document.getElementById('adjAmount').value);
+  const description = document.getElementById('adjDescription').value.trim();
+  const reference   = document.getElementById('adjReference').value.trim();
+
+  if (!investorId) { Toast.error('Please select an investor'); return; }
+  if (!rawAmount || rawAmount <= 0) { Toast.error('Please enter a valid positive amount'); return; }
+  if (!description) { Toast.error('Description is required'); return; }
+
+  const investor = STATE.investors.find(i => i.id === investorId);
+  if (!investor) { Toast.error('Investor not found'); return; }
+
+  const signedAmount = adjType === 'credit' ? Math.abs(rawAmount) : -Math.abs(rawAmount);
+  const currentBalance = parseFloat(investor.wallet_balance) || 0;
+  const newBalance = Math.round((currentBalance + signedAmount) * 100) / 100;
+
+  if (newBalance < 0 && adjType === 'debit') {
+    if (!confirm(`This debit of ${Utils.rand(rawAmount)} will result in a negative wallet balance of ${Utils.rand(newBalance)}. Continue?`)) return;
+  }
+
+  try {
+    // 1. Record transaction
+    await API.transactions.create({
+      id:               Utils.genId ? Utils.genId('TXN') : `TXN-${Date.now()}`,
+      investor_id:      investorId,
+      type:             'adjustment',
+      amount:           signedAmount,
+      status:           'completed',
+      reference:        reference,
+      description:      description,
+      transaction_date: new Date().toISOString()
+    });
+
+    // 2. Update wallet balance
+    await API.investors.update(investorId, { wallet_balance: newBalance });
+
+    // Update in STATE
+    investor.wallet_balance = newBalance;
+
+    Toast.success(`Adjustment applied: ${adjType === 'credit' ? '+' : '−'}${Utils.rand(rawAmount)} for ${investor.first_name} ${investor.last_name}`);
+    Modal.close('manualAdjModal');
+
+    // Reload investors if on investors view
+    if (STATE.currentView === 'investors') await loadInvestors();
+  } catch (e) {
+    Toast.error('Failed to apply adjustment');
+    console.error(e);
+  }
+}
