@@ -15,6 +15,7 @@ const jwt     = require('jsonwebtoken');
 const pool    = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const emailService = require('../services/email');
+const audit        = require('../services/audit');
 
 const JWT_SECRET     = process.env.JWT_SECRET || 'svcapital-dev-secret-change-in-production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
@@ -95,6 +96,13 @@ router.post('/login', async (req, res) => {
       fund_manager: '/fund/index.html',
       staff:        '/team/hub.html',
     };
+
+    setImmediate(() => audit.log({
+      actorId: user.id, actorEmail: user.email, action: 'user.login',
+      entityType: 'users', entityId: user.id,
+      description: `${user.role} login: ${user.email}`,
+      ip: req.ip,
+    }));
 
     res.json({
       token,

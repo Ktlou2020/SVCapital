@@ -96,7 +96,8 @@ function navigate(view, btnEl) {
   const titles = {
     dashboard: 'Dashboard', investors: 'Investor Management', ifa: 'IFA Management', kyc: 'KYC / FICA',
     pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
-    transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics', settings: 'Settings'
+    transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
+    auditlog: 'Audit Log', settings: 'Settings'
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -112,6 +113,7 @@ function navigate(view, btnEl) {
     transactions: loadTransactions,
     support: loadSupport,
     analytics: loadAnalytics,
+    auditlog: loadAuditLog,
     settings: loadSettings,
     withdrawals: loadWithdrawals,
   };
@@ -1685,6 +1687,7 @@ async function loadAnalytics() {
   renderProvinceChart();
   renderRiskChart();
   renderTxnFlowChart();
+  renderConversionFunnel();
 }
 
 function renderProductVolChart() {
@@ -1775,6 +1778,82 @@ function renderTxnFlowChart() {
       }
     }
   });
+}
+
+function renderConversionFunnel() {
+  const panel = document.getElementById('funnelPanel');
+  if (!panel) return;
+
+  const total = STATE.investors.length;
+  if (!total) { panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">No investor data</div>'; return; }
+
+  // Compute each stage
+  const ficaSubmitted = STATE.investors.filter(i =>
+    ['fica_submitted', 'active'].includes(i.status) ||
+    ['fica_submitted', 'approved'].includes(i.fica_status)
+  ).length;
+
+  const ficaApproved = STATE.investors.filter(i =>
+    i.status === 'active' || i.fica_status === 'approved'
+  ).length;
+
+  // Investors with at least one completed deposit
+  const depositedIds = new Set(
+    STATE.transactions
+      .filter(t => t.type === 'deposit' && t.status === 'completed')
+      .map(t => t.investor_id)
+  );
+  const deposited = STATE.investors.filter(i => depositedIds.has(i.id)).length;
+
+  // Investors with at least one investment
+  const investedIds = new Set(STATE.investments.map(i => i.investor_id));
+  const invested = STATE.investors.filter(i => investedIds.has(i.id)).length;
+
+  const stages = [
+    { label: 'Signed Up',        count: total,         color: '#6366f1' },
+    { label: 'FICA Submitted',   count: ficaSubmitted,  color: '#3b82f6' },
+    { label: 'FICA Approved',    count: ficaApproved,   color: '#FF9B0C' },
+    { label: 'First Deposit',    count: deposited,      color: '#22c55e' },
+    { label: 'First Investment', count: invested,       color: '#D4AF37' },
+  ];
+
+  panel.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0">
+      ${stages.map((s, i) => {
+        const pct     = total > 0 ? Math.round(s.count / total * 100) : 0;
+        const dropOff = i > 0 ? Math.round((1 - s.count / (stages[i-1].count || 1)) * 100) : 0;
+        return `
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="width:10px;height:10px;border-radius:50%;background:${s.color};flex-shrink:0"></div>
+                <span style="font-size:0.82rem;font-weight:600;color:var(--white)">${s.label}</span>
+                ${i > 0 && dropOff > 0 ? `<span style="font-size:0.7rem;color:#ef4444;background:rgba(239,68,68,0.12);padding:1px 6px;border-radius:4px">−${dropOff}% drop</span>` : ''}
+              </div>
+              <div style="display:flex;gap:12px;align-items:center">
+                <span style="font-size:0.9rem;font-weight:700;color:var(--white)">${s.count.toLocaleString()}</span>
+                <span style="font-size:0.78rem;color:var(--text-muted);min-width:36px;text-align:right">${pct}%</span>
+              </div>
+            </div>
+            <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:${s.color};border-radius:4px;transition:width 0.6s ease"></div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:24px;flex-wrap:wrap">
+      <div style="font-size:0.78rem;color:var(--text-muted)">
+        <span style="font-weight:600;color:#22c55e">${invested > 0 ? Math.round(invested/total*100) : 0}%</span> end-to-end conversion
+      </div>
+      <div style="font-size:0.78rem;color:var(--text-muted)">
+        <span style="font-weight:600;color:#FF9B0C">${total}</span> total investors
+      </div>
+      <div style="font-size:0.78rem;color:var(--text-muted)">
+        <span style="font-weight:600;color:#D4AF37">${invested}</span> active investors
+      </div>
+    </div>
+  `;
 }
 
 /* ═══════════════════════════════════════════════
@@ -2436,4 +2515,96 @@ async function bulkRejectKyc() {
     Toast.success(`${ids.length} document(s) rejected`);
     await loadKYC();
   } catch (e) { Toast.error('Bulk reject failed'); }
+}
+
+/* ═══════════════════════════════════════════════
+   AUDIT LOG
+   ═══════════════════════════════════════════════ */
+let _auditEvents = [];
+let _auditPage   = 1;
+const AUDIT_PG   = 50;
+
+async function loadAuditLog() {
+  try {
+    const res = await API.tables.list('audit_events', { limit: 500, order: 'created_at', direction: 'desc' });
+    _auditEvents = res.data || [];
+    renderAuditTable();
+    document.getElementById('auditTypeFilter')?.addEventListener('change', () => { _auditPage = 1; renderAuditTable(); });
+  } catch (e) { Toast.error('Failed to load audit log'); }
+}
+
+function renderAuditTable() {
+  const body   = document.getElementById('auditBody');
+  const filter = document.getElementById('auditTypeFilter')?.value || '';
+  const items  = filter ? _auditEvents.filter(e => e.event_type?.includes(filter)) : _auditEvents;
+  const start  = (_auditPage - 1) * AUDIT_PG;
+  const page   = items.slice(start, start + AUDIT_PG);
+
+  document.getElementById('auditFooter').textContent = `${start + 1}–${Math.min(start + AUDIT_PG, items.length)} of ${items.length} events`;
+
+  if (!page.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No audit events found</td></tr>'; return; }
+
+  const actionColor = { 'user.login': 'blue', 'kyc.approved': 'green', 'kyc.rejected': 'red', 'transaction.completed': 'green', 'transaction.rejected': 'red', 'investment.paid_out': 'gold' };
+
+  body.innerHTML = page.map(e => `<tr>
+    <td class="td-muted" style="white-space:nowrap;font-size:0.75rem">${Utils.datetime ? Utils.datetime(e.created_at) : Utils.date(e.created_at)}</td>
+    <td><span class="badge badge--${actionColor[e.event_type] || 'gray'}" style="font-size:0.7rem">${e.event_type || '—'}</span></td>
+    <td><div style="font-size:0.78rem;font-weight:600">${e.user_email || '—'}</div></td>
+    <td class="td-muted" style="font-size:0.75rem">${e.entity_type ? `${e.entity_type}#${e.entity_id || ''}` : '—'}</td>
+    <td style="font-size:0.78rem;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.description || '—'}</td>
+    <td class="td-muted" style="font-size:0.72rem">${e.ip_address || '—'}</td>
+  </tr>`).join('');
+
+  const pages = Math.ceil(items.length / AUDIT_PG);
+  document.getElementById('auditPagination').innerHTML = Array.from({ length: Math.min(pages, 10) }, (_, i) =>
+    `<button class="page-btn ${i + 1 === _auditPage ? 'active' : ''}" onclick="_auditPage=${i+1};renderAuditTable()">${i+1}</button>`
+  ).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   AUDIT LOG
+   ═══════════════════════════════════════════════ */
+let _auditEvents = [];
+let _auditPage   = 1;
+const AUDIT_PG   = 50;
+
+async function loadAuditLog() {
+  try {
+    const res = await API.tables.list('audit_events', { limit: 500, order: 'created_at', direction: 'desc' });
+    _auditEvents = res.data || [];
+    renderAuditTable();
+    const filter = document.getElementById('auditTypeFilter');
+    if (filter) filter.addEventListener('change', () => { _auditPage = 1; renderAuditTable(); });
+  } catch (e) { Toast.error('Failed to load audit log'); }
+}
+
+function renderAuditTable() {
+  const body   = document.getElementById('auditBody');
+  if (!body) return;
+  const filter = document.getElementById('auditTypeFilter')?.value || '';
+  const items  = filter ? _auditEvents.filter(e => (e.event_type || '').includes(filter)) : _auditEvents;
+  const start  = (_auditPage - 1) * AUDIT_PG;
+  const page   = items.slice(start, start + AUDIT_PG);
+
+  const footer = document.getElementById('auditFooter');
+  if (footer) footer.textContent = `${start + 1}–${Math.min(start + AUDIT_PG, items.length)} of ${items.length} events`;
+
+  if (!page.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No audit events found</td></tr>'; return; }
+
+  const actionColor = { 'user.login': 'blue', 'kyc.approved': 'green', 'kyc.rejected': 'red', 'transaction.completed': 'green', 'transaction.rejected': 'red', 'investment.paid_out': 'gold' };
+
+  body.innerHTML = page.map(e => `<tr>
+    <td class="td-muted" style="white-space:nowrap;font-size:0.75rem">${Utils.date(e.created_at)}</td>
+    <td><span class="badge badge--${actionColor[e.event_type] || 'gray'}" style="font-size:0.7rem">${e.event_type || '—'}</span></td>
+    <td><div style="font-size:0.78rem;font-weight:600">${e.user_email || '—'}</div></td>
+    <td class="td-muted" style="font-size:0.75rem">${e.entity_type ? `${e.entity_type}#${(e.entity_id||'').slice(0,8)}` : '—'}</td>
+    <td style="font-size:0.78rem;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.description || '—'}</td>
+    <td class="td-muted" style="font-size:0.72rem">${e.ip_address || '—'}</td>
+  </tr>`).join('');
+
+  const pages = Math.ceil(items.length / AUDIT_PG);
+  const pag   = document.getElementById('auditPagination');
+  if (pag) pag.innerHTML = Array.from({ length: Math.min(pages, 10) }, (_, i) =>
+    `<button class="page-btn ${i + 1 === _auditPage ? 'active' : ''}" onclick="_auditPage=${i+1};renderAuditTable()">${i+1}</button>`
+  ).join('');
 }

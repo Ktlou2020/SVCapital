@@ -15,6 +15,7 @@ const { v4: uuidv4 } = require('uuid');
 const { requireAuth } = require('../middleware/auth');
 const emailService = require('../services/email');
 const smsService   = require('../services/sms');
+const audit        = require('../services/audit');
 
 /* ─── Whitelist of allowed tables and their primary key column ─── */
 const ALLOWED_TABLES = {
@@ -447,10 +448,30 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     const [clean] = stripSensitive(table, rows);
     res.json(clean);
 
-    // ── Email hooks (fire-and-forget) ──────────────────────────────────────
+    // ── Audit + Email hooks (fire-and-forget) ─────────────────────────────
     setImmediate(async () => {
       try {
         const updated = rows[0];
+        const actor   = req.user || {};
+
+        // Audit log key status changes
+        const auditMap = {
+          'kyc_documents:approved':    'kyc.approved',
+          'kyc_documents:rejected':    'kyc.rejected',
+          'transactions:completed':    'transaction.completed',
+          'transactions:rejected':     'transaction.rejected',
+          'investments:paid_out':      'investment.paid_out',
+          'investors:approved':        'investor.approved',
+        };
+        const auditKey = body.status ? `${table}:${body.status}` : (body.bank_account_status ? `${table}:${body.bank_account_status}` : null);
+        if (auditKey && auditMap[auditKey]) {
+          await audit.log({
+            actorId: actor.id, actorEmail: actor.email, action: auditMap[auditKey],
+            entityType: table, entityId: req.params.id,
+            description: `${auditMap[auditKey]} on ${table}#${req.params.id}`,
+            ip: req.ip,
+          });
+        }
 
         // Deposit confirmed → email + SMS investor
         if (table === 'transactions' && body.status === 'completed' && updated.type === 'deposit' && updated.investor_id) {
