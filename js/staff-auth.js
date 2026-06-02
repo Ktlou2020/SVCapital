@@ -51,10 +51,10 @@
    * App keys map to physical paths in APPS_REGISTRY (below).
    */
   const ROLE_PERMISSIONS = {
-    'CEO':                  ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director'],
-    'Operations Manager':   ['employee', 'team', 'fund', 'admin'],
-    'Finance Manager':      ['employee', 'team', 'fund', 'admin'],
-    'Tech Lead':            ['employee', 'team', 'fund', 'admin'],
+    'CEO':                  ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting'],
+    'Operations Manager':   ['employee', 'team', 'fund', 'admin', 'accounting'],
+    'Finance Manager':      ['employee', 'team', 'fund', 'admin', 'accounting'],
+    'Tech Lead':            ['employee', 'team', 'fund', 'admin', 'accounting'],
     'Investment Analyst':   ['employee', 'team', 'fund'],
     'Compliance Officer':   ['employee', 'admin'],
     'Client Relations':     ['employee', 'portal'],
@@ -64,7 +64,7 @@
   };
 
   /* Level-based elevation (overrides role if level is executive) */
-  const EXECUTIVE_APPS = ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director'];
+  const EXECUTIVE_APPS = ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting'];
 
   /* Director-level check — executive level, CEO/COO/CTO/CFO titles,
      or a JWT role of 'director' or 'admin' all grant Director panel access */
@@ -245,6 +245,7 @@
     if (path.includes('/admin/'))         return 'admin';
     if (path.includes('/ifa/'))           return 'ifa';
     if (path.includes('/portal/'))        return 'portal';
+    if (path.includes('/team/accounting')) return 'accounting';
     return null;
   }
 

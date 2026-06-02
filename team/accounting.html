@@ -1,0 +1,1747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SV Capital — Accounting</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="../js/staff-auth.js?v=3"></script>
+  <script>document.addEventListener('DOMContentLoaded',()=>{ StaffAuth.guard('accounting'); StaffAuth.injectWidget(); });</script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0b0c10; --surface: #111318; --surface2: #1a1c24; --surface3: #22252f;
+      --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.12);
+      --purple: #7c5cfc; --teal: #00d4aa; --text: #e8eaf6; --muted: #6b7280;
+      --muted2: #9ca3af; --red: #ef4444; --green: #22c55e; --amber: #f59e0b;
+      --indigo: #6366f1; --sidebar-w: 220px;
+    }
+    html, body { height: 100%; background: var(--bg); font-family: 'Inter', sans-serif; color: var(--text); overflow: hidden; }
+    #acct-loader {
+      position: fixed; inset: 0; background: var(--bg);
+      display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; z-index: 9999;
+    }
+    #acct-loader .spin { width: 38px; height: 38px; border: 3px solid rgba(124,92,252,0.15); border-top-color: var(--purple); border-radius: 50%; animation: spin 0.65s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* Layout */
+    .acct-layout { display: flex; height: 100vh; }
+    /* Sidebar */
+    .acct-sidebar {
+      width: var(--sidebar-w); flex-shrink: 0;
+      background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden;
+    }
+    .acct-brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 18px 16px 14px; border-bottom: 1px solid var(--border);
+    }
+    .acct-brand-icon {
+      width: 34px; height: 34px; border-radius: 9px; background: var(--indigo);
+      display: flex; align-items: center; justify-content: center; font-size: 0.95rem; color: #fff; flex-shrink: 0;
+    }
+    .acct-brand-name { font-size: 0.88rem; font-weight: 800; }
+    .acct-brand-sub { font-size: 0.68rem; color: var(--muted); }
+    .biz-selector {
+      margin: 12px 10px; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+    }
+    .biz-selector:hover { border-color: var(--border2); }
+    .biz-name { font-size: 0.78rem; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .biz-chevron { color: var(--muted); font-size: 0.65rem; }
+    .acct-nav { flex: 1; padding: 8px 0; }
+    .nav-group { margin-bottom: 4px; }
+    .nav-group-label { font-size: 0.62rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; padding: 8px 16px 4px; }
+    .nav-btn {
+      display: flex; align-items: center; gap: 9px; width: 100%;
+      padding: 7px 16px; font-size: 0.8rem; font-weight: 500; color: var(--muted2);
+      background: none; border: none; cursor: pointer; text-align: left; border-radius: 0;
+      transition: color 0.15s, background 0.15s;
+    }
+    .nav-btn i { width: 16px; text-align: center; font-size: 0.8rem; }
+    .nav-btn:hover { background: var(--surface2); color: var(--text); }
+    .nav-btn.active { background: rgba(124,92,252,0.12); color: var(--purple); font-weight: 600; }
+    .nav-btn.active i { color: var(--purple); }
+    .sidebar-footer { padding: 12px 14px; border-top: 1px solid var(--border); }
+    .back-hub-btn {
+      display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--muted);
+      background: none; border: none; cursor: pointer; padding: 6px 8px; border-radius: 6px; width: 100%;
+    }
+    .back-hub-btn:hover { color: var(--text); background: var(--surface2); }
+    /* Main */
+    .acct-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .acct-topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 28px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0;
+    }
+    .page-title { font-size: 1.05rem; font-weight: 700; }
+    .page-subtitle { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
+    .topbar-actions { display: flex; align-items: center; gap: 10px; }
+    .acct-content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+    /* Cards */
+    .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px; }
+    .metric-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px 18px;
+    }
+    .metric-label { font-size: 0.72rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .metric-value { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+    .metric-sub { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+    .metric-up { color: var(--green); }
+    .metric-down { color: var(--red); }
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; border: none; cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--purple); color: #fff; }
+    .btn-primary:hover { opacity: 0.88; }
+    .btn-secondary { background: var(--surface3); color: var(--text); border: 1px solid var(--border2); }
+    .btn-secondary:hover { background: var(--surface2); }
+    .btn-success { background: var(--green); color: #fff; }
+    .btn-success:hover { opacity: 0.85; }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-danger:hover { opacity: 0.85; }
+    .btn-sm { padding: 5px 11px; font-size: 0.75rem; }
+    .btn-xs { padding: 3px 8px; font-size: 0.7rem; }
+    /* Tables */
+    .tbl-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    thead th {
+      padding: 10px 14px; text-align: left; font-size: 0.7rem; font-weight: 700;
+      color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
+      background: var(--surface2); border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
+    }
+    thead th:hover { color: var(--text); }
+    thead th.sort-asc::after { content: ' ↑'; color: var(--purple); }
+    thead th.sort-desc::after { content: ' ↓'; color: var(--purple); }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--surface2); }
+    tbody td { padding: 10px 14px; vertical-align: middle; }
+    /* Badges */
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; }
+    .badge-draft { background: rgba(107,114,128,0.2); color: var(--muted2); }
+    .badge-sent { background: rgba(99,102,241,0.2); color: #818cf8; }
+    .badge-paid { background: rgba(34,197,94,0.2); color: var(--green); }
+    .badge-overdue { background: rgba(239,68,68,0.2); color: var(--red); }
+    .badge-asset { background: rgba(0,212,170,0.15); color: var(--teal); }
+    .badge-liability { background: rgba(239,68,68,0.15); color: #f87171; }
+    .badge-equity { background: rgba(124,92,252,0.15); color: #a78bfa; }
+    .badge-revenue { background: rgba(34,197,94,0.15); color: var(--green); }
+    .badge-expense { background: rgba(245,158,11,0.15); color: var(--amber); }
+    /* Modals */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-backdrop.hidden { display: none; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border2); border-radius: 14px;
+      width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; padding: 24px;
+      position: relative;
+    }
+    .modal-lg { max-width: 760px; }
+    .modal-title { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+    .modal-sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 20px; }
+    .modal-close {
+      position: absolute; top: 16px; right: 16px; background: none; border: none;
+      color: var(--muted); cursor: pointer; font-size: 1.1rem; padding: 4px 8px; border-radius: 6px;
+    }
+    .modal-close:hover { color: var(--text); background: var(--surface3); }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+    /* Forms */
+    .form-row { display: grid; gap: 14px; margin-bottom: 14px; }
+    .form-row.cols-2 { grid-template-columns: 1fr 1fr; }
+    .form-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-label { font-size: 0.75rem; font-weight: 600; color: var(--muted2); }
+    .form-control {
+      background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px;
+      padding: 8px 11px; font-size: 0.82rem; color: var(--text); font-family: inherit; width: 100%;
+      transition: border-color 0.15s;
+    }
+    .form-control:focus { outline: none; border-color: var(--purple); }
+    .form-control.error { border-color: var(--red); }
+    select.form-control { cursor: pointer; }
+    /* Toast */
+    #toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-radius: 10px;
+      font-size: 0.82rem; font-weight: 600; min-width: 260px; max-width: 380px;
+      animation: slideUp 0.25s ease; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .toast-success { background: #14532d; color: #86efac; border: 1px solid #166534; }
+    .toast-error { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
+    .toast-info { background: #1e1b4b; color: #a5b4fc; border: 1px solid #3730a3; }
+    /* Tabs */
+    .tab-bar { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+    .tab-btn {
+      padding: 8px 16px; font-size: 0.8rem; font-weight: 600; color: var(--muted);
+      background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px;
+    }
+    .tab-btn.active { color: var(--purple); border-bottom-color: var(--purple); }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+    /* Onboarding */
+    .onboarding-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+      padding: 48px 32px; text-align: center; max-width: 480px; margin: 60px auto;
+    }
+    .onboarding-icon { font-size: 3rem; color: var(--indigo); margin-bottom: 16px; }
+    .onboarding-title { font-size: 1.3rem; font-weight: 800; margin-bottom: 8px; }
+    .onboarding-sub { font-size: 0.85rem; color: var(--muted); margin-bottom: 24px; line-height: 1.6; }
+    /* Chart containers */
+    .chart-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+    .chart-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 14px; }
+    /* Period selector */
+    .period-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .period-bar label { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+    /* Line items */
+    .line-items-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-bottom: 10px; }
+    .line-items-table th { padding: 6px 8px; text-align: left; font-size: 0.68rem; font-weight: 700; color: var(--muted); background: var(--surface2); }
+    .line-items-table td { padding: 6px 8px; border-top: 1px solid var(--border); }
+    .line-items-table input, .line-items-table select { background: var(--bg); border: 1px solid var(--border2); border-radius: 5px; padding: 4px 7px; color: var(--text); font-size: 0.78rem; width: 100%; }
+    .li-totals { text-align: right; font-size: 0.8rem; color: var(--muted2); padding: 8px 0; }
+    .li-totals strong { color: var(--text); }
+    /* Variance colors */
+    .var-pos { color: var(--green); }
+    .var-neg { color: var(--red); }
+    /* Statement tables */
+    .stmt-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .stmt-table tr td { padding: 7px 12px; border-bottom: 1px solid var(--border); }
+    .stmt-table .stmt-section { font-weight: 800; color: var(--muted2); font-size: 0.7rem; text-transform: uppercase; background: var(--surface2); padding: 8px 12px; }
+    .stmt-table .stmt-total td { font-weight: 700; border-top: 2px solid var(--border2); }
+    .stmt-table .stmt-grand td { font-weight: 800; font-size: 0.95rem; border-top: 2px solid var(--purple); color: var(--purple); }
+    .text-right { text-align: right; }
+    .text-muted { color: var(--muted); }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 3px; }
+    /* Empty state */
+    .empty-state { text-align: center; padding: 48px 20px; color: var(--muted); }
+    .empty-state i { font-size: 2.5rem; margin-bottom: 12px; display: block; }
+    .empty-state p { font-size: 0.85rem; }
+    /* Section header */
+    .section-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .section-hdr h2 { font-size: 0.95rem; font-weight: 700; }
+    /* COA type section */
+    .coa-section { margin-bottom: 20px; }
+    .coa-section-title {
+      font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--muted); padding: 8px 14px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 8px 8px 0 0; border-bottom: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="acct-loader">
+  <div class="spin"></div>
+  <div style="font-size:0.82rem;color:#6b7280;font-weight:600">Loading Accounting…</div>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- Business Modal -->
+<div class="modal-backdrop hidden" id="biz-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('biz-modal')"><i class="fa-solid fa-xmark"></i></button>
+    <div class="modal-title" id="biz-modal-title">Add Business</div>
+    <div class="modal-sub">Register a new company entity</div>
+    <div class="form-row cols-2">
+      <div class="form-group"><label class="form-label">Business Name *</label><input class="form-control" id="biz-name" placeholder="Acme (Pty) Ltd" /></div>
+      <div class="form-group"><label class="form-label">Registration Number</label><input class="form-control" id="biz-reg" placeholder="2023/123456/07" /></div>
+    </div>
+    <div class="form-row cols-2">
+      <div class="form-group"><label class="form-label">VAT Number</label><input class="form-control" id="biz-vat" placeholder="4123456789" /></div>
+      <div class="form-group"><label class="form-label">Country</label>
+        <select class="form-control" id="biz-country">
+          <option value="ZA">South Africa</option><option value="NA">Namibia</option><option value="BW">Botswana</option><option value="ZW">Zimbabwe</option><option value="OTHER">Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row cols-2">
+      <div class="form-group"><label class="form-label">Currency</label>
+        <select class="form-control" id="biz-currency">
+          <option value="ZAR">ZAR — South African Rand</option><option value="NAD">NAD — Namibian Dollar</option><option value="BWP">BWP — Botswana Pula</option><option value="USD">USD — US Dollar</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('biz-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBusiness()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- COA Modal -->
+<div class="modal-backdrop hidden" id="coa-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('coa-modal')"><i class="fa-solid fa-xmark"></i></button>
+    <div class="modal-title" id="coa-modal-title">Add Account</div>
+    <div class="modal-sub">Add a new account to your Chart of Accounts</div>
+    <div class="form-row cols-2">
+      <div class="form-group"><label class="form-label">Account Code *</label><input class="form-control" id="coa-code" placeholder="7000" /></div>
+      <div class="form-group"><label class="form-label">Account Name *</label><input class="form-control" id="coa-name" placeholder="Travel Expenses" /></div>
+    </div>
+    <div class="form-row cols-2">
+      <div class="form-group"><label class="form-label">Type *</label>
+        <select class="form-control" id="coa-type" onchange="updateCoaCategories()">
+          <option value="asset">Asset</option><option value="liability">Liability</option><option value="equity">Equity</option><option value="revenue">Revenue</option><option value="expense">Expense</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Category</label>
+        <select class="form-control" id="coa-category"></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Opening Balance</label><input class="form-control" id="coa-balance" type="number" placeholder="0.00" /></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('coa-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCoa()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invoice/Bill Modal -->
+<div class="modal-backdrop hidden" id="inv-modal">
+  <div class="modal modal-lg">
+    <button class="modal-close" onclick="closeModal('inv-modal')"><i class="fa-solid fa-xmark"></i></button>
+    <div class="modal-title" id="inv-modal-title">Create Invoice</div>
+    <div class="modal-sub" id="inv-modal-sub">Issue a new customer invoice</div>
+    <div class="form-row cols-2">
+      <div class="form-group"><label class="form-label" id="inv-contact-label">Customer Name *</label><input class="form-control" id="inv-contact-name" placeholder="Client Name" /></div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-control" id="inv-contact-email" type="email" placeholder="client@example.com" /></div>
+    </div>
+    <div class="form-row cols-3">
+      <div class="form-group"><label class="form-label">Issue Date *</label><input class="form-control" id="inv-issue-date" type="date" /></div>
+      <div class="form-group"><label class="form-label">Due Date *</label><input class="form-control" id="inv-due-date" type="date" /></div>
+      <div class="form-group"><label class="form-label">Status</label>
+        <select class="form-control" id="inv-status"><option value="draft">Draft</option><option value="sent">Sent</option></select>
+      </div>
+    </div>
+    <div style="margin-bottom:10px">
+      <div style="font-size:0.75rem;font-weight:700;color:var(--muted2);margin-bottom:8px;">LINE ITEMS</div>
+      <table class="line-items-table">
+        <thead><tr><th style="width:40%">Description</th><th style="width:12%">Qty</th><th style="width:18%">Unit Price</th><th style="width:12%">VAT %</th><th style="width:15%">Amount</th><th style="width:3%"></th></tr></thead>
+        <tbody id="li-body"></tbody>
+      </table>
+      <button class="btn btn-secondary btn-sm" onclick="addLineItem()"><i class="fa-solid fa-plus"></i> Add Line</button>
+    </div>
+    <div class="li-totals" id="li-totals">Subtotal: R0.00 | VAT: R0.00 | <strong>Total: R0.00</strong></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('inv-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveInvoice()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Transaction Modal -->
+<div class="modal-backdrop hidden" id="txn-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('txn-modal')"><i class="fa-solid fa-xmark"></i></button>
+    <div class="modal-title">Add Transaction</div>
+    <div class="modal-sub">Record a bank transaction</div>
+    <div class="form-row cols-2">
+      <div class="form-group"><label class="form-label">Date *</label><input class="form-control" id="txn-date" type="date" /></div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-control" id="txn-type"><option value="credit">Credit (Money In)</option><option value="debit">Debit (Money Out)</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Description *</label><input class="form-control" id="txn-desc" placeholder="Payment received from client" /></div>
+    </div>
+    <div class="form-row cols-2">
+      <div class="form-group"><label class="form-label">Amount *</label><input class="form-control" id="txn-amount" type="number" step="0.01" placeholder="0.00" /></div>
+      <div class="form-group"><label class="form-label">Account *</label><select class="form-control" id="txn-account"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Reference</label><input class="form-control" id="txn-ref" placeholder="INV-001 / PO-123" /></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('txn-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTransaction()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Budget Modal -->
+<div class="modal-backdrop hidden" id="budget-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('budget-modal')"><i class="fa-solid fa-xmark"></i></button>
+    <div class="modal-title">Set Budget</div>
+    <div class="modal-sub">Set monthly budget for an account</div>
+    <div class="form-row cols-2">
+      <div class="form-group"><label class="form-label">Year</label><input class="form-control" id="bgt-year" type="number" /></div>
+      <div class="form-group"><label class="form-label">Month</label>
+        <select class="form-control" id="bgt-month">
+          <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+          <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+          <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+          <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Account</label><select class="form-control" id="bgt-account"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Budget Amount</label><input class="form-control" id="bgt-amount" type="number" step="0.01" placeholder="0.00" /></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('budget-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBudget()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="acct-layout" id="acct-app" style="display:none">
+  <!-- SIDEBAR -->
+  <aside class="acct-sidebar">
+    <div class="acct-brand">
+      <div class="acct-brand-icon"><i class="fa-solid fa-calculator"></i></div>
+      <div><div class="acct-brand-name">Accounting</div><div class="acct-brand-sub">SV Capital</div></div>
+    </div>
+    <div class="biz-selector" onclick="showView('businesses')">
+      <i class="fa-solid fa-building" style="color:var(--muted);font-size:0.8rem"></i>
+      <span class="biz-name" id="sidebar-biz-name">No Business</span>
+      <i class="fa-solid fa-chevron-down biz-chevron"></i>
+    </div>
+    <nav class="acct-nav">
+      <div class="nav-group">
+        <div class="nav-group-label">Overview</div>
+        <button class="nav-btn active" data-view="dashboard" onclick="showView('dashboard')"><i class="fa-solid fa-gauge-high"></i> Dashboard</button>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Setup</div>
+        <button class="nav-btn" data-view="businesses" onclick="showView('businesses')"><i class="fa-solid fa-building"></i> Businesses</button>
+        <button class="nav-btn" data-view="coa" onclick="showView('coa')"><i class="fa-solid fa-list-tree"></i> Chart of Accounts</button>
+        <button class="nav-btn" data-view="budgets" onclick="showView('budgets')"><i class="fa-solid fa-sliders"></i> Budgets</button>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Transactions</div>
+        <button class="nav-btn" data-view="invoices" onclick="showView('invoices')"><i class="fa-solid fa-file-invoice-dollar"></i> Invoices</button>
+        <button class="nav-btn" data-view="bills" onclick="showView('bills')"><i class="fa-solid fa-receipt"></i> Bills</button>
+        <button class="nav-btn" data-view="bank" onclick="showView('bank')"><i class="fa-solid fa-landmark"></i> Bank Transactions</button>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Reporting</div>
+        <button class="nav-btn" data-view="financials" onclick="showView('financials')"><i class="fa-solid fa-chart-bar"></i> Financial Statements</button>
+        <button class="nav-btn" data-view="mgmt" onclick="showView('mgmt')"><i class="fa-solid fa-table-cells"></i> Management Accounts</button>
+        <button class="nav-btn" data-view="reports" onclick="showView('reports')"><i class="fa-solid fa-file-export"></i> Reports</button>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="back-hub-btn" onclick="window.location.href='hub.html'"><i class="fa-solid fa-arrow-left"></i> Back to Hub</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="acct-main">
+    <div class="acct-topbar">
+      <div>
+        <div class="page-title" id="page-title">Dashboard</div>
+        <div class="page-subtitle" id="page-subtitle">Overview of your financial position</div>
+      </div>
+      <div class="topbar-actions" id="topbar-actions"></div>
+    </div>
+    <div class="acct-content" id="acct-content"></div>
+  </div>
+</div>
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════════════════
+   CONSTANTS & HELPERS
+═══════════════════════════════════════════════════ */
+const DEFAULT_COA = [
+  {code:'1000',name:'Cash and Bank',type:'asset',category:'current',balance:0},
+  {code:'1100',name:'Accounts Receivable',type:'asset',category:'current',balance:0},
+  {code:'1200',name:'Inventory',type:'asset',category:'current',balance:0},
+  {code:'1500',name:'Property, Plant & Equipment',type:'asset',category:'fixed',balance:0},
+  {code:'2000',name:'Accounts Payable',type:'liability',category:'current',balance:0},
+  {code:'2100',name:'VAT Control',type:'liability',category:'current',balance:0},
+  {code:'2200',name:'Short-term Loans',type:'liability',category:'current',balance:0},
+  {code:'2500',name:'Long-term Loans',type:'liability',category:'long_term',balance:0},
+  {code:'3000',name:'Share Capital',type:'equity',category:'equity',balance:0},
+  {code:'3100',name:'Retained Earnings',type:'equity',category:'equity',balance:0},
+  {code:'4000',name:'Sales Revenue',type:'revenue',category:'operating',balance:0},
+  {code:'4100',name:'Service Revenue',type:'revenue',category:'operating',balance:0},
+  {code:'4200',name:'Other Income',type:'revenue',category:'other',balance:0},
+  {code:'5000',name:'Cost of Sales',type:'expense',category:'cogs',balance:0},
+  {code:'6000',name:'Salaries & Wages',type:'expense',category:'operating',balance:0},
+  {code:'6100',name:'Rent',type:'expense',category:'operating',balance:0},
+  {code:'6200',name:'Utilities',type:'expense',category:'operating',balance:0},
+  {code:'6300',name:'Marketing',type:'expense',category:'operating',balance:0},
+  {code:'6400',name:'Professional Fees',type:'expense',category:'operating',balance:0},
+  {code:'6500',name:'Bank Charges',type:'expense',category:'operating',balance:0},
+  {code:'6600',name:'Depreciation',type:'expense',category:'operating',balance:0},
+  {code:'6700',name:'Other Expenses',type:'expense',category:'other',balance:0},
+];
+
+const COA_CATEGORIES = {
+  asset:     [{v:'current',l:'Current'},{v:'fixed',l:'Fixed'}],
+  liability: [{v:'current',l:'Current'},{v:'long_term',l:'Long-term'}],
+  equity:    [{v:'equity',l:'Equity'}],
+  revenue:   [{v:'operating',l:'Operating'},{v:'other',l:'Other'}],
+  expense:   [{v:'cogs',l:'COGS'},{v:'operating',l:'Operating'},{v:'other',l:'Other'}],
+};
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+let currentView = 'dashboard';
+let editingInvId = null;
+let editingInvType = 'invoice';
+let sortStates = {};
+let dashCharts = {};
+
+/* ── Storage helpers ── */
+function ls(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } }
+function lsSet(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+function getBizList() { return ls('acct_businesses') || []; }
+function getActiveId() { return ls('acct_active'); }
+function getActiveBiz() { return getBizList().find(b=>b.id===getActiveId()) || null; }
+function getCoa(bid) { return ls('acct_coa_'+bid) || []; }
+function getInvoices(bid) { return ls('acct_invoices_'+bid) || []; }
+function getBills(bid) { return ls('acct_bills_'+bid) || []; }
+function getTransactions(bid) { return ls('acct_transactions_'+bid) || []; }
+function getBudgets(bid) { return ls('acct_budgets_'+bid) || []; }
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function fmt(n, currency='ZAR') {
+  return new Intl.NumberFormat('en-ZA',{style:'currency',currency,minimumFractionDigits:2}).format(n||0);
+}
+function fmtDate(d) { if(!d) return ''; return new Date(d).toLocaleDateString('en-ZA'); }
+
+/* ── Toast ── */
+function showToast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  const icons = {success:'fa-check-circle',error:'fa-triangle-exclamation',info:'fa-circle-info'};
+  el.innerHTML = `<i class="fa-solid ${icons[type]||'fa-circle-info'}"></i> ${msg}`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(()=>el.remove(), 3500);
+}
+
+/* ── Modal helpers ── */
+function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+/* ── Invoice status calculation ── */
+function calcInvStatus(inv) {
+  if (inv.status === 'paid') return 'paid';
+  if (inv.status === 'draft') return 'draft';
+  if (inv.dueDate && new Date(inv.dueDate) < new Date() && inv.status !== 'paid') return 'overdue';
+  return inv.status;
+}
+
+function invTotal(inv) {
+  let sub=0, vat=0;
+  (inv.lineItems||[]).forEach(li=>{
+    const amt = (li.qty||0)*(li.unitPrice||0);
+    sub += amt;
+    vat += amt*(li.vatRate||0)/100;
+  });
+  return {sub, vat, total: sub+vat};
+}
+
+/* ── COA account balance from transactions ── */
+function getAccountBalance(bid, accountId) {
+  const txns = getTransactions(bid);
+  const coa = getCoa(bid);
+  const acc = coa.find(a=>a.id===accountId);
+  if (!acc) return 0;
+  let bal = acc.balance || 0;
+  txns.filter(t=>t.accountId===accountId).forEach(t=>{
+    bal += t.type==='credit' ? t.amount : -t.amount;
+  });
+  return bal;
+}
+
+function getTotalByType(bid, type) {
+  const coa = getCoa(bid);
+  const txns = getTransactions(bid);
+  return coa.filter(a=>a.type===type).reduce((sum,acc)=>{
+    let bal = acc.balance||0;
+    txns.filter(t=>t.accountId===acc.id).forEach(t=>{
+      bal += t.type==='credit' ? t.amount : -t.amount;
+    });
+    return sum + bal;
+  }, 0);
+}
+
+/* ═══════════════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════════════ */
+const PAGE_META = {
+  dashboard:   {title:'Dashboard', subtitle:'Financial overview and key metrics'},
+  businesses:  {title:'Businesses', subtitle:'Manage registered business entities'},
+  coa:         {title:'Chart of Accounts', subtitle:'Categorized ledger accounts'},
+  invoices:    {title:'Invoices', subtitle:'Customer invoices and receivables'},
+  bills:       {title:'Bills', subtitle:'Supplier bills and payables'},
+  bank:        {title:'Bank Transactions', subtitle:'Import and categorize transactions'},
+  financials:  {title:'Financial Statements', subtitle:'Income statement, balance sheet & cash flow'},
+  mgmt:        {title:'Management Accounts', subtitle:'P&L with budget vs actuals'},
+  budgets:     {title:'Budgets', subtitle:'Monthly budget planning per account'},
+  reports:     {title:'Reports', subtitle:'Export financial data to CSV'},
+};
+
+function showView(view) {
+  currentView = view;
+  document.querySelectorAll('.nav-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.view === view);
+  });
+  const meta = PAGE_META[view] || {title:view, subtitle:''};
+  document.getElementById('page-title').textContent = meta.title;
+  document.getElementById('page-subtitle').textContent = meta.subtitle;
+  document.getElementById('topbar-actions').innerHTML = '';
+  const content = document.getElementById('acct-content');
+  content.innerHTML = '';
+  sortStates = {};
+
+  const bid = getActiveId();
+  const biz = getActiveBiz();
+
+  if (view !== 'businesses' && !bid) {
+    content.innerHTML = `<div class="onboarding-card">
+      <div class="onboarding-icon"><i class="fa-solid fa-building-circle-exclamation"></i></div>
+      <div class="onboarding-title">No Business Selected</div>
+      <div class="onboarding-sub">You need to add a business before you can use the accounting features.</div>
+      <button class="btn btn-primary" onclick="showView('businesses')"><i class="fa-solid fa-plus"></i> Add Your First Business</button>
+    </div>`;
+    return;
+  }
+
+  switch(view) {
+    case 'dashboard':   renderDashboard(bid, biz); break;
+    case 'businesses':  renderBusinesses(); break;
+    case 'coa':         renderCoa(bid, biz); break;
+    case 'invoices':    renderInvoices(bid, biz); break;
+    case 'bills':       renderBills(bid, biz); break;
+    case 'bank':        renderBank(bid, biz); break;
+    case 'financials':  renderFinancials(bid, biz); break;
+    case 'mgmt':        renderMgmt(bid, biz); break;
+    case 'budgets':     renderBudgets(bid, biz); break;
+    case 'reports':     renderReports(bid, biz); break;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   DASHBOARD
+═══════════════════════════════════════════════════ */
+function renderDashboard(bid, biz) {
+  const currency = biz.currency || 'ZAR';
+  const invoices = getInvoices(bid);
+  const bills = getBills(bid);
+  const revenue = getTotalByType(bid,'revenue');
+  const expenses = getTotalByType(bid,'expense');
+  const netProfit = revenue - expenses;
+  const outstanding = invoices.filter(i=>calcInvStatus(i)!=='paid').reduce((s,i)=>s+invTotal(i).total,0);
+  const overdueBills = bills.filter(b=>calcInvStatus(b)==='overdue').reduce((s,b)=>s+invTotal(b).total,0);
+  const cashBal = (() => {
+    const coa = getCoa(bid);
+    const cashAcct = coa.find(a=>a.code==='1000');
+    return cashAcct ? getAccountBalance(bid, cashAcct.id) : 0;
+  })();
+
+  const content = document.getElementById('acct-content');
+  content.innerHTML = `
+    <div class="metric-grid">
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-arrow-trend-up" style="color:var(--green)"></i> Total Revenue</div>
+        <div class="metric-value" style="color:var(--green)">${fmt(revenue,currency)}</div>
+        <div class="metric-sub">All revenue accounts</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-arrow-trend-down" style="color:var(--red)"></i> Total Expenses</div>
+        <div class="metric-value" style="color:var(--red)">${fmt(expenses,currency)}</div>
+        <div class="metric-sub">All expense accounts</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-chart-pie" style="color:var(--purple)"></i> Net Profit</div>
+        <div class="metric-value" style="color:${netProfit>=0?'var(--green)':'var(--red)'}">${fmt(netProfit,currency)}</div>
+        <div class="metric-sub">${netProfit>=0?'Profitable':'Loss-making'}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-landmark" style="color:var(--teal)"></i> Cash Balance</div>
+        <div class="metric-value">${fmt(cashBal,currency)}</div>
+        <div class="metric-sub">Cash and Bank account</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-file-invoice-dollar" style="color:var(--amber)"></i> Outstanding Invoices</div>
+        <div class="metric-value" style="color:var(--amber)">${fmt(outstanding,currency)}</div>
+        <div class="metric-sub">${invoices.filter(i=>calcInvStatus(i)!=='paid').length} unpaid invoice(s)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-exclamation-circle" style="color:var(--red)"></i> Overdue Bills</div>
+        <div class="metric-value" style="color:var(--red)">${fmt(overdueBills,currency)}</div>
+        <div class="metric-sub">${bills.filter(b=>calcInvStatus(b)==='overdue').length} overdue bill(s)</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="chart-wrap">
+        <div class="chart-title">Revenue vs Expenses</div>
+        <canvas id="dash-bar-chart" height="200"></canvas>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-title">Expense Breakdown</div>
+        <canvas id="dash-pie-chart" height="200"></canvas>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px">
+      <div class="tbl-wrap">
+        <div style="padding:14px 16px;font-size:0.85rem;font-weight:700;border-bottom:1px solid var(--border)">Recent Invoices</div>
+        <table><thead><tr><th>Customer</th><th>Amount</th><th>Status</th></tr></thead>
+        <tbody>${invoices.slice(-5).reverse().map(i=>`<tr><td>${i.contactName}</td><td>${fmt(invTotal(i).total,currency)}</td><td><span class="badge badge-${calcInvStatus(i)}">${calcInvStatus(i)}</span></td></tr>`).join('')||'<tr><td colspan="3" class="text-muted" style="text-align:center;padding:20px">No invoices yet</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div class="tbl-wrap">
+        <div style="padding:14px 16px;font-size:0.85rem;font-weight:700;border-bottom:1px solid var(--border)">Recent Bills</div>
+        <table><thead><tr><th>Supplier</th><th>Amount</th><th>Status</th></tr></thead>
+        <tbody>${bills.slice(-5).reverse().map(b=>`<tr><td>${b.contactName}</td><td>${fmt(invTotal(b).total,currency)}</td><td><span class="badge badge-${calcInvStatus(b)}">${calcInvStatus(b)}</span></td></tr>`).join('')||'<tr><td colspan="3" class="text-muted" style="text-align:center;padding:20px">No bills yet</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  // Charts
+  requestAnimationFrame(()=>{
+    const coa = getCoa(bid);
+    const expAccts = coa.filter(a=>a.type==='expense');
+    const txns = getTransactions(bid);
+    const expData = expAccts.map(a=>{
+      let b = a.balance||0;
+      txns.filter(t=>t.accountId===a.id).forEach(t=>{ b += t.type==='credit'?t.amount:-t.amount; });
+      return {name:a.name, val:Math.abs(b)};
+    }).filter(x=>x.val>0).slice(0,6);
+
+    if(dashCharts.bar) { dashCharts.bar.destroy(); }
+    if(dashCharts.pie) { dashCharts.pie.destroy(); }
+
+    const barCtx = document.getElementById('dash-bar-chart');
+    if(barCtx) {
+      dashCharts.bar = new Chart(barCtx, {
+        type:'bar',
+        data:{
+          labels:['Revenue','Expenses','Net Profit'],
+          datasets:[{data:[revenue, expenses, netProfit],
+            backgroundColor:['rgba(34,197,94,0.7)','rgba(239,68,68,0.7)',netProfit>=0?'rgba(124,92,252,0.7)':'rgba(239,68,68,0.7)'],
+            borderRadius:6}]
+        },
+        options:{responsive:true,plugins:{legend:{display:false}},scales:{
+          x:{ticks:{color:'#6b7280'},grid:{color:'rgba(255,255,255,0.05)'}},
+          y:{ticks:{color:'#6b7280'},grid:{color:'rgba(255,255,255,0.05)'}}
+        }}
+      });
+    }
+    const pieCtx = document.getElementById('dash-pie-chart');
+    if(pieCtx && expData.length) {
+      dashCharts.pie = new Chart(pieCtx, {
+        type:'doughnut',
+        data:{labels:expData.map(e=>e.name),datasets:[{data:expData.map(e=>e.val),
+          backgroundColor:['#7c5cfc','#00d4aa','#f59e0b','#ef4444','#6366f1','#06b6d4'],
+          borderWidth:0}]},
+        options:{responsive:true,plugins:{legend:{labels:{color:'#9ca3af',font:{size:11}}}}}
+      });
+    } else if(pieCtx) {
+      const ctx2 = pieCtx.getContext('2d');
+      ctx2.fillStyle='#6b7280'; ctx2.font='14px Inter'; ctx2.textAlign='center';
+      ctx2.fillText('No expense data', pieCtx.width/2, pieCtx.height/2);
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   BUSINESSES
+═══════════════════════════════════════════════════ */
+function renderBusinesses() {
+  const bizList = getBizList();
+  const activeId = getActiveId();
+  const content = document.getElementById('acct-content');
+  const tb = document.getElementById('topbar-actions');
+  tb.innerHTML = `<button class="btn btn-primary" onclick="openAddBiz()"><i class="fa-solid fa-plus"></i> Add Business</button>`;
+
+  if (!bizList.length) {
+    content.innerHTML = `<div class="onboarding-card">
+      <div class="onboarding-icon"><i class="fa-solid fa-building"></i></div>
+      <div class="onboarding-title">No Businesses Yet</div>
+      <div class="onboarding-sub">Add your first business entity to start tracking finances. You can manage multiple companies separately.</div>
+      <button class="btn btn-primary" onclick="openAddBiz()"><i class="fa-solid fa-plus"></i> Add First Business</button>
+    </div>`;
+    return;
+  }
+
+  content.innerHTML = `<div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Business Name</th><th>Reg Number</th><th>VAT</th><th>Currency</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        ${bizList.map(b=>`<tr>
+          <td><strong>${b.name}</strong></td>
+          <td>${b.registrationNumber||'—'}</td>
+          <td>${b.vatNumber||'—'}</td>
+          <td>${b.currency||'ZAR'}</td>
+          <td>${b.id===activeId?'<span class="badge badge-paid">Active</span>':'<span class="badge badge-draft">Inactive</span>'}</td>
+          <td>
+            ${b.id!==activeId?`<button class="btn btn-secondary btn-xs" onclick="switchBiz('${b.id}')"><i class="fa-solid fa-check"></i> Set Active</button>`:''}
+            <button class="btn btn-danger btn-xs" onclick="deleteBiz('${b.id}')"><i class="fa-solid fa-trash"></i></button>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function openAddBiz() {
+  ['biz-name','biz-reg','biz-vat'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('biz-modal-title').textContent = 'Add Business';
+  openModal('biz-modal');
+}
+
+function saveBusiness() {
+  const name = document.getElementById('biz-name').value.trim();
+  if (!name) { showToast('Business name is required','error'); return; }
+  const id = uid();
+  const biz = {
+    id, name,
+    registrationNumber: document.getElementById('biz-reg').value.trim(),
+    vatNumber: document.getElementById('biz-vat').value.trim(),
+    country: document.getElementById('biz-country').value,
+    currency: document.getElementById('biz-currency').value,
+    createdAt: new Date().toISOString(),
+  };
+  const list = getBizList();
+  list.push(biz);
+  lsSet('acct_businesses', list);
+  // Seed default COA
+  const coa = DEFAULT_COA.map(a=>({...a, id:uid()}));
+  lsSet('acct_coa_'+id, coa);
+  if (!getActiveId()) { lsSet('acct_active', id); }
+  closeModal('biz-modal');
+  showToast(`Business "${name}" created`, 'success');
+  updateSidebarBiz();
+  renderBusinesses();
+}
+
+function switchBiz(id) {
+  lsSet('acct_active', id);
+  updateSidebarBiz();
+  showView('dashboard');
+  showToast('Active business switched', 'info');
+}
+
+function deleteBiz(id) {
+  if (!confirm('Delete this business and all its data? This cannot be undone.')) return;
+  const list = getBizList().filter(b=>b.id!==id);
+  lsSet('acct_businesses', list);
+  ['coa','invoices','bills','transactions','budgets'].forEach(k=>localStorage.removeItem('acct_'+k+'_'+id));
+  if (getActiveId()===id) lsSet('acct_active', list[0]?.id||null);
+  updateSidebarBiz();
+  renderBusinesses();
+  showToast('Business deleted','info');
+}
+
+function updateSidebarBiz() {
+  const biz = getActiveBiz();
+  document.getElementById('sidebar-biz-name').textContent = biz ? biz.name : 'No Business';
+}
+
+/* ═══════════════════════════════════════════════════
+   CHART OF ACCOUNTS
+═══════════════════════════════════════════════════ */
+function renderCoa(bid, biz) {
+  const coa = getCoa(bid);
+  const currency = biz.currency||'ZAR';
+  const tb = document.getElementById('topbar-actions');
+  tb.innerHTML = `<button class="btn btn-primary" onclick="openAddCoa()"><i class="fa-solid fa-plus"></i> Add Account</button>`;
+
+  const types = ['asset','liability','equity','revenue','expense'];
+  const typeLabels = {asset:'Assets',liability:'Liabilities',equity:'Equity',revenue:'Revenue',expenses:'Expense'};
+
+  let html = '';
+  types.forEach(type=>{
+    const accts = coa.filter(a=>a.type===type).sort((a,b)=>a.code.localeCompare(b.code));
+    if (!accts.length) return;
+    html += `<div class="coa-section">
+      <div class="coa-section-title">${type.charAt(0).toUpperCase()+type.slice(1)}s</div>
+      <div class="tbl-wrap" style="border-radius:0 0 12px 12px">
+        <table>
+          <thead><tr><th onclick="sortTable(this,'code')">Code</th><th onclick="sortTable(this,'name')">Account Name</th><th>Type</th><th>Category</th><th class="text-right">Balance</th><th></th></tr></thead>
+          <tbody>
+            ${accts.map(a=>{
+              const bal = getAccountBalance(bid, a.id);
+              return `<tr>
+                <td><strong>${a.code}</strong></td>
+                <td>${a.name}</td>
+                <td><span class="badge badge-${a.type}">${a.type}</span></td>
+                <td>${a.category||'—'}</td>
+                <td class="text-right">${fmt(bal,currency)}</td>
+                <td><button class="btn btn-secondary btn-xs" onclick="editCoa('${a.id}')"><i class="fa-solid fa-pencil"></i></button>
+                    <button class="btn btn-danger btn-xs" onclick="deleteCoa('${a.id}')"><i class="fa-solid fa-trash"></i></button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  });
+  document.getElementById('acct-content').innerHTML = html || '<div class="empty-state"><i class="fa-solid fa-list"></i><p>No accounts found</p></div>';
+}
+
+function updateCoaCategories() {
+  const type = document.getElementById('coa-type').value;
+  const cats = COA_CATEGORIES[type]||[];
+  const sel = document.getElementById('coa-category');
+  sel.innerHTML = cats.map(c=>`<option value="${c.v}">${c.l}</option>`).join('');
+}
+
+function openAddCoa() {
+  document.getElementById('coa-modal-title').textContent = 'Add Account';
+  ['coa-code','coa-name','coa-balance'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('coa-type').value = 'asset';
+  updateCoaCategories();
+  document.getElementById('coa-modal').dataset.editId = '';
+  openModal('coa-modal');
+}
+
+function editCoa(id) {
+  const bid = getActiveId();
+  const coa = getCoa(bid);
+  const acc = coa.find(a=>a.id===id);
+  if (!acc) return;
+  document.getElementById('coa-modal-title').textContent = 'Edit Account';
+  document.getElementById('coa-code').value = acc.code;
+  document.getElementById('coa-name').value = acc.name;
+  document.getElementById('coa-type').value = acc.type;
+  updateCoaCategories();
+  document.getElementById('coa-category').value = acc.category;
+  document.getElementById('coa-balance').value = acc.balance||0;
+  document.getElementById('coa-modal').dataset.editId = id;
+  openModal('coa-modal');
+}
+
+function saveCoa() {
+  const code = document.getElementById('coa-code').value.trim();
+  const name = document.getElementById('coa-name').value.trim();
+  if (!code||!name) { showToast('Code and name are required','error'); return; }
+  const bid = getActiveId();
+  let coa = getCoa(bid);
+  const editId = document.getElementById('coa-modal').dataset.editId;
+  if (editId) {
+    coa = coa.map(a=>a.id===editId?{...a,code,name,type:document.getElementById('coa-type').value,category:document.getElementById('coa-category').value,balance:parseFloat(document.getElementById('coa-balance').value)||0}:a);
+  } else {
+    coa.push({id:uid(),code,name,type:document.getElementById('coa-type').value,category:document.getElementById('coa-category').value,balance:parseFloat(document.getElementById('coa-balance').value)||0});
+  }
+  lsSet('acct_coa_'+bid, coa);
+  closeModal('coa-modal');
+  showToast('Account saved','success');
+  renderCoa(bid,getActiveBiz());
+}
+
+function deleteCoa(id) {
+  if (!confirm('Delete this account?')) return;
+  const bid = getActiveId();
+  let coa = getCoa(bid).filter(a=>a.id!==id);
+  lsSet('acct_coa_'+bid, coa);
+  renderCoa(bid,getActiveBiz());
+  showToast('Account deleted','info');
+}
+
+/* ═══════════════════════════════════════════════════
+   INVOICES & BILLS
+═══════════════════════════════════════════════════ */
+function renderInvoices(bid, biz) {
+  renderInvBill(bid, biz, 'invoice');
+}
+function renderBills(bid, biz) {
+  renderInvBill(bid, biz, 'bill');
+}
+
+function renderInvBill(bid, biz, type) {
+  const currency = biz.currency||'ZAR';
+  const data = type==='invoice' ? getInvoices(bid) : getBills(bid);
+  const tb = document.getElementById('topbar-actions');
+  const label = type==='invoice' ? 'Invoice' : 'Bill';
+  tb.innerHTML = `<button class="btn btn-primary" onclick="openInv('${type}')"><i class="fa-solid fa-plus"></i> New ${label}</button>`;
+
+  const rows = data.sort((a,b)=>b.issueDate?.localeCompare(a.issueDate)).map(inv=>{
+    const st = calcInvStatus(inv);
+    const tot = invTotal(inv);
+    return `<tr>
+      <td><strong>${inv.number}</strong></td>
+      <td>${inv.contactName}</td>
+      <td>${fmtDate(inv.issueDate)}</td>
+      <td>${fmtDate(inv.dueDate)}</td>
+      <td>${fmt(tot.total,currency)}</td>
+      <td><span class="badge badge-${st}">${st}</span></td>
+      <td>
+        ${st!=='paid'?`<button class="btn btn-success btn-xs" onclick="markPaid('${inv.id}','${type}')"><i class="fa-solid fa-check"></i> Mark Paid</button>`:''}
+        <button class="btn btn-secondary btn-xs" onclick="editInv('${inv.id}','${type}')"><i class="fa-solid fa-pencil"></i></button>
+        <button class="btn btn-danger btn-xs" onclick="deleteInv('${inv.id}','${type}')"><i class="fa-solid fa-trash"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('acct-content').innerHTML = `
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th onclick="sortTable(this,'number')">Number</th>
+          <th onclick="sortTable(this,'contact')">${type==='invoice'?'Customer':'Supplier'}</th>
+          <th onclick="sortTable(this,'issue')">Issue Date</th>
+          <th onclick="sortTable(this,'due')">Due Date</th>
+          <th onclick="sortTable(this,'amount')">Amount</th>
+          <th onclick="sortTable(this,'status')">Status</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody>${rows||'<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)">No '+label.toLowerCase()+'s yet. Click "New '+label+'" to create one.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+let lineItems = [];
+function openInv(type) {
+  editingInvType = type;
+  editingInvId = null;
+  document.getElementById('inv-modal-title').textContent = type==='invoice'?'Create Invoice':'Create Bill';
+  document.getElementById('inv-modal-sub').textContent = type==='invoice'?'Issue a new customer invoice':'Record a new supplier bill';
+  document.getElementById('inv-contact-label').textContent = type==='invoice'?'Customer Name *':'Supplier Name *';
+  ['inv-contact-name','inv-contact-email'].forEach(id=>document.getElementById(id).value='');
+  const today = new Date().toISOString().split('T')[0];
+  const due = new Date(Date.now()+30*86400000).toISOString().split('T')[0];
+  document.getElementById('inv-issue-date').value = today;
+  document.getElementById('inv-due-date').value = due;
+  document.getElementById('inv-status').value = 'draft';
+  lineItems = [{description:'',qty:1,unitPrice:0,vatRate:15}];
+  renderLineItems();
+  openModal('inv-modal');
+}
+
+function editInv(id, type) {
+  editingInvType = type;
+  editingInvId = id;
+  const bid = getActiveId();
+  const data = type==='invoice' ? getInvoices(bid) : getBills(bid);
+  const inv = data.find(i=>i.id===id);
+  if (!inv) return;
+  document.getElementById('inv-modal-title').textContent = type==='invoice'?'Edit Invoice':'Edit Bill';
+  document.getElementById('inv-modal-sub').textContent = '';
+  document.getElementById('inv-contact-label').textContent = type==='invoice'?'Customer Name *':'Supplier Name *';
+  document.getElementById('inv-contact-name').value = inv.contactName;
+  document.getElementById('inv-contact-email').value = inv.contactEmail||'';
+  document.getElementById('inv-issue-date').value = inv.issueDate;
+  document.getElementById('inv-due-date').value = inv.dueDate;
+  document.getElementById('inv-status').value = inv.status==='paid'?'sent':inv.status;
+  lineItems = inv.lineItems ? JSON.parse(JSON.stringify(inv.lineItems)) : [{description:'',qty:1,unitPrice:0,vatRate:15}];
+  renderLineItems();
+  openModal('inv-modal');
+}
+
+function renderLineItems() {
+  const tbody = document.getElementById('li-body');
+  tbody.innerHTML = lineItems.map((li,i)=>`<tr>
+    <td><input value="${li.description||''}" oninput="lineItems[${i}].description=this.value" /></td>
+    <td><input type="number" value="${li.qty||1}" min="0" step="0.01" oninput="lineItems[${i}].qty=parseFloat(this.value)||0;calcLiTotals()" /></td>
+    <td><input type="number" value="${li.unitPrice||0}" min="0" step="0.01" oninput="lineItems[${i}].unitPrice=parseFloat(this.value)||0;calcLiTotals()" /></td>
+    <td><select oninput="lineItems[${i}].vatRate=parseFloat(this.value);calcLiTotals()">
+      <option value="0" ${li.vatRate==0?'selected':''}>0%</option>
+      <option value="15" ${li.vatRate==15?'selected':''}>15%</option>
+    </select></td>
+    <td>${fmt((li.qty||0)*(li.unitPrice||0)*(1+(li.vatRate||0)/100))}</td>
+    <td><button class="btn btn-danger btn-xs" onclick="removeLineItem(${i})"><i class="fa-solid fa-xmark"></i></button></td>
+  </tr>`).join('');
+  calcLiTotals();
+}
+
+function addLineItem() {
+  lineItems.push({description:'',qty:1,unitPrice:0,vatRate:15});
+  renderLineItems();
+}
+
+function removeLineItem(i) {
+  lineItems.splice(i,1);
+  if (!lineItems.length) lineItems.push({description:'',qty:1,unitPrice:0,vatRate:15});
+  renderLineItems();
+}
+
+function calcLiTotals() {
+  let sub=0, vat=0;
+  lineItems.forEach(li=>{ const a=(li.qty||0)*(li.unitPrice||0); sub+=a; vat+=a*(li.vatRate||0)/100; });
+  const biz=getActiveBiz(); const c=biz?.currency||'ZAR';
+  document.getElementById('li-totals').innerHTML = `Subtotal: ${fmt(sub,c)} | VAT: ${fmt(vat,c)} | <strong>Total: ${fmt(sub+vat,c)}</strong>`;
+}
+
+function saveInvoice() {
+  const name = document.getElementById('inv-contact-name').value.trim();
+  const issueDate = document.getElementById('inv-issue-date').value;
+  const dueDate = document.getElementById('inv-due-date').value;
+  if (!name||!issueDate||!dueDate) { showToast('Name, issue date and due date are required','error'); return; }
+  const bid = getActiveId();
+  const type = editingInvType;
+  let data = type==='invoice' ? getInvoices(bid) : getBills(bid);
+  const prefix = type==='invoice'?'INV':'BILL';
+
+  if (editingInvId) {
+    data = data.map(i=>i.id===editingInvId?{...i,contactName:name,contactEmail:document.getElementById('inv-contact-email').value,issueDate,dueDate,lineItems:JSON.parse(JSON.stringify(lineItems)),status:document.getElementById('inv-status').value}:i);
+  } else {
+    const num = String(data.length+1).padStart(3,'0');
+    data.push({
+      id:uid(), number:`${prefix}-${num}`, contactName:name,
+      contactEmail:document.getElementById('inv-contact-email').value,
+      issueDate, dueDate, lineItems:JSON.parse(JSON.stringify(lineItems)),
+      status:document.getElementById('inv-status').value,
+    });
+  }
+  lsSet(type==='invoice'?'acct_invoices_'+bid:'acct_bills_'+bid, data);
+  closeModal('inv-modal');
+  showToast(`${type==='invoice'?'Invoice':'Bill'} saved`,'success');
+  if (type==='invoice') renderInvoices(bid,getActiveBiz()); else renderBills(bid,getActiveBiz());
+}
+
+function markPaid(id, type) {
+  const bid = getActiveId();
+  let data = type==='invoice' ? getInvoices(bid) : getBills(bid);
+  data = data.map(i=>i.id===id?{...i,status:'paid',paidDate:new Date().toISOString().split('T')[0]}:i);
+  lsSet(type==='invoice'?'acct_invoices_'+bid:'acct_bills_'+bid, data);
+  showToast('Marked as paid','success');
+  if (type==='invoice') renderInvoices(bid,getActiveBiz()); else renderBills(bid,getActiveBiz());
+}
+
+function deleteInv(id, type) {
+  if (!confirm('Delete this record?')) return;
+  const bid = getActiveId();
+  let data = type==='invoice' ? getInvoices(bid) : getBills(bid);
+  data = data.filter(i=>i.id!==id);
+  lsSet(type==='invoice'?'acct_invoices_'+bid:'acct_bills_'+bid, data);
+  showToast('Deleted','info');
+  if (type==='invoice') renderInvoices(bid,getActiveBiz()); else renderBills(bid,getActiveBiz());
+}
+
+/* ═══════════════════════════════════════════════════
+   BANK TRANSACTIONS
+═══════════════════════════════════════════════════ */
+function renderBank(bid, biz) {
+  const currency = biz.currency||'ZAR';
+  const txns = getTransactions(bid).sort((a,b)=>b.date?.localeCompare(a.date));
+  const coa = getCoa(bid);
+  const tb = document.getElementById('topbar-actions');
+  tb.innerHTML = `<button class="btn btn-primary" onclick="openTxn()"><i class="fa-solid fa-plus"></i> Add Transaction</button>`;
+
+  const rows = txns.map(t=>{
+    const acc = coa.find(a=>a.id===t.accountId);
+    return `<tr>
+      <td>${fmtDate(t.date)}</td>
+      <td>${t.description}</td>
+      <td><span style="color:${t.type==='credit'?'var(--green)':'var(--red)'}">${t.type==='credit'?'+':'-'}${fmt(t.amount,currency)}</span></td>
+      <td>${acc?acc.name:'—'}</td>
+      <td>${t.reference||'—'}</td>
+      <td><span class="badge ${t.reconciled?'badge-paid':'badge-draft'}">${t.reconciled?'Reconciled':'Unreconciled'}</span></td>
+      <td>
+        <button class="btn btn-secondary btn-xs" onclick="toggleReconcile('${t.id}')"><i class="fa-solid fa-check-double"></i></button>
+        <button class="btn btn-danger btn-xs" onclick="deleteTxn('${t.id}')"><i class="fa-solid fa-trash"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('acct-content').innerHTML = `
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th onclick="sortTable(this,'date')">Date</th>
+          <th onclick="sortTable(this,'desc')">Description</th>
+          <th onclick="sortTable(this,'amount')">Amount</th>
+          <th onclick="sortTable(this,'account')">Account</th>
+          <th>Reference</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody>${rows||'<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)">No transactions yet.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+function openTxn() {
+  const bid = getActiveId();
+  const coa = getCoa(bid);
+  document.getElementById('txn-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('txn-desc').value = '';
+  document.getElementById('txn-amount').value = '';
+  document.getElementById('txn-ref').value = '';
+  document.getElementById('txn-type').value = 'credit';
+  const sel = document.getElementById('txn-account');
+  sel.innerHTML = coa.map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
+  openModal('txn-modal');
+}
+
+function saveTransaction() {
+  const date = document.getElementById('txn-date').value;
+  const desc = document.getElementById('txn-desc').value.trim();
+  const amount = parseFloat(document.getElementById('txn-amount').value);
+  const accountId = document.getElementById('txn-account').value;
+  if (!date||!desc||!amount||!accountId) { showToast('All fields are required','error'); return; }
+  const bid = getActiveId();
+  const txns = getTransactions(bid);
+  txns.push({id:uid(),date,description:desc,amount,type:document.getElementById('txn-type').value,accountId,reference:document.getElementById('txn-ref').value.trim(),reconciled:false});
+  lsSet('acct_transactions_'+bid, txns);
+  closeModal('txn-modal');
+  showToast('Transaction saved','success');
+  renderBank(bid,getActiveBiz());
+}
+
+function toggleReconcile(id) {
+  const bid = getActiveId();
+  const txns = getTransactions(bid).map(t=>t.id===id?{...t,reconciled:!t.reconciled}:t);
+  lsSet('acct_transactions_'+bid, txns);
+  renderBank(bid,getActiveBiz());
+}
+
+function deleteTxn(id) {
+  if (!confirm('Delete this transaction?')) return;
+  const bid = getActiveId();
+  const txns = getTransactions(bid).filter(t=>t.id!==id);
+  lsSet('acct_transactions_'+bid, txns);
+  renderBank(bid,getActiveBiz());
+  showToast('Transaction deleted','info');
+}
+
+/* ═══════════════════════════════════════════════════
+   FINANCIAL STATEMENTS
+═══════════════════════════════════════════════════ */
+function renderFinancials(bid, biz) {
+  const tb = document.getElementById('topbar-actions');
+  tb.innerHTML = '';
+  const content = document.getElementById('acct-content');
+  const now = new Date();
+  content.innerHTML = `
+    <div class="period-bar">
+      <label>Period:</label>
+      <select class="form-control" id="fs-year" style="width:100px" onchange="refreshFinancials()">
+        ${[now.getFullYear()-1,now.getFullYear()].map(y=>`<option value="${y}" ${y===now.getFullYear()?'selected':''}>${y}</option>`).join('')}
+      </select>
+      <select class="form-control" id="fs-period" style="width:140px" onchange="refreshFinancials()">
+        <option value="full">Full Year</option>
+        ${MONTHS.map((m,i)=>`<option value="${i+1}" ${i+1===now.getMonth()+1?'selected':''}>${m}</option>`).join('')}
+      </select>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="income" onclick="switchFsTab(this,'income')">Income Statement</button>
+      <button class="tab-btn" data-tab="balance" onclick="switchFsTab(this,'balance')">Balance Sheet</button>
+      <button class="tab-btn" data-tab="cashflow" onclick="switchFsTab(this,'cashflow')">Cash Flow</button>
+    </div>
+    <div id="fs-body"></div>`;
+  refreshFinancials();
+}
+
+function switchFsTab(btn, tab) {
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  btn.dataset.activeTab = tab;
+  refreshFinancials();
+}
+
+function refreshFinancials() {
+  const bid = getActiveId();
+  const biz = getActiveBiz();
+  const year = parseInt(document.getElementById('fs-year')?.value||new Date().getFullYear());
+  const period = document.getElementById('fs-period')?.value||'full';
+  const activeTab = document.querySelector('.tab-btn.active')?.dataset?.tab||'income';
+  const currency = biz?.currency||'ZAR';
+  const coa = getCoa(bid);
+  const txns = getTransactions(bid).filter(t=>{
+    const d = new Date(t.date);
+    if (d.getFullYear()!==year) return false;
+    if (period!=='full' && d.getMonth()+1!==parseInt(period)) return false;
+    return true;
+  });
+
+  function accBal(acc) {
+    let b = acc.balance||0;
+    txns.filter(t=>t.accountId===acc.id).forEach(t=>{ b+= t.type==='credit'?t.amount:-t.amount; });
+    return b;
+  }
+
+  const body = document.getElementById('fs-body');
+  if (!body) return;
+
+  if (activeTab==='income') {
+    const revAccts = coa.filter(a=>a.type==='revenue');
+    const expAccts = coa.filter(a=>a.type==='expense');
+    const totalRev = revAccts.reduce((s,a)=>s+accBal(a),0);
+    const totalExp = expAccts.reduce((s,a)=>s+Math.abs(accBal(a)),0);
+    const netProfit = totalRev - totalExp;
+
+    body.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <button class="btn btn-secondary btn-sm" onclick="exportIncomeCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
+      </div>
+      <div class="tbl-wrap"><table class="stmt-table">
+        <thead><tr><th colspan="2" style="background:var(--surface2);padding:12px;font-size:0.82rem">Income Statement</th></tr></thead>
+        <tbody>
+          <tr><td colspan="2" class="stmt-section">Revenue</td></tr>
+          ${revAccts.map(a=>`<tr><td>${a.code} — ${a.name}</td><td class="text-right">${fmt(accBal(a),currency)}</td></tr>`).join('')}
+          <tr class="stmt-total"><td><strong>Total Revenue</strong></td><td class="text-right"><strong>${fmt(totalRev,currency)}</strong></td></tr>
+          <tr><td colspan="2" class="stmt-section">Expenses</td></tr>
+          ${expAccts.map(a=>`<tr><td>${a.code} — ${a.name}</td><td class="text-right">${fmt(Math.abs(accBal(a)),currency)}</td></tr>`).join('')}
+          <tr class="stmt-total"><td><strong>Total Expenses</strong></td><td class="text-right"><strong>${fmt(totalExp,currency)}</strong></td></tr>
+          <tr class="stmt-grand"><td>Net Profit / (Loss)</td><td class="text-right" style="color:${netProfit>=0?'var(--green)':'var(--red)'}">${fmt(netProfit,currency)}</td></tr>
+        </tbody>
+      </table></div>`;
+  } else if (activeTab==='balance') {
+    const assets = coa.filter(a=>a.type==='asset');
+    const liabs = coa.filter(a=>a.type==='liability');
+    const equity = coa.filter(a=>a.type==='equity');
+    const allTxns = getTransactions(bid);
+    function fullBal(acc) {
+      let b=acc.balance||0;
+      allTxns.filter(t=>t.accountId===acc.id).forEach(t=>{ b+=t.type==='credit'?t.amount:-t.amount; });
+      return b;
+    }
+    const totalAssets = assets.reduce((s,a)=>s+fullBal(a),0);
+    const totalLiabs = liabs.reduce((s,a)=>s+fullBal(a),0);
+    const totalEquity = equity.reduce((s,a)=>s+fullBal(a),0);
+    // Net profit from all time
+    const revTotal = coa.filter(a=>a.type==='revenue').reduce((s,a)=>s+fullBal(a),0);
+    const expTotal = coa.filter(a=>a.type==='expense').reduce((s,a)=>s+Math.abs(fullBal(a)),0);
+    const retained = revTotal - expTotal;
+    const totalLE = totalLiabs + totalEquity + retained;
+
+    body.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <button class="btn btn-secondary btn-sm" onclick="exportBalanceCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div class="tbl-wrap"><table class="stmt-table">
+          <thead><tr><th colspan="2" style="background:var(--surface2);padding:12px">Assets</th></tr></thead>
+          <tbody>
+            <tr><td colspan="2" class="stmt-section">Current Assets</td></tr>
+            ${assets.filter(a=>a.category==='current').map(a=>`<tr><td>${a.code} — ${a.name}</td><td class="text-right">${fmt(fullBal(a),currency)}</td></tr>`).join('')}
+            <tr><td colspan="2" class="stmt-section">Fixed Assets</td></tr>
+            ${assets.filter(a=>a.category==='fixed').map(a=>`<tr><td>${a.code} — ${a.name}</td><td class="text-right">${fmt(fullBal(a),currency)}</td></tr>`).join('')}
+            <tr class="stmt-grand"><td>Total Assets</td><td class="text-right">${fmt(totalAssets,currency)}</td></tr>
+          </tbody>
+        </table></div>
+        <div class="tbl-wrap"><table class="stmt-table">
+          <thead><tr><th colspan="2" style="background:var(--surface2);padding:12px">Liabilities & Equity</th></tr></thead>
+          <tbody>
+            <tr><td colspan="2" class="stmt-section">Current Liabilities</td></tr>
+            ${liabs.filter(a=>a.category==='current').map(a=>`<tr><td>${a.code} — ${a.name}</td><td class="text-right">${fmt(fullBal(a),currency)}</td></tr>`).join('')}
+            <tr><td colspan="2" class="stmt-section">Long-term Liabilities</td></tr>
+            ${liabs.filter(a=>a.category==='long_term').map(a=>`<tr><td>${a.code} — ${a.name}</td><td class="text-right">${fmt(fullBal(a),currency)}</td></tr>`).join('')}
+            <tr class="stmt-total"><td>Total Liabilities</td><td class="text-right">${fmt(totalLiabs,currency)}</td></tr>
+            <tr><td colspan="2" class="stmt-section">Equity</td></tr>
+            ${equity.map(a=>`<tr><td>${a.code} — ${a.name}</td><td class="text-right">${fmt(fullBal(a),currency)}</td></tr>`).join('')}
+            <tr><td>Retained Earnings (Net Profit)</td><td class="text-right" style="color:${retained>=0?'var(--green)':'var(--red)'}">${fmt(retained,currency)}</td></tr>
+            <tr class="stmt-grand"><td>Total Liabilities & Equity</td><td class="text-right">${fmt(totalLE,currency)}</td></tr>
+          </tbody>
+        </table></div>
+      </div>`;
+  } else {
+    // Cash Flow
+    const cashAcct = coa.find(a=>a.code==='1000');
+    if (!cashAcct) { body.innerHTML = '<div class="empty-state"><i class="fa-solid fa-landmark"></i><p>No Cash and Bank account found (code 1000)</p></div>'; return; }
+    const cashTxns = txns.filter(t=>t.accountId===cashAcct.id);
+    const receipts = cashTxns.filter(t=>t.type==='credit');
+    const payments = cashTxns.filter(t=>t.type==='debit');
+    const totalIn = receipts.reduce((s,t)=>s+t.amount,0);
+    const totalOut = payments.reduce((s,t)=>s+t.amount,0);
+    const netCash = totalIn - totalOut;
+
+    body.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <button class="btn btn-secondary btn-sm" onclick="exportCashCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
+      </div>
+      <div class="tbl-wrap"><table class="stmt-table">
+        <thead><tr><th colspan="2" style="background:var(--surface2);padding:12px">Cash Flow Statement</th></tr></thead>
+        <tbody>
+          <tr><td colspan="2" class="stmt-section">Cash Receipts (Inflows)</td></tr>
+          ${receipts.map(t=>`<tr><td>${fmtDate(t.date)} — ${t.description}</td><td class="text-right" style="color:var(--green)">+${fmt(t.amount,currency)}</td></tr>`).join('')||'<tr><td colspan="2" class="text-muted" style="padding:10px 12px">No cash receipts in this period</td></tr>'}
+          <tr class="stmt-total"><td>Total Cash Inflows</td><td class="text-right">${fmt(totalIn,currency)}</td></tr>
+          <tr><td colspan="2" class="stmt-section">Cash Payments (Outflows)</td></tr>
+          ${payments.map(t=>`<tr><td>${fmtDate(t.date)} — ${t.description}</td><td class="text-right" style="color:var(--red)">-${fmt(t.amount,currency)}</td></tr>`).join('')||'<tr><td colspan="2" class="text-muted" style="padding:10px 12px">No cash payments in this period</td></tr>'}
+          <tr class="stmt-total"><td>Total Cash Outflows</td><td class="text-right">${fmt(totalOut,currency)}</td></tr>
+          <tr class="stmt-grand"><td>Net Cash Flow</td><td class="text-right" style="color:${netCash>=0?'var(--green)':'var(--red)'}">${fmt(netCash,currency)}</td></tr>
+        </tbody>
+      </table></div>`;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   MANAGEMENT ACCOUNTS
+═══════════════════════════════════════════════════ */
+function renderMgmt(bid, biz) {
+  const currency = biz.currency||'ZAR';
+  const now = new Date();
+  const tb = document.getElementById('topbar-actions');
+  tb.innerHTML = `<button class="btn btn-secondary btn-sm" onclick="exportMgmtCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>`;
+  const content = document.getElementById('acct-content');
+  content.innerHTML = `
+    <div class="period-bar">
+      <label>Year:</label>
+      <select class="form-control" id="mgmt-year" style="width:100px" onchange="refreshMgmt()">
+        ${[now.getFullYear()-1,now.getFullYear()].map(y=>`<option value="${y}" ${y===now.getFullYear()?'selected':''}>${y}</option>`).join('')}
+      </select>
+      <label>Month:</label>
+      <select class="form-control" id="mgmt-month" style="width:140px" onchange="refreshMgmt()">
+        ${MONTHS.map((m,i)=>`<option value="${i+1}" ${i+1===now.getMonth()+1?'selected':''}>${m}</option>`).join('')}
+      </select>
+    </div>
+    <div id="mgmt-body"></div>`;
+  refreshMgmt();
+}
+
+function refreshMgmt() {
+  const bid = getActiveId();
+  const biz = getActiveBiz();
+  const currency = biz?.currency||'ZAR';
+  const year = parseInt(document.getElementById('mgmt-year')?.value);
+  const month = parseInt(document.getElementById('mgmt-month')?.value);
+  const coa = getCoa(bid);
+  const budgets = getBudgets(bid);
+  const txns = getTransactions(bid).filter(t=>{
+    const d=new Date(t.date); return d.getFullYear()===year && d.getMonth()+1===month;
+  });
+
+  function actual(accId) {
+    let b=0;
+    txns.filter(t=>t.accountId===accId).forEach(t=>{ b+=t.type==='credit'?t.amount:-t.amount; });
+    return b;
+  }
+  function budget(accId) {
+    const b=budgets.find(b=>b.accountId===accId&&b.year===year&&b.month===month);
+    return b?b.budgetAmount:0;
+  }
+
+  const rvAccts = coa.filter(a=>a.type==='revenue');
+  const exAccts = coa.filter(a=>a.type==='expense');
+
+  function rows(accts, isExpense) {
+    return accts.map(a=>{
+      const act = Math.abs(actual(a.id));
+      const bgt = budget(a.id);
+      const variance = isExpense ? bgt - act : act - bgt; // fav if positive
+      const varPct = bgt!==0 ? ((variance/bgt)*100).toFixed(1)+'%' : '—';
+      const favourable = variance >= 0;
+      return `<tr>
+        <td>${a.code} — ${a.name}</td>
+        <td class="text-right">${fmt(bgt,currency)}</td>
+        <td class="text-right">${fmt(act,currency)}</td>
+        <td class="text-right ${favourable?'var-pos':'var-neg'}">${favourable?'+':''}${fmt(variance,currency)}</td>
+        <td class="text-right ${favourable?'var-pos':'var-neg'}">${varPct}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  const totalRevBgt = rvAccts.reduce((s,a)=>s+budget(a.id),0);
+  const totalRevAct = rvAccts.reduce((s,a)=>s+Math.abs(actual(a.id)),0);
+  const totalExpBgt = exAccts.reduce((s,a)=>s+budget(a.id),0);
+  const totalExpAct = exAccts.reduce((s,a)=>s+Math.abs(actual(a.id)),0);
+  const netBgt = totalRevBgt - totalExpBgt;
+  const netAct = totalRevAct - totalExpAct;
+
+  document.getElementById('mgmt-body').innerHTML = `
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>Account</th>
+          <th class="text-right">Budget</th>
+          <th class="text-right">Actual</th>
+          <th class="text-right">Variance</th>
+          <th class="text-right">Var %</th>
+        </tr></thead>
+        <tbody>
+          <tr><td colspan="5" class="stmt-section">Revenue</td></tr>
+          ${rows(rvAccts,false)}
+          <tr style="font-weight:700;border-top:2px solid var(--border2)">
+            <td>Total Revenue</td>
+            <td class="text-right">${fmt(totalRevBgt,currency)}</td>
+            <td class="text-right">${fmt(totalRevAct,currency)}</td>
+            <td class="text-right ${totalRevAct>=totalRevBgt?'var-pos':'var-neg'}">${fmt(totalRevAct-totalRevBgt,currency)}</td>
+            <td class="text-right ${totalRevAct>=totalRevBgt?'var-pos':'var-neg'}">${totalRevBgt?((totalRevAct-totalRevBgt)/totalRevBgt*100).toFixed(1)+'%':'—'}</td>
+          </tr>
+          <tr><td colspan="5" class="stmt-section">Expenses</td></tr>
+          ${rows(exAccts,true)}
+          <tr style="font-weight:700;border-top:2px solid var(--border2)">
+            <td>Total Expenses</td>
+            <td class="text-right">${fmt(totalExpBgt,currency)}</td>
+            <td class="text-right">${fmt(totalExpAct,currency)}</td>
+            <td class="text-right ${totalExpAct<=totalExpBgt?'var-pos':'var-neg'}">${fmt(totalExpBgt-totalExpAct,currency)}</td>
+            <td class="text-right ${totalExpAct<=totalExpBgt?'var-pos':'var-neg'}">${totalExpBgt?((totalExpBgt-totalExpAct)/totalExpBgt*100).toFixed(1)+'%':'—'}</td>
+          </tr>
+          <tr style="font-weight:800;font-size:0.95rem;border-top:2px solid var(--purple)">
+            <td style="color:var(--purple)">Net Profit</td>
+            <td class="text-right" style="color:var(--purple)">${fmt(netBgt,currency)}</td>
+            <td class="text-right" style="color:${netAct>=0?'var(--green)':'var(--red)'}">${fmt(netAct,currency)}</td>
+            <td class="text-right ${netAct>=netBgt?'var-pos':'var-neg'}">${fmt(netAct-netBgt,currency)}</td>
+            <td class="text-right ${netAct>=netBgt?'var-pos':'var-neg'}">${netBgt?((netAct-netBgt)/netBgt*100).toFixed(1)+'%':'—'}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════
+   BUDGETS
+═══════════════════════════════════════════════════ */
+function renderBudgets(bid, biz) {
+  const currency = biz.currency||'ZAR';
+  const coa = getCoa(bid);
+  const budgets = getBudgets(bid);
+  const now = new Date();
+  const tb = document.getElementById('topbar-actions');
+  tb.innerHTML = `<button class="btn btn-primary" onclick="openBudgetModal()"><i class="fa-solid fa-plus"></i> Set Budget</button>`;
+
+  const rows = budgets.sort((a,b)=>{
+    if (a.year!==b.year) return b.year-a.year;
+    return b.month-a.month;
+  }).map(b=>{
+    const acc = coa.find(a=>a.id===b.accountId);
+    return `<tr>
+      <td>${b.year}</td>
+      <td>${MONTHS[b.month-1]}</td>
+      <td>${acc?`${acc.code} — ${acc.name}`:'Unknown Account'}</td>
+      <td class="text-right">${fmt(b.budgetAmount,currency)}</td>
+      <td><button class="btn btn-danger btn-xs" onclick="deleteBudget('${b.accountId}','${b.year}','${b.month}')"><i class="fa-solid fa-trash"></i></button></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('acct-content').innerHTML = `
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Year</th><th>Month</th><th>Account</th><th class="text-right">Budget</th><th>Actions</th></tr></thead>
+        <tbody>${rows||'<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted)">No budgets set yet.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+function openBudgetModal() {
+  const bid = getActiveId();
+  const coa = getCoa(bid);
+  const now = new Date();
+  document.getElementById('bgt-year').value = now.getFullYear();
+  document.getElementById('bgt-month').value = now.getMonth()+1;
+  document.getElementById('bgt-amount').value = '';
+  const sel = document.getElementById('bgt-account');
+  sel.innerHTML = coa.filter(a=>a.type==='revenue'||a.type==='expense').map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
+  openModal('budget-modal');
+}
+
+function saveBudget() {
+  const year = parseInt(document.getElementById('bgt-year').value);
+  const month = parseInt(document.getElementById('bgt-month').value);
+  const accountId = document.getElementById('bgt-account').value;
+  const budgetAmount = parseFloat(document.getElementById('bgt-amount').value);
+  if (!year||!month||!accountId||isNaN(budgetAmount)) { showToast('All fields required','error'); return; }
+  const bid = getActiveId();
+  let budgets = getBudgets(bid).filter(b=>!(b.accountId===accountId&&b.year===year&&b.month===month));
+  budgets.push({accountId, year, month, budgetAmount});
+  lsSet('acct_budgets_'+bid, budgets);
+  closeModal('budget-modal');
+  showToast('Budget saved','success');
+  renderBudgets(bid,getActiveBiz());
+}
+
+function deleteBudget(accountId, year, month) {
+  const bid = getActiveId();
+  const budgets = getBudgets(bid).filter(b=>!(b.accountId===accountId&&b.year==year&&b.month==month));
+  lsSet('acct_budgets_'+bid, budgets);
+  renderBudgets(bid,getActiveBiz());
+  showToast('Budget deleted','info');
+}
+
+/* ═══════════════════════════════════════════════════
+   REPORTS / EXPORT
+═══════════════════════════════════════════════════ */
+function renderReports(bid, biz) {
+  document.getElementById('acct-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
+      ${[
+        {icon:'fa-file-invoice',label:'Income Statement',desc:'Revenue, expenses and net profit',fn:'exportIncomeCSV()'},
+        {icon:'fa-scale-balanced',label:'Balance Sheet',desc:'Assets, liabilities and equity',fn:'exportBalanceCSV()'},
+        {icon:'fa-water',label:'Cash Flow Statement',desc:'Cash receipts and payments',fn:'exportCashCSV()'},
+        {icon:'fa-table-cells',label:'Management Accounts',desc:'P&L with budget vs actuals',fn:'exportMgmtCSV()'},
+        {icon:'fa-list-tree',label:'Chart of Accounts',desc:'All accounts and balances',fn:'exportCoaCSV()'},
+        {icon:'fa-file-invoice-dollar',label:'Invoices',desc:'All customer invoices',fn:'exportInvoicesCSV()'},
+        {icon:'fa-receipt',label:'Bills',desc:'All supplier bills',fn:'exportBillsCSV()'},
+        {icon:'fa-landmark',label:'Bank Transactions',desc:'All transactions',fn:'exportTxnCSV()'},
+      ].map(r=>`<div class="metric-card" style="cursor:pointer" onclick="${r.fn}">
+        <div style="font-size:1.5rem;color:var(--purple);margin-bottom:10px"><i class="fa-solid ${r.icon}"></i></div>
+        <div style="font-weight:700;margin-bottom:4px">${r.label}</div>
+        <div style="font-size:0.78rem;color:var(--muted);margin-bottom:14px">${r.desc}</div>
+        <button class="btn btn-secondary btn-sm"><i class="fa-solid fa-download"></i> Export CSV</button>
+      </div>`).join('')}
+    </div>`;
+}
+
+function csvDown(filename, rows) {
+  const BOM = '﻿';
+  const content = BOM + rows.map(r=>r.map(c=>'"'+(String(c||'').replace(/"/g,'""'))+'"').join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8'}));
+  a.download = filename; a.click();
+  showToast('CSV exported','success');
+}
+
+function exportCoaCSV() {
+  const bid=getActiveId(); const coa=getCoa(bid);
+  csvDown('chart-of-accounts.csv',[['Code','Name','Type','Category','Opening Balance'],...coa.map(a=>[a.code,a.name,a.type,a.category,a.balance||0])]);
+}
+
+function exportInvoicesCSV() {
+  const bid=getActiveId(); const invs=getInvoices(bid);
+  csvDown('invoices.csv',[['Number','Customer','Email','Issue Date','Due Date','Subtotal','VAT','Total','Status'],
+    ...invs.map(i=>{const t=invTotal(i);return [i.number,i.contactName,i.contactEmail,i.issueDate,i.dueDate,t.sub,t.vat,t.total,calcInvStatus(i)];})]);
+}
+
+function exportBillsCSV() {
+  const bid=getActiveId(); const bills=getBills(bid);
+  csvDown('bills.csv',[['Number','Supplier','Email','Issue Date','Due Date','Subtotal','VAT','Total','Status'],
+    ...bills.map(b=>{const t=invTotal(b);return [b.number,b.contactName,b.contactEmail,b.issueDate,b.dueDate,t.sub,t.vat,t.total,calcInvStatus(b)];})]);
+}
+
+function exportTxnCSV() {
+  const bid=getActiveId(); const txns=getTransactions(bid); const coa=getCoa(bid);
+  csvDown('transactions.csv',[['Date','Description','Type','Amount','Account','Reference','Reconciled'],
+    ...txns.map(t=>{const acc=coa.find(a=>a.id===t.accountId);return [t.date,t.description,t.type,t.amount,acc?acc.name:'',t.reference,t.reconciled?'Yes':'No'];})]);
+}
+
+function exportIncomeCSV() {
+  const bid=getActiveId(); const biz=getActiveBiz(); const coa=getCoa(bid);
+  const year=parseInt(document.getElementById('fs-year')?.value||new Date().getFullYear());
+  const period=document.getElementById('fs-period')?.value||'full';
+  const txns=getTransactions(bid).filter(t=>{ const d=new Date(t.date); return d.getFullYear()===year&&(period==='full'||d.getMonth()+1===parseInt(period)); });
+  function bal(acc){ let b=acc.balance||0; txns.filter(t=>t.accountId===acc.id).forEach(t=>{ b+=t.type==='credit'?t.amount:-t.amount; }); return b; }
+  const rows=[['Account Code','Account Name','Type','Amount']];
+  coa.filter(a=>a.type==='revenue'||a.type==='expense').forEach(a=>rows.push([a.code,a.name,a.type,bal(a)]));
+  csvDown('income-statement.csv',rows);
+}
+
+function exportBalanceCSV() {
+  const bid=getActiveId(); const coa=getCoa(bid); const txns=getTransactions(bid);
+  function bal(acc){ let b=acc.balance||0; txns.filter(t=>t.accountId===acc.id).forEach(t=>{ b+=t.type==='credit'?t.amount:-t.amount; }); return b; }
+  const rows=[['Account Code','Account Name','Type','Balance']];
+  coa.filter(a=>['asset','liability','equity'].includes(a.type)).forEach(a=>rows.push([a.code,a.name,a.type,bal(a)]));
+  csvDown('balance-sheet.csv',rows);
+}
+
+function exportCashCSV() {
+  const bid=getActiveId(); const coa=getCoa(bid); const txns=getTransactions(bid);
+  const cashAcct=coa.find(a=>a.code==='1000');
+  if(!cashAcct){showToast('No Cash account found','error');return;}
+  const rows=[['Date','Description','Type','Amount','Reference']];
+  txns.filter(t=>t.accountId===cashAcct.id).forEach(t=>rows.push([t.date,t.description,t.type,t.amount,t.reference||'']));
+  csvDown('cash-flow.csv',rows);
+}
+
+function exportMgmtCSV() {
+  const bid=getActiveId(); const biz=getActiveBiz(); const currency=biz?.currency||'ZAR';
+  const year=parseInt(document.getElementById('mgmt-year')?.value||new Date().getFullYear());
+  const month=parseInt(document.getElementById('mgmt-month')?.value||new Date().getMonth()+1);
+  const coa=getCoa(bid); const budgets=getBudgets(bid);
+  const txns=getTransactions(bid).filter(t=>{ const d=new Date(t.date); return d.getFullYear()===year&&d.getMonth()+1===month; });
+  function actual(id){ let b=0; txns.filter(t=>t.accountId===id).forEach(t=>{ b+=t.type==='credit'?t.amount:-t.amount; }); return Math.abs(b); }
+  function budget(id){ const b=budgets.find(b=>b.accountId===id&&b.year===year&&b.month===month); return b?b.budgetAmount:0; }
+  const rows=[['Account Code','Account Name','Type','Budget','Actual','Variance']];
+  coa.filter(a=>a.type==='revenue'||a.type==='expense').forEach(a=>{
+    const act=actual(a.id); const bgt=budget(a.id);
+    rows.push([a.code,a.name,a.type,bgt,act,bgt-act]);
+  });
+  csvDown('management-accounts.csv',rows);
+}
+
+/* ═══════════════════════════════════════════════════
+   TABLE SORTING
+═══════════════════════════════════════════════════ */
+function sortTable(th, key) {
+  const table = th.closest('table');
+  const tbody = table.querySelector('tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const idx = Array.from(th.parentElement.children).indexOf(th);
+  const asc = !th.classList.contains('sort-asc');
+  table.querySelectorAll('thead th').forEach(t=>t.classList.remove('sort-asc','sort-desc'));
+  th.classList.add(asc?'sort-asc':'sort-desc');
+  rows.sort((a,b)=>{
+    const av = a.cells[idx]?.textContent.trim()||'';
+    const bv = b.cells[idx]?.textContent.trim()||'';
+    const an = parseFloat(av.replace(/[^0-9.-]/g,''));
+    const bn = parseFloat(bv.replace(/[^0-9.-]/g,''));
+    if (!isNaN(an)&&!isNaN(bn)) return asc?an-bn:bn-an;
+    return asc?av.localeCompare(bv):bv.localeCompare(av);
+  });
+  rows.forEach(r=>tbody.appendChild(r));
+}
+
+/* ═══════════════════════════════════════════════════
+   DEMO DATA
+═══════════════════════════════════════════════════ */
+function seedDemoData(bid) {
+  const coa = getCoa(bid);
+  function getAcct(code) { return coa.find(a=>a.code===code); }
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth()+1).padStart(2,'0');
+
+  const txns = [
+    {id:uid(),date:`${y}-${m}-01`,description:'Client payment — ABC Corp',amount:85000,type:'credit',accountId:getAcct('1000')?.id,reference:'INV-001',reconciled:true},
+    {id:uid(),date:`${y}-${m}-03`,description:'Office rent payment',amount:18000,type:'debit',accountId:getAcct('1000')?.id,reference:'LEASE-2024',reconciled:true},
+    {id:uid(),date:`${y}-${m}-05`,description:'Consulting revenue',amount:45000,type:'credit',accountId:getAcct('4100')?.id,reference:'INV-002',reconciled:false},
+    {id:uid(),date:`${y}-${m}-08`,description:'Staff salaries',amount:62000,type:'debit',accountId:getAcct('6000')?.id,reference:'PAYROLL',reconciled:true},
+    {id:uid(),date:`${y}-${m}-10`,description:'Software subscription',amount:3500,type:'debit',accountId:getAcct('6700')?.id,reference:'SAAS-001',reconciled:false},
+    {id:uid(),date:`${y}-${m}-12`,description:'Marketing campaign',amount:12000,type:'debit',accountId:getAcct('6300')?.id,reference:'MKT-Q1',reconciled:false},
+    {id:uid(),date:`${y}-${m}-15`,description:'Product sales',amount:127500,type:'credit',accountId:getAcct('4000')?.id,reference:'SALES-BATCH',reconciled:true},
+    {id:uid(),date:`${y}-${m}-18`,description:'Cost of goods sold',amount:54000,type:'debit',accountId:getAcct('5000')?.id,reference:'COGS-BATCH',reconciled:true},
+    {id:uid(),date:`${y}-${m}-20`,description:'Professional fees',amount:8500,type:'debit',accountId:getAcct('6400')?.id,reference:'LEGAL-01',reconciled:false},
+    {id:uid(),date:`${y}-${m}-22`,description:'Bank charges',amount:450,type:'debit',accountId:getAcct('6500')?.id,reference:'BANK-FEE',reconciled:true},
+  ].filter(t=>t.accountId);
+
+  lsSet('acct_transactions_'+bid, txns);
+
+  const invoices = [
+    {id:uid(),number:'INV-001',contactName:'ABC Corporation',contactEmail:'finance@abc.co.za',issueDate:`${y}-${m}-01`,dueDate:`${y}-${m}-30`,lineItems:[{description:'Consulting Services Q1',qty:1,unitPrice:73913,vatRate:15}],status:'paid',paidDate:`${y}-${m}-01`},
+    {id:uid(),number:'INV-002',contactName:'XYZ Holdings',contactEmail:'accounts@xyz.co.za',issueDate:`${y}-${m}-05`,dueDate:`${y}-${m}-25`,lineItems:[{description:'Financial Advisory',qty:5,unitPrice:7826,vatRate:15}],status:'sent'},
+    {id:uid(),number:'INV-003',contactName:'Delta Ventures',contactEmail:'pay@delta.co.za',issueDate:`${y}-01-10`,dueDate:`${y}-01-25`,lineItems:[{description:'Strategy Report',qty:1,unitPrice:25000,vatRate:15}],status:'sent'},
+  ];
+  lsSet('acct_invoices_'+bid, invoices);
+
+  const bills = [
+    {id:uid(),number:'BILL-001',contactName:'Office Park Properties',contactEmail:'rent@officePark.co.za',issueDate:`${y}-${m}-01`,dueDate:`${y}-${m}-07`,lineItems:[{description:'Monthly Office Rent',qty:1,unitPrice:18000,vatRate:15}],status:'paid',paidDate:`${y}-${m}-03`},
+    {id:uid(),number:'BILL-002',contactName:'Eskom',contactEmail:'billing@eskom.co.za',issueDate:`${y}-${m}-12`,dueDate:`${y}-${m}-25`,lineItems:[{description:'Electricity — Commercial',qty:1,unitPrice:4200,vatRate:15}],status:'sent'},
+  ];
+  lsSet('acct_bills_'+bid, bills);
+
+  // Seed budgets
+  const budgets = coa.filter(a=>a.type==='revenue'||a.type==='expense').map(a=>({
+    accountId:a.id, year:y, month:parseInt(m),
+    budgetAmount: a.type==='revenue' ? (a.code==='4000'?150000:a.code==='4100'?50000:10000) :
+                  (a.code==='6000'?65000:a.code==='5000'?60000:a.code==='6100'?18000:
+                   a.code==='6300'?15000:a.code==='6400'?10000:5000),
+  }));
+  lsSet('acct_budgets_'+bid, budgets);
+}
+
+/* ═══════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  updateCoaCategories();
+
+  // Check if we need to auto-seed demo data
+  setTimeout(() => {
+    const bid = getActiveId();
+    if (bid && !getTransactions(bid).length && !getInvoices(bid).length) {
+      if (confirm('Would you like to load demo data to see the app in action?')) {
+        seedDemoData(bid);
+        showToast('Demo data loaded!', 'success');
+      }
+    }
+    updateSidebarBiz();
+    showView('dashboard');
+    document.getElementById('acct-loader').style.display = 'none';
+    document.getElementById('acct-app').style.display = 'flex';
+  }, 600);
+});
+</script>
+</body>
+</html>
