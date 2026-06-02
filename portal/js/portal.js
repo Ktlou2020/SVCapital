@@ -5086,7 +5086,7 @@ async function submitEarlyRedemption() {
   if (!_earlyRedemptionInvId) return;
   const inv = PORTAL.investments.find(i => i.id === _earlyRedemptionInvId);
   try {
-    await API.tables.post('support_tickets', {
+    await API.post('support_tickets', {
       investor_id:   PORTAL.investor.id,
       investor_name: `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
       subject:       `Early Redemption Request — ${inv?.pool_name || 'Investment'}`,
