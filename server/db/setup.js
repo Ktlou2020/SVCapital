@@ -315,6 +315,11 @@ DO $$ BEGIN
   -- IFA commission invoice tracking
   BEGIN ALTER TABLE ifas ADD COLUMN last_invoice_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE ifas ADD COLUMN total_commission_paid NUMERIC(18,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Transaction columns used by portal investment flow and Paystack creditWallet
+  BEGIN ALTER TABLE transactions ADD COLUMN transaction_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE transactions ADD COLUMN investor_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Maturity instruction on investments (used by maturity flow)
+  BEGIN ALTER TABLE investments ADD COLUMN maturity_instruction TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
 
 CREATE TABLE IF NOT EXISTS payslips (
