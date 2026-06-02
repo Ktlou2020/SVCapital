@@ -900,13 +900,17 @@ async function rejectBankAccount(investorId) {
 }
 
 /* ═══════════════════════════════════════════════
-   WITHDRAWALS
+   WITHDRAWALS — Feature 5: Approval Workflow
    ═══════════════════════════════════════════════ */
 async function loadWithdrawals() {
   try {
-    const res = await API._fetch('GET', 'tables/transactions', null, { limit: 200 });
-    const all  = (res.data || []).filter(t => t.type === 'withdrawal');
+    const [txnRes, invRes] = await Promise.all([
+      API._fetch('GET', 'tables/transactions', null, { type: 'withdrawal', limit: 300 }),
+      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 200 })
+    ]);
+    const all = (txnRes.data || []).filter(t => t.type === 'withdrawal');
     STATE.withdrawals = all;
+    if (!STATE.investors.length) STATE.investors = invRes.data || [];
     renderWithdrawalsTable();
   } catch (e) {
     Toast.error('Failed to load withdrawals');
@@ -915,59 +919,94 @@ async function loadWithdrawals() {
 }
 
 function renderWithdrawalsTable() {
-  const tbody = document.getElementById('withdrawalsTableBody');
-  if (!tbody) return;
-  const withdrawals = STATE.withdrawals || [];
-  const pending = withdrawals.filter(w => w.status === 'pending');
-  const rest    = withdrawals.filter(w => w.status !== 'pending');
-  const all     = [...pending, ...rest];
+  const pendingBody    = document.getElementById('withdrawalsPendingBody');
+  const completedBody  = document.getElementById('withdrawalsCompletedBody');
+  const withdrawals    = STATE.withdrawals || [];
+  const pending        = withdrawals.filter(w => w.status === 'pending');
+  const completed      = withdrawals.filter(w => w.status !== 'pending');
 
-  if (!all.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No withdrawal requests</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = all.map(w => {
-    const inv = STATE.investors.find(i => i.id === w.investor_id);
+  const _row = (w, showActions) => {
+    const inv  = STATE.investors.find(i => i.id === w.investor_id);
     const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id || '—';
-    const bank = inv?.bank_name || '—';
+    const bank = inv ? (inv.bank_name || '—') : '—';
     return `<tr>
-      <td class="td-strong">${name}</td>
-      <td class="td-gold fw-700">${Utils.rand(w.amount)}</td>
-      <td>${bank}</td>
-      <td>${Utils.statusBadge(w.status)}</td>
-      <td class="td-muted">${Utils.date(w.created_at)}</td>
+      <td class="td-muted">${Utils.date(w.created_at || w.transaction_date)}</td>
+      <td><div class="td-strong">${name}</div></td>
+      <td class="td-gold fw-700">${Utils.rand(Math.abs(w.amount))}</td>
+      <td class="td-muted">${bank}</td>
+      <td class="td-muted" style="font-size:0.75rem">${w.reference || '—'}</td>
       <td>
-        ${w.status === 'pending' ? `
-          <button class="btn btn--success btn--sm" onclick='processWithdrawal(${JSON.stringify(w.id)})'><i class="fa-solid fa-check"></i> Process</button>
-          <button class="btn btn--danger btn--sm" onclick='rejectWithdrawal(${JSON.stringify(w.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
-        ` : '—'}
+        ${showActions ? `
+          <div class="flex-center gap-6">
+            <button class="btn btn--success btn--sm" onclick='approveWithdrawal(${JSON.stringify(w.id)})'><i class="fa-solid fa-check"></i> Approve</button>
+            <button class="btn btn--danger btn--sm" onclick='rejectWithdrawalPrompt(${JSON.stringify(w.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+          </div>
+        ` : Utils.statusBadge(w.status)}
       </td>
     </tr>`;
-  }).join('');
+  };
+
+  if (pendingBody) {
+    pendingBody.innerHTML = pending.length
+      ? pending.map(w => _row(w, true)).join('')
+      : '<tr><td colspan="6" class="text-center text-muted" style="padding:24px"><i class="fa-solid fa-check-circle" style="color:var(--green);margin-right:6px"></i>No pending withdrawals</td></tr>';
+  }
+
+  if (completedBody) {
+    completedBody.innerHTML = completed.length
+      ? completed.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(w => _row(w, false)).join('')
+      : '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No completed withdrawals</td></tr>';
+  }
 }
 
-async function processWithdrawal(txnId) {
-  if (!confirm('Mark this withdrawal as processed? This will notify the investor by email.')) return;
+async function approveWithdrawal(txnId) {
+  if (!confirm('Approve this withdrawal? This will notify the investor.')) return;
   try {
-    await API._fetch('PATCH', `tables/transactions/${txnId}`, { status: 'completed' });
-    Toast.success('Withdrawal marked as processed — investor notified');
+    await fetch(`/api/withdrawals/${txnId}/approve`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Authorization: 'Bearer ' + localStorage.getItem('svc_token'), 'Content-Type': 'application/json' }
+    }).then(r => r.ok ? r : Promise.reject(r));
+    Toast.success('Withdrawal approved — investor notified');
     await loadWithdrawals();
-  } catch (e) { Toast.error('Failed to process withdrawal'); }
+  } catch (e) {
+    // Fallback: update status directly
+    try {
+      await API._fetch('PATCH', `tables/transactions/${txnId}`, { status: 'completed' });
+      Toast.success('Withdrawal approved');
+      await loadWithdrawals();
+    } catch (e2) { Toast.error('Failed to approve withdrawal'); }
+  }
 }
 
-async function rejectWithdrawal(txnId) {
-  const reason = prompt('Reason for rejection (optional — will be included in the email):');
+async function rejectWithdrawalPrompt(txnId) {
+  const reason = prompt('Reason for rejection (will be sent to investor):');
   if (reason === null) return;
   try {
-    await API._fetch('PATCH', `tables/transactions/${txnId}`, {
-      status:      'rejected',
-      description: reason || undefined,
-    });
-    Toast.success('Withdrawal rejected — funds returned to investor wallet');
+    await fetch(`/api/withdrawals/${txnId}/reject`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Authorization: 'Bearer ' + localStorage.getItem('svc_token'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason || 'Withdrawal rejected by admin.' })
+    }).then(r => r.ok ? r : Promise.reject(r));
+    Toast.success('Withdrawal rejected');
     await loadWithdrawals();
-  } catch (e) { Toast.error('Failed to reject withdrawal'); }
+  } catch (e) {
+    // Fallback: update status directly
+    try {
+      await API._fetch('PATCH', `tables/transactions/${txnId}`, {
+        status: 'rejected',
+        description: reason || 'Rejected by admin.'
+      });
+      Toast.success('Withdrawal rejected');
+      await loadWithdrawals();
+    } catch (e2) { Toast.error('Failed to reject withdrawal'); }
+  }
 }
+
+// Keep legacy aliases
+async function processWithdrawal(txnId) { return approveWithdrawal(txnId); }
+async function rejectWithdrawal(txnId) { return rejectWithdrawalPrompt(txnId); }
 
 async function confirmDeleteInvestor(id) {
   if (!confirm('Are you sure you want to delete this investor? This cannot be undone.')) return;

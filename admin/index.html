@@ -828,6 +828,9 @@
               <div class="table-card__sub">Immutable record of all significant actions</div>
             </div>
             <div class="table-card__controls">
+              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search action, actor…" id="auditSearchInput" /></div>
+              <input type="date" class="tbl-filter" id="auditDateFrom" title="From date" />
+              <input type="date" class="tbl-filter" id="auditDateTo" title="To date" />
               <select class="tbl-filter" id="auditTypeFilter">
                 <option value="">All Events</option>
                 <option value="user.login">Logins</option>
@@ -841,7 +844,7 @@
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>When</th><th>Action</th><th>Actor</th><th>Entity</th><th>Description</th><th>IP</th>
+                <th>Timestamp</th><th>Actor</th><th>Role</th><th>Action</th><th>Target</th><th>IP</th>
               </tr></thead>
               <tbody id="auditBody">
                 <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
