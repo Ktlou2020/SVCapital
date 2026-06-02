@@ -1,93 +1,237 @@
 /* ════════════════════════════════════════════════════════════
-   Payment helpers — server-side hash generation for Ozow
-   POST /api/payments/ozow-hash
+   Payment routes
+   GET  /api/payments/config              — returns public Paystack key
+   POST /api/payments/paystack/verify     — server-verifies a reference & credits wallet
+   POST /api/payments/paystack/webhook    — Paystack server-to-server event (charge.success)
+   POST /api/payments/ozow-hash           — generates Ozow SHA-512 HashCheck
    ════════════════════════════════════════════════════════════ */
 'use strict';
 
-const router = require('express').Router();
-const crypto = require('crypto');
+const router       = require('express').Router();
+const crypto       = require('crypto');
+const pool         = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
+const emailService = require('../services/email');
+const smsService   = require('../services/sms');
+const audit        = require('../services/audit');
 
-/**
- * POST /api/payments/ozow-hash
- * Body: { countryCode, currencyCode, amount, transactionRef,
- *         bankRef, cancelUrl, errorUrl, successUrl, isTest }
- *
- * The server reads OZOW_SITE_CODE and OZOW_PRIVATE_KEY from env vars
- * so the frontend never needs to hold sensitive credentials.
- *
- * Ozow HashCheck spec:
- *   lowercase( SHA512(
- *     siteCode + countryCode + currencyCode + amount +
- *     transactionRef + bankRef + cancelUrl + errorUrl +
- *     successUrl + isTest + privateKey
- *   ) )
- * where every value is first lowercased before concatenation.
- *
- * Returns: { hash, siteCode }  — frontend uses the returned siteCode.
- */
+/* ──────────────────────────────────────────────────────────
+   GET /api/payments/config
+   Returns the Paystack public key so the frontend can be
+   configured without hardcoded keys in source code.
+────────────────────────────────────────────────────────── */
+router.get('/config', requireAuth, (req, res) => {
+  const paystackPublicKey = (process.env.PAYSTACK_PUBLIC_KEY || '').trim();
+  res.json({ paystackPublicKey });
+});
+
+/* ──────────────────────────────────────────────────────────
+   Shared helper — atomically credit wallet and record deposit
+   Idempotent: skips silently if the reference is already processed.
+────────────────────────────────────────────────────────── */
+async function creditWallet(investorId, amount, reference, actorEmail = null, source = 'paystack') {
+  // Idempotency check — never double-credit the same reference
+  const dupCheck = await pool.query(
+    `SELECT id FROM transactions
+     WHERE reference = $1 AND investor_id = $2 AND type = 'deposit' AND status = 'completed'`,
+    [reference, investorId]
+  );
+  if (dupCheck.rows.length > 0) {
+    console.log(`[payments] ${reference} already processed — skipping duplicate credit`);
+    return { alreadyProcessed: true };
+  }
+
+  const invRes = await pool.query('SELECT * FROM investors WHERE id = $1', [investorId]);
+  if (!invRes.rows[0]) throw new Error(`Investor ${investorId} not found`);
+  const investor = invRes.rows[0];
+
+  // Atomic SQL increment — safe against race conditions
+  await pool.query(
+    'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+    [amount, investorId]
+  );
+
+  const sourceLabel = source === 'webhook' ? 'Paystack (confirmed)' : 'Paystack';
+  const desc = `Wallet top-up via ${sourceLabel} — R${Number(amount).toLocaleString('en-ZA')} credited`;
+
+  // Upsert transaction: update pending → completed, or insert fresh
+  const existingTx = await pool.query(
+    `SELECT id FROM transactions WHERE reference = $1 AND investor_id = $2 AND type = 'deposit'`,
+    [reference, investorId]
+  );
+  if (existingTx.rows.length > 0) {
+    await pool.query(
+      `UPDATE transactions SET status = 'completed', description = $1, updated_at = NOW() WHERE id = $2`,
+      [desc, existingTx.rows[0].id]
+    );
+  } else {
+    await pool.query(
+      `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
+       VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, $4, NOW(), NOW())`,
+      [investorId, amount, reference, desc]
+    );
+  }
+
+  // Email + SMS confirmation (non-blocking)
+  Promise.all([
+    emailService.sendDepositConfirmed(investor, amount, reference, 'Paystack').catch(e => console.error('[payments] email error:', e.message)),
+    smsService.sendDepositConfirmed(investor.phone, investor.first_name, amount).catch(e => console.error('[payments] sms error:', e.message)),
+  ]);
+
+  // Audit trail
+  await audit.log({
+    actorEmail: actorEmail || investor.email,
+    action: 'transaction.completed',
+    entityType: 'transactions',
+    entityId: reference,
+    description: `Paystack deposit R${amount} credited to ${investorId}`,
+  }).catch(() => {});
+
+  console.log(`[payments] Credited R${amount} to investor ${investorId}, ref: ${reference}`);
+  return { alreadyProcessed: false, amount, investorId };
+}
+
+/* ──────────────────────────────────────────────────────────
+   POST /api/payments/paystack/verify
+   Called by the frontend after PaystackPop onSuccess fires.
+   Verifies the reference with Paystack's API, then atomically
+   credits the investor's wallet.
+────────────────────────────────────────────────────────── */
+router.post('/paystack/verify', requireAuth, async (req, res) => {
+  const { reference, investorId, walletCredit } = req.body;
+  if (!reference) return res.status(400).json({ error: 'reference is required' });
+
+  const resolvedInvestorId = investorId || req.user.investorId;
+  if (!resolvedInvestorId) return res.status(400).json({ error: 'investorId is required' });
+
+  const secretKey = (process.env.PAYSTACK_SECRET_KEY || '').trim();
+
+  if (!secretKey) {
+    // No secret key — log warning and fall back to trusting the client reference
+    // Set PAYSTACK_SECRET_KEY in Railway env vars for production security
+    console.warn('[payments] PAYSTACK_SECRET_KEY not set — processing without server verification');
+    try {
+      const result = await creditWallet(resolvedInvestorId, Number(walletCredit), reference, req.user?.email);
+      return res.json({ success: true, verified: false, ...result });
+    } catch (err) {
+      console.error('[payments] creditWallet error:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // Verify with Paystack REST API
+  try {
+    const psRes = await fetch(
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+      { headers: { Authorization: `Bearer ${secretKey}` } }
+    );
+    const psData = await psRes.json();
+
+    if (!psData.status || psData.data?.status !== 'success') {
+      console.error('[payments] Paystack verification failed:', JSON.stringify(psData));
+      return res.status(400).json({
+        error: 'Payment not verified by Paystack',
+        details: psData.message || 'Verification returned non-success status',
+      });
+    }
+
+    // Use wallet_credit from metadata (base amount, excluding gateway fee)
+    // Fall back to full transaction amount if metadata missing
+    const creditAmount = Number(psData.data.metadata?.wallet_credit) || (psData.data.amount / 100);
+    const psInvestorId = psData.data.metadata?.investor_id || resolvedInvestorId;
+
+    const result = await creditWallet(psInvestorId, creditAmount, reference, req.user?.email);
+    return res.json({ success: true, verified: true, ...result });
+
+  } catch (err) {
+    console.error('[payments] Paystack verify error:', err.message);
+    return res.status(500).json({ error: `Verification failed: ${err.message}` });
+  }
+});
+
+/* ──────────────────────────────────────────────────────────
+   POST /api/payments/paystack/webhook
+   Paystack sends this server-to-server for every charge.success.
+   This is the reliable backup path — fires even if the browser
+   crashed or onSuccess didn't complete.
+   No auth required (uses HMAC signature verification instead).
+────────────────────────────────────────────────────────── */
+router.post('/paystack/webhook', async (req, res) => {
+  // Acknowledge immediately — Paystack requires a 200 within 5 seconds
+  res.sendStatus(200);
+
+  const secretKey = (process.env.PAYSTACK_SECRET_KEY || '').trim();
+  if (secretKey) {
+    // Verify HMAC-SHA512 signature using the raw body (captured in server/index.js middleware)
+    const rawBody = req.rawBody || JSON.stringify(req.body);
+    const expectedSig = crypto.createHmac('sha512', secretKey).update(rawBody).digest('hex');
+    if (expectedSig !== req.headers['x-paystack-signature']) {
+      console.warn('[payments/webhook] Invalid Paystack signature — ignoring');
+      return;
+    }
+  } else {
+    console.warn('[payments/webhook] PAYSTACK_SECRET_KEY not set — skipping signature check');
+  }
+
+  const { event, data } = req.body;
+  if (event !== 'charge.success') return;
+
+  const reference  = data?.reference;
+  const investorId = data?.metadata?.investor_id;
+  const creditAmt  = Number(data?.metadata?.wallet_credit) || (data?.amount / 100);
+
+  if (!investorId) {
+    console.warn('[payments/webhook] No investor_id in metadata, ref:', reference);
+    return;
+  }
+
+  try {
+    const result = await creditWallet(investorId, creditAmt, reference, null, 'webhook');
+    if (!result.alreadyProcessed) {
+      console.log(`[payments/webhook] charge.success — credited R${creditAmt} to ${investorId}`);
+    }
+  } catch (err) {
+    console.error('[payments/webhook] creditWallet error:', err.message);
+  }
+});
+
+/* ──────────────────────────────────────────────────────────
+   POST /api/payments/ozow-hash
+   Generates the server-side Ozow SHA-512 HashCheck.
+   (Unchanged from previous implementation)
+────────────────────────────────────────────────────────── */
 router.post('/ozow-hash', requireAuth, (req, res) => {
-  // .trim() guards against accidental trailing newlines/spaces when copy-pasting into Railway env vars
   const siteCode   = (process.env.OZOW_SITE_CODE   || '').trim();
   const privateKey = (process.env.OZOW_PRIVATE_KEY || '').trim();
 
-  if (!siteCode) {
-    console.error('Ozow: OZOW_SITE_CODE env var not set');
-    return res.status(503).json({ error: 'Ozow site code not configured on server. Set OZOW_SITE_CODE in Railway.' });
-  }
-  if (!privateKey) {
-    console.error('Ozow: OZOW_PRIVATE_KEY env var not set');
-    return res.status(503).json({ error: 'Ozow private key not configured on server. Set OZOW_PRIVATE_KEY in Railway.' });
-  }
+  if (!siteCode)   return res.status(503).json({ error: 'OZOW_SITE_CODE not configured on server.' });
+  if (!privateKey) return res.status(503).json({ error: 'OZOW_PRIVATE_KEY not configured on server.' });
 
   const {
     countryCode  = 'ZA',
     currencyCode = 'ZAR',
     amount,
     transactionRef,
-    bankRef      = '',
-    cancelUrl    = '',
-    errorUrl     = '',
+    bankRef    = '',
+    cancelUrl  = '',
+    errorUrl   = '',
     successUrl,
-    isTest       = 'false',
+    isTest     = 'false',
   } = req.body;
 
-  if (!amount || !transactionRef || !successUrl) {
+  if (!amount || !transactionRef || !successUrl)
     return res.status(400).json({ error: 'amount, transactionRef and successUrl are required.' });
-  }
 
-  // Ozow HashCheck spec (per official PHP SDK):
-  //   lowercase(SHA512(
-  //     lowercase(siteCode) + lowercase(countryCode) + lowercase(currencyCode) +
-  //     lowercase(amount) + lowercase(transactionRef) + lowercase(bankRef) +
-  //     lowercase(cancelUrl) + lowercase(errorUrl) + lowercase(successUrl) +
-  //     lowercase(isTest) + privateKey   ← private key appended as-is, NOT lowercased
-  //   ))
   const lc = v => String(v).toLowerCase();
   const payload =
     lc(siteCode) + lc(countryCode) + lc(currencyCode) +
     lc(amount) + lc(transactionRef) + lc(bankRef) +
     lc(cancelUrl) + lc(errorUrl) + lc(successUrl) +
-    lc(String(isTest)) + privateKey;  // privateKey used verbatim
+    lc(String(isTest)) + privateKey;
 
   const hash = crypto.createHash('sha512').update(payload).digest('hex').toLowerCase();
 
-  // Debug — visible in Railway logs to diagnose mismatches (private key not logged)
-  console.log('[Ozow] hash inputs:', {
-    siteCode,
-    countryCode,
-    currencyCode,
-    amount,
-    transactionRef,
-    bankRef,
-    cancelUrl,
-    errorUrl,
-    successUrl,
-    isTest: String(isTest),
-    privateKeyLen: privateKey.length,
-    hash,
-  });
-
+  console.log('[Ozow] hash generated for ref:', transactionRef);
   return res.json({ hash, siteCode });
 });
 

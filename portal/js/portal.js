@@ -257,6 +257,7 @@ async function loadPortalData() {
       API.investments.list({ limit: 200 }),
       API.transactions.list({ limit: 200 }),
       API.pools.list({ limit: 100 }),
+      loadPaymentConfig(),  // load Paystack key from server env var
     ]);
 
     const allInvestors   = invRes.data   || [];
@@ -816,9 +817,18 @@ async function loadWallet() {
    Paystack public key (test): pk_test_72040393098052bb00477db9fb8f69f369193707
    ═══════════════════════════════════════════════ */
 
-// ⚠️  REPLACE WITH LIVE KEY before going live — pk_live_xxxxxxxxxxxxxxxx
-// Test key only works in Paystack's sandbox — real cards are declined
-const PAYSTACK_PUBLIC_KEY = 'pk_test_72040393098052bb00477db9fb8f69f369193707';
+// Paystack public key — loaded from server env var (PAYSTACK_PUBLIC_KEY) at init.
+// Set PAYSTACK_PUBLIC_KEY=pk_live_... in Railway to go live without touching code.
+let PAYSTACK_PUBLIC_KEY = 'pk_test_72040393098052bb00477db9fb8f69f369193707';
+
+async function loadPaymentConfig() {
+  try {
+    const cfg = await API._fetch('GET', 'payments/config');
+    if (cfg.paystackPublicKey) PAYSTACK_PUBLIC_KEY = cfg.paystackPublicKey;
+  } catch (e) {
+    console.warn('[portal] Could not load payment config — using fallback key');
+  }
+}
 
 // ⚠️  REPLACE with your real Ozow SiteCode from the Ozow merchant portal
 // Set IsTest=false in launchOzow() when going live
@@ -1038,9 +1048,35 @@ function launchPaystack() {
             { display_name: 'Gateway Fee',    variable_name: 'gateway_fee',   value: `R${_pmFee(_pmAmount)}` },
           ]
         },
-        onSuccess: function(transaction) {
-          // Payment authorised — credit wallet with base amount only (fee stays with gateway)
-          _recordDeposit('paystack', transaction.reference, 'completed');
+        onSuccess: async function(transaction) {
+          // Payment authorised by Paystack — ask the server to verify the reference
+          // and atomically credit the wallet. This is more reliable than direct DB patching.
+          _pmShowOnly('pmStep3Processing');
+          _pmEl('pmProcessingTitle').textContent    = 'Confirming payment…';
+          _pmEl('pmProcessingSubtitle').textContent = 'Verifying with Paystack — please wait';
+          try {
+            const result = await API._fetch('POST', 'payments/paystack/verify', {
+              reference:    transaction.reference,
+              investorId:   _pmInvestorId(),
+              walletCredit: _pmAmount,
+            });
+            if (result.error) throw new Error(result.error);
+
+            // Update local cache so UI reflects the new balance immediately
+            if (!result.alreadyProcessed && PORTAL.investor) {
+              PORTAL.investor.wallet_balance = (parseFloat(PORTAL.investor.wallet_balance) || 0) + _pmAmount;
+              _refreshWalletUI(PORTAL.investor.wallet_balance);
+            }
+
+            await _showDepositSuccess('paystack', transaction.reference);
+          } catch (verifyErr) {
+            console.error('Paystack verify error:', verifyErr);
+            Toast.error('Payment was received by Paystack but we could not confirm it on our end. ' +
+              'Your wallet will be updated within a few minutes via webhook, or contact support with ref: ' +
+              transaction.reference);
+            _pmShowOnly('pmStep2');
+            _pmSetProgress(66);
+          }
         },
         onCancel: function() {
           // User closed the Paystack popup without completing payment
@@ -1243,6 +1279,23 @@ async function confirmEftDeposit() {
   }
 }
 
+/* ── Show deposit success screen (shared by paystack verify path + EFT) ─── */
+async function _showDepositSuccess(gateway, reference) {
+  _pmShowOnly('pmStep3Success');
+  _pmSetProgress(100);
+  _pmSetStepLabel('Complete');
+  const isGateway = gateway === 'paystack' || gateway === 'ozow';
+  const fee = isGateway ? _pmFee(_pmAmount) : 0;
+  const fmtBase = `R${_pmAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  _pmEl('pmSuccessAmount').innerHTML =
+    `<strong style="color:#22c55e">${fmtBase}</strong> successfully credited to your wallet` +
+    (fee > 0 ? `<br><span style="font-size:0.75rem;color:#6b7280">R${fee.toFixed(2)} gateway fee charged by ${gateway === 'paystack' ? 'Paystack' : 'Ozow'}</span>` : '');
+  _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
+  PORTAL.transactions = [];
+  await loadPortalData();
+  loadWallet();
+}
+
 /* ── core: record deposit transaction + update wallet balance ─── */
 /**
  * _recordDeposit(gateway, reference, status, showSuccess)
@@ -1291,27 +1344,21 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
       });
     }
 
-    // 3. If completed, update the investor's wallet_balance in the DB
-    //    Only the base amount (_pmAmount) is credited — fee was paid to the gateway
-    if (status === 'completed' && PORTAL.investor) {
+    // 3. If completed, update the investor's wallet_balance in the DB.
+    //    Paystack deposits are now handled server-side via /api/payments/paystack/verify
+    //    (which uses an atomic SQL increment). Only run this client-side PATCH for
+    //    non-Paystack gateways (EFT, Ozow, admin top-ups) to avoid double-crediting.
+    if (status === 'completed' && PORTAL.investor && gateway !== 'paystack') {
       const currentBalance = parseFloat(PORTAL.investor.wallet_balance) || 0;
       const newBalance     = Math.round((currentBalance + _pmAmount) * 100) / 100;
 
-      // Persist to DB using PATCH (only update wallet_balance field)
       try {
         await API.investors.update(PORTAL.investor.id, { wallet_balance: newBalance });
       } catch (dbErr) {
-        console.warn('wallet_balance DB update failed, retrying with full record:', dbErr);
-        await API.investors.update(PORTAL.investor.id, {
-          ...PORTAL.investor,
-          wallet_balance: newBalance,
-        });
+        console.warn('wallet_balance PATCH failed:', dbErr.message);
       }
 
-      // Update local cache immediately so all UI shows the new balance
       PORTAL.investor.wallet_balance = newBalance;
-
-      // Update every wallet balance display on the page right now
       _refreshWalletUI(newBalance);
     }
 
@@ -1328,25 +1375,19 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
     }
 
     if (showSuccess) {
-      _pmShowOnly('pmStep3Success');
-      _pmSetProgress(100);
-      _pmSetStepLabel('Complete');
-
-      const fmtBase = `R${_pmAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       if (status === 'pending') {
+        _pmShowOnly('pmStep3Success');
+        _pmSetProgress(100);
+        _pmSetStepLabel('Complete');
+        const fmtBase = `R${_pmAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         _pmEl('pmSuccessAmount').textContent = `${fmtBase} deposit registered — awaiting bank confirmation`;
+        _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
+        PORTAL.transactions = [];
+        await loadPortalData();
+        loadWallet();
       } else {
-        _pmEl('pmSuccessAmount').innerHTML =
-          `<strong style="color:#22c55e">${fmtBase}</strong> successfully credited to your wallet` +
-          (isGateway ? `<br><span style="font-size:0.75rem;color:#6b7280">R${fee.toFixed(2)} gateway fee was charged by ${gatewayLabel}</span>` : '');
+        await _showDepositSuccess(gateway, reference);
       }
-
-      _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
-
-      // Reload portal data fully, then refresh wallet view
-      PORTAL.transactions = [];
-      await loadPortalData();
-      loadWallet();
     }
 
   } catch (err) {

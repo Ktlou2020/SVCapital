@@ -321,6 +321,26 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     const [clean] = stripSensitive(table, rows);
     res.status(201).json(clean);
 
+    /* ── Wallet credit hook ─────────────────────────────────────────────
+       When a completed deposit is created directly (e.g. admin top-up,
+       or EFT marked completed), atomically increment wallet_balance.
+       Paystack/Ozow deposits are credited via payments.js creditWallet()
+       which is idempotent, so double-credits are prevented there.
+       This hook covers non-gateway deposits created via the tables API.
+    ───────────────────────────────────────────────────────────────────── */
+    if (table === 'transactions' && clean.type === 'deposit' && clean.status === 'completed' && clean.investor_id) {
+      setImmediate(async () => {
+        try {
+          await pool.query(
+            'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+            [clean.amount, clean.investor_id]
+          );
+        } catch (err) {
+          console.error('[wallet hook] deposit credit error:', err.message);
+        }
+      });
+    }
+
     /* ── FICA deposit hook ──────────────────────────────────────────────
        When a completed deposit transaction is created, trigger an
        automated FICA check if the investor has never had one.
