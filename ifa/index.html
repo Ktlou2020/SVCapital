@@ -55,6 +55,9 @@
       <button class="nav-item" data-view="clients" onclick="navigate('clients', this)">
         <i class="fa-solid fa-users"></i> My Clients
       </button>
+      <button class="nav-item" data-view="refer" onclick="navigate('refer', this)">
+        <i class="fa-solid fa-user-plus"></i> Refer Client
+      </button>
 
       <div class="nav-section-label">Activity</div>
       <button class="nav-item" data-view="investments" onclick="navigate('investments', this)">
@@ -478,8 +481,8 @@
         <div class="table-card">
           <div class="table-card__header">
             <div>
-              <div class="table-card__title">Client Support Tickets</div>
-              <div class="table-card__sub">Support tickets raised by your linked clients</div>
+              <div class="table-card__title">Support Tickets</div>
+              <div class="table-card__sub">Support tickets for your clients and your own account</div>
             </div>
             <div class="table-card__controls">
               <select class="tbl-filter" id="ticketStatusFilter" onchange="renderTicketsTable(this.value)">
@@ -489,15 +492,18 @@
                 <option value="resolved">Resolved</option>
                 <option value="closed">Closed</option>
               </select>
+              <button class="btn btn--primary btn--sm" onclick="openNewTicketModal()">
+                <i class="fa-solid fa-plus"></i> New Ticket
+              </button>
             </div>
           </div>
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>Ticket ID</th><th>Client</th><th>Subject</th><th>Priority</th><th>Status</th><th>Date</th>
+                <th>Ticket ID</th><th>Client / Source</th><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th><th>Date</th>
               </tr></thead>
               <tbody id="ticketsBody">
-                <tr><td colspan="6"><div class="empty-state"><i class="fa-solid fa-headset"></i><p>Loading...</p></div></td></tr>
+                <tr><td colspan="7"><div class="empty-state"><i class="fa-solid fa-headset"></i><p>Loading...</p></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -597,6 +603,79 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: REFER CLIENT
+      ══════════════════════════════════ -->
+      <div class="view" id="view-refer">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+          <!-- Referral Link Card -->
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-link"></i> Your Referral Link</span>
+            </div>
+            <div class="panel__body">
+              <p style="font-size:0.84rem;color:var(--text-muted);margin-bottom:16px">
+                Share your unique referral link with potential clients. When they sign up using this link, they will be automatically linked to your IFA account.
+              </p>
+              <div style="display:flex;gap:8px;align-items:center;background:#f8fafc;border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:16px">
+                <span style="font-size:0.8rem;font-family:monospace;flex:1;word-break:break-all;color:var(--teal)" id="referralLinkText">—</span>
+                <button class="btn btn--sm btn--secondary" onclick="copyReferralLink()" title="Copy to clipboard">
+                  <i class="fa-solid fa-copy"></i> Copy
+                </button>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <a id="referralWhatsApp" href="#" target="_blank" class="btn btn--sm btn--primary" style="background:#25D366;border-color:#25D366;text-decoration:none">
+                  <i class="fa-brands fa-whatsapp"></i> Share via WhatsApp
+                </a>
+                <a id="referralEmail" href="#" class="btn btn--sm btn--secondary" style="text-decoration:none">
+                  <i class="fa-solid fa-envelope"></i> Share via Email
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Referral Stats Card -->
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-chart-bar"></i> Referral Overview</span>
+            </div>
+            <div class="panel__body" id="referralOverviewBody">
+              <div style="text-align:center;padding:32px;color:var(--text-muted);font-size:0.82rem">Loading...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- KYC Status Table -->
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">KYC Onboarding Status</div>
+              <div class="table-card__sub">Track which of your referred clients still need to complete onboarding</div>
+            </div>
+            <select class="tbl-filter" id="referFicaFilter" onchange="renderReferTable(this.value)">
+              <option value="">All Statuses</option>
+              <option value="pending_fica">Pending FICA</option>
+              <option value="fica_submitted">FICA Submitted</option>
+              <option value="active">Active / Approved</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>Client</th><th>Email</th><th>Phone</th><th>FICA Status</th><th>Joined</th><th>Total Invested</th><th>Action</th>
+              </tr></thead>
+              <tbody id="referTableBody">
+                <tr><td colspan="7"><div class="empty-state"><i class="fa-solid fa-user-plus"></i><p>Loading...</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="padding:12px 20px;border-top:1px solid var(--border);font-size:0.75rem;color:var(--text-muted)">
+            <span id="referTableFooter">—</span>
           </div>
         </div>
       </div>

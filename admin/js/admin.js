@@ -14,6 +14,9 @@ let STATE = {
   maturity: [],
   settings: [],
   ifas: [],
+  withdrawals: [],
+  amlFlags: [],
+  adminEmail: null,
   currentView: 'dashboard',
   charts: {}
 };
@@ -211,7 +214,7 @@ function navigate(view, btnEl) {
     dashboard: 'Dashboard', investors: 'Investor Management', ifa: 'IFA Management', kyc: 'KYC / FICA',
     pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
     transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
-    auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications'
+    auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications', aml: 'AML Compliance Review'
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -231,6 +234,7 @@ function navigate(view, btnEl) {
     settings: loadSettings,
     withdrawals: loadWithdrawals,
     comms: loadComms,
+    aml: loadAML,
   };
   if (loaders[view]) loaders[view]();
 }
@@ -339,6 +343,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Prefer staffSession (richer: has avatar colour, initials, department)
     // Fall back to svc_user / JWT payload for main-login users.
     _populateAdminIdentity(user);
+
+    // ── Extract admin email from JWT for use in notes etc ──────────────
+    try {
+      const token = localStorage.getItem('svc_token');
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        STATE.adminEmail = payload.email || (user && user.email) || null;
+      }
+    } catch (_) {}
+    if (!STATE.adminEmail && user) STATE.adminEmail = user.email || null;
   }
 
   await loadDashboard();
@@ -785,6 +799,21 @@ async function viewInvestor(id) {
     </div>`;
     })()}
 
+    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:var(--white)">Admin Notes (Persistent)</div>
+    <div class="panel mb-16" style="background:var(--dark-3)">
+      <div class="panel__header">
+        <span class="panel__title">Notes History</span>
+        <span style="font-size:0.72rem;color:var(--text-dim)" id="invNotesCount">Loading…</span>
+      </div>
+      <div class="panel__body" id="invNotesList" style="max-height:200px;overflow-y:auto">
+        <div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin"></i> Loading notes…</div>
+      </div>
+      <div class="panel__body" style="border-top:1px solid var(--border);padding-top:12px">
+        <textarea class="form-input" id="invNewNoteTA" style="width:100%;min-height:70px;font-size:0.82rem;resize:vertical;margin-bottom:8px" placeholder="Add a note visible only to admins…"></textarea>
+        <button class="btn btn--primary btn--sm" onclick='addInvestorNote(${JSON.stringify(inv.id)})'><i class="fa-solid fa-plus"></i> Add Note</button>
+      </div>
+    </div>
+
     <div class="flex-between mt-16" style="flex-wrap:wrap;gap:8px">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn--success btn--sm" onclick='depositToInvestor(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, ${inv.wallet_balance || 0})'><i class="fa-solid fa-wallet"></i> Add Funds</button>
@@ -798,6 +827,8 @@ async function viewInvestor(id) {
   // Set textarea value after innerHTML to avoid XSS via template literals
   const ta = document.getElementById('investorNotesTA');
   if (ta) ta.value = inv.notes || '';
+  // Load persistent notes
+  loadInvestorNotes(inv.id);
 }
 
 async function depositToInvestor(investorId, investorName, currentBalance) {
