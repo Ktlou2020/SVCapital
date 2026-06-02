@@ -245,6 +245,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadNotifications();
   checkFirstDepositPrompt();
   _checkAutoStartTour();
+  load2FAStatus();
 });
 
 async function loadPortalData() {
@@ -4695,4 +4696,113 @@ td:last-child{text-align:right;font-weight:600}
   if (!win) { Toast.error('Pop-up blocked — please allow pop-ups for this site'); return; }
   win.document.write(html);
   win.document.close();
+}
+
+/* ═══════════════════════════════════════════════
+   TWO-FACTOR AUTHENTICATION (TOTP)
+   ═══════════════════════════════════════════════ */
+let _2faSecret = null; // temp storage during setup flow
+
+async function load2FAStatus() {
+  try {
+    const data = await API._fetch('GET', 'auth/2fa/status');
+    const label = document.getElementById('twoFAToggleLabel');
+    if (label) label.textContent = data.enabled ? 'Disable 2FA' : 'Enable 2FA';
+    const btn = document.getElementById('twoFAToggleBtn');
+    if (btn) {
+      btn.className = data.enabled
+        ? 'btn btn--danger btn--full'
+        : 'btn btn--secondary btn--full';
+    }
+    return data.enabled;
+  } catch (e) {
+    const label = document.getElementById('twoFAToggleLabel');
+    if (label) label.textContent = 'Enable 2FA';
+  }
+}
+
+async function toggle2FA() {
+  const enabled = await load2FAStatus();
+  if (enabled) {
+    document.getElementById('disable2FACode').value = '';
+    Modal.open('disable2FAModal');
+  } else {
+    await open2FASetupModal();
+  }
+}
+
+async function open2FASetupModal() {
+  const body   = document.getElementById('twoFAModalBody');
+  const footer = document.getElementById('twoFAModalFooter');
+  body.innerHTML = '<div style="text-align:center;padding:20px"><i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem;color:#ff9b0c"></i><p style="margin-top:10px;color:var(--text-muted);font-size:0.85rem">Generating your secret…</p></div>';
+  footer.innerHTML = '';
+  Modal.open('twoFAModal');
+  try {
+    const data = await API._fetch('POST', 'auth/2fa/setup');
+    _2faSecret = data.secret;
+    body.innerHTML = `
+      <div style="text-align:center;margin-bottom:18px">
+        <p style="font-size:0.84rem;color:var(--text-muted);margin-bottom:14px">
+          1. Install <strong>Google Authenticator</strong>, <strong>Authy</strong>, or any TOTP app.<br>
+          2. Scan the QR code below, or enter the key manually.<br>
+          3. Enter the 6-digit code to confirm setup.
+        </p>
+        <div id="qrCodeCanvas" style="display:inline-block;background:#fff;padding:14px;border-radius:12px;margin-bottom:12px"></div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px">Or enter this key manually:</div>
+        <div style="font-family:monospace;font-size:0.85rem;font-weight:700;background:rgba(255,155,12,0.08);padding:8px 14px;border-radius:8px;letter-spacing:0.08em;word-break:break-all">${data.secret}</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Verification Code <span style="color:#ef4444">*</span></label>
+        <input type="text" class="form-input" id="totpVerifyInput" inputmode="numeric" maxlength="6" placeholder="000000" style="text-align:center;font-size:1.3rem;letter-spacing:0.2em;font-weight:700" />
+        <div id="totpVerifyError" style="display:none;color:#ef4444;font-size:0.78rem;margin-top:6px"></div>
+      </div>
+    `;
+    footer.innerHTML = `
+      <button class="btn btn--secondary" onclick="Modal.close('twoFAModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="confirm2FASetup()"><i class="fa-solid fa-check"></i> Enable 2FA</button>
+    `;
+    // Render QR code
+    if (typeof QRCode !== 'undefined') {
+      new QRCode(document.getElementById('qrCodeCanvas'), { text: data.uri, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+    } else {
+      document.getElementById('qrCodeCanvas').innerHTML = '<div style="font-size:0.78rem;color:#ef4444">QR library not loaded — use the manual key above</div>';
+    }
+  } catch (e) {
+    body.innerHTML = '<div style="color:#ef4444;text-align:center;padding:20px">Failed to generate 2FA secret. Please try again.</div>';
+    Toast.error('Could not set up 2FA');
+  }
+}
+
+async function confirm2FASetup() {
+  const code  = (document.getElementById('totpVerifyInput')?.value || '').replace(/\s/g, '');
+  const errEl = document.getElementById('totpVerifyError');
+  if (!/^\d{6}$/.test(code)) {
+    if (errEl) { errEl.textContent = 'Please enter your 6-digit code.'; errEl.style.display = 'block'; }
+    return;
+  }
+  if (errEl) errEl.style.display = 'none';
+  try {
+    await API._fetch('POST', 'auth/2fa/enable', { secret: _2faSecret, token: code });
+    _2faSecret = null;
+    Toast.success('Two-factor authentication is now enabled! Your account is secured.');
+    Modal.close('twoFAModal');
+    await load2FAStatus();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message || 'Invalid code — please try again.'; errEl.style.display = 'block'; }
+  }
+}
+
+async function confirmDisable2FA() {
+  const code  = (document.getElementById('disable2FACode')?.value || '').replace(/\s/g, '');
+  if (!/^\d{6}$/.test(code)) { Toast.error('Please enter your 6-digit authenticator code'); return; }
+  try {
+    await API._fetch('POST', 'auth/2fa/disable', { token: code });
+    Toast.success('Two-factor authentication disabled.');
+    Modal.close('disable2FAModal');
+    await load2FAStatus();
+  } catch (e) { Toast.error(e.message || 'Invalid code'); }
+}
+
+function openChangePasswordModal() {
+  Toast.info('Use the Change Password option in your account settings.');
 }

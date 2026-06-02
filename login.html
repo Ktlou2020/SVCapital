@@ -632,6 +632,21 @@
         </div>
       </form>
 
+      <!-- 2FA verification step (shown after password success if 2FA enabled) -->
+      <div id="twoFAStep" style="display:none">
+        <div style="text-align:center;margin-bottom:20px">
+          <i class="fa-solid fa-mobile-screen-button" style="font-size:2rem;color:#FF9B0C;margin-bottom:10px;display:block"></i>
+          <div style="font-size:1rem;font-weight:700;color:#1a2235">Two-Factor Authentication</div>
+          <div style="font-size:0.82rem;color:#6b7280;margin-top:6px">Enter the 6-digit code from your authenticator app</div>
+        </div>
+        <div style="margin-bottom:14px">
+          <input type="text" id="totpInput" inputmode="numeric" pattern="\d{6}" maxlength="6" placeholder="000 000" style="width:100%;text-align:center;font-size:1.6rem;font-weight:700;letter-spacing:0.25em;padding:14px;border:2px solid #e5e7eb;border-radius:10px;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='#FF9B0C'" onblur="this.style.borderColor='#e5e7eb'" onkeydown="if(event.key==='Enter')verify2FA()" />
+        </div>
+        <div id="twoFAError" style="display:none;color:#ef4444;font-size:0.82rem;margin-bottom:10px;text-align:center"></div>
+        <button type="button" id="verify2FABtn" onclick="verify2FA()" style="width:100%;padding:13px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.95rem;font-weight:700;cursor:pointer;margin-bottom:10px">Verify Code</button>
+        <button type="button" onclick="back2FAStep()" style="width:100%;padding:10px;background:transparent;color:#6b7280;border:1px solid #e5e7eb;border-radius:10px;font-size:0.85rem;cursor:pointer">← Back to Sign In</button>
+      </div>
+
       <!-- ─── FORGOT PASSWORD PANEL ─── -->
       <div class="forgot-panel" id="forgotPanel">
         <button type="button" class="back-link" onclick="showLoginForm()">
@@ -803,6 +818,8 @@
     });
   }
 
+  let _pending2FAToken = null;
+
   async function handleLogin(e) {
     e.preventDefault();
     const email    = document.getElementById('emailInput').value.toLowerCase().trim();
@@ -810,40 +827,66 @@
     const errorEl  = document.getElementById('formError');
     const btn      = document.getElementById('loginBtn');
     const btnText  = document.getElementById('loginBtnText');
-
     errorEl.classList.remove('show');
-    btn.disabled = true;
-    btn.classList.add('loading');
+    btn.disabled = true; btn.classList.add('loading');
     btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Signing in…';
-
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email, password }),
-      });
+      const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ email, password }) });
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Invalid credentials.');
+      if (!res.ok) throw new Error(data.error || 'Invalid credentials.');
+      if (data.requires2FA) {
+        _pending2FAToken = data.pending2FAToken;
+        btn.disabled = false; btn.classList.remove('loading');
+        btnText.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In';
+        show2FAStep();
+        return;
       }
 
       /* Store token */
       localStorage.setItem('svc_token', data.token);
       localStorage.setItem('svc_user',  JSON.stringify(data.user));
 
-      btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
-      setTimeout(() => {
-        window.location.href = data.redirect || 'portal/index.html';
-      }, 350);
 
+      btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
+      setTimeout(() => { window.location.href = data.redirect || 'portal/index.html'; }, 350);
     } catch (err) {
-      btn.disabled = false;
-      btn.classList.remove('loading');
+      btn.disabled = false; btn.classList.remove('loading');
       btnText.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In';
       showError(err.message || 'Login failed. Please try again.');
     }
+  }
+
+  function show2FAStep() {
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('twoFAStep').style.display = 'block';
+    setTimeout(() => document.getElementById('totpInput')?.focus(), 100);
+  }
+
+  async function verify2FA() {
+    const code   = (document.getElementById('totpInput')?.value || '').replace(/\s/g,'');
+    const btn    = document.getElementById('verify2FABtn');
+    const errEl  = document.getElementById('twoFAError');
+    if (!/^\d{6}$/.test(code)) { if (errEl) { errEl.textContent = 'Please enter your 6-digit code.'; errEl.style.display = 'block'; } return; }
+    btn.disabled = true; btn.textContent = 'Verifying…';
+    if (errEl) errEl.style.display = 'none';
+    try {
+      const res = await fetch('/api/auth/2fa/verify-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ pending2FAToken: _pending2FAToken, token: code }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Invalid code.');
+      localStorage.setItem('svc_token', data.token);
+      localStorage.setItem('svc_user',  JSON.stringify(data.user));
+      btn.textContent = 'Verified ✓';
+      setTimeout(() => { window.location.href = data.redirect || 'portal/index.html'; }, 350);
+    } catch (err) {
+      btn.disabled = false; btn.textContent = 'Verify Code';
+      if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }
+    }
+  }
+
+  function back2FAStep() {
+    _pending2FAToken = null;
+    document.getElementById('twoFAStep').style.display = 'none';
+    document.getElementById('loginForm').style.display = 'block';
   }
 </script>
 </body>

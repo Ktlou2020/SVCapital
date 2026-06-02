@@ -63,6 +63,16 @@ router.post('/login', async (req, res) => {
     if (!match)
       return res.status(401).json({ error: 'Invalid credentials.' });
 
+    // 2FA check: if enabled, issue a short-lived pending token instead of full JWT
+    if (user.totp_enabled) {
+      const pending2FAToken = jwt.sign(
+        { purpose: '2fa_pending', userId: user.id },
+        JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({ requires2FA: true, pending2FAToken });
+    }
+
     // update last_login
     await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
 
@@ -220,7 +230,7 @@ router.post('/register', async (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, email, role, first_name, last_name, investor_id, ifa_id, is_active, last_login, created_at FROM users WHERE id = $1',
+      'SELECT id, email, role, first_name, last_name, investor_id, ifa_id, is_active, last_login, created_at, totp_enabled FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'User not found.' });
@@ -530,6 +540,77 @@ router.post('/set-pin', async (req, res) => {
     console.error('Set-pin error:', err.message);
     res.status(500).json({ error: 'Could not save PIN.' });
   }
+});
+
+/* ─── GET /api/auth/2fa/status ─── */
+router.get('/2fa/status', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT totp_enabled FROM users WHERE id = $1', [req.user.id]);
+    res.json({ enabled: !!(rows[0]?.totp_enabled) });
+  } catch (err) { res.status(500).json({ error: 'Internal server error.' }); }
+});
+
+/* ─── POST /api/auth/2fa/setup ─── */
+// Generates a new secret. Does NOT save it yet — user must verify first.
+router.post('/2fa/setup', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT email FROM users WHERE id = $1', [req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'User not found.' });
+    const { generateSecret, otpauthUri } = require('../services/totp');
+    const secret = generateSecret();
+    const uri    = otpauthUri(secret, rows[0].email);
+    res.json({ secret, uri });
+  } catch (err) { console.error('/2fa/setup error:', err.message); res.status(500).json({ error: 'Internal server error.' }); }
+});
+
+/* ─── POST /api/auth/2fa/enable ─── */
+// Saves the secret and enables 2FA after verifying the TOTP token.
+router.post('/2fa/enable', requireAuth, async (req, res) => {
+  try {
+    const { secret, token } = req.body;
+    if (!secret || !token) return res.status(400).json({ error: 'secret and token are required.' });
+    const { verify } = require('../services/totp');
+    if (!verify(secret, token)) return res.status(400).json({ error: 'Invalid code — please try again.' });
+    await pool.query('UPDATE users SET totp_secret = $1, totp_enabled = true WHERE id = $2', [secret, req.user.id]);
+    res.json({ success: true });
+  } catch (err) { console.error('/2fa/enable error:', err.message); res.status(500).json({ error: 'Internal server error.' }); }
+});
+
+/* ─── POST /api/auth/2fa/disable ─── */
+router.post('/2fa/disable', requireAuth, async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'Authenticator code required.' });
+    const { rows } = await pool.query('SELECT totp_secret, totp_enabled FROM users WHERE id = $1', [req.user.id]);
+    if (!rows[0]?.totp_enabled) return res.status(400).json({ error: '2FA is not currently enabled.' });
+    const { verify } = require('../services/totp');
+    if (!verify(rows[0].totp_secret, token)) return res.status(400).json({ error: 'Invalid code.' });
+    await pool.query('UPDATE users SET totp_secret = NULL, totp_enabled = false WHERE id = $1', [req.user.id]);
+    res.json({ success: true });
+  } catch (err) { console.error('/2fa/disable error:', err.message); res.status(500).json({ error: 'Internal server error.' }); }
+});
+
+/* ─── POST /api/auth/2fa/verify-login ─── */
+router.post('/2fa/verify-login', async (req, res) => {
+  try {
+    const { pending2FAToken, token } = req.body;
+    if (!pending2FAToken || !token) return res.status(400).json({ error: 'pending2FAToken and token are required.' });
+    let payload;
+    try { payload = jwt.verify(pending2FAToken, JWT_SECRET); } catch {
+      return res.status(401).json({ error: 'Session expired. Please log in again.' });
+    }
+    if (payload.purpose !== '2fa_pending') return res.status(401).json({ error: 'Invalid token.' });
+    const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [payload.userId]);
+    const user = rows[0];
+    if (!user || !user.totp_secret) return res.status(400).json({ error: 'User not found or 2FA not configured.' });
+    const { verify } = require('../services/totp');
+    if (!verify(user.totp_secret, token)) return res.status(401).json({ error: 'Invalid authenticator code.' });
+    await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
+    const fullToken = signToken(user);
+    res.cookie('svc_token', fullToken, { httpOnly: true, secure: IS_PROD, sameSite: IS_PROD ? 'none' : 'lax', maxAge: 8*60*60*1000 });
+    const redirectMap = { admin: '/admin/index.html', director: '/admin/index.html', investor: '/portal/index.html', ifa: '/ifa/index.html', fund_manager: '/fund/index.html', staff: '/team/hub.html' };
+    res.json({ token: fullToken, user: { id: user.id, email: user.email, role: user.role, firstName: user.first_name, lastName: user.last_name, investorId: user.investor_id }, redirect: redirectMap[user.role] || '/portal/index.html' });
+  } catch (err) { console.error('/2fa/verify-login error:', err.message); res.status(500).json({ error: 'Internal server error.' }); }
 });
 
 module.exports = router;
