@@ -104,6 +104,7 @@ app.use('/api/users',    require('./routes/users'));
 app.use('/api/tables',   require('./routes/tables'));
 app.use('/api/fica',     require('./routes/fica'));
 app.use('/api/payments', require('./routes/payments'));
+app.use('/api/admin',    require('./routes/broadcast'));
 
 /* ─── One-time Provision Endpoint ───────────────────────────────────────────
    GET /api/provision?secret=<PROVISION_SECRET>

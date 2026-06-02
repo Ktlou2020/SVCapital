@@ -79,6 +79,9 @@
         <i class="fa-solid fa-headset"></i> Support Tickets
         <span class="nav-badge" id="ticketBadge">0</span>
       </button>
+      <button class="nav-item" data-view="comms" onclick="navigate('comms', this)">
+        <i class="fa-solid fa-paper-plane"></i><span>Communications</span>
+      </button>
       <button class="nav-item" data-view="analytics" onclick="navigate('analytics', this)">
         <i class="fa-solid fa-chart-pie"></i> Analytics
       </button>
@@ -181,6 +184,12 @@
               <i class="fa-solid fa-users"></i> Investors
             </button>
           </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-bottom:12px;gap:8px">
+          <button class="btn btn--secondary btn--sm" onclick="exportAumReport()">
+            <i class="fa-solid fa-file-arrow-down"></i> Export AUM Report
+          </button>
         </div>
 
         <div class="stats-row" id="dashStats">
@@ -795,6 +804,89 @@
               <div class="panel__body" style="display:flex;flex-direction:column;gap:8px">
                 <a href="../index.html" target="_blank" class="btn btn--secondary btn--full"><i class="fa-solid fa-globe"></i> View Public Website</a>
                 <a href="../portal/index.html" target="_blank" class="btn btn--secondary btn--full"><i class="fa-solid fa-user"></i> Open Investor Portal</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: COMMUNICATIONS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-comms">
+        <div class="grid-layout grid-layout--sidebar">
+
+          <!-- LEFT: Compose -->
+          <div>
+            <div class="panel mb-20">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-paper-plane" style="color:var(--orange);margin-right:8px"></i>Compose Broadcast</span>
+              </div>
+              <div class="panel__body">
+
+                <!-- Channel -->
+                <div class="form-group" style="margin-bottom:16px">
+                  <label class="form-label">Channel</label>
+                  <div style="display:flex;gap:20px;margin-top:6px">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
+                      <input type="radio" name="broadcastChannel" value="email" id="bcEmail" checked onchange="toggleBroadcastSubject()" style="accent-color:#FF9B0C;width:16px;height:16px"> Email
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
+                      <input type="radio" name="broadcastChannel" value="sms" id="bcSms" onchange="toggleBroadcastSubject()" style="accent-color:#FF9B0C;width:16px;height:16px"> SMS
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
+                      <input type="radio" name="broadcastChannel" value="both" id="bcBoth" onchange="toggleBroadcastSubject()" style="accent-color:#FF9B0C;width:16px;height:16px"> Both
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Segment -->
+                <div class="form-group" style="margin-bottom:16px">
+                  <label class="form-label">Recipient Segment</label>
+                  <select class="form-select" id="broadcastSegment" onchange="updateBroadcastPreview()">
+                    <option value="all">All Investors</option>
+                    <option value="active">Active Investors (with active investments)</option>
+                    <option value="pending_fica">Pending FICA / KYC</option>
+                  </select>
+                </div>
+
+                <!-- Preview count -->
+                <div id="broadcastPreviewBar" style="margin-bottom:16px;padding:10px 14px;background:rgba(255,155,12,0.07);border:1px solid rgba(255,155,12,0.2);border-radius:8px;font-size:0.82rem;color:var(--text-muted)">
+                  <i class="fa-solid fa-users" style="color:var(--orange);margin-right:6px"></i>
+                  Estimated recipients: <strong id="broadcastPreviewCount" style="color:var(--white)">—</strong>
+                </div>
+
+                <!-- Subject (email only) -->
+                <div class="form-group" id="broadcastSubjectGroup" style="margin-bottom:16px">
+                  <label class="form-label">Subject Line</label>
+                  <input type="text" class="form-input" id="broadcastSubject" placeholder="e.g. Important update from SV Capital" />
+                </div>
+
+                <!-- Message -->
+                <div class="form-group" style="margin-bottom:20px">
+                  <label class="form-label">Message</label>
+                  <textarea class="form-textarea" id="broadcastMessage" rows="7" placeholder="Write your broadcast message here..."></textarea>
+                </div>
+
+                <button class="btn btn--primary" id="broadcastSendBtn" onclick="sendBroadcast()" style="width:100%">
+                  <i class="fa-solid fa-paper-plane"></i> Send Broadcast
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: History -->
+          <div>
+            <div class="panel">
+              <div class="panel__header">
+                <span class="panel__title">Sent History</span>
+                <span id="broadcastHistoryCount" style="font-size:0.75rem;color:var(--text-muted)">0 broadcasts</span>
+              </div>
+              <div class="panel__body" id="broadcastHistoryBody">
+                <div style="text-align:center;padding:32px;color:var(--text-dim)">
+                  <i class="fa-solid fa-inbox" style="font-size:2rem;opacity:0.3;display:block;margin-bottom:8px"></i>
+                  No broadcasts sent yet
+                </div>
               </div>
             </div>
           </div>

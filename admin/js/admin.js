@@ -211,7 +211,7 @@ function navigate(view, btnEl) {
     dashboard: 'Dashboard', investors: 'Investor Management', ifa: 'IFA Management', kyc: 'KYC / FICA',
     pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
     transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
-    auditlog: 'Audit Log', settings: 'Settings'
+    auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications'
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -230,6 +230,7 @@ function navigate(view, btnEl) {
     auditlog: loadAuditLog,
     settings: loadSettings,
     withdrawals: loadWithdrawals,
+    comms: loadComms,
   };
   if (loaders[view]) loaders[view]();
 }
@@ -2705,4 +2706,249 @@ function renderAuditTable() {
   if (pag) pag.innerHTML = Array.from({ length: Math.min(pages, 10) }, (_, i) =>
     `<button class="page-btn ${i + 1 === _auditPage ? 'active' : ''}" onclick="_auditPage=${i+1};renderAuditTable()">${i+1}</button>`
   ).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   BROADCAST COMMUNICATIONS (Feature 9)
+   ═══════════════════════════════════════════════ */
+let _broadcastHistory = [];
+
+function loadComms() {
+  // Populate pool options in segment select from STATE.pools
+  const seg = document.getElementById('broadcastSegment');
+  if (seg) {
+    // Remove any old pool options first
+    Array.from(seg.querySelectorAll('option[data-pool]')).forEach(o => o.remove());
+    STATE.pools.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.dataset.pool = '1';
+      opt.textContent = `Pool: ${p.name}`;
+      seg.appendChild(opt);
+    });
+  }
+
+  toggleBroadcastSubject();
+  updateBroadcastPreview();
+  _renderBroadcastHistory();
+}
+
+function toggleBroadcastSubject() {
+  const channel = document.querySelector('input[name="broadcastChannel"]:checked')?.value || 'email';
+  const group = document.getElementById('broadcastSubjectGroup');
+  if (group) group.style.display = channel === 'sms' ? 'none' : '';
+}
+
+async function updateBroadcastPreview() {
+  const seg = document.getElementById('broadcastSegment')?.value || 'all';
+  const countEl = document.getElementById('broadcastPreviewCount');
+  if (countEl) countEl.textContent = '…';
+  try {
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+    const res = await fetch(`/api/admin/broadcast/preview?segment=${encodeURIComponent(seg)}`, {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (countEl) countEl.textContent = data.count ?? '—';
+    } else {
+      if (countEl) countEl.textContent = '—';
+    }
+  } catch (_) {
+    if (countEl) countEl.textContent = '—';
+  }
+}
+
+async function sendBroadcast() {
+  const channel  = document.querySelector('input[name="broadcastChannel"]:checked')?.value || 'email';
+  const segment  = document.getElementById('broadcastSegment')?.value || 'all';
+  const subject  = document.getElementById('broadcastSubject')?.value?.trim() || '';
+  const message  = document.getElementById('broadcastMessage')?.value?.trim() || '';
+
+  if (!message) { Toast.error('Please write a message before sending'); return; }
+  if ((channel === 'email' || channel === 'both') && !subject) {
+    Toast.error('Please enter a subject line for email broadcasts');
+    return;
+  }
+
+  const segLabel = document.getElementById('broadcastSegment')?.selectedOptions[0]?.text || segment;
+  const previewCount = document.getElementById('broadcastPreviewCount')?.textContent || '?';
+
+  const confirmed = confirm(`Send ${channel.toUpperCase()} broadcast to ${previewCount} recipients in segment "${segLabel}"?\n\nSubject: ${subject || '(SMS — no subject)'}\n\nThis cannot be undone.`);
+  if (!confirmed) return;
+
+  const btn = document.getElementById('broadcastSendBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending…'; }
+
+  try {
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+
+    const res = await fetch('/api/admin/broadcast', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ subject, message, channel, segment }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      Toast.error(data.error || 'Broadcast failed');
+      return;
+    }
+
+    const { sent = 0, failed = 0, total = 0 } = data;
+    Toast.success(`Broadcast sent! ${sent} of ${total} delivered${failed > 0 ? ` (${failed} failed)` : ''}`);
+
+    // Record in history
+    _broadcastHistory.unshift({
+      date: new Date().toISOString(),
+      subject: subject || '(SMS)',
+      message: message.slice(0, 80) + (message.length > 80 ? '…' : ''),
+      channel,
+      segment: segLabel,
+      sent,
+      failed,
+      total,
+    });
+    _renderBroadcastHistory();
+
+    // Clear form
+    const msgEl = document.getElementById('broadcastMessage');
+    const subEl = document.getElementById('broadcastSubject');
+    if (msgEl) msgEl.value = '';
+    if (subEl) subEl.value = '';
+    updateBroadcastPreview();
+  } catch (err) {
+    Toast.error('Broadcast failed: ' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Broadcast'; }
+  }
+}
+
+function _renderBroadcastHistory() {
+  const body  = document.getElementById('broadcastHistoryBody');
+  const count = document.getElementById('broadcastHistoryCount');
+  if (count) count.textContent = `${_broadcastHistory.length} broadcast${_broadcastHistory.length !== 1 ? 's' : ''}`;
+
+  if (!body) return;
+  if (!_broadcastHistory.length) {
+    body.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-dim)">
+      <i class="fa-solid fa-inbox" style="font-size:2rem;opacity:0.3;display:block;margin-bottom:8px"></i>
+      No broadcasts sent yet
+    </div>`;
+    return;
+  }
+
+  const chIcon = { email: 'fa-envelope', sms: 'fa-mobile-screen', both: 'fa-paper-plane' };
+
+  body.innerHTML = _broadcastHistory.map(h => `
+    <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:0.82rem;font-weight:700;color:var(--white)">${h.subject || '(SMS)'}</span>
+        <span style="font-size:0.7rem;color:var(--text-dim)">${Utils.date(h.date)}</span>
+      </div>
+      <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:6px">${h.message}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span class="badge badge--blue"><i class="fa-solid ${chIcon[h.channel] || 'fa-paper-plane'}"></i> ${h.channel}</span>
+        <span class="badge badge--gray">${h.segment}</span>
+        <span class="badge badge--green"><i class="fa-solid fa-check"></i> ${h.sent} sent</span>
+        ${h.failed > 0 ? `<span class="badge badge--red"><i class="fa-solid fa-xmark"></i> ${h.failed} failed</span>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   NAV / AUM REPORT EXPORT (Feature 11)
+   ═══════════════════════════════════════════════ */
+async function exportAumReport() {
+  // Ensure we have data
+  if (!STATE.investors.length) {
+    Toast.info('Loading investor data…');
+    try {
+      const [invRes, poolRes, invstRes] = await Promise.all([
+        API.investors.list({ limit: 200 }),
+        API.pools.list({ limit: 100 }),
+        API.investments.list({ limit: 200 }),
+      ]);
+      STATE.investors   = invRes.data   || [];
+      STATE.pools       = poolRes.data  || [];
+      STATE.investments = invstRes.data || [];
+    } catch (e) {
+      Toast.error('Failed to load data for export');
+      return;
+    }
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const now   = new Date().toLocaleString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  // Aggregate totals
+  const totalWallet   = STATE.investors.reduce((s, i) => s + (i.wallet_balance  || 0), 0);
+  const totalInvested = STATE.investors.reduce((s, i) => s + (i.total_invested  || 0), 0);
+  const totalReturns  = STATE.investors.reduce((s, i) => s + (i.total_returns   || 0), 0);
+  const activeInvCount = STATE.investments.filter(i => i.status === 'active').length;
+  const totalAUM      = totalWallet + totalInvested;
+
+  const fmt  = v => 'R' + Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtD = v => v ? new Date(v).toLocaleDateString('en-ZA') : '';
+
+  // Build rows
+  const rows = [];
+
+  // Section 1: Summary
+  rows.push(['SV Capital — AUM Report', `Generated: ${now}`]);
+  rows.push(['', '']);
+  rows.push(['Total AUM', fmt(totalAUM)]);
+  rows.push(['Total Investors', STATE.investors.length]);
+  rows.push(['Active Investments', activeInvCount]);
+  rows.push(['Total Returns Paid', fmt(totalReturns)]);
+  rows.push(['', '']);
+
+  // Section 2: Investor detail
+  rows.push([
+    'Investor ID', 'Name', 'Email', 'Wallet Balance', 'Total Invested',
+    'Total Returns', 'Active Investments', 'FICA Status', 'KYC Status', 'Date Joined'
+  ]);
+
+  STATE.investors.forEach(inv => {
+    const activeInvts = STATE.investments.filter(i => i.investor_id === inv.id && i.status === 'active').length;
+    rows.push([
+      inv.id || '',
+      `${inv.first_name || ''} ${inv.last_name || ''}`.trim(),
+      inv.email || '',
+      fmt(inv.wallet_balance),
+      fmt(inv.total_invested),
+      fmt(inv.total_returns),
+      activeInvts,
+      inv.fica_status || '',
+      inv.kyc_status  || '',
+      fmtD(inv.date_joined),
+    ]);
+  });
+
+  _downloadCSV(rows, `SVC-AUM-Report-${today}.csv`);
+  Toast.success(`AUM report exported — ${STATE.investors.length} investors`);
+
+  // Optionally generate PDF if jsPDF is available
+  if (window.jspdf) {
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: 'landscape' });
+      doc.setFontSize(18);
+      doc.text('SV Capital — AUM Report', 14, 18);
+      doc.setFontSize(10);
+      doc.text(`Generated: ${now}`, 14, 26);
+      doc.text(`Total AUM: ${fmt(totalAUM)}`, 14, 34);
+      doc.text(`Total Investors: ${STATE.investors.length}`, 14, 40);
+      doc.text(`Active Investments: ${activeInvCount}`, 14, 46);
+      doc.text(`Total Returns Paid: ${fmt(totalReturns)}`, 14, 52);
+      doc.save(`SVC-AUM-Report-${today}.pdf`);
+      Toast.success('PDF report also exported');
+    } catch (_) { /* jsPDF not fully available */ }
+  }
 }

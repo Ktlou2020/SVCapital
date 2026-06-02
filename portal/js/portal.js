@@ -296,6 +296,7 @@ function navigate(view, btnEl) {
     maturity: 'Maturity Instructions', profile: 'My Profile',
     support: 'Support', referral: 'Refer & Earn', statement: 'Account Statement',
     quests: 'Earn Rewards', learn: 'Learning Hub', subaccounts: 'My Accounts',
+    documents: 'Document Vault',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
 
@@ -311,6 +312,8 @@ function navigate(view, btnEl) {
     learn: renderLearnView,
     subaccounts: loadSubAccounts,
     referral: loadReferralDashboard,
+    documents: loadDocuments,
+    profile: renderRiskProfile,
   };
   if (loaders[view]) loaders[view]();
 }
@@ -5053,61 +5056,103 @@ async function downloadMyData() {
 }
 
 /* ═══════════════════════════════════════════════
-   INVESTMENT CALCULATOR
+   INVESTMENT CALCULATOR  (Feature 6 — Enhanced)
    ═══════════════════════════════════════════════ */
 let _calcPoolId = null;
 
 function openCalcModal() {
   const sel = document.getElementById('calcPoolSelect');
   if (sel) {
-    sel.innerHTML = '<option value="">— Custom values —</option>' +
+    sel.innerHTML = '<option value="">— Custom rate —</option>' +
       (PORTAL.pools || []).filter(p => p.status === 'open').map(p =>
         `<option value="${p.id}" data-rate="${p.annual_rate}" data-term="${p.term_months}">${p.name} — ${Utils.pct(p.annual_rate)} p.a.</option>`
       ).join('');
   }
   _calcPoolId = null;
-  document.getElementById('calcCTABar').style.display = 'none';
+  // Reset inputs to defaults
+  const amtEl = document.getElementById('calcAmount');
+  const sldEl = document.getElementById('calcAmountSlider');
+  if (amtEl) amtEl.value = '50000';
+  if (sldEl) sldEl.value = '50000';
+  const termEl = document.getElementById('calcTerm');
+  if (termEl) termEl.value = '12';
+  const rateEl = document.getElementById('calcRate');
+  if (rateEl) rateEl.value = '14';
+  const ctaBar = document.getElementById('calcCTABar');
+  if (ctaBar) ctaBar.style.display = 'none';
   updateCalc();
   Modal.open('calcModal');
+}
+
+/* Sync slider → amount input */
+function calcSyncAmount(val) {
+  const el = document.getElementById('calcAmount');
+  if (el) el.value = val;
+}
+
+/* Sync amount input → slider */
+function calcSyncSlider(val) {
+  const el = document.getElementById('calcAmountSlider');
+  if (el) el.value = Math.max(1000, Math.min(1000000, parseFloat(val) || 50000));
 }
 
 function calcLoadPool() {
   const sel = document.getElementById('calcPoolSelect');
   const opt = sel?.options[sel.selectedIndex];
-  if (!opt?.value) { _calcPoolId = null; document.getElementById('calcCTABar').style.display = 'none'; return; }
+  if (!opt?.value) {
+    _calcPoolId = null;
+    const ctaBar = document.getElementById('calcCTABar');
+    if (ctaBar) ctaBar.style.display = 'none';
+    return;
+  }
   _calcPoolId = opt.value;
-  document.getElementById('calcRate').value = opt.dataset.rate || '';
-  document.getElementById('calcTerm').value = opt.dataset.term || '';
-  document.getElementById('calcCTABar').style.display = 'block';
+  const rateEl = document.getElementById('calcRate');
+  const termEl = document.getElementById('calcTerm');
+  if (rateEl) rateEl.value = Math.round((parseFloat(opt.dataset.rate || 0.14) * 100) * 10) / 10;
+  // Set term select to closest available option
+  if (termEl) {
+    const poolTerm = parseInt(opt.dataset.term || 12);
+    const opts = [...termEl.options];
+    let closest = opts.reduce((prev, cur) => Math.abs(parseInt(cur.value) - poolTerm) < Math.abs(parseInt(prev.value) - poolTerm) ? cur : prev);
+    if (closest) closest.selected = true;
+  }
+  const ctaBar = document.getElementById('calcCTABar');
+  if (ctaBar) ctaBar.style.display = 'block';
   updateCalc();
 }
 
 function updateCalc() {
-  const principal = parseFloat(document.getElementById('calcAmount')?.value)  || 0;
-  const rate      = parseFloat(document.getElementById('calcRate')?.value)    || 0;
-  const term      = parseInt(document.getElementById('calcTerm')?.value)      || 0;
-  const compound  = document.getElementById('calcCompound')?.value || 'simple';
+  const principal = parseFloat(document.getElementById('calcAmount')?.value) || 0;
+  const rateRaw   = parseFloat(document.getElementById('calcRate')?.value)   || 0;
+  const term      = parseInt(document.getElementById('calcTerm')?.value)     || 0;
 
-  let total = principal;
-  if (principal > 0 && rate > 0 && term > 0) {
-    if      (compound === 'simple')  total = principal * (1 + (rate / 100) * (term / 12));
-    else if (compound === 'monthly') total = principal * Math.pow(1 + (rate / 100) / 12, term);
-    else                             total = principal * Math.pow(1 + (rate / 100), term / 12);
-  }
+  // Rate from pool is stored as decimal (0.14) or percentage (14) — normalise
+  const rate = rateRaw > 1 ? rateRaw / 100 : rateRaw;  // annual rate as decimal
 
-  const earned   = total - principal;
-  const monthly  = term > 0 ? earned / term : 0;
-  const effYield = principal > 0 ? (earned / principal) * 100 : 0;
+  const totalInterest = principal * rate * (term / 12);
+  const total         = principal + totalInterest;
+  const monthly       = term > 0 ? totalInterest / term : 0;
+  const effYield      = rate * 100;
 
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  set('calcReturn',  Utils.rand(earned));
+  set('calcReturn',  Utils.rand(totalInterest));
   set('calcTotal',   Utils.rand(total));
   set('calcMonthly', Utils.rand(monthly));
   set('calcYield',   effYield.toFixed(2) + '%');
+
+  // Visual capital vs interest bar
+  const capBar = document.getElementById('calcBarCapital');
+  const intBar = document.getElementById('calcBarInterest');
+  if (capBar && intBar && total > 0) {
+    const capPct = Math.round((principal / total) * 100);
+    const intPct = 100 - capPct;
+    capBar.style.width = capPct + '%';
+    intBar.style.width = intPct + '%';
+  }
 }
 
 function calcGoInvest() {
-  if (_calcPoolId) openInvestModal(_calcPoolId);
+  if (_calcPoolId) { openInvestModal(_calcPoolId); }
   Modal.close('calcModal');
 }
 
