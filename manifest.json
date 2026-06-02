@@ -1,50 +1,32 @@
 {
-  "name": "SV Capital Fund Portal",
+  "name": "SV Capital — Investor Portal",
   "short_name": "SV Capital",
-  "description": "SV Capital — Fund Management & Investor Portal. Track allocations, manage cattle cycles, solar projects and short-term loans.",
-  "start_url": "./index.html",
-  "scope": "./",
+  "description": "Manage your SV Capital investment portfolio",
+  "start_url": "/portal/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#0d0f17",
-  "theme_color": "#D4AF37",
-  "categories": ["finance", "business"],
-  "lang": "en-ZA",
+  "background_color": "#0f1623",
+  "theme_color": "#FF9B0C",
   "icons": [
-    {
-      "src": "assets/favicon-32.png",
-      "sizes": "32x32",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "assets/logo-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "assets/logo.png",
-      "sizes": "256x256",
-      "type": "image/png",
-      "purpose": "any"
-    }
+    { "src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/assets/logo-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/assets/logo.png", "sizes": "256x256", "type": "image/png" }
   ],
-  "screenshots": [],
+  "categories": ["finance"],
+  "lang": "en-ZA",
   "shortcuts": [
     {
-      "name": "Dashboard",
-      "short_name": "Dashboard",
-      "description": "Go to Fund Dashboard",
-      "url": "/fund/index.html",
-      "icons": [{ "src": "assets/logo-192.png", "sizes": "192x192" }]
+      "name": "My Portfolio",
+      "short_name": "Portfolio",
+      "url": "/portal/",
+      "icons": [{ "src": "/assets/logo-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Cattle Operations",
-      "short_name": "Cattle",
-      "description": "Manage cattle cycles and costs",
-      "url": "/fund/cattle.html",
-      "icons": [{ "src": "assets/logo-192.png", "sizes": "192x192" }]
+      "name": "Wallet",
+      "short_name": "Wallet",
+      "url": "/portal/",
+      "icons": [{ "src": "/assets/logo-192.png", "sizes": "192x192" }]
     }
   ]
 }

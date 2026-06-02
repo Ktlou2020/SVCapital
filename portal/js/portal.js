@@ -3491,11 +3491,15 @@ async function markModuleComplete(modId) {
 }
 
 function shareReferral(method) {
-  const link = document.getElementById('referralLink').textContent;
+  const code = PORTAL.investor?.referral_code || '';
+  const link = `${window.location.origin}/register?ref=${code}`;
   if (method === 'whatsapp') {
-    window.open(`https://api.whatsapp.com/send?text=Join SV Capital and start earning inflation-beating returns on your investments! Use my referral code THA002: ${encodeURIComponent(link)}`, '_blank');
+    const msg = `Join SV Capital and start earning inflation-beating returns! Use my referral code ${code}: ${link}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
   } else {
-    copyReferralLink();
+    navigator.clipboard.writeText(link)
+      .then(() => Toast.success('Referral link copied to clipboard!'))
+      .catch(() => Toast.error('Copy failed — please copy the link manually'));
   }
 }
 
@@ -5168,7 +5172,8 @@ async function loadReferralDashboard() {
   const codeEl = document.getElementById('referralCode');
   const linkEl = document.getElementById('referralLink');
   if (codeEl) codeEl.textContent = code || '—';
-  if (linkEl) linkEl.textContent = code ? `https://svcapital.co.za?ref=${code}` : '—';
+  const refLink = code ? `${window.location.origin}/register?ref=${code}` : '—';
+  if (linkEl) linkEl.textContent = refLink;
 
   // Find who referred by this investor's code
   const all      = PORTAL.investors || [];
@@ -5240,5 +5245,540 @@ async function submitEarlyRedemption() {
     _earlyRedemptionInvId = null;
   } catch (e) {
     Toast.error(e.message || 'Failed to submit request. Please try again.');
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE 7: DOCUMENT VAULT
+   ═══════════════════════════════════════════════ */
+
+function loadDocuments() {
+  if (!PORTAL.investor) { Toast.error('Portfolio data still loading'); return; }
+  _renderCertificatesTable();
+  _renderReceiptsTable();
+}
+
+function _renderCertificatesTable() {
+  const body = document.getElementById('docCertificatesBody');
+  if (!body) return;
+
+  const investments = PORTAL.investments;
+  if (!investments.length) {
+    body.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:24px">No investments found.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = investments.map(inv => {
+    const pi = Utils.productInfo(inv.product_type);
+    return `<tr>
+      <td class="td-strong">${inv.pool_name || '—'}</td>
+      <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
+      <td class="td-gold fw-700">${Utils.rand(inv.amount)}</td>
+      <td>${Utils.pct(inv.expected_return_rate || inv.annual_rate)}</td>
+      <td class="td-muted">${Utils.date(inv.investment_date || inv.start_date)}</td>
+      <td class="td-muted">${Utils.date(inv.maturity_date || inv.end_date)}</td>
+      <td>${Utils.statusBadge(inv.status)}</td>
+      <td><button class="btn btn--primary btn--sm" onclick="downloadCertificate('${inv.id}')">
+        <i class="fa-solid fa-download"></i> Certificate
+      </button></td>
+    </tr>`;
+  }).join('');
+}
+
+function _renderReceiptsTable() {
+  const body = document.getElementById('docReceiptsBody');
+  if (!body) return;
+
+  const deposits = [...PORTAL.transactions]
+    .filter(t => t.type === 'deposit')
+    .sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at))
+    .slice(0, 20);
+
+  if (!deposits.length) {
+    body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No deposit transactions found.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = deposits.map(t => `<tr>
+    <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
+    <td class="td-green fw-700">+${Utils.rand(Math.abs(t.amount))}</td>
+    <td class="td-muted" style="font-size:0.78rem">${t.description || 'Wallet deposit'}</td>
+    <td class="td-muted" style="font-size:0.75rem">${t.reference || '—'}</td>
+    <td>${Utils.statusBadge(t.status)}</td>
+    <td><button class="btn btn--secondary btn--sm" onclick="downloadReceipt('${t.id}')">
+      <i class="fa-solid fa-download"></i> Receipt
+    </button></td>
+  </tr>`).join('');
+}
+
+/* ── PDF helper: get jsPDF instance ── */
+function _getPDF(orientation = 'portrait') {
+  if (!window.jspdf) {
+    Toast.error('PDF library not loaded yet — please wait a moment and try again.');
+    return null;
+  }
+  const { jsPDF } = window.jspdf;
+  return new jsPDF({ orientation, unit: 'mm', format: 'a4' });
+}
+
+/* ── PDF: dark header bar ── */
+function _pdfHeader(doc, title, subtitle) {
+  const W = doc.internal.pageSize.getWidth();
+  // Dark header
+  doc.setFillColor(26, 34, 53); // #1a2235
+  doc.rect(0, 0, W, 38, 'F');
+  // Gold accent line
+  doc.setFillColor(255, 155, 12); // #FF9B0C
+  doc.rect(0, 38, W, 2, 'F');
+  // "SV CAPITAL" text in gold
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 155, 12);
+  doc.text('SV Capital', 14, 17);
+  // Subtitle
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(156, 163, 175);
+  doc.text('SmartVest Financial Services · FSP #52449', 14, 24);
+  // Document title (right aligned)
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 255, 255);
+  doc.text(title, W - 14, 17, { align: 'right' });
+  if (subtitle) {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(156, 163, 175);
+    doc.text(subtitle, W - 14, 24, { align: 'right' });
+  }
+  doc.setTextColor(0, 0, 0); // reset
+  return 48; // Y position after header
+}
+
+/* ── PDF: footer ── */
+function _pdfFooter(doc) {
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  doc.setDrawColor(229, 231, 235);
+  doc.setLineWidth(0.3);
+  doc.line(14, H - 16, W - 14, H - 16);
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(107, 114, 128);
+  doc.text('This document is issued by SV Capital (Pty) Ltd · Confidential · Not for distribution', 14, H - 10);
+  doc.text(`Generated: ${new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })}`, W - 14, H - 10, { align: 'right' });
+  doc.setTextColor(0, 0, 0);
+}
+
+/* ── Info row helper for PDF ── */
+function _pdfInfoRow(doc, label, value, y, labelX = 14, valueX = 75) {
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(107, 114, 128);
+  doc.text(label, labelX, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(26, 26, 26);
+  doc.text(String(value || '—'), valueX, y);
+  return y + 6;
+}
+
+/* downloadCertificate(investmentId) */
+function downloadCertificate(investmentId) {
+  const inv = PORTAL.investments.find(i => i.id === investmentId);
+  if (!inv) { Toast.error('Investment not found'); return; }
+  const investor = PORTAL.investor;
+  const pool = PORTAL.pools.find(p => p.id === inv.pool_id) || {};
+
+  const doc = _getPDF('portrait');
+  if (!doc) return;
+
+  const W = doc.internal.pageSize.getWidth();
+
+  // Header
+  let y = _pdfHeader(doc, 'INVESTMENT CERTIFICATE', `#${inv.id}`);
+
+  // Certificate badge area
+  y += 6;
+  doc.setFillColor(255, 249, 235);
+  doc.setDrawColor(255, 155, 12);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(14, y, W - 28, 22, 3, 3, 'FD');
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(180, 100, 0);
+  doc.text('CERTIFICATE OF INVESTMENT', W / 2, y + 8, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(120, 80, 0);
+  doc.text('This certifies that the investor has made a valid investment with SV Capital.', W / 2, y + 15, { align: 'center' });
+  y += 28;
+
+  // Two-column info layout
+  const leftX  = 14;
+  const rightX = W / 2 + 4;
+  const valLeft  = 70;
+  const valRight = W / 2 + 58;
+
+  doc.setFillColor(247, 248, 250);
+  doc.roundedRect(leftX, y, (W - 28) / 2 - 2, 62, 2, 2, 'F');
+  doc.roundedRect(rightX - 2, y, (W - 28) / 2, 62, 2, 2, 'F');
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(107, 114, 128);
+  doc.text('INVESTOR DETAILS', leftX + 4, y + 8);
+  doc.text('INVESTMENT DETAILS', rightX + 2, y + 8);
+
+  let ly = y + 16;
+  let ry = y + 16;
+
+  const infoL = (lbl, val) => {
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(107, 114, 128);
+    doc.text(lbl, leftX + 4, ly);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(26, 26, 26);
+    doc.text(String(val || '—'), valLeft, ly);
+    ly += 7;
+  };
+  const infoR = (lbl, val) => {
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(107, 114, 128);
+    doc.text(lbl, rightX + 2, ry);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(26, 26, 26);
+    doc.text(String(val || '—'), valRight, ry);
+    ry += 7;
+  };
+
+  infoL('Investor Name', `${investor.first_name} ${investor.last_name}`);
+  infoL('Investor ID', investor.id);
+  infoL('Email', investor.email || '—');
+  infoL('FICA Status', (investor.fica_status || 'approved').toUpperCase());
+
+  infoR('Investment ID', inv.id);
+  infoR('Pool Name', inv.pool_name || pool.name || '—');
+  infoR('Amount Invested', Utils.rand(inv.amount));
+  infoR('Annual Rate', Utils.pct(inv.expected_return_rate || inv.annual_rate));
+
+  y = Math.max(ly, ry) + 4;
+
+  doc.setFillColor(247, 248, 250);
+  doc.roundedRect(leftX, y, W - 28, 26, 2, 2, 'F');
+
+  let iy = y + 10;
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(107, 114, 128);
+  doc.text('Start Date', leftX + 4, iy);
+  doc.text('Maturity Date', W / 2 - 20, iy);
+  doc.text('Status', W - 60, iy);
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+  doc.setTextColor(26, 26, 26);
+  doc.text(Utils.date(inv.investment_date || inv.start_date), leftX + 4, iy + 8);
+  doc.text(Utils.date(inv.maturity_date || inv.end_date), W / 2 - 20, iy + 8);
+  const statusColor = inv.status === 'active' ? [47, 140, 155] : inv.status === 'paid_out' ? [34, 197, 94] : [156, 163, 175];
+  doc.setTextColor(...statusColor);
+  doc.text((inv.status || '').toUpperCase(), W - 60, iy + 8);
+
+  y += 32;
+
+  // Disclaimer
+  y += 6;
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(156, 163, 175);
+  doc.text('This certificate is a record of investment and does not constitute a guarantee of returns. All investments are subject to the terms', 14, y, { maxWidth: W - 28 });
+  doc.text('and conditions of SV Capital and SmartVest Financial Services (Pty) Ltd (FSP #52449).', 14, y + 5, { maxWidth: W - 28 });
+
+  _pdfFooter(doc);
+  doc.save(`SVC-Certificate-${inv.id}.pdf`);
+  Toast.success('Certificate downloaded!');
+}
+
+/* downloadReceipt(transactionId) */
+function downloadReceipt(transactionId) {
+  const txn = PORTAL.transactions.find(t => t.id === transactionId);
+  if (!txn) { Toast.error('Transaction not found'); return; }
+  const investor = PORTAL.investor;
+
+  const doc = _getPDF('portrait');
+  if (!doc) return;
+
+  const W = doc.internal.pageSize.getWidth();
+
+  // Header
+  let y = _pdfHeader(doc, 'DEPOSIT RECEIPT', `REF: ${txn.reference || txn.id}`);
+  y += 8;
+
+  // Amount hero box
+  doc.setFillColor(240, 253, 244);
+  doc.setDrawColor(34, 197, 94);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(14, y, W - 28, 30, 3, 3, 'FD');
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(22, 101, 52);
+  doc.text('AMOUNT RECEIVED', W / 2, y + 8, { align: 'center' });
+  doc.setFontSize(22);
+  doc.setTextColor(21, 128, 61);
+  doc.text(Utils.rand(Math.abs(txn.amount)), W / 2, y + 22, { align: 'center' });
+  y += 38;
+
+  // Details table
+  doc.setFillColor(247, 248, 250);
+  doc.roundedRect(14, y, W - 28, 74, 2, 2, 'F');
+
+  const details = [
+    ['Receipt No.',       txn.id],
+    ['Investor',          `${investor.first_name} ${investor.last_name} (${investor.id})`],
+    ['Date',              Utils.date(txn.transaction_date || txn.created_at)],
+    ['Amount',            Utils.rand(Math.abs(txn.amount))],
+    ['Payment Method',    txn.description || 'Bank Transfer'],
+    ['Reference',         txn.reference || '—'],
+    ['Status',            (txn.status || 'completed').toUpperCase()],
+  ];
+
+  let dy = y + 12;
+  details.forEach(([label, value]) => {
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(107, 114, 128);
+    doc.text(label, 20, dy);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(26, 26, 26);
+    doc.text(String(value), 90, dy);
+    dy += 9;
+  });
+
+  y += 80;
+  y += 10;
+
+  // Thank you note
+  doc.setFillColor(255, 249, 235);
+  doc.setDrawColor(255, 155, 12);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(14, y, W - 28, 16, 2, 2, 'FD');
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(180, 100, 0);
+  doc.text('Thank you for investing with SV Capital', W / 2, y + 10, { align: 'center' });
+
+  _pdfFooter(doc);
+  doc.save(`SVC-Receipt-${txn.id}.pdf`);
+  Toast.success('Receipt downloaded!');
+}
+
+/* downloadStatement() — 90-day statement */
+function downloadStatement() {
+  const investor = PORTAL.investor;
+  if (!investor) { Toast.error('Portfolio data still loading'); return; }
+
+  const doc = _getPDF('portrait');
+  if (!doc) return;
+
+  const W  = doc.internal.pageSize.getWidth();
+  const now = new Date();
+  const from90 = new Date(now);
+  from90.setDate(from90.getDate() - 90);
+
+  // Filter last 90 days
+  const txns = PORTAL.transactions
+    .filter(t => {
+      const d = new Date(t.transaction_date || t.created_at || 0);
+      return d >= from90;
+    })
+    .sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at));
+
+  const totalInvested = PORTAL.investments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const totalReturns  = PORTAL.investments.reduce((s, i) => s + (Number(i.actual_return_amount) || 0), 0);
+  const walletBal     = Number(investor.wallet_balance) || 0;
+  const portfolioVal  = totalInvested + walletBal + totalReturns;
+
+  const periodLabel = `${from90.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })} – ${now.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+
+  // Header
+  let y = _pdfHeader(doc, 'ACCOUNT STATEMENT', periodLabel);
+  y += 6;
+
+  // Investor info
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(26, 26, 26);
+  doc.text(`${investor.first_name} ${investor.last_name}`, 14, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(107, 114, 128);
+  doc.setFontSize(8);
+  doc.text(`${investor.id} · ${investor.email || ''}`, 14, y + 5);
+  y += 14;
+
+  // Summary stats
+  const stats = [
+    ['Portfolio Value', Utils.rand(portfolioVal), [255, 155, 12]],
+    ['Wallet Balance',  Utils.rand(walletBal),    [47, 140, 155]],
+    ['Total Invested',  Utils.rand(totalInvested), [26, 34, 53]],
+    ['Returns Earned',  Utils.rand(totalReturns),  [34, 197, 94]],
+  ];
+  const boxW = (W - 28 - 9) / 4;
+  stats.forEach(([label, value, color], i) => {
+    const bx = 14 + i * (boxW + 3);
+    doc.setFillColor(...color, 0.08);
+    doc.setFillColor(color[0], color[1], color[2]);
+    doc.setGState && doc.setGState(doc.GState({ opacity: 0.07 }));
+    doc.setFillColor(247, 248, 250);
+    doc.roundedRect(bx, y, boxW, 24, 2, 2, 'F');
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...color);
+    doc.text(label.toUpperCase(), bx + boxW / 2, y + 8, { align: 'center' });
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(26, 26, 26);
+    doc.text(value, bx + boxW / 2, y + 18, { align: 'center' });
+  });
+  y += 30;
+
+  // Transaction table
+  if (!txns.length) {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(156, 163, 175);
+    doc.text('No transactions in the last 90 days.', 14, y + 10);
+  } else {
+    const typeMap = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus' };
+    const tableHead = [['Date', 'Type', 'Description', 'Amount', 'Status']];
+    const tableBody = txns.map(t => [
+      Utils.date(t.transaction_date || t.created_at),
+      typeMap[t.type] || t.type,
+      (t.description || '—').slice(0, 38),
+      (t.amount > 0 ? '+' : '') + Utils.rand(t.amount),
+      (t.status || '—').toUpperCase(),
+    ]);
+
+    if (doc.autoTable) {
+      doc.autoTable({
+        head: tableHead,
+        body: tableBody,
+        startY: y,
+        margin: { left: 14, right: 14 },
+        headStyles: { fillColor: [26, 34, 53], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+        bodyStyles: { fontSize: 8, textColor: [26, 26, 26] },
+        alternateRowStyles: { fillColor: [247, 248, 250] },
+        columnStyles: {
+          0: { cellWidth: 22 },
+          1: { cellWidth: 26 },
+          2: { cellWidth: 'auto' },
+          3: { cellWidth: 28, halign: 'right' },
+          4: { cellWidth: 22, halign: 'center' },
+        },
+        didDrawPage: () => _pdfFooter(doc),
+      });
+    } else {
+      // Fallback without autoTable
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(107, 114, 128);
+      doc.text('Date', 14, y + 6); doc.text('Type', 40, y + 6); doc.text('Description', 70, y + 6); doc.text('Amount', 150, y + 6); doc.text('Status', 175, y + 6);
+      y += 10;
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(26, 26, 26);
+      tableBody.slice(0, 30).forEach(row => {
+        doc.text(row[0], 14, y); doc.text(row[1], 40, y); doc.text(row[2].slice(0, 30), 70, y);
+        doc.text(row[3], 150, y, { align: 'right' }); doc.text(row[4], 175, y);
+        y += 6;
+        if (y > 260) { doc.addPage(); y = 20; }
+      });
+    }
+  }
+
+  _pdfFooter(doc);
+  const ym = now.toISOString().slice(0, 7);
+  doc.save(`SVC-Statement-${ym}.pdf`);
+  Toast.success('90-day statement downloaded!');
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE 12: RISK PROFILE QUESTIONNAIRE
+   ═══════════════════════════════════════════════ */
+
+function openRiskQuestionnaire() {
+  // Clear all radio selections
+  document.querySelectorAll('#riskModal input[type=radio]').forEach(r => r.checked = false);
+  Modal.open('riskModal');
+}
+
+async function submitRiskQuestionnaire() {
+  // Read all 5 radio values
+  const scores = [1, 2, 3, 4, 5].map(n => {
+    const checked = document.querySelector(`input[name="rq${n}"]:checked`);
+    return checked ? parseInt(checked.value) : null;
+  });
+
+  if (scores.some(s => s === null)) {
+    Toast.error('Please answer all 5 questions before submitting.');
+    return;
+  }
+
+  const total = scores.reduce((a, b) => a + b, 0);
+  let result;
+  if (total <= 8) result = 'conservative';
+  else if (total <= 11) result = 'moderate';
+  else result = 'aggressive';
+
+  try {
+    await API._fetch('PATCH', `tables/investors/${PORTAL.investor.id}`, { risk_profile: result });
+    PORTAL.investor.risk_profile = result;
+    Modal.close('riskModal');
+    Toast.success(`Your risk profile: ${result.charAt(0).toUpperCase() + result.slice(1)}. Your dashboard has been updated.`);
+    renderRiskProfile();
+  } catch (e) {
+    console.warn('Risk profile save error:', e);
+    // Still update locally even if server fails
+    PORTAL.investor.risk_profile = result;
+    Modal.close('riskModal');
+    Toast.success(`Your risk profile: ${result.charAt(0).toUpperCase() + result.slice(1)}.`);
+    renderRiskProfile();
+  }
+}
+
+function renderRiskProfile() {
+  const inv = PORTAL.investor;
+  if (!inv) return;
+
+  const profile = inv.risk_profile || null;
+  const badge = document.getElementById('riskProfileBadge');
+  const desc  = document.getElementById('riskProfileDesc');
+  const btnLabel = document.getElementById('riskProfileBtnLabel');
+
+  // Also sync the radio buttons in the profile form
+  if (profile) {
+    const radios = document.querySelectorAll('input[name="riskProf"]');
+    radios.forEach(r => { r.checked = r.value === profile; });
+  }
+
+  if (!badge) return;
+
+  const configs = {
+    conservative: {
+      badgeClass: 'badge--blue',
+      label: 'Conservative',
+      desc: 'You prefer capital preservation with lower risk. We recommend short-term and solar investments.',
+    },
+    moderate: {
+      badgeClass: 'badge--orange',
+      label: 'Moderate',
+      desc: 'You balance growth with prudent risk. A blend of cattle and solar products suits you well.',
+    },
+    aggressive: {
+      badgeClass: 'badge--red',
+      label: 'Aggressive',
+      desc: 'You prioritise high returns and can tolerate risk. Cattle cycles and high-yield pools are ideal.',
+    },
+  };
+
+  if (profile && configs[profile]) {
+    const cfg = configs[profile];
+    badge.className = `badge ${cfg.badgeClass}`;
+    badge.textContent = cfg.label;
+    if (desc) desc.textContent = cfg.desc;
+    if (btnLabel) btnLabel.textContent = 'Retake Questionnaire';
+  } else {
+    badge.className = 'badge badge--gray';
+    badge.textContent = 'Not assessed';
+    if (desc) desc.textContent = 'Complete the questionnaire to determine your risk appetite and get tailored pool recommendations.';
+    if (btnLabel) btnLabel.textContent = 'Take Questionnaire';
   }
 }
