@@ -872,8 +872,14 @@ function renderKYCTable() {
 
   if (!items.length) { body.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:32px">No documents found</td></tr>'; return; }
 
-  body.innerHTML = items.map(k => `
+  const allCb2 = document.getElementById('kycSelectAll');
+  if (allCb2) allCb2.checked = false;
+
+  body.innerHTML = items.map(k => {
+    const canSelect = ['pending', 'under_review'].includes(k.status);
+    return `
     <tr>
+      <td><input type="checkbox" class="kyc-cb" value="${k.id}" ${!canSelect ? 'disabled' : ''} ${_kycSelected.has(k.id) ? 'checked' : ''} onchange="toggleKycRow('${k.id}', this.checked)" style="${canSelect ? 'cursor:pointer;width:16px;height:16px;accent-color:#FF9B0C' : 'opacity:0.3;width:16px;height:16px'}"></td>
       <td><div class="td-strong">${k.investor_name}</div><div class="td-muted">${k.investor_id}</div></td>
       <td>${k.document_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—'}</td>
       <td class="td-muted">${k.file_name || 'Not uploaded'}</td>
@@ -899,7 +905,7 @@ function renderKYCTable() {
         </button>
       </td>
     </tr>
-  `).join('');
+  `}).join('');
 }
 
 function viewFicaDocument(kycId) {
@@ -2306,4 +2312,128 @@ function setupGlobalSearch() {
       }, 300);
     }
   });
+}
+
+/* ═══════════════════════════════════════════════
+   CSV EXPORT
+   ═══════════════════════════════════════════════ */
+function _downloadCSV(rows, filename) {
+  const csv = rows.map(r => r.map(cell => {
+    const s = String(cell == null ? '' : cell).replace(/"/g, '""');
+    return /[,"\n\r]/.test(s) ? `"${s}"` : s;
+  }).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportInvestorsCSV() {
+  if (!STATE.investors.length) { Toast.error('Load investors first'); return; }
+  const headers = ['ID','First Name','Last Name','Email','Phone','FICA Status','Wallet Balance','Total Invested','Total Returns','Date Joined'];
+  const rows = [headers, ...STATE.investors.map(i => [
+    i.id, i.first_name, i.last_name, i.email, i.phone || '',
+    i.fica_status, i.wallet_balance || 0, i.total_invested || 0, i.total_returns || 0,
+    i.date_joined ? new Date(i.date_joined).toLocaleDateString('en-ZA') : '',
+  ])];
+  _downloadCSV(rows, `investors-${new Date().toISOString().slice(0,10)}.csv`);
+  Toast.success(`Exported ${STATE.investors.length} investors`);
+}
+
+function exportTransactionsCSV() {
+  if (!STATE.transactions.length) { Toast.error('Load transactions first'); return; }
+  const headers = ['ID','Investor','Type','Amount','Status','Reference','Description','Date'];
+  const rows = [headers, ...STATE.transactions.map(t => [
+    t.id, _txnInvName(t), t.type, t.amount, t.status,
+    t.reference || '', t.description || '',
+    t.created_at ? new Date(t.created_at).toLocaleDateString('en-ZA') : '',
+  ])];
+  _downloadCSV(rows, `transactions-${new Date().toISOString().slice(0,10)}.csv`);
+  Toast.success(`Exported ${STATE.transactions.length} transactions`);
+}
+
+function exportKYCCSV() {
+  if (!STATE.kyc.length) { Toast.error('Load KYC data first'); return; }
+  const headers = ['ID','Investor','Investor ID','Document Type','File','Status','Submitted','Reviewed'];
+  const rows = [headers, ...STATE.kyc.map(k => [
+    k.id, k.investor_name, k.investor_id, k.document_type || '', k.file_name || '',
+    k.status,
+    k.submitted_date ? new Date(k.submitted_date).toLocaleDateString('en-ZA') : '',
+    k.reviewed_date  ? new Date(k.reviewed_date).toLocaleDateString('en-ZA')  : '',
+  ])];
+  _downloadCSV(rows, `kyc-${new Date().toISOString().slice(0,10)}.csv`);
+  Toast.success(`Exported ${STATE.kyc.length} KYC records`);
+}
+
+/* ═══════════════════════════════════════════════
+   BULK KYC OPERATIONS
+   ═══════════════════════════════════════════════ */
+let _kycSelected = new Set();
+
+function _kycUpdateBulkBar() {
+  const bar   = document.getElementById('kycBulkBar');
+  const count = document.getElementById('kycBulkCount');
+  if (!bar) return;
+  if (_kycSelected.size > 0) {
+    bar.style.display = 'flex';
+    count.textContent = `${_kycSelected.size} selected`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function toggleKycRow(id, checked) {
+  if (checked) _kycSelected.add(id);
+  else _kycSelected.delete(id);
+  _kycUpdateBulkBar();
+}
+
+function toggleAllKyc(checked) {
+  const filter = document.getElementById('kycStatusFilter').value;
+  const items  = filter ? STATE.kyc.filter(k => k.status === filter) : STATE.kyc;
+  const actionable = items.filter(k => ['pending', 'under_review'].includes(k.status));
+  if (checked) actionable.forEach(k => _kycSelected.add(k.id));
+  else _kycSelected.clear();
+  _kycUpdateBulkBar();
+  document.querySelectorAll('.kyc-cb').forEach(cb => {
+    if (actionable.find(k => k.id == cb.value)) cb.checked = checked;
+  });
+}
+
+function clearKycSelection() {
+  _kycSelected.clear();
+  _kycUpdateBulkBar();
+  document.querySelectorAll('.kyc-cb').forEach(cb => { cb.checked = false; });
+  const all = document.getElementById('kycSelectAll');
+  if (all) all.checked = false;
+}
+
+async function bulkApproveKyc() {
+  if (!_kycSelected.size) return;
+  const ids = [..._kycSelected];
+  if (!confirm(`Approve ${ids.length} document(s)?`)) return;
+  try {
+    for (const id of ids) {
+      await API.kyc.update(id, { status: 'approved', reviewed_by: 'Admin', reviewed_date: new Date().toISOString() });
+    }
+    _kycSelected.clear();
+    Toast.success(`${ids.length} document(s) approved`);
+    await loadKYC();
+  } catch (e) { Toast.error('Bulk approve failed'); }
+}
+
+async function bulkRejectKyc() {
+  if (!_kycSelected.size) return;
+  const reason = prompt(`Rejection reason for ${_kycSelected.size} document(s):`);
+  if (reason === null) return;
+  const ids = [..._kycSelected];
+  try {
+    for (const id of ids) {
+      await API.kyc.update(id, { status: 'rejected', rejection_reason: reason, reviewed_by: 'Admin', reviewed_date: new Date().toISOString() });
+    }
+    _kycSelected.clear();
+    Toast.success(`${ids.length} document(s) rejected`);
+    await loadKYC();
+  } catch (e) { Toast.error('Bulk reject failed'); }
 }

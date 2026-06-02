@@ -337,6 +337,9 @@
               <button class="btn btn--primary btn--sm" onclick="openAddInvestorModal()">
                 <i class="fa-solid fa-plus"></i> Add Investor
               </button>
+              <button class="btn btn--secondary btn--sm" onclick="exportInvestorsCSV()">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
+              </button>
             </div>
           </div>
           <div style="overflow-x:auto">
@@ -445,12 +448,22 @@
               <button class="btn btn--primary btn--sm" onclick="openKycUploadModal('','')">
                 <i class="fa-solid fa-upload"></i> Upload Document
               </button>
+              <button class="btn btn--secondary btn--sm" onclick="exportKYCCSV()">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
+              </button>
             </div>
+          </div>
+          <div id="kycBulkBar" style="display:none;background:rgba(255,155,12,0.08);border:1px solid rgba(255,155,12,0.25);border-radius:10px;padding:10px 16px;margin:0 16px 12px;align-items:center;gap:12px">
+            <span id="kycBulkCount" style="font-size:0.85rem;font-weight:600;color:#1a2235">0 selected</span>
+            <div style="flex:1"></div>
+            <button class="btn btn--success btn--sm" onclick="bulkApproveKyc()"><i class="fa-solid fa-check-double"></i> Bulk Approve</button>
+            <button class="btn btn--danger btn--sm" onclick="bulkRejectKyc()"><i class="fa-solid fa-xmark"></i> Bulk Reject</button>
+            <button class="btn btn--secondary btn--sm" onclick="clearKycSelection()"><i class="fa-solid fa-times"></i> Clear</button>
           </div>
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>Investor</th><th>Document Type</th><th>File</th><th>Status</th><th>Submitted</th><th>Document</th><th>Actions</th><th></th>
+                <th style="width:36px"><input type="checkbox" id="kycSelectAll" onchange="toggleAllKyc(this.checked)" style="cursor:pointer;width:16px;height:16px;accent-color:#FF9B0C" title="Select all actionable"></th><th>Investor</th><th>Document Type</th><th>File</th><th>Status</th><th>Submitted</th><th>Document</th><th>Actions</th><th></th>
               </tr></thead>
               <tbody id="kycBody">
                 <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
@@ -587,6 +600,9 @@
               </select>
               <button class="btn btn--primary btn--sm" onclick="openAddTxnModal()">
                 <i class="fa-solid fa-plus"></i> Record Transaction
+              </button>
+              <button class="btn btn--secondary btn--sm" onclick="exportTransactionsCSV()">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
               </button>
             </div>
           </div>

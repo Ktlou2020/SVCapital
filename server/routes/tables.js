@@ -14,6 +14,7 @@ const pool   = require('../db/pool');
 const { v4: uuidv4 } = require('uuid');
 const { requireAuth } = require('../middleware/auth');
 const emailService = require('../services/email');
+const smsService   = require('../services/sms');
 
 /* ─── Whitelist of allowed tables and their primary key column ─── */
 const ALLOWED_TABLES = {
@@ -451,7 +452,7 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
       try {
         const updated = rows[0];
 
-        // Deposit confirmed → email investor
+        // Deposit confirmed → email + SMS investor
         if (table === 'transactions' && body.status === 'completed' && updated.type === 'deposit' && updated.investor_id) {
           const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
           if (inv[0]) {
@@ -459,6 +460,7 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
                           : updated.description?.includes('Ozow')     ? 'Ozow'
                           : 'EFT';
             await emailService.sendDepositConfirmed(inv[0], updated.amount, updated.reference || updated.id, gateway);
+            await smsService.sendDepositConfirmed(inv[0].phone, inv[0].first_name, updated.amount);
           }
         }
 
@@ -473,19 +475,21 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           }
         }
 
-        // Investment paid out → email investor
+        // Investment paid out → email + SMS investor
         if (table === 'investments' && body.status === 'paid_out' && updated.investor_id) {
           const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
           if (inv[0]) {
+            const poolName = updated.pool_name || updated.pool_id || 'your investment';
             await emailService.sendInvestmentMatured(inv[0], {
-              poolName:     updated.pool_name || updated.pool_id || 'your investment',
+              poolName,
               amount:       updated.amount,
               actualReturn: updated.actual_return || 0,
             });
+            await smsService.sendMaturityAlert(inv[0].phone, inv[0].first_name, updated.amount, poolName);
           }
         }
 
-        // Withdrawal completed → email investor
+        // Withdrawal completed → email + SMS investor
         if (table === 'transactions' && body.status === 'completed' && updated.type === 'withdrawal' && updated.investor_id) {
           const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
           if (inv[0]) {
@@ -494,10 +498,11 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
               reference: updated.reference || updated.id,
               bankName:  inv[0].bank_name,
             });
+            await smsService.sendWithdrawalProcessed(inv[0].phone, inv[0].first_name, updated.amount);
           }
         }
 
-        // Withdrawal rejected → refund wallet + email investor
+        // Withdrawal rejected → refund wallet + email + SMS investor
         if (table === 'transactions' && body.status === 'rejected' && updated.type === 'withdrawal' && updated.investor_id) {
           await pool.query(
             'UPDATE investors SET wallet_balance = wallet_balance + $1 WHERE id = $2',
@@ -510,6 +515,7 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
               reference: updated.reference || updated.id,
               reason:    updated.description,
             });
+            await smsService.sendWithdrawalRejected(inv[0].phone, inv[0].first_name, updated.amount);
           }
         }
 
