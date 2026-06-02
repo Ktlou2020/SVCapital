@@ -138,45 +138,125 @@ function loadNotifications() {
     });
   }
 
-  // 3. Admin response to support ticket
-  const answered = PORTAL.tickets.filter(t => t.admin_response && t.admin_response.trim());
-  if (answered.length) {
+  // 3. FICA / KYC status notifications
+  if (inv) {
+    if (inv.fica_status === 'rejected' || inv.kyc_status === 'rejected') {
+      notifs.push({
+        icon: 'fa-triangle-exclamation', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
+        title: 'FICA verification unsuccessful',
+        sub: 'Your documents could not be verified. Please re-upload and resubmit.',
+        time: 'Action required',
+        action: "navigate('fica',document.querySelector('[data-view=fica]'))",
+        unread: true,
+      });
+    } else if (inv.fica_status === 'pending' || inv.kyc_status === 'pending' || inv.status === 'fica_submitted') {
+      notifs.push({
+        icon: 'fa-clock', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
+        title: 'FICA verification in progress',
+        sub: 'Your documents are under review — typically 1–2 business days.',
+        time: 'Pending',
+        action: null,
+        unread: false,
+      });
+    } else if (inv.fica_status === 'approved') {
+      notifs.push({
+        icon: 'fa-shield-halved', iconBg: 'rgba(168,85,247,0.1)', iconColor: '#a855f7',
+        title: 'Identity verified',
+        sub: 'Your FICA verification is complete. You can invest in all available pools.',
+        time: inv.fica_verified_at ? Utils.timeAgo(inv.fica_verified_at) : 'Approved',
+        action: null,
+        unread: false,
+      });
+    }
+  }
+
+  // 4. Bank account status
+  if (inv && inv.bank_account_number) {
+    if (inv.bank_account_status === 'pending') {
+      notifs.push({
+        icon: 'fa-building-columns', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
+        title: 'Bank account pending verification',
+        sub: `${inv.bank_name || 'Your bank account'} is being reviewed by our team. Withdrawals will be enabled once approved.`,
+        time: 'Under review',
+        action: null,
+        unread: false,
+      });
+    } else if (inv.bank_account_status === 'approved') {
+      notifs.push({
+        icon: 'fa-building-columns', iconBg: 'rgba(34,197,94,0.1)', iconColor: '#22c55e',
+        title: 'Bank account verified',
+        sub: `Your ${inv.bank_name || 'bank'} account has been verified. You can now request withdrawals.`,
+        time: 'Approved',
+        action: "navigate('wallet',document.querySelector('[data-view=wallet]'))",
+        unread: true,
+      });
+    } else if (inv.bank_account_status === 'rejected') {
+      notifs.push({
+        icon: 'fa-building-columns', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
+        title: 'Bank account not verified',
+        sub: inv.bank_account_notes || 'Your bank details could not be verified. Please update and resubmit.',
+        time: 'Action required',
+        action: "navigate('settings',document.querySelector('[data-view=settings]'))",
+        unread: true,
+      });
+    }
+  }
+
+  // 5. Maturity overdue — investment has matured but no instruction yet
+  const overdue = PORTAL.investments.filter(i => {
+    if (i.status !== 'matured') return false;
+    return !i.maturity_instruction;
+  });
+  if (overdue.length) {
     notifs.push({
-      icon: 'fa-reply', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#2F8C9B',
-      title: 'Support ticket response',
-      sub: `Your ticket "${answered[0].subject}" has been answered by the team.`,
-      time: answered[0].responded_at ? Utils.timeAgo(answered[0].responded_at) : 'Recently',
-      action: "navigate('support',document.querySelector('[data-view=support]'))",
+      icon: 'fa-exclamation-circle', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
+      title: `${overdue.length} investment${overdue.length === 1 ? '' : 's'} awaiting instruction`,
+      sub: `${overdue.map(i => i.pool_name || 'Investment').slice(0,2).join(', ')} ha${overdue.length === 1 ? 's' : 've'} matured — submit your payout instruction now.`,
+      time: 'Urgent',
+      action: "navigate('maturity',document.querySelector('[data-view=maturity]'))",
       unread: true,
     });
   }
 
-  // 4. New pools opened in last 14 days
+  // 6. Support ticket responses — one notification per answered ticket
+  const answered = PORTAL.tickets.filter(t => t.admin_response && t.admin_response.trim());
+  answered.forEach(t => {
+    notifs.push({
+      icon: 'fa-reply', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#2F8C9B',
+      title: 'Support reply received',
+      sub: `"${t.subject}" — our team has responded.`,
+      time: t.responded_at ? Utils.timeAgo(t.responded_at) : 'Recently',
+      action: "navigate('support',document.querySelector('[data-view=support]'))",
+      unread: true,
+    });
+  });
+
+  // 7. Pending withdrawal submitted
+  const pendingWithdrawal = PORTAL.transactions.find(t => t.type === 'withdrawal' && t.status === 'pending');
+  if (pendingWithdrawal) {
+    notifs.push({
+      icon: 'fa-money-bill-transfer', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#6366f1',
+      title: 'Withdrawal in progress',
+      sub: `${Utils.rand(Math.abs(pendingWithdrawal.amount))} withdrawal is being processed — 1–2 business days.`,
+      time: Utils.timeAgo(pendingWithdrawal.created_at || pendingWithdrawal.transaction_date),
+      action: "navigate('wallet',document.querySelector('[data-view=wallet]'))",
+      unread: false,
+    });
+  }
+
+  // 8. New pools opened in last 14 days
   const newPools = PORTAL.pools.filter(p => {
     if (p.status !== 'open') return false;
-    const created = new Date(p.created_at);
-    return (now - created) < 14 * 86400000;
+    return (now - new Date(p.created_at)) < 14 * 86400000;
   });
   if (newPools.length) {
     const np = newPools[0];
     notifs.push({
       icon: 'fa-chart-line', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#2F8C9B',
-      title: 'New investment pool open',
-      sub: `${np.name || np.pool_name} is now open — ${Utils.pct(np.annual_rate || np.benchmark_rate)} p.a. for ${np.term_months} months.`,
+      title: 'New investment pool available',
+      sub: `${np.name || np.pool_name} — ${Utils.pct(np.annual_rate || np.benchmark_rate)} p.a. over ${np.term_months} months.`,
       time: Utils.timeAgo(np.created_at),
       action: "navigate('marketplace',document.querySelector('[data-view=marketplace]'))",
-      unread: false,
-    });
-  }
-
-  // 5. FICA approved
-  if (inv && inv.fica_status === 'approved') {
-    notifs.push({
-      icon: 'fa-shield-halved', iconBg: 'rgba(168,85,247,0.1)', iconColor: '#a855f7',
-      title: 'FICA verification approved',
-      sub: 'Your identity has been verified. You can now invest in all available pools.',
-      time: inv.fica_verified_at ? Utils.timeAgo(inv.fica_verified_at) : 'Previously',
-      action: null,
       unread: false,
     });
   }

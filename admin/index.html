@@ -125,23 +125,8 @@
               <span style="font-size:0.88rem;font-weight:800;color:#1a1a1a">Admin Alerts</span>
               <button onclick="adminMarkAllRead()" style="font-size:0.7rem;color:#FF8215;font-weight:700;background:none;border:none;cursor:pointer">Mark all read</button>
             </div>
-            <div style="max-height:340px;overflow-y:auto">
-              <div class="notif-item unread">
-                <div class="notif-icon" style="background:rgba(239,68,68,0.1)"><i class="fa-solid fa-user-clock" style="color:#ef4444"></i></div>
-                <div class="notif-body"><div class="notif-title">KYC documents pending</div><div class="notif-sub">3 investors are awaiting FICA verification review.</div><div class="notif-time">1 hour ago</div></div>
-              </div>
-              <div class="notif-item unread">
-                <div class="notif-icon" style="background:rgba(255,130,21,0.1)"><i class="fa-solid fa-wallet" style="color:#FF8215"></i></div>
-                <div class="notif-body"><div class="notif-title">New wallet top-up</div><div class="notif-sub">Thabo Khumalo deposited R5,000 via Paystack.</div><div class="notif-time">2 hours ago</div></div>
-              </div>
-              <div class="notif-item">
-                <div class="notif-icon" style="background:rgba(34,197,94,0.1)"><i class="fa-solid fa-coins" style="color:#22c55e"></i></div>
-                <div class="notif-body"><div class="notif-title">Pool funded</div><div class="notif-sub">Cattle Pool Q2 has reached its funding target.</div><div class="notif-time">Yesterday</div></div>
-              </div>
-              <div class="notif-item">
-                <div class="notif-icon" style="background:rgba(47,140,155,0.1)"><i class="fa-solid fa-headset" style="color:#2F8C9B"></i></div>
-                <div class="notif-body"><div class="notif-title">New support ticket</div><div class="notif-sub">Ticket #TKT-007 opened by Lerato Dlamini — Withdrawal query.</div><div class="notif-time">2 days ago</div></div>
-              </div>
+            <div id="adminNotifBody" style="max-height:340px;overflow-y:auto">
+              <div style="padding:24px 18px;text-align:center;color:#888;font-size:0.82rem">Loading alerts…</div>
             </div>
             <div style="padding:10px 18px;border-top:1px solid rgba(0,0,0,0.07);text-align:center">
               <button onclick="navigate('support', document.querySelector('[data-view=support]'));toggleAdminNotif()" style="font-size:0.78rem;color:#FF8215;font-weight:600;background:none;border:none;cursor:pointer">View all in Support &rarr;</button>

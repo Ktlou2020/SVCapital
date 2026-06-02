@@ -84,6 +84,120 @@ function adminMarkAllRead() {
   if (dot) dot.classList.remove('has-unread');
 }
 
+/* ── Dynamic admin notification panel ─────────────────────────────────────
+   Builds real-time alerts from already-loaded STATE data.
+   Called at the end of loadDashboard() once investors, transactions
+   and tickets are in memory.
+─────────────────────────────────────────────────────────────────────────── */
+function loadAdminNotifications(investors, transactions, tickets) {
+  const body = document.getElementById('adminNotifBody');
+  if (!body) return;
+
+  const now    = new Date();
+  const notifs = [];
+
+  // 1. Pending KYC / FICA
+  const pendingKyc = investors.filter(i =>
+    i.kyc_status === 'pending' || i.fica_status === 'pending' ||
+    i.status === 'pending_fica' || i.status === 'fica_submitted'
+  );
+  if (pendingKyc.length) {
+    notifs.push({
+      icon: 'fa-user-clock', iconBg: 'rgba(239,68,68,0.1)', iconColor: '#ef4444',
+      title: `${pendingKyc.length} KYC ${pendingKyc.length === 1 ? 'application' : 'applications'} pending`,
+      sub: `${pendingKyc.slice(0,2).map(i => i.first_name).join(', ')}${pendingKyc.length > 2 ? ` +${pendingKyc.length - 2} more` : ''} awaiting FICA review.`,
+      action: "navigate('kyc',document.querySelector('[data-view=kyc]'));toggleAdminNotif()",
+      unread: true,
+    });
+  }
+
+  // 2. Bank accounts awaiting verification
+  const pendingBank = investors.filter(i => i.bank_account_status === 'pending');
+  if (pendingBank.length) {
+    notifs.push({
+      icon: 'fa-building-columns', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#6366f1',
+      title: `${pendingBank.length} bank account${pendingBank.length === 1 ? '' : 's'} to verify`,
+      sub: `${pendingBank.slice(0,2).map(i => `${i.first_name} ${i.last_name}`).join(', ')}${pendingBank.length > 2 ? ` +${pendingBank.length - 2} more` : ''}.`,
+      action: "navigate('investors',document.querySelector('[data-view=investors]'));toggleAdminNotif()",
+      unread: true,
+    });
+  }
+
+  // 3. Pending withdrawals
+  const pendingWith = transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending');
+  if (pendingWith.length) {
+    const total = pendingWith.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+    notifs.push({
+      icon: 'fa-money-bill-transfer', iconBg: 'rgba(239,68,68,0.1)', iconColor: '#ef4444',
+      title: `${pendingWith.length} withdrawal${pendingWith.length === 1 ? '' : 's'} pending`,
+      sub: `${Utils.rand(total)} total awaiting processing.`,
+      action: "navigate('transactions',document.querySelector('[data-view=transactions]'));toggleAdminNotif()",
+      unread: true,
+    });
+  }
+
+  // 4. Bank verification support tickets
+  const bankTkts = tickets.filter(t => t.category === 'bank_verification' && t.status === 'open');
+  if (bankTkts.length) {
+    notifs.push({
+      icon: 'fa-file-invoice', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
+      title: `${bankTkts.length} bank verification ticket${bankTkts.length === 1 ? '' : 's'}`,
+      sub: `${bankTkts.slice(0,2).map(t => t.investor_name || 'Investor').join(', ')} submitted bank details.`,
+      action: "navigate('support',document.querySelector('[data-view=support]'));toggleAdminNotif()",
+      unread: true,
+    });
+  }
+
+  // 5. Other open support tickets (unanswered)
+  const openTkts = tickets.filter(t => t.status === 'open' && t.category !== 'bank_verification' && !t.admin_response);
+  if (openTkts.length) {
+    const urgent = openTkts.filter(t => t.priority === 'high' || t.priority === 'urgent');
+    notifs.push({
+      icon: 'fa-headset', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#2F8C9B',
+      title: `${openTkts.length} open ticket${openTkts.length === 1 ? '' : 's'} awaiting reply`,
+      sub: urgent.length
+        ? `${urgent.length} high-priority — "${urgent[0].subject}"`
+        : `"${openTkts[0].subject}"`,
+      action: "navigate('support',document.querySelector('[data-view=support]'));toggleAdminNotif()",
+      unread: true,
+    });
+  }
+
+  // 6. Recent deposits (last 24 h) — informational
+  const recentDeps = transactions.filter(t => {
+    if (t.type !== 'deposit' || t.status !== 'completed') return false;
+    return (now - new Date(t.created_at || t.transaction_date || 0)) < 86400000;
+  });
+  if (recentDeps.length) {
+    const total = recentDeps.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+    notifs.push({
+      icon: 'fa-wallet', iconBg: 'rgba(34,197,94,0.1)', iconColor: '#22c55e',
+      title: `${recentDeps.length} deposit${recentDeps.length === 1 ? '' : 's'} received today`,
+      sub: `${Utils.rand(total)} credited in the last 24 hours.`,
+      action: "navigate('transactions',document.querySelector('[data-view=transactions]'));toggleAdminNotif()",
+      unread: false,
+    });
+  }
+
+  if (!notifs.length) {
+    body.innerHTML = '<div style="padding:24px 18px;text-align:center;color:#888;font-size:0.82rem"><i class="fa-solid fa-circle-check" style="color:#22c55e;margin-right:6px"></i>No pending actions — all clear!</div>';
+    document.getElementById('adminNotifDot')?.classList.remove('has-unread');
+    return;
+  }
+
+  body.innerHTML = notifs.map(n => `
+    <div class="notif-item${n.unread ? ' unread' : ''}" ${n.action ? `onclick="${n.action}" style="cursor:pointer"` : ''}>
+      <div class="notif-icon" style="background:${n.iconBg}"><i class="fa-solid ${n.icon}" style="color:${n.iconColor}"></i></div>
+      <div class="notif-body">
+        <div class="notif-title">${n.title}</div>
+        <div class="notif-sub">${n.sub}</div>
+      </div>
+    </div>
+  `).join('');
+
+  _syncAdminNotifDot();
+}
+
 /* ─── Navigation ─── */
 function navigate(view, btnEl) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -271,6 +385,9 @@ async function loadDashboard() {
       const tktBadge = document.getElementById('ticketBadge');
       if (tktBadge) tktBadge.textContent = openTickets;
     } catch (_) {}
+
+    // Build dynamic notification panel
+    loadAdminNotifications(STATE.investors, STATE.transactions, tickets);
 
     // Populate welcome strip
     const jwtUser = (typeof Auth !== 'undefined') ? Auth.getUser() : null;

@@ -429,6 +429,50 @@ function sendMonthlyStatement(investor, { investments, recentTransactions }) {
   return _send({ to: email, subject: `Your SV Capital Statement — ${monthName}`, html });
 }
 
+/* ── 13. KYC / FICA approved ─────────────────────────────── */
+function sendKycApproved(investor) {
+  const { email, first_name } = investor;
+  if (!email) return Promise.resolve();
+  const today = new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' });
+  return _send({
+    to: email,
+    subject: 'Identity Verified — You\'re Ready to Invest ✅',
+    html: _wrap(`
+      <h2>FICA Verification Approved ✅</h2>
+      <p>Hi ${first_name}, great news! Your identity documents have been reviewed and approved by our compliance team.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Status</span><span class="val green">Approved</span></div>
+        <div class="row"><span class="lbl">Verified on</span><span class="val">${today}</span></div>
+      </div>
+      <p>Your account is now fully verified. You can invest in all available pools on the SV Capital platform.</p>
+      <a href="${BASE_URL}/portal/" class="btn">Start Investing →</a>
+    `),
+    text: `Hi ${first_name}, your FICA/KYC documents have been approved. Your account is now fully verified — log in to start investing.`,
+  });
+}
+
+/* ── 14. KYC / FICA rejected ─────────────────────────────── */
+function sendKycRejected(investor, { reason, notes } = {}) {
+  const { email, first_name } = investor;
+  if (!email) return Promise.resolve();
+  const detail = notes || reason || 'The documents provided did not meet our verification requirements.';
+  return _send({
+    to: email,
+    subject: 'Action Required: FICA Documents Need Attention',
+    html: _wrap(`
+      <h2>FICA Verification Unsuccessful</h2>
+      <p>Hi ${first_name}, unfortunately we could not verify your identity documents at this time.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Status</span><span class="val" style="color:#ef4444">Requires Re-submission</span></div>
+        <div class="row"><span class="lbl">Reason</span><span class="val">${detail}</span></div>
+      </div>
+      <p>Please log in to your portal, update your documents, and resubmit. Our team will re-review within 1–2 business days.</p>
+      <a href="${BASE_URL}/portal/" class="btn">Update Documents →</a>
+    `),
+    text: `Hi ${first_name}, your FICA/KYC verification was unsuccessful. Reason: ${detail}. Please update and resubmit your documents via the portal.`,
+  });
+}
+
 module.exports = {
   sendWelcome,
   sendDepositConfirmed,
@@ -442,4 +486,6 @@ module.exports = {
   sendWithdrawalRejected,
   sendBankAccountApproved,
   sendMonthlyStatement,
+  sendKycApproved,
+  sendKycRejected,
 };

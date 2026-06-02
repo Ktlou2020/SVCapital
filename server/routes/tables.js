@@ -567,6 +567,18 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
             accountNumber: updated.bank_account_number,
           });
         }
+
+        // KYC document approved → email investor
+        if (table === 'kyc_documents' && body.status === 'approved' && updated.investor_id) {
+          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
+          if (inv[0]) await emailService.sendKycApproved(inv[0]);
+        }
+
+        // KYC document rejected → email investor with reason from notes
+        if (table === 'kyc_documents' && body.status === 'rejected' && updated.investor_id) {
+          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
+          if (inv[0]) await emailService.sendKycRejected(inv[0], { notes: updated.notes });
+        }
       } catch (hookErr) {
         console.error('[email hook PATCH] error:', hookErr.message);
       }
