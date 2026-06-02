@@ -2728,10 +2728,7 @@ async function bulkRejectKyc() {
 }
 
 /* ═══════════════════════════════════════════════
-   AUDIT LOG
-   ═══════════════════════════════════════════════ */
-/* ═══════════════════════════════════════════════
-   AUDIT LOG
+   AUDIT LOG — Feature 6: Real Audit Log
    ═══════════════════════════════════════════════ */
 let _auditEvents = [];
 let _auditPage   = 1;
@@ -2739,36 +2736,60 @@ const AUDIT_PG   = 50;
 
 async function loadAuditLog() {
   try {
-    const res = await API.tables.list('audit_events', { limit: 500, order: 'created_at', direction: 'desc' });
+    const res = await API._fetch('GET', 'tables/audit_events', null, { limit: 200, order: 'created_at', direction: 'desc' });
     _auditEvents = res.data || [];
     renderAuditTable();
-    const filter = document.getElementById('auditTypeFilter');
-    if (filter) filter.addEventListener('change', () => { _auditPage = 1; renderAuditTable(); });
+
+    // Wire filters once (guard against double-wiring)
+    const typeF   = document.getElementById('auditTypeFilter');
+    const searchF = document.getElementById('auditSearchInput');
+    const dateFrom = document.getElementById('auditDateFrom');
+    const dateTo   = document.getElementById('auditDateTo');
+
+    const resetAndRender = () => { _auditPage = 1; renderAuditTable(); };
+    if (typeF   && !typeF._auditWired)   { typeF.addEventListener('change', resetAndRender);   typeF._auditWired = true; }
+    if (searchF && !searchF._auditWired) { searchF.addEventListener('input', Utils.debounce(resetAndRender, 250)); searchF._auditWired = true; }
+    if (dateFrom && !dateFrom._auditWired) { dateFrom.addEventListener('change', resetAndRender); dateFrom._auditWired = true; }
+    if (dateTo   && !dateTo._auditWired)   { dateTo.addEventListener('change', resetAndRender);   dateTo._auditWired   = true; }
   } catch (e) { Toast.error('Failed to load audit log'); }
 }
 
 function renderAuditTable() {
   const body   = document.getElementById('auditBody');
   if (!body) return;
-  const filter = document.getElementById('auditTypeFilter')?.value || '';
-  const items  = filter ? _auditEvents.filter(e => (e.event_type || '').includes(filter)) : _auditEvents;
+
+  const typeFilter   = document.getElementById('auditTypeFilter')?.value || '';
+  const searchQ      = (document.getElementById('auditSearchInput')?.value || '').toLowerCase();
+  const dateFromVal  = document.getElementById('auditDateFrom')?.value || '';
+  const dateToVal    = document.getElementById('auditDateTo')?.value || '';
+
+  let items = _auditEvents;
+  if (typeFilter)   items = items.filter(e => (e.event_type || '').includes(typeFilter));
+  if (searchQ)      items = items.filter(e => `${e.event_type} ${e.user_email} ${e.actor_role} ${e.action} ${e.entity_type} ${e.entity_id} ${e.description}`.toLowerCase().includes(searchQ));
+  if (dateFromVal)  items = items.filter(e => e.created_at && new Date(e.created_at) >= new Date(dateFromVal));
+  if (dateToVal)    items = items.filter(e => e.created_at && new Date(e.created_at) <= new Date(dateToVal + 'T23:59:59'));
+
   const start  = (_auditPage - 1) * AUDIT_PG;
   const page   = items.slice(start, start + AUDIT_PG);
 
   const footer = document.getElementById('auditFooter');
-  if (footer) footer.textContent = `${start + 1}–${Math.min(start + AUDIT_PG, items.length)} of ${items.length} events`;
+  if (footer) footer.textContent = items.length ? `${start + 1}–${Math.min(start + AUDIT_PG, items.length)} of ${items.length} events` : '0 events';
 
-  if (!page.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No audit events found</td></tr>'; return; }
+  if (!page.length) {
+    body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No audit events found</td></tr>';
+    document.getElementById('auditPagination').innerHTML = '';
+    return;
+  }
 
-  const actionColor = { 'user.login': 'blue', 'kyc.approved': 'green', 'kyc.rejected': 'red', 'transaction.completed': 'green', 'transaction.rejected': 'red', 'investment.paid_out': 'gold' };
+  const actionColor = { 'user.login': 'blue', 'kyc.approved': 'green', 'kyc.rejected': 'red', 'transaction.completed': 'green', 'transaction.rejected': 'red', 'investment.paid_out': 'gold', 'withdrawal.approved': 'green', 'withdrawal.rejected': 'red' };
 
   body.innerHTML = page.map(e => `<tr>
     <td class="td-muted" style="white-space:nowrap;font-size:0.75rem">${Utils.date(e.created_at)}</td>
-    <td><span class="badge badge--${actionColor[e.event_type] || 'gray'}" style="font-size:0.7rem">${e.event_type || '—'}</span></td>
-    <td><div style="font-size:0.78rem;font-weight:600">${e.user_email || '—'}</div></td>
-    <td class="td-muted" style="font-size:0.75rem">${e.entity_type ? `${e.entity_type}#${(e.entity_id||'').slice(0,8)}` : '—'}</td>
-    <td style="font-size:0.78rem;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.description || '—'}</td>
-    <td class="td-muted" style="font-size:0.72rem">${e.ip_address || '—'}</td>
+    <td><div style="font-size:0.78rem;font-weight:600;color:var(--white)">${e.user_email || e.actor || '—'}</div></td>
+    <td><span style="font-size:0.72rem;color:var(--text-muted)">${e.actor_role || e.role || '—'}</span></td>
+    <td><span class="badge badge--${actionColor[e.event_type] || 'gray'}" style="font-size:0.7rem">${e.event_type || e.action || '—'}</span></td>
+    <td class="td-muted" style="font-size:0.75rem">${e.entity_type ? `${e.entity_type}${e.entity_id ? ' #' + String(e.entity_id).slice(0, 8) : ''}` : (e.target || '—')}</td>
+    <td class="td-muted" style="font-size:0.72rem">${e.ip_address || e.ip || '—'}</td>
   </tr>`).join('');
 
   const pages = Math.ceil(items.length / AUDIT_PG);

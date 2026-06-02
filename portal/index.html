@@ -1538,6 +1538,23 @@
 </div>
 
 <style>
+/* ── Toggle switch styles ─────────────────────────────────────── */
+#pushNotifToggle:checked + #pushNotifSlider { background: #ff9b0c !important; }
+#pushNotifSlider::before { content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s; }
+#pushNotifToggle:checked + #pushNotifSlider::before { transform:translateX(18px); }
+#recurringToggleSlider::before { content:'';position:absolute;width:20px;height:20px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s; }
+.recurring-toggle-on { background: #ff9b0c !important; }
+.recurring-toggle-on::before { transform:translateX(22px) !important; }
+
+/* ── Ticket conversation chat bubbles ──────────────────────────── */
+.chat-bubble { padding:10px 14px; border-radius:12px; max-width:85%; font-size:0.84rem; line-height:1.5; }
+.chat-bubble--investor { background:linear-gradient(135deg,#FF9B0C,#FF5229); color:#fff; align-self:flex-end; border-bottom-right-radius:4px; }
+.chat-bubble--admin { background:var(--ci-bg-light,#F7F8FA); border:1px solid rgba(0,0,0,0.08); color:#1a1a1a; align-self:flex-start; border-bottom-left-radius:4px; }
+.chat-bubble-wrap { display:flex; flex-direction:column; gap:3px; }
+.chat-bubble-wrap--investor { align-items:flex-end; }
+.chat-bubble-wrap--admin { align-items:flex-start; }
+.chat-bubble-meta { font-size:0.68rem; color:var(--text-muted); padding:0 4px; }
+
 /* ── Payment modal component styles ─────────────────────────────── */
 /* Keep payment modal dark regardless of CI theme overrides */
 #paymentModalBox .info-row__label { color: #9ca3af !important; }
