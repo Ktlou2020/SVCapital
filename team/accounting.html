@@ -120,6 +120,36 @@
     tbody tr:last-child { border-bottom: none; }
     tbody tr:hover { background: var(--surface2); }
     tbody td { padding: 10px 14px; vertical-align: middle; }
+    /* ── Statement Import ── */
+    .upload-zone {
+      border: 2px dashed var(--border2); border-radius: 16px; padding: 56px 32px;
+      text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s;
+      position: relative; margin-bottom: 20px;
+    }
+    .upload-zone:hover, .upload-zone.drag-over { border-color: var(--purple); background: rgba(124,92,252,0.04); }
+    .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+    .upload-icon { font-size: 2.8rem; color: var(--muted); margin-bottom: 14px; transition: color 0.2s; }
+    .upload-zone:hover .upload-icon, .upload-zone.drag-over .upload-icon { color: var(--purple); }
+    .upload-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 6px; }
+    .upload-sub { font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
+    .bank-pills { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; margin-top: 14px; }
+    .bank-pill { background: var(--surface3); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; font-size: 0.71rem; color: var(--muted2); font-weight: 500; }
+    .import-info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .import-info-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+    .import-info-card h4 { font-size: 0.78rem; font-weight: 700; margin-bottom: 6px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.05em; }
+    .import-info-card p { font-size: 0.76rem; color: var(--muted); line-height: 1.5; }
+    .import-tbl-wrap { overflow-x: auto; max-height: calc(100vh - 320px); overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+    .import-tbl-wrap table { width: 100%; border-collapse: collapse; min-width: 700px; }
+    .import-tbl-wrap th { position: sticky; top: 0; z-index: 2; background: var(--surface2); font-size: 0.7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 9px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .import-tbl-wrap td { padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 0.79rem; vertical-align: middle; }
+    .import-tbl-wrap tr:last-child td { border-bottom: none; }
+    .import-tbl-wrap tr:hover td { background: rgba(255,255,255,0.02); }
+    .import-tbl-wrap tr.row-dup td:not(:first-child) { opacity: 0.45; }
+    .match-bill { display: inline-flex; align-items: center; gap: 4px; background: rgba(0,212,170,0.1); color: var(--teal); border-radius: 5px; padding: 2px 7px; font-size: 0.69rem; font-weight: 600; white-space: nowrap; }
+    .match-rule { display: inline-flex; align-items: center; gap: 4px; background: rgba(124,92,252,0.1); color: #a78bfa; border-radius: 5px; padding: 2px 7px; font-size: 0.69rem; font-weight: 600; white-space: nowrap; }
+    .match-none { color: var(--muted); font-size: 0.72rem; font-style: italic; }
+    .dup-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(245,158,11,0.1); color: var(--amber); border-radius: 5px; padding: 2px 7px; font-size: 0.69rem; font-weight: 600; }
+    .import-actions-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; border-top: 1px solid var(--border); margin-top: 14px; flex-wrap: wrap; }
     /* Badges */
     .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; }
     .badge-draft { background: rgba(107,114,128,0.2); color: var(--muted2); }
@@ -427,6 +457,7 @@
         <button class="nav-btn" data-view="invoices" onclick="showView('invoices')"><i class="fa-solid fa-file-invoice-dollar"></i> Invoices</button>
         <button class="nav-btn" data-view="bills" onclick="showView('bills')"><i class="fa-solid fa-receipt"></i> Bills</button>
         <button class="nav-btn" data-view="bank" onclick="showView('bank')"><i class="fa-solid fa-landmark"></i> Bank Transactions</button>
+        <button class="nav-btn" data-view="import" onclick="showView('import')"><i class="fa-solid fa-file-arrow-up"></i> Statement Import</button>
       </div>
       <div class="nav-group">
         <div class="nav-group-label">Reporting</div>
@@ -589,6 +620,7 @@ const PAGE_META = {
   mgmt:        {title:'Management Accounts', subtitle:'P&L with budget vs actuals'},
   budgets:     {title:'Budgets', subtitle:'Monthly budget planning per account'},
   reports:     {title:'Reports', subtitle:'Export financial data to CSV'},
+  import:      {title:'Statement Import', subtitle:'Upload bank statements and auto-allocate to accounts'},
 };
 
 function showView(view) {
@@ -628,6 +660,7 @@ function showView(view) {
     case 'mgmt':        renderMgmt(bid, biz); break;
     case 'budgets':     renderBudgets(bid, biz); break;
     case 'reports':     renderReports(bid, biz); break;
+    case 'import':      renderImportView(bid, biz); break;
   }
 }
 
@@ -1128,7 +1161,9 @@ function renderBank(bid, biz) {
   const txns = getTransactions(bid).sort((a,b)=>b.date?.localeCompare(a.date));
   const coa = getCoa(bid);
   const tb = document.getElementById('topbar-actions');
-  tb.innerHTML = `<button class="btn btn-primary" onclick="openTxn()"><i class="fa-solid fa-plus"></i> Add Transaction</button>`;
+  tb.innerHTML = `
+    <button class="btn btn-secondary" onclick="showView('import')"><i class="fa-solid fa-file-arrow-up"></i> Import Statement</button>
+    <button class="btn btn-primary" onclick="openTxn()"><i class="fa-solid fa-plus"></i> Add Transaction</button>`;
 
   const rows = txns.map(t=>{
     const acc = coa.find(a=>a.id===t.accountId);
@@ -1719,6 +1754,439 @@ function seedDemoData(bid) {
                    a.code==='6300'?15000:a.code==='6400'?10000:5000),
   }));
   lsSet('acct_budgets_'+bid, budgets);
+}
+
+/* ═══════════════════════════════════════════════════
+   STATEMENT IMPORT
+═══════════════════════════════════════════════════ */
+
+// Module-level state for the two-step import flow
+let _importRows = [];  // parsed + enriched rows pending review
+
+/* ── SA Bank keyword-to-account-code rules ── */
+const CATEG_RULES = [
+  { kw: ['salary','payroll','wages','paye','uif'], code: '6000' },
+  { kw: ['rent','lease','property rental'], code: '6100' },
+  { kw: ['electricity','eskom','water','municipal rates','city of','rates and'], code: '6200' },
+  { kw: ['marketing','advertising','facebook','google ads','instagram','sms blast','flyer'], code: '6300' },
+  { kw: ['audit','attorney','legal','accountant','consultant','advisory fees','professional'], code: '6400' },
+  { kw: ['bank charge','service fee','monthly fee','atm fee','transaction fee','administration fee','ledger fee'], code: '6500' },
+  { kw: ['depreciation','amortisation','amortization'], code: '6600' },
+  { kw: ['loan repay','instalment','installment','mortgage'], code: '2200' },
+  { kw: ['vat payment','sars vat','e-filing'], code: '2100' },
+  { kw: ['petrol','fuel','engen','sasol','shell','bp '], code: '6700' },
+  // Credits
+  { kw: ['payment received','invoice paid','deposit','eft receipt','online receipt'], code: '4000', creditOnly: true },
+  { kw: ['service income','consulting income','fee income'], code: '4100', creditOnly: true },
+];
+
+function _normStr(s) {
+  return (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function autoCategTxn(description, amount, type, coa, bills) {
+  const desc = _normStr(description);
+  const isCredit = type === 'credit' || amount > 0;
+
+  // 1. Try to match against existing bill vendor names
+  for (const bill of bills) {
+    const vendor = _normStr(bill.contactName || '');
+    if (vendor.length > 2) {
+      const vendorWords = vendor.split(' ').filter(w => w.length > 3);
+      if (vendorWords.some(w => desc.includes(w))) {
+        const apAcc = coa.find(a => a.code === '2000');
+        return {
+          accountId: apAcc ? apAcc.id : (coa[0] || {}).id,
+          billId: bill.id,
+          matchType: 'bill',
+          confidence: 'high',
+        };
+      }
+    }
+  }
+
+  // 2. Keyword rules
+  for (const rule of CATEG_RULES) {
+    if (rule.creditOnly && !isCredit) continue;
+    if (rule.kw.some(kw => desc.includes(kw))) {
+      const acc = coa.find(a => a.code === rule.code);
+      if (acc) return { accountId: acc.id, billId: null, matchType: 'rule', confidence: 'medium' };
+    }
+  }
+
+  // 3. Fallback based on direction
+  const fallbackCode = isCredit ? '4200' : '6700';
+  const fallbackAcc = coa.find(a => a.code === fallbackCode);
+  return {
+    accountId: fallbackAcc ? fallbackAcc.id : (coa[0] || {}).id,
+    billId: null,
+    matchType: 'none',
+    confidence: 'low',
+  };
+}
+
+/* ── Duplicate detection ── */
+function isDuplicate(row, existingTxns) {
+  return existingTxns.some(t => {
+    if (t.date !== row.date) return false;
+    if (Math.abs(Number(t.amount) - Math.abs(Number(row.amount))) > 0.01) return false;
+    const a = _normStr(t.description).slice(0, 20);
+    const b = _normStr(row.description).slice(0, 20);
+    return a === b || (a.length > 6 && b.includes(a.slice(0, 8)));
+  });
+}
+
+/* ── CSV parsers for SA bank formats ── */
+function parseCSVStatement(text) {
+  // Normalize line endings and split
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+
+  function parseCSVLine(line) {
+    const result = [];
+    let inQuote = false, cur = '';
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQuote = !inQuote; continue; }
+      if (ch === ',' && !inQuote) { result.push(cur.trim()); cur = ''; continue; }
+      cur += ch;
+    }
+    result.push(cur.trim());
+    return result;
+  }
+
+  const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const rows = [];
+
+  // Detect format by headers
+  const isFNB = headers.some(h => h.includes('description1') || h.includes('desc1'));
+  const hasDebitCredit = headers.some(h => h === 'debit' || h === 'credit');
+  const hasTransaction = headers.some(h => h === 'transaction' || h === 'narration');
+
+  for (let i = 1; i < lines.length; i++) {
+    const cells = parseCSVLine(lines[i]);
+    if (cells.length < 3) continue;
+
+    try {
+      let date = '', description = '', amount = 0, reference = '';
+
+      if (isFNB) {
+        // FNB: AccountNumber, Desc1, Desc2, Desc3, Amount, Balance
+        date = _parseDate(cells[4] || cells[3] || '');
+        description = [cells[1], cells[2], cells[3]].filter(Boolean).join(' ').trim();
+        amount = parseFloat((cells[5] || cells[4] || '0').replace(/[, ]/g, ''));
+      } else if (hasDebitCredit) {
+        // Nedbank / ABSA debit+credit style: Date, Description, Debit, Credit, Balance
+        const di = headers.findIndex(h => h === 'date' || h === 'transactiondate');
+        const desci = headers.findIndex(h => h.includes('desc') || h === 'narration' || h === 'details');
+        const debi = headers.findIndex(h => h === 'debit');
+        const credi = headers.findIndex(h => h === 'credit');
+        date = _parseDate(cells[di >= 0 ? di : 0]);
+        description = cells[desci >= 0 ? desci : 1] || '';
+        const debit = parseFloat((cells[debi >= 0 ? debi : 2] || '0').replace(/[, ]/g, '')) || 0;
+        const credit = parseFloat((cells[credi >= 0 ? credi : 3] || '0').replace(/[, ]/g, '')) || 0;
+        amount = credit > 0 ? credit : -debit;
+      } else if (hasTransaction) {
+        // ABSA "Transaction" column style: Date, Transaction, Amount, Balance
+        date = _parseDate(cells[0]);
+        description = cells[1] || '';
+        amount = parseFloat((cells[2] || '0').replace(/[, ]/g, ''));
+      } else {
+        // Generic / Standard Bank / Capitec: Date, Description, Amount[, Balance]
+        date = _parseDate(cells[0]);
+        description = cells[1] || '';
+        amount = parseFloat((cells[2] || '0').replace(/[, ]/g, ''));
+        reference = cells[4] || '';
+      }
+
+      if (!date || isNaN(amount) || !description) continue;
+      rows.push({ date, description: description.trim(), amount, reference: reference.trim() });
+    } catch (_) { /* skip malformed rows */ }
+  }
+  return rows;
+}
+
+function parseOFXStatement(text) {
+  const rows = [];
+  const txnBlocks = text.match(/<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi) || [];
+  for (const block of txnBlocks) {
+    const get = (tag) => { const m = block.match(new RegExp(`<${tag}>([^<]+)`, 'i')); return m ? m[1].trim() : ''; };
+    const dtRaw = get('DTPOSTED');
+    const date = dtRaw ? `${dtRaw.slice(0,4)}-${dtRaw.slice(4,6)}-${dtRaw.slice(6,8)}` : '';
+    const amount = parseFloat(get('TRNAMT') || '0');
+    const description = get('MEMO') || get('NAME') || get('FITID');
+    const reference = get('FITID');
+    if (!date || isNaN(amount) || !description) continue;
+    rows.push({ date, description, amount, reference });
+  }
+  return rows;
+}
+
+function _parseDate(raw) {
+  if (!raw) return '';
+  raw = raw.trim();
+  // ISO: 2025-01-15
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  // DD/MM/YYYY or DD-MM-YYYY
+  let m = raw.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+  if (m) {
+    const y = m[3].length === 2 ? '20' + m[3] : m[3];
+    return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  }
+  // YYYY/MM/DD
+  m = raw.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+  if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  // Try "01 Jan 2025" or "Jan 01 2025"
+  try {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  } catch (_) {}
+  return '';
+}
+
+/* ── Main render ── */
+function renderImportView(bid, biz) {
+  document.getElementById('topbar-actions').innerHTML = '';
+  _importRows = [];
+  _renderImportStep1();
+}
+
+function _renderImportStep1() {
+  document.getElementById('acct-content').innerHTML = `
+    <div style="max-width:720px;margin:0 auto">
+      <div class="upload-zone" id="upload-zone"
+           ondragover="event.preventDefault();this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="event.preventDefault();this.classList.remove('drag-over');_handleImportFiles(event.dataTransfer.files)">
+        <input type="file" id="import-file-input" accept=".csv,.ofx,.qfx,.txt"
+               onchange="_handleImportFiles(this.files)">
+        <div class="upload-icon"><i class="fa-solid fa-file-arrow-up"></i></div>
+        <div class="upload-title">Drop your bank statement here</div>
+        <div class="upload-sub">Or click to browse your files<br><span style="color:var(--purple);font-weight:600">Supported formats: CSV, OFX, QFX</span></div>
+        <div class="bank-pills" style="margin-top:16px">
+          <span class="bank-pill">FNB</span>
+          <span class="bank-pill">Standard Bank</span>
+          <span class="bank-pill">ABSA</span>
+          <span class="bank-pill">Nedbank</span>
+          <span class="bank-pill">Capitec</span>
+          <span class="bank-pill">Discovery Bank</span>
+          <span class="bank-pill">Investec</span>
+          <span class="bank-pill">Any OFX/QFX</span>
+        </div>
+      </div>
+
+      <div class="import-info-grid">
+        <div class="import-info-card">
+          <h4><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--purple);margin-right:5px"></i>Auto-Categorisation</h4>
+          <p>Transactions are automatically matched to your Chart of Accounts using keyword rules and vendor name matching from your Bills.</p>
+        </div>
+        <div class="import-info-card">
+          <h4><i class="fa-solid fa-copy" style="color:var(--amber);margin-right:5px"></i>Duplicate Detection</h4>
+          <p>Already-imported transactions are flagged so you never double-count. Review and deselect before importing.</p>
+        </div>
+        <div class="import-info-card">
+          <h4><i class="fa-solid fa-sliders" style="color:var(--teal);margin-right:5px"></i>Review Before Import</h4>
+          <p>Every parsed transaction is shown in a review table. Change the account category on any row before confirming.</p>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;font-size:0.77rem;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--muted2)"><i class="fa-solid fa-circle-info" style="margin-right:5px"></i>How to export from your bank:</strong><br>
+        <strong>FNB:</strong> Online Banking → Accounts → Statements → Download → CSV &nbsp;·&nbsp;
+        <strong>Standard Bank:</strong> Internet Banking → Account History → Export to CSV &nbsp;·&nbsp;
+        <strong>ABSA:</strong> AbsaOnline → Account Details → Export Statement &nbsp;·&nbsp;
+        <strong>Nedbank:</strong> NetBank → Accounts → Export → CSV &nbsp;·&nbsp;
+        <strong>Capitec:</strong> Internet Banking → Statements → Export
+      </div>
+    </div>
+  `;
+}
+
+function _handleImportFiles(files) {
+  if (!files || !files.length) return;
+  const file = files[0];
+  const bid = getActiveId();
+  const biz = getActiveBiz();
+  if (!bid) { showToast('No active business selected', 'error'); return; }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const isOFX = /\.ofx|\.qfx/i.test(file.name) || text.includes('<OFX>') || text.includes('<OFXHEADER>');
+
+    let parsed;
+    try {
+      parsed = isOFX ? parseOFXStatement(text) : parseCSVStatement(text);
+    } catch (err) {
+      showToast('Could not parse file — check format', 'error');
+      console.error(err);
+      return;
+    }
+
+    if (!parsed.length) {
+      showToast('No transactions found in file. Check the format is correct.', 'error');
+      return;
+    }
+
+    const coa = getCoa(bid);
+    const bills = getBills(bid);
+    const existingTxns = getTransactions(bid);
+
+    // Enrich each row with auto-categorisation + duplicate flag
+    _importRows = parsed.map((row, idx) => {
+      const type = row.amount >= 0 ? 'credit' : 'debit';
+      const categ = autoCategTxn(row.description, row.amount, type, coa, bills);
+      const dup = isDuplicate(row, existingTxns);
+      return {
+        _idx: idx,
+        date: row.date,
+        description: row.description,
+        amount: Math.abs(row.amount),
+        type,
+        reference: row.reference || '',
+        accountId: categ.accountId,
+        billId: categ.billId,
+        matchType: categ.matchType,
+        dup,
+        include: !dup, // auto-deselect duplicates
+      };
+    });
+
+    showToast(`Parsed ${parsed.length} transactions from ${file.name}`, 'success');
+    _renderImportStep2(bid, biz, coa, bills);
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function _renderImportStep2(bid, biz, coa, bills) {
+  const currency = biz.currency || 'ZAR';
+  const total = _importRows.length;
+  const dups = _importRows.filter(r => r.dup).length;
+  const billMatches = _importRows.filter(r => r.matchType === 'bill').length;
+  const ruleMatches = _importRows.filter(r => r.matchType === 'rule').length;
+
+  const coaOptions = coa.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
+
+  const rows = _importRows.map((r, idx) => {
+    const acc = coa.find(a => a.id === r.accountId);
+    const bill = bills.find(b => b.id === r.billId);
+    const matchBadge = r.matchType === 'bill'
+      ? `<span class="match-bill"><i class="fa-solid fa-link"></i> ${bill ? bill.contactName.slice(0,18) : 'Bill'}</span>`
+      : r.matchType === 'rule'
+      ? `<span class="match-rule"><i class="fa-solid fa-wand-magic-sparkles"></i> Auto-matched</span>`
+      : `<span class="match-none">Unmatched</span>`;
+
+    const dupBadge = r.dup ? `<span class="dup-badge"><i class="fa-solid fa-copy"></i> Dup</span>` : '';
+    const rowClass = r.dup ? 'row-dup' : '';
+    const amtClass = r.type === 'credit' ? 'style="color:var(--green)"' : 'style="color:var(--red)"';
+    const sign = r.type === 'credit' ? '+' : '-';
+
+    return `<tr class="${rowClass}" id="irow-${idx}">
+      <td style="width:36px">
+        <input type="checkbox" id="ichk-${idx}" ${r.include ? 'checked' : ''} onchange="_toggleImportRow(${idx})">
+      </td>
+      <td style="white-space:nowrap">${fmtDate(r.date)}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.description.replace(/"/g,'&quot;')}">${r.description}</td>
+      <td ${amtClass} style="white-space:nowrap;font-weight:600">${sign}${fmt(r.amount, currency)}</td>
+      <td>
+        <select class="form-control" style="font-size:0.75rem;padding:4px 6px" onchange="_changeImportAcct(${idx}, this.value)">
+          ${coa.map(a => `<option value="${a.id}"${a.id === r.accountId ? ' selected' : ''}>${a.code} — ${a.name}</option>`).join('')}
+        </select>
+      </td>
+      <td>${matchBadge} ${dupBadge}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('acct-content').innerHTML = `
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+      <div class="import-stat"><div class="import-stat-val">${total}</div><div class="import-stat-lbl">Transactions Found</div></div>
+      <div class="import-stat"><div class="import-stat-val" style="color:var(--teal)">${billMatches}</div><div class="import-stat-lbl">Bill Matches</div></div>
+      <div class="import-stat"><div class="import-stat-val" style="color:#a78bfa">${ruleMatches}</div><div class="import-stat-lbl">Rule Matches</div></div>
+      <div class="import-stat"><div class="import-stat-val" style="color:var(--amber)">${dups}</div><div class="import-stat-lbl">Duplicates Flagged</div></div>
+    </div>
+
+    <div class="import-tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:36px"><input type="checkbox" id="ichk-all" checked onchange="_toggleAllImport(this.checked)" title="Select all"></th>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Amount</th>
+            <th style="min-width:200px">Category</th>
+            <th>Match</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+
+    <div class="import-actions-bar">
+      <div style="font-size:0.8rem;color:var(--muted)">
+        <span id="import-count-label">${_importRows.filter(r=>r.include).length} of ${total} selected for import</span>
+        &nbsp;·&nbsp;
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:0.75rem" onclick="showView('import')"><i class="fa-solid fa-arrow-left"></i> Back</button>
+      </div>
+      <button class="btn btn-primary" onclick="_confirmImport()">
+        <i class="fa-solid fa-file-import"></i> Import <span id="import-btn-count">${_importRows.filter(r=>r.include).length}</span> Transactions
+      </button>
+    </div>
+  `;
+}
+
+function _toggleImportRow(idx) {
+  if (_importRows[idx]) {
+    _importRows[idx].include = document.getElementById('ichk-' + idx).checked;
+    _updateImportCount();
+  }
+}
+
+function _toggleAllImport(checked) {
+  _importRows.forEach((r, idx) => {
+    r.include = checked;
+    const chk = document.getElementById('ichk-' + idx);
+    if (chk) chk.checked = checked;
+  });
+  _updateImportCount();
+}
+
+function _changeImportAcct(idx, accountId) {
+  if (_importRows[idx]) _importRows[idx].accountId = accountId;
+}
+
+function _updateImportCount() {
+  const n = _importRows.filter(r => r.include).length;
+  const lbl = document.getElementById('import-count-label');
+  const btn = document.getElementById('import-btn-count');
+  if (lbl) lbl.textContent = `${n} of ${_importRows.length} selected for import`;
+  if (btn) btn.textContent = n;
+}
+
+function _confirmImport() {
+  const bid = getActiveId();
+  if (!bid) return;
+  const toImport = _importRows.filter(r => r.include);
+  if (!toImport.length) { showToast('No transactions selected', 'error'); return; }
+
+  const txns = getTransactions(bid);
+  toImport.forEach(r => {
+    txns.push({
+      id: uid(),
+      date: r.date,
+      description: r.description,
+      amount: r.amount,
+      type: r.type,
+      accountId: r.accountId,
+      reference: r.reference || '',
+      reconciled: false,
+      importedAt: new Date().toISOString(),
+    });
+  });
+  lsSet('acct_transactions_' + bid, txns);
+
+  showToast(`${toImport.length} transactions imported successfully!`, 'success');
+  _importRows = [];
+  showView('bank');
 }
 
 /* ═══════════════════════════════════════════════════
