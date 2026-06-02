@@ -282,6 +282,14 @@ app.listen(PORT, '0.0.0.0', async () => {
   const { startMaturityCron } = require('./jobs/maturityCron');
   startMaturityCron();
 
+  // Start monthly interest crediting cron (1st of month, 06:00 SAST)
+  const { startInterestCron } = require('./jobs/interestCron');
+  startInterestCron();
+
+  // Start automated payout cron (daily 07:30 SAST)
+  const { startPayoutCron } = require('./jobs/payoutCron');
+  startPayoutCron();
+
   // Start monthly statement cron (1st of month, 07:00 SAST)
   const { startStatementCron } = require('./jobs/statementCron');
   startStatementCron();
