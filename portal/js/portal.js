@@ -230,6 +230,7 @@ function navigate(view, btnEl) {
     quests: renderQuestView,
     learn: renderLearnView,
     subaccounts: loadSubAccounts,
+    referral: loadReferralDashboard,
   };
   if (loaders[view]) loaders[view]();
 }
@@ -710,9 +711,14 @@ function renderMyInvestmentCards() {
             <i class="fa-solid fa-hourglass-end"></i> Submit Maturity Instruction
           </button>
         ` : ''}
+        ${inv.status === 'active' ? `
+          <button class="btn btn--secondary btn--full btn--sm" onclick='openEarlyRedemptionModal(${JSON.stringify(inv.id)})' style="margin-top:6px;font-size:0.76rem;color:var(--text-muted);border-color:rgba(0,0,0,0.12)">
+            <i class="fa-solid fa-right-from-bracket"></i> Request Early Redemption
+          </button>
+        ` : ''}
         ${isPaidOut ? `
           <div style="font-size:0.75rem;color:var(--text-muted);text-align:center">
-            <i class="fa-solid fa-check-circle" style="color:var(--green)"></i> 
+            <i class="fa-solid fa-check-circle" style="color:var(--green)"></i>
             Paid out ${Utils.date(inv.payout_date)} — Total: ${Utils.rand(inv.amount + inv.actual_return_amount)}
           </div>
         ` : ''}
@@ -4805,4 +4811,150 @@ async function confirmDisable2FA() {
 
 function openChangePasswordModal() {
   Toast.info('Use the Change Password option in your account settings.');
+}
+
+/* ═══════════════════════════════════════════════
+   INVESTMENT CALCULATOR
+   ═══════════════════════════════════════════════ */
+let _calcPoolId = null;
+
+function openCalcModal() {
+  const sel = document.getElementById('calcPoolSelect');
+  if (sel) {
+    sel.innerHTML = '<option value="">— Custom values —</option>' +
+      (PORTAL.pools || []).filter(p => p.status === 'open').map(p =>
+        `<option value="${p.id}" data-rate="${p.annual_rate}" data-term="${p.term_months}">${p.name} — ${Utils.pct(p.annual_rate)} p.a.</option>`
+      ).join('');
+  }
+  _calcPoolId = null;
+  document.getElementById('calcCTABar').style.display = 'none';
+  updateCalc();
+  Modal.open('calcModal');
+}
+
+function calcLoadPool() {
+  const sel = document.getElementById('calcPoolSelect');
+  const opt = sel?.options[sel.selectedIndex];
+  if (!opt?.value) { _calcPoolId = null; document.getElementById('calcCTABar').style.display = 'none'; return; }
+  _calcPoolId = opt.value;
+  document.getElementById('calcRate').value = opt.dataset.rate || '';
+  document.getElementById('calcTerm').value = opt.dataset.term || '';
+  document.getElementById('calcCTABar').style.display = 'block';
+  updateCalc();
+}
+
+function updateCalc() {
+  const principal = parseFloat(document.getElementById('calcAmount')?.value)  || 0;
+  const rate      = parseFloat(document.getElementById('calcRate')?.value)    || 0;
+  const term      = parseInt(document.getElementById('calcTerm')?.value)      || 0;
+  const compound  = document.getElementById('calcCompound')?.value || 'simple';
+
+  let total = principal;
+  if (principal > 0 && rate > 0 && term > 0) {
+    if      (compound === 'simple')  total = principal * (1 + (rate / 100) * (term / 12));
+    else if (compound === 'monthly') total = principal * Math.pow(1 + (rate / 100) / 12, term);
+    else                             total = principal * Math.pow(1 + (rate / 100), term / 12);
+  }
+
+  const earned   = total - principal;
+  const monthly  = term > 0 ? earned / term : 0;
+  const effYield = principal > 0 ? (earned / principal) * 100 : 0;
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('calcReturn',  Utils.rand(earned));
+  set('calcTotal',   Utils.rand(total));
+  set('calcMonthly', Utils.rand(monthly));
+  set('calcYield',   effYield.toFixed(2) + '%');
+}
+
+function calcGoInvest() {
+  if (_calcPoolId) openInvestModal(_calcPoolId);
+  Modal.close('calcModal');
+}
+
+/* ═══════════════════════════════════════════════
+   LIVE REFERRAL DASHBOARD
+   ═══════════════════════════════════════════════ */
+async function loadReferralDashboard() {
+  if (!PORTAL.investor) await loadPortalData();
+  const inv  = PORTAL.investor;
+  const code = inv?.referral_code || '';
+
+  // Show real referral code + link
+  const codeEl = document.getElementById('referralCode');
+  const linkEl = document.getElementById('referralLink');
+  if (codeEl) codeEl.textContent = code || '—';
+  if (linkEl) linkEl.textContent = code ? `https://svcapital.co.za?ref=${code}` : '—';
+
+  // Find who referred by this investor's code
+  const all      = PORTAL.investors || [];
+  const referred = code ? all.filter(i => i.referred_by === code) : [];
+  const approved = referred.filter(i => !['pending_fica', 'suspended'].includes(i.status));
+  const invested = referred.filter(i => (i.total_invested || 0) > 0);
+  const bonuses  = (PORTAL.transactions || []).filter(t => t.type === 'referral_bonus');
+  const totalBonus = bonuses.reduce((s, t) => s + (t.amount || 0), 0);
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('refStatTotal',    referred.length);
+  set('refStatApproved', approved.length);
+  set('refStatInvested', invested.length);
+  set('refStatBonuses',  Utils.rand(totalBonus));
+
+  const body = document.getElementById('referredInvestorsBody');
+  if (!body) return;
+  if (!referred.length) {
+    body.innerHTML = `<tr><td colspan="4" class="text-center text-muted" style="padding:16px">No referrals yet — share your code to get started <i class="fa-solid fa-arrow-up-right-from-square" style="margin-left:4px"></i></td></tr>`;
+    return;
+  }
+  body.innerHTML = referred.map(r => `
+    <tr>
+      <td><div style="font-weight:600;font-size:0.82rem;color:#1a1a1a">${r.first_name} ${r.last_name}</div></td>
+      <td>${Utils.statusBadge(r.fica_status || r.status)}</td>
+      <td>${(r.total_invested || 0) > 0
+        ? `<span class="badge badge--green">Invested</span>`
+        : `<span class="badge badge--gray">Not yet</span>`}</td>
+      <td style="font-size:0.75rem;color:#6b7280">${Utils.date(r.date_joined)}</td>
+    </tr>
+  `).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   EARLY REDEMPTION REQUEST
+   ═══════════════════════════════════════════════ */
+let _earlyRedemptionInvId = null;
+
+function openEarlyRedemptionModal(invId) {
+  _earlyRedemptionInvId = invId;
+  const inv = PORTAL.investments.find(i => i.id === invId);
+  if (!inv) return;
+  const titleEl = document.getElementById('earlyRedemptionTitle');
+  const infoEl  = document.getElementById('earlyRedemptionInfo');
+  if (titleEl) titleEl.textContent = `Early Redemption — ${inv.pool_name}`;
+  if (infoEl)  infoEl.textContent  = `${Utils.rand(inv.amount)} invested · Matures ${Utils.date(inv.maturity_date)}`;
+  const reason = document.getElementById('earlyRedemptionReason');
+  if (reason) reason.value = '';
+  Modal.open('earlyRedemptionModal');
+}
+
+async function submitEarlyRedemption() {
+  const reason = (document.getElementById('earlyRedemptionReason')?.value || '').trim();
+  if (!reason) { Toast.error('Please provide a reason for your request'); return; }
+  if (!_earlyRedemptionInvId) return;
+  const inv = PORTAL.investments.find(i => i.id === _earlyRedemptionInvId);
+  try {
+    await API.tables.post('support_tickets', {
+      investor_id:   PORTAL.investor.id,
+      investor_name: `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
+      subject:       `Early Redemption Request — ${inv?.pool_name || 'Investment'}`,
+      message:       reason,
+      status:        'open',
+      priority:      'high',
+      category:      'early_redemption',
+    });
+    Toast.success('Request submitted. Our team will review it and contact you within 2 business days.');
+    Modal.close('earlyRedemptionModal');
+    _earlyRedemptionInvId = null;
+  } catch (e) {
+    Toast.error(e.message || 'Failed to submit request. Please try again.');
+  }
 }

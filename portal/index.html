@@ -8,6 +8,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SV Capital — Investor Portal</title>
+  <meta name="theme-color" content="#FF9B0C" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="SV Capital" />
+  <link rel="manifest" href="manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
@@ -499,12 +505,17 @@
             <h2 class="section-banner__title">Open Investment Pools</h2>
             <p class="section-banner__sub">Invest in real, asset-backed opportunities. All investments are FSCA-regulated via SmartVest Financial Services (FSP 52449).</p>
           </div>
-          <div class="tab-bar" style="align-self:center">
-            <button class="tab-btn active" onclick="filterMarket('all', this)">All</button>
-            <button class="tab-btn" onclick="filterMarket('cattle', this)">Cattle</button>
-            <button class="tab-btn" onclick="filterMarket('solar', this)">Solar</button>
-            <button class="tab-btn" onclick="filterMarket('short_term', this)">Short-Term</button>
-            <button class="tab-btn" onclick="filterMarket('delivery_bike', this)">Delivery</button>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div class="tab-bar" style="align-self:center">
+              <button class="tab-btn active" onclick="filterMarket('all', this)">All</button>
+              <button class="tab-btn" onclick="filterMarket('cattle', this)">Cattle</button>
+              <button class="tab-btn" onclick="filterMarket('solar', this)">Solar</button>
+              <button class="tab-btn" onclick="filterMarket('short_term', this)">Short-Term</button>
+              <button class="tab-btn" onclick="filterMarket('delivery_bike', this)">Delivery</button>
+            </div>
+            <button class="btn btn--secondary btn--sm" onclick="openCalcModal()" style="white-space:nowrap">
+              <i class="fa-solid fa-calculator"></i> Calculate Returns
+            </button>
           </div>
         </div>
 
@@ -792,11 +803,25 @@
               <div class="panel__header"><span class="panel__title">Referral Stats</span></div>
               <div class="panel__body">
                 <div class="info-list">
-                  <div class="info-row"><span class="info-row__label">Total Referred</span><span class="info-row__value text-gold">0</span></div>
-                  <div class="info-row"><span class="info-row__label">FICA Approved</span><span class="info-row__value">0</span></div>
-                  <div class="info-row"><span class="info-row__label">Invested</span><span class="info-row__value">0</span></div>
-                  <div class="info-row"><span class="info-row__label">Bonuses Earned</span><span class="info-row__value text-green">R0</span></div>
+                  <div class="info-row"><span class="info-row__label">Total Referred</span><span class="info-row__value text-gold" id="refStatTotal">—</span></div>
+                  <div class="info-row"><span class="info-row__label">FICA Approved</span><span class="info-row__value" id="refStatApproved">—</span></div>
+                  <div class="info-row"><span class="info-row__label">Invested</span><span class="info-row__value" id="refStatInvested">—</span></div>
+                  <div class="info-row"><span class="info-row__label">Bonuses Earned</span><span class="info-row__value text-green" id="refStatBonuses">—</span></div>
                 </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel__header"><span class="panel__title">Who You've Referred</span></div>
+              <div style="overflow-x:auto">
+                <table class="data-table" style="font-size:0.8rem">
+                  <thead><tr>
+                    <th>Name</th><th>FICA</th><th>Invested</th><th>Joined</th>
+                  </tr></thead>
+                  <tbody id="referredInvestorsBody">
+                    <tr><td colspan="4" class="text-center text-muted" style="padding:16px">Loading…</td></tr>
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -1819,8 +1844,108 @@
   </div>
 </div>
 
+<!-- Investment Calculator Modal -->
+<div class="modal-overlay" id="calcModal" onclick="if(event.target===this)Modal.close('calcModal')">
+  <div class="modal" style="max-width:520px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-calculator" style="color:#FF9B0C;margin-right:8px"></i>Investment Calculator</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">See what your investment could earn</div>
+      </div>
+      <button class="modal__close" onclick="Modal.close('calcModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" style="display:flex;flex-direction:column;gap:14px">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Pre-fill from a pool (optional)</label>
+        <select class="form-input" id="calcPoolSelect" onchange="calcLoadPool()">
+          <option value="">— Custom values —</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Investment Amount (R)</label>
+          <input type="number" class="form-input" id="calcAmount" value="50000" min="1000" oninput="updateCalc()">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Annual Rate (%)</label>
+          <input type="number" class="form-input" id="calcRate" value="14" min="0" max="100" step="0.1" oninput="updateCalc()">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Term (months)</label>
+          <input type="number" class="form-input" id="calcTerm" value="12" min="1" max="360" oninput="updateCalc()">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Interest Type</label>
+          <select class="form-input" id="calcCompound" onchange="updateCalc()">
+            <option value="simple">Simple Interest</option>
+            <option value="monthly">Monthly Compound</option>
+            <option value="annual">Annual Compound</option>
+          </select>
+        </div>
+      </div>
+      <!-- Results card -->
+      <div style="background:linear-gradient(135deg,rgba(255,155,12,0.08),rgba(255,82,41,0.05));border:1px solid rgba(255,155,12,0.25);border-radius:12px;padding:18px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;text-align:center">
+          <div>
+            <div style="font-size:0.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Expected Return</div>
+            <div id="calcReturn" style="font-size:1.55rem;font-weight:800;color:#FF9B0C">—</div>
+          </div>
+          <div>
+            <div style="font-size:0.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Total at Maturity</div>
+            <div id="calcTotal" style="font-size:1.55rem;font-weight:800;color:#1a2235">—</div>
+          </div>
+          <div>
+            <div style="font-size:0.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Monthly Gain</div>
+            <div id="calcMonthly" style="font-size:1.1rem;font-weight:700;color:#22c55e">—</div>
+          </div>
+          <div>
+            <div style="font-size:0.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Effective Yield</div>
+            <div id="calcYield" style="font-size:1.1rem;font-weight:700;color:#6b7280">—</div>
+          </div>
+        </div>
+      </div>
+      <div id="calcCTABar" style="display:none;background:#F7F8FA;border-radius:10px;padding:10px 14px;font-size:0.82rem;color:#6b7280;text-align:center">
+        Ready to invest in this pool? <a href="#" onclick="calcGoInvest();return false" style="color:#FF9B0C;font-weight:700">Invest now →</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Early Redemption Modal -->
+<div class="modal-overlay" id="earlyRedemptionModal" onclick="if(event.target===this)Modal.close('earlyRedemptionModal')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title" id="earlyRedemptionTitle">Request Early Redemption</span>
+        <div id="earlyRedemptionInfo" style="font-size:0.75rem;color:var(--text-muted)"></div>
+      </div>
+      <button class="modal__close" onclick="Modal.close('earlyRedemptionModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="info-box" style="background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.18);border-radius:10px;padding:12px 14px;font-size:0.81rem;color:#b91c1c;margin-bottom:16px;line-height:1.5">
+        <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>
+        Early redemption is subject to review and may incur a penalty. Our team will assess your request and respond within 2 business days.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reason for early redemption <span style="color:#ef4444">*</span></label>
+        <textarea class="form-input" id="earlyRedemptionReason" rows="4" placeholder="Please describe why you need to exit this investment early…" style="resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('earlyRedemptionModal')">Cancel</button>
+      <button class="btn btn--danger" onclick="submitEarlyRedemption()"><i class="fa-solid fa-paper-plane"></i> Submit Request</button>
+    </div>
+  </div>
+</div>
+
 <script src="../js/api.js?v=2"></script>
 <script src="js/portal.js"></script>
 <script src="../js/sv-intelligence.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js', { scope: './' })
+      .catch(e => console.warn('[PWA] SW registration failed:', e));
+  }
+</script>
 </body>
 </html>
