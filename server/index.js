@@ -262,7 +262,7 @@ app.use((err, req, res, _next) => {
 });
 
 /* ─── Start ─── */
-app.listen(PORT, '0.0.0.0', async () => {
+const server = app.listen(PORT, '0.0.0.0', async () => {
   const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
   console.log('');
   console.log('🚀 SV Capital server started');
@@ -297,9 +297,34 @@ app.listen(PORT, '0.0.0.0', async () => {
   const { startStatementCron } = require('./jobs/statementCron');
   startStatementCron();
 
+  // Start monthly director report cron (1st of month, 07:00 UTC / 09:00 SAST)
+  const { startDirectorReportCron } = require('./jobs/directorReportCron');
+  startDirectorReportCron();
+
   // Start recurring investment cron (1st of month, 03:00 UTC / 05:00 SAST)
   const { startRecurringCron } = require('./jobs/recurringCron');
   startRecurringCron();
 });
+
+/* ─── Graceful Shutdown ─── */
+async function shutdown(signal) {
+  console.log(`\n[${signal}] Graceful shutdown initiated…`);
+  server.close(async () => {
+    console.log('[shutdown] HTTP server closed');
+    try {
+      const pool = require('./db/pool');
+      await pool.end();
+      console.log('[shutdown] DB pool closed');
+    } catch (e) {
+      console.error('[shutdown] DB pool close error:', e.message);
+    }
+    process.exit(0);
+  });
+  // Force exit after 15 seconds if shutdown stalls
+  setTimeout(() => { console.error('[shutdown] Forced exit after timeout'); process.exit(1); }, 15000);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
 
 module.exports = app;

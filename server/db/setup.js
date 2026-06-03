@@ -337,7 +337,20 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investors ADD COLUMN recurring_enabled BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Withdrawal notes column on transactions
   BEGIN ALTER TABLE transactions ADD COLUMN notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Investment pool capacity columns (Feature: waitlist)
+  BEGIN ALTER TABLE investment_pools ADD COLUMN max_capacity NUMERIC(15,2) DEFAULT NULL; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investment_pools ADD COLUMN current_invested NUMERIC(15,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
+
+CREATE TABLE IF NOT EXISTS investment_waitlist (
+  id TEXT PRIMARY KEY,
+  investor_id TEXT NOT NULL,
+  pool_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  notified_at TIMESTAMPTZ,
+  notified BOOLEAN DEFAULT false,
+  UNIQUE(investor_id, pool_id)
+);
 
 CREATE TABLE IF NOT EXISTS investor_notes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -723,6 +736,33 @@ async function autoSetup() {
       END $$
     `);
     console.log('✅ Investor FICA + gamification columns ready.');
+
+    // 1c. Performance indexes (each wrapped individually so one failure won't abort the rest)
+    const indexes = [
+      'CREATE INDEX IF NOT EXISTS idx_transactions_investor_id ON transactions(investor_id)',
+      'CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)',
+      'CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_investments_investor_id ON investments(investor_id)',
+      'CREATE INDEX IF NOT EXISTS idx_investments_status ON investments(status)',
+      'CREATE INDEX IF NOT EXISTS idx_investments_pool_id ON investments(pool_id)',
+      'CREATE INDEX IF NOT EXISTS idx_support_tickets_investor_id ON support_tickets(investor_id)',
+      'CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status)',
+      'CREATE INDEX IF NOT EXISTS idx_kyc_documents_investor_id ON kyc_documents(investor_id)',
+      'CREATE INDEX IF NOT EXISTS idx_audit_events_actor_id ON audit_events(actor_id)',
+      'CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_investors_status ON investors(status)',
+      'CREATE INDEX IF NOT EXISTS idx_investors_fica_status ON investors(fica_status)',
+      'CREATE INDEX IF NOT EXISTS idx_investment_waitlist_pool_id ON investment_waitlist(pool_id)',
+      'CREATE INDEX IF NOT EXISTS idx_investment_waitlist_investor_id ON investment_waitlist(investor_id)',
+    ];
+    for (const sql of indexes) {
+      try {
+        await pool.query(sql);
+      } catch (idxErr) {
+        console.warn('⚠️  Index creation warning:', idxErr.message);
+      }
+    }
+    console.log('✅ Performance indexes ready.');
 
     // 2. Check if the COO account already exists — if so, skip seeding entirely
     const { rows: existing } = await pool.query(

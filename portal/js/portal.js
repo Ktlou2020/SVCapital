@@ -24,6 +24,7 @@ let PORTAL = {
   pools: [],
   tickets: [],
   subAccounts: [],
+  waitlist: [],
   charts: {},
   myInvFilter: 'all',
   marketFilter: 'all',
@@ -396,7 +397,13 @@ async function loadPortalData() {
     // Ensure investor object is never null so statement guard passes
     if (!PORTAL.investor) PORTAL.investor = { id: demoId, first_name: 'Thabo', last_name: 'Khumalo' };
 
+    // Load waitlist entries for this investor (non-blocking)
+    const waitlistRes = await API._fetch('GET', 'tables/investment_waitlist', null, { investor_id: PORTAL.investor.id, limit: 50 }).catch(() => ({ data: [] }));
+    PORTAL.waitlist = waitlistRes.data || [];
+
     renderOverview();
+    renderEquityChart();
+    renderOnboardingWizard();
     updateStmtQuickStats();
     _renderBankDetailsPanel();
 
@@ -522,6 +529,196 @@ function renderOverview() {
   renderPortfolioTrendChart();
   renderAllocationChart();
   renderXPWidget();
+}
+
+/* ─── Equity Curve Chart ─────────────────────────────────────────── */
+function renderEquityChart() {
+  const canvas = document.getElementById('equityChart');
+  if (!canvas) return;
+
+  PORTAL.charts = PORTAL.charts || {};
+  if (PORTAL.charts.equity) { PORTAL.charts.equity.destroy(); PORTAL.charts.equity = null; }
+
+  const now = new Date();
+  const months = [];
+  const monthLabels = [];
+
+  // Build last 12 months
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleString('en-ZA', { month: 'short' }) });
+    monthLabels.push(d.toLocaleString('en-ZA', { month: 'short' }));
+  }
+
+  // Compute cumulative portfolio value at end of each month
+  // deposits, returns, payout, referral_bonus, adjustment (positive) → ADD
+  // withdrawal → SUBTRACT
+  // investment → NEITHER (money moved wallet→invested, total wealth unchanged)
+  const txns = (PORTAL.transactions || []).slice().sort((a, b) =>
+    new Date(a.transaction_date || a.created_at || 0) - new Date(b.transaction_date || b.created_at || 0)
+  );
+
+  const addTypes = new Set(['deposit', 'return', 'payout', 'referral_bonus', 'adjustment']);
+  const subTypes = new Set(['withdrawal']);
+
+  // Build a running cumulative sum month by month
+  // First, group net delta per month key
+  const deltaMap = {};
+  for (const t of txns) {
+    const raw = t.transaction_date || t.created_at;
+    if (!raw) continue;
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) continue;
+    const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`;
+    const amt = parseFloat(t.amount) || 0;
+    let delta = 0;
+    if (addTypes.has(t.type) && amt > 0) delta = amt;
+    else if (subTypes.has(t.type) && amt > 0) delta = -amt;
+    deltaMap[key] = (deltaMap[key] || 0) + delta;
+  }
+
+  // Compute cumulative values
+  const values = [];
+  let cumulative = 0;
+  for (const m of months) {
+    const key = `${m.year}-${String(m.month).padStart(2,'0')}`;
+    cumulative += (deltaMap[key] || 0);
+    values.push(Math.max(0, Math.round(cumulative)));
+  }
+
+  // Replace last data point with actual current portfolio value (wallet + invested)
+  const currentValue = (parseFloat(PORTAL.investor?.wallet_balance) || 0) +
+                       (parseFloat(PORTAL.investor?.total_invested)  || 0);
+  if (values.length > 0) values[values.length - 1] = Math.max(values[values.length - 1], Math.round(currentValue));
+
+  PORTAL.charts.equity = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: monthLabels,
+      datasets: [{
+        label: 'Portfolio Value',
+        data: values,
+        borderColor: '#FF9B0C',
+        backgroundColor: 'rgba(255,155,12,0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#FF9B0C'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: c => ' R ' + c.parsed.y.toLocaleString('en-ZA')
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } }
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.06)' },
+          ticks: {
+            color: 'rgba(255,255,255,0.4)',
+            callback: v => 'R' + (v / 1000).toFixed(0) + 'k',
+            font: { size: 10 }
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ─── Onboarding Wizard ──────────────────────────────────────────── */
+function renderOnboardingWizard() {
+  const wizard = document.getElementById('onboardingWizard');
+  if (!wizard) return;
+
+  // Check dismiss state first
+  if (localStorage.getItem('svc_onboard_dismissed') === '1') {
+    wizard.style.display = 'none';
+    return;
+  }
+
+  const inv = PORTAL.investor;
+  if (!inv) return;
+
+  const ficaDone   = inv.fica_status === 'approved';
+  const bankDone   = inv.bank_account_status && inv.bank_account_status !== 'none';
+  const walletDone = parseFloat(inv.wallet_balance) > 0;
+  const investDone = !!(PORTAL.investments && PORTAL.investments.length > 0);
+
+  // If all steps done, hide
+  if (ficaDone && bankDone && walletDone && investDone) {
+    wizard.style.display = 'none';
+    return;
+  }
+
+  const stepDefs = [
+    {
+      label: 'FICA / KYC Verification',
+      icon: 'id-card',
+      done: ficaDone,
+      action: "navigate('profile', document.querySelector('[data-view=profile]'))",
+      actionLabel: 'Verify Now'
+    },
+    {
+      label: 'Add Bank Account',
+      icon: 'building-columns',
+      done: bankDone,
+      action: 'openBankDetailsModal()',
+      actionLabel: 'Add Account'
+    },
+    {
+      label: 'Top Up Wallet',
+      icon: 'wallet',
+      done: walletDone,
+      action: 'openTopUpModal()',
+      actionLabel: 'Top Up'
+    },
+    {
+      label: 'Make First Investment',
+      icon: 'coins',
+      done: investDone,
+      action: "navigate('marketplace', document.querySelector('[data-view=marketplace]'))",
+      actionLabel: 'Browse Pools'
+    }
+  ];
+
+  const doneCount = stepDefs.filter(s => s.done).length;
+  const progressPct = (doneCount / stepDefs.length) * 100;
+
+  const stepsEl = document.getElementById('wizardSteps');
+  if (stepsEl) {
+    stepsEl.innerHTML = stepDefs.map(s => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.03)">
+        <div style="width:22px;height:22px;border-radius:50%;background:${s.done ? '#22c55e' : 'rgba(255,155,12,0.2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="fa-solid ${s.done ? 'fa-check' : 'fa-' + s.icon}" style="font-size:0.65rem;color:${s.done ? '#fff' : '#FF9B0C'}"></i>
+        </div>
+        <div style="flex:1">
+          <div style="font-size:0.82rem;font-weight:${s.done ? '600' : '700'};color:${s.done ? 'var(--text-muted)' : 'var(--white)'};${s.done ? 'text-decoration:line-through' : ''}">${s.label}</div>
+        </div>
+        ${!s.done ? `<button onclick="${s.action}" class="btn btn--primary btn--sm" style="padding:4px 12px;font-size:0.72rem">${s.actionLabel}</button>` : ''}
+      </div>
+    `).join('');
+  }
+
+  const bar = document.getElementById('wizardProgressBar');
+  if (bar) bar.style.width = progressPct + '%';
+
+  wizard.style.display = 'block';
+}
+
+function dismissOnboarding() {
+  localStorage.setItem('svc_onboard_dismissed', '1');
+  const wizard = document.getElementById('onboardingWizard');
+  if (wizard) wizard.style.display = 'none';
 }
 
 function renderOverviewInvestments() {
@@ -1612,10 +1809,11 @@ const _POOL_META = {
 
 function renderMarketplace() {
   const grid = document.getElementById('marketplaceGrid');
-  const openPools = PORTAL.pools.filter(p => p.status === 'open');
+  // Include waitlisted pools too so they appear in the marketplace
+  const visiblePools = PORTAL.pools.filter(p => p.status === 'open' || p.status === 'waitlist');
   const filtered = PORTAL.marketFilter === 'all'
-    ? openPools
-    : openPools.filter(p => {
+    ? visiblePools
+    : visiblePools.filter(p => {
         if (PORTAL.marketFilter === 'solar') return p.product_type.includes('solar');
         return p.product_type === PORTAL.marketFilter;
       });
@@ -1637,6 +1835,9 @@ function renderMarketplace() {
     return;
   }
 
+  const waitlist = PORTAL.waitlist || [];
+  const investorId = PORTAL.investor?.id;
+
   grid.innerHTML = filtered.map(pool => {
     const pi   = Utils.productInfo(pool.product_type);
     const pct  = Utils.poolFillPct(pool);
@@ -1645,13 +1846,70 @@ function renderMarketplace() {
     const canInvest = walletBal >= pool.min_investment;
     const urgency   = days !== null && days <= 7;
 
+    // Waitlist state
+    const isWaitlisted = pool.status === 'waitlist' || pool.is_waitlisted;
+    const alreadyOnWaitlist = waitlist.some(w => w.pool_id === pool.id && w.investor_id === investorId);
+
+    // Capacity progress bar
+    const maxCap = parseFloat(pool.max_capacity) || 0;
+    const curInv = parseFloat(pool.current_invested) || parseFloat(pool.raised_amount) || 0;
+    let capacityBarHtml = '';
+    if (maxCap > 0) {
+      const capPct = Math.min(100, Math.round((curInv / maxCap) * 100));
+      const capColor = capPct >= 90 ? '#ef4444' : capPct >= 70 ? '#f59e0b' : '#22c55e';
+      capacityBarHtml = `
+        <div style="margin-top:6px">
+          <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--text-muted);margin-bottom:3px">
+            <span>Capacity</span>
+            <span style="color:${capColor};font-weight:700">${capPct}% filled</span>
+          </div>
+          <div style="height:4px;border-radius:2px;background:rgba(255,255,255,0.1);overflow:hidden">
+            <div style="height:100%;width:${capPct}%;background:${capColor};border-radius:2px;transition:width 0.4s"></div>
+          </div>
+        </div>`;
+    }
+
+    // CTA area
+    let ctaHtml;
+    if (isWaitlisted) {
+      if (alreadyOnWaitlist) {
+        ctaHtml = `
+          <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+            <span class="badge badge--green" style="flex:1;justify-content:center;padding:10px 0"><i class="fa-solid fa-check"></i> On Waitlist</span>
+          </div>`;
+      } else {
+        ctaHtml = `
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:2px">
+            <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;font-size:0.78rem;color:#ef4444">
+              <i class="fa-solid fa-lock"></i> Pool Full — Waitlist Available
+            </div>
+            <button class="btn btn--secondary btn--full" onclick='joinWaitlist(${JSON.stringify(pool.id)})'>
+              <i class="fa-solid fa-clock"></i> Join Waitlist
+            </button>
+          </div>`;
+      }
+    } else if (canInvest) {
+      ctaHtml = `<button class="btn btn--primary btn--full" onclick='openInvestModal(${JSON.stringify(pool.id)})'>
+                   <i class="fa-solid fa-coins"></i> Invest Now
+                 </button>`;
+    } else {
+      ctaHtml = `<div class="pool-card__need-topup">
+                   <i class="fa-solid fa-wallet"></i>
+                   <span>Need ${Utils.rand(pool.min_investment - walletBal)} more in wallet</span>
+                   <button class="btn btn--ghost btn--sm" onclick="navigate('wallet',document.querySelector('[data-view=wallet]'))">Top Up</button>
+                 </div>`;
+    }
+
     return `
       <div class="market-pool-card">
         <div class="flex-between">
           <div class="market-pool-card__icon" style="background:${pi.color}18;color:${pi.color}"><i class="fa-solid ${pi.icon}"></i></div>
           <div style="display:flex;gap:6px;align-items:center">
             <span class="pool-risk-badge" style="background:${meta.riskColor}18;color:${meta.riskColor}">${meta.risk} risk</span>
-            ${urgency ? `<span class="pool-urgency-badge"><i class="fa-solid fa-fire"></i> Closing soon</span>` : Utils.statusBadge(pool.status)}
+            ${isWaitlisted
+              ? '<span class="badge badge--red" style="font-size:0.65rem"><i class="fa-solid fa-lock"></i> Pool Full</span>'
+              : (urgency ? '<span class="pool-urgency-badge"><i class="fa-solid fa-fire"></i> Closing soon</span>' : Utils.statusBadge(pool.status))
+            }
           </div>
         </div>
 
@@ -1689,21 +1947,54 @@ function renderMarketplace() {
             <span>${pct}% funded</span>
           </div>
           <div class="progress-bar"><div class="progress-fill${pool.product_type.includes('solar') ? ' progress-fill--green' : pool.product_type === 'short_term' ? ' progress-fill--blue' : ''}" style="width:${pct}%"></div></div>
+          ${capacityBarHtml}
         </div>
 
-        ${canInvest
-          ? `<button class="btn btn--primary btn--full" onclick='openInvestModal(${JSON.stringify(pool.id)})'>
-               <i class="fa-solid fa-coins"></i> Invest Now
-             </button>`
-          : `<div class="pool-card__need-topup">
-               <i class="fa-solid fa-wallet"></i>
-               <span>Need ${Utils.rand(pool.min_investment - walletBal)} more in wallet</span>
-               <button class="btn btn--ghost btn--sm" onclick="navigate('wallet',document.querySelector('[data-view=wallet]'))">Top Up</button>
-             </div>`
-        }
+        ${ctaHtml}
       </div>
     `;
   }).join('');
+}
+
+/* ─── Waitlist ───────────────────────────────────────────────────── */
+async function joinWaitlist(poolId) {
+  const investorId = PORTAL.investor?.id;
+  if (!investorId) { Toast.error('Please log in to join the waitlist'); return; }
+
+  // Check already on waitlist
+  if ((PORTAL.waitlist || []).some(w => w.pool_id === poolId && w.investor_id === investorId)) {
+    Toast.info('You are already on the waitlist for this pool.');
+    return;
+  }
+
+  try {
+    const entry = {
+      id: Utils.genId('WL'),
+      investor_id: investorId,
+      pool_id: poolId,
+      created_at: new Date().toISOString()
+    };
+
+    await API._fetch('POST', 'tables/investment_waitlist', entry);
+
+    // Update local state
+    PORTAL.waitlist = PORTAL.waitlist || [];
+    PORTAL.waitlist.push(entry);
+
+    // Persist to localStorage for instant UI
+    try {
+      const key = `svc_waitlist_${investorId}`;
+      const stored = JSON.parse(localStorage.getItem(key) || '[]');
+      stored.push(entry);
+      localStorage.setItem(key, JSON.stringify(stored));
+    } catch (_) { /* localStorage unavailable */ }
+
+    Toast.success("You're on the waitlist! We'll notify you when this pool reopens.");
+    renderMarketplace();
+  } catch (e) {
+    console.error('joinWaitlist error:', e);
+    Toast.error('Could not join waitlist. Please try again.');
+  }
 }
 
 function openInvestModal(poolId) {
@@ -2015,25 +2306,6 @@ async function loadSupport() {
     PORTAL.tickets = (res.data || []).filter(t => t.investor_id === DEMO_INVESTOR_ID);
     renderMyTickets();
   } catch (e) { Toast.error('Failed to load tickets'); }
-}
-
-function renderMyTickets() {
-  const body = document.getElementById('myTicketsBody');
-  if (!PORTAL.tickets.length) {
-    body.innerHTML = '<div class="empty-state" style="padding:16px"><i class="fa-solid fa-ticket"></i><p>No support tickets yet.</p></div>';
-    return;
-  }
-
-  body.innerHTML = PORTAL.tickets.map(t => `
-    <div class="my-ticket-item">
-      <div class="my-ticket-header">
-        <span class="my-ticket-subject">${t.subject}</span>
-        ${Utils.statusBadge(t.status)}
-      </div>
-      <div class="my-ticket-meta">${Utils.date(t.created_at)} · ${t.category?.replace(/_/g, ' ')}</div>
-      ${t.admin_response ? `<div class="my-ticket-response"><strong>Admin:</strong> ${t.admin_response}</div>` : ''}
-    </div>
-  `).join('');
 }
 
 /* ── Ticket attachment state ─── */

@@ -45,8 +45,12 @@ function signToken(user) {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password)
-      return res.status(400).json({ error: 'Email and password are required.' });
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email address is required.' });
+    }
+    if (!password || typeof password !== 'string' || password.length < 1) {
+      return res.status(400).json({ error: 'Password is required.' });
+    }
 
     const { rows } = await pool.query(
       'SELECT * FROM users WHERE email = $1 LIMIT 1',
@@ -166,6 +170,12 @@ router.post('/register', async (req, res) => {
       riskProfile = 'moderate', referredBy = '', notes = '',
     } = req.body;
 
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email address is required.' });
+    }
+    if (!password || typeof password !== 'string' || password.length < 1) {
+      return res.status(400).json({ error: 'Password is required.' });
+    }
     if (!email || !password || !firstName || !lastName)
       return res.status(400).json({ error: 'Email, password, first name and last name are required.' });
 
