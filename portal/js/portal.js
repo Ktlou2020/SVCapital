@@ -4853,24 +4853,6 @@ td:last-child{text-align:right;font-weight:600}
    ═══════════════════════════════════════════════ */
 let _2faSecret = null; // temp storage during setup flow
 
-async function load2FAStatus() {
-  try {
-    const data = await API._fetch('GET', 'auth/2fa/status');
-    const label = document.getElementById('twoFAToggleLabel');
-    if (label) label.textContent = data.enabled ? 'Disable 2FA' : 'Enable 2FA';
-    const btn = document.getElementById('twoFAToggleBtn');
-    if (btn) {
-      btn.className = data.enabled
-        ? 'btn btn--danger btn--full'
-        : 'btn btn--secondary btn--full';
-    }
-    return data.enabled;
-  } catch (e) {
-    const label = document.getElementById('twoFAToggleLabel');
-    if (label) label.textContent = 'Enable 2FA';
-  }
-}
-
 async function toggle2FA() {
   const enabled = await load2FAStatus();
   if (enabled) {
@@ -4911,11 +4893,18 @@ async function open2FASetupModal() {
       <button class="btn btn--secondary" onclick="Modal.close('twoFAModal')">Cancel</button>
       <button class="btn btn--primary" onclick="confirm2FASetup()"><i class="fa-solid fa-check"></i> Enable 2FA</button>
     `;
-    // Render QR code
-    if (typeof QRCode !== 'undefined') {
-      new QRCode(document.getElementById('qrCodeCanvas'), { text: data.uri, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+    // Render QR code using qrcode npm browser build (QRCode.toDataURL / toCanvas)
+    const qrEl = document.getElementById('qrCodeCanvas');
+    if (typeof QRCode !== 'undefined' && typeof QRCode.toDataURL === 'function') {
+      QRCode.toDataURL(data.uri, { width: 180, margin: 1, color: { dark: '#000000', light: '#ffffff' } }, (err, url) => {
+        if (err) {
+          qrEl.innerHTML = '<div style="font-size:0.78rem;color:#ef4444">QR generation failed — use the manual key above</div>';
+        } else {
+          qrEl.innerHTML = `<img src="${url}" width="180" height="180" style="border-radius:8px;display:block">`;
+        }
+      });
     } else {
-      document.getElementById('qrCodeCanvas').innerHTML = '<div style="font-size:0.78rem;color:#ef4444">QR library not loaded — use the manual key above</div>';
+      qrEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted)">Scan using your authenticator app with the key shown below.</div>';
     }
   } catch (e) {
     body.innerHTML = '<div style="color:#ef4444;text-align:center;padding:20px">Failed to generate 2FA secret. Please try again.</div>';
@@ -5787,8 +5776,7 @@ function renderRiskProfile() {
    FEATURE: ENHANCED 2FA STATUS IN PROFILE
    ═══════════════════════════════════════════════ */
 
-/* Patch load2FAStatus to also update the status row in profile */
-const _orig_load2FAStatus = load2FAStatus;
+/* load2FAStatus — fetches 2FA status and updates all UI elements */
 async function load2FAStatus() {
   try {
     const data = await API._fetch('GET', 'auth/2fa/status');
