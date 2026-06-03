@@ -698,16 +698,51 @@
             <div class="panel mb-16">
               <div class="panel__header"><span class="panel__title">Security</span></div>
               <div class="panel__body" style="display:flex;flex-direction:column;gap:8px">
+                <!-- 2FA status row -->
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--ci-bg-light,#F7F8FA);border-radius:8px;border:1px solid rgba(0,0,0,0.06)">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <i class="fa-solid fa-mobile-screen-button" style="color:var(--gold);font-size:1rem"></i>
+                    <div>
+                      <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">Two-Factor Authentication</div>
+                      <div id="twoFAStatusText" style="font-size:0.72rem;color:var(--text-muted)">Loading…</div>
+                    </div>
+                  </div>
+                  <span id="twoFAStatusBadge" style="display:none"></span>
+                </div>
                 <button class="btn btn--secondary btn--full" onclick="openChangePasswordModal()"><i class="fa-solid fa-key"></i> Change Password</button>
                 <button class="btn btn--secondary btn--full" id="twoFAToggleBtn" onclick="toggle2FA()"><i class="fa-solid fa-mobile"></i> <span id="twoFAToggleLabel">Loading…</span></button>
+                <!-- Push notifications toggle -->
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--ci-bg-light,#F7F8FA);border-radius:8px;border:1px solid rgba(0,0,0,0.06)">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <i class="fa-solid fa-bell" style="color:var(--gold);font-size:1rem"></i>
+                    <div>
+                      <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">Push Notifications</div>
+                      <div id="pushNotifStatusText" style="font-size:0.72rem;color:var(--text-muted)">Enable to receive investment alerts</div>
+                    </div>
+                  </div>
+                  <label style="position:relative;display:inline-block;width:42px;height:24px;flex-shrink:0">
+                    <input type="checkbox" id="pushNotifToggle" onchange="togglePushNotifications(this.checked)" style="opacity:0;width:0;height:0">
+                    <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:24px;transition:.3s" id="pushNotifSlider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel mb-16">
+              <div class="panel__header"><span class="panel__title">Recurring Investment</span></div>
+              <div class="panel__body">
+                <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px">Automatically invest a fixed amount each month into your chosen pool.</div>
+                <div id="recurringStatusSummary" style="display:none;padding:10px 14px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;font-size:0.82rem;margin-bottom:12px"></div>
+                <button class="btn btn--secondary btn--full" onclick="openRecurringModal()"><i class="fa-solid fa-rotate"></i> Set Up Recurring Investment</button>
               </div>
             </div>
 
             <div class="panel">
-              <div class="panel__header"><span class="panel__title">Privacy & Data</span></div>
-              <div class="panel__body">
-                <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px">In terms of POPIA, you have the right to access all personal data we hold about you. Download a complete copy below.</div>
-                <button class="btn btn--secondary btn--full" onclick="downloadMyData()"><i class="fa-solid fa-download"></i> Download My Data</button>
+              <div class="panel__header"><span class="panel__title">Privacy &amp; Data (POPIA)</span></div>
+              <div class="panel__body" style="display:flex;flex-direction:column;gap:8px">
+                <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:4px">In terms of POPIA, you have the right to access and delete all personal data we hold about you.</div>
+                <button class="btn btn--secondary btn--full" onclick="downloadMyData()"><i class="fa-solid fa-download"></i> Export My Data (POPIA)</button>
+                <button class="btn btn--full" style="background:rgba(239,68,68,0.06);color:#ef4444;border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:9px 14px;font-size:0.85rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px" onclick="openDeleteAccountModal()"><i class="fa-solid fa-trash-can"></i> Request Account Deletion</button>
               </div>
             </div>
           </div>
@@ -766,9 +801,23 @@
             </div>
 
             <!-- My tickets -->
-            <div class="panel">
+            <div class="panel" id="myTicketsPanel">
               <div class="panel__header"><span class="panel__title">My Support Tickets</span></div>
               <div id="myTicketsBody" style="padding:8px">Loading...</div>
+            </div>
+
+            <!-- Ticket conversation view (hidden until a ticket is selected) -->
+            <div class="panel" id="ticketConversationPanel" style="display:none">
+              <div class="panel__header" style="display:flex;align-items:center;gap:10px">
+                <button onclick="closeTicketConversation()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1rem;padding:0" title="Back to tickets"><i class="fa-solid fa-arrow-left"></i></button>
+                <span class="panel__title" id="convTicketSubject">Conversation</span>
+                <span id="convTicketStatus" style="margin-left:auto"></span>
+              </div>
+              <div id="ticketConversationThread" style="padding:16px;display:flex;flex-direction:column;gap:12px;max-height:420px;overflow-y:auto"></div>
+              <div style="padding:12px 16px;border-top:1px solid rgba(0,0,0,0.07)">
+                <textarea id="ticketReplyInput" class="form-textarea" rows="3" placeholder="Type your reply…" style="resize:vertical;margin-bottom:8px"></textarea>
+                <button class="btn btn--primary btn--full" onclick="sendTicketReply()"><i class="fa-solid fa-paper-plane"></i> Send Reply</button>
+              </div>
             </div>
           </div>
 
@@ -1489,6 +1538,23 @@
 </div>
 
 <style>
+/* ── Toggle switch styles ─────────────────────────────────────── */
+#pushNotifToggle:checked + #pushNotifSlider { background: #ff9b0c !important; }
+#pushNotifSlider::before { content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s; }
+#pushNotifToggle:checked + #pushNotifSlider::before { transform:translateX(18px); }
+#recurringToggleSlider::before { content:'';position:absolute;width:20px;height:20px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s; }
+.recurring-toggle-on { background: #ff9b0c !important; }
+.recurring-toggle-on::before { transform:translateX(22px) !important; }
+
+/* ── Ticket conversation chat bubbles ──────────────────────────── */
+.chat-bubble { padding:10px 14px; border-radius:12px; max-width:85%; font-size:0.84rem; line-height:1.5; }
+.chat-bubble--investor { background:linear-gradient(135deg,#FF9B0C,#FF5229); color:#fff; align-self:flex-end; border-bottom-right-radius:4px; }
+.chat-bubble--admin { background:var(--ci-bg-light,#F7F8FA); border:1px solid rgba(0,0,0,0.08); color:#1a1a1a; align-self:flex-start; border-bottom-left-radius:4px; }
+.chat-bubble-wrap { display:flex; flex-direction:column; gap:3px; }
+.chat-bubble-wrap--investor { align-items:flex-end; }
+.chat-bubble-wrap--admin { align-items:flex-start; }
+.chat-bubble-meta { font-size:0.68rem; color:var(--text-muted); padding:0 4px; }
+
 /* ── Payment modal component styles ─────────────────────────────── */
 /* Keep payment modal dark regardless of CI theme overrides */
 #paymentModalBox .info-row__label { color: #9ca3af !important; }
@@ -2114,6 +2180,79 @@
           <i class="fa-solid fa-coins"></i> Invest Now
         </button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recurring Investment Modal -->
+<div class="modal-overlay" id="recurringModal" onclick="if(event.target===this)Modal.close('recurringModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-rotate" style="color:var(--gold);margin-right:8px"></i>Recurring Investment</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Automatically invest monthly</div>
+      </div>
+      <button class="modal__close" onclick="Modal.close('recurringModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--ci-bg-light,#F7F8FA);border-radius:10px;margin-bottom:16px">
+        <div>
+          <div style="font-size:0.88rem;font-weight:700;color:#1a1a1a">Enable Recurring Investment</div>
+          <div style="font-size:0.75rem;color:var(--text-muted)">Toggle to activate monthly auto-investment</div>
+        </div>
+        <label style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0">
+          <input type="checkbox" id="recurringEnabledToggle" style="opacity:0;width:0;height:0">
+          <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s;display:block" id="recurringToggleSlider" onclick="document.getElementById('recurringEnabledToggle').checked=!document.getElementById('recurringEnabledToggle').checked;updateRecurringToggleStyle()"></span>
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Monthly Investment Amount (ZAR) <span style="color:#ef4444">*</span></label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:1.1rem;font-weight:700;color:#6b7280">R</span>
+          <input type="number" class="form-input" id="recurringAmount" min="100" step="100" placeholder="e.g. 5000" style="flex:1">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Investment Pool <span style="color:#ef4444">*</span></label>
+        <select class="form-select" id="recurringPoolSelect">
+          <option value="">Select a pool…</option>
+        </select>
+      </div>
+      <div style="padding:10px 14px;background:rgba(255,155,12,0.06);border:1px solid rgba(255,155,12,0.2);border-radius:8px;font-size:0.78rem;color:var(--text-muted)">
+        <i class="fa-solid fa-circle-info" style="color:var(--gold)"></i>
+        Monthly investments will be processed on the 1st of each month from your wallet balance. Ensure your wallet is funded before the processing date.
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('recurringModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveRecurringInvestment()"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- Account Deletion Confirmation Modal -->
+<div class="modal-overlay" id="deleteAccountModal" onclick="if(event.target===this)Modal.close('deleteAccountModal')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title" style="color:#ef4444"><i class="fa-solid fa-triangle-exclamation" style="margin-right:8px"></i>Request Account Deletion</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">This action cannot be undone</div>
+      </div>
+      <button class="modal__close" onclick="Modal.close('deleteAccountModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:14px;font-size:0.82rem;color:#b91c1c;margin-bottom:16px;line-height:1.6">
+        <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>
+        <strong>Warning:</strong> Requesting account deletion will close your account, cancel all active investments, and permanently delete your personal data. Active investments must be settled first.
+      </div>
+      <div style="font-size:0.82rem;color:#374151;margin-bottom:12px">To confirm, type <strong>DELETE MY ACCOUNT</strong> in the box below:</div>
+      <div class="form-group">
+        <input type="text" class="form-input" id="deleteAccountConfirmInput" placeholder="Type: DELETE MY ACCOUNT" style="font-size:0.9rem" />
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('deleteAccountModal')">Cancel</button>
+      <button class="btn btn--danger" onclick="confirmAccountDeletion()"><i class="fa-solid fa-trash-can"></i> Delete My Account</button>
     </div>
   </div>
 </div>

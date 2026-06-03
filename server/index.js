@@ -99,12 +99,14 @@ app.use('/api/', apiLimiter);
 app.use('/api/auth/', authLimiter);
 
 /* ─── API Routes ─── */
-app.use('/api/auth',     require('./routes/auth'));
-app.use('/api/users',    require('./routes/users'));
-app.use('/api/tables',   require('./routes/tables'));
-app.use('/api/fica',     require('./routes/fica'));
-app.use('/api/payments', require('./routes/payments'));
-app.use('/api/admin',    require('./routes/broadcast'));
+app.use('/api/auth',        require('./routes/auth'));
+app.use('/api/users',       require('./routes/users'));
+app.use('/api/tables',      require('./routes/tables'));
+app.use('/api/fica',        require('./routes/fica'));
+app.use('/api/payments',    require('./routes/payments'));
+app.use('/api/admin',       require('./routes/broadcast'));
+app.use('/api/privacy',     require('./routes/privacy'));
+app.use('/api/withdrawals', require('./routes/withdrawals'));
 
 /* ─── One-time Provision Endpoint ───────────────────────────────────────────
    GET /api/provision?secret=<PROVISION_SECRET>
@@ -294,6 +296,10 @@ app.listen(PORT, '0.0.0.0', async () => {
   // Start monthly statement cron (1st of month, 07:00 SAST)
   const { startStatementCron } = require('./jobs/statementCron');
   startStatementCron();
+
+  // Start recurring investment cron (1st of month, 03:00 UTC / 05:00 SAST)
+  const { startRecurringCron } = require('./jobs/recurringCron');
+  startRecurringCron();
 });
 
 module.exports = app;

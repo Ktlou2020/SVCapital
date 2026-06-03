@@ -14,6 +14,9 @@ let STATE = {
   maturity: [],
   settings: [],
   ifas: [],
+  withdrawals: [],
+  amlFlags: [],
+  adminEmail: null,
   currentView: 'dashboard',
   charts: {}
 };
@@ -211,7 +214,7 @@ function navigate(view, btnEl) {
     dashboard: 'Dashboard', investors: 'Investor Management', ifa: 'IFA Management', kyc: 'KYC / FICA',
     pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
     transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
-    auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications'
+    auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications', aml: 'AML Compliance Review'
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -231,6 +234,7 @@ function navigate(view, btnEl) {
     settings: loadSettings,
     withdrawals: loadWithdrawals,
     comms: loadComms,
+    aml: loadAML,
   };
   if (loaders[view]) loaders[view]();
 }
@@ -339,6 +343,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Prefer staffSession (richer: has avatar colour, initials, department)
     // Fall back to svc_user / JWT payload for main-login users.
     _populateAdminIdentity(user);
+
+    // ── Extract admin email from JWT for use in notes etc ──────────────
+    try {
+      const token = localStorage.getItem('svc_token');
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        STATE.adminEmail = payload.email || (user && user.email) || null;
+      }
+    } catch (_) {}
+    if (!STATE.adminEmail && user) STATE.adminEmail = user.email || null;
   }
 
   await loadDashboard();
@@ -785,6 +799,21 @@ async function viewInvestor(id) {
     </div>`;
     })()}
 
+    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:var(--white)">Admin Notes (Persistent)</div>
+    <div class="panel mb-16" style="background:var(--dark-3)">
+      <div class="panel__header">
+        <span class="panel__title">Notes History</span>
+        <span style="font-size:0.72rem;color:var(--text-dim)" id="invNotesCount">Loading…</span>
+      </div>
+      <div class="panel__body" id="invNotesList" style="max-height:200px;overflow-y:auto">
+        <div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin"></i> Loading notes…</div>
+      </div>
+      <div class="panel__body" style="border-top:1px solid var(--border);padding-top:12px">
+        <textarea class="form-input" id="invNewNoteTA" style="width:100%;min-height:70px;font-size:0.82rem;resize:vertical;margin-bottom:8px" placeholder="Add a note visible only to admins…"></textarea>
+        <button class="btn btn--primary btn--sm" onclick='addInvestorNote(${JSON.stringify(inv.id)})'><i class="fa-solid fa-plus"></i> Add Note</button>
+      </div>
+    </div>
+
     <div class="flex-between mt-16" style="flex-wrap:wrap;gap:8px">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn--success btn--sm" onclick='depositToInvestor(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, ${inv.wallet_balance || 0})'><i class="fa-solid fa-wallet"></i> Add Funds</button>
@@ -798,6 +827,8 @@ async function viewInvestor(id) {
   // Set textarea value after innerHTML to avoid XSS via template literals
   const ta = document.getElementById('investorNotesTA');
   if (ta) ta.value = inv.notes || '';
+  // Load persistent notes
+  loadInvestorNotes(inv.id);
 }
 
 async function depositToInvestor(investorId, investorName, currentBalance) {
@@ -869,13 +900,17 @@ async function rejectBankAccount(investorId) {
 }
 
 /* ═══════════════════════════════════════════════
-   WITHDRAWALS
+   WITHDRAWALS — Feature 5: Approval Workflow
    ═══════════════════════════════════════════════ */
 async function loadWithdrawals() {
   try {
-    const res = await API._fetch('GET', 'tables/transactions', null, { limit: 200 });
-    const all  = (res.data || []).filter(t => t.type === 'withdrawal');
+    const [txnRes, invRes] = await Promise.all([
+      API._fetch('GET', 'tables/transactions', null, { type: 'withdrawal', limit: 300 }),
+      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 200 })
+    ]);
+    const all = (txnRes.data || []).filter(t => t.type === 'withdrawal');
     STATE.withdrawals = all;
+    if (!STATE.investors.length) STATE.investors = invRes.data || [];
     renderWithdrawalsTable();
   } catch (e) {
     Toast.error('Failed to load withdrawals');
@@ -884,59 +919,94 @@ async function loadWithdrawals() {
 }
 
 function renderWithdrawalsTable() {
-  const tbody = document.getElementById('withdrawalsTableBody');
-  if (!tbody) return;
-  const withdrawals = STATE.withdrawals || [];
-  const pending = withdrawals.filter(w => w.status === 'pending');
-  const rest    = withdrawals.filter(w => w.status !== 'pending');
-  const all     = [...pending, ...rest];
+  const pendingBody    = document.getElementById('withdrawalsPendingBody');
+  const completedBody  = document.getElementById('withdrawalsCompletedBody');
+  const withdrawals    = STATE.withdrawals || [];
+  const pending        = withdrawals.filter(w => w.status === 'pending');
+  const completed      = withdrawals.filter(w => w.status !== 'pending');
 
-  if (!all.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No withdrawal requests</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = all.map(w => {
-    const inv = STATE.investors.find(i => i.id === w.investor_id);
+  const _row = (w, showActions) => {
+    const inv  = STATE.investors.find(i => i.id === w.investor_id);
     const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id || '—';
-    const bank = inv?.bank_name || '—';
+    const bank = inv ? (inv.bank_name || '—') : '—';
     return `<tr>
-      <td class="td-strong">${name}</td>
-      <td class="td-gold fw-700">${Utils.rand(w.amount)}</td>
-      <td>${bank}</td>
-      <td>${Utils.statusBadge(w.status)}</td>
-      <td class="td-muted">${Utils.date(w.created_at)}</td>
+      <td class="td-muted">${Utils.date(w.created_at || w.transaction_date)}</td>
+      <td><div class="td-strong">${name}</div></td>
+      <td class="td-gold fw-700">${Utils.rand(Math.abs(w.amount))}</td>
+      <td class="td-muted">${bank}</td>
+      <td class="td-muted" style="font-size:0.75rem">${w.reference || '—'}</td>
       <td>
-        ${w.status === 'pending' ? `
-          <button class="btn btn--success btn--sm" onclick='processWithdrawal(${JSON.stringify(w.id)})'><i class="fa-solid fa-check"></i> Process</button>
-          <button class="btn btn--danger btn--sm" onclick='rejectWithdrawal(${JSON.stringify(w.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
-        ` : '—'}
+        ${showActions ? `
+          <div class="flex-center gap-6">
+            <button class="btn btn--success btn--sm" onclick='approveWithdrawal(${JSON.stringify(w.id)})'><i class="fa-solid fa-check"></i> Approve</button>
+            <button class="btn btn--danger btn--sm" onclick='rejectWithdrawalPrompt(${JSON.stringify(w.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+          </div>
+        ` : Utils.statusBadge(w.status)}
       </td>
     </tr>`;
-  }).join('');
+  };
+
+  if (pendingBody) {
+    pendingBody.innerHTML = pending.length
+      ? pending.map(w => _row(w, true)).join('')
+      : '<tr><td colspan="6" class="text-center text-muted" style="padding:24px"><i class="fa-solid fa-check-circle" style="color:var(--green);margin-right:6px"></i>No pending withdrawals</td></tr>';
+  }
+
+  if (completedBody) {
+    completedBody.innerHTML = completed.length
+      ? completed.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(w => _row(w, false)).join('')
+      : '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No completed withdrawals</td></tr>';
+  }
 }
 
-async function processWithdrawal(txnId) {
-  if (!confirm('Mark this withdrawal as processed? This will notify the investor by email.')) return;
+async function approveWithdrawal(txnId) {
+  if (!confirm('Approve this withdrawal? This will notify the investor.')) return;
   try {
-    await API._fetch('PATCH', `tables/transactions/${txnId}`, { status: 'completed' });
-    Toast.success('Withdrawal marked as processed — investor notified');
+    await fetch(`/api/withdrawals/${txnId}/approve`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Authorization: 'Bearer ' + localStorage.getItem('svc_token'), 'Content-Type': 'application/json' }
+    }).then(r => r.ok ? r : Promise.reject(r));
+    Toast.success('Withdrawal approved — investor notified');
     await loadWithdrawals();
-  } catch (e) { Toast.error('Failed to process withdrawal'); }
+  } catch (e) {
+    // Fallback: update status directly
+    try {
+      await API._fetch('PATCH', `tables/transactions/${txnId}`, { status: 'completed' });
+      Toast.success('Withdrawal approved');
+      await loadWithdrawals();
+    } catch (e2) { Toast.error('Failed to approve withdrawal'); }
+  }
 }
 
-async function rejectWithdrawal(txnId) {
-  const reason = prompt('Reason for rejection (optional — will be included in the email):');
+async function rejectWithdrawalPrompt(txnId) {
+  const reason = prompt('Reason for rejection (will be sent to investor):');
   if (reason === null) return;
   try {
-    await API._fetch('PATCH', `tables/transactions/${txnId}`, {
-      status:      'rejected',
-      description: reason || undefined,
-    });
-    Toast.success('Withdrawal rejected — funds returned to investor wallet');
+    await fetch(`/api/withdrawals/${txnId}/reject`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Authorization: 'Bearer ' + localStorage.getItem('svc_token'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason || 'Withdrawal rejected by admin.' })
+    }).then(r => r.ok ? r : Promise.reject(r));
+    Toast.success('Withdrawal rejected');
     await loadWithdrawals();
-  } catch (e) { Toast.error('Failed to reject withdrawal'); }
+  } catch (e) {
+    // Fallback: update status directly
+    try {
+      await API._fetch('PATCH', `tables/transactions/${txnId}`, {
+        status: 'rejected',
+        description: reason || 'Rejected by admin.'
+      });
+      Toast.success('Withdrawal rejected');
+      await loadWithdrawals();
+    } catch (e2) { Toast.error('Failed to reject withdrawal'); }
+  }
 }
+
+// Keep legacy aliases
+async function processWithdrawal(txnId) { return approveWithdrawal(txnId); }
+async function rejectWithdrawal(txnId) { return rejectWithdrawalPrompt(txnId); }
 
 async function confirmDeleteInvestor(id) {
   if (!confirm('Are you sure you want to delete this investor? This cannot be undone.')) return;
@@ -2658,10 +2728,7 @@ async function bulkRejectKyc() {
 }
 
 /* ═══════════════════════════════════════════════
-   AUDIT LOG
-   ═══════════════════════════════════════════════ */
-/* ═══════════════════════════════════════════════
-   AUDIT LOG
+   AUDIT LOG — Feature 6: Real Audit Log
    ═══════════════════════════════════════════════ */
 let _auditEvents = [];
 let _auditPage   = 1;
@@ -2669,36 +2736,60 @@ const AUDIT_PG   = 50;
 
 async function loadAuditLog() {
   try {
-    const res = await API.tables.list('audit_events', { limit: 500, order: 'created_at', direction: 'desc' });
+    const res = await API._fetch('GET', 'tables/audit_events', null, { limit: 200, order: 'created_at', direction: 'desc' });
     _auditEvents = res.data || [];
     renderAuditTable();
-    const filter = document.getElementById('auditTypeFilter');
-    if (filter) filter.addEventListener('change', () => { _auditPage = 1; renderAuditTable(); });
+
+    // Wire filters once (guard against double-wiring)
+    const typeF   = document.getElementById('auditTypeFilter');
+    const searchF = document.getElementById('auditSearchInput');
+    const dateFrom = document.getElementById('auditDateFrom');
+    const dateTo   = document.getElementById('auditDateTo');
+
+    const resetAndRender = () => { _auditPage = 1; renderAuditTable(); };
+    if (typeF   && !typeF._auditWired)   { typeF.addEventListener('change', resetAndRender);   typeF._auditWired = true; }
+    if (searchF && !searchF._auditWired) { searchF.addEventListener('input', Utils.debounce(resetAndRender, 250)); searchF._auditWired = true; }
+    if (dateFrom && !dateFrom._auditWired) { dateFrom.addEventListener('change', resetAndRender); dateFrom._auditWired = true; }
+    if (dateTo   && !dateTo._auditWired)   { dateTo.addEventListener('change', resetAndRender);   dateTo._auditWired   = true; }
   } catch (e) { Toast.error('Failed to load audit log'); }
 }
 
 function renderAuditTable() {
   const body   = document.getElementById('auditBody');
   if (!body) return;
-  const filter = document.getElementById('auditTypeFilter')?.value || '';
-  const items  = filter ? _auditEvents.filter(e => (e.event_type || '').includes(filter)) : _auditEvents;
+
+  const typeFilter   = document.getElementById('auditTypeFilter')?.value || '';
+  const searchQ      = (document.getElementById('auditSearchInput')?.value || '').toLowerCase();
+  const dateFromVal  = document.getElementById('auditDateFrom')?.value || '';
+  const dateToVal    = document.getElementById('auditDateTo')?.value || '';
+
+  let items = _auditEvents;
+  if (typeFilter)   items = items.filter(e => (e.event_type || '').includes(typeFilter));
+  if (searchQ)      items = items.filter(e => `${e.event_type} ${e.user_email} ${e.actor_role} ${e.action} ${e.entity_type} ${e.entity_id} ${e.description}`.toLowerCase().includes(searchQ));
+  if (dateFromVal)  items = items.filter(e => e.created_at && new Date(e.created_at) >= new Date(dateFromVal));
+  if (dateToVal)    items = items.filter(e => e.created_at && new Date(e.created_at) <= new Date(dateToVal + 'T23:59:59'));
+
   const start  = (_auditPage - 1) * AUDIT_PG;
   const page   = items.slice(start, start + AUDIT_PG);
 
   const footer = document.getElementById('auditFooter');
-  if (footer) footer.textContent = `${start + 1}–${Math.min(start + AUDIT_PG, items.length)} of ${items.length} events`;
+  if (footer) footer.textContent = items.length ? `${start + 1}–${Math.min(start + AUDIT_PG, items.length)} of ${items.length} events` : '0 events';
 
-  if (!page.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No audit events found</td></tr>'; return; }
+  if (!page.length) {
+    body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No audit events found</td></tr>';
+    document.getElementById('auditPagination').innerHTML = '';
+    return;
+  }
 
-  const actionColor = { 'user.login': 'blue', 'kyc.approved': 'green', 'kyc.rejected': 'red', 'transaction.completed': 'green', 'transaction.rejected': 'red', 'investment.paid_out': 'gold' };
+  const actionColor = { 'user.login': 'blue', 'kyc.approved': 'green', 'kyc.rejected': 'red', 'transaction.completed': 'green', 'transaction.rejected': 'red', 'investment.paid_out': 'gold', 'withdrawal.approved': 'green', 'withdrawal.rejected': 'red' };
 
   body.innerHTML = page.map(e => `<tr>
     <td class="td-muted" style="white-space:nowrap;font-size:0.75rem">${Utils.date(e.created_at)}</td>
-    <td><span class="badge badge--${actionColor[e.event_type] || 'gray'}" style="font-size:0.7rem">${e.event_type || '—'}</span></td>
-    <td><div style="font-size:0.78rem;font-weight:600">${e.user_email || '—'}</div></td>
-    <td class="td-muted" style="font-size:0.75rem">${e.entity_type ? `${e.entity_type}#${(e.entity_id||'').slice(0,8)}` : '—'}</td>
-    <td style="font-size:0.78rem;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.description || '—'}</td>
-    <td class="td-muted" style="font-size:0.72rem">${e.ip_address || '—'}</td>
+    <td><div style="font-size:0.78rem;font-weight:600;color:var(--white)">${e.user_email || e.actor || '—'}</div></td>
+    <td><span style="font-size:0.72rem;color:var(--text-muted)">${e.actor_role || e.role || '—'}</span></td>
+    <td><span class="badge badge--${actionColor[e.event_type] || 'gray'}" style="font-size:0.7rem">${e.event_type || e.action || '—'}</span></td>
+    <td class="td-muted" style="font-size:0.75rem">${e.entity_type ? `${e.entity_type}${e.entity_id ? ' #' + String(e.entity_id).slice(0, 8) : ''}` : (e.target || '—')}</td>
+    <td class="td-muted" style="font-size:0.72rem">${e.ip_address || e.ip || '—'}</td>
   </tr>`).join('');
 
   const pages = Math.ceil(items.length / AUDIT_PG);
@@ -2950,5 +3041,415 @@ async function exportAumReport() {
       doc.save(`SVC-AUM-Report-${today}.pdf`);
       Toast.success('PDF report also exported');
     } catch (_) { /* jsPDF not fully available */ }
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE 1: AML COMPLIANCE DASHBOARD
+   ═══════════════════════════════════════════════ */
+async function loadAML() {
+  try {
+    const [flagRes, invRes] = await Promise.all([
+      API._fetch('GET', 'tables/support_tickets', null, { category: 'aml_review', limit: 200 }),
+      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 200 })
+    ]);
+    STATE.amlFlags = flagRes.data || [];
+    if (!STATE.investors.length) STATE.investors = invRes.data || [];
+    renderAMLStats();
+    renderAMLTable();
+
+    // Update nav badge
+    const badge = document.getElementById('amlBadge');
+    const openCount = STATE.amlFlags.filter(f => f.status === 'open' || f.status === 'in_review').length;
+    if (badge) {
+      badge.textContent = openCount;
+      badge.style.display = openCount > 0 ? '' : 'none';
+    }
+  } catch (e) {
+    Toast.error('Failed to load AML flags');
+    console.error(e);
+  }
+}
+
+function renderAMLStats() {
+  const flags = STATE.amlFlags;
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const total      = flags.length;
+  const open       = flags.filter(f => f.status === 'open' || f.status === 'in_review').length;
+  const highPri    = flags.filter(f => f.priority === 'high' || f.priority === 'urgent').length;
+  const resolvedMo = flags.filter(f => f.status === 'resolved' && new Date(f.updated_at || f.resolved_at || f.created_at) >= startOfMonth).length;
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('aml-total',    total);
+  set('aml-open',     open);
+  set('aml-high',     highPri);
+  set('aml-resolved', resolvedMo);
+}
+
+function renderAMLTable() {
+  const tbody = document.getElementById('amlTableBody');
+  if (!tbody) return;
+  const flags = STATE.amlFlags;
+
+  if (!flags.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-shield-check" style="color:var(--green);font-size:1.5rem;margin-bottom:8px;display:block"></i>No AML flags found</td></tr>';
+    return;
+  }
+
+  const statusBadge = s => {
+    const map = { open: 'badge--red', in_review: 'badge--yellow', resolved: 'badge--green', closed: 'badge--gray' };
+    return `<span class="badge ${map[s] || 'badge--gray'}">${s ? s.replace(/_/g, ' ') : '—'}</span>`;
+  };
+
+  tbody.innerHTML = flags.map(f => {
+    const inv      = STATE.investors.find(i => i.id === f.investor_id);
+    const invName  = f.investor_name || (inv ? `${inv.first_name} ${inv.last_name}` : f.investor_id || '—');
+    const amount   = f.amount || f.transaction_amount || '';
+    const canResolve = f.status !== 'resolved' && f.status !== 'closed';
+    return `<tr>
+      <td class="td-muted">${Utils.date(f.created_at)}</td>
+      <td>
+        <div class="td-strong">${invName}</div>
+        <div class="td-muted" style="font-size:0.72rem">${f.investor_id || ''}</div>
+      </td>
+      <td class="td-gold fw-700">${amount ? Utils.rand(amount) : '—'}</td>
+      <td style="max-width:200px;font-size:0.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.subject || f.reason || f.message || '—'}</td>
+      <td>${Utils.priorityBadge ? Utils.priorityBadge(f.priority) : `<span class="badge">${f.priority || '—'}</span>`}</td>
+      <td>${statusBadge(f.status)}</td>
+      <td>
+        <div class="flex-center gap-6">
+          <button class="btn btn--secondary btn--sm" onclick='navigate("investors", document.querySelector("[data-view=investors]"));setTimeout(()=>{document.getElementById("investorSearch").value=${JSON.stringify(invName)};document.getElementById("investorSearch").dispatchEvent(new Event("input"))},350)'><i class="fa-solid fa-eye"></i> Investor</button>
+          ${canResolve ? `<button class="btn btn--success btn--sm" onclick='resolveAMLFlag(${JSON.stringify(f.id)})'><i class="fa-solid fa-check"></i> Resolve</button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function resolveAMLFlag(id) {
+  if (!confirm('Mark this AML flag as resolved?')) return;
+  try {
+    await API._fetch('PATCH', `tables/support_tickets/${id}`, {
+      status: 'resolved',
+      resolved_at: new Date().toISOString(),
+      admin_response: `Resolved by admin on ${new Date().toLocaleDateString('en-ZA')}`
+    });
+    Toast.success('AML flag resolved');
+    await loadAML();
+  } catch (e) { Toast.error('Failed to resolve AML flag'); }
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE 2: INVESTOR NOTES
+   ═══════════════════════════════════════════════ */
+async function loadInvestorNotes(investorId) {
+  const listEl  = document.getElementById('invNotesList');
+  const countEl = document.getElementById('invNotesCount');
+  if (!listEl) return;
+
+  try {
+    const res = await API._fetch('GET', 'tables/investor_notes', null, { investor_id: investorId, limit: 50 });
+    const notes = (res.data || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    if (countEl) countEl.textContent = `${notes.length} note${notes.length !== 1 ? 's' : ''}`;
+
+    if (!notes.length) {
+      listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem">No notes yet — add the first note below.</div>';
+      return;
+    }
+
+    listEl.innerHTML = notes.map(n => {
+      const authorShort = n.admin_email ? n.admin_email.replace(/@.*$/, '') : 'Admin';
+      return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:0.75rem;font-weight:700;color:var(--orange)">${authorShort}</span>
+          <span style="font-size:0.7rem;color:var(--text-dim)">${Utils.date(n.created_at)}</span>
+        </div>
+        <div style="font-size:0.82rem;color:var(--text);white-space:pre-wrap">${n.note || '—'}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    if (listEl) listEl.innerHTML = '<div style="padding:16px;color:var(--text-dim);font-size:0.8rem">Could not load notes.</div>';
+    if (countEl) countEl.textContent = '—';
+  }
+}
+
+async function addInvestorNote(investorId) {
+  const ta = document.getElementById('invNewNoteTA');
+  if (!ta) return;
+  const noteText = ta.value.trim();
+  if (!noteText) { Toast.error('Please enter a note'); return; }
+
+  const adminEmail = STATE.adminEmail || 'admin@svcapital.co.za';
+
+  try {
+    await API._fetch('POST', 'tables/investor_notes', {
+      id:          `NOTE-${Date.now()}`,
+      investor_id: investorId,
+      admin_email: adminEmail,
+      note:        noteText,
+      created_at:  new Date().toISOString()
+    });
+    ta.value = '';
+    Toast.success('Note added');
+    await loadInvestorNotes(investorId);
+  } catch (e) { Toast.error('Failed to save note'); }
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE 3: ANALYTICS CHARTS (Real Data)
+   ═══════════════════════════════════════════════ */
+
+// Helper: get last N month labels (e.g. ["Jul 25", "Aug 25", ...])
+function _lastNMonths(n) {
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const result = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    result.push({ label: `${months[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`, year: d.getFullYear(), month: d.getMonth() });
+  }
+  return result;
+}
+
+function _chartDefaults() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: '#7a92a8', font: { size: 10 }, boxWidth: 10, padding: 8 } },
+      tooltip: { backgroundColor: 'rgba(13,17,23,0.95)', titleColor: '#e8edf2', bodyColor: '#7a92a8', borderColor: 'rgba(212,175,55,0.3)', borderWidth: 1 }
+    },
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', font: { size: 10 } } },
+      y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', font: { size: 10 } } }
+    }
+  };
+}
+
+function renderAnAumChart() {
+  const ctx = document.getElementById('anAumChart');
+  if (!ctx) return;
+
+  const buckets = _lastNMonths(12);
+  // Running cumulative sum of deposit transactions
+  const monthTotals = buckets.map(b => {
+    return STATE.transactions
+      .filter(t => {
+        if (t.type !== 'deposit' || t.status !== 'completed') return false;
+        const d = new Date(t.created_at || t.transaction_date || 0);
+        return d.getFullYear() === b.year && d.getMonth() === b.month;
+      })
+      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+  });
+
+  // Running cumulative AUM
+  let running = 0;
+  const aumData = monthTotals.map(v => { running += v; return running; });
+
+  if (STATE.charts.anAum) STATE.charts.anAum.destroy();
+  const opts = _chartDefaults();
+  opts.plugins.tooltip.callbacks = { label: c => ` ${Utils.rand(c.parsed.y)}` };
+  opts.scales.y.ticks.callback = v => 'R' + (v / 1000).toFixed(0) + 'k';
+
+  STATE.charts.anAum = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: buckets.map(b => b.label),
+      datasets: [{
+        label: 'Cumulative AUM (deposits)',
+        data: aumData,
+        borderColor: '#D4AF37',
+        backgroundColor: (c) => {
+          const g = c.chart.ctx.createLinearGradient(0, 0, 0, 220);
+          g.addColorStop(0, 'rgba(212,175,55,0.2)');
+          g.addColorStop(1, 'rgba(212,175,55,0)');
+          return g;
+        },
+        fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: '#D4AF37'
+      }]
+    },
+    options: opts
+  });
+}
+
+function renderAnNewInvChart() {
+  const ctx = document.getElementById('anNewInvChart');
+  if (!ctx) return;
+
+  const buckets = _lastNMonths(12);
+  const counts = buckets.map(b =>
+    STATE.investors.filter(i => {
+      const d = new Date(i.date_joined || i.created_at || 0);
+      return d.getFullYear() === b.year && d.getMonth() === b.month;
+    }).length
+  );
+
+  if (STATE.charts.anNewInv) STATE.charts.anNewInv.destroy();
+  const opts = _chartDefaults();
+  opts.plugins.tooltip.callbacks = { label: c => ` ${c.parsed.y} investors` };
+
+  STATE.charts.anNewInv = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: buckets.map(b => b.label),
+      datasets: [{
+        label: 'New Investors',
+        data: counts,
+        backgroundColor: 'rgba(99,102,241,0.7)',
+        borderRadius: 5
+      }]
+    },
+    options: opts
+  });
+}
+
+function renderAnReturnsChart() {
+  const ctx = document.getElementById('anReturnsChart');
+  if (!ctx) return;
+
+  const buckets = _lastNMonths(12);
+  const data = buckets.map(b =>
+    STATE.transactions
+      .filter(t => {
+        if (t.type !== 'return') return false;
+        const d = new Date(t.created_at || t.transaction_date || 0);
+        return d.getFullYear() === b.year && d.getMonth() === b.month;
+      })
+      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0)
+  );
+
+  if (STATE.charts.anReturns) STATE.charts.anReturns.destroy();
+  const opts = _chartDefaults();
+  opts.plugins.tooltip.callbacks = { label: c => ` ${Utils.rand(c.parsed.y)}` };
+  opts.scales.y.ticks.callback = v => 'R' + (v / 1000).toFixed(0) + 'k';
+
+  STATE.charts.anReturns = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: buckets.map(b => b.label),
+      datasets: [{
+        label: 'Returns Distributed',
+        data,
+        backgroundColor: 'rgba(34,197,94,0.7)',
+        borderRadius: 5
+      }]
+    },
+    options: opts
+  });
+}
+
+function renderAnStatusChart() {
+  const ctx = document.getElementById('anStatusChart');
+  if (!ctx) return;
+
+  const statuses = ['active', 'matured', 'paid_out', 'pending'];
+  const counts = statuses.map(s => STATE.investments.filter(i => i.status === s).length);
+  const labels = ['Active', 'Matured', 'Paid Out', 'Pending'];
+  const colors = ['#22c55e', '#a855f7', '#D4AF37', '#f97316'];
+
+  if (STATE.charts.anStatus) STATE.charts.anStatus.destroy();
+
+  STATE.charts.anStatus = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data: counts, backgroundColor: colors, borderColor: 'var(--dark-2)', borderWidth: 3, hoverOffset: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#7a92a8', font: { size: 10 }, boxWidth: 10, padding: 10 } },
+        tooltip: { backgroundColor: 'rgba(13,17,23,0.95)', titleColor: '#e8edf2', bodyColor: '#7a92a8', callbacks: { label: c => ` ${c.label}: ${c.parsed}` } }
+      }
+    }
+  });
+}
+
+// Wrap the existing loadAnalytics to also render the new charts
+const _origLoadAnalytics = loadAnalytics;
+async function loadAnalytics() {
+  await _origLoadAnalytics();
+  renderAnAumChart();
+  renderAnNewInvChart();
+  renderAnReturnsChart();
+  renderAnStatusChart();
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE 4: MANUAL INTEREST / ADJUSTMENT
+   ═══════════════════════════════════════════════ */
+function openManualAdjModal() {
+  const sel = document.getElementById('adjInvestorSelect');
+  if (sel) {
+    sel.innerHTML = '<option value="">Select investor…</option>' +
+      [...STATE.investors]
+        .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
+        .map(i => `<option value="${i.id}">${i.first_name} ${i.last_name} (${i.id})</option>`)
+        .join('');
+  }
+  const refEl = document.getElementById('adjReference');
+  if (refEl) refEl.value = `ADJ-${Date.now()}`;
+  const amtEl = document.getElementById('adjAmount');
+  if (amtEl) amtEl.value = '';
+  const descEl = document.getElementById('adjDescription');
+  if (descEl) descEl.value = '';
+  // Default to credit
+  const creditRad = document.getElementById('adjCredit');
+  if (creditRad) creditRad.checked = true;
+  Modal.open('manualAdjModal');
+}
+
+async function saveManualAdj() {
+  const investorId  = document.getElementById('adjInvestorSelect').value;
+  const adjType     = document.querySelector('input[name="adjType"]:checked')?.value || 'credit';
+  const rawAmount   = parseFloat(document.getElementById('adjAmount').value);
+  const description = document.getElementById('adjDescription').value.trim();
+  const reference   = document.getElementById('adjReference').value.trim();
+
+  if (!investorId) { Toast.error('Please select an investor'); return; }
+  if (!rawAmount || rawAmount <= 0) { Toast.error('Please enter a valid positive amount'); return; }
+  if (!description) { Toast.error('Description is required'); return; }
+
+  const investor = STATE.investors.find(i => i.id === investorId);
+  if (!investor) { Toast.error('Investor not found'); return; }
+
+  const signedAmount = adjType === 'credit' ? Math.abs(rawAmount) : -Math.abs(rawAmount);
+  const currentBalance = parseFloat(investor.wallet_balance) || 0;
+  const newBalance = Math.round((currentBalance + signedAmount) * 100) / 100;
+
+  if (newBalance < 0 && adjType === 'debit') {
+    if (!confirm(`This debit of ${Utils.rand(rawAmount)} will result in a negative wallet balance of ${Utils.rand(newBalance)}. Continue?`)) return;
+  }
+
+  try {
+    // 1. Record transaction
+    await API.transactions.create({
+      id:               Utils.genId ? Utils.genId('TXN') : `TXN-${Date.now()}`,
+      investor_id:      investorId,
+      type:             'adjustment',
+      amount:           signedAmount,
+      status:           'completed',
+      reference:        reference,
+      description:      description,
+      transaction_date: new Date().toISOString()
+    });
+
+    // 2. Update wallet balance
+    await API.investors.update(investorId, { wallet_balance: newBalance });
+
+    // Update in STATE
+    investor.wallet_balance = newBalance;
+
+    Toast.success(`Adjustment applied: ${adjType === 'credit' ? '+' : '−'}${Utils.rand(rawAmount)} for ${investor.first_name} ${investor.last_name}`);
+    Modal.close('manualAdjModal');
+
+    // Reload investors if on investors view
+    if (STATE.currentView === 'investors') await loadInvestors();
+  } catch (e) {
+    Toast.error('Failed to apply adjustment');
+    console.error(e);
   }
 }

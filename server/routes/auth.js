@@ -74,8 +74,31 @@ router.post('/login', async (req, res) => {
       return res.json({ requires2FA: true, pending2FAToken });
     }
 
-    // update last_login
-    await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
+    // Feature B: login anomaly — track IP and alert on new location
+    const newIp = (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+    if (user.last_login_ip && user.last_login_ip !== newIp && newIp) {
+      setImmediate(() => emailService.sendLoginAlert(user, { ip: newIp, time: new Date().toISOString() })
+        .catch(err => console.error('[email] loginAlert failed:', err.message)));
+    }
+    await pool.query(
+      'UPDATE users SET last_login = NOW(), last_login_ip = $1, last_login_at = NOW() WHERE id = $2',
+      [newIp || null, user.id]
+    );
+
+    // Also update linked investor record if present
+    if (user.investor_id) {
+      const { rows: invRows } = await pool.query(
+        'SELECT last_login_ip FROM investors WHERE id = $1', [user.investor_id]
+      ).catch(() => ({ rows: [] }));
+      const invRow = invRows[0];
+      if (invRow && invRow.last_login_ip && invRow.last_login_ip !== newIp && newIp) {
+        // investor row alert already covered by user alert above — just update tracking
+      }
+      await pool.query(
+        'UPDATE investors SET last_login_ip = $1, last_login_at = NOW() WHERE id = $2',
+        [newIp || null, user.investor_id]
+      ).catch(() => {});
+    }
 
     const token = signToken(user);
 
@@ -613,7 +636,15 @@ router.post('/2fa/verify-login', async (req, res) => {
     if (!user || !user.totp_secret) return res.status(400).json({ error: 'User not found or 2FA not configured.' });
     const { verify } = require('../services/totp');
     if (!verify(user.totp_secret, token)) return res.status(401).json({ error: 'Invalid authenticator code.' });
-    await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
+    const newIp2fa = (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+    if (user.last_login_ip && user.last_login_ip !== newIp2fa && newIp2fa) {
+      setImmediate(() => emailService.sendLoginAlert(user, { ip: newIp2fa, time: new Date().toISOString() })
+        .catch(err => console.error('[email] loginAlert (2fa) failed:', err.message)));
+    }
+    await pool.query(
+      'UPDATE users SET last_login = NOW(), last_login_ip = $1, last_login_at = NOW() WHERE id = $2',
+      [newIp2fa || null, user.id]
+    );
     const fullToken = signToken(user);
     res.cookie('svc_token', fullToken, { httpOnly: true, secure: IS_PROD, sameSite: IS_PROD ? 'none' : 'lax', maxAge: 8*60*60*1000 });
     const redirectMap = { admin: '/admin/index.html', director: '/admin/index.html', investor: '/portal/index.html', ifa: '/ifa/index.html', fund_manager: '/fund/index.html', staff: '/team/hub.html' };

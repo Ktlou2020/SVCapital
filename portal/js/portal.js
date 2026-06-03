@@ -5782,3 +5782,443 @@ function renderRiskProfile() {
     if (btnLabel) btnLabel.textContent = 'Take Questionnaire';
   }
 }
+
+/* ═══════════════════════════════════════════════
+   FEATURE: ENHANCED 2FA STATUS IN PROFILE
+   ═══════════════════════════════════════════════ */
+
+/* Patch load2FAStatus to also update the status row in profile */
+const _orig_load2FAStatus = load2FAStatus;
+async function load2FAStatus() {
+  try {
+    const data = await API._fetch('GET', 'auth/2fa/status');
+    const enabled = !!data.enabled;
+
+    // Update button
+    const label = document.getElementById('twoFAToggleLabel');
+    if (label) label.textContent = enabled ? 'Disable 2FA' : 'Enable 2FA';
+    const btn = document.getElementById('twoFAToggleBtn');
+    if (btn) {
+      btn.className = enabled
+        ? 'btn btn--danger btn--full'
+        : 'btn btn--secondary btn--full';
+    }
+
+    // Update status row
+    const statusText = document.getElementById('twoFAStatusText');
+    const statusBadge = document.getElementById('twoFAStatusBadge');
+    if (statusText) statusText.textContent = enabled ? 'Enabled — your account is protected' : 'Not enabled — recommended for security';
+    if (statusBadge) {
+      statusBadge.style.display = 'inline-block';
+      statusBadge.innerHTML = enabled
+        ? '<span class="badge badge--green"><i class="fa-solid fa-check"></i> Enabled</span>'
+        : '<span class="badge badge--gray">Disabled</span>';
+    }
+
+    return enabled;
+  } catch (e) {
+    const label = document.getElementById('twoFAToggleLabel');
+    if (label) label.textContent = 'Enable 2FA';
+    const statusText = document.getElementById('twoFAStatusText');
+    if (statusText) statusText.textContent = 'Status unavailable';
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE 2: TWO-WAY SUPPORT MESSAGING
+   ═══════════════════════════════════════════════ */
+
+let _activeTicketId = null;
+
+/* Override renderMyTickets to add "View Conversation" button */
+function renderMyTickets() {
+  const body = document.getElementById('myTicketsBody');
+  if (!PORTAL.tickets.length) {
+    body.innerHTML = '<div class="empty-state" style="padding:16px"><i class="fa-solid fa-ticket"></i><p>No support tickets yet.</p></div>';
+    return;
+  }
+
+  body.innerHTML = PORTAL.tickets.map(t => {
+    const hasAdminReply = !!(t.admin_response && t.admin_response.trim());
+    const unreadBadge = hasAdminReply
+      ? '<span style="background:#ef4444;color:#fff;font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:20px;margin-left:6px">NEW</span>'
+      : '';
+    return `
+      <div class="my-ticket-item" style="padding:12px 14px;border-radius:10px;border:1px solid rgba(0,0,0,0.07);margin-bottom:8px;background:var(--ci-bg-light,#F7F8FA)">
+        <div class="my-ticket-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px">
+          <span class="my-ticket-subject" style="font-weight:700;font-size:0.86rem;color:#1a1a1a;flex:1">${t.subject}</span>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+            ${unreadBadge}
+            ${Utils.statusBadge(t.status)}
+          </div>
+        </div>
+        <div class="my-ticket-meta" style="font-size:0.74rem;color:var(--text-muted);margin-bottom:8px">${Utils.date(t.created_at)} &middot; ${(t.category || '').replace(/_/g, ' ')}</div>
+        ${hasAdminReply ? `<div style="font-size:0.78rem;color:#1a1a1a;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.2);border-radius:6px;padding:6px 10px;margin-bottom:8px"><strong style="color:#2F8C9B">Support:</strong> ${(t.admin_response || '').slice(0, 120)}${(t.admin_response || '').length > 120 ? '…' : ''}</div>` : ''}
+        <button class="btn btn--ghost btn--sm" onclick="openTicketConversation('${t.id}')" style="font-size:0.78rem;padding:5px 12px">
+          <i class="fa-solid fa-comment-dots"></i> View Conversation
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+async function openTicketConversation(ticketId) {
+  _activeTicketId = ticketId;
+  const ticket = PORTAL.tickets.find(t => t.id === ticketId);
+  if (!ticket) return;
+
+  // Show conversation panel, hide new ticket form area
+  document.getElementById('myTicketsPanel').style.display = 'none';
+  const convPanel = document.getElementById('ticketConversationPanel');
+  convPanel.style.display = '';
+
+  // Set header info
+  const subjectEl = document.getElementById('convTicketSubject');
+  if (subjectEl) subjectEl.textContent = ticket.subject;
+  const statusEl = document.getElementById('convTicketStatus');
+  if (statusEl) statusEl.innerHTML = Utils.statusBadge(ticket.status);
+
+  // Render loading state
+  const thread = document.getElementById('ticketConversationThread');
+  if (thread) thread.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading conversation…</div>';
+
+  // Fetch replies from ticket_replies table
+  let replies = [];
+  try {
+    const res = await API._fetch('GET', 'tables/ticket_replies', null, { ticket_id: ticketId, limit: 100 });
+    replies = res.data || [];
+  } catch (e) {
+    // table may not exist yet — fall back to just the ticket message + admin_response
+    replies = [];
+  }
+
+  // Build thread: original message first, then replies, then admin_response if no replies
+  const messages = [];
+
+  // Original investor message
+  messages.push({
+    sender: 'investor',
+    text: ticket.message || '',
+    time: ticket.created_at,
+    name: `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim() || 'You',
+  });
+
+  // Replies from ticket_replies table
+  replies.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).forEach(r => {
+    messages.push({
+      sender: r.sender === 'investor' ? 'investor' : 'admin',
+      text: r.message || '',
+      time: r.created_at,
+      name: r.sender === 'investor' ? 'You' : 'SV Capital Support',
+    });
+  });
+
+  // If no replies from table but admin_response exists on the ticket, show it
+  if (!replies.length && ticket.admin_response && ticket.admin_response.trim()) {
+    messages.push({
+      sender: 'admin',
+      text: ticket.admin_response,
+      time: ticket.responded_at || ticket.updated_at || ticket.created_at,
+      name: 'SV Capital Support',
+    });
+  }
+
+  if (thread) {
+    thread.innerHTML = messages.map(m => {
+      const isInvestor = m.sender === 'investor';
+      const wrapClass = isInvestor ? 'chat-bubble-wrap--investor' : 'chat-bubble-wrap--admin';
+      const bubbleClass = isInvestor ? 'chat-bubble--investor' : 'chat-bubble--admin';
+      return `
+        <div class="chat-bubble-wrap ${wrapClass}">
+          <div class="chat-bubble-meta">${m.name} &middot; ${Utils.date(m.time)}</div>
+          <div class="chat-bubble ${bubbleClass}">${(m.text || '').replace(/\n/g, '<br>')}</div>
+        </div>
+      `;
+    }).join('');
+    // Scroll to bottom
+    thread.scrollTop = thread.scrollHeight;
+  }
+
+  // Clear reply input
+  const replyInput = document.getElementById('ticketReplyInput');
+  if (replyInput) replyInput.value = '';
+}
+
+function closeTicketConversation() {
+  _activeTicketId = null;
+  document.getElementById('ticketConversationPanel').style.display = 'none';
+  document.getElementById('myTicketsPanel').style.display = '';
+}
+
+async function sendTicketReply() {
+  if (!_activeTicketId) return;
+  const input = document.getElementById('ticketReplyInput');
+  const message = (input?.value || '').trim();
+  if (!message) { Toast.error('Please enter a reply message'); return; }
+
+  try {
+    // Try to post to ticket_replies table
+    await API._fetch('POST', 'tables/ticket_replies', {
+      id: Utils.genId('RPL'),
+      ticket_id: _activeTicketId,
+      sender: 'investor',
+      sender_id: PORTAL.investor?.id || DEMO_INVESTOR_ID,
+      sender_name: `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim(),
+      message,
+      created_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    // ticket_replies table may not exist — update the ticket message instead
+    const ticket = PORTAL.tickets.find(t => t.id === _activeTicketId);
+    const existingMsg = ticket ? (ticket.message || '') : '';
+    const appendedMsg = existingMsg + `\n\n[Investor reply ${new Date().toLocaleDateString('en-ZA')}]: ${message}`;
+    try {
+      await API._fetch('PATCH', `tables/support_tickets/${_activeTicketId}`, { message: appendedMsg });
+      if (ticket) ticket.message = appendedMsg;
+    } catch (e2) {
+      Toast.error('Could not send reply. Please try again.');
+      return;
+    }
+  }
+
+  Toast.success('Reply sent!');
+  if (input) input.value = '';
+
+  // Reload conversation
+  await openTicketConversation(_activeTicketId);
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE 3: RECURRING INVESTMENT SETUP
+   ═══════════════════════════════════════════════ */
+
+function updateRecurringToggleStyle() {
+  const toggle = document.getElementById('recurringEnabledToggle');
+  const slider = document.getElementById('recurringToggleSlider');
+  if (slider) {
+    if (toggle && toggle.checked) {
+      slider.classList.add('recurring-toggle-on');
+    } else {
+      slider.classList.remove('recurring-toggle-on');
+    }
+  }
+}
+
+function openRecurringModal() {
+  // Populate pool selector
+  const sel = document.getElementById('recurringPoolSelect');
+  if (sel) {
+    sel.innerHTML = '<option value="">Select a pool…</option>' +
+      (PORTAL.pools || []).filter(p => p.status === 'open').map(p =>
+        `<option value="${p.id}">${p.name} — ${Utils.pct(p.annual_rate || p.benchmark_rate)} p.a.</option>`
+      ).join('');
+  }
+
+  // Load existing settings from investor
+  const inv = PORTAL.investor;
+  const toggle = document.getElementById('recurringEnabledToggle');
+  const amtEl  = document.getElementById('recurringAmount');
+
+  if (toggle) {
+    toggle.checked = !!(inv && inv.recurring_enabled);
+    updateRecurringToggleStyle();
+  }
+  if (amtEl && inv && inv.recurring_amount) {
+    amtEl.value = inv.recurring_amount;
+  }
+  if (sel && inv && inv.recurring_pool_id) {
+    sel.value = inv.recurring_pool_id;
+  }
+
+  Modal.open('recurringModal');
+}
+
+async function saveRecurringInvestment() {
+  const toggle  = document.getElementById('recurringEnabledToggle');
+  const amtEl   = document.getElementById('recurringAmount');
+  const poolSel = document.getElementById('recurringPoolSelect');
+
+  const enabled  = !!(toggle && toggle.checked);
+  const amount   = parseFloat(amtEl?.value || 0);
+  const poolId   = poolSel?.value || null;
+
+  if (enabled) {
+    if (!amount || amount < 100) { Toast.error('Please enter a monthly amount of at least R100'); return; }
+    if (!poolId) { Toast.error('Please select an investment pool'); return; }
+  }
+
+  const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
+  try {
+    await API._fetch('PATCH', `tables/investors/${investorId}`, {
+      recurring_enabled: enabled,
+      recurring_amount:  enabled ? amount : null,
+      recurring_pool_id: enabled ? poolId : null,
+    });
+
+    // Update local state
+    if (PORTAL.investor) {
+      PORTAL.investor.recurring_enabled  = enabled;
+      PORTAL.investor.recurring_amount   = enabled ? amount : null;
+      PORTAL.investor.recurring_pool_id  = enabled ? poolId : null;
+    }
+
+    Modal.close('recurringModal');
+
+    if (enabled) {
+      const pool = (PORTAL.pools || []).find(p => p.id === poolId);
+      Toast.success(`Recurring investment of ${Utils.rand(amount)}/month set up${pool ? ' in ' + pool.name : ''}!`);
+    } else {
+      Toast.success('Recurring investment disabled.');
+    }
+
+    _renderRecurringStatusSummary();
+  } catch (e) {
+    Toast.error('Failed to save recurring settings. Please try again.');
+    console.error(e);
+  }
+}
+
+function _renderRecurringStatusSummary() {
+  const inv = PORTAL.investor;
+  const summaryEl = document.getElementById('recurringStatusSummary');
+  if (!summaryEl) return;
+
+  if (inv && inv.recurring_enabled && inv.recurring_amount) {
+    const pool = (PORTAL.pools || []).find(p => p.id === inv.recurring_pool_id);
+    summaryEl.style.display = '';
+    summaryEl.innerHTML = `<i class="fa-solid fa-check-circle" style="color:#22c55e"></i> <strong>Active:</strong> ${Utils.rand(inv.recurring_amount)}/month into ${pool ? pool.name : 'selected pool'}`;
+  } else {
+    summaryEl.style.display = 'none';
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE 5 (extended): ACCOUNT DELETION
+   ═══════════════════════════════════════════════ */
+
+function openDeleteAccountModal() {
+  const input = document.getElementById('deleteAccountConfirmInput');
+  if (input) input.value = '';
+  Modal.open('deleteAccountModal');
+}
+
+async function confirmAccountDeletion() {
+  const input = document.getElementById('deleteAccountConfirmInput');
+  const value = (input?.value || '').trim();
+
+  if (value !== 'DELETE MY ACCOUNT') {
+    Toast.error('Please type exactly: DELETE MY ACCOUNT');
+    return;
+  }
+
+  try {
+    // POST to privacy endpoint
+    await API._fetch('POST', 'privacy/account', { confirm: 'DELETE MY ACCOUNT' });
+    Modal.close('deleteAccountModal');
+    Toast.info('Account deletion request submitted. You will be signed out.');
+    setTimeout(() => { window.location.href = '/login.html'; }, 2500);
+  } catch (e) {
+    // If endpoint doesn't exist, still handle gracefully
+    if (e.message && e.message.includes('404')) {
+      // Submit as a support ticket instead
+      try {
+        await API.tickets.create({
+          id:             Utils.genId('TKT'),
+          investor_id:    PORTAL.investor?.id || DEMO_INVESTOR_ID,
+          investor_name:  `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim(),
+          investor_email: PORTAL.investor?.email || '',
+          subject:        'Account Deletion Request (POPIA)',
+          category:       'general',
+          priority:       'high',
+          message:        'The investor has formally requested account deletion in accordance with POPIA. Please process this request and confirm via email.',
+          status:         'open',
+        });
+        Modal.close('deleteAccountModal');
+        Toast.success('Account deletion request submitted to our team. We will contact you within 3 business days.');
+      } catch (e2) {
+        Toast.error('Could not submit deletion request. Please email admin@svcapital.co.za directly.');
+      }
+    } else {
+      Toast.error('Failed to submit deletion request. Please try again.');
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE 6: PUSH NOTIFICATION OPT-IN
+   ═══════════════════════════════════════════════ */
+
+const PUSH_PREF_KEY = 'svc_push_pref';
+
+function _initPushNotifToggle() {
+  const toggle = document.getElementById('pushNotifToggle');
+  const slider = document.getElementById('pushNotifSlider');
+  const statusText = document.getElementById('pushNotifStatusText');
+  if (!toggle) return;
+
+  const saved = localStorage.getItem(PUSH_PREF_KEY);
+  const enabled = saved === 'true';
+  toggle.checked = enabled;
+  if (slider) {
+    // Manually apply the checked style since it's a hidden input
+    slider.style.background = enabled ? '#ff9b0c' : '#ccc';
+    if (enabled) {
+      slider.style.cssText += ';background:#ff9b0c';
+    }
+  }
+  if (statusText) statusText.textContent = enabled ? 'Enabled — you will receive investment alerts' : 'Enable to receive investment alerts';
+}
+
+async function togglePushNotifications(checked) {
+  const slider = document.getElementById('pushNotifSlider');
+  const statusText = document.getElementById('pushNotifStatusText');
+
+  if (checked) {
+    // Check if Notifications API supported
+    if (!('Notification' in window)) {
+      Toast.info('Push notifications are not supported in this browser. Install the SV Capital app (PWA) for notifications.');
+      const toggle = document.getElementById('pushNotifToggle');
+      if (toggle) toggle.checked = false;
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      localStorage.setItem(PUSH_PREF_KEY, 'true');
+      if (slider) slider.style.background = '#ff9b0c';
+      if (statusText) statusText.textContent = 'Enabled — you will receive investment alerts';
+      Toast.success('Push notifications enabled!');
+
+      // Try to subscribe via service worker if available
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(reg => {
+          // VAPID subscription would go here once keys are configured
+          console.log('[Push] Service worker ready — VAPID subscription pending key configuration');
+        }).catch(e => console.warn('[Push] SW not ready:', e));
+      }
+    } else {
+      // Permission denied
+      localStorage.setItem(PUSH_PREF_KEY, 'false');
+      const toggle = document.getElementById('pushNotifToggle');
+      if (toggle) toggle.checked = false;
+      if (slider) slider.style.background = '#ccc';
+      if (statusText) statusText.textContent = 'Permission denied — enable in browser settings';
+      Toast.error('Notification permission denied. Please enable in your browser settings.');
+    }
+  } else {
+    localStorage.setItem(PUSH_PREF_KEY, 'false');
+    if (slider) slider.style.background = '#ccc';
+    if (statusText) statusText.textContent = 'Disabled';
+    Toast.info('Push notifications disabled.');
+  }
+}
+
+/* ─── Hook into navigate to init profile view extras ─── */
+const _origNavigate = navigate;
+function navigate(view, btnEl) {
+  _origNavigate(view, btnEl);
+  if (view === 'profile') {
+    _initPushNotifToggle();
+    _renderRecurringStatusSummary();
+  }
+}
