@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SV Capital — Client Portal QA Test Guide v1.0</title>
+  <style>
+    /* ── Reset & base ────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                   "Helvetica Neue", Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.55;
+      color: #1a1a2e;
+      background: #f4f5f7;
+    }
+
+    /* ── Page wrapper ────────────────────────────────────────────── */
+    .page {
+      max-width: 960px;
+      margin: 32px auto;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.10);
+      overflow: hidden;
+    }
+
+    /* ── Header ──────────────────────────────────────────────────── */
+    .doc-header {
+      background: #0d1117;
+      padding: 28px 36px 22px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .logo-block {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-icon {
+      width: 46px;
+      height: 46px;
+      background: #FF9B0C;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: 900;
+      color: #0d1117;
+      letter-spacing: -1px;
+      flex-shrink: 0;
+    }
+
+    .logo-text {
+      color: #ffffff;
+    }
+
+    .logo-text .brand {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+
+    .logo-text .brand span {
+      color: #FF9B0C;
+    }
+
+    .logo-text .doc-type {
+      font-size: 11px;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-top: 2px;
+    }
+
+    .doc-meta {
+      text-align: right;
+      color: #8b949e;
+      font-size: 11.5px;
+      line-height: 1.7;
+    }
+
+    .doc-meta .version-badge {
+      display: inline-block;
+      background: #FF9B0C;
+      color: #0d1117;
+      font-weight: 700;
+      font-size: 10.5px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.3px;
+      margin-bottom: 4px;
+    }
+
+    /* ── Tester sign-off strip ───────────────────────────────────── */
+    .signoff-strip {
+      background: #f0f3f8;
+      border-bottom: 1px solid #d0d7de;
+      padding: 12px 36px;
+      display: flex;
+      gap: 48px;
+      flex-wrap: wrap;
+    }
+
+    .signoff-strip .field {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: #444;
+    }
+
+    .signoff-strip .field label {
+      font-weight: 600;
+      white-space: nowrap;
+      color: #0d1117;
+    }
+
+    .signoff-strip .field .line {
+      border-bottom: 1.5px solid #aaa;
+      min-width: 160px;
+      height: 18px;
+    }
+
+    /* ── Body content ────────────────────────────────────────────── */
+    .content {
+      padding: 32px 36px 48px;
+    }
+
+    /* ── Section ─────────────────────────────────────────────────── */
+    .section {
+      margin-bottom: 40px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #FF9B0C;
+    }
+
+    .section-number {
+      background: #FF9B0C;
+      color: #0d1117;
+      font-weight: 800;
+      font-size: 13px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0d1117;
+      letter-spacing: 0.2px;
+    }
+
+    /* ── Info / callout boxes ────────────────────────────────────── */
+    .callout {
+      background: #fff8ed;
+      border-left: 4px solid #FF9B0C;
+      border-radius: 0 6px 6px 0;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      font-size: 12.5px;
+      color: #5a3e00;
+      line-height: 1.6;
+    }
+
+    .callout strong {
+      color: #3a2800;
+    }
+
+    .callout.info {
+      background: #eef4ff;
+      border-left-color: #2563eb;
+      color: #1e3a6e;
+    }
+
+    .callout.info strong { color: #12275e; }
+
+    .callout.warn {
+      background: #fff3f3;
+      border-left-color: #dc2626;
+      color: #7f1d1d;
+    }
+
+    .callout.warn strong { color: #5a1111; }
+
+    /* ── Credentials block ───────────────────────────────────────── */
+    .credentials {
+      background: #0d1117;
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin-bottom: 14px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 12px;
+      color: #e6edf3;
+      line-height: 2;
+    }
+
+    .credentials .cred-label {
+      color: #FF9B0C;
+      font-weight: 700;
+      min-width: 90px;
+      display: inline-block;
+    }
+
+    .credentials a {
+      color: #58a6ff;
+      text-decoration: none;
+    }
+
+    /* ── Test table ──────────────────────────────────────────────── */
+    .test-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+      margin-top: 8px;
+    }
+
+    .test-table thead tr {
+      background: #0d1117;
+      color: #ffffff;
+    }
+
+    .test-table thead th {
+      padding: 9px 11px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    .test-table thead th:first-child {
+      border-radius: 6px 0 0 0;
+      width: 36px;
+      text-align: center;
+    }
+
+    .test-table thead th:last-child {
+      border-radius: 0 6px 0 0;
+    }
+
+    .test-table tbody tr {
+      border-bottom: 1px solid #e1e4e8;
+    }
+
+    .test-table tbody tr:nth-child(even) {
+      background: #f8f9fb;
+    }
+
+    .test-table tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    .test-table tbody td {
+      padding: 9px 11px;
+      vertical-align: top;
+      color: #24292f;
+    }
+
+    .test-table tbody td:first-child {
+      text-align: center;
+      font-weight: 700;
+      color: #6e7681;
+      font-size: 11.5px;
+    }
+
+    /* column widths */
+    .col-num   { width: 36px; }
+    .col-step  { width: 36%; }
+    .col-exp   { width: 34%; }
+    .col-pf    { width: 72px; text-align: center !important; }
+    .col-notes { /* remaining */ }
+
+    .checkbox {
+      font-size: 16px;
+      color: #8b949e;
+    }
+
+    /* ── Limitations section ─────────────────────────────────────── */
+    .limit-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .limit-list li {
+      padding: 8px 12px;
+      border-bottom: 1px solid #e1e4e8;
+      font-size: 12.5px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .limit-list li:last-child { border-bottom: none; }
+
+    .limit-list li .bullet {
+      background: #fee2e2;
+      color: #991b1b;
+      font-weight: 700;
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ── Footer ──────────────────────────────────────────────────── */
+    .doc-footer {
+      background: #0d1117;
+      color: #8b949e;
+      font-size: 11px;
+      text-align: center;
+      padding: 14px 36px;
+      letter-spacing: 0.3px;
+    }
+
+    .doc-footer span {
+      color: #FF9B0C;
+      font-weight: 600;
+    }
+
+    /* ── Print styles ────────────────────────────────────────────── */
+    @media print {
+      body { background: #fff; font-size: 11px; }
+      .page { margin: 0; border-radius: 0; box-shadow: none; max-width: 100%; }
+      .section { page-break-inside: avoid; }
+      .test-table { page-break-inside: auto; }
+      .test-table tr { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- ══════════════════════════════════════════════════════════════
+       HEADER
+  ══════════════════════════════════════════════════════════════ -->
+  <header class="doc-header">
+    <div class="logo-block">
+      <div class="logo-icon">SV</div>
+      <div class="logo-text">
+        <div class="brand">SV <span>Capital</span></div>
+        <div class="doc-type">Client Portal &mdash; QA Test Guide</div>
+      </div>
+    </div>
+    <div class="doc-meta">
+      <div><span class="version-badge">v1.0</span></div>
+      <div>June 2026</div>
+      <div>Internal Use Only</div>
+      <div>platform.svcapital.co.za</div>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       TESTER SIGN-OFF STRIP
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="signoff-strip">
+    <div class="field">
+      <label>Tested by:</label>
+      <div class="line"></div>
+    </div>
+    <div class="field">
+      <label>Date tested:</label>
+      <div class="line"></div>
+    </div>
+    <div class="field">
+      <label>Environment:</label>
+      <div class="line"></div>
+    </div>
+    <div class="field">
+      <label>Build / version:</label>
+      <div class="line"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       BODY
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="content">
+
+    <!-- ─────────────────────────────────────────────────────────
+         SECTION 1 — TEST ACCOUNT SETUP
+    ───────────────────────────────────────────────────────────── -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-number">1</div>
+        <div class="section-title">Test Account Setup</div>
+      </div>
+
+      <div class="callout info">
+        <strong>Before you begin:</strong> Use a dedicated QA investor account. Do <strong>not</strong> use
+        a production investor account with real funds. Ensure cookies are enabled in the browser. Use an
+        incognito / private-browsing window to start with a clean session and avoid cached auth tokens.
+      </div>
+
+      <div class="credentials">
+        <div><span class="cred-label">Portal URL</span> <a href="https://platform.svcapital.co.za" target="_blank">https://platform.svcapital.co.za</a></div>
+        <div><span class="cred-label">Email</span> [email]</div>
+        <div><span class="cred-label">Password</span> [password]</div>
+        <div><span class="cred-label">Browser</span> Chrome / Firefox / Safari (latest)</div>
+        <div><span class="cred-label">Mode</span> Incognito / Private window</div>
+      </div>
+
+      <div class="callout warn">
+        <strong>Cookies required:</strong> The session token is stored in an HttpOnly cookie. Blocking cookies
+        will prevent login. Disable any browser extensions that intercept cookies before testing.
+      </div>
+
+      <table class="test-table">
+        <thead>
+          <tr>
+            <th class="col-num">#</th>
+            <th class="col-step">Step</th>
+            <th class="col-exp">Expected Result</th>
+            <th class="col-pf">Pass / Fail</th>
+            <th class="col-notes">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1.1</td>
+            <td>Open an incognito window and navigate to <strong>https://platform.svcapital.co.za</strong></td>
+            <td>Login page loads without redirect errors; SV Capital logo and sign-in form visible</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>1.2</td>
+            <td>Enter the test account email and password; click <strong>Sign In</strong></td>
+            <td>Redirect to investor dashboard; no 401/403 error; URL changes to <code>/dashboard</code></td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>1.3</td>
+            <td>Attempt login with an <strong>incorrect password</strong></td>
+            <td>Inline error message: "Invalid email or password." Login form remains; no account lockout on first attempt</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>1.4</td>
+            <td>Leave the email field blank and click <strong>Sign In</strong></td>
+            <td>Validation error on email field; form does not submit</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>1.5</td>
+            <td>After successful login, check that the session cookie is set (<em>DevTools &rarr; Application &rarr; Cookies</em>)</td>
+            <td>HttpOnly session cookie present with <code>Secure</code> flag; expiry is in the future</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>1.6</td>
+            <td>Reload the page (F5) while logged in</td>
+            <td>Session persists; dashboard reloads without redirect to login page</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>1.7</td>
+            <td>Click <strong>Logout</strong> / Sign out from the account menu</td>
+            <td>Session cookie is cleared; user is redirected to the login page</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SECTION 2 — ONBOARDING CHECKLIST
+    ───────────────────────────────────────────────────────────── -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-number">2</div>
+        <div class="section-title">Onboarding Checklist</div>
+      </div>
+
+      <div class="callout">
+        <strong>Purpose:</strong> Verify that a brand-new investor account is guided through each onboarding
+        step in the correct order and that the progress indicator updates after each completed step.
+      </div>
+
+      <table class="test-table">
+        <thead>
+          <tr>
+            <th class="col-num">#</th>
+            <th class="col-step">Step</th>
+            <th class="col-exp">Expected Result</th>
+            <th class="col-pf">Pass / Fail</th>
+            <th class="col-notes">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>2.1</td>
+            <td>Log in with a <strong>freshly created</strong> (not yet onboarded) test account</td>
+            <td>Onboarding wizard / checklist screen is displayed; dashboard widgets are locked or greyed out until onboarding is complete</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>2.2</td>
+            <td><strong>FICA Upload</strong> &mdash; Upload a test ID document (dummy PDF or JPG, under 5 MB)</td>
+            <td>Upload progress indicator shows; file appears in the uploaded documents list; step marked as complete with a green tick</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>2.3</td>
+            <td><strong>FICA Upload</strong> &mdash; Attempt to upload a file over 10 MB or an unsupported format (e.g. <code>.exe</code>)</td>
+            <td>Error message displayed; upload is rejected; step remains incomplete</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>2.4</td>
+            <td><strong>Bank Account Details</strong> &mdash; Enter valid South African bank account details (account number, branch code, bank name)</td>
+            <td>Details saved successfully; confirmation message shown; step marked complete</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>2.5</td>
+            <td><strong>Bank Account Details</strong> &mdash; Submit with an invalid branch code (e.g. "000")</td>
+            <td>Validation error on branch code field; form does not submit</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>2.6</td>
+            <td><strong>Wallet Top-up</strong> &mdash; Navigate to the top-up step and initiate a deposit of R100 using the EFT option</td>
+            <td>EFT banking details (account number, reference) are displayed; step status shows "Pending" or "Awaiting payment"</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>2.7</td>
+            <td><strong>First Investment</strong> &mdash; Attempt to reach this step without completing prior steps</td>
+            <td>Step is locked; prompt directs user to complete preceding steps first</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>2.8</td>
+            <td>With all prior steps complete, navigate to the <strong>First Investment</strong> step</td>
+            <td>Available investment pools are listed; user can select a pool and enter an investment amount</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>2.9</td>
+            <td>Refresh the page mid-onboarding (after step 2.2 but before completing all steps)</td>
+            <td>Onboarding resumes at the last incomplete step; completed steps remain ticked</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>2.10</td>
+            <td>Complete all four onboarding steps</td>
+            <td>Checklist shows 100% complete; user is redirected (or prompted) to the main dashboard; all dashboard widgets are now active</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SECTION 3 — DASHBOARD & PORTFOLIO
+    ───────────────────────────────────────────────────────────── -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-number">3</div>
+        <div class="section-title">Dashboard &amp; Portfolio</div>
+      </div>
+
+      <div class="callout">
+        <strong>Note:</strong> The test account must have at least one investment recorded to validate the
+        equity curve chart. Seed data should be pre-loaded for the QA account covering the past 12 months.
+      </div>
+
+      <table class="test-table">
+        <thead>
+          <tr>
+            <th class="col-num">#</th>
+            <th class="col-step">Step</th>
+            <th class="col-exp">Expected Result</th>
+            <th class="col-pf">Pass / Fail</th>
+            <th class="col-notes">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>3.1</td>
+            <td>Navigate to <strong>Dashboard</strong></td>
+            <td>Dashboard loads within 3 seconds; no blank widgets or console errors</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>3.2</td>
+            <td>Inspect the <strong>Portfolio Equity Curve</strong> chart</td>
+            <td>Line chart renders with 12 data points (one per month); x-axis shows month labels; y-axis shows ZAR values; hover tooltip shows date and portfolio value</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>3.3</td>
+            <td>Check the <strong>Wallet Balance</strong> widget</td>
+            <td>Displays current uninvested wallet balance in ZAR (e.g. "R&nbsp;1&nbsp;500.00"); value matches the account's actual wallet balance in the admin panel</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>3.4</td>
+            <td>Check the <strong>Total Invested</strong> widget</td>
+            <td>Displays total principal invested across all active pools in ZAR; value is consistent with the sum of individual investments</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>3.5</td>
+            <td>Scroll to the <strong>Recent Transactions</strong> table</td>
+            <td>Table shows at least the last 5 transactions; columns: Date, Description, Type, Amount, Status; amounts formatted as ZAR with correct sign (+ / &minus;)</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>3.6</td>
+            <td>Verify <strong>transaction types</strong> in the table include: Deposit, Investment, Return, Withdrawal</td>
+            <td>Each type is visually distinct (badge or colour); correct sign applied (Deposits positive, Withdrawals negative)</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>3.7</td>
+            <td>Click a transaction row or the "View all" link for the transactions list</td>
+            <td>Full transaction history page loads; transactions are paginated or filterable by date and type</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>3.8</td>
+            <td>Resize the browser to mobile viewport (375px wide) and reload the dashboard</td>
+            <td>All widgets stack vertically; chart is still readable; no horizontal overflow or clipped content</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SECTION 4 — MARKETPLACE
+    ───────────────────────────────────────────────────────────── -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-number">4</div>
+        <div class="section-title">Marketplace</div>
+      </div>
+
+      <div class="callout">
+        <strong>Prerequisites:</strong> At least two pools should be available in the QA environment &mdash;
+        one <strong>open</strong> (with capacity remaining) and one <strong>full</strong> (at 100% capacity) &mdash;
+        to test both the invest and waitlist flows.
+      </div>
+
+      <table class="test-table">
+        <thead>
+          <tr>
+            <th class="col-num">#</th>
+            <th class="col-step">Step</th>
+            <th class="col-exp">Expected Result</th>
+            <th class="col-pf">Pass / Fail</th>
+            <th class="col-notes">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>4.1</td>
+            <td>Navigate to <strong>Marketplace</strong> via the main navigation</td>
+            <td>Marketplace page loads; pool cards are displayed in a grid or list layout</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>4.2</td>
+            <td>Inspect an <strong>open pool card</strong></td>
+            <td>Card shows: pool name, expected return %, term, minimum investment, capacity progress bar (partially filled), and an enabled <strong>Invest</strong> button</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>4.3</td>
+            <td>Inspect a <strong>full pool card</strong> (100% capacity)</td>
+            <td>Capacity bar is filled to 100%; <strong>Invest</strong> button is replaced by an enabled <strong>Join Waitlist</strong> button</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>4.4</td>
+            <td>Click <strong>Join Waitlist</strong> on the full pool</td>
+            <td>Confirmation prompt or modal appears; after confirming, a success toast is shown; button changes to "On Waitlist" or similar; waitlist position is shown if applicable</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>4.5</td>
+            <td>Click <strong>Join Waitlist</strong> a second time on the same full pool</td>
+            <td>System prevents duplicate entry; error or info message shown: "You are already on the waitlist"</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>4.6</td>
+            <td>Click <strong>Invest</strong> on an open pool</td>
+            <td>Investment modal or page opens; amount input is focused; minimum investment amount is displayed (e.g. "Minimum R&nbsp;500")</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>4.7</td>
+            <td>Enter an amount <strong>below</strong> the pool minimum and attempt to proceed</td>
+            <td>Validation error: "Amount must be at least R&nbsp;[minimum]"; form does not submit</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>4.8</td>
+            <td>Click on a pool card to view the <strong>Pool Detail</strong> page</td>
+            <td>Detail page shows: full description, strategy, expected return, term, start/close dates, fee structure, minimum investment, current capacity and investor count</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>4.9</td>
+            <td>Verify the capacity progress bar <strong>accuracy</strong> on the detail page</td>
+            <td>Percentage shown matches: (amount raised &divide; total capacity) &times; 100, rounded to one decimal place</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>4.10</td>
+            <td>Use any <strong>filter or sort controls</strong> on the Marketplace page (if present)</td>
+            <td>Filters (e.g. by status: Open / Full / Closed) and sort options (by return, by term) work correctly; pool list updates without a full page reload</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SECTION 5 — TOP-UP / DEPOSIT FLOW
+    ───────────────────────────────────────────────────────────── -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-number">5</div>
+        <div class="section-title">Top-up / Deposit Flow</div>
+      </div>
+
+      <div class="callout warn">
+        <strong>Important &mdash; Sandbox only:</strong> Use the <strong>Paystack test key</strong>
+        (<code>pk_test_...</code>) for card payments. Do not process real payments during QA testing.
+        EFT and Ozow flows can be verified up to the gateway redirect step without completing a real transaction.
+      </div>
+
+      <table class="test-table">
+        <thead>
+          <tr>
+            <th class="col-num">#</th>
+            <th class="col-step">Step</th>
+            <th class="col-exp">Expected Result</th>
+            <th class="col-pf">Pass / Fail</th>
+            <th class="col-notes">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>5.1</td>
+            <td>Navigate to <strong>Wallet &rarr; Top Up</strong></td>
+            <td>Top-up flow opens at <strong>Step 1 &mdash; Enter Amount</strong>; amount input is empty and focused</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>5.2</td>
+            <td><strong>Step 1:</strong> Enter an amount below R100 (e.g. R50) and proceed</td>
+            <td>Validation error: "Minimum deposit is R100"; user cannot proceed to Step 2</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>5.3</td>
+            <td><strong>Step 1:</strong> Enter a valid amount (e.g. R500) and click <strong>Continue</strong></td>
+            <td>Proceeds to <strong>Step 2 &mdash; Choose Payment Gateway</strong>; the entered amount is displayed as a summary</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>5.4</td>
+            <td><strong>Step 2:</strong> Verify all three gateway options are present: <strong>EFT</strong>, <strong>Paystack</strong> (card), <strong>Ozow</strong></td>
+            <td>All three options are visible with name and logo or icon; none are disabled unless explicitly not configured</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>5.5</td>
+            <td><strong>Step 2:</strong> Select <strong>Paystack</strong> (card payment)</td>
+            <td>Fee summary strip updates to show <strong>2.9% + R1</strong> transaction fee; total amount (deposit + fee) is clearly displayed before confirming</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>5.6</td>
+            <td>Verify the <strong>fee calculation</strong> for a R500 deposit via Paystack card</td>
+            <td>Fee = (R500 &times; 0.029) + R1 = R15.50; Total = R515.50; values displayed match this calculation exactly</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>5.7</td>
+            <td><strong>Step 2:</strong> Select <strong>EFT</strong></td>
+            <td>Fee summary shows R0 fee (or a no-fee message); EFT banking reference is generated and shown</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>5.8</td>
+            <td><strong>Step 2:</strong> Select <strong>Ozow</strong></td>
+            <td>Fee summary updates for Ozow fees (if applicable); Continue button is enabled</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>5.9</td>
+            <td><strong>Step 3 (Paystack):</strong> Click <strong>Confirm and Pay</strong> with Paystack selected</td>
+            <td>Paystack checkout popup or redirect opens; network tab confirms the request uses the test key (<code>Authorization: Bearer pk_test_...</code>)</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>5.10</td>
+            <td><strong>Step 3 (Paystack sandbox):</strong> Complete payment using test card <code>4084 0840 8408 4081</code>, CVV <code>408</code>, any future expiry date</td>
+            <td>Payment succeeds in sandbox; user is redirected back to the portal; wallet balance increases by the deposit amount; transaction appears in Recent Transactions</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>5.11</td>
+            <td>Press the browser <strong>Back</strong> button during Step 3</td>
+            <td>User is returned to Step 2 (gateway selection) without creating a duplicate pending transaction</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>5.12</td>
+            <td><strong>Step 3 (EFT):</strong> Click <strong>Confirm</strong> for an EFT deposit</td>
+            <td>EFT banking details shown (bank name, account number, branch code, unique payment reference); option to copy reference to clipboard; transaction status set to "Pending"</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SECTION 6 — SUPPORT TICKETS
+    ───────────────────────────────────────────────────────────── -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-number">6</div>
+        <div class="section-title">Support Tickets</div>
+      </div>
+
+      <div class="callout">
+        <strong>Note:</strong> Email notifications for new and updated tickets require a configured Resend API key.
+        If the key is absent in the test environment, verify ticket creation in the UI and database only &mdash;
+        the absence of an email notification is expected and is covered under Section 8 (Known Limitations).
+      </div>
+
+      <table class="test-table">
+        <thead>
+          <tr>
+            <th class="col-num">#</th>
+            <th class="col-step">Step</th>
+            <th class="col-exp">Expected Result</th>
+            <th class="col-pf">Pass / Fail</th>
+            <th class="col-notes">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>6.1</td>
+            <td>Navigate to <strong>Support</strong> in the main navigation</td>
+            <td>Support page loads; list of existing tickets shown (or empty state if none); <strong>New Ticket</strong> button visible</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>6.2</td>
+            <td>Click <strong>New Ticket</strong>; fill in subject and description; click <strong>Submit</strong></td>
+            <td>Ticket is created; user is navigated to the ticket thread view; status shows "Open"; ticket appears in the ticket list</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>6.3</td>
+            <td>Submit a new ticket with an <strong>empty subject</strong></td>
+            <td>Validation error on subject field: "Subject is required"; form does not submit</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>6.4</td>
+            <td>Open an existing ticket to <strong>view the thread</strong></td>
+            <td>Thread view shows all messages in chronological order (oldest at top); sender name and timestamp shown for each message; investor messages are visually distinguished from support replies</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>6.5</td>
+            <td>Type a reply in the reply box and click <strong>Send</strong></td>
+            <td>Reply appears at the bottom of the thread; timestamp is correct; character limit warning shown if applicable</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>6.6</td>
+            <td>Attempt to submit an <strong>empty reply</strong></td>
+            <td>Send button is disabled or validation prevents submission; empty message is not added to the thread</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>6.7</td>
+            <td>Have an admin reply to the ticket from the admin panel; reload the support page as the investor</td>
+            <td>Navigation shows an <strong>unread badge</strong> (red dot or count) on the Support menu item; ticket in the list is highlighted or marked as having unread messages</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>6.8</td>
+            <td>Open the ticket that has the unread reply</td>
+            <td>Unread badge clears from the navigation; ticket is marked as read after viewing</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>6.9</td>
+            <td>Attempt to reply to a ticket with status <strong>Closed</strong> (if available)</td>
+            <td>Reply box is disabled or hidden; message shown: "This ticket is closed. Open a new ticket if you need further assistance."</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SECTION 7 — PROFILE & DOCUMENTS
+    ───────────────────────────────────────────────────────────── -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-number">7</div>
+        <div class="section-title">Profile &amp; Documents</div>
+      </div>
+
+      <div class="callout">
+        <strong>Note:</strong> Monthly statement PDFs are generated server-side. Ensure the test account has
+        at least one completed month of transaction history so a statement is available to download.
+      </div>
+
+      <table class="test-table">
+        <thead>
+          <tr>
+            <th class="col-num">#</th>
+            <th class="col-step">Step</th>
+            <th class="col-exp">Expected Result</th>
+            <th class="col-pf">Pass / Fail</th>
+            <th class="col-notes">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>7.1</td>
+            <td>Navigate to <strong>Profile</strong> (account settings page)</td>
+            <td>Profile page loads; displays investor's personal information: full name, email, phone number, ID number (partially masked), and address</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>7.2</td>
+            <td>Edit a non-sensitive field (e.g. phone number) and save</td>
+            <td>Updated value is saved and displayed; success toast or confirmation shown; no full page reload required</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>7.3</td>
+            <td>Submit the profile form with a <strong>malformed phone number</strong> (e.g. "123")</td>
+            <td>Validation error on phone field; form does not save</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>7.4</td>
+            <td>Navigate to the <strong>Documents</strong> tab or section</td>
+            <td>Documents section loads; shows FICA documents (ID and proof of address) with upload status (Pending / Approved / Rejected) and upload date</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>7.5</td>
+            <td><strong>Upload FICA &mdash; ID document:</strong> Click upload and select a valid PDF or image under 5 MB</td>
+            <td>File uploads successfully; document listed with status "Pending Review"; upload date is today</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>7.6</td>
+            <td><strong>Upload FICA &mdash; Proof of address:</strong> Upload a second valid document</td>
+            <td>Second document appears in list; each document type is shown separately; both show status "Pending Review"</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>7.7</td>
+            <td>Navigate to <strong>Statements</strong> and find the most recent monthly statement</td>
+            <td>Statement is listed with a month label (e.g. "May 2026"); <strong>Download PDF</strong> button is present</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>7.8</td>
+            <td>Click <strong>Download PDF</strong> for the monthly statement</td>
+            <td>PDF downloads to the user's device or opens in a new tab; PDF contains SV Capital branding, investor name, account number, and itemised transactions for the month</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>7.9</td>
+            <td>Locate the <strong>Referral</strong> section on the Profile page</td>
+            <td>Investor's unique referral link and referral code are displayed; a <strong>Copy Link</strong> button is present</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>7.10</td>
+            <td>Click <strong>Copy Link</strong> in the referral section</td>
+            <td>Link is copied to clipboard; success feedback shown (e.g. "Copied!"); pasting the clipboard content gives the correct referral URL</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>7.11</td>
+            <td>Open the referral link in a new incognito window</td>
+            <td>Registration page loads with the referral code pre-populated or referral attribution tracked; referrer's personal details are not exposed to the new visitor</td>
+            <td class="col-pf"><span class="checkbox">&#9633;</span></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ─────────────────────────────────────────────────────────
+         SECTION 8 — KNOWN LIMITATIONS / NOT IN SCOPE
+    ───────────────────────────────────────────────────────────── -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-number">8</div>
+        <div class="section-title">Known Limitations &amp; Out-of-Scope Items</div>
+      </div>
+
+      <div class="callout warn">
+        <strong>Do not raise these as bugs</strong> unless the behaviour differs from the description below.
+        These are known environment constraints or features intentionally excluded from this test cycle.
+      </div>
+
+      <ul class="limit-list">
+        <li>
+          <span class="bullet">PAYMENT</span>
+          <span>
+            <strong>Real payments are live by default.</strong> The production Paystack key processes actual card
+            charges. QA testing must use the <strong>Paystack test key</strong> (<code>pk_test_...</code>)
+            configured in the environment. Confirm with the backend team that the test environment is using the
+            sandbox key before running any deposit tests.
+          </span>
+        </li>
+        <li>
+          <span class="bullet">SMS</span>
+          <span>
+            <strong>SMS notifications are not available in QA.</strong> OTP and transactional SMS messages use
+            the Africa's Talking API, which requires a live paid key. In the QA environment, SMS sending will
+            silently fail or log to console only. Verify SMS content via the Africa's Talking test dashboard
+            if a staging key has been provisioned.
+          </span>
+        </li>
+        <li>
+          <span class="bullet">EMAIL</span>
+          <span>
+            <strong>Email notifications require the Resend API key.</strong> Without a valid
+            <code>RESEND_API_KEY</code> environment variable, all outbound emails (welcome, deposit confirmation,
+            support ticket updates, statements) will fail silently. Check server logs for <code>[email]</code>
+            log lines to confirm the correct email would have been sent.
+          </span>
+        </li>
+        <li>
+          <span class="bullet">FICA</span>
+          <span>
+            <strong>FICA document approval is a manual admin action.</strong> Uploading FICA documents sets
+            their status to "Pending Review"; approval or rejection must be performed by an admin in the
+            back-office panel. Automated identity verification via a third-party API is not in scope for
+            this test cycle.
+          </span>
+        </li>
+        <li>
+          <span class="bullet">OZOW</span>
+          <span>
+            <strong>Ozow sandbox requires a dedicated test merchant ID.</strong> If Ozow is not configured with
+            a sandbox merchant ID in the QA environment, the Ozow redirect will fail at the gateway. Log this
+            as an environment configuration issue, not a portal bug.
+          </span>
+        </li>
+        <li>
+          <span class="bullet">PERF</span>
+          <span>
+            <strong>Load and performance testing are out of scope</strong> for this guide. This document covers
+            functional and UI correctness only. Concurrent-user and stress testing should be handled in a
+            separate performance test plan against a dedicated load-test environment.
+          </span>
+        </li>
+        <li>
+          <span class="bullet">SECURITY</span>
+          <span>
+            <strong>Penetration testing and vulnerability scanning are out of scope</strong> for this guide.
+            Security testing (OWASP Top 10, API security) should be performed in a dedicated security review
+            cycle against a staging environment &mdash; never against production.
+          </span>
+        </li>
+      </ul>
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- ══════════════════════════════════════════════════════════════
+       FOOTER
+  ══════════════════════════════════════════════════════════════ -->
+  <footer class="doc-footer">
+    <span>SV Capital</span> &mdash; Client Portal QA Test Guide &mdash; v1.0 &mdash; June 2026
+    &mdash; Internal use only &mdash; platform.svcapital.co.za
+  </footer>
+
+</div><!-- /page -->
+
+</body>
+</html>

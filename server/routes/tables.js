@@ -17,6 +17,28 @@ const emailService = require('../services/email');
 const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
 
+/* ─── Input Validation ─── */
+const NUMERIC_FIELDS = new Set(['amount','wallet_balance','total_invested','total_returns','annual_rate','max_capacity','current_invested','recurring_amount','xp_points']);
+const STATUS_FIELDS  = { status: ['active','inactive','pending','matured','paid_out','cancelled','rejected','open','closed','resolved','in_review','completed','waitlist'], fica_status: ['pending','approved','rejected','not_started'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','reinvest','pending'] };
+
+function validateBody(table, body, isCreate) {
+  const errors = [];
+  for (const [key, val] of Object.entries(body)) {
+    if (NUMERIC_FIELDS.has(key) && val !== null && val !== undefined) {
+      const n = Number(val);
+      if (isNaN(n)) errors.push(`${key} must be a number`);
+      // wallet_balance and amount can't be negative when setting directly (allow negative for adjustments)
+      if ((key === 'amount') && n < 0 && isCreate) errors.push(`${key} cannot be negative`);
+    }
+    if (STATUS_FIELDS[key] && val !== null && val !== undefined) {
+      if (!STATUS_FIELDS[key].includes(val)) {
+        errors.push(`${key} must be one of: ${STATUS_FIELDS[key].join(', ')}`);
+      }
+    }
+  }
+  return errors;
+}
+
 /* ─── Whitelist of allowed tables and their primary key column ─── */
 const ALLOWED_TABLES = {
   investors:             'id',
@@ -65,6 +87,7 @@ const ALLOWED_TABLES = {
   fica_checks:           'id',   // read-only via generic API; writes via /api/fica/*
   quest_completions:     'id',   // read via generic API; writes via /api/quests/*
   users:                 'id',   // limited, no password_hash exposed
+  investment_waitlist:   'id',
 };
 
 /* ─── Tables that require admin/director role for READ ─── */
@@ -270,6 +293,9 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     const protectedCols = PROTECTED_WRITE_COLS[table] || [];
     protectedCols.forEach(c => delete body[c]);
 
+    const validationErrors = validateBody(table, req.body, true);
+    if (validationErrors.length) return res.status(400).json({ error: validationErrors.join('; ') });
+
     // Auto-generate ID if missing
     if (!body.id) {
       const prefixMap = {
@@ -455,6 +481,9 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     delete body.created_at;
     body.updated_at = new Date().toISOString();
 
+    const validationErrors = validateBody(table, req.body, false);
+    if (validationErrors.length) return res.status(400).json({ error: validationErrors.join('; ') });
+
     const keys   = Object.keys(body);
     const values = Object.values(body);
     const sets   = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
@@ -578,6 +607,34 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
         if (table === 'kyc_documents' && body.status === 'rejected' && updated.investor_id) {
           const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
           if (inv[0]) await emailService.sendKycRejected(inv[0], { notes: updated.notes });
+        }
+
+        // Pool reopened → notify waitlisted investors
+        if (table === 'investment_pools' && body.status === 'active' && updated.id) {
+          (async () => {
+            try {
+              const { rows: waitlist } = await pool.query(
+                `SELECT w.*, inv.email, inv.first_name, inv.last_name
+                 FROM investment_waitlist w
+                 JOIN investors inv ON inv.id = w.investor_id
+                 WHERE w.pool_id = $1 AND w.notified = false`,
+                [updated.id]
+              );
+              for (const entry of waitlist) {
+                await emailService.sendWaitlistNotification(
+                  { email: entry.email, first_name: entry.first_name, last_name: entry.last_name },
+                  { poolName: updated.pool_name || updated.id }
+                ).catch(e => console.error('[waitlist] email error:', e.message));
+                await pool.query(
+                  'UPDATE investment_waitlist SET notified = true, notified_at = NOW() WHERE id = $1',
+                  [entry.id]
+                );
+              }
+              console.log(`[waitlist] Notified ${waitlist.length} investors for pool ${updated.id}`);
+            } catch (e) {
+              console.error('[waitlist] notification error:', e.message);
+            }
+          })();
         }
       } catch (hookErr) {
         console.error('[email hook PATCH] error:', hookErr.message);

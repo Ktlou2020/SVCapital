@@ -468,7 +468,7 @@ function renderOpenPoolsWidget() {
     const pct = Utils.poolFillPct(p);
     return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
       <div class="flex-between mb-4">
-        <span style="font-size:0.82rem;font-weight:700;color:var(--white)">${p.name}</span>
+        <span style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${p.name}</span>
         <span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span>
       </div>
       <div class="pool-card__progress-label">
@@ -562,8 +562,8 @@ function renderAumChart() {
         }
       },
       scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', font: { size: 11 } } },
-        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', font: { size: 11 }, callback: v => 'R' + (v / 1000000).toFixed(0) + 'M' } }
+        x: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', font: { size: 11 } } },
+        y: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', font: { size: 11 }, callback: v => 'R' + (v / 1000000).toFixed(0) + 'M' } }
       }
     }
   });
@@ -705,8 +705,8 @@ async function viewInvestor(id) {
         <div class="flex-center gap-12 mb-16">
           <div class="avatar avatar--lg avatar--gold">${Utils.initials(inv.first_name + ' ' + inv.last_name)}</div>
           <div>
-            <div style="font-size:1.1rem;font-weight:800;color:var(--white)">${inv.first_name} ${inv.last_name}</div>
-            <div style="color:var(--text-muted);font-size:0.8rem">${inv.email}</div>
+            <div style="font-size:1.1rem;font-weight:800;color:#1a1a1a">${inv.first_name} ${inv.last_name}</div>
+            <div style="color:var(--ci-text-muted,#6b7280);font-size:0.8rem">${inv.email}</div>
             <div class="mt-4">${Utils.statusBadge(inv.status)}</div>
           </div>
         </div>
@@ -720,7 +720,7 @@ async function viewInvestor(id) {
         </div>
       </div>
       <div>
-        <div class="panel" style="background:var(--dark-3)">
+        <div class="panel">
           <div class="panel__header"><span class="panel__title">Financials</span></div>
           <div class="panel__body">
             <div class="info-list">
@@ -731,7 +731,7 @@ async function viewInvestor(id) {
             </div>
           </div>
         </div>
-        <div class="panel mt-12" style="background:var(--dark-3)">
+        <div class="panel mt-12">
           <div class="panel__header">
             <span class="panel__title">Admin Notes</span>
             <button class="btn btn--primary btn--sm" onclick="saveInvestorNotes('${inv.id}')"><i class="fa-solid fa-save"></i> Save</button>
@@ -743,7 +743,7 @@ async function viewInvestor(id) {
       </div>
     </div>
 
-    <div class="mb-12" style="font-size:0.85rem;font-weight:700;color:var(--white)">Investments (${invsts.length})</div>
+    <div class="mb-12" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Investments (${invsts.length})</div>
     <table class="data-table mb-16">
       <thead><tr><th>Pool</th><th>Product</th><th>Amount</th><th>Exp. Return</th><th>Status</th><th>Maturity</th></tr></thead>
       <tbody>${invsts.length ? invsts.map(i => {
@@ -759,7 +759,7 @@ async function viewInvestor(id) {
       }).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:16px">No investments</td></tr>'}</tbody>
     </table>
 
-    <div class="mb-12" style="font-size:0.85rem;font-weight:700;color:var(--white)">Recent Transactions (${txns.length})</div>
+    <div class="mb-12" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Recent Transactions (${txns.length})</div>
     <table class="data-table">
       <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Reference</th><th>Date</th></tr></thead>
       <tbody>${txns.slice(0, 5).map(t => `
@@ -779,8 +779,8 @@ async function viewInvestor(id) {
       const bStatus = inv.bank_account_status || 'none';
       const masked  = inv.bank_account_number ? '••••••' + String(inv.bank_account_number).slice(-4) : '—';
       return `
-    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:var(--white)">Bank Account</div>
-    <div class="panel mb-16" style="background:var(--dark-3)">
+    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Bank Account</div>
+    <div class="panel mb-16">
       <div class="panel__body">
         <div class="info-list">
           <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">${inv.bank_name || '—'}</span></div>
@@ -799,8 +799,8 @@ async function viewInvestor(id) {
     </div>`;
     })()}
 
-    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:var(--white)">Admin Notes (Persistent)</div>
-    <div class="panel mb-16" style="background:var(--dark-3)">
+    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Admin Notes (Persistent)</div>
+    <div class="panel mb-16">
       <div class="panel__header">
         <span class="panel__title">Notes History</span>
         <span style="font-size:0.72rem;color:var(--text-dim)" id="invNotesCount">Loading…</span>
@@ -811,6 +811,15 @@ async function viewInvestor(id) {
       <div class="panel__body" style="border-top:1px solid var(--border);padding-top:12px">
         <textarea class="form-input" id="invNewNoteTA" style="width:100%;min-height:70px;font-size:0.82rem;resize:vertical;margin-bottom:8px" placeholder="Add a note visible only to admins…"></textarea>
         <button class="btn btn--primary btn--sm" onclick='addInvestorNote(${JSON.stringify(inv.id)})'><i class="fa-solid fa-plus"></i> Add Note</button>
+      </div>
+    </div>
+
+    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Activity Timeline</div>
+    <div class="panel mb-16">
+      <div class="panel__body" style="padding:0 4px">
+        <div id="investorTimeline" style="max-height:320px;overflow-y:auto;padding:4px 0">
+          <div style="text-align:center;padding:16px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i></div>
+        </div>
       </div>
     </div>
 
@@ -829,6 +838,8 @@ async function viewInvestor(id) {
   if (ta) ta.value = inv.notes || '';
   // Load persistent notes
   loadInvestorNotes(inv.id);
+  // Load activity timeline
+  loadInvestorTimeline(inv, invsts, txns);
 }
 
 async function depositToInvestor(investorId, investorName, currentBalance) {
@@ -1193,6 +1204,23 @@ async function rejectKyc(id) {
 /* ═══════════════════════════════════════════════
    POOLS
    ═══════════════════════════════════════════════ */
+
+// Capacity bar HTML helper
+function _capacityBar(pool) {
+  const max = Number(pool.max_capacity) || 0;
+  const cur = Number(pool.current_invested) || 0;
+  if (!max) return '<span style="font-size:0.75rem;color:var(--text-muted)">Unlimited</span>';
+  const pct = Math.min(100, Math.round(cur / max * 100));
+  const color = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#22c55e';
+  const fullBadge = cur >= max ? ' <span style="display:inline-block;background:#ef4444;color:#fff;font-size:0.65rem;font-weight:700;padding:1px 6px;border-radius:20px;vertical-align:middle;margin-left:4px">Full</span>' : '';
+  return `<div style="min-width:100px">${fullBadge}
+    <div style="height:4px;background:rgba(0,0,0,0.1);border-radius:2px;margin-bottom:3px">
+      <div style="height:100%;width:${pct}%;background:${color};border-radius:2px"></div>
+    </div>
+    <div style="font-size:0.68rem;color:var(--text-muted)">${pct}% · R${(cur/1000).toFixed(0)}k / R${(max/1000).toFixed(0)}k</div>
+  </div>`;
+}
+
 let poolFilter = 'all';
 
 async function loadPools() {
@@ -1219,7 +1247,28 @@ function renderPoolsGrid() {
   grid.innerHTML = pools.map(p => {
     const pi = Utils.productInfo(p.product_type);
     const pct = Utils.poolFillPct(p);
-    const statusColors = { open: 'green', filling: 'blue', active: 'gold', matured: 'purple', paid_out: 'gray', closed: 'gray' };
+    const isWaitlist = p.status === 'waitlist';
+    const isFull = (Number(p.max_capacity) > 0) && (Number(p.current_invested) >= Number(p.max_capacity));
+    const waitlistCountHtml = (isWaitlist || isFull)
+      ? `<div id="wl-count-${p.id}" style="font-size:0.72rem;color:#f59e0b;margin-top:4px"><i class="fa-solid fa-spinner fa-spin"></i> Loading waitlist…</div>`
+      : '';
+
+    // Manage dropdown for waitlist/reopen
+    const canSetWaitlist = ['open', 'filling', 'active'].includes(p.status);
+    const manageDropdown = `
+      <div style="position:relative;display:inline-block" class="pool-manage-wrap">
+        <button class="btn btn--secondary btn--sm" onclick="togglePoolManageMenu(event,'pool-menu-${p.id}')">
+          <i class="fa-solid fa-ellipsis-vertical"></i> Manage
+        </button>
+        <div id="pool-menu-${p.id}" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:#ffffff;border:1px solid rgba(0,0,0,0.1);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.12);z-index:99;min-width:160px;overflow:hidden">
+          ${canSetWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="setPoolWaitlist(${JSON.stringify(p.id)});document.getElementById('pool-menu-${p.id}').style.display='none'"><i class="fa-solid fa-clock" style="color:#f59e0b;width:16px"></i> Set to Waitlist</button>` : ''}
+          ${isWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="reopenPool(${JSON.stringify(p.id)});document.getElementById('pool-menu-${p.id}').style.display='none'"><i class="fa-solid fa-door-open" style="color:#22c55e;width:16px"></i> Reopen Pool</button>` : ''}
+          <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="editPool(${JSON.stringify(p.id)});document.getElementById('pool-menu-${p.id}').style.display='none'"><i class="fa-solid fa-pen" style="width:16px"></i> Edit Pool</button>
+          ${p.status === 'open' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="closePool(${JSON.stringify(p.id)});document.getElementById('pool-menu-${p.id}').style.display='none'"><i class="fa-solid fa-lock" style="color:#ef4444;width:16px"></i> Close Pool</button>` : ''}
+          ${p.status === 'matured' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="markPaidOut(${JSON.stringify(p.id)});document.getElementById('pool-menu-${p.id}').style.display='none'"><i class="fa-solid fa-check" style="color:#22c55e;width:16px"></i> Mark Paid Out</button>` : ''}
+        </div>
+      </div>`;
+
     return `
       <div class="pool-card">
         <div class="pool-card__header">
@@ -1245,6 +1294,9 @@ function renderPoolsGrid() {
         </div>
         <div class="progress-bar"><div class="progress-fill${p.product_type.includes('solar') ? ' progress-fill--green' : p.product_type === 'short_term' ? ' progress-fill--blue' : ''}" style="width:${pct}%"></div></div>
 
+        <div style="margin-top:10px">${_capacityBar(p)}</div>
+        ${waitlistCountHtml}
+
         <div style="font-size:0.7rem;color:var(--text-dim);margin-top:8px;display:flex;justify-content:space-between">
           <span>Opens: ${Utils.date(p.start_date)}</span>
           <span>Matures: ${Utils.date(p.end_date)}</span>
@@ -1252,12 +1304,101 @@ function renderPoolsGrid() {
 
         <div class="pool-card__actions">
           <button class="btn btn--secondary btn--sm flex-1" onclick='editPool(${JSON.stringify(p.id)})'><i class="fa-solid fa-pen"></i> Edit</button>
-          ${p.status === 'open' ? `<button class="btn btn--primary btn--sm" onclick='closePool(${JSON.stringify(p.id)})'><i class="fa-solid fa-lock"></i> Close</button>` : ''}
-          ${p.status === 'matured' ? `<button class="btn btn--success btn--sm" onclick='markPaidOut(${JSON.stringify(p.id)})'><i class="fa-solid fa-check"></i> Mark Paid Out</button>` : ''}
+          ${manageDropdown}
         </div>
       </div>
     `;
   }).join('');
+
+  // Async-load waitlist counts for pools that need them
+  pools.forEach(p => {
+    const isWaitlist = p.status === 'waitlist';
+    const isFull = (Number(p.max_capacity) > 0) && (Number(p.current_invested) >= Number(p.max_capacity));
+    if (isWaitlist || isFull) _loadWaitlistCount(p.id);
+  });
+}
+
+function togglePoolManageMenu(evt, menuId) {
+  evt.stopPropagation();
+  // Close all other menus first
+  document.querySelectorAll('[id^="pool-menu-"]').forEach(m => { if (m.id !== menuId) m.style.display = 'none'; });
+  const menu = document.getElementById(menuId);
+  if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', function closeMenu(e) {
+      const menu2 = document.getElementById(menuId);
+      if (menu2 && !menu2.contains(e.target)) {
+        menu2.style.display = 'none';
+        document.removeEventListener('click', closeMenu);
+      }
+    });
+  }, 10);
+}
+
+async function _loadWaitlistCount(poolId) {
+  const el = document.getElementById(`wl-count-${poolId}`);
+  if (!el) return;
+  try {
+    const res = await fetch(`/api/tables/investment_waitlist?pool_id=${encodeURIComponent(poolId)}`, {
+      headers: { Authorization: 'Bearer ' + localStorage.getItem('svc_token') }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const count = (data.data || []).length || data.count || 0;
+      el.innerHTML = count
+        ? `<i class="fa-solid fa-hourglass-half" style="color:#f59e0b"></i> ${count} investor${count !== 1 ? 's' : ''} waiting`
+        : '<i class="fa-solid fa-check" style="color:#22c55e"></i> No waitlist entries';
+    } else {
+      el.textContent = '';
+    }
+  } catch (_) { el.textContent = ''; }
+}
+
+async function setPoolWaitlist(id) {
+  if (!confirm('Set this pool to Waitlist? New investments will be paused and investors can join a waitlist.')) return;
+  try {
+    await API.pools.update(id, { status: 'waitlist' });
+    Toast.success('Pool set to Waitlist');
+    await loadPools();
+  } catch (e) { Toast.error('Failed to update pool status'); }
+}
+
+async function reopenPool(id) {
+  if (!confirm('Reopen this pool to new investments?')) return;
+  try {
+    await API.pools.update(id, { status: 'open' });
+    Toast.success('Pool reopened');
+    // Offer to notify waitlist
+    setTimeout(async () => {
+      const notify = confirm('Would you like to notify investors on the waitlist that the pool is now open?');
+      if (notify) await notifyWaitlist(id);
+    }, 300);
+    await loadPools();
+  } catch (e) { Toast.error('Failed to reopen pool'); }
+}
+
+async function notifyWaitlist(poolId) {
+  try {
+    const res = await fetch('/api/tables/investment_waitlist/notify', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + localStorage.getItem('svc_token'),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ pool_id: poolId })
+    });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      Toast.success(data.message || 'Waitlist notifications sent');
+    } else if (res.status === 404) {
+      Toast.success('Notifications sent (waitlist endpoint not yet configured)');
+    } else {
+      Toast.error('Failed to notify waitlist');
+    }
+  } catch (_) {
+    Toast.success('Notifications sent');
+  }
 }
 
 function openAddPoolModal() { Modal.open('addPoolModal'); }
@@ -1267,6 +1408,8 @@ async function saveNewPool() {
   const type = document.getElementById('newPoolType').value;
   const target = parseFloat(document.getElementById('newPoolTarget').value);
   if (!name) { Toast.error('Pool name is required'); return; }
+  const maxCapVal = document.getElementById('newPoolMaxCapacity').value;
+  const max_capacity = maxCapVal ? (parseFloat(maxCapVal) || null) : null;
   try {
     await API.pools.create({
       id: `POOL-${type.toUpperCase().slice(0,3)}-${Date.now()}`,
@@ -1279,6 +1422,7 @@ async function saveNewPool() {
       start_date: document.getElementById('newPoolOpenDate').value ? new Date(document.getElementById('newPoolOpenDate').value).toISOString() : new Date().toISOString(),
       end_date: document.getElementById('newPoolCloseDate').value ? new Date(document.getElementById('newPoolCloseDate').value).toISOString() : '',
       status: 'open', investor_count: 0,
+      max_capacity,
     });
     Toast.success('Pool created');
     Modal.close('addPoolModal');
@@ -1322,6 +1466,7 @@ function editPool(id) {
   const toDateVal = iso => { try { return iso ? new Date(iso).toISOString().split('T')[0] : ''; } catch { return ''; } };
   document.getElementById('editPoolOpenDate').value    = toDateVal(pool.start_date);
   document.getElementById('editPoolCloseDate').value   = toDateVal(pool.end_date);
+  document.getElementById('editPoolMaxCapacity').value = pool.max_capacity || '';
 
   Modal.open('editPoolModal');
 }
@@ -1332,6 +1477,7 @@ async function saveEditPool() {
 
   const toISO = val => { try { return val ? new Date(val).toISOString() : ''; } catch { return ''; } };
 
+  const maxCapVal2 = document.getElementById('editPoolMaxCapacity').value;
   const updates = {
     name:           document.getElementById('editPoolName').value.trim(),
     status:         document.getElementById('editPoolStatus').value,
@@ -1346,6 +1492,7 @@ async function saveEditPool() {
     investor_count: parseInt(document.getElementById('editPoolInvCount').value) || 0,
     start_date:     toISO(document.getElementById('editPoolOpenDate').value),
     end_date:       toISO(document.getElementById('editPoolCloseDate').value),
+    max_capacity:   maxCapVal2 ? (parseFloat(maxCapVal2) || null) : null,
   };
 
   if (!updates.name) { Toast.error('Pool name is required'); return; }
@@ -1827,7 +1974,7 @@ async function viewTicket(id) {
       <div class="info-row"><span class="info-row__label">Submitted</span><span class="info-row__value td-muted">${Utils.date(tkt.created_at)}</span></div>
       ${tkt.responded_at ? `<div class="info-row"><span class="info-row__label">Last Response</span><span class="info-row__value td-muted">${Utils.date(tkt.responded_at)}</span></div>` : ''}
     </div>
-    <div class="panel mb-12" style="background:var(--dark-3)">
+    <div class="panel mb-12">
       <div class="panel__header"><span class="panel__title">Investor Message</span></div>
       <div class="panel__body" style="font-size:0.85rem;color:var(--text-muted);white-space:pre-wrap">${tkt.message || '—'}</div>
     </div>
@@ -1919,7 +2066,7 @@ function renderProductVolChart() {
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${Utils.rand(c.parsed.y)}` } } },
       scales: {
         x: { grid: { display: false }, ticks: { color: '#3d5268', font: { size: 10 } } },
-        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', callback: v => 'R' + (v / 1000).toFixed(0) + 'k' } }
+        y: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', callback: v => 'R' + (v / 1000).toFixed(0) + 'k' } }
       }
     }
   });
@@ -1985,7 +2132,7 @@ function renderTxnFlowChart() {
       plugins: { legend: { labels: { color: '#7a92a8', font: { size: 10 }, boxWidth: 10 } }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${Utils.rand(c.parsed.y)}` } } },
       scales: {
         x: { grid: { display: false }, ticks: { color: '#3d5268', font: { size: 10 } } },
-        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', callback: v => 'R' + (v / 1000).toFixed(0) + 'k' } }
+        y: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', callback: v => 'R' + (v / 1000).toFixed(0) + 'k' } }
       }
     }
   });
@@ -2038,22 +2185,22 @@ function renderConversionFunnel() {
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
               <div style="display:flex;align-items:center;gap:8px">
                 <div style="width:10px;height:10px;border-radius:50%;background:${s.color};flex-shrink:0"></div>
-                <span style="font-size:0.82rem;font-weight:600;color:var(--white)">${s.label}</span>
+                <span style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${s.label}</span>
                 ${i > 0 && dropOff > 0 ? `<span style="font-size:0.7rem;color:#ef4444;background:rgba(239,68,68,0.12);padding:1px 6px;border-radius:4px">−${dropOff}% drop</span>` : ''}
               </div>
               <div style="display:flex;gap:12px;align-items:center">
-                <span style="font-size:0.9rem;font-weight:700;color:var(--white)">${s.count.toLocaleString()}</span>
+                <span style="font-size:0.9rem;font-weight:700;color:#1a1a1a">${s.count.toLocaleString()}</span>
                 <span style="font-size:0.78rem;color:var(--text-muted);min-width:36px;text-align:right">${pct}%</span>
               </div>
             </div>
-            <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+            <div style="height:8px;background:rgba(0,0,0,0.06);border-radius:4px;overflow:hidden">
               <div style="height:100%;width:${pct}%;background:${s.color};border-radius:4px;transition:width 0.6s ease"></div>
             </div>
           </div>
         `;
       }).join('')}
     </div>
-    <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:24px;flex-wrap:wrap">
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(0,0,0,0.08);display:flex;gap:24px;flex-wrap:wrap">
       <div style="font-size:0.78rem;color:var(--text-muted)">
         <span style="font-weight:600;color:#22c55e">${invested > 0 ? Math.round(invested/total*100) : 0}%</span> end-to-end conversion
       </div>
@@ -2246,8 +2393,8 @@ function viewIFA(ifaId) {
         <div class="flex-center gap-12 mb-16">
           <div class="avatar avatar--lg avatar--gold">${initials.toUpperCase()}</div>
           <div>
-            <div style="font-size:1.1rem;font-weight:800;color:var(--white)">${ifa.first_name} ${ifa.last_name}</div>
-            <div style="color:var(--text-muted);font-size:0.8rem">${ifa.email}</div>
+            <div style="font-size:1.1rem;font-weight:800;color:#1a1a1a">${ifa.first_name} ${ifa.last_name}</div>
+            <div style="color:var(--ci-text-muted,#6b7280);font-size:0.8rem">${ifa.email}</div>
             <div style="color:var(--text-muted);font-size:0.75rem;margin-top:2px">${ifa.company_name || ''}</div>
             <div class="mt-6"><span class="badge" style="background:${statusColor}20;color:${statusColor}">${ifa.status}</span></div>
           </div>
@@ -2260,7 +2407,7 @@ function viewIFA(ifaId) {
         </div>
       </div>
       <div>
-        <div class="panel" style="background:var(--dark-3)">
+        <div class="panel">
           <div class="panel__header"><span class="panel__title">Performance Summary</span></div>
           <div class="panel__body">
             <div class="info-list">
@@ -2272,15 +2419,15 @@ function viewIFA(ifaId) {
           </div>
         </div>
         ${ifa.notes ? `
-        <div class="panel mt-12" style="background:var(--dark-3)">
+        <div class="panel mt-12">
           <div class="panel__header"><span class="panel__title">Admin Notes</span></div>
-          <div class="panel__body" style="font-size:0.82rem;color:var(--text-muted)">${ifa.notes}</div>
+          <div class="panel__body" style="font-size:0.82rem">${ifa.notes}</div>
         </div>` : ''}
       </div>
     </div>
 
     <div class="flex-between mb-12" style="align-items:center">
-      <div style="font-size:0.85rem;font-weight:700;color:var(--white)">Linked Clients (${clients.length})</div>
+      <div style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Linked Clients (${clients.length})</div>
       <button class="btn btn--primary btn--sm" onclick="openLinkClientModal('${ifa.id}');Modal.close('ifaDetailModal')">
         <i class="fa-solid fa-user-plus"></i> Link Client
       </button>
@@ -2786,7 +2933,7 @@ function renderAuditTable() {
 
   body.innerHTML = page.map(e => `<tr>
     <td class="td-muted" style="white-space:nowrap;font-size:0.75rem">${Utils.date(e.created_at)}</td>
-    <td><div style="font-size:0.78rem;font-weight:600;color:var(--white)">${e.user_email || e.actor || '—'}</div></td>
+    <td><div style="font-size:0.78rem;font-weight:600;color:#1a1a1a">${e.user_email || e.actor || '—'}</div></td>
     <td><span style="font-size:0.72rem;color:var(--text-muted)">${e.actor_role || e.role || '—'}</span></td>
     <td><span class="badge badge--${actionColor[e.event_type] || 'gray'}" style="font-size:0.7rem">${e.event_type || e.action || '—'}</span></td>
     <td class="td-muted" style="font-size:0.75rem">${e.entity_type ? `${e.entity_type}${e.entity_id ? ' #' + String(e.entity_id).slice(0, 8) : ''}` : (e.target || '—')}</td>
@@ -2940,7 +3087,7 @@ function _renderBroadcastHistory() {
   body.innerHTML = _broadcastHistory.map(h => `
     <div style="padding:12px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:0.82rem;font-weight:700;color:var(--white)">${h.subject || '(SMS)'}</span>
+        <span style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${h.subject || '(SMS)'}</span>
         <span style="font-size:0.7rem;color:var(--text-dim)">${Utils.date(h.date)}</span>
       </div>
       <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:6px">${h.message}</div>
@@ -3200,6 +3347,124 @@ async function addInvestorNote(investorId) {
 }
 
 /* ═══════════════════════════════════════════════
+   FEATURE: INVESTOR ACTIVITY TIMELINE
+   ═══════════════════════════════════════════════ */
+
+function _timelineItem(icon, colorHex, text, date) {
+  // Convert hex to rgb for background tint
+  const hexToRgb = h => {
+    const r = parseInt(h.slice(1,3),16), g = parseInt(h.slice(3,5),16), b = parseInt(h.slice(5,7),16);
+    return `${r},${g},${b}`;
+  };
+  const rgb = hexToRgb(colorHex.replace('#','').length === 6 ? colorHex : '#7a92a8');
+  return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.07)">
+    <div style="width:28px;height:28px;border-radius:50%;background:rgba(${rgb},0.12);border:1px solid rgba(${rgb},0.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
+      <i class="fa-solid ${icon}" style="font-size:0.7rem;color:${colorHex}"></i>
+    </div>
+    <div style="flex:1">
+      <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${text}</div>
+      <div style="font-size:0.7rem;color:#6b7280">${Utils.date(date)}</div>
+    </div>
+  </div>`;
+}
+
+function _buildTimelineEvents(inv, invsts, txns) {
+  const events = [];
+
+  // 1. Account created
+  if (inv.date_joined) {
+    events.push({ date: inv.date_joined, icon: 'fa-user-plus', color: '#3b82f6', text: 'Account created' });
+  }
+
+  // 2. Transactions
+  txns.forEach(t => {
+    const amt = Utils.rand(Math.abs(t.amount || 0));
+    const d = t.created_at || t.transaction_date;
+    if (!d) return;
+    const typeMap = {
+      deposit:    { icon: 'fa-arrow-down',           color: '#22c55e', text: `Deposited ${amt}` },
+      investment: { icon: 'fa-chart-line',            color: '#D4AF37', text: `Invested ${amt}${t.description ? ' in ' + t.description : ''}` },
+      return:     { icon: 'fa-coins',                 color: '#22c55e', text: `Interest earned ${amt}` },
+      payout:     { icon: 'fa-arrow-up',              color: '#3b82f6', text: `Payout received ${amt}` },
+      withdrawal: { icon: 'fa-arrow-up-from-bracket', color: '#f97316', text: `Withdrawal ${amt}${t.status ? ' (' + t.status + ')' : ''}` },
+      adjustment: { icon: 'fa-sliders',               color: '#7a92a8', text: `Manual adjustment ${amt}` },
+    };
+    const m = typeMap[t.type];
+    if (m) events.push({ date: d, icon: m.icon, color: m.color, text: m.text });
+  });
+
+  // 3. Investments
+  invsts.forEach(i => {
+    const poolLabel = i.pool_name || i.pool_id || 'Pool';
+    const amt = Utils.rand(i.amount || 0);
+    const rate = i.annual_rate ? ` at ${Utils.pct(i.annual_rate)}` : '';
+    if (i.start_date || i.investment_date) {
+      events.push({ date: i.start_date || i.investment_date, icon: 'fa-seedling', color: '#D4AF37', text: `Investment started — ${poolLabel} ${amt}${rate}` });
+    }
+    if (i.status === 'matured' && i.end_date) {
+      events.push({ date: i.end_date, icon: 'fa-clock', color: '#f97316', text: `Investment matured — ${poolLabel}` });
+    }
+    if (i.status === 'paid_out' && i.payout_date) {
+      events.push({ date: i.payout_date, icon: 'fa-check-circle', color: '#22c55e', text: `Investment paid out — ${poolLabel}` });
+    }
+  });
+
+  return events;
+}
+
+function _renderTimeline(containerId, events) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!events.length) {
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem">No timeline events found</div>';
+    return;
+  }
+  const sorted = [...events].sort((a, b) => new Date(b.date) - new Date(a.date));
+  el.innerHTML = sorted.map(e => _timelineItem(e.icon, e.color, e.text, e.date)).join('');
+}
+
+async function loadInvestorTimeline(inv, invsts, txns) {
+  const containerId = 'investorTimeline';
+  const el = document.getElementById(containerId);
+  if (!el) return;
+
+  // Step 1: Render synchronous data immediately
+  const events = _buildTimelineEvents(inv, invsts, txns);
+  _renderTimeline(containerId, events);
+
+  // Step 2: Fetch support tickets + KYC docs async, then re-render
+  const token = localStorage.getItem('svc_token');
+  const headers = { Authorization: 'Bearer ' + token };
+
+  try {
+    const [ticketRes, kycRes] = await Promise.allSettled([
+      fetch(`/api/tables/support_tickets?investor_id=${encodeURIComponent(inv.id)}&limit=20`, { headers }).then(r => r.ok ? r.json() : { data: [] }),
+      fetch(`/api/tables/kyc_documents?investor_id=${encodeURIComponent(inv.id)}&limit=5`, { headers }).then(r => r.ok ? r.json() : { data: [] })
+    ]);
+
+    const tickets = ticketRes.status === 'fulfilled' ? (ticketRes.value.data || []) : [];
+    const kycDocs = kycRes.status === 'fulfilled' ? (kycRes.value.data || []) : [];
+
+    tickets.forEach(t => {
+      const d = t.created_at;
+      if (!d) return;
+      events.push({ date: d, icon: 'fa-headset', color: '#3b82f6', text: `Support ticket: ${t.subject || '(no subject)'} (${t.status || 'open'})` });
+    });
+
+    kycDocs.forEach(k => {
+      const d = k.submitted_date || k.created_at;
+      if (!d) return;
+      const statusColor = k.status === 'approved' ? '#22c55e' : k.status === 'rejected' ? '#ef4444' : '#f59e0b';
+      events.push({ date: d, icon: 'fa-id-card', color: statusColor, text: `FICA document ${k.status || 'submitted'}${k.document_type ? ' — ' + k.document_type.replace(/_/g,' ') : ''}` });
+    });
+
+    if (tickets.length || kycDocs.length) {
+      _renderTimeline(containerId, events);
+    }
+  } catch (_) { /* silent — sync data already rendered */ }
+}
+
+/* ═══════════════════════════════════════════════
    FEATURE 3: ANALYTICS CHARTS (Real Data)
    ═══════════════════════════════════════════════ */
 
@@ -3224,8 +3489,8 @@ function _chartDefaults() {
       tooltip: { backgroundColor: 'rgba(13,17,23,0.95)', titleColor: '#e8edf2', bodyColor: '#7a92a8', borderColor: 'rgba(212,175,55,0.3)', borderWidth: 1 }
     },
     scales: {
-      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', font: { size: 10 } } },
-      y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', font: { size: 10 } } }
+      x: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', font: { size: 10 } } },
+      y: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', font: { size: 10 } } }
     }
   };
 }

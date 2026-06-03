@@ -429,7 +429,80 @@ function sendMonthlyStatement(investor, { investments, recentTransactions }) {
   return _send({ to: email, subject: `Your SV Capital Statement — ${monthName}`, html });
 }
 
-/* ── 13. KYC / FICA approved ─────────────────────────────── */
+/* ── 13. Director monthly report ────────────────────────── */
+function sendDirectorReport(director, data) {
+  const { email, first_name } = director;
+  const { monthLabel, aum, newInvestors, returnsTotal, depositsTotal, totalInvestors, pools } = data;
+  const fmtR = v => `R${Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtN = v => Number(v || 0).toLocaleString('en-ZA');
+
+  const poolRows = (pools && pools.length)
+    ? pools.map(p => `
+      <tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.86rem">${p.pool_name || '—'}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.86rem;text-transform:capitalize">${p.product_type || '—'}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.86rem;color:#ff9b0c;font-weight:600">${fmtR(p.invested)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.86rem;text-align:right">${fmtN(p.investors)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="4" style="padding:12px;text-align:center;color:#aaa;font-size:0.85rem">No active pool data</td></tr>';
+
+  return _send({
+    to: email,
+    subject: `SV Capital — Monthly Director Report: ${monthLabel}`,
+    html: _wrap(`
+      <h2>Monthly Director Report 📊</h2>
+      <p>Hi ${first_name || 'Director'}, here is the SV Capital platform summary for <strong>${monthLabel}</strong>.</p>
+
+      <div class="box">
+        <div class="row"><span class="lbl">Total AUM (Active Investments)</span><span class="val gold">${fmtR(aum)}</span></div>
+        <div class="row"><span class="lbl">Total Active Investors</span><span class="val">${fmtN(totalInvestors)}</span></div>
+        <div class="row"><span class="lbl">New Investors This Month</span><span class="val green">${fmtN(newInvestors)}</span></div>
+        <div class="row"><span class="lbl">Returns Distributed This Month</span><span class="val green">${fmtR(returnsTotal)}</span></div>
+        <div class="row"><span class="lbl">Deposits Received This Month</span><span class="val">${fmtR(depositsTotal)}</span></div>
+      </div>
+
+      <h2 style="margin-top:24px">Pool Breakdown (Top 10 Active)</h2>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:10px;border-radius:10px;overflow:hidden;border:1px solid #eee">
+        <thead>
+          <tr style="background:#f7f9fc">
+            <th style="padding:9px 12px;text-align:left;font-size:0.78rem;color:#888;font-weight:600;text-transform:uppercase">Pool</th>
+            <th style="padding:9px 12px;text-align:left;font-size:0.78rem;color:#888;font-weight:600;text-transform:uppercase">Type</th>
+            <th style="padding:9px 12px;text-align:left;font-size:0.78rem;color:#888;font-weight:600;text-transform:uppercase">Total Invested</th>
+            <th style="padding:9px 12px;text-align:right;font-size:0.78rem;color:#888;font-weight:600;text-transform:uppercase"># Investors</th>
+          </tr>
+        </thead>
+        <tbody>${poolRows}</tbody>
+      </table>
+
+      <p style="margin-top:22px">Log in to the admin panel to view full breakdowns, transaction details, and investor activity.</p>
+      <a href="${BASE_URL}/admin/" class="btn">Go to Admin Panel →</a>
+    `),
+    text: `Director Report — ${monthLabel}\n\nAUM: ${fmtR(aum)}\nTotal Investors: ${fmtN(totalInvestors)}\nNew Investors: ${fmtN(newInvestors)}\nReturns Distributed: ${fmtR(returnsTotal)}\nDeposits: ${fmtR(depositsTotal)}\n\nLog in at ${BASE_URL}/admin/`,
+  });
+}
+
+/* ── 14. Waitlist notification ───────────────────────────── */
+function sendWaitlistNotification(investor, { poolName }) {
+  const { email, first_name } = investor;
+  return _send({
+    to: email,
+    subject: `Good news — ${poolName} is open again!`,
+    html: _wrap(`
+      <h2>Investment Pool Now Open 🎉</h2>
+      <p>Hi ${first_name || 'there'}, great news!</p>
+      <p>The investment pool you joined the waitlist for — <strong>${poolName}</strong> — is now open for new investments.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Pool</span><span class="val">${poolName}</span></div>
+        <div class="row"><span class="lbl">Status</span><span class="val green">Open for Investment</span></div>
+      </div>
+      <p>Log in now to secure your spot before it fills up again. Pools can close quickly once reopened!</p>
+      <a href="${BASE_URL}/portal/" class="btn">Invest Now →</a>
+    `),
+    text: `Hi ${first_name || 'there'}, ${poolName} is now open for new investments. Log in to secure your spot: ${BASE_URL}/portal/`,
+  });
+}
+
+/* ── 15. KYC / FICA approved ─────────────────────────────── */
 function sendKycApproved(investor) {
   const { email, first_name } = investor;
   if (!email) return Promise.resolve();
@@ -515,6 +588,8 @@ module.exports = {
   sendWithdrawalRejected,
   sendBankAccountApproved,
   sendMonthlyStatement,
+  sendDirectorReport,
+  sendWaitlistNotification,
   sendKycApproved,
   sendKycRejected,
   sendLoginAlert,
