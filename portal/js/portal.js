@@ -313,7 +313,7 @@ function navigate(view, btnEl) {
     subaccounts: loadSubAccounts,
     referral: loadReferralDashboard,
     documents: loadDocuments,
-    profile: renderRiskProfile,
+    profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderRecurringStatusSummary(); },
   };
   if (loaders[view]) loaders[view]();
 }
@@ -6213,12 +6213,3 @@ async function togglePushNotifications(checked) {
   }
 }
 
-/* ─── Hook into navigate to init profile view extras ─── */
-const _origNavigate = navigate;
-function navigate(view, btnEl) {
-  _origNavigate(view, btnEl);
-  if (view === 'profile') {
-    _initPushNotifToggle();
-    _renderRecurringStatusSummary();
-  }
-}
