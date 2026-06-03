@@ -468,7 +468,7 @@ function renderOpenPoolsWidget() {
     const pct = Utils.poolFillPct(p);
     return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
       <div class="flex-between mb-4">
-        <span style="font-size:0.82rem;font-weight:700;color:var(--white)">${p.name}</span>
+        <span style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${p.name}</span>
         <span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span>
       </div>
       <div class="pool-card__progress-label">
@@ -562,8 +562,8 @@ function renderAumChart() {
         }
       },
       scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', font: { size: 11 } } },
-        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', font: { size: 11 }, callback: v => 'R' + (v / 1000000).toFixed(0) + 'M' } }
+        x: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', font: { size: 11 } } },
+        y: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', font: { size: 11 }, callback: v => 'R' + (v / 1000000).toFixed(0) + 'M' } }
       }
     }
   });
@@ -705,8 +705,8 @@ async function viewInvestor(id) {
         <div class="flex-center gap-12 mb-16">
           <div class="avatar avatar--lg avatar--gold">${Utils.initials(inv.first_name + ' ' + inv.last_name)}</div>
           <div>
-            <div style="font-size:1.1rem;font-weight:800;color:var(--white)">${inv.first_name} ${inv.last_name}</div>
-            <div style="color:var(--text-muted);font-size:0.8rem">${inv.email}</div>
+            <div style="font-size:1.1rem;font-weight:800;color:#1a1a1a">${inv.first_name} ${inv.last_name}</div>
+            <div style="color:var(--ci-text-muted,#6b7280);font-size:0.8rem">${inv.email}</div>
             <div class="mt-4">${Utils.statusBadge(inv.status)}</div>
           </div>
         </div>
@@ -720,7 +720,7 @@ async function viewInvestor(id) {
         </div>
       </div>
       <div>
-        <div class="panel" style="background:var(--dark-3)">
+        <div class="panel">
           <div class="panel__header"><span class="panel__title">Financials</span></div>
           <div class="panel__body">
             <div class="info-list">
@@ -731,7 +731,7 @@ async function viewInvestor(id) {
             </div>
           </div>
         </div>
-        <div class="panel mt-12" style="background:var(--dark-3)">
+        <div class="panel mt-12">
           <div class="panel__header">
             <span class="panel__title">Admin Notes</span>
             <button class="btn btn--primary btn--sm" onclick="saveInvestorNotes('${inv.id}')"><i class="fa-solid fa-save"></i> Save</button>
@@ -743,7 +743,7 @@ async function viewInvestor(id) {
       </div>
     </div>
 
-    <div class="mb-12" style="font-size:0.85rem;font-weight:700;color:var(--white)">Investments (${invsts.length})</div>
+    <div class="mb-12" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Investments (${invsts.length})</div>
     <table class="data-table mb-16">
       <thead><tr><th>Pool</th><th>Product</th><th>Amount</th><th>Exp. Return</th><th>Status</th><th>Maturity</th></tr></thead>
       <tbody>${invsts.length ? invsts.map(i => {
@@ -759,7 +759,7 @@ async function viewInvestor(id) {
       }).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:16px">No investments</td></tr>'}</tbody>
     </table>
 
-    <div class="mb-12" style="font-size:0.85rem;font-weight:700;color:var(--white)">Recent Transactions (${txns.length})</div>
+    <div class="mb-12" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Recent Transactions (${txns.length})</div>
     <table class="data-table">
       <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Reference</th><th>Date</th></tr></thead>
       <tbody>${txns.slice(0, 5).map(t => `
@@ -779,8 +779,8 @@ async function viewInvestor(id) {
       const bStatus = inv.bank_account_status || 'none';
       const masked  = inv.bank_account_number ? '••••••' + String(inv.bank_account_number).slice(-4) : '—';
       return `
-    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:var(--white)">Bank Account</div>
-    <div class="panel mb-16" style="background:var(--dark-3)">
+    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Bank Account</div>
+    <div class="panel mb-16">
       <div class="panel__body">
         <div class="info-list">
           <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">${inv.bank_name || '—'}</span></div>
@@ -799,8 +799,8 @@ async function viewInvestor(id) {
     </div>`;
     })()}
 
-    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:var(--white)">Admin Notes (Persistent)</div>
-    <div class="panel mb-16" style="background:var(--dark-3)">
+    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Admin Notes (Persistent)</div>
+    <div class="panel mb-16">
       <div class="panel__header">
         <span class="panel__title">Notes History</span>
         <span style="font-size:0.72rem;color:var(--text-dim)" id="invNotesCount">Loading…</span>
@@ -814,8 +814,8 @@ async function viewInvestor(id) {
       </div>
     </div>
 
-    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:var(--white)">Activity Timeline</div>
-    <div class="panel mb-16" style="background:var(--dark-3)">
+    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Activity Timeline</div>
+    <div class="panel mb-16">
       <div class="panel__body" style="padding:0 4px">
         <div id="investorTimeline" style="max-height:320px;overflow-y:auto;padding:4px 0">
           <div style="text-align:center;padding:16px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i></div>
@@ -1214,7 +1214,7 @@ function _capacityBar(pool) {
   const color = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#22c55e';
   const fullBadge = cur >= max ? ' <span style="display:inline-block;background:#ef4444;color:#fff;font-size:0.65rem;font-weight:700;padding:1px 6px;border-radius:20px;vertical-align:middle;margin-left:4px">Full</span>' : '';
   return `<div style="min-width:100px">${fullBadge}
-    <div style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin-bottom:3px">
+    <div style="height:4px;background:rgba(0,0,0,0.1);border-radius:2px;margin-bottom:3px">
       <div style="height:100%;width:${pct}%;background:${color};border-radius:2px"></div>
     </div>
     <div style="font-size:0.68rem;color:var(--text-muted)">${pct}% · R${(cur/1000).toFixed(0)}k / R${(max/1000).toFixed(0)}k</div>
@@ -1260,7 +1260,7 @@ function renderPoolsGrid() {
         <button class="btn btn--secondary btn--sm" onclick="togglePoolManageMenu(event,'pool-menu-${p.id}')">
           <i class="fa-solid fa-ellipsis-vertical"></i> Manage
         </button>
-        <div id="pool-menu-${p.id}" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--dark-2);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.3);z-index:99;min-width:160px;overflow:hidden">
+        <div id="pool-menu-${p.id}" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:#ffffff;border:1px solid rgba(0,0,0,0.1);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.12);z-index:99;min-width:160px;overflow:hidden">
           ${canSetWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="setPoolWaitlist(${JSON.stringify(p.id)});document.getElementById('pool-menu-${p.id}').style.display='none'"><i class="fa-solid fa-clock" style="color:#f59e0b;width:16px"></i> Set to Waitlist</button>` : ''}
           ${isWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="reopenPool(${JSON.stringify(p.id)});document.getElementById('pool-menu-${p.id}').style.display='none'"><i class="fa-solid fa-door-open" style="color:#22c55e;width:16px"></i> Reopen Pool</button>` : ''}
           <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="editPool(${JSON.stringify(p.id)});document.getElementById('pool-menu-${p.id}').style.display='none'"><i class="fa-solid fa-pen" style="width:16px"></i> Edit Pool</button>
@@ -1974,7 +1974,7 @@ async function viewTicket(id) {
       <div class="info-row"><span class="info-row__label">Submitted</span><span class="info-row__value td-muted">${Utils.date(tkt.created_at)}</span></div>
       ${tkt.responded_at ? `<div class="info-row"><span class="info-row__label">Last Response</span><span class="info-row__value td-muted">${Utils.date(tkt.responded_at)}</span></div>` : ''}
     </div>
-    <div class="panel mb-12" style="background:var(--dark-3)">
+    <div class="panel mb-12">
       <div class="panel__header"><span class="panel__title">Investor Message</span></div>
       <div class="panel__body" style="font-size:0.85rem;color:var(--text-muted);white-space:pre-wrap">${tkt.message || '—'}</div>
     </div>
@@ -2066,7 +2066,7 @@ function renderProductVolChart() {
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${Utils.rand(c.parsed.y)}` } } },
       scales: {
         x: { grid: { display: false }, ticks: { color: '#3d5268', font: { size: 10 } } },
-        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', callback: v => 'R' + (v / 1000).toFixed(0) + 'k' } }
+        y: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', callback: v => 'R' + (v / 1000).toFixed(0) + 'k' } }
       }
     }
   });
@@ -2132,7 +2132,7 @@ function renderTxnFlowChart() {
       plugins: { legend: { labels: { color: '#7a92a8', font: { size: 10 }, boxWidth: 10 } }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${Utils.rand(c.parsed.y)}` } } },
       scales: {
         x: { grid: { display: false }, ticks: { color: '#3d5268', font: { size: 10 } } },
-        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', callback: v => 'R' + (v / 1000).toFixed(0) + 'k' } }
+        y: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', callback: v => 'R' + (v / 1000).toFixed(0) + 'k' } }
       }
     }
   });
@@ -2185,22 +2185,22 @@ function renderConversionFunnel() {
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
               <div style="display:flex;align-items:center;gap:8px">
                 <div style="width:10px;height:10px;border-radius:50%;background:${s.color};flex-shrink:0"></div>
-                <span style="font-size:0.82rem;font-weight:600;color:var(--white)">${s.label}</span>
+                <span style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${s.label}</span>
                 ${i > 0 && dropOff > 0 ? `<span style="font-size:0.7rem;color:#ef4444;background:rgba(239,68,68,0.12);padding:1px 6px;border-radius:4px">−${dropOff}% drop</span>` : ''}
               </div>
               <div style="display:flex;gap:12px;align-items:center">
-                <span style="font-size:0.9rem;font-weight:700;color:var(--white)">${s.count.toLocaleString()}</span>
+                <span style="font-size:0.9rem;font-weight:700;color:#1a1a1a">${s.count.toLocaleString()}</span>
                 <span style="font-size:0.78rem;color:var(--text-muted);min-width:36px;text-align:right">${pct}%</span>
               </div>
             </div>
-            <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+            <div style="height:8px;background:rgba(0,0,0,0.06);border-radius:4px;overflow:hidden">
               <div style="height:100%;width:${pct}%;background:${s.color};border-radius:4px;transition:width 0.6s ease"></div>
             </div>
           </div>
         `;
       }).join('')}
     </div>
-    <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:24px;flex-wrap:wrap">
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(0,0,0,0.08);display:flex;gap:24px;flex-wrap:wrap">
       <div style="font-size:0.78rem;color:var(--text-muted)">
         <span style="font-weight:600;color:#22c55e">${invested > 0 ? Math.round(invested/total*100) : 0}%</span> end-to-end conversion
       </div>
@@ -2393,8 +2393,8 @@ function viewIFA(ifaId) {
         <div class="flex-center gap-12 mb-16">
           <div class="avatar avatar--lg avatar--gold">${initials.toUpperCase()}</div>
           <div>
-            <div style="font-size:1.1rem;font-weight:800;color:var(--white)">${ifa.first_name} ${ifa.last_name}</div>
-            <div style="color:var(--text-muted);font-size:0.8rem">${ifa.email}</div>
+            <div style="font-size:1.1rem;font-weight:800;color:#1a1a1a">${ifa.first_name} ${ifa.last_name}</div>
+            <div style="color:var(--ci-text-muted,#6b7280);font-size:0.8rem">${ifa.email}</div>
             <div style="color:var(--text-muted);font-size:0.75rem;margin-top:2px">${ifa.company_name || ''}</div>
             <div class="mt-6"><span class="badge" style="background:${statusColor}20;color:${statusColor}">${ifa.status}</span></div>
           </div>
@@ -2407,7 +2407,7 @@ function viewIFA(ifaId) {
         </div>
       </div>
       <div>
-        <div class="panel" style="background:var(--dark-3)">
+        <div class="panel">
           <div class="panel__header"><span class="panel__title">Performance Summary</span></div>
           <div class="panel__body">
             <div class="info-list">
@@ -2419,15 +2419,15 @@ function viewIFA(ifaId) {
           </div>
         </div>
         ${ifa.notes ? `
-        <div class="panel mt-12" style="background:var(--dark-3)">
+        <div class="panel mt-12">
           <div class="panel__header"><span class="panel__title">Admin Notes</span></div>
-          <div class="panel__body" style="font-size:0.82rem;color:var(--text-muted)">${ifa.notes}</div>
+          <div class="panel__body" style="font-size:0.82rem">${ifa.notes}</div>
         </div>` : ''}
       </div>
     </div>
 
     <div class="flex-between mb-12" style="align-items:center">
-      <div style="font-size:0.85rem;font-weight:700;color:var(--white)">Linked Clients (${clients.length})</div>
+      <div style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Linked Clients (${clients.length})</div>
       <button class="btn btn--primary btn--sm" onclick="openLinkClientModal('${ifa.id}');Modal.close('ifaDetailModal')">
         <i class="fa-solid fa-user-plus"></i> Link Client
       </button>
@@ -2933,7 +2933,7 @@ function renderAuditTable() {
 
   body.innerHTML = page.map(e => `<tr>
     <td class="td-muted" style="white-space:nowrap;font-size:0.75rem">${Utils.date(e.created_at)}</td>
-    <td><div style="font-size:0.78rem;font-weight:600;color:var(--white)">${e.user_email || e.actor || '—'}</div></td>
+    <td><div style="font-size:0.78rem;font-weight:600;color:#1a1a1a">${e.user_email || e.actor || '—'}</div></td>
     <td><span style="font-size:0.72rem;color:var(--text-muted)">${e.actor_role || e.role || '—'}</span></td>
     <td><span class="badge badge--${actionColor[e.event_type] || 'gray'}" style="font-size:0.7rem">${e.event_type || e.action || '—'}</span></td>
     <td class="td-muted" style="font-size:0.75rem">${e.entity_type ? `${e.entity_type}${e.entity_id ? ' #' + String(e.entity_id).slice(0, 8) : ''}` : (e.target || '—')}</td>
@@ -3087,7 +3087,7 @@ function _renderBroadcastHistory() {
   body.innerHTML = _broadcastHistory.map(h => `
     <div style="padding:12px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:0.82rem;font-weight:700;color:var(--white)">${h.subject || '(SMS)'}</span>
+        <span style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${h.subject || '(SMS)'}</span>
         <span style="font-size:0.7rem;color:var(--text-dim)">${Utils.date(h.date)}</span>
       </div>
       <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:6px">${h.message}</div>
@@ -3357,13 +3357,13 @@ function _timelineItem(icon, colorHex, text, date) {
     return `${r},${g},${b}`;
   };
   const rgb = hexToRgb(colorHex.replace('#','').length === 6 ? colorHex : '#7a92a8');
-  return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
-    <div style="width:28px;height:28px;border-radius:50%;background:rgba(${rgb},0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
+  return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.07)">
+    <div style="width:28px;height:28px;border-radius:50%;background:rgba(${rgb},0.12);border:1px solid rgba(${rgb},0.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
       <i class="fa-solid ${icon}" style="font-size:0.7rem;color:${colorHex}"></i>
     </div>
     <div style="flex:1">
-      <div style="font-size:0.82rem;font-weight:600;color:var(--white)">${text}</div>
-      <div style="font-size:0.7rem;color:var(--text-muted)">${Utils.date(date)}</div>
+      <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${text}</div>
+      <div style="font-size:0.7rem;color:#6b7280">${Utils.date(date)}</div>
     </div>
   </div>`;
 }
@@ -3489,8 +3489,8 @@ function _chartDefaults() {
       tooltip: { backgroundColor: 'rgba(13,17,23,0.95)', titleColor: '#e8edf2', bodyColor: '#7a92a8', borderColor: 'rgba(212,175,55,0.3)', borderWidth: 1 }
     },
     scales: {
-      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', font: { size: 10 } } },
-      y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5268', font: { size: 10 } } }
+      x: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', font: { size: 10 } } },
+      y: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', font: { size: 10 } } }
     }
   };
 }

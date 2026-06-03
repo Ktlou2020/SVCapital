@@ -620,12 +620,12 @@ function renderEquityChart() {
       scales: {
         x: {
           grid: { display: false },
-          ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } }
+          ticks: { color: '#6b7280', font: { size: 10 } }
         },
         y: {
-          grid: { color: 'rgba(255,255,255,0.06)' },
+          grid: { color: 'rgba(0,0,0,0.06)' },
           ticks: {
-            color: 'rgba(255,255,255,0.4)',
+            color: '#6b7280',
             callback: v => 'R' + (v / 1000).toFixed(0) + 'k',
             font: { size: 10 }
           }
@@ -697,12 +697,12 @@ function renderOnboardingWizard() {
   const stepsEl = document.getElementById('wizardSteps');
   if (stepsEl) {
     stepsEl.innerHTML = stepDefs.map(s => `
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.03)">
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:rgba(0,0,0,0.04)">
         <div style="width:22px;height:22px;border-radius:50%;background:${s.done ? '#22c55e' : 'rgba(255,155,12,0.2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <i class="fa-solid ${s.done ? 'fa-check' : 'fa-' + s.icon}" style="font-size:0.65rem;color:${s.done ? '#fff' : '#FF9B0C'}"></i>
         </div>
         <div style="flex:1">
-          <div style="font-size:0.82rem;font-weight:${s.done ? '600' : '700'};color:${s.done ? 'var(--text-muted)' : 'var(--white)'};${s.done ? 'text-decoration:line-through' : ''}">${s.label}</div>
+          <div style="font-size:0.82rem;font-weight:${s.done ? '600' : '700'};color:${s.done ? '#9ca3af' : '#1a1a1a'};${s.done ? 'text-decoration:line-through' : ''}">${s.label}</div>
         </div>
         ${!s.done ? `<button onclick="${s.action}" class="btn btn--primary btn--sm" style="padding:4px 12px;font-size:0.72rem">${s.actionLabel}</button>` : ''}
       </div>
@@ -870,7 +870,7 @@ function renderPortfolioTrendChart() {
         y: {
           min:    yMin,
           max:    yMax,
-          grid:   { color: 'rgba(255,255,255,0.04)' },
+          grid:   { color: 'rgba(0,0,0,0.06)' },
           border: { display: false },
           ticks:  {
             color: '#6b7280', font: { size: 10 },
@@ -1863,7 +1863,7 @@ function renderMarketplace() {
             <span>Capacity</span>
             <span style="color:${capColor};font-weight:700">${capPct}% filled</span>
           </div>
-          <div style="height:4px;border-radius:2px;background:rgba(255,255,255,0.1);overflow:hidden">
+          <div style="height:4px;border-radius:2px;background:rgba(0,0,0,0.1);overflow:hidden">
             <div style="height:100%;width:${capPct}%;background:${capColor};border-radius:2px;transition:width 0.4s"></div>
           </div>
         </div>`;
@@ -5261,13 +5261,13 @@ function renderOnboardingChecklist() {
   const stepsEl = document.getElementById('onboardingSteps');
   if (stepsEl) {
     stepsEl.innerHTML = steps.map(s => `
-      <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:8px;background:${s.done ? 'rgba(16,185,129,0.08)' : 'var(--dark-3)'}">
-        <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.75rem;background:${s.done ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.06)'};color:${s.done ? '#10b981' : 'var(--text-muted)'}">
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:8px;background:${s.done ? 'rgba(16,185,129,0.08)' : 'rgba(0,0,0,0.04)'}">
+        <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.75rem;background:${s.done ? 'rgba(16,185,129,0.2)' : 'rgba(0,0,0,0.08)'};color:${s.done ? '#10b981' : '#6b7280'}">
           <i class="fa-solid ${s.done ? 'fa-check' : 'fa-circle-dot'}"></i>
         </div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:0.82rem;font-weight:600;color:${s.done ? '#10b981' : 'var(--white)'}${s.done ? ';text-decoration:line-through;opacity:0.7' : ''}">${s.label}</div>
-          ${!s.done ? `<div style="font-size:0.73rem;color:var(--text-muted)">${s.desc}</div>` : ''}
+          <div style="font-size:0.82rem;font-weight:600;color:${s.done ? '#10b981' : '#1a1a1a'}${s.done ? ';text-decoration:line-through;opacity:0.7' : ''}">${s.label}</div>
+          ${!s.done ? `<div style="font-size:0.73rem;color:#6b7280">${s.desc}</div>` : ''}
         </div>
         ${!s.done ? `<button class="btn btn--primary btn--sm" onclick="${s.action}" style="white-space:nowrap">${s.actionLabel}</button>` : ''}
       </div>
