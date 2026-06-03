@@ -1898,6 +1898,7 @@ async function loadAnalytics() {
   renderRiskChart();
   renderTxnFlowChart();
   renderConversionFunnel();
+  _renderAnalyticsCharts();
 }
 
 function renderProductVolChart() {
@@ -3368,10 +3369,8 @@ function renderAnStatusChart() {
   });
 }
 
-// Wrap the existing loadAnalytics to also render the new charts
-const _origLoadAnalytics = loadAnalytics;
-async function loadAnalytics() {
-  await _origLoadAnalytics();
+// Chart rendering triggered from loadAnalytics after data loads
+function _renderAnalyticsCharts() {
   renderAnAumChart();
   renderAnNewInvChart();
   renderAnReturnsChart();

@@ -305,6 +305,7 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investors ADD COLUMN bank_account_type TEXT DEFAULT 'current'; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN bank_account_status TEXT DEFAULT 'none'; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN bank_account_notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- sub_account_id on transactions for sub-account deposits
   BEGIN ALTER TABLE transactions ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- TOTP 2FA columns for users table
