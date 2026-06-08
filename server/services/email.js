@@ -210,6 +210,29 @@ function sendTicketResponse(investor, { subject: ticketSubject, adminResponse })
   });
 }
 
+/* ── 7a. Ticket assigned to admin user ──────────────────── */
+function sendTicketAssigned(assignedUser, { ticketId, subject, investorName, category, priority }) {
+  const { email, first_name } = assignedUser;
+  const priorityColor = priority === 'urgent' ? '#ef4444' : priority === 'high' ? '#f97316' : '#6b7280';
+  return _send({
+    to: email,
+    subject: `You've been assigned a support ticket: "${subject}"`,
+    html: _wrap(`
+      <h2>Support Ticket Assigned 🎫</h2>
+      <p>Hi ${first_name}, a support ticket has been assigned to you.</p>
+      <div class="box">
+        <p style="margin:0 0 6px"><strong>Ticket:</strong> #${ticketId} — ${subject}</p>
+        <p style="margin:0 0 6px"><strong>Investor:</strong> ${investorName}</p>
+        ${category ? `<p style="margin:0 0 6px"><strong>Category:</strong> ${category.replace(/_/g, ' ')}</p>` : ''}
+        <p style="margin:0"><strong>Priority:</strong> <span style="color:${priorityColor};font-weight:700">${priority}</span></p>
+      </div>
+      <p>Please log in to the admin dashboard to review and respond.</p>
+      <a href="${BASE_URL}/admin/" class="btn">Open Admin Dashboard →</a>
+    `),
+    text: `Hi ${first_name}, ticket #${ticketId} "${subject}" from ${investorName} has been assigned to you. Log in at ${BASE_URL}/admin/`,
+  });
+}
+
 /* ── 7. Password reset ───────────────────────────────────── */
 function sendPasswordReset(email, firstName, resetLink) {
   return _send({
@@ -582,6 +605,7 @@ module.exports = {
   sendMaturityAlert,
   sendInvestmentMatured,
   sendTicketResponse,
+  sendTicketAssigned,
   sendPasswordReset,
   sendWithdrawalRequested,
   sendWithdrawalProcessed,

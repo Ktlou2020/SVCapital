@@ -393,9 +393,10 @@ async function loadDashboard() {
 
     // Fetch ticket count for welcome strip
     let openTickets = 0;
+    let tickets = [];
     try {
       const tktRes = await API.tickets.list({ limit: 50 });
-      const tickets = tktRes.data || [];
+      tickets = tktRes.data || [];
       openTickets = tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
       const tktBadge = document.getElementById('ticketBadge');
       if (tktBadge) tktBadge.textContent = openTickets;
@@ -1964,6 +1965,26 @@ async function viewTicket(id) {
   const tktInv     = STATE.investors.find(i => i.id === tkt.investor_id);
   const tktInvName = tkt.investor_name || (tktInv ? `${tktInv.first_name} ${tktInv.last_name}` : tkt.investor_id || '—');
   const tktEmail   = tkt.investor_email || tktInv?.email || '';
+
+  // Load admin users for the "Assigned To" dropdown
+  let adminUsers = [];
+  try {
+    const uRes = await API.users.list({ limit: 100 });
+    adminUsers = (uRes.data || uRes || []).filter(u =>
+      ['admin','director','staff','fund_manager'].includes(u.role) && u.is_active !== false
+    );
+  } catch (_) {}
+
+  const assignedOpts = [
+    `<option value="">— Unassigned —</option>`,
+    ...adminUsers.map(u => {
+      const name  = `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email;
+      const val   = u.email;
+      const sel   = tkt.assigned_to === val ? 'selected' : '';
+      return `<option value="${val}" ${sel}>${name}</option>`;
+    }),
+  ].join('');
+
   document.getElementById('ticketModalTitle').textContent = `Ticket #${tkt.id} — ${tkt.subject}`;
   document.getElementById('ticketModalBody').innerHTML = `
     <div class="grid-2 mb-16" style="gap:12px">
@@ -1994,22 +2015,26 @@ async function viewTicket(id) {
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Assigned To</label>
-        <input type="text" class="form-input" id="ticketAssigned" value="${tkt.assigned_to || ''}" placeholder="Admin name" />
+        <label class="form-label">Assign To</label>
+        <select class="form-select" id="ticketAssigned">${assignedOpts}</select>
       </div>
     </div>
   `;
 
   document.getElementById('ticketSaveBtn').onclick = async () => {
     try {
-      const newStatus = document.getElementById('ticketStatusUpdate').value;
+      const newStatus   = document.getElementById('ticketStatusUpdate').value;
+      const newAssigned = document.getElementById('ticketAssigned').value;
       await API.tickets.update(id, {
         admin_response: document.getElementById('ticketResponse').value,
         status:         newStatus,
-        assigned_to:    document.getElementById('ticketAssigned').value,
+        assigned_to:    newAssigned,
         responded_at:   new Date().toISOString(),
       });
       Toast.success('Response saved — investor will see this in their portal');
+      if (newAssigned && newAssigned !== tkt.assigned_to) {
+        Toast.info('Assignment notification sent');
+      }
       Modal.close('ticketModal');
       await loadSupport();
     } catch (e) { Toast.error('Failed to update ticket'); }

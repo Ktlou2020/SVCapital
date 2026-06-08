@@ -19,7 +19,7 @@ const audit        = require('../services/audit');
 
 /* ─── Input Validation ─── */
 const NUMERIC_FIELDS = new Set(['amount','wallet_balance','total_invested','total_returns','annual_rate','max_capacity','current_invested','recurring_amount','xp_points']);
-const STATUS_FIELDS  = { status: ['active','inactive','pending','matured','paid_out','cancelled','rejected','open','closed','resolved','in_review','completed','waitlist'], fica_status: ['pending','approved','rejected','not_started'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','reinvest','pending'] };
+const STATUS_FIELDS  = { status: ['active','inactive','pending','matured','paid_out','cancelled','rejected','open','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor'], fica_status: ['pending','approved','rejected','not_started'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','reinvest','pending'] };
 
 function validateBody(table, body, isCreate) {
   const errors = [];
@@ -163,6 +163,7 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
     // Investors only see their own data
     if (req.user.role === 'investor' && req.user.investorId) {
       const investorCols = {
+        investors:             'id',
         investments:           'investor_id',
         transactions:          'investor_id',
         kyc_documents:         'investor_id',
@@ -170,6 +171,8 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         support_tickets:       'investor_id',
         return_schedules:      'investor_id',
         investor_allocations:  'investor_id',
+        investment_waitlist:   'investor_id',
+        sub_accounts:          'investor_id',
       };
       if (investorCols[table]) {
         params.push(req.user.investorId);
@@ -531,6 +534,24 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
                           : 'EFT';
             await emailService.sendDepositConfirmed(inv[0], updated.amount, updated.reference || updated.id, gateway);
             await smsService.sendDepositConfirmed(inv[0].phone, inv[0].first_name, updated.amount);
+          }
+        }
+
+        // Support ticket assigned → email the assigned user
+        if (table === 'support_tickets' && body.assigned_to) {
+          const { rows: assignedUser } = await pool.query(
+            `SELECT first_name, last_name, email FROM users WHERE email = $1 AND is_active = true LIMIT 1`,
+            [body.assigned_to]
+          );
+          if (assignedUser[0]) {
+            const tktSubject = updated.subject || `Ticket #${updated.id}`;
+            await emailService.sendTicketAssigned(assignedUser[0], {
+              ticketId:     updated.id,
+              subject:      tktSubject,
+              investorName: updated.investor_name || updated.investor_id || 'An investor',
+              category:     updated.category || '',
+              priority:     updated.priority || 'normal',
+            });
           }
         }
 
