@@ -407,7 +407,15 @@ async function loadPortalData() {
       myTxns = allTxns.filter(t => t.investor_id === fallbackId);
     }
 
-    PORTAL.investments  = myInvests;
+    PORTAL.investments  = myInvests.map(inv => ({
+      ...inv,
+      // Normalise DB column names to the aliases used throughout the portal
+      maturity_date:          inv.end_date         || inv.maturity_date,
+      investment_date:        inv.start_date        || inv.investment_date,
+      expected_return_amount: inv.expected_return   != null ? inv.expected_return   : (inv.expected_return_amount   || 0),
+      actual_return_amount:   inv.actual_return     != null ? inv.actual_return     : (inv.actual_return_amount     || 0),
+      expected_return_rate:   inv.annual_rate       != null ? inv.annual_rate       : (inv.expected_return_rate     || 0),
+    }));
     PORTAL.transactions = myTxns;
     PORTAL.pools        = poolRes.data || [];
 
