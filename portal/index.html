@@ -276,6 +276,10 @@
               <span class="ph-stat__label">Active Investments</span>
               <span class="ph-stat__value" id="pov-active">—</span>
             </div>
+            <div class="ph-stat">
+              <span class="ph-stat__label">Rewards &amp; XP</span>
+              <span class="ph-stat__value" id="pov-rewards" style="color:#ff9b0c">—</span>
+            </div>
           </div>
         </div>
 
@@ -459,6 +463,14 @@
            VIEW: WALLET
       ══════════════════════════════════ -->
       <div class="view" id="view-wallet">
+        <!-- Wallet Sub-Tabs -->
+        <div class="tab-bar mb-20">
+          <button class="tab-btn active" id="walletSubTab1" onclick="_switchWalletTab('overview',this)"><i class="fa-solid fa-wallet"></i> Wallet Overview</button>
+          <button class="tab-btn" id="walletSubTab2" onclick="_switchWalletTab('recurring',this)"><i class="fa-solid fa-rotate"></i> Recurring Investments<span class="nav-badge" id="recurringActiveBadge" style="display:none;margin-left:6px">●</span></button>
+        </div>
+
+        <!-- Overview sub-tab -->
+        <div id="walletOverviewTab">
         <div class="grid-layout grid-layout--sidebar">
           <div>
             <div class="wallet-card mb-20">
@@ -486,7 +498,7 @@
                   <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">First National Bank (FNB)</span></div>
                   <div class="info-row"><span class="info-row__label">Account Name</span><span class="info-row__value">Smartvest Financial Services</span></div>
                   <div class="info-row"><span class="info-row__label">Account No.</span><span class="info-row__value">63058190794</span></div>
-                  <div class="info-row"><span class="info-row__label">Reference</span><span class="info-row__value text-gold">INV-002</span></div>
+                  <div class="info-row"><span class="info-row__label">Reference</span><span class="info-row__value text-gold" id="walletEftRef">—</span></div>
                 </div>
                 <div style="font-size:0.75rem;color:#6b7280;margin-top:12px;padding:10px;background:#F0F2F5;border-radius:6px">
                   <i class="fa-solid fa-circle-info" style="color:var(--blue)"></i> 
@@ -535,6 +547,21 @@
 
           </div>
         </div>
+        </div><!-- end walletOverviewTab -->
+
+        <!-- Recurring Investments sub-tab -->
+        <div id="walletRecurringTab" style="display:none">
+          <div id="recurringStatusCard" class="wallet-card mb-20">
+            <!-- rendered by _renderRecurringTab() -->
+          </div>
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title">Active Recurring Investments</span>
+              <button class="btn btn--secondary btn--sm" onclick="openRecurringModal()"><i class="fa-solid fa-pen"></i> Manage</button>
+            </div>
+            <div class="panel__body" id="recurringInvestmentsList"><!-- rendered by JS --></div>
+          </div>
+        </div><!-- end walletRecurringTab -->
       </div>
 
       <!-- ══════════════════════════════════
@@ -1226,6 +1253,30 @@
           </div>
         </div>
 
+        <!-- Rewards Stats Row -->
+        <div class="rewards-stats-row" id="rewardsStatsRow" style="display:none">
+          <div class="rewards-stat">
+            <div class="rewards-stat__val" id="rwStatXP">0 XP</div>
+            <div class="rewards-stat__label">Total XP Earned</div>
+          </div>
+          <div class="rewards-stat">
+            <div class="rewards-stat__val" id="rwStatLevel">Seed</div>
+            <div class="rewards-stat__label">Current Level</div>
+          </div>
+          <div class="rewards-stat">
+            <div class="rewards-stat__val" id="rwStatCash" style="color:#22c55e">R0</div>
+            <div class="rewards-stat__label">XP Cash Rewards</div>
+          </div>
+          <div class="rewards-stat">
+            <div class="rewards-stat__val" id="rwStatRef" style="color:#ff9b0c">R0</div>
+            <div class="rewards-stat__label">Referral Bonuses</div>
+          </div>
+          <div class="rewards-stat">
+            <div class="rewards-stat__val" id="rwStatTotal" style="color:#D4AF37">R0</div>
+            <div class="rewards-stat__label">Total Rewards Value</div>
+          </div>
+        </div>
+
         <!-- Level Track -->
         <div class="level-track" id="levelTrack">
           <!-- rendered by JS -->
@@ -1234,6 +1285,17 @@
         <!-- Quest Categories -->
         <div id="questCategories">
           <!-- rendered by JS -->
+        </div>
+
+        <!-- Referral Rewards History -->
+        <div id="rewardsReferralSection" class="panel mt-20" style="display:none">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-gift" style="color:#ff9b0c;margin-right:6px"></i>Referral Rewards History</span>
+            <button class="btn btn--secondary btn--sm" onclick="navigate('referral',document.querySelector('[data-view=referral]'))">
+              <i class="fa-solid fa-share-nodes"></i> Refer &amp; Earn
+            </button>
+          </div>
+          <div id="rewardsReferralList" style="padding:0 16px 8px"></div>
         </div>
       </div><!-- end view-quests -->
 

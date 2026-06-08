@@ -447,6 +447,25 @@ function renderOverview() {
   if (retEl) _animateNum(retEl, totalRet, 'R ', '', 900);
   document.getElementById('pov-active').textContent = activeCount;
 
+  // ── Rewards & XP stat ──────────────────────────────────────
+  const referralTotal = PORTAL.transactions
+    .filter(t => t.type === 'referral_bonus' && t.status !== 'rejected')
+    .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+  const xpCash = PORTAL.quests
+    ? XP_LEVELS.filter(l => l.min > 0 && (PORTAL.quests.xp || 0) >= l.min).length * 50
+    : 0;
+  const rewEl = document.getElementById('pov-rewards');
+  if (rewEl) {
+    const totalRewards = referralTotal + xpCash;
+    if (totalRewards > 0) {
+      _animateNum(rewEl, totalRewards, 'R ', '', 900);
+    } else {
+      const xp = PORTAL.quests?.xp || 0;
+      const lvl = _getLevelForXP(xp);
+      rewEl.textContent = `${lvl.label} · ${xp} XP`;
+    }
+  }
+
   // ── Welcome banner ───────────────────────────────────────────
   const initials = `${(inv.first_name || '')[0] || '?'}${(inv.last_name || '')[0] || ''}`.toUpperCase();
   const avatarEl = document.getElementById('welcomeAvatar');
@@ -1062,6 +1081,12 @@ function _refreshWalletUI(balance) {
 async function loadWallet() {
   if (!PORTAL.investor) await loadPortalData();
   document.getElementById('walletBalance').textContent = Utils.rand(PORTAL.investor?.wallet_balance || 0);
+  // Update recurring badge
+  const badge = document.getElementById('recurringActiveBadge');
+  if (badge) badge.style.display = PORTAL.investor?.recurring_enabled ? 'inline-flex' : 'none';
+  // Set EFT reference to actual investor ID
+  const eftRef = document.getElementById('walletEftRef');
+  if (eftRef) eftRef.textContent = PORTAL.investor?.id || DEMO_INVESTOR_ID;
 
   const activity = document.getElementById('walletActivity');
   const walletTxns = PORTAL.transactions
@@ -1085,6 +1110,100 @@ async function loadWallet() {
       <span style="font-weight:700;color:${colour}">${sign}${Utils.rand(Math.abs(t.amount))}</span>
     </div>
   `}).join('');
+}
+
+function _switchWalletTab(tab, btn) {
+  document.querySelectorAll('#view-wallet .tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const ov = document.getElementById('walletOverviewTab');
+  const rc = document.getElementById('walletRecurringTab');
+  if (ov) ov.style.display = tab === 'overview' ? '' : 'none';
+  if (rc) rc.style.display = tab === 'recurring' ? '' : 'none';
+  if (tab === 'recurring') _renderRecurringTab();
+}
+
+function _renderRecurringTab() {
+  const inv = PORTAL.investor;
+  const statusCard = document.getElementById('recurringStatusCard');
+  const listEl     = document.getElementById('recurringInvestmentsList');
+  if (!statusCard || !listEl) return;
+
+  const pool     = (PORTAL.pools || []).find(p => p.id === inv?.recurring_pool_id);
+  const isActive = !!(inv?.recurring_enabled && inv?.recurring_amount);
+
+  const badge = document.getElementById('recurringActiveBadge');
+  if (badge) badge.style.display = isActive ? 'inline-flex' : 'none';
+
+  if (isActive) {
+    const today      = new Date();
+    const nextDate   = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    const daysUntil  = Math.ceil((nextDate - today) / 86400000);
+    statusCard.innerHTML = `
+      <div class="wallet-card__label">Recurring Investment
+        <span style="background:rgba(34,197,94,0.15);color:#22c55e;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:8px;vertical-align:middle">Active</span>
+      </div>
+      <div class="wallet-card__value" style="color:#ff9b0c">${Utils.rand(inv.recurring_amount)}<span style="font-size:0.85rem;font-weight:500;color:#6b7280;margin-left:4px">/ month</span></div>
+      <div class="wallet-card__sub"><i class="fa-solid fa-layer-group" style="margin-right:4px"></i>${pool ? pool.name : 'Selected pool'} &nbsp;·&nbsp; Next investment in <strong>${daysUntil} day${daysUntil !== 1 ? 's' : ''}</strong></div>
+      <div class="wallet-card__actions">
+        <button class="btn btn--secondary" onclick="openRecurringModal()"><i class="fa-solid fa-pen"></i> Edit</button>
+        <button class="btn btn--secondary" style="color:#ef4444;border-color:rgba(239,68,68,0.3)" onclick="_cancelRecurring()"><i class="fa-solid fa-xmark"></i> Cancel</button>
+      </div>`;
+  } else {
+    statusCard.innerHTML = `
+      <div class="wallet-card__label">Recurring Investment</div>
+      <div class="wallet-card__value" style="font-size:1.1rem;color:#9ca3af">Not active</div>
+      <div class="wallet-card__sub">Automate monthly investments into any open pool — minimum R100/month</div>
+      <div class="wallet-card__actions">
+        <button class="btn btn--primary" onclick="openRecurringModal()"><i class="fa-solid fa-plus"></i> Set Up Recurring</button>
+      </div>`;
+  }
+
+  const recurringInvs = pool
+    ? PORTAL.investments.filter(i => i.status === 'active' && i.pool_id === inv?.recurring_pool_id)
+    : [];
+
+  if (!recurringInvs.length) {
+    listEl.innerHTML = `<div class="empty-state" style="padding:20px"><i class="fa-solid fa-rotate"></i><p>${isActive ? 'Your first recurring investment will be processed at the start of next month.' : 'Set up a recurring investment to automate your monthly savings.'}</p></div>`;
+  } else {
+    listEl.innerHTML = recurringInvs.map(ri => {
+      const pi       = Utils.productInfo(ri.product_type);
+      const daysLeft = Utils.daysRemaining(ri.end_date);
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid rgba(0,0,0,0.06)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:36px;height:36px;border-radius:8px;background:${pi.color}18;color:${pi.color};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <i class="fa-solid ${pi.icon}"></i>
+            </div>
+            <div>
+              <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${ri.pool_name || pool?.name || 'Investment'}</div>
+              <div style="font-size:0.7rem;color:#9ca3af">Started ${Utils.date(ri.start_date)}${daysLeft !== null ? ' · ' + daysLeft + 'd remaining' : ''}</div>
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-weight:700;color:#1a1a1a">${Utils.rand(ri.amount)}</div>
+            <div style="font-size:0.7rem;color:#22c55e">${Utils.pct(ri.annual_rate)} p.a.</div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+}
+
+async function _cancelRecurring() {
+  if (!confirm('Cancel your recurring investment? You can set it up again at any time.')) return;
+  const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
+  try {
+    await API._fetch('PATCH', `tables/investors/${investorId}`, {
+      recurring_enabled: false, recurring_amount: null, recurring_pool_id: null,
+    });
+    if (PORTAL.investor) {
+      PORTAL.investor.recurring_enabled = false;
+      PORTAL.investor.recurring_amount  = null;
+      PORTAL.investor.recurring_pool_id = null;
+    }
+    Toast.success('Recurring investment cancelled');
+    _renderRecurringTab();
+    _renderRecurringStatusSummary();
+  } catch (e) { Toast.error('Failed to cancel recurring investment'); }
 }
 
 /* ═══════════════════════════════════════════════
@@ -3130,8 +3249,28 @@ function renderQuestView() {
 
   // ── Rewards earned (levels passed × R50)
   const levelsEarned = XP_LEVELS.filter(l => l.min > 0 && xp >= l.min).length;
+  const xpCashValue  = levelsEarned * 50;
   const rewardsEl = document.getElementById('questRewardsEarned');
-  if (rewardsEl) rewardsEl.textContent = `R${levelsEarned * 50}`;
+  if (rewardsEl) rewardsEl.textContent = `R${xpCashValue}`;
+
+  // ── Rewards stats row ────────────────────────────────────────
+  const referralBonuses = PORTAL.transactions
+    .filter(t => t.type === 'referral_bonus' && t.status !== 'rejected')
+    .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+  const statsRow = document.getElementById('rewardsStatsRow');
+  if (statsRow) {
+    statsRow.style.display = 'flex';
+    const rwXP  = document.getElementById('rwStatXP');
+    const rwLvl = document.getElementById('rwStatLevel');
+    const rwCash = document.getElementById('rwStatCash');
+    const rwRef  = document.getElementById('rwStatRef');
+    const rwTot  = document.getElementById('rwStatTotal');
+    if (rwXP)   rwXP.textContent   = xp.toLocaleString('en-ZA') + ' XP';
+    if (rwLvl)  rwLvl.innerHTML    = `<i class="fa-solid ${lvl.icon}" style="margin-right:4px"></i>${lvl.label}`;
+    if (rwCash) rwCash.textContent = `R${xpCashValue}`;
+    if (rwRef)  rwRef.textContent  = `R${referralBonuses.toFixed(2)}`;
+    if (rwTot)  rwTot.textContent  = `R${(xpCashValue + referralBonuses).toFixed(2)}`;
+  }
 
   // ── Level track
   const trackEl = document.getElementById('levelTrack');
@@ -3284,6 +3423,26 @@ function renderQuestView() {
   }).join('');
 
   catEl.innerHTML = pendingHtml + categoryHtml;
+
+  // ── Referral rewards history ─────────────────────────────────
+  const refSection = document.getElementById('rewardsReferralSection');
+  const refList    = document.getElementById('rewardsReferralList');
+  const refTxns    = PORTAL.transactions.filter(t => t.type === 'referral_bonus').sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  if (refSection && refList) {
+    refSection.style.display = '';
+    if (!refTxns.length) {
+      refList.innerHTML = `<div class="empty-state" style="padding:20px"><i class="fa-solid fa-gift"></i><p>No referral bonuses yet. Share your referral link to earn rewards!</p></div>`;
+    } else {
+      refList.innerHTML = refTxns.map(t => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
+          <div>
+            <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${t.description || 'Referral bonus'}</div>
+            <div style="font-size:0.7rem;color:#9ca3af">${Utils.date(t.created_at || t.transaction_date)}</div>
+          </div>
+          <span style="font-weight:700;color:#ff9b0c">+${Utils.rand(Math.abs(parseFloat(t.amount) || 0))}</span>
+        </div>`).join('');
+    }
+  }
 }
 
 /* ─── Claim a milestone quest via button ─────────────────── */
@@ -6516,6 +6675,11 @@ async function saveRecurringInvestment() {
     }
 
     _renderRecurringStatusSummary();
+    // Refresh the recurring tab if it's currently visible
+    if (document.getElementById('walletRecurringTab')?.style.display !== 'none') _renderRecurringTab();
+    // Update badge
+    const badge = document.getElementById('recurringActiveBadge');
+    if (badge) badge.style.display = enabled ? 'inline-flex' : 'none';
   } catch (e) {
     Toast.error('Failed to save recurring settings. Please try again.');
     console.error(e);
