@@ -1,5 +1,5 @@
 'use strict';
-const CACHE   = 'svc-portal-v1';
+const CACHE   = 'svc-portal-v2';
 const PRECACHE = [
   './',
   './index.html',
@@ -44,7 +44,9 @@ self.addEventListener('fetch', e => {
           caches.open(CACHE).then(c => c.put(request, clone));
         }
         return res;
-      }).catch(() => cached);
+      }).catch(() => cached || (request.mode === 'navigate'
+        ? caches.match('./index.html')
+        : undefined));
       return cached || networkFetch;
     })
   );

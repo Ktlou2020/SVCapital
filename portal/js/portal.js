@@ -283,6 +283,21 @@ function loadNotifications() {
 }
 
 /* ─── Navigation ─── */
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (!sidebar) return;
+  const open = sidebar.classList.toggle('open');
+  if (backdrop) backdrop.classList.toggle('sidebar-backdrop--visible', open);
+}
+
+function closeSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (sidebar) sidebar.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('sidebar-backdrop--visible');
+}
+
 function navigate(view, btnEl) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -290,6 +305,9 @@ function navigate(view, btnEl) {
   const el = document.getElementById(`view-${view}`);
   if (el) el.classList.add('active');
   if (btnEl) btnEl.classList.add('active');
+
+  // Auto-close sidebar on mobile when navigating
+  if (window.innerWidth <= 768) closeSidebar();
 
   const titles = {
     overview: 'Portfolio Overview', investments: 'My Investments',
@@ -6933,5 +6951,23 @@ function _dismissPwaPrompt() {
   const banner = document.getElementById('pwaInstallBanner');
   if (banner) banner.style.display = 'none';
   localStorage.setItem('pwa_dismissed', Date.now().toString());
+}
+
+/* ── iOS / Safari "Add to Home Screen" prompt ── */
+(function _initIOSBanner() {
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isStandalone = window.navigator.standalone === true;
+  if (!isIOS || isStandalone) return;
+  if (localStorage.getItem('ios_pwa_dismissed')) return;
+  setTimeout(() => {
+    const el = document.getElementById('iosPwaBanner');
+    if (el) el.style.display = 'flex';
+  }, 8000);
+})();
+
+function _dismissIosBanner() {
+  const el = document.getElementById('iosPwaBanner');
+  if (el) el.style.display = 'none';
+  localStorage.setItem('ios_pwa_dismissed', '1');
 }
 
