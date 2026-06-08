@@ -21,8 +21,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script src="https://js.paystack.co/v2/inline.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <link rel="stylesheet" href="../css/admin.css" />
   <link rel="stylesheet" href="css/portal.css" />
   <link rel="stylesheet" href="../css/ci-theme.css" />
@@ -217,19 +217,7 @@
           <div class="xp-progress-next" id="xpProgressNext"></div>
         </div>
 
-        <!-- Onboarding Checklist -->
-        <div id="onboardingChecklist" class="panel mb-16" style="display:none;border:1px solid rgba(255,155,12,0.25);background:rgba(255,155,12,0.04)">
-          <div class="panel__header">
-            <span class="panel__title"><i class="fa-solid fa-rocket" style="color:var(--gold)"></i> Getting Started</span>
-            <span id="onboardingProgress" style="font-size:0.75rem;color:var(--text-muted)">0 / 3 complete</span>
-          </div>
-          <div class="panel__body">
-            <div style="display:flex;flex-direction:column;gap:10px" id="onboardingSteps"></div>
-            <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted)">Complete these steps to unlock your full investment potential.</div>
-          </div>
-        </div>
-
-        <!-- Onboarding Wizard -->
+        <!-- Onboarding Wizard (single Getting Started panel) -->
         <div id="onboardingWizard" style="display:none;margin-bottom:20px">
           <div class="panel" style="border:1.5px solid rgba(255,155,12,0.3);background:linear-gradient(135deg,rgba(255,155,12,0.06),rgba(255,82,41,0.04))">
             <div class="panel__header">
@@ -682,16 +670,13 @@
               </div>
             </div>
 
-            <div class="panel">
-              <div class="panel__header"><span class="panel__title">FICA / KYC Status</span></div>
-              <div class="panel__body">
-                <div class="info-list">
-                  <div class="info-row"><span class="info-row__label">ID Document</span><span class="info-row__value text-green"><i class="fa-solid fa-check-circle"></i> Approved</span></div>
-                  <div class="info-row"><span class="info-row__label">Proof of Address</span><span class="info-row__value text-green"><i class="fa-solid fa-check-circle"></i> Approved</span></div>
-                  <div class="info-row"><span class="info-row__label">Selfie / Liveness</span><span class="info-row__value text-green"><i class="fa-solid fa-check-circle"></i> Approved</span></div>
-                  <div class="info-row"><span class="info-row__label">Overall Status</span><span class="info-row__value">${Utils ? Utils.statusBadge('approved') : '<span class=\'badge badge--green\'>Approved</span>'}</span></div>
-                </div>
-                <div style="font-size:0.75rem;color:var(--text-muted);margin-top:12px">Your account is fully verified. You can invest across all available pools.</div>
+            <div class="panel" id="kycStatusPanel">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-id-card" style="color:#FF9B0C;margin-right:6px"></i>FICA / KYC Status</span>
+                <button class="btn btn--primary btn--sm" onclick="openKycUploadModal()"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document</button>
+              </div>
+              <div class="panel__body" id="kycStatusBody">
+                <div style="text-align:center;padding:20px;color:#6b7280;font-size:0.85rem">Loading KYC status…</div>
               </div>
             </div>
           </div>
@@ -850,10 +835,10 @@
             <div class="panel mb-16" style="background:#F7F8FA">
               <div class="panel__header"><span class="panel__title">Contact Us</span></div>
               <div class="panel__body" style="display:flex;flex-direction:column;gap:12px">
-                <a href="mailto:info@svcapital.co.za" class="btn btn--secondary btn--full">
-                  <i class="fa-solid fa-envelope"></i> info@svcapital.co.za
+                <a href="mailto:enquiry@svcapital.co.za" class="btn btn--secondary btn--full">
+                  <i class="fa-solid fa-envelope"></i> enquiry@svcapital.co.za
                 </a>
-                <a href="https://api.whatsapp.com/send?phone=27" target="_blank" class="btn btn--success btn--full">
+                <a href="https://api.whatsapp.com/send?phone=27760842102" target="_blank" class="btn btn--success btn--full">
                   <i class="fa-brands fa-whatsapp"></i> WhatsApp Support
                 </a>
               </div>
@@ -963,6 +948,21 @@
            VIEW: DOCUMENTS
       ══════════════════════════════════ -->
       <div class="view" id="view-documents">
+
+        <!-- Section 0: FICA / KYC Documents -->
+        <div class="panel mb-20">
+          <div class="panel__header">
+            <div>
+              <div class="panel__title"><i class="fa-solid fa-id-card" style="color:#FF9B0C"></i> FICA / KYC Documents</div>
+              <div style="font-size:0.75rem;color:#6b7280;margin-top:2px">South African law requires identity verification before investing</div>
+            </div>
+            <button class="btn btn--primary btn--sm" onclick="openKycUploadModal()"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document</button>
+          </div>
+          <div class="panel__body" id="kycDocsList">
+            <div style="text-align:center;padding:20px;color:#6b7280;font-size:0.85rem">Loading documents…</div>
+          </div>
+        </div>
+
         <!-- Section 1: Investment Certificates -->
         <div class="table-card mb-20">
           <div class="table-card__header">
@@ -1508,7 +1508,7 @@
       <!-- Email proof of payment option -->
       <div style="background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.25);border-radius:10px;padding:12px 14px;font-size:0.75rem;color:#9ca3af;display:flex;gap:8px;align-items:flex-start;margin-bottom:16px">
         <i class="fa-solid fa-envelope" style="color:#4AACBB;margin-top:2px;flex-shrink:0"></i>
-        <span>Email your proof of payment to <a href="mailto:admin@svcapital.co.za" style="color:#4AACBB;font-weight:700;text-decoration:underline">admin@svcapital.co.za</a> — include your Investor ID in the subject line for faster processing.</span>
+        <span>Email your proof of payment to <a href="mailto:enquiry@svcapital.co.za" style="color:#4AACBB;font-weight:700;text-decoration:underline">enquiry@svcapital.co.za</a> — include your Investor ID in the subject line for faster processing.</span>
       </div>
 
       <!-- Proof of payment upload -->
@@ -2305,6 +2305,56 @@
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('earlyRedemptionModal')">Cancel</button>
       <button class="btn btn--danger" onclick="submitEarlyRedemption()"><i class="fa-solid fa-paper-plane"></i> Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── KYC Upload Modal ───────────────────────────────────────────── -->
+<div class="modal-overlay" id="kycUploadModal" onclick="if(event.target===this)Modal.close('kycUploadModal')">
+  <div class="modal" style="max-width:480px;width:95vw">
+    <div class="modal__header">
+      <span class="modal__title"><i class="fa-solid fa-id-card" style="color:#FF9B0C;margin-right:8px"></i>Upload KYC Document</span>
+      <button class="modal__close" onclick="Modal.close('kycUploadModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <p style="font-size:0.82rem;color:#6b7280;margin-bottom:16px">
+        Upload a clear photo or scan of your identity document. Files are reviewed by the SV Capital compliance team within 1–2 business days.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Document Type <span style="color:#ef4444">*</span></label>
+        <select class="form-select" id="kycDocType">
+          <option value="">— Select document type —</option>
+          <option value="id_document">South African ID / Passport</option>
+          <option value="proof_of_address">Proof of Address (bank statement, utility bill)</option>
+          <option value="selfie">Selfie / Liveness Photo</option>
+          <option value="tax_certificate">Tax Certificate (IT3b)</option>
+          <option value="other">Other Supporting Document</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Select File <span style="color:#ef4444">*</span></label>
+        <div id="kycDropZone" style="border:2px dashed rgba(255,155,12,0.35);border-radius:10px;padding:24px 16px;text-align:center;cursor:pointer;transition:all 0.2s;background:rgba(255,155,12,0.03)" onclick="document.getElementById('kycFileInput').click()" ondragover="event.preventDefault();this.style.borderColor='#FF9B0C'" ondragleave="this.style.borderColor='rgba(255,155,12,0.35)'" ondrop="_kycHandleDrop(event)">
+          <i class="fa-solid fa-cloud-arrow-up" style="font-size:1.8rem;color:#FF9B0C;margin-bottom:8px;display:block"></i>
+          <div style="font-size:0.85rem;font-weight:600;color:#1a1a1a">Click to browse or drag & drop</div>
+          <div style="font-size:0.72rem;color:#9ca3af;margin-top:4px">JPG, PNG or PDF · Max 10 MB</div>
+        </div>
+        <input type="file" id="kycFileInput" accept="image/*,.pdf" style="display:none" onchange="_kycFileSelected(this.files[0])">
+        <div id="kycFileStatus" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.25);border-radius:8px;display:flex;align-items:center;gap:10px">
+          <i class="fa-solid fa-file-check" style="color:#22c55e;font-size:1rem"></i>
+          <span id="kycFileName" style="font-size:0.82rem;color:#1a1a1a;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+          <button onclick="_kycClearFile()" style="background:none;border:none;color:#9ca3af;cursor:pointer;padding:0 4px;font-size:0.8rem">✕</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes <span style="font-size:0.72rem;color:#9ca3af">(optional)</span></label>
+        <textarea class="form-textarea" id="kycNotes" rows="2" placeholder="e.g. Front side of green ID book, issued 2018"></textarea>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('kycUploadModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="submitKycDocument()" id="kycSubmitBtn">
+        <i class="fa-solid fa-paper-plane"></i> Submit for Review
+      </button>
     </div>
   </div>
 </div>

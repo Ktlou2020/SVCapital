@@ -314,7 +314,7 @@ function navigate(view, btnEl) {
     subaccounts: loadSubAccounts,
     referral: loadReferralDashboard,
     documents: loadDocuments,
-    profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderRecurringStatusSummary(); },
+    profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderRecurringStatusSummary(); _renderKycStatusPanel(); },
   };
   if (loaders[view]) loaders[view]();
 }
@@ -331,7 +331,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   checkFirstDepositPrompt();
   _checkAutoStartTour();
   load2FAStatus();
-  renderOnboardingChecklist();
 });
 
 async function loadPortalData() {
@@ -665,8 +664,8 @@ function renderOnboardingWizard() {
       label: 'FICA / KYC Verification',
       icon: 'id-card',
       done: ficaDone,
-      action: "navigate('profile', document.querySelector('[data-view=profile]'))",
-      actionLabel: 'Verify Now'
+      action: 'openKycUploadModal()',
+      actionLabel: 'Upload Docs'
     },
     {
       label: 'Add Bank Account',
@@ -5513,8 +5512,186 @@ async function submitEarlyRedemption() {
    FEATURE 7: DOCUMENT VAULT
    ═══════════════════════════════════════════════ */
 
+/* ─── KYC Document Upload ─────────────────────────────────────── */
+let _kycFile = null;
+
+function _kycFileSelected(file) {
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { Toast.error('File too large — maximum 10 MB'); return; }
+  _kycFile = file;
+  const statusEl = document.getElementById('kycFileStatus');
+  const nameEl   = document.getElementById('kycFileName');
+  if (statusEl) statusEl.style.display = 'flex';
+  if (nameEl)   nameEl.textContent = file.name;
+  const zone = document.getElementById('kycDropZone');
+  if (zone) { zone.style.borderColor = '#22c55e'; zone.style.background = 'rgba(34,197,94,0.04)'; }
+}
+
+function _kycHandleDrop(event) {
+  event.preventDefault();
+  const zone = document.getElementById('kycDropZone');
+  if (zone) zone.style.borderColor = 'rgba(255,155,12,0.35)';
+  const file = event.dataTransfer?.files?.[0];
+  if (file) {
+    document.getElementById('kycFileInput').files; // reset
+    _kycFileSelected(file);
+  }
+}
+
+function _kycClearFile() {
+  _kycFile = null;
+  const input = document.getElementById('kycFileInput');
+  if (input) input.value = '';
+  const statusEl = document.getElementById('kycFileStatus');
+  if (statusEl) statusEl.style.display = 'none';
+  const zone = document.getElementById('kycDropZone');
+  if (zone) { zone.style.borderColor = 'rgba(255,155,12,0.35)'; zone.style.background = 'rgba(255,155,12,0.03)'; }
+}
+
+function openKycUploadModal() {
+  _kycClearFile();
+  const typeEl  = document.getElementById('kycDocType');
+  const notesEl = document.getElementById('kycNotes');
+  if (typeEl)  typeEl.value  = '';
+  if (notesEl) notesEl.value = '';
+  Modal.open('kycUploadModal');
+}
+
+async function submitKycDocument() {
+  const docType = document.getElementById('kycDocType')?.value;
+  if (!docType) { Toast.error('Please select a document type'); return; }
+  if (!_kycFile) { Toast.error('Please select a file to upload'); return; }
+
+  const btn = document.getElementById('kycSubmitBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting…'; }
+
+  try {
+    const notes = (document.getElementById('kycNotes')?.value || '').trim();
+    await API.kyc.create({
+      investor_id: PORTAL.investor?.id || DEMO_INVESTOR_ID,
+      doc_type:    docType,
+      status:      'pending',
+      file_name:   _kycFile.name,
+      notes:       [notes, `File: ${_kycFile.name} (${(_kycFile.size / 1024).toFixed(1)} KB)`].filter(Boolean).join(' — '),
+    });
+    Toast.success('Document submitted! The compliance team will review it within 1–2 business days.');
+    Modal.close('kycUploadModal');
+    _kycFile = null;
+    // Refresh KYC panel wherever visible
+    _renderKycStatusPanel();
+    _renderKycDocsList();
+  } catch (e) {
+    Toast.error('Upload failed — please try again');
+    console.error(e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit for Review'; }
+  }
+}
+
+async function _renderKycStatusPanel() {
+  const body = document.getElementById('kycStatusBody');
+  if (!body || !PORTAL.investor) return;
+
+  let docs = [];
+  try {
+    const res = await API.kyc.list({ investor_id: PORTAL.investor.id, limit: 20 });
+    docs = res.data || [];
+  } catch (_) {}
+
+  const inv = PORTAL.investor;
+  const overallStatus = inv.fica_status || inv.kyc_status || 'pending';
+  const statusColor = { approved: '#22c55e', rejected: '#ef4444', pending: '#f59e0b', submitted: '#3b82f6', not_started: '#9ca3af' };
+  const color = statusColor[overallStatus] || '#9ca3af';
+
+  const typeLabel = {
+    id_document: 'SA ID / Passport', proof_of_address: 'Proof of Address',
+    selfie: 'Selfie / Liveness', tax_certificate: 'Tax Certificate', other: 'Other Document',
+  };
+
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(0,0,0,0.07);margin-bottom:12px">
+      <div style="width:40px;height:40px;border-radius:50%;background:${color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <i class="fa-solid fa-${overallStatus === 'approved' ? 'shield-check' : overallStatus === 'rejected' ? 'shield-xmark' : 'clock'}" style="color:${color};font-size:1.1rem"></i>
+      </div>
+      <div>
+        <div style="font-size:0.88rem;font-weight:700;color:#1a1a1a">FICA / KYC Verification</div>
+        <div style="font-size:0.78rem;color:#6b7280;margin-top:1px">${Utils.statusBadge(overallStatus)}</div>
+      </div>
+    </div>
+    ${docs.length ? `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${docs.map(d => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,0,0,0.03);border-radius:8px">
+            <i class="fa-solid fa-file-lines" style="color:#FF9B0C;font-size:0.9rem;flex-shrink:0"></i>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${typeLabel[d.doc_type] || d.doc_type}</div>
+              <div style="font-size:0.72rem;color:#9ca3af">${d.file_name || '—'} · ${Utils.date(d.created_at)}</div>
+            </div>
+            ${Utils.statusBadge(d.status)}
+          </div>
+        `).join('')}
+      </div>
+    ` : `<div style="font-size:0.82rem;color:#9ca3af;text-align:center;padding:12px 0">No documents uploaded yet.</div>`}
+    <div style="margin-top:14px">
+      <button class="btn btn--primary btn--sm" onclick="openKycUploadModal()"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document</button>
+    </div>
+  `;
+}
+
+async function _renderKycDocsList() {
+  const list = document.getElementById('kycDocsList');
+  if (!list || !PORTAL.investor) return;
+
+  let docs = [];
+  try {
+    const res = await API.kyc.list({ investor_id: PORTAL.investor.id, limit: 20 });
+    docs = res.data || [];
+  } catch (_) {}
+
+  const inv = PORTAL.investor;
+  const overallStatus = inv.fica_status || inv.kyc_status || 'pending';
+  const typeLabel = {
+    id_document: 'SA ID / Passport', proof_of_address: 'Proof of Address',
+    selfie: 'Selfie / Liveness', tax_certificate: 'Tax Certificate', other: 'Other',
+  };
+  const requiredTypes = ['id_document', 'proof_of_address'];
+  const submittedTypes = new Set(docs.map(d => d.doc_type));
+  const missingRequired = requiredTypes.filter(t => !submittedTypes.has(t));
+
+  list.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:${overallStatus === 'approved' ? 'rgba(34,197,94,0.08)' : 'rgba(255,155,12,0.07)'};margin-bottom:14px">
+      <i class="fa-solid fa-${overallStatus === 'approved' ? 'circle-check' : 'circle-info'}" style="color:${overallStatus === 'approved' ? '#22c55e' : '#FF9B0C'};font-size:1rem"></i>
+      <div style="flex:1">
+        <span style="font-size:0.82rem;font-weight:700;color:#1a1a1a">Overall FICA Status: </span>
+        ${Utils.statusBadge(overallStatus)}
+        ${missingRequired.length ? `<div style="font-size:0.75rem;color:#9ca3af;margin-top:3px">Still needed: ${missingRequired.map(t => typeLabel[t]).join(', ')}</div>` : ''}
+      </div>
+    </div>
+    ${docs.length ? `
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Document Type</th><th>File</th><th>Submitted</th><th>Status</th><th>Notes</th></tr></thead>
+          <tbody>
+            ${docs.map(d => `<tr>
+              <td class="td-strong">${typeLabel[d.doc_type] || d.doc_type}</td>
+              <td class="td-muted" style="font-size:0.78rem">${d.file_name || '—'}</td>
+              <td class="td-muted">${Utils.date(d.created_at)}</td>
+              <td>${Utils.statusBadge(d.status)}</td>
+              <td class="td-muted" style="font-size:0.72rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.notes || '—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    ` : `<div style="text-align:center;padding:24px;color:#9ca3af;font-size:0.85rem">
+      <i class="fa-solid fa-id-card" style="font-size:1.6rem;display:block;margin-bottom:8px;opacity:0.4"></i>
+      No documents uploaded yet. Upload your ID and proof of address to get verified.
+    </div>`}
+  `;
+}
+
 function loadDocuments() {
   if (!PORTAL.investor) { Toast.error('Portfolio data still loading'); return; }
+  _renderKycDocsList();
   _renderCertificatesTable();
   _renderReceiptsTable();
 }
@@ -5574,12 +5751,15 @@ function _renderReceiptsTable() {
 
 /* ── PDF helper: get jsPDF instance ── */
 function _getPDF(orientation = 'portrait') {
-  if (!window.jspdf) {
-    Toast.error('PDF library not loaded yet — please wait a moment and try again.');
+  // jsPDF 2.x UMD exposes window.jspdf.jsPDF; older builds use window.jsPDF
+  const lib = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF
+            : (window.jsPDF) ? window.jsPDF
+            : null;
+  if (!lib) {
+    Toast.error('PDF library not loaded — please refresh the page and try again.');
     return null;
   }
-  const { jsPDF } = window.jspdf;
-  return new jsPDF({ orientation, unit: 'mm', format: 'a4' });
+  return new lib({ orientation, unit: 'mm', format: 'a4' });
 }
 
 /* ── PDF: dark header bar ── */
