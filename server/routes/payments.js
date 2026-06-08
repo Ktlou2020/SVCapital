@@ -144,7 +144,29 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
 
     const result = await creditWallet(psInvestorId, creditAmount, reference, req.user?.email);
     aml.checkDeposit(pool, psInvestorId, creditAmount, reference).catch(e => console.error('[aml]', e.message));
-    return res.json({ success: true, verified: true, ...result });
+
+    // Save reusable authorization code for future auto top-ups
+    let authSaved = false;
+    const auth = psData.data?.authorization;
+    if (auth?.reusable && auth?.authorization_code && psData.data?.customer?.email) {
+      try {
+        await pool.query(
+          `INSERT INTO paystack_authorizations
+             (investor_id, authorization_code, email, card_type, last4, exp_month, exp_year, bank, channel, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+           ON CONFLICT (investor_id) DO UPDATE SET
+             authorization_code=$2, email=$3, card_type=$4, last4=$5,
+             exp_month=$6, exp_year=$7, bank=$8, channel=$9, updated_at=NOW()`,
+          [psInvestorId, auth.authorization_code, psData.data.customer.email,
+           auth.card_type, auth.last4, auth.exp_month, auth.exp_year, auth.bank, auth.channel]
+        );
+        authSaved = true;
+      } catch (e) {
+        console.warn('[payments] Could not save Paystack authorization:', e.message);
+      }
+    }
+
+    return res.json({ success: true, verified: true, authSaved, ...result });
 
   } catch (err) {
     console.error('[payments] Paystack verify error:', err.message);
@@ -237,6 +259,75 @@ router.post('/ozow-hash', requireAuth, (req, res) => {
 
   console.log('[Ozow] hash generated for ref:', transactionRef);
   return res.json({ hash, siteCode });
+});
+
+/* ──────────────────────────────────────────────────────────
+   GET  /api/payments/topup-card   — return saved Paystack card
+   DELETE /api/payments/topup-card — remove saved card + disable auto top-up
+────────────────────────────────────────────────────────── */
+router.get('/topup-card', requireAuth, async (req, res) => {
+  const investorId = req.user.investorId;
+  if (!investorId) return res.status(400).json({ error: 'investorId required' });
+  const { rows } = await pool.query(
+    `SELECT card_type, last4, exp_month, exp_year, bank, channel, created_at
+     FROM paystack_authorizations WHERE investor_id = $1`,
+    [investorId]
+  );
+  res.json({ card: rows[0] || null });
+});
+
+router.delete('/topup-card', requireAuth, async (req, res) => {
+  const investorId = req.user.investorId;
+  if (!investorId) return res.status(400).json({ error: 'investorId required' });
+  await pool.query('DELETE FROM paystack_authorizations WHERE investor_id = $1', [investorId]);
+  await pool.query(
+    `UPDATE investors SET auto_topup_enabled=false, auto_topup_amount=NULL, auto_topup_day=1, updated_at=NOW()
+     WHERE id=$1`,
+    [investorId]
+  );
+  res.json({ success: true });
+});
+
+/* ──────────────────────────────────────────────────────────
+   GET  /api/payments/auto-topup  — return current settings
+   POST /api/payments/auto-topup  — save settings
+────────────────────────────────────────────────────────── */
+router.get('/auto-topup', requireAuth, async (req, res) => {
+  const investorId = req.user.investorId;
+  if (!investorId) return res.status(400).json({ error: 'investorId required' });
+  const { rows } = await pool.query(
+    `SELECT auto_topup_enabled, auto_topup_amount, auto_topup_day FROM investors WHERE id=$1`,
+    [investorId]
+  );
+  res.json(rows[0] || { auto_topup_enabled: false, auto_topup_amount: null, auto_topup_day: 1 });
+});
+
+router.post('/auto-topup', requireAuth, async (req, res) => {
+  const investorId = req.user.investorId;
+  if (!investorId) return res.status(400).json({ error: 'investorId required' });
+
+  const { enabled, amount, day } = req.body;
+  const amountNum = parseFloat(amount);
+  const dayNum    = parseInt(day, 10);
+
+  if (enabled) {
+    if (!amountNum || amountNum < 50) return res.status(400).json({ error: 'Minimum auto top-up amount is R50' });
+    if (!dayNum || dayNum < 1 || dayNum > 28) return res.status(400).json({ error: 'Day must be between 1 and 28' });
+
+    // Require saved card to enable
+    const { rows } = await pool.query(
+      'SELECT id FROM paystack_authorizations WHERE investor_id=$1', [investorId]
+    );
+    if (!rows.length) return res.status(400).json({ error: 'No saved card found. Complete a Paystack top-up first to save your card.' });
+  }
+
+  await pool.query(
+    `UPDATE investors SET
+       auto_topup_enabled=$1, auto_topup_amount=$2, auto_topup_day=$3, updated_at=NOW()
+     WHERE id=$4`,
+    [!!enabled, enabled ? amountNum : null, enabled ? dayNum : 1, investorId]
+  );
+  res.json({ success: true });
 });
 
 module.exports = router;

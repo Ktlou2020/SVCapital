@@ -335,6 +335,10 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investors ADD COLUMN recurring_amount NUMERIC(12,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN recurring_pool_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN recurring_enabled BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Auto wallet top-up (Paystack authorization-based recurring charge)
+  BEGIN ALTER TABLE investors ADD COLUMN auto_topup_enabled BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN auto_topup_amount NUMERIC(12,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN auto_topup_day INT DEFAULT 1; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Withdrawal notes column on transactions
   BEGIN ALTER TABLE transactions ADD COLUMN notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Investment pool capacity columns (Feature: waitlist)
@@ -376,6 +380,24 @@ DO $$ BEGIN
 END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS push_subs_endpoint_idx ON push_subscriptions ((subscription->>'endpoint'));
 CREATE INDEX IF NOT EXISTS push_subs_investor_idx ON push_subscriptions (investor_id);
+
+/* Paystack reusable card tokens for auto wallet top-up */
+CREATE TABLE IF NOT EXISTS paystack_authorizations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  investor_id TEXT NOT NULL REFERENCES investors(id) ON DELETE CASCADE,
+  authorization_code TEXT NOT NULL,
+  email TEXT NOT NULL,
+  card_type TEXT,
+  last4 TEXT,
+  exp_month TEXT,
+  exp_year TEXT,
+  bank TEXT,
+  channel TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(investor_id)
+);
+CREATE INDEX IF NOT EXISTS paystack_auth_investor_idx ON paystack_authorizations (investor_id);
 
 CREATE TABLE IF NOT EXISTS push_notifications_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
