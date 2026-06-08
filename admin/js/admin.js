@@ -3029,11 +3029,13 @@ function loadComms() {
   toggleBroadcastSubject();
   updateBroadcastPreview();
   _renderBroadcastHistory();
+  loadPushAnalytics();
 }
 
 function toggleBroadcastSubject() {
   const channel = document.querySelector('input[name="broadcastChannel"]:checked')?.value || 'email';
-  const group = document.getElementById('broadcastSubjectGroup');
+  const group   = document.getElementById('broadcastSubjectGroup');
+  // Hide subject only for SMS-only channel
   if (group) group.style.display = channel === 'sms' ? 'none' : '';
 }
 
@@ -3065,15 +3067,16 @@ async function sendBroadcast() {
   const message  = document.getElementById('broadcastMessage')?.value?.trim() || '';
 
   if (!message) { Toast.error('Please write a message before sending'); return; }
-  if ((channel === 'email' || channel === 'both') && !subject) {
-    Toast.error('Please enter a subject line for email broadcasts');
+  if (channel !== 'sms' && channel !== 'push' && !subject) {
+    Toast.error('Please enter a subject / push title');
     return;
   }
 
-  const segLabel = document.getElementById('broadcastSegment')?.selectedOptions[0]?.text || segment;
+  const segLabel     = document.getElementById('broadcastSegment')?.selectedOptions[0]?.text || segment;
   const previewCount = document.getElementById('broadcastPreviewCount')?.textContent || '?';
+  const chLabel      = { email: 'EMAIL', sms: 'SMS', push: 'PUSH NOTIFICATION', both: 'EMAIL + SMS', all: 'ALL CHANNELS' }[channel] || channel.toUpperCase();
 
-  const confirmed = confirm(`Send ${channel.toUpperCase()} broadcast to ${previewCount} recipients in segment "${segLabel}"?\n\nSubject: ${subject || '(SMS — no subject)'}\n\nThis cannot be undone.`);
+  const confirmed = confirm(`Send ${chLabel} broadcast to ${previewCount} recipients in segment "${segLabel}"?\n\nTitle/Subject: ${subject || '(SMS — no subject)'}\n\nThis cannot be undone.`);
   if (!confirmed) return;
 
   const btn = document.getElementById('broadcastSendBtn');
@@ -3103,8 +3106,8 @@ async function sendBroadcast() {
 
     // Record in history
     _broadcastHistory.unshift({
-      date: new Date().toISOString(),
-      subject: subject || '(SMS)',
+      date:    new Date().toISOString(),
+      subject: subject || '(SMS/Push)',
       message: message.slice(0, 80) + (message.length > 80 ? '…' : ''),
       channel,
       segment: segLabel,
@@ -3113,6 +3116,9 @@ async function sendBroadcast() {
       total,
     });
     _renderBroadcastHistory();
+
+    // Refresh push analytics if push was involved
+    if (channel === 'push' || channel === 'all') loadPushAnalytics();
 
     // Clear form
     const msgEl = document.getElementById('broadcastMessage');
@@ -3141,7 +3147,7 @@ function _renderBroadcastHistory() {
     return;
   }
 
-  const chIcon = { email: 'fa-envelope', sms: 'fa-mobile-screen', both: 'fa-paper-plane' };
+  const chIcon = { email: 'fa-envelope', sms: 'fa-mobile-screen', push: 'fa-bell', both: 'fa-paper-plane', all: 'fa-paper-plane' };
 
   body.innerHTML = _broadcastHistory.map(h => `
     <div style="padding:12px 0;border-bottom:1px solid var(--border)">
@@ -3158,6 +3164,66 @@ function _renderBroadcastHistory() {
       </div>
     </div>
   `).join('');
+}
+
+/* ─── Push Analytics ─── */
+async function loadPushAnalytics() {
+  const subEl  = document.getElementById('pushStatSubscribers');
+  const sentEl = document.getElementById('pushStatSent');
+  const logEl  = document.getElementById('pushRecentLog');
+  if (!subEl && !sentEl && !logEl) return; // not on comms view
+
+  try {
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+    const res   = await fetch('/api/push/analytics', {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    if (!res.ok) {
+      if (logEl) logEl.textContent = 'Could not load push analytics.';
+      return;
+    }
+
+    const data = await res.json();
+    if (subEl)  subEl.textContent  = data.total_subscribers ?? 0;
+    if (sentEl) sentEl.textContent = data.notifications_sent ?? 0;
+
+    const recent = data.recent_notifications || [];
+    if (!logEl) return;
+
+    if (!recent.length) {
+      logEl.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim)">No notifications sent yet</div>';
+      return;
+    }
+
+    const dateStr = d => new Date(d).toLocaleString('en-ZA', { dateStyle: 'short', timeStyle: 'short' });
+    logEl.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.76rem;min-width:400px">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:4px 6px;color:var(--text-muted)">Date</th>
+          <th style="text-align:left;padding:4px 6px;color:var(--text-muted)">Title</th>
+          <th style="text-align:left;padding:4px 6px;color:var(--text-muted)">Body</th>
+          <th style="text-align:right;padding:4px 6px;color:var(--text-muted)">Recipients</th>
+          <th style="text-align:left;padding:4px 6px;color:var(--text-muted)">Type</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${recent.map(n => `
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:4px 6px;color:var(--text-dim);white-space:nowrap">${dateStr(n.created_at)}</td>
+            <td style="padding:4px 6px;font-weight:600">${n.title || '—'}</td>
+            <td style="padding:4px 6px;color:var(--text-muted)">${(n.body || '').slice(0, 50)}${(n.body || '').length > 50 ? '…' : ''}</td>
+            <td style="padding:4px 6px;text-align:right">${n.recipient_count ?? 0}</td>
+            <td style="padding:4px 6px"><span class="badge badge--blue">${n.notification_type || 'system'}</span></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table></div>`;
+  } catch (err) {
+    if (logEl) logEl.textContent = 'Error loading analytics: ' + err.message;
+    console.error('[push analytics]', err);
+  }
 }
 
 /* ═══════════════════════════════════════════════

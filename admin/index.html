@@ -914,7 +914,7 @@
                 <!-- Channel -->
                 <div class="form-group" style="margin-bottom:16px">
                   <label class="form-label">Channel</label>
-                  <div style="display:flex;gap:20px;margin-top:6px">
+                  <div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap">
                     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
                       <input type="radio" name="broadcastChannel" value="email" id="bcEmail" checked onchange="toggleBroadcastSubject()" style="accent-color:#FF9B0C;width:16px;height:16px"> Email
                     </label>
@@ -922,7 +922,13 @@
                       <input type="radio" name="broadcastChannel" value="sms" id="bcSms" onchange="toggleBroadcastSubject()" style="accent-color:#FF9B0C;width:16px;height:16px"> SMS
                     </label>
                     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
-                      <input type="radio" name="broadcastChannel" value="both" id="bcBoth" onchange="toggleBroadcastSubject()" style="accent-color:#FF9B0C;width:16px;height:16px"> Both
+                      <input type="radio" name="broadcastChannel" value="push" id="bcPush" onchange="toggleBroadcastSubject()" style="accent-color:#FF9B0C;width:16px;height:16px"> <i class="fa-solid fa-bell" style="color:#FF9B0C;font-size:0.8rem"></i>&nbsp;Push
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
+                      <input type="radio" name="broadcastChannel" value="both" id="bcBoth" onchange="toggleBroadcastSubject()" style="accent-color:#FF9B0C;width:16px;height:16px"> Email + SMS
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
+                      <input type="radio" name="broadcastChannel" value="all" id="bcAll" onchange="toggleBroadcastSubject()" style="accent-color:#FF9B0C;width:16px;height:16px"> All Channels
                     </label>
                   </div>
                 </div>
@@ -962,9 +968,9 @@
             </div>
           </div>
 
-          <!-- RIGHT: History -->
+          <!-- RIGHT: History + Push Analytics -->
           <div>
-            <div class="panel">
+            <div class="panel mb-20">
               <div class="panel__header">
                 <span class="panel__title">Sent History</span>
                 <span id="broadcastHistoryCount" style="font-size:0.75rem;color:var(--text-muted)">0 broadcasts</span>
@@ -973,6 +979,30 @@
                 <div style="text-align:center;padding:32px;color:var(--text-dim)">
                   <i class="fa-solid fa-inbox" style="font-size:2rem;opacity:0.3;display:block;margin-bottom:8px"></i>
                   No broadcasts sent yet
+                </div>
+              </div>
+            </div>
+
+            <!-- Push Analytics -->
+            <div class="panel">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-bell" style="color:var(--orange);margin-right:8px"></i>Push Analytics</span>
+                <button class="btn btn--secondary btn--sm" onclick="loadPushAnalytics()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+              </div>
+              <div class="panel__body">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+                  <div style="background:rgba(255,155,12,0.07);border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:14px;text-align:center">
+                    <div style="font-size:1.6rem;font-weight:800;color:var(--orange)" id="pushStatSubscribers">—</div>
+                    <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Total Subscribers</div>
+                  </div>
+                  <div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:14px;text-align:center">
+                    <div style="font-size:1.6rem;font-weight:800;color:#22c55e" id="pushStatSent">—</div>
+                    <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Notifications Sent</div>
+                  </div>
+                </div>
+                <div style="font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:8px">Recent Notifications</div>
+                <div id="pushRecentLog" style="font-size:0.78rem;color:var(--text-dim);text-align:center;padding:12px">
+                  Loading analytics…
                 </div>
               </div>
             </div>

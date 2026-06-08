@@ -366,6 +366,27 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   subscription JSONB NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+DO $$ BEGIN
+  ALTER TABLE push_subscriptions ADD COLUMN user_agent TEXT;
+  EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE push_subscriptions ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
+  EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS push_subs_endpoint_idx ON push_subscriptions ((subscription->>'endpoint'));
+CREATE INDEX IF NOT EXISTS push_subs_investor_idx ON push_subscriptions (investor_id);
+
+CREATE TABLE IF NOT EXISTS push_notifications_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  notification_type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT,
+  url TEXT,
+  recipient_count INT DEFAULT 0,
+  sent_by TEXT DEFAULT 'system',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
 CREATE TABLE IF NOT EXISTS payslips (
   id TEXT PRIMARY KEY,
