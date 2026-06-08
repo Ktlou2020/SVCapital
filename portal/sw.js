@@ -49,3 +49,39 @@ self.addEventListener('fetch', e => {
     })
   );
 });
+
+// ── Push notification handler ──────────────────────────────────────────────
+self.addEventListener('push', event => {
+  let data = {
+    title: 'SV Capital',
+    body:  'You have a new notification',
+    url:   '/portal/',
+    icon:  '/assets/logo.png',
+    badge: '/assets/logo.png',
+  };
+  if (event.data) {
+    try { data = { ...data, ...event.data.json() }; } catch (_) {}
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body:               data.body,
+      icon:               data.icon  || '/assets/logo.png',
+      badge:              data.badge || '/assets/logo.png',
+      tag:                data.tag   || 'sv-capital',
+      data:               { url: data.url || '/portal/' },
+      requireInteraction: false,
+    })
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/portal/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      const match = list.find(c => c.url.includes('/portal'));
+      if (match) return match.focus();
+      return clients.openWindow(url);
+    })
+  );
+});
