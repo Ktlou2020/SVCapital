@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+    <!-- App identity -->
+    <key>CFBundleDisplayName</key>
+    <string>SV Capital</string>
+    <key>CFBundleName</key>
+    <string>SVCapital</string>
+    <key>CFBundleIdentifier</key>
+    <string>co.za.svcapital.investor</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleExecutable</key>
+    <string>App</string>
+
+    <!-- Supported orientations -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+
+    <!-- Status bar -->
+    <key>UIStatusBarStyle</key>
+    <string>UIStatusBarStyleLightContent</string>
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <true/>
+
+    <!-- Main storyboard -->
+    <key>UIMainStoryboardFile</key>
+    <string>Main</string>
+    <key>UILaunchStoryboardName</key>
+    <string>LaunchScreen</string>
+
+    <!-- Deep links -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>co.za.svcapital.investor</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>svcapital</string>
+            </array>
+        </dict>
+    </array>
+
+    <!-- Associated Domains (Universal Links) -->
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>applinks:svcapital.co.za</string>
+    </array>
+
+    <!-- Push Notifications -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>remote-notification</string>
+        <string>fetch</string>
+    </array>
+
+    <!-- Privacy usage descriptions (App Store requirement) -->
+    <key>NSCameraUsageDescription</key>
+    <string>SV Capital uses your camera to scan documents for identity verification (FICA/KYC).</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>SV Capital uses your photo library to upload identity verification documents.</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>SV Capital uses Face ID to securely authenticate you into your investment account.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>SV Capital may use your location to comply with financial regulations.</string>
+
+    <!-- ATS: allow HTTPS only -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>svcapital.co.za</key>
+            <dict>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <false/>
+            </dict>
+            <key>railway.app</key>
+            <dict>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <false/>
+            </dict>
+        </dict>
+    </dict>
+
+    <!-- Capacitor bridge config -->
+    <key>WKAppBoundDomains</key>
+    <array>
+        <string>svcapital.co.za</string>
+        <string>railway.app</string>
+    </array>
+
+</dict>
+</plist>

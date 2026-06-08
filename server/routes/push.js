@@ -107,6 +107,33 @@ router.delete('/unsubscribe', requireAuth, async (req, res) => {
 });
 
 /* ══════════════════════════════════════════════════════════════
+   POST /api/investors/push-token   (also at /api/push/mobile-token)
+   Saves a Capacitor FCM/APNs device token for push delivery
+══════════════════════════════════════════════════════════════ */
+router.post('/mobile-token', requireAuth, async (req, res) => {
+  const { token, platform } = req.body || {};
+  if (!token) return res.status(400).json({ error: 'token is required' });
+  const validPlatforms = ['ios', 'android', 'web'];
+  const plat = validPlatforms.includes(platform) ? platform : 'android';
+
+  const investorId = req.user.investorId || req.user.id;
+  if (!investorId) return res.status(400).json({ error: 'No investor ID on session' });
+
+  try {
+    await pool.query(
+      `INSERT INTO push_tokens (investor_id, token, platform, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (investor_id, token) DO UPDATE SET platform=$3, updated_at=NOW()`,
+      [investorId, token, plat]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[push] mobile-token error:', err.message);
+    res.status(500).json({ error: 'Failed to save push token' });
+  }
+});
+
+/* ══════════════════════════════════════════════════════════════
    GET /api/push/analytics
    Admin / director only
 ══════════════════════════════════════════════════════════════ */

@@ -765,6 +765,18 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS sessions_user_idx  ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS sessions_token_idx ON sessions(refresh_token);
+
+-- Mobile push notification tokens (one per device per investor)
+CREATE TABLE IF NOT EXISTS push_tokens (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  investor_id TEXT NOT NULL REFERENCES investors(id) ON DELETE CASCADE,
+  token       TEXT NOT NULL,
+  platform    TEXT NOT NULL CHECK (platform IN ('ios','android','web')),
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (investor_id, token)
+);
+CREATE INDEX IF NOT EXISTS push_tokens_investor_idx ON push_tokens(investor_id);
 `;
 
 async function autoSetup() {
