@@ -972,33 +972,56 @@ function renderAllocationChart() {
   const ctx = document.getElementById('allocationChart');
   if (!ctx) return;
 
+  const colors = ['#D4AF37', '#22c55e', '#3b82f6', '#f97316', '#a855f7', '#ec4899', '#14b8a6'];
+
+  const activeInvests = PORTAL.investments.filter(i => i.status === 'active');
   const allocation = {};
-  PORTAL.investments.filter(i => i.status === 'active').forEach(i => {
-    const label = Utils.productInfo(i.product_type).label;
-    allocation[label] = (allocation[label] || 0) + i.amount;
+  activeInvests.forEach(i => {
+    const label = Utils.productInfo(i.product_type || 'other').label;
+    allocation[label] = (allocation[label] || 0) + (parseFloat(i.amount) || 0);
   });
 
-  if (!Object.keys(allocation).length) {
-    allocation['No Investments'] = 1;
-  }
+  const isEmpty = !Object.keys(allocation).length;
+  if (isEmpty) allocation['No Investments'] = 1;
 
-  const colors = ['#D4AF37', '#22c55e', '#3b82f6', '#f97316', '#a855f7'];
+  const labels = Object.keys(allocation);
+  const values = Object.values(allocation);
+  const total  = values.reduce((s, v) => s + v, 0);
 
   if (PORTAL.charts.alloc) PORTAL.charts.alloc.destroy();
   PORTAL.charts.alloc = new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: Object.keys(allocation),
-      datasets: [{ data: Object.values(allocation), backgroundColor: colors.slice(0, Object.keys(allocation).length), borderColor: 'var(--dark-2)', borderWidth: 3, hoverOffset: 4 }]
+      labels,
+      datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderColor: 'var(--dark-2)', borderWidth: 3, hoverOffset: 4 }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'bottom', labels: { color: '#7a92a8', font: { size: 10 }, boxWidth: 10, padding: 8 } },
+        legend: { display: false },
         tooltip: { callbacks: { label: c => ` ${c.label}: ${Utils.rand(c.parsed)}` } }
       }
     }
   });
+
+  // Render breakdown list beneath chart
+  const list = document.getElementById('allocationList');
+  if (!list) return;
+  if (isEmpty) {
+    list.innerHTML = '<div style="font-size:0.8rem;color:#9ca3af;text-align:center;padding:8px 0">No active investments</div>';
+    return;
+  }
+  list.innerHTML = labels.map((label, idx) => {
+    const amt = values[idx];
+    const pct = total > 0 ? ((amt / total) * 100).toFixed(1) : '0';
+    const color = colors[idx] || '#8ea3b8';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+      <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
+      <span style="flex:1;font-size:0.8rem;color:#c9d6e3">${label}</span>
+      <span style="font-size:0.8rem;font-weight:600;color:#f0f4f8">${Utils.rand(amt)}</span>
+      <span style="font-size:0.72rem;color:#9ca3af;min-width:38px;text-align:right">${pct}%</span>
+    </div>`;
+  }).join('');
 }
 
 /* ═══════════════════════════════════════════════
