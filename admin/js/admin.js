@@ -579,7 +579,7 @@ function renderProductMixChart() {
     if (products[i.product_type] !== undefined) products[i.product_type] += i.amount;
   });
 
-  const labels = ['Cattle', 'Solar 7yr', 'Solar 6yr', 'Solar 5yr', 'Short-Term', 'Delivery Bike'];
+  const labels = ['Cattle Investment', 'Solar Investment (7yr)', 'Solar Investment (6yr)', 'Solar Investment (5yr)', 'Short Term Investment', 'Delivery Bikes'];
   const data = Object.values(products);
   const colors = ['#D4AF37', '#22c55e', '#4ade80', '#86efac', '#3b82f6', '#f97316'];
 
@@ -1402,7 +1402,41 @@ async function notifyWaitlist(poolId) {
   }
 }
 
-function openAddPoolModal() { Modal.open('addPoolModal'); }
+function openAddPoolModal() { _poolNameManual = false; Modal.open('addPoolModal'); }
+
+// Track whether admin has manually typed a pool name
+let _poolNameManual = false;
+function _syncPoolNameManual() { _poolNameManual = true; }
+
+function _autoPoolName() {
+  if (_poolNameManual) return; // don't override manual input
+  const typeEl    = document.getElementById('newPoolType');
+  const closeEl   = document.getElementById('newPoolCloseDate');
+  const partnerEl = document.getElementById('newPoolPartner');
+  const nameEl    = document.getElementById('newPoolName');
+  if (!typeEl || !nameEl) return;
+
+  const typeLabels = {
+    cattle:        'Cattle Investment',
+    solar_7yr:     'Solar Investment',
+    solar_6yr:     'Solar Investment',
+    solar_5yr:     'Solar Investment',
+    short_term:    'Short Term Investment',
+    delivery_bike: 'Delivery Bikes',
+  };
+  const productLabel = typeLabels[typeEl.value] || typeEl.value;
+  const partner      = partnerEl?.value.trim();
+  const closeDate    = closeEl?.value;
+  const monthYear    = closeDate
+    ? new Date(closeDate).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })
+    : '';
+
+  const parts = [productLabel];
+  if (monthYear) parts.push(monthYear);
+  if (partner)   parts.push(partner);
+
+  nameEl.value = parts.join(' - ');
+}
 
 async function saveNewPool() {
   const name = document.getElementById('newPoolName').value.trim();

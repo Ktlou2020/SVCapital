@@ -1801,9 +1801,12 @@ function filterMarket(type, btn) {
 
 const _POOL_META = {
   solar:         { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  cattle:        { blurb: 'Invests in livestock purchasing, management, and resale cycles.',   risk: 'Medium-High',  riskColor: '#ff9b0c' },
-  short_term:    { blurb: 'Short-duration bridging finance to vetted borrowers. High liquidity.', risk: 'Medium',   riskColor: '#f59e0b' },
-  delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',   risk: 'Low-Medium',   riskColor: '#22c55e' },
+  solar_7yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
+  solar_6yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
+  solar_5yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
+  cattle:        { blurb: 'Invests in livestock purchasing, management, and resale cycles.',    risk: 'Medium-High',  riskColor: '#ff9b0c' },
+  short_term:    { blurb: 'Short-duration bridging finance to vetted borrowers. High liquidity.', risk: 'Medium',    riskColor: '#f59e0b' },
+  delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Low-Medium',   riskColor: '#22c55e' },
 };
 
 function renderMarketplace() {
@@ -2135,7 +2138,7 @@ async function confirmInvestment(pool) {
       investor_id: DEMO_INVESTOR_ID,
       investor_name:    `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
       type:             'investment',
-      amount:           -amount,
+      amount:           amount,
       status:           'completed',
       reference:        `INVST-${Date.now()}`,
       description:      `Investment into ${pool.name}`,
@@ -2854,12 +2857,13 @@ function stmtInfoRow(label, val) {
 
 function getProductInfo(type) {
   const map = {
-    cattle:        { label:'Cattle Finance',   color:'#d97706', bg:'#fef3c7' },
-    solar_7yr:     { label:'Solar 7yr',        color:'#ea580c', bg:'#ffedd5' },
-    solar_6yr:     { label:'Solar 6yr',        color:'#ea580c', bg:'#fff7ed' },
-    solar_5yr:     { label:'Solar 5yr',        color:'#c2410c', bg:'#fff7ed' },
-    short_term:    { label:'SMME Short-Term',  color:'#2563eb', bg:'#dbeafe' },
-    delivery_bike: { label:'Delivery Bike',    color:'#7c3aed', bg:'#ede9fe' },
+    cattle:        { label:'Cattle Investment',        color:'#d97706', bg:'#fef3c7' },
+    solar_7yr:     { label:'Solar Investment (7yr)',   color:'#ea580c', bg:'#ffedd5' },
+    solar_6yr:     { label:'Solar Investment (6yr)',   color:'#ea580c', bg:'#fff7ed' },
+    solar_5yr:     { label:'Solar Investment (5yr)',   color:'#c2410c', bg:'#fff7ed' },
+    solar:         { label:'Solar Investment',         color:'#ea580c', bg:'#ffedd5' },
+    short_term:    { label:'Short Term Investment',    color:'#2563eb', bg:'#dbeafe' },
+    delivery_bike: { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
   };
   return map[type] || { label: type || 'Investment', color:'#6b7280', bg:'#f3f4f6' };
 }

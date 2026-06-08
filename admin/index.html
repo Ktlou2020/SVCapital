@@ -1056,15 +1056,15 @@
     </div>
     <div class="modal__body">
       <div class="form-row form-row--2">
-        <div class="form-group"><label class="form-label">Pool Name *</label><input type="text" class="form-input" id="newPoolName" placeholder="Cattle Pool #16" /></div>
+        <div class="form-group"><label class="form-label">Pool Name *</label><input type="text" class="form-input" id="newPoolName" placeholder="e.g. Cattle Investment - June 2025 - Beefcor" oninput="_syncPoolNameManual()" /></div>
         <div class="form-group"><label class="form-label">Product Type *</label>
-          <select class="form-select" id="newPoolType">
-            <option value="cattle">Cattle</option>
-            <option value="solar_7yr">Solar 7yr</option>
-            <option value="solar_6yr">Solar 6yr</option>
-            <option value="solar_5yr">Solar 5yr</option>
-            <option value="short_term">Short-Term</option>
-            <option value="delivery_bike">Delivery Bike</option>
+          <select class="form-select" id="newPoolType" onchange="_autoPoolName()">
+            <option value="cattle">Cattle Investment</option>
+            <option value="solar_7yr">Solar Investment (7yr)</option>
+            <option value="solar_6yr">Solar Investment (6yr)</option>
+            <option value="solar_5yr">Solar Investment (5yr)</option>
+            <option value="short_term">Short Term Investment</option>
+            <option value="delivery_bike">Delivery Bikes</option>
           </select>
         </div>
       </div>
@@ -1075,11 +1075,11 @@
       </div>
       <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Benchmark Rate (e.g. 0.1483)</label><input type="number" class="form-input" id="newPoolRate" placeholder="0.1483" step="0.0001" /></div>
-        <div class="form-group"><label class="form-label">Partner Name</label><input type="text" class="form-input" id="newPoolPartner" placeholder="Beefcor" /></div>
+        <div class="form-group"><label class="form-label">Partner Name</label><input type="text" class="form-input" id="newPoolPartner" placeholder="Beefcor" oninput="_autoPoolName()" /></div>
       </div>
       <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Open Date</label><input type="date" class="form-input" id="newPoolOpenDate" /></div>
-        <div class="form-group"><label class="form-label">Close Date</label><input type="date" class="form-input" id="newPoolCloseDate" /></div>
+        <div class="form-group"><label class="form-label">Close Date</label><input type="date" class="form-input" id="newPoolCloseDate" onchange="_autoPoolName()" /></div>
       </div>
       <div class="form-group"><label class="form-label">Max Capacity (ZAR)</label><input type="number" class="form-input" id="newPoolMaxCapacity" placeholder="Leave blank for unlimited" min="0" step="10000" /></div>
     </div>
@@ -1250,12 +1250,12 @@
       <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Product Type</label>
           <select class="form-select" id="editPoolType">
-            <option value="cattle">Cattle</option>
-            <option value="solar_7yr">Solar 7yr</option>
-            <option value="solar_6yr">Solar 6yr</option>
-            <option value="solar_5yr">Solar 5yr</option>
-            <option value="short_term">Short-Term</option>
-            <option value="delivery_bike">Delivery Bike</option>
+            <option value="cattle">Cattle Investment</option>
+            <option value="solar_7yr">Solar Investment (7yr)</option>
+            <option value="solar_6yr">Solar Investment (6yr)</option>
+            <option value="solar_5yr">Solar Investment (5yr)</option>
+            <option value="short_term">Short Term Investment</option>
+            <option value="delivery_bike">Delivery Bikes</option>
           </select>
         </div>
         <div class="form-group"><label class="form-label">Term (months)</label><input type="number" class="form-input" id="editPoolTerm" /></div>
