@@ -6,6 +6,14 @@
      • Check wallet_balance >= recurring_amount
      • If yes: deduct wallet, create investment + transaction
      • If no:  log skip
+
+   Auto Top-Up Cron (Paystack charge_authorization)
+   Runs daily at 04:00 UTC (06:00 SAST).
+   For each investor with auto_topup_enabled=true whose
+   auto_topup_day matches today's day-of-month:
+     • Call Paystack charge_authorization
+     • On success: creditWallet()
+     • On failure: log error + push notification
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
@@ -134,10 +142,99 @@ async function runRecurringInvestments() {
   );
 }
 
-function startRecurringCron() {
-  // 1st of each month at 03:00 UTC (05:00 SAST)
-  cron.schedule('0 3 1 * *', runRecurringInvestments, { timezone: 'UTC' });
-  console.log('[recurringCron] Scheduled: 1st of each month at 03:00 UTC (05:00 SAST)');
+/* ═══════════════════════════════════════════════════════════
+   AUTO WALLET TOP-UP via Paystack charge_authorization
+   ═══════════════════════════════════════════════════════════ */
+async function runAutoTopUps() {
+  const todayDay = new Date().getDate(); // 1-31
+  console.log(`[autoTopUp] Running for day ${todayDay}…`);
+
+  const secretKey = (process.env.PAYSTACK_SECRET_KEY || '').trim();
+  if (!secretKey) {
+    console.warn('[autoTopUp] PAYSTACK_SECRET_KEY not set — skipping auto top-up run');
+    return;
+  }
+
+  const { rows: investors } = await pool.query(
+    `SELECT i.id, i.first_name, i.last_name, i.email, i.auto_topup_amount,
+            pa.authorization_code, pa.email AS auth_email
+     FROM investors i
+     JOIN paystack_authorizations pa ON pa.investor_id = i.id
+     WHERE i.auto_topup_enabled = true
+       AND i.auto_topup_amount  > 0
+       AND i.auto_topup_day     = $1
+       AND i.status             = 'active'`,
+    [todayDay]
+  );
+
+  console.log(`[autoTopUp] ${investors.length} investor(s) scheduled for top-up today`);
+  let processed = 0, failed = 0;
+
+  for (const inv of investors) {
+    const amount   = parseFloat(inv.auto_topup_amount);
+    const amtKobo  = Math.round(amount * 100);
+    const reference = `ATU-${Date.now()}-${inv.id.replace(/[^A-Z0-9]/g, '')}`;
+
+    try {
+      const psRes = await fetch('https://api.paystack.co/transaction/charge_authorization', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${secretKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          authorization_code: inv.authorization_code,
+          email:              inv.auth_email,
+          amount:             amtKobo,
+          reference,
+          metadata: {
+            investor_id:   inv.id,
+            wallet_credit: amount,
+            source:        'auto_topup',
+          },
+        }),
+      });
+      const psData = await psRes.json();
+
+      if (psData.status && psData.data?.status === 'success') {
+        // Re-use the shared creditWallet helper from payments.js
+        const { rows: [invRow] } = await pool.query('SELECT * FROM investors WHERE id=$1', [inv.id]);
+        if (invRow) {
+          // Inline credit (same logic as creditWallet in payments.js)
+          await pool.query(
+            'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at=NOW() WHERE id=$2',
+            [amount, inv.id]
+          );
+          const desc = `Auto top-up via Paystack — R${amount.toLocaleString('en-ZA')} credited`;
+          await pool.query(
+            `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
+             VALUES (gen_random_uuid(),$1,'deposit',$2,'completed',$3,$4,NOW(),NOW())`,
+            [inv.id, amount, reference, desc]
+          );
+          emailService.sendDepositConfirmed(invRow, amount, reference, 'Auto Top-Up (Paystack)').catch(() => {});
+          console.log(`[autoTopUp] R${amount} credited to ${inv.id}, ref: ${reference}`);
+          processed++;
+        }
+      } else {
+        console.error(`[autoTopUp] Charge failed for ${inv.id}:`, psData.message || JSON.stringify(psData));
+        // Disable auto top-up after failure so we don't keep retrying a bad card
+        await pool.query('UPDATE investors SET auto_topup_enabled=false WHERE id=$1', [inv.id]);
+        failed++;
+      }
+    } catch (err) {
+      console.error(`[autoTopUp] Error for investor ${inv.id}:`, err.message);
+      failed++;
+    }
+  }
+
+  console.log(`[autoTopUp] Done — ${processed} credited, ${failed} failed`);
 }
 
-module.exports = { startRecurringCron, runRecurringInvestments };
+function startRecurringCron() {
+  // 1st of each month at 03:00 UTC (05:00 SAST) — recurring investments
+  cron.schedule('0 3 1 * *', runRecurringInvestments, { timezone: 'UTC' });
+  console.log('[recurringCron] Scheduled: 1st of each month at 03:00 UTC');
+
+  // Daily at 04:00 UTC (06:00 SAST) — auto wallet top-ups
+  cron.schedule('0 4 * * *', runAutoTopUps, { timezone: 'UTC' });
+  console.log('[recurringCron] Auto top-up scheduled: daily at 04:00 UTC');
+}
+
+module.exports = { startRecurringCron, runRecurringInvestments, runAutoTopUps };

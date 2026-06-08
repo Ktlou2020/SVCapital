@@ -507,3 +507,109 @@
   .rewards-stats-row { gap: 8px; }
   .rewards-stat { min-width: calc(50% - 4px); padding: 10px 12px; }
 }
+
+/* ═══════════════════════════════════════════════
+   MOBILE SIDEBAR BACKDROP
+   ═══════════════════════════════════════════════ */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 199;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+@media (max-width: 900px) {
+  .sidebar-backdrop { display: block; pointer-events: none; }
+  .sidebar-backdrop--visible {
+    pointer-events: auto;
+    opacity: 1;
+  }
+  /* Sidebar sits above backdrop on mobile */
+  .sidebar { z-index: 200; }
+}
+
+/* ═══════════════════════════════════════════════
+   MOBILE HAMBURGER BUTTON
+   ═══════════════════════════════════════════════ */
+.sidebar-toggle-btn {
+  display: none;
+}
+@media (max-width: 900px) {
+  .sidebar-toggle-btn { display: flex !important; }
+}
+
+/* ═══════════════════════════════════════════════
+   MOBILE LAYOUT OVERRIDES
+   ═══════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Prevent horizontal overflow */
+  body { overflow-x: hidden; }
+  .page-content { padding: 12px 14px !important; }
+
+  /* Portfolio hero: single column on small screens */
+  .portfolio-hero {
+    grid-template-columns: 1fr !important;
+    padding: 20px 16px !important;
+  }
+  .portfolio-hero__right { display: none !important; }
+  .portfolio-hero__left { grid-column: 1; }
+  .portfolio-hero__stats {
+    grid-column: 1 !important;
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+    padding-bottom: 4px;
+    gap: 16px !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .portfolio-hero__stats::-webkit-scrollbar { display: none; }
+  .ph-stat { flex-shrink: 0; }
+  .portfolio-hero__value { font-size: 2rem !important; }
+
+  /* Topbar: hide website link on mobile */
+  .topbar__actions .btn[href*="index.html"] { display: none; }
+
+  /* Larger tap targets for nav items */
+  .nav-item { min-height: 44px !important; padding: 10px 16px !important; }
+  .topbar-btn { min-width: 40px !important; min-height: 40px !important; }
+
+  /* Tables: horizontal scroll */
+  .data-table { font-size: 0.78rem; }
+  .table-card { overflow-x: auto; }
+
+  /* Modals: full width on mobile */
+  .modal__box {
+    width: calc(100% - 24px) !important;
+    max-width: 100% !important;
+    margin: 12px !important;
+    max-height: 92vh;
+    overflow-y: auto;
+  }
+
+  /* Grid layouts stack on mobile */
+  .grid-layout { grid-template-columns: 1fr !important; }
+
+  /* Wallet sub-tabs: full width */
+  .wallet-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Quest view rewards stats */
+  .rewards-stats-row { overflow-x: auto; flex-wrap: nowrap !important; }
+  .rewards-stat { flex-shrink: 0; }
+
+  /* Hide sign out text on very small screens, keep icon */
+  .topbar__actions .btn--secondary[href*="login"] .fa-arrow-right-from-bracket + * { display: none; }
+}
+
+@media (max-width: 480px) {
+  .portfolio-hero__value { font-size: 1.7rem !important; }
+  .ph-stat__value { font-size: 0.85rem !important; }
+  .welcome-name { font-size: 1.2rem !important; }
+  .topbar { padding: 10px 12px !important; }
+  /* Sign out button: icon only */
+  .topbar__actions .btn--secondary[href*="login"] { padding: 6px 8px !important; }
+}

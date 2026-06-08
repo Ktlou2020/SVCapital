@@ -283,6 +283,21 @@ function loadNotifications() {
 }
 
 /* ─── Navigation ─── */
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (!sidebar) return;
+  const open = sidebar.classList.toggle('open');
+  if (backdrop) backdrop.classList.toggle('sidebar-backdrop--visible', open);
+}
+
+function closeSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (sidebar) sidebar.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('sidebar-backdrop--visible');
+}
+
 function navigate(view, btnEl) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -290,6 +305,9 @@ function navigate(view, btnEl) {
   const el = document.getElementById(`view-${view}`);
   if (el) el.classList.add('active');
   if (btnEl) btnEl.classList.add('active');
+
+  // Auto-close sidebar on mobile when navigating
+  if (window.innerWidth <= 768) closeSidebar();
 
   const titles = {
     overview: 'Portfolio Overview', investments: 'My Investments',
@@ -1088,6 +1106,8 @@ async function loadWallet() {
   const eftRef = document.getElementById('walletEftRef');
   if (eftRef) eftRef.textContent = PORTAL.investor?.id || DEMO_INVESTOR_ID;
 
+  _loadAutoTopUpCard().catch(() => {});
+
   const activity = document.getElementById('walletActivity');
   const walletTxns = PORTAL.transactions
     .filter(t => ['deposit', 'return', 'payout', 'referral_bonus', 'withdrawal'].includes(t.type))
@@ -1204,6 +1224,168 @@ async function _cancelRecurring() {
     _renderRecurringTab();
     _renderRecurringStatusSummary();
   } catch (e) { Toast.error('Failed to cancel recurring investment'); }
+}
+
+/* ═══════════════════════════════════════════════
+   AUTO WALLET TOP-UP (Paystack Authorization)
+   ═══════════════════════════════════════════════ */
+
+let _autoTopUpCard     = null;  // cached card info {card_type, last4, ...}
+let _autoTopUpSettings = null;  // cached settings {auto_topup_enabled, amount, day}
+
+async function _loadAutoTopUpCard() {
+  const container = document.getElementById('autoTopUpCard');
+  if (!container) return;
+
+  try {
+    const [cardRes, settingsRes] = await Promise.all([
+      API._fetch('GET', 'payments/topup-card'),
+      API._fetch('GET', 'payments/auto-topup'),
+    ]);
+    _autoTopUpCard     = cardRes.card || null;
+    _autoTopUpSettings = settingsRes;
+  } catch (e) {
+    _autoTopUpCard = null;
+    _autoTopUpSettings = null;
+  }
+
+  _renderAutoTopUpCard(container);
+}
+
+function _cardIcon(type) {
+  const t = (type || '').toLowerCase();
+  if (t.includes('visa'))       return '<i class="fa-brands fa-cc-visa"   style="color:#1a1f71;font-size:1.4rem"></i>';
+  if (t.includes('mastercard')) return '<i class="fa-brands fa-cc-mastercard" style="font-size:1.4rem"></i>';
+  if (t.includes('amex'))       return '<i class="fa-brands fa-cc-amex"   style="color:#016fcb;font-size:1.4rem"></i>';
+  return '<i class="fa-solid fa-credit-card" style="font-size:1.2rem;color:#6b7280"></i>';
+}
+
+function _renderAutoTopUpCard(container) {
+  const card     = _autoTopUpCard;
+  const settings = _autoTopUpSettings;
+  const enabled  = settings?.auto_topup_enabled;
+  const amount   = settings?.auto_topup_amount;
+  const day      = settings?.auto_topup_day || 1;
+
+  const suffix = day === 1 ? 'st' : day === 2 ? 'nd' : day === 3 ? 'rd' : 'th';
+
+  if (!card) {
+    container.innerHTML = `
+      <div style="display:flex;align-items:center;gap:14px;padding:16px">
+        <div style="width:42px;height:42px;border-radius:10px;background:rgba(255,155,12,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="fa-solid fa-rotate" style="color:#ff9b0c;font-size:1.1rem"></i>
+        </div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:0.88rem;color:#1a1a1a">Auto Wallet Top-Up</div>
+          <div style="font-size:0.75rem;color:#6b7280;margin-top:2px">Complete a Paystack payment to save your card, then enable auto top-up.</div>
+        </div>
+        <button class="btn btn--secondary btn--sm" onclick="openTopUpModal('paystack')">
+          <i class="fa-solid fa-plus"></i> Add Card
+        </button>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="padding:16px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div style="width:42px;height:42px;border-radius:10px;background:rgba(255,155,12,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="fa-solid fa-rotate" style="color:#ff9b0c;font-size:1.1rem"></i>
+        </div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:0.88rem;color:#1a1a1a">Auto Wallet Top-Up</div>
+          <div style="font-size:0.75rem;color:#6b7280;margin-top:1px">Automatically charge your saved card on a set day each month</div>
+        </div>
+        ${enabled
+          ? `<span style="background:rgba(34,197,94,0.12);color:#22c55e;font-size:0.68rem;font-weight:700;padding:3px 9px;border-radius:20px;border:1px solid rgba(34,197,94,0.3);white-space:nowrap">ACTIVE</span>`
+          : `<span style="background:rgba(107,114,128,0.1);color:#6b7280;font-size:0.68rem;font-weight:700;padding:3px 9px;border-radius:20px;border:1px solid rgba(107,114,128,0.2);white-space:nowrap">INACTIVE</span>`
+        }
+      </div>
+
+      <div style="background:#F9FAFB;border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
+        ${_cardIcon(card.card_type)}
+        <div>
+          <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">
+            ${card.card_type ? card.card_type.replace(/^\w/, c => c.toUpperCase()) : 'Card'} •••• ${card.last4 || '????'}
+          </div>
+          <div style="font-size:0.7rem;color:#6b7280">${card.bank || ''} · Expires ${card.exp_month || '??'}/${card.exp_year || '??'}</div>
+        </div>
+        <button onclick="_removeTopUpCard()" style="margin-left:auto;background:none;border:none;color:#ef4444;font-size:0.72rem;font-weight:600;cursor:pointer;padding:4px 8px;border-radius:4px;transition:background 0.15s" onmouseover="this.style.background='rgba(239,68,68,0.08)'" onmouseout="this.style.background='none'">
+          <i class="fa-solid fa-trash"></i> Remove
+        </button>
+      </div>
+
+      ${enabled ? `
+        <div style="font-size:0.8rem;color:#374151;margin-bottom:10px">
+          <i class="fa-solid fa-calendar-check" style="color:#22c55e;margin-right:5px"></i>
+          <strong>${Utils.rand(amount)}</strong> charged on the <strong>${day}${suffix}</strong> of each month
+        </div>` : ''}
+
+      <div style="display:flex;gap:8px">
+        <button class="btn btn--primary btn--sm" onclick="openAutoTopUpModal()" style="flex:1">
+          <i class="fa-solid fa-pen"></i> ${enabled ? 'Edit Schedule' : 'Set Up Auto Top-Up'}
+        </button>
+        ${enabled ? `<button class="btn btn--secondary btn--sm" onclick="_cancelAutoTopUp()" style="color:#ef4444;border-color:rgba(239,68,68,0.3)">
+          <i class="fa-solid fa-xmark"></i> Cancel
+        </button>` : ''}
+      </div>
+    </div>`;
+}
+
+function openAutoTopUpModal() {
+  const settings = _autoTopUpSettings || {};
+  const el = id => document.getElementById(id);
+  if (!el('autoTopUpModal')) return;
+  if (el('atuEnabled'))  el('atuEnabled').checked = !!settings.auto_topup_enabled;
+  if (el('atuAmount'))   el('atuAmount').value    = settings.auto_topup_amount || '';
+  if (el('atuDay'))      el('atuDay').value       = settings.auto_topup_day || 1;
+  Modal.open('autoTopUpModal');
+}
+
+async function saveAutoTopUp() {
+  const el = id => document.getElementById(id);
+  const enabled = el('atuEnabled')?.checked;
+  const amount  = parseFloat(el('atuAmount')?.value);
+  const day     = parseInt(el('atuDay')?.value, 10);
+
+  if (enabled) {
+    if (!amount || amount < 50) return Toast.error('Minimum auto top-up is R50');
+    if (!day || day < 1 || day > 28) return Toast.error('Day must be between 1 and 28');
+  }
+
+  const btn = el('atuSaveBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  try {
+    await API._fetch('POST', 'payments/auto-topup', { enabled, amount, day });
+    Modal.close('autoTopUpModal');
+    Toast.success(enabled ? `Auto top-up of ${Utils.rand(amount)} set for the ${day}${day===1?'st':day===2?'nd':day===3?'rd':'th'} of each month` : 'Auto top-up disabled');
+    await _loadAutoTopUpCard();
+  } catch (e) {
+    Toast.error(e.message || 'Failed to save auto top-up settings');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+  }
+}
+
+async function _cancelAutoTopUp() {
+  if (!confirm('Cancel auto top-up? Your saved card will remain on file.')) return;
+  try {
+    await API._fetch('POST', 'payments/auto-topup', { enabled: false });
+    Toast.success('Auto top-up cancelled');
+    await _loadAutoTopUpCard();
+  } catch (e) { Toast.error('Failed to cancel auto top-up'); }
+}
+
+async function _removeTopUpCard() {
+  if (!confirm('Remove your saved card? This will also cancel auto top-up.')) return;
+  try {
+    await API._fetch('DELETE', 'payments/topup-card');
+    _autoTopUpCard = null;
+    _autoTopUpSettings = null;
+    Toast.success('Card removed');
+    await _loadAutoTopUpCard();
+  } catch (e) { Toast.error('Failed to remove card'); }
 }
 
 /* ═══════════════════════════════════════════════
@@ -1465,6 +1647,9 @@ function launchPaystack() {
               PORTAL.investor.wallet_balance = (parseFloat(PORTAL.investor.wallet_balance) || 0) + _pmAmount;
               _refreshWalletUI(PORTAL.investor.wallet_balance);
             }
+
+            // If Paystack returned a reusable authorization, refresh the auto top-up card
+            if (result.authSaved) _loadAutoTopUpCard().catch(() => {});
 
             await _showDepositSuccess('paystack', transaction.reference);
           } catch (verifyErr) {
@@ -6933,5 +7118,23 @@ function _dismissPwaPrompt() {
   const banner = document.getElementById('pwaInstallBanner');
   if (banner) banner.style.display = 'none';
   localStorage.setItem('pwa_dismissed', Date.now().toString());
+}
+
+/* ── iOS / Safari "Add to Home Screen" prompt ── */
+(function _initIOSBanner() {
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isStandalone = window.navigator.standalone === true;
+  if (!isIOS || isStandalone) return;
+  if (localStorage.getItem('ios_pwa_dismissed')) return;
+  setTimeout(() => {
+    const el = document.getElementById('iosPwaBanner');
+    if (el) el.style.display = 'flex';
+  }, 8000);
+})();
+
+function _dismissIosBanner() {
+  const el = document.getElementById('iosPwaBanner');
+  if (el) el.style.display = 'none';
+  localStorage.setItem('ios_pwa_dismissed', '1');
 }
 

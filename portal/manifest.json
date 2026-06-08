@@ -2,11 +2,12 @@
   "name": "SV Capital — Investor Portal",
   "short_name": "SV Capital",
   "description": "Track your SV Capital investments, wallet balance, and returns.",
-  "start_url": "./index.html",
+  "id": "/portal/",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#ffffff",
+  "background_color": "#0f1623",
   "theme_color": "#FF9B0C",
   "categories": ["finance"],
   "lang": "en-ZA",
@@ -19,13 +20,13 @@
     {
       "name": "My Portfolio",
       "short_name": "Portfolio",
-      "url": "./index.html",
+      "url": "./",
       "icons": [{ "src": "../assets/logo-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Wallet",
       "short_name": "Wallet",
-      "url": "./index.html",
+      "url": "./",
       "icons": [{ "src": "../assets/logo-192.png", "sizes": "192x192" }]
     }
   ]
