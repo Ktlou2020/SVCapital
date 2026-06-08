@@ -727,12 +727,12 @@
         const redirectMap = {
           admin:        'admin/index.html',
           director:     'admin/index.html',
-          investor:     'portal/index.html',
+          investor:     'portal/',
           ifa:          'ifa/index.html',
           fund_manager: 'fund/index.html',
           staff:        'team/hub.html',
         };
-        window.location.replace(redirectMap[payload.role] || 'portal/index.html');
+        window.location.replace(redirectMap[payload.role] || 'portal/');
       }
     } catch (_) {}
   })();
@@ -848,7 +848,7 @@
 
 
       btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
-      setTimeout(() => { window.location.href = data.redirect || 'portal/index.html'; }, 350);
+      setTimeout(() => { window.location.href = data.redirect || 'portal/'; }, 350);
     } catch (err) {
       btn.disabled = false; btn.classList.remove('loading');
       btnText.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In';
@@ -876,7 +876,7 @@
       localStorage.setItem('svc_token', data.token);
       localStorage.setItem('svc_user',  JSON.stringify(data.user));
       btn.textContent = 'Verified ✓';
-      setTimeout(() => { window.location.href = data.redirect || 'portal/index.html'; }, 350);
+      setTimeout(() => { window.location.href = data.redirect || 'portal/'; }, 350);
     } catch (err) {
       btn.disabled = false; btn.textContent = 'Verify Code';
       if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }

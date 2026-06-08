@@ -1837,6 +1837,13 @@ body {
   font-weight: 800 !important;
   letter-spacing: -0.02em !important;
 }
+/* Higher-specificity override to beat ci-theme.css (.brand-text .brand-name) */
+.sidebar .brand-text .brand-name {
+  color: #ffffff !important;
+}
+.sidebar .brand-text .brand-role {
+  color: rgba(255,255,255,0.45) !important;
+}
 .brand-role {
   color: rgba(255,255,255,0.38) !important;
   font-size: 0.62rem !important;
@@ -1896,6 +1903,9 @@ body {
 }
 .user-name  { color: rgba(255,255,255,0.88) !important; font-size: 0.8rem !important; font-weight: 700 !important; }
 .user-role  { color: rgba(255,255,255,0.38) !important; font-size: 0.68rem !important; }
+/* Higher-specificity override to beat ci-theme.css (.sidebar-user__info .user-name) */
+.sidebar .sidebar-user__info .user-name { color: #ffffff !important; }
+.sidebar .sidebar-user__info .user-role { color: rgba(255,255,255,0.50) !important; }
 
 /* ─── TOPBAR — Crisp and clean ─── */
 .topbar {
