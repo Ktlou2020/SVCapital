@@ -369,7 +369,7 @@ async function loadDashboard() {
       API.investors.list({ limit: 100 }),
       API.pools.list({ limit: 100 }),
       API.investments.list({ limit: 100 }),
-      API.transactions.list({ limit: 100 })
+      API.transactions.list({ limit: 500 })
     ]);
 
     STATE.investors = invRes.data || [];
@@ -2116,7 +2116,7 @@ async function loadAnalytics() {
     const [invRes, invstRes, txnRes] = await Promise.all([
       API.investors.list({ limit: 100 }),
       API.investments.list({ limit: 200 }),
-      API.transactions.list({ limit: 200 })
+      API.transactions.list({ limit: 500 })
     ]);
     STATE.investors = invRes.data || [];
     STATE.investments = invstRes.data || [];
@@ -2246,16 +2246,22 @@ function renderConversionFunnel() {
   ).length;
 
   // Investors with at least one completed deposit
+  // Guard against transactions with missing investor_id
   const depositedIds = new Set(
-    STATE.transactions
-      .filter(t => t.type === 'deposit' && t.status === 'completed')
+    (STATE.transactions || [])
+      .filter(t => t.type === 'deposit' && t.status === 'completed' && t.investor_id != null)
       .map(t => t.investor_id)
   );
-  const deposited = STATE.investors.filter(i => depositedIds.has(i.id)).length;
+  const deposited = STATE.investors.filter(i => i.id != null && depositedIds.has(i.id)).length;
 
   // Investors with at least one investment
-  const investedIds = new Set(STATE.investments.map(i => i.investor_id));
-  const invested = STATE.investors.filter(i => investedIds.has(i.id)).length;
+  // Guard against investments with missing investor_id
+  const investedIds = new Set(
+    (STATE.investments || [])
+      .filter(inv => inv.investor_id != null)
+      .map(inv => inv.investor_id)
+  );
+  const invested = STATE.investors.filter(i => i.id != null && investedIds.has(i.id)).length;
 
   const stages = [
     { label: 'Signed Up',        count: total,         color: '#6366f1' },
@@ -3032,27 +3038,28 @@ function renderAuditTable() {
   const dateFromVal  = document.getElementById('auditDateFrom')?.value || '';
   const dateToVal    = document.getElementById('auditDateTo')?.value || '';
 
+  // Apply client-side filters to the server-fetched page
   let items = _auditEvents;
   if (typeFilter)   items = items.filter(e => (e.event_type || '').includes(typeFilter));
   if (searchQ)      items = items.filter(e => `${e.event_type} ${e.user_email} ${e.actor_role} ${e.action} ${e.entity_type} ${e.entity_id} ${e.description}`.toLowerCase().includes(searchQ));
   if (dateFromVal)  items = items.filter(e => e.created_at && new Date(e.created_at) >= new Date(dateFromVal));
   if (dateToVal)    items = items.filter(e => e.created_at && new Date(e.created_at) <= new Date(dateToVal + 'T23:59:59'));
 
-  const start  = (_auditPage - 1) * AUDIT_PG;
-  const page   = items.slice(start, start + AUDIT_PG);
-
   const footer = document.getElementById('auditFooter');
-  if (footer) footer.textContent = items.length ? `${start + 1}–${Math.min(start + AUDIT_PG, items.length)} of ${items.length} events` : '0 events';
+  if (footer) footer.textContent = items.length ? `Page ${_auditPage} · ${items.length} events shown` : '0 events';
 
-  if (!page.length) {
+  if (!items.length) {
     body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No audit events found</td></tr>';
-    document.getElementById('auditPagination').innerHTML = '';
+    const pag = document.getElementById('auditPagination');
+    if (pag) pag.innerHTML = _auditPage > 1
+      ? `<button class="page-btn" onclick="_auditPrevPage()">‹ Prev</button>`
+      : '';
     return;
   }
 
   const actionColor = { 'user.login': 'blue', 'kyc.approved': 'green', 'kyc.rejected': 'red', 'transaction.completed': 'green', 'transaction.rejected': 'red', 'investment.paid_out': 'gold', 'withdrawal.approved': 'green', 'withdrawal.rejected': 'red' };
 
-  body.innerHTML = page.map(e => `<tr>
+  body.innerHTML = items.map(e => `<tr>
     <td class="td-muted" style="white-space:nowrap;font-size:0.75rem">${Utils.date(e.created_at)}</td>
     <td><div style="font-size:0.78rem;font-weight:600;color:#1a1a1a">${e.user_email || e.actor || '—'}</div></td>
     <td><span style="font-size:0.72rem;color:var(--text-muted)">${e.actor_role || e.role || '—'}</span></td>
@@ -3061,11 +3068,17 @@ function renderAuditTable() {
     <td class="td-muted" style="font-size:0.72rem">${e.ip_address || e.ip || '—'}</td>
   </tr>`).join('');
 
-  const pages = Math.ceil(items.length / AUDIT_PG);
-  const pag   = document.getElementById('auditPagination');
-  if (pag) pag.innerHTML = Array.from({ length: Math.min(pages, 10) }, (_, i) =>
-    `<button class="page-btn ${i + 1 === _auditPage ? 'active' : ''}" onclick="_auditPage=${i+1};renderAuditTable()">${i+1}</button>`
-  ).join('');
+  // Prev/Next server-side pagination controls
+  const pag = document.getElementById('auditPagination');
+  if (pag) {
+    const hasPrev = _auditPage > 1;
+    const hasNext = _auditEvents.length === AUDIT_PG; // if we got a full page, there may be more
+    pag.innerHTML = [
+      hasPrev ? `<button class="page-btn" onclick="_auditPrevPage()">‹ Prev</button>` : '',
+      `<span class="page-btn active" style="cursor:default">${_auditPage}</span>`,
+      hasNext ? `<button class="page-btn" onclick="_auditNextPage()">Next ›</button>` : '',
+    ].join('');
+  }
 }
 
 /* ═══════════════════════════════════════════════

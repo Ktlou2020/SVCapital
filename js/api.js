@@ -90,6 +90,15 @@ const Auth = {
   },
 
   /**
+   * Sign out of all devices by revoking all server sessions.
+   */
+  async signOutAll() {
+    try { await API._fetch('POST', 'auth/signout-all'); } catch (_) {}
+    this.clear();
+    window.location.href = '/login.html';
+  },
+
+  /**
    * Check if user is authenticated via JWT or staffSession
    */
   isLoggedIn() {
@@ -210,13 +219,21 @@ const API = {
 
     const r = await fetch(url, opts);
 
-    // Handle 401 — redirect to login
+    // Handle 401 — try silent token refresh before giving up
     if (r.status === 401) {
+      try {
+        const refreshRes = await fetch(`${_API_BASE}auth/refresh`, { method: 'POST', credentials: 'include' });
+        if (refreshRes.ok) {
+          const { token } = await refreshRes.json();
+          if (token) { Auth.setToken(token); }
+          // Retry the original request once with new token
+          const retryOpts = { ...opts, headers: { ...opts.headers, Authorization: `Bearer ${token}` } };
+          const retry = await fetch(url, retryOpts);
+          if (retry.ok) { if (retry.status === 204) return true; return retry.json(); }
+        }
+      } catch (_) {}
       Auth.clear();
-      // Only redirect if we're not already on a login page
-      if (!window.location.pathname.includes('login')) {
-        window.location.href = '/login.html';
-      }
+      if (!window.location.pathname.includes('login')) window.location.href = '/login.html';
       throw new Error('Session expired — please log in again.');
     }
 
