@@ -192,11 +192,18 @@ async function _sviLoadData() {
       SVI.data.transactions = txnR.data   || [];
       SVI.data.tickets      = tktR.data   || [];
 
-      // Identify current investor (mirror portal.js logic)
-      SVI.investor = SVI.data.investors.find(i => i.id === 'INV-002')
+      // Identify current investor using the actual session investor ID
+      const _currentInvId = (typeof DEMO_INVESTOR_ID !== 'undefined' ? DEMO_INVESTOR_ID : null)
+                          || (typeof Auth !== 'undefined' && Auth.getUser ? Auth.getUser()?.investorId : null);
+      SVI.investor = (_currentInvId ? SVI.data.investors.find(i => i.id === _currentInvId) : null)
                   || SVI.data.investors.find(i => i.status === 'active')
                   || SVI.data.investors[0]
                   || null;
+
+      // Fall back to portal cache if API returned no investor record
+      if (!SVI.investor && typeof PORTAL !== 'undefined' && PORTAL.investor) {
+        SVI.investor = PORTAL.investor;
+      }
 
       if (SVI.investor) {
         const id = SVI.investor.id;
@@ -205,7 +212,6 @@ async function _sviLoadData() {
         // If empty, try to use PORTAL's cached data
         if (!SVI.myInvestments.length  && typeof PORTAL !== 'undefined') SVI.myInvestments  = PORTAL.investments  || [];
         if (!SVI.myTransactions.length && typeof PORTAL !== 'undefined') SVI.myTransactions = PORTAL.transactions || [];
-        if (!SVI.investor               && typeof PORTAL !== 'undefined') SVI.investor        = PORTAL.investor;
       }
     }
 

@@ -414,11 +414,16 @@ const Utils = {
   /* Product display info */
   productInfo(type) {
     const map = {
-      cattle:         { label: 'Cattle Finance', icon: 'fa-cow',        color: '#D4AF37', badgeClass: 'badge--gold' },
-      solar:          { label: 'Solar Energy',   icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
-      smme:           { label: 'SMME Lending',   icon: 'fa-bolt',        color: '#3b82f6', badgeClass: 'badge--blue' },
-      delivery_bikes: { label: 'Delivery Bikes', icon: 'fa-motorcycle',  color: '#f97316', badgeClass: 'badge--orange' },
-      other:          { label: 'Other',           icon: 'fa-circle',      color: '#8ea3b8', badgeClass: 'badge--gray' },
+      cattle:         { label: 'Cattle Investment',       icon: 'fa-cow',        color: '#D4AF37', badgeClass: 'badge--gold' },
+      solar:          { label: 'Solar Investment',        icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
+      solar_7yr:      { label: 'Solar Investment (7yr)',  icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
+      solar_6yr:      { label: 'Solar Investment (6yr)',  icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
+      solar_5yr:      { label: 'Solar Investment (5yr)',  icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
+      short_term:     { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#3b82f6', badgeClass: 'badge--blue' },
+      smme:           { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#3b82f6', badgeClass: 'badge--blue' },
+      delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#f97316', badgeClass: 'badge--orange' },
+      delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#f97316', badgeClass: 'badge--orange' },
+      other:          { label: 'Other',                   icon: 'fa-circle',      color: '#8ea3b8', badgeClass: 'badge--gray' },
     };
     return map[type] || { label: type, icon: 'fa-circle', color: '#8ea3b8', badgeClass: 'badge--gray' };
   },

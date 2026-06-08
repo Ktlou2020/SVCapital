@@ -393,9 +393,10 @@ async function loadDashboard() {
 
     // Fetch ticket count for welcome strip
     let openTickets = 0;
+    let tickets = [];
     try {
       const tktRes = await API.tickets.list({ limit: 50 });
-      const tickets = tktRes.data || [];
+      tickets = tktRes.data || [];
       openTickets = tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
       const tktBadge = document.getElementById('ticketBadge');
       if (tktBadge) tktBadge.textContent = openTickets;
@@ -578,7 +579,7 @@ function renderProductMixChart() {
     if (products[i.product_type] !== undefined) products[i.product_type] += i.amount;
   });
 
-  const labels = ['Cattle', 'Solar 7yr', 'Solar 6yr', 'Solar 5yr', 'Short-Term', 'Delivery Bike'];
+  const labels = ['Cattle Investment', 'Solar Investment (7yr)', 'Solar Investment (6yr)', 'Solar Investment (5yr)', 'Short Term Investment', 'Delivery Bikes'];
   const data = Object.values(products);
   const colors = ['#D4AF37', '#22c55e', '#4ade80', '#86efac', '#3b82f6', '#f97316'];
 
@@ -1401,7 +1402,41 @@ async function notifyWaitlist(poolId) {
   }
 }
 
-function openAddPoolModal() { Modal.open('addPoolModal'); }
+function openAddPoolModal() { _poolNameManual = false; Modal.open('addPoolModal'); }
+
+// Track whether admin has manually typed a pool name
+let _poolNameManual = false;
+function _syncPoolNameManual() { _poolNameManual = true; }
+
+function _autoPoolName() {
+  if (_poolNameManual) return; // don't override manual input
+  const typeEl    = document.getElementById('newPoolType');
+  const closeEl   = document.getElementById('newPoolCloseDate');
+  const partnerEl = document.getElementById('newPoolPartner');
+  const nameEl    = document.getElementById('newPoolName');
+  if (!typeEl || !nameEl) return;
+
+  const typeLabels = {
+    cattle:        'Cattle Investment',
+    solar_7yr:     'Solar Investment',
+    solar_6yr:     'Solar Investment',
+    solar_5yr:     'Solar Investment',
+    short_term:    'Short Term Investment',
+    delivery_bike: 'Delivery Bikes',
+  };
+  const productLabel = typeLabels[typeEl.value] || typeEl.value;
+  const partner      = partnerEl?.value.trim();
+  const closeDate    = closeEl?.value;
+  const monthYear    = closeDate
+    ? new Date(closeDate).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })
+    : '';
+
+  const parts = [productLabel];
+  if (monthYear) parts.push(monthYear);
+  if (partner)   parts.push(partner);
+
+  nameEl.value = parts.join(' - ');
+}
 
 async function saveNewPool() {
   const name = document.getElementById('newPoolName').value.trim();
@@ -1964,6 +1999,26 @@ async function viewTicket(id) {
   const tktInv     = STATE.investors.find(i => i.id === tkt.investor_id);
   const tktInvName = tkt.investor_name || (tktInv ? `${tktInv.first_name} ${tktInv.last_name}` : tkt.investor_id || '—');
   const tktEmail   = tkt.investor_email || tktInv?.email || '';
+
+  // Load admin users for the "Assigned To" dropdown
+  let adminUsers = [];
+  try {
+    const uRes = await API.users.list({ limit: 100 });
+    adminUsers = (uRes.data || uRes || []).filter(u =>
+      ['admin','director','staff','fund_manager'].includes(u.role) && u.is_active !== false
+    );
+  } catch (_) {}
+
+  const assignedOpts = [
+    `<option value="">— Unassigned —</option>`,
+    ...adminUsers.map(u => {
+      const name  = `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email;
+      const val   = u.email;
+      const sel   = tkt.assigned_to === val ? 'selected' : '';
+      return `<option value="${val}" ${sel}>${name}</option>`;
+    }),
+  ].join('');
+
   document.getElementById('ticketModalTitle').textContent = `Ticket #${tkt.id} — ${tkt.subject}`;
   document.getElementById('ticketModalBody').innerHTML = `
     <div class="grid-2 mb-16" style="gap:12px">
@@ -1994,22 +2049,26 @@ async function viewTicket(id) {
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Assigned To</label>
-        <input type="text" class="form-input" id="ticketAssigned" value="${tkt.assigned_to || ''}" placeholder="Admin name" />
+        <label class="form-label">Assign To</label>
+        <select class="form-select" id="ticketAssigned">${assignedOpts}</select>
       </div>
     </div>
   `;
 
   document.getElementById('ticketSaveBtn').onclick = async () => {
     try {
-      const newStatus = document.getElementById('ticketStatusUpdate').value;
+      const newStatus   = document.getElementById('ticketStatusUpdate').value;
+      const newAssigned = document.getElementById('ticketAssigned').value;
       await API.tickets.update(id, {
         admin_response: document.getElementById('ticketResponse').value,
         status:         newStatus,
-        assigned_to:    document.getElementById('ticketAssigned').value,
+        assigned_to:    newAssigned,
         responded_at:   new Date().toISOString(),
       });
       Toast.success('Response saved — investor will see this in their portal');
+      if (newAssigned && newAssigned !== tkt.assigned_to) {
+        Toast.info('Assignment notification sent');
+      }
       Modal.close('ticketModal');
       await loadSupport();
     } catch (e) { Toast.error('Failed to update ticket'); }
