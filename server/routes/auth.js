@@ -118,7 +118,7 @@ router.post('/login', async (req, res) => {
     const redirectMap = {
       admin:        '/admin/index.html',
       director:     '/admin/index.html',
-      investor:     '/portal/index.html',
+      investor:     '/portal/',
       ifa:          '/ifa/index.html',
       fund_manager: '/fund/index.html',
       staff:        '/team/hub.html',
@@ -142,7 +142,7 @@ router.post('/login', async (req, res) => {
         investorId: user.investor_id,
         ifaId:      user.ifa_id,
       },
-      redirect: redirectMap[user.role] || '/portal/index.html',
+      redirect: redirectMap[user.role] || '/portal/',
     });
   } catch (err) {
     console.error('Login error:', err.message);
@@ -248,7 +248,7 @@ router.post('/register', async (req, res) => {
         lastName:   newUser.last_name,
         investorId: newUser.investor_id || null,
       },
-      redirect: '/portal/index.html',
+      redirect: '/portal/',
     });
   } catch (err) {
     console.error('Register error:', err.message);
@@ -657,8 +657,8 @@ router.post('/2fa/verify-login', async (req, res) => {
     );
     const fullToken = signToken(user);
     res.cookie('svc_token', fullToken, { httpOnly: true, secure: IS_PROD, sameSite: IS_PROD ? 'none' : 'lax', maxAge: 8*60*60*1000 });
-    const redirectMap = { admin: '/admin/index.html', director: '/admin/index.html', investor: '/portal/index.html', ifa: '/ifa/index.html', fund_manager: '/fund/index.html', staff: '/team/hub.html' };
-    res.json({ token: fullToken, user: { id: user.id, email: user.email, role: user.role, firstName: user.first_name, lastName: user.last_name, investorId: user.investor_id }, redirect: redirectMap[user.role] || '/portal/index.html' });
+    const redirectMap = { admin: '/admin/index.html', director: '/admin/index.html', investor: '/portal/', ifa: '/ifa/index.html', fund_manager: '/fund/index.html', staff: '/team/hub.html' };
+    res.json({ token: fullToken, user: { id: user.id, email: user.email, role: user.role, firstName: user.first_name, lastName: user.last_name, investorId: user.investor_id }, redirect: redirectMap[user.role] || '/portal/' });
   } catch (err) { console.error('/2fa/verify-login error:', err.message); res.status(500).json({ error: 'Internal server error.' }); }
 });
 
