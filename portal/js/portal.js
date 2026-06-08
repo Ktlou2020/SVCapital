@@ -31,6 +31,18 @@ let PORTAL = {
   quests: null,       // { xp, level, currentLevel, nextLevel, completedIds, quests, levels, profile }
 };
 
+/* ─── Skeleton loading helpers ─── */
+function _skeletonRows(count, cols) {
+  return Array(count).fill(0).map(() =>
+    `<tr>${Array(cols).fill('<td><span class="skeleton" style="display:inline-block;width:80%;height:14px;border-radius:4px"></span></td>').join('')}</tr>`
+  ).join('');
+}
+function _skeletonCards(count) {
+  return Array(count).fill(0).map(() =>
+    `<div class="my-inv-card" style="opacity:0.5"><div class="skeleton" style="height:120px;border-radius:12px"></div></div>`
+  ).join('');
+}
+
 /* ─── Notifications ─── */
 function toggleNotifPanel() {
   const panel = document.getElementById('notifPanel');
@@ -340,15 +352,45 @@ function navigate(view, btnEl) {
 /* ═══════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════ */
+// 30-second polling — refresh wallet balance and investment statuses
+let _pollTimer = null;
+function _startPolling() {
+  if (_pollTimer) return;
+  _pollTimer = setInterval(async () => {
+    if (document.hidden) return; // skip when tab is backgrounded
+    try {
+      const invRes = await API.investors.list({ limit: 1 });
+      const fresh = (invRes.data || [])[0];
+      if (fresh && PORTAL.investor && fresh.id === PORTAL.investor.id) {
+        const balChanged = parseFloat(fresh.wallet_balance) !== parseFloat(PORTAL.investor.wallet_balance);
+        Object.assign(PORTAL.investor, fresh);
+        if (balChanged) {
+          _refreshWalletUI(parseFloat(PORTAL.investor.wallet_balance) || 0);
+          const povWal = document.getElementById('pov-wallet');
+          if (povWal) povWal.textContent = Utils.rand(PORTAL.investor.wallet_balance);
+        }
+      }
+    } catch(_) {}
+  }, 30000);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && _pollTimer) {} });
+
 document.addEventListener('DOMContentLoaded', async () => {
   Toast.init();
   initDarkMode();
+  // Set skeleton placeholders on overview stats while data loads
+  const _skelSpan = '<span class="skeleton" style="display:inline-block;width:80px;height:20px;border-radius:4px"></span>';
+  ['pov-total','pov-invested','pov-wallet','pov-returns'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = _skelSpan;
+  });
   await loadPortalData();
   // Generate notifications from real data
   loadNotifications();
   checkFirstDepositPrompt();
   _checkAutoStartTour();
   load2FAStatus();
+  _startPolling();
 });
 
 async function loadPortalData() {
@@ -407,7 +449,15 @@ async function loadPortalData() {
       myTxns = allTxns.filter(t => t.investor_id === fallbackId);
     }
 
-    PORTAL.investments  = myInvests;
+    PORTAL.investments  = myInvests.map(inv => ({
+      ...inv,
+      // Normalise DB column names to the aliases used throughout the portal
+      maturity_date:          inv.end_date         || inv.maturity_date,
+      investment_date:        inv.start_date        || inv.investment_date,
+      expected_return_amount: inv.expected_return   != null ? inv.expected_return   : (inv.expected_return_amount   || 0),
+      actual_return_amount:   inv.actual_return     != null ? inv.actual_return     : (inv.actual_return_amount     || 0),
+      expected_return_rate:   inv.annual_rate       != null ? inv.annual_rate       : (inv.expected_return_rate     || 0),
+    }));
     PORTAL.transactions = myTxns;
     PORTAL.pools        = poolRes.data || [];
 
@@ -955,6 +1005,8 @@ function renderAllocationChart() {
    MY INVESTMENTS
    ═══════════════════════════════════════════════ */
 async function loadMyInvestments() {
+  const grid = document.getElementById('myInvestmentsGrid');
+  if (grid && !PORTAL.investments.length) grid.innerHTML = _skeletonCards(3);
   if (!PORTAL.investments.length) await loadPortalData();
   renderMyInvestmentStats();
   renderMyInvestmentCards();
@@ -1049,6 +1101,8 @@ function renderMyInvestmentCards() {
    TRANSACTIONS
    ═══════════════════════════════════════════════ */
 async function loadMyTransactions() {
+  const txnBody = document.getElementById('myTxnBody');
+  if (txnBody && !PORTAL.transactions.length) txnBody.innerHTML = _skeletonRows(5, 6);
   if (!PORTAL.transactions.length) await loadPortalData();
   renderMyTxnTable();
 
@@ -1073,6 +1127,59 @@ function renderMyTxnTable() {
     <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
     <td class="td-muted">${Utils.date(t.transaction_date)}</td>
   </tr>`).join('');
+}
+
+function _switchTxnTab(tab, btn) {
+  document.querySelectorAll('#txnTabBar .tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const allTab = document.getElementById('txnAllTab');
+  const retTab = document.getElementById('txnReturnsTab');
+  if (allTab) allTab.style.display = tab === 'all' ? '' : 'none';
+  if (retTab) retTab.style.display = tab === 'returns' ? '' : 'none';
+  if (tab === 'returns') _renderReturnHistory();
+}
+
+function _renderReturnHistory() {
+  const el = document.getElementById('txnReturnsTab');
+  if (!el) return;
+  const returns = [...PORTAL.transactions]
+    .filter(t => ['return','payout','referral_bonus'].includes(t.type) && t.status !== 'rejected')
+    .sort((a,b) => new Date(b.transaction_date||b.created_at) - new Date(a.transaction_date||a.created_at));
+
+  if (!returns.length) {
+    el.innerHTML = '<div class="empty-state"><i class="fa-solid fa-chart-line"></i><p>No return payments yet. Returns are paid when your investments mature.</p></div>';
+    return;
+  }
+
+  let running = 0;
+  const typeLabel = { return: 'Return Payment', payout: 'Payout', referral_bonus: 'Referral Bonus' };
+  const typeColor = { return: '#22c55e', payout: '#ff9b0c', referral_bonus: '#a855f7' };
+
+  el.innerHTML = `
+    <div class="panel mb-16">
+      <div class="panel__header"><span class="panel__title">Returns Received</span>
+        <span style="font-weight:800;color:#22c55e">${Utils.rand(returns.reduce((s,t)=>s+Math.abs(parseFloat(t.amount)||0),0))}</span>
+      </div>
+      <div class="panel__body" style="padding:0">
+        ${returns.map((t, i) => {
+          running += Math.abs(parseFloat(t.amount) || 0);
+          const color = typeColor[t.type] || '#22c55e';
+          return `<div style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid rgba(0,0,0,0.06)${i===returns.length-1?';border-bottom:none':''}">
+            <div style="width:36px;height:36px;border-radius:50%;background:${color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <i class="fa-solid fa-arrow-trend-up" style="color:${color};font-size:0.85rem"></i>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${typeLabel[t.type]||t.type}</div>
+              <div style="font-size:0.72rem;color:#6b7280">${t.description||t.pool_id||'—'} · ${Utils.date(t.transaction_date||t.created_at)}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-weight:800;color:${color}">${Utils.rand(Math.abs(parseFloat(t.amount)||0))}</div>
+              <div style="font-size:0.68rem;color:#9ca3af">Running: ${Utils.rand(running)}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
 }
 
 /* ─── Refresh every wallet balance element on the page ─── */
@@ -5341,6 +5448,8 @@ async function confirmWithdrawal() {
 /* ═══════════════════════════════════════════════
    TAX CERTIFICATE — SARS Interest Income
    ═══════════════════════════════════════════════ */
+let _lastTaxCertHTML = null; // cached for PDF download
+
 function generateTaxCertificate() {
   if (!PORTAL.investor) { Toast.error('Portfolio data still loading — please wait'); return; }
 
@@ -5461,10 +5570,31 @@ td:last-child{text-align:right;font-weight:600}
 </div>
 </body></html>`;
 
+  _lastTaxCertHTML = html;
+
   const win = window.open('', '_blank', 'width=820,height=900');
   if (!win) { Toast.error('Pop-up blocked — please allow pop-ups for this site'); return; }
   win.document.write(html);
   win.document.close();
+}
+
+/* ── IT3(b) jsPDF download ── */
+function downloadTaxCertPDF(htmlContent) {
+  const lib = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF
+            : (window.jsPDF) ? window.jsPDF : null;
+  if (!lib) { Toast.error('PDF library not loaded — please refresh and try again.'); return; }
+  const div = document.createElement('div');
+  div.style.cssText = 'position:fixed;left:-9999px;top:0;width:740px;background:#fff';
+  document.body.appendChild(div);
+  div.innerHTML = htmlContent;
+  const doc = new lib({ unit: 'mm', format: 'a4' });
+  doc.html(div, {
+    callback: d => {
+      d.save('SVC-IT3b-' + new Date().getFullYear() + '.pdf');
+      document.body.removeChild(div);
+    },
+    x: 10, y: 10, width: 190, windowWidth: 740,
+  });
 }
 
 /* ═══════════════════════════════════════════════
@@ -5800,10 +5930,18 @@ async function loadReferralDashboard() {
   const body = document.getElementById('referredInvestorsBody');
   if (!body) return;
   if (!referred.length) {
-    body.innerHTML = `<tr><td colspan="4" class="text-center text-muted" style="padding:16px">No referrals yet — share your code to get started <i class="fa-solid fa-arrow-up-right-from-square" style="margin-left:4px"></i></td></tr>`;
+    body.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding:16px">No referrals yet — share your code to get started <i class="fa-solid fa-arrow-up-right-from-square" style="margin-left:4px"></i></td></tr>`;
     return;
   }
-  body.innerHTML = referred.map(r => `
+  body.innerHTML = referred.map(r => {
+    const bonusTx = (PORTAL.transactions || []).find(t =>
+      t.type === 'referral_bonus' &&
+      (t.referred_investor_id === r.id || Math.abs(new Date(t.created_at) - new Date(r.date_joined||r.created_at)) < 86400000 * 7)
+    );
+    const bonusCell = bonusTx
+      ? `<span style="font-weight:700;color:#22c55e">${Utils.rand(bonusTx.amount||0)}</span>`
+      : `<span style="color:#f59e0b">Pending</span>`;
+    return `
     <tr>
       <td><div style="font-weight:600;font-size:0.82rem;color:#1a1a1a">${r.first_name} ${r.last_name}</div></td>
       <td>${Utils.statusBadge(r.fica_status || r.status)}</td>
@@ -5811,8 +5949,9 @@ async function loadReferralDashboard() {
         ? `<span class="badge badge--green">Invested</span>`
         : `<span class="badge badge--gray">Not yet</span>`}</td>
       <td style="font-size:0.75rem;color:#6b7280">${Utils.date(r.date_joined)}</td>
+      <td>${bonusCell}</td>
     </tr>
-  `).join('');
+  `}).join('');
 }
 
 /* ═══════════════════════════════════════════════
@@ -6018,7 +6157,7 @@ async function _renderKycDocsList() {
     ${docs.length ? `
       <div style="overflow-x:auto">
         <table class="data-table">
-          <thead><tr><th>Document Type</th><th>File</th><th>Submitted</th><th>Status</th><th>Notes</th></tr></thead>
+          <thead><tr><th>Document Type</th><th>File</th><th>Submitted</th><th>Status</th><th>Notes</th><th></th></tr></thead>
           <tbody>
             ${docs.map(d => `<tr>
               <td class="td-strong">${typeLabel[d.doc_type] || d.doc_type}</td>
@@ -6026,6 +6165,7 @@ async function _renderKycDocsList() {
               <td class="td-muted">${Utils.date(d.created_at)}</td>
               <td>${Utils.statusBadge(d.status)}</td>
               <td class="td-muted" style="font-size:0.72rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.notes || '—'}</td>
+              <td>${d.file_url ? `<a href="${d.file_url}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-download"></i> Download</a>` : '—'}</td>
             </tr>`).join('')}
           </tbody>
         </table>
@@ -6064,9 +6204,12 @@ function _renderCertificatesTable() {
       <td class="td-muted">${Utils.date(inv.investment_date || inv.start_date)}</td>
       <td class="td-muted">${Utils.date(inv.maturity_date || inv.end_date)}</td>
       <td>${Utils.statusBadge(inv.status)}</td>
-      <td><button class="btn btn--primary btn--sm" onclick="downloadCertificate('${inv.id}')">
-        <i class="fa-solid fa-download"></i> Certificate
-      </button></td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn--primary btn--sm" onclick="generateInvestmentCertificate('${inv.id}')">
+          <i class="fa-solid fa-file-pdf"></i> Certificate
+        </button>
+        ${(() => { const pool = PORTAL.pools.find(p => p.id === inv.pool_id); return pool && pool.term_sheet_url ? `<a href="${pool.term_sheet_url}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-file-contract"></i> Term Sheet</a>` : ''; })()}
+      </td>
     </tr>`;
   }).join('');
 }
@@ -6095,6 +6238,59 @@ function _renderReceiptsTable() {
       <i class="fa-solid fa-download"></i> Receipt
     </button></td>
   </tr>`).join('');
+}
+
+/* ── Investment Certificate PDF (html path) ── */
+function generateInvestmentCertificate(invId) {
+  const inv = PORTAL.investments.find(i => i.id === invId);
+  const investor = PORTAL.investor;
+  if (!inv || !investor) return Toast.error('Investment not found');
+
+  const certNo = 'SVC-CERT-' + (invId||'').slice(-6).toUpperCase() + '-' + Date.now().toString(36).toUpperCase();
+  const pool = PORTAL.pools.find(p => p.id === inv.pool_id) || {};
+
+  const html = `<div style="font-family:Arial,sans-serif;padding:40px;max-width:700px;margin:0 auto">
+    <div style="text-align:center;margin-bottom:30px">
+      <h1 style="font-size:22px;color:#1a1a1a;margin:0">INVESTMENT CERTIFICATE</h1>
+      <div style="color:#ff9b0c;font-size:13px;font-weight:700;margin-top:4px">SV CAPITAL</div>
+    </div>
+    <div style="border:2px solid #ff9b0c;border-radius:8px;padding:24px;margin-bottom:20px">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <tr><td style="padding:6px 0;color:#6b7280;width:45%">Certificate Number</td><td style="font-weight:700;color:#1a1a1a">${certNo}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Investor Name</td><td style="font-weight:700">${investor.first_name} ${investor.last_name}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Investor ID</td><td style="font-weight:700">${investor.id}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Investment Pool</td><td style="font-weight:700">${inv.pool_name||pool.name||'—'}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Amount Invested</td><td style="font-weight:700;color:#ff9b0c;font-size:16px">${Utils.rand(inv.amount)}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Annual Rate</td><td style="font-weight:700">${Utils.pct(inv.annual_rate||inv.expected_return_rate)}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Expected Return</td><td style="font-weight:700;color:#22c55e">${Utils.rand(inv.expected_return_amount||inv.expected_return)}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Investment Date</td><td style="font-weight:700">${Utils.date(inv.investment_date||inv.start_date)}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Maturity Date</td><td style="font-weight:700">${Utils.date(inv.maturity_date||inv.end_date)}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Status</td><td>${Utils.statusBadge(inv.status)}</td></tr>
+      </table>
+    </div>
+    <div style="font-size:10px;color:#9ca3af;text-align:center;margin-top:20px">
+      This certificate is issued by SV Capital (Pty) Ltd. Generated ${new Date().toLocaleDateString('en-ZA')}.<br>
+      Certificate No: ${certNo}
+    </div>
+  </div>`;
+
+  const lib = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF
+            : (window.jsPDF) ? window.jsPDF : null;
+  if (!lib) { Toast.error('PDF library not loaded — please refresh and try again.'); return; }
+
+  const div = document.createElement('div');
+  div.style.cssText = 'position:fixed;left:-9999px;top:0;width:700px;background:#fff';
+  document.body.appendChild(div);
+  div.innerHTML = html;
+
+  const doc = new lib({ unit: 'mm', format: 'a4' });
+  doc.html(div, {
+    callback: d => {
+      d.save(`SVC-CERT-${invId.slice(-8)}.pdf`);
+      document.body.removeChild(div);
+    },
+    x: 5, y: 5, width: 200, windowWidth: 700,
+  });
 }
 
 /* ── PDF helper: get jsPDF instance ── */

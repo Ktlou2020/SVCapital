@@ -90,6 +90,15 @@ const Auth = {
   },
 
   /**
+   * Sign out of all devices by revoking all server sessions.
+   */
+  async signOutAll() {
+    try { await API._fetch('POST', 'auth/signout-all'); } catch (_) {}
+    this.clear();
+    window.location.href = '/login.html';
+  },
+
+  /**
    * Check if user is authenticated via JWT or staffSession
    */
   isLoggedIn() {
@@ -210,13 +219,21 @@ const API = {
 
     const r = await fetch(url, opts);
 
-    // Handle 401 — redirect to login
+    // Handle 401 — try silent token refresh before giving up
     if (r.status === 401) {
+      try {
+        const refreshRes = await fetch(`${_API_BASE}auth/refresh`, { method: 'POST', credentials: 'include' });
+        if (refreshRes.ok) {
+          const { token } = await refreshRes.json();
+          if (token) { Auth.setToken(token); }
+          // Retry the original request once with new token
+          const retryOpts = { ...opts, headers: { ...opts.headers, Authorization: `Bearer ${token}` } };
+          const retry = await fetch(url, retryOpts);
+          if (retry.ok) { if (retry.status === 204) return true; return retry.json(); }
+        }
+      } catch (_) {}
       Auth.clear();
-      // Only redirect if we're not already on a login page
-      if (!window.location.pathname.includes('login')) {
-        window.location.href = '/login.html';
-      }
+      if (!window.location.pathname.includes('login')) window.location.href = '/login.html';
       throw new Error('Session expired — please log in again.');
     }
 
@@ -540,13 +557,40 @@ const Toast = {
    MODAL SYSTEM
    ═══════════════════════════════════════════════ */
 const Modal = {
+  _prevFocus: null,
+  _trapHandler: null,
   open(id) {
     const el = document.getElementById(id);
-    if (el) { el.classList.add('open'); document.body.style.overflow = 'hidden'; }
+    if (!el) return;
+    el.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    Modal._prevFocus = document.activeElement;
+    const focusable = el.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable[0]) focusable[0].focus();
+    // Focus trap
+    Modal._trapHandler = (e) => {
+      if (e.key !== 'Tab') return;
+      const items = [...el.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey ? document.activeElement === first : document.activeElement === last) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      }
+    };
+    el.addEventListener('keydown', Modal._trapHandler);
   },
   close(id) {
     const el = document.getElementById(id);
-    if (el) { el.classList.remove('open'); document.body.style.overflow = ''; }
+    if (!el) return;
+    el.classList.remove('open');
+    document.body.style.overflow = '';
+    el.removeAttribute('role');
+    el.removeAttribute('aria-modal');
+    if (Modal._trapHandler) { el.removeEventListener('keydown', Modal._trapHandler); Modal._trapHandler = null; }
+    if (Modal._prevFocus) { Modal._prevFocus.focus(); Modal._prevFocus = null; }
   },
   closeAll() {
     document.querySelectorAll('.modal-overlay.open').forEach(m => {

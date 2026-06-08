@@ -152,7 +152,7 @@
   <div class="main-content">
     <header class="topbar">
       <div class="topbar__left">
-        <button class="topbar-btn sidebar-toggle-btn" onclick="toggleSidebar()" title="Menu" id="sidebarToggleBtn">
+        <button class="topbar-btn sidebar-toggle-btn" onclick="toggleSidebar()" title="Menu" id="sidebarToggleBtn" aria-label="Open navigation menu">
           <i class="fa-solid fa-bars"></i>
         </button>
         <div>
@@ -165,11 +165,11 @@
           <i class="fa-solid fa-map"></i>
           <span class="tour-btn-pulse"></span>
         </button>
-        <button class="topbar-btn dark-mode-toggle" title="Toggle dark mode" onclick="toggleDarkMode()" id="darkModeBtn">
+        <button class="topbar-btn dark-mode-toggle" title="Toggle dark mode" onclick="toggleDarkMode()" id="darkModeBtn" aria-label="Toggle dark mode">
           <i class="fa-solid fa-moon" id="darkModeIcon"></i>
         </button>
         <div style="position:relative">
-          <button class="topbar-btn" title="Notifications" onclick="toggleNotifPanel()" id="notifBtn">
+          <button class="topbar-btn" title="Notifications" onclick="toggleNotifPanel()" id="notifBtn" aria-label="Open notifications">
             <i class="fa-solid fa-bell"></i>
             <span class="notif-dot" id="notifDot"></span>
           </button>
@@ -452,6 +452,11 @@
            VIEW: TRANSACTIONS
       ══════════════════════════════════ -->
       <div class="view" id="view-transactions">
+        <div class="tab-bar mb-16" id="txnTabBar">
+          <button class="tab-btn active" id="txnTab1" onclick="_switchTxnTab('all',this)"><i class="fa-solid fa-list"></i> All Transactions</button>
+          <button class="tab-btn" id="txnTab2" onclick="_switchTxnTab('returns',this)"><i class="fa-solid fa-chart-line"></i> Return History</button>
+        </div>
+        <div id="txnAllTab">
         <div class="table-card">
           <div class="table-card__header">
             <div><div class="table-card__title">My Transactions</div><div class="table-card__sub">Complete transaction history</div></div>
@@ -475,6 +480,8 @@
             </table>
           </div>
         </div>
+        </div>
+        <div id="txnReturnsTab" style="display:none"></div>
       </div>
 
       <!-- ══════════════════════════════════
@@ -781,6 +788,7 @@
                 </div>
                 <button class="btn btn--secondary btn--full" onclick="openChangePasswordModal()"><i class="fa-solid fa-key"></i> Change Password</button>
                 <button class="btn btn--secondary btn--full" id="twoFAToggleBtn" onclick="toggle2FA()"><i class="fa-solid fa-mobile"></i> <span id="twoFAToggleLabel">Loading…</span></button>
+                <button class="btn btn--secondary btn--sm" onclick="Auth.signOutAll()" style="margin-top:8px"><i class="fa-solid fa-right-from-bracket"></i> Sign Out All Devices</button>
                 <!-- Push notifications toggle -->
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--ci-bg-light,#F7F8FA);border-radius:8px;border:1px solid rgba(0,0,0,0.06)">
                   <div style="display:flex;align-items:center;gap:10px">
@@ -978,7 +986,7 @@
               <div style="overflow-x:auto">
                 <table class="data-table" style="font-size:0.8rem">
                   <thead><tr>
-                    <th>Name</th><th>FICA</th><th>Invested</th><th>Joined</th>
+                    <th>Name</th><th>FICA</th><th>Invested</th><th>Joined</th><th>Bonus Earned</th>
                   </tr></thead>
                   <tbody id="referredInvestorsBody">
                     <tr><td colspan="4" class="text-center text-muted" style="padding:16px">Loading…</td></tr>
@@ -1215,9 +1223,14 @@
                     <option value="2023">March 2022 – February 2023</option>
                   </select>
                 </div>
-                <button class="btn btn--success btn--full" onclick="generateTaxCertificate()">
-                  <i class="fa-solid fa-file-arrow-down"></i> Download Tax Certificate (IT3b)
-                </button>
+                <div style="display:flex;gap:10px">
+                  <button class="btn btn--success" style="flex:1" onclick="generateTaxCertificate()">
+                    <i class="fa-solid fa-file-arrow-down"></i> Preview / Print IT3b
+                  </button>
+                  <button class="btn btn--secondary" style="flex:1" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(_lastTaxCertHTML),200)">
+                    <i class="fa-solid fa-file-pdf"></i> Download PDF
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1386,7 +1399,7 @@
       <!-- ══ SURVEY MODAL ══ -->
       <div class="modal-overlay" id="surveyModal" style="display:none" onclick="if(event.target===this)closeSurveyModal()">
         <div class="modal-box survey-modal-box" id="surveyModalBox">
-          <button class="modal-close" onclick="closeSurveyModal()"><i class="fa-solid fa-xmark"></i></button>
+          <button class="modal-close" aria-label="Close" onclick="closeSurveyModal()"><i class="fa-solid fa-xmark"></i></button>
           <div id="surveyModalContent"></div>
         </div>
       </div>
@@ -1740,7 +1753,7 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title" id="investModalTitle">Invest Now</span>
-      <button class="modal__close" onclick="Modal.close('investModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('investModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="investModalBody">Loading...</div>
     <div class="modal__footer">
@@ -1755,7 +1768,7 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Submit Maturity Instruction</span>
-      <button class="modal__close" onclick="Modal.close('maturityModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('maturityModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="maturityModalBody">Loading...</div>
     <div class="modal__footer">
@@ -1795,7 +1808,7 @@
 <!-- ══ FIRST DEPOSIT PROMPT ══ -->
 <div class="modal-overlay" id="depositPromptModal" style="display:none">
   <div class="deposit-prompt-box">
-    <button class="modal-close" onclick="dismissDepositPrompt(false)" style="position:absolute;top:14px;right:14px">
+    <button class="modal-close" aria-label="Close" onclick="dismissDepositPrompt(false)" style="position:absolute;top:14px;right:14px">
       <i class="fa-solid fa-xmark"></i>
     </button>
     <div class="deposit-prompt-emoji">💰</div>
@@ -1834,7 +1847,7 @@
         <span class="modal__title">Open a Sub-Account</span>
         <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px" id="saCreateStepLbl">Step 1 of 3</div>
       </div>
-      <button class="modal__close" onclick="Modal.close('createSaModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('createSaModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="sa-create-progress"><div class="sa-create-progress__fill" id="saCreateProg" style="width:33%"></div></div>
 
@@ -1897,7 +1910,7 @@
   <div class="modal modal--lg">
     <div class="modal__header">
       <span class="modal__title" id="saDetailTitle">Account Details</span>
-      <button class="modal__close" onclick="Modal.close('saDetailModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('saDetailModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="saDetailBody" style="padding:0"></div>
     <div class="modal__footer">
@@ -1914,7 +1927,7 @@
         <span class="modal__title" id="saDepositTitle">Deposit</span>
         <div style="font-size:0.75rem;color:var(--text-muted)" id="saDepositSubtitle"></div>
       </div>
-      <button class="modal__close" onclick="Modal.close('saDepositModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('saDepositModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <input type="hidden" id="saDepositSaId" />
@@ -1944,7 +1957,7 @@
   <div class="modal modal--lg">
     <div class="modal__header">
       <span class="modal__title">Upload FICA Document</span>
-      <button class="modal__close" onclick="Modal.close('saFicaModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('saFicaModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <div class="sa-section-title mb-8">Account: <strong id="saFicaAccountName"></strong></div>
@@ -1984,7 +1997,7 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Set Savings Goal 🎯</span>
-      <button class="modal__close" onclick="Modal.close('saGoalModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('saGoalModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <input type="hidden" id="saGoalSaId" />
@@ -2012,7 +2025,7 @@
         <span class="modal__title">Linked Bank Account</span>
         <div style="font-size:0.75rem;color:var(--text-muted)">Your payout bank account — must be in your name</div>
       </div>
-      <button class="modal__close" onclick="Modal.close('bankDetailsModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('bankDetailsModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <div class="info-box" style="background:rgba(255,155,12,0.08);border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:12px 14px;font-size:0.8rem;color:var(--text-muted);margin-bottom:16px">
@@ -2076,7 +2089,7 @@
         <span class="modal__title">Withdraw Funds</span>
         <div style="font-size:0.75rem;color:var(--text-muted)">Transfer your wallet balance to your bank account</div>
       </div>
-      <button class="modal__close" onclick="Modal.close('withdrawalModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('withdrawalModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <div id="withdrawalModalContent">Loading…</div>
@@ -2096,7 +2109,7 @@
         <span class="modal__title">Set Up Two-Factor Authentication</span>
         <div style="font-size:0.75rem;color:var(--text-muted)">Protect your account with an authenticator app</div>
       </div>
-      <button class="modal__close" onclick="Modal.close('twoFAModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('twoFAModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="twoFAModalBody">Loading…</div>
     <div class="modal__footer" id="twoFAModalFooter"></div>
@@ -2108,7 +2121,7 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Disable Two-Factor Authentication</span>
-      <button class="modal__close" onclick="Modal.close('disable2FAModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('disable2FAModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <div class="info-box" style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:12px 14px;font-size:0.82rem;color:#ef4444;margin-bottom:16px">
@@ -2135,7 +2148,7 @@
         <span class="modal__title"><i class="fa-solid fa-shield-halved" style="color:#FF9B0C;margin-right:8px"></i>Risk Profile Questionnaire</span>
         <div style="font-size:0.75rem;color:var(--text-muted)">5 questions — takes about 2 minutes</div>
       </div>
-      <button class="modal__close" onclick="Modal.close('riskModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('riskModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" style="display:flex;flex-direction:column;gap:18px">
 
@@ -2215,7 +2228,7 @@
         <span class="modal__title"><i class="fa-solid fa-calculator" style="color:#FF9B0C;margin-right:8px"></i>Investment Calculator</span>
         <div style="font-size:0.75rem;color:var(--text-muted)">See what your investment could earn</div>
       </div>
-      <button class="modal__close" onclick="Modal.close('calcModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('calcModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" style="display:flex;flex-direction:column;gap:14px">
 
@@ -2312,7 +2325,7 @@
         <span class="modal__title"><i class="fa-solid fa-rotate" style="color:var(--gold);margin-right:8px"></i>Recurring Investment</span>
         <div style="font-size:0.75rem;color:var(--text-muted)">Automatically invest monthly</div>
       </div>
-      <button class="modal__close" onclick="Modal.close('recurringModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('recurringModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--ci-bg-light,#F7F8FA);border-radius:10px;margin-bottom:16px">
@@ -2358,7 +2371,7 @@
         <span class="modal__title"><i class="fa-solid fa-rotate" style="color:var(--gold);margin-right:8px"></i>Auto Wallet Top-Up</span>
         <div style="font-size:0.75rem;color:var(--text-muted)">Automatically charge your saved card each month</div>
       </div>
-      <button class="modal__close" onclick="Modal.close('autoTopUpModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('autoTopUpModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <!-- Enable toggle -->
@@ -2424,7 +2437,7 @@
         <span class="modal__title" style="color:#ef4444"><i class="fa-solid fa-triangle-exclamation" style="margin-right:8px"></i>Request Account Deletion</span>
         <div style="font-size:0.75rem;color:var(--text-muted)">This action cannot be undone</div>
       </div>
-      <button class="modal__close" onclick="Modal.close('deleteAccountModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('deleteAccountModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:14px;font-size:0.82rem;color:#b91c1c;margin-bottom:16px;line-height:1.6">
@@ -2451,7 +2464,7 @@
         <span class="modal__title" id="earlyRedemptionTitle">Request Early Redemption</span>
         <div id="earlyRedemptionInfo" style="font-size:0.75rem;color:var(--text-muted)"></div>
       </div>
-      <button class="modal__close" onclick="Modal.close('earlyRedemptionModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('earlyRedemptionModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <div class="info-box" style="background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.18);border-radius:10px;padding:12px 14px;font-size:0.81rem;color:#b91c1c;margin-bottom:16px;line-height:1.5">
@@ -2475,7 +2488,7 @@
   <div class="modal" style="max-width:480px;width:95vw">
     <div class="modal__header">
       <span class="modal__title"><i class="fa-solid fa-id-card" style="color:#FF9B0C;margin-right:8px"></i>Upload KYC Document</span>
-      <button class="modal__close" onclick="Modal.close('kycUploadModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('kycUploadModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <p style="font-size:0.82rem;color:#6b7280;margin-bottom:16px">

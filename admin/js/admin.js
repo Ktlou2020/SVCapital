@@ -369,7 +369,7 @@ async function loadDashboard() {
       API.investors.list({ limit: 100 }),
       API.pools.list({ limit: 100 }),
       API.investments.list({ limit: 100 }),
-      API.transactions.list({ limit: 100 })
+      API.transactions.list({ limit: 500 })
     ]);
 
     STATE.investors = invRes.data || [];
@@ -1574,11 +1574,12 @@ function renderInvestmentsTable() {
 
   document.getElementById('investmentsFooter').textContent = `${start + 1}–${Math.min(start + INV_PG_SIZE, filteredInvests.length)} of ${filteredInvests.length}`;
 
-  if (!page.length) { body.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:32px">No investments</td></tr>'; return; }
+  if (!page.length) { body.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding:32px">No investments</td></tr>'; return; }
 
   body.innerHTML = page.map(i => {
     const pi = Utils.productInfo(i.product_type);
     return `<tr>
+      <td style="width:36px;text-align:center"><input type="checkbox" class="inv-select-cb" value="${i.id}" onchange="_invUpdateBulkBar()" /></td>
       <td><div class="td-strong">${i.investor_name}</div><div class="td-muted">${i.investor_email}</div></td>
       <td class="td-strong">${i.pool_name}</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
@@ -1596,6 +1597,36 @@ function renderInvestmentsTable() {
   document.getElementById('investmentsPagination').innerHTML = Array.from({ length: pages }, (_, i) =>
     `<button class="page-btn ${i + 1 === invPage ? 'active' : ''}" onclick="invPage=${i + 1};renderInvestmentsTable()">${i + 1}</button>`
   ).join('');
+
+  _invUpdateBulkBar();
+}
+
+function _invUpdateBulkBar() {
+  const checked = document.querySelectorAll('.inv-select-cb:checked');
+  let bar = document.getElementById('invBulkBar');
+  if (!bar) return;
+  if (checked.length > 0) {
+    bar.style.display = 'flex';
+    const label = bar.querySelector('#invBulkCount');
+    if (label) label.textContent = checked.length;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+async function bulkTriggerPayout() {
+  const checked = [...document.querySelectorAll('.inv-select-cb:checked')].map(cb => cb.value);
+  if (!checked.length) return Toast.error('Select at least one investment');
+  if (!confirm(`Mark ${checked.length} investment(s) as paid out?`)) return;
+  let done = 0;
+  for (const id of checked) {
+    try {
+      await API.investments.update(id, { status: 'paid_out', payout_date: new Date().toISOString() });
+      done++;
+    } catch(e) { console.error('payout error', id, e.message); }
+  }
+  Toast.success(`${done} investment(s) marked as paid out`);
+  loadInvestments && loadInvestments();
 }
 
 function setupInvestmentFilters() {
@@ -2085,7 +2116,7 @@ async function loadAnalytics() {
     const [invRes, invstRes, txnRes] = await Promise.all([
       API.investors.list({ limit: 100 }),
       API.investments.list({ limit: 200 }),
-      API.transactions.list({ limit: 200 })
+      API.transactions.list({ limit: 500 })
     ]);
     STATE.investors = invRes.data || [];
     STATE.investments = invstRes.data || [];
@@ -2215,16 +2246,22 @@ function renderConversionFunnel() {
   ).length;
 
   // Investors with at least one completed deposit
+  // Guard against transactions with missing investor_id
   const depositedIds = new Set(
-    STATE.transactions
-      .filter(t => t.type === 'deposit' && t.status === 'completed')
+    (STATE.transactions || [])
+      .filter(t => t.type === 'deposit' && t.status === 'completed' && t.investor_id != null)
       .map(t => t.investor_id)
   );
-  const deposited = STATE.investors.filter(i => depositedIds.has(i.id)).length;
+  const deposited = STATE.investors.filter(i => i.id != null && depositedIds.has(i.id)).length;
 
   // Investors with at least one investment
-  const investedIds = new Set(STATE.investments.map(i => i.investor_id));
-  const invested = STATE.investors.filter(i => investedIds.has(i.id)).length;
+  // Guard against investments with missing investor_id
+  const investedIds = new Set(
+    (STATE.investments || [])
+      .filter(inv => inv.investor_id != null)
+      .map(inv => inv.investor_id)
+  );
+  const invested = STATE.investors.filter(i => i.id != null && investedIds.has(i.id)).length;
 
   const stages = [
     { label: 'Signed Up',        count: total,         color: '#6366f1' },
@@ -2909,14 +2946,24 @@ async function bulkApproveKyc() {
   if (!_kycSelected.size) return;
   const ids = [..._kycSelected];
   if (!confirm(`Approve ${ids.length} document(s)?`)) return;
+  const total = ids.length;
+  const approveBtn = document.querySelector('[onclick="bulkApproveKyc()"]');
+  const rejectBtn  = document.querySelector('[onclick="bulkRejectKyc()"]');
+  if (approveBtn) approveBtn.disabled = true;
+  if (rejectBtn)  rejectBtn.disabled  = true;
   try {
-    for (const id of ids) {
-      await API.kyc.update(id, { status: 'approved', reviewed_by: 'Admin', reviewed_date: new Date().toISOString() });
+    for (let i = 0; i < ids.length; i++) {
+      await API.kyc.update(ids[i], { status: 'approved', reviewed_by: 'Admin', reviewed_date: new Date().toISOString() });
+      if ((i + 1) % 5 === 0) Toast.info(`Processing ${i + 1}/${total}...`);
     }
     _kycSelected.clear();
     Toast.success(`${ids.length} document(s) approved`);
     await loadKYC();
   } catch (e) { Toast.error('Bulk approve failed'); }
+  finally {
+    if (approveBtn) approveBtn.disabled = false;
+    if (rejectBtn)  rejectBtn.disabled  = false;
+  }
 }
 
 async function bulkRejectKyc() {
@@ -2924,14 +2971,24 @@ async function bulkRejectKyc() {
   const reason = prompt(`Rejection reason for ${_kycSelected.size} document(s):`);
   if (reason === null) return;
   const ids = [..._kycSelected];
+  const total = ids.length;
+  const approveBtn = document.querySelector('[onclick="bulkApproveKyc()"]');
+  const rejectBtn  = document.querySelector('[onclick="bulkRejectKyc()"]');
+  if (approveBtn) approveBtn.disabled = true;
+  if (rejectBtn)  rejectBtn.disabled  = true;
   try {
-    for (const id of ids) {
-      await API.kyc.update(id, { status: 'rejected', rejection_reason: reason, reviewed_by: 'Admin', reviewed_date: new Date().toISOString() });
+    for (let i = 0; i < ids.length; i++) {
+      await API.kyc.update(ids[i], { status: 'rejected', rejection_reason: reason, reviewed_by: 'Admin', reviewed_date: new Date().toISOString() });
+      if ((i + 1) % 5 === 0) Toast.info(`Processing ${i + 1}/${total}...`);
     }
     _kycSelected.clear();
     Toast.success(`${ids.length} document(s) rejected`);
     await loadKYC();
   } catch (e) { Toast.error('Bulk reject failed'); }
+  finally {
+    if (approveBtn) approveBtn.disabled = false;
+    if (rejectBtn)  rejectBtn.disabled  = false;
+  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -2943,7 +3000,7 @@ const AUDIT_PG   = 50;
 
 async function loadAuditLog() {
   try {
-    const res = await API._fetch('GET', 'tables/audit_events', null, { limit: 200, order: 'created_at', direction: 'desc' });
+    const res = await API._fetch('GET', 'tables/audit_events', null, { limit: 50, page: _auditPage, order: 'created_at', direction: 'desc' });
     _auditEvents = res.data || [];
     renderAuditTable();
 
@@ -2953,12 +3010,23 @@ async function loadAuditLog() {
     const dateFrom = document.getElementById('auditDateFrom');
     const dateTo   = document.getElementById('auditDateTo');
 
-    const resetAndRender = () => { _auditPage = 1; renderAuditTable(); };
+    const resetAndRender = () => { _auditPage = 1; loadAuditLog(); };
     if (typeF   && !typeF._auditWired)   { typeF.addEventListener('change', resetAndRender);   typeF._auditWired = true; }
     if (searchF && !searchF._auditWired) { searchF.addEventListener('input', Utils.debounce(resetAndRender, 250)); searchF._auditWired = true; }
     if (dateFrom && !dateFrom._auditWired) { dateFrom.addEventListener('change', resetAndRender); dateFrom._auditWired = true; }
     if (dateTo   && !dateTo._auditWired)   { dateTo.addEventListener('change', resetAndRender);   dateTo._auditWired   = true; }
   } catch (e) { Toast.error('Failed to load audit log'); }
+}
+
+function _auditPrevPage() {
+  if (_auditPage <= 1) return;
+  _auditPage--;
+  loadAuditLog();
+}
+
+function _auditNextPage() {
+  _auditPage++;
+  loadAuditLog();
 }
 
 function renderAuditTable() {
@@ -2970,27 +3038,28 @@ function renderAuditTable() {
   const dateFromVal  = document.getElementById('auditDateFrom')?.value || '';
   const dateToVal    = document.getElementById('auditDateTo')?.value || '';
 
+  // Apply client-side filters to the server-fetched page
   let items = _auditEvents;
   if (typeFilter)   items = items.filter(e => (e.event_type || '').includes(typeFilter));
   if (searchQ)      items = items.filter(e => `${e.event_type} ${e.user_email} ${e.actor_role} ${e.action} ${e.entity_type} ${e.entity_id} ${e.description}`.toLowerCase().includes(searchQ));
   if (dateFromVal)  items = items.filter(e => e.created_at && new Date(e.created_at) >= new Date(dateFromVal));
   if (dateToVal)    items = items.filter(e => e.created_at && new Date(e.created_at) <= new Date(dateToVal + 'T23:59:59'));
 
-  const start  = (_auditPage - 1) * AUDIT_PG;
-  const page   = items.slice(start, start + AUDIT_PG);
-
   const footer = document.getElementById('auditFooter');
-  if (footer) footer.textContent = items.length ? `${start + 1}–${Math.min(start + AUDIT_PG, items.length)} of ${items.length} events` : '0 events';
+  if (footer) footer.textContent = items.length ? `Page ${_auditPage} · ${items.length} events shown` : '0 events';
 
-  if (!page.length) {
+  if (!items.length) {
     body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No audit events found</td></tr>';
-    document.getElementById('auditPagination').innerHTML = '';
+    const pag = document.getElementById('auditPagination');
+    if (pag) pag.innerHTML = _auditPage > 1
+      ? `<button class="page-btn" onclick="_auditPrevPage()">‹ Prev</button>`
+      : '';
     return;
   }
 
   const actionColor = { 'user.login': 'blue', 'kyc.approved': 'green', 'kyc.rejected': 'red', 'transaction.completed': 'green', 'transaction.rejected': 'red', 'investment.paid_out': 'gold', 'withdrawal.approved': 'green', 'withdrawal.rejected': 'red' };
 
-  body.innerHTML = page.map(e => `<tr>
+  body.innerHTML = items.map(e => `<tr>
     <td class="td-muted" style="white-space:nowrap;font-size:0.75rem">${Utils.date(e.created_at)}</td>
     <td><div style="font-size:0.78rem;font-weight:600;color:#1a1a1a">${e.user_email || e.actor || '—'}</div></td>
     <td><span style="font-size:0.72rem;color:var(--text-muted)">${e.actor_role || e.role || '—'}</span></td>
@@ -2999,11 +3068,17 @@ function renderAuditTable() {
     <td class="td-muted" style="font-size:0.72rem">${e.ip_address || e.ip || '—'}</td>
   </tr>`).join('');
 
-  const pages = Math.ceil(items.length / AUDIT_PG);
-  const pag   = document.getElementById('auditPagination');
-  if (pag) pag.innerHTML = Array.from({ length: Math.min(pages, 10) }, (_, i) =>
-    `<button class="page-btn ${i + 1 === _auditPage ? 'active' : ''}" onclick="_auditPage=${i+1};renderAuditTable()">${i+1}</button>`
-  ).join('');
+  // Prev/Next server-side pagination controls
+  const pag = document.getElementById('auditPagination');
+  if (pag) {
+    const hasPrev = _auditPage > 1;
+    const hasNext = _auditEvents.length === AUDIT_PG; // if we got a full page, there may be more
+    pag.innerHTML = [
+      hasPrev ? `<button class="page-btn" onclick="_auditPrevPage()">‹ Prev</button>` : '',
+      `<span class="page-btn active" style="cursor:default">${_auditPage}</span>`,
+      hasNext ? `<button class="page-btn" onclick="_auditNextPage()">Next ›</button>` : '',
+    ].join('');
+  }
 }
 
 /* ═══════════════════════════════════════════════

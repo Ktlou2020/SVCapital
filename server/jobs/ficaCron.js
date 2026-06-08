@@ -13,6 +13,7 @@
 const cron           = require('node-cron');
 const pool           = require('../db/pool');
 const { runFicaCheck } = require('../services/ficaService');
+const emailService   = require('../services/email');
 
 const BATCH_LIMIT  = 50;   // max investors per cron run
 const INTER_DELAY  = 800;  // ms between API calls (rate-limit courtesy)
@@ -96,6 +97,25 @@ function _delay(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
+async function runFicaExpiryAlerts() {
+  // Alert investors whose FICA approval is approaching 3 years old
+  const { rows } = await pool.query(`
+    SELECT id, first_name, last_name, email
+    FROM investors
+    WHERE fica_approved_at < NOW() - INTERVAL '2 years 9 months'
+      AND fica_resubmit_requested_at IS NULL
+      AND status = 'active'
+      AND fica_status = 'approved'
+  `);
+  for (const inv of rows) {
+    try {
+      await emailService.sendFicaResubmitReminder(inv);
+      await pool.query('UPDATE investors SET fica_resubmit_requested_at=NOW() WHERE id=$1', [inv.id]);
+      console.log(`[ficaCron] FICA expiry reminder sent to ${inv.id}`);
+    } catch (e) { console.error('[ficaCron] expiry alert error:', e.message); }
+  }
+}
+
 /* ─── Start the cron (called from server/index.js) ────────────────────── */
 function startFicaCron() {
   if (!process.env.DATABASE_URL) {
@@ -104,7 +124,10 @@ function startFicaCron() {
   }
 
   /* Daily at 02:00 SAST — cron expression uses Africa/Johannesburg TZ */
-  cron.schedule('0 2 * * *', runFicaSweep, {
+  cron.schedule('0 2 * * *', async () => {
+    await runFicaSweep();
+    await runFicaExpiryAlerts();
+  }, {
     timezone: 'Africa/Johannesburg',
     scheduled: true,
   });
@@ -112,4 +135,4 @@ function startFicaCron() {
   console.log('⏰ FICA re-check cron scheduled: daily at 02:00 SAST (Africa/Johannesburg)');
 }
 
-module.exports = { startFicaCron, runFicaSweep };
+module.exports = { startFicaCron, runFicaSweep, runFicaExpiryAlerts };

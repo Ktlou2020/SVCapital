@@ -144,6 +144,20 @@ const PROTECTED_WRITE_COLS = {
   users:     ['password_hash', 'staff_pin'],
 };
 
+/* ─── Investor-owned tables: column that ties a row to an investor ─── */
+const INVESTOR_COLS = {
+  investors:             'id',
+  investments:           'investor_id',
+  transactions:          'investor_id',
+  kyc_documents:         'investor_id',
+  maturity_instructions: 'investor_id',
+  support_tickets:       'investor_id',
+  return_schedules:      'investor_id',
+  investor_allocations:  'investor_id',
+  investment_waitlist:   'investor_id',
+  sub_accounts:          'investor_id',
+};
+
 /* ─── Columns to strip from responses ─── */
 const STRIP_COLS = {
   users: ['password_hash', 'staff_pin'],
@@ -190,21 +204,9 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
     // ─── Role-based data isolation ───
     // Investors only see their own data
     if (req.user.role === 'investor' && req.user.investorId) {
-      const investorCols = {
-        investors:             'id',
-        investments:           'investor_id',
-        transactions:          'investor_id',
-        kyc_documents:         'investor_id',
-        maturity_instructions: 'investor_id',
-        support_tickets:       'investor_id',
-        return_schedules:      'investor_id',
-        investor_allocations:  'investor_id',
-        investment_waitlist:   'investor_id',
-        sub_accounts:          'investor_id',
-      };
-      if (investorCols[table]) {
+      if (INVESTOR_COLS[table]) {
         params.push(req.user.investorId);
-        conditions.push(`${investorCols[table]} = $${params.length}`);
+        conditions.push(`${INVESTOR_COLS[table]} = $${params.length}`);
       }
     }
 
@@ -300,6 +302,16 @@ router.get('/:table/:id', requireAuth, validateTable, async (req, res) => {
       [req.params.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Record not found.' });
+
+    // Investor data isolation: verify the row belongs to this investor
+    if (req.user.role === 'investor' && INVESTOR_COLS[table]) {
+      const ownerCol = INVESTOR_COLS[table];
+      const rowOwner = table === 'investors' ? rows[0].id : rows[0][ownerCol];
+      if (rowOwner !== req.user.investorId) {
+        return res.status(404).json({ error: 'Record not found.' });
+      }
+    }
+
     const [clean] = stripSensitive(table, rows);
     res.json(clean);
   } catch (err) {
@@ -503,6 +515,18 @@ router.put('/:table/:id', requireAuth, validateTable, async (req, res) => {
     if (['users'].includes(table))
       return res.status(403).json({ error: `Use /api/users for table: ${table}` });
 
+    // Investor data isolation: verify record ownership before UPDATE
+    if (req.user.role === 'investor' && INVESTOR_COLS[table]) {
+      const ownerCol = INVESTOR_COLS[table];
+      const selectCol = table === 'investors' ? 'id' : ownerCol;
+      const { rows: ownerRows } = await pool.query(
+        `SELECT id, ${selectCol} FROM ${table} WHERE ${key} = $1`, [req.params.id]
+      );
+      if (!ownerRows[0] || ownerRows[0][selectCol] !== req.user.investorId) {
+        return res.status(404).json({ error: 'Record not found.' });
+      }
+    }
+
     const body   = { ...req.body };
     delete body[key]; // don't update PK
     delete body.created_at;
@@ -535,6 +559,18 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
 
     if (['users'].includes(table))
       return res.status(403).json({ error: `Use /api/users for table: ${table}` });
+
+    // Investor data isolation: verify record ownership before UPDATE
+    if (req.user.role === 'investor' && INVESTOR_COLS[table]) {
+      const ownerCol = INVESTOR_COLS[table];
+      const selectCol = table === 'investors' ? 'id' : ownerCol;
+      const { rows: ownerRows } = await pool.query(
+        `SELECT id, ${selectCol} FROM ${table} WHERE ${key} = $1`, [req.params.id]
+      );
+      if (!ownerRows[0] || ownerRows[0][selectCol] !== req.user.investorId) {
+        return res.status(404).json({ error: 'Record not found.' });
+      }
+    }
 
     const body   = { ...req.body };
     delete body[key];
@@ -673,6 +709,14 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
             bankName:      updated.bank_name,
             accountNumber: updated.bank_account_number,
           });
+        }
+
+        // FICA status approved → record fica_approved_at timestamp (once only)
+        if (table === 'investors' && body.fica_status === 'approved') {
+          await pool.query(
+            'UPDATE investors SET fica_approved_at=NOW() WHERE id=$1 AND fica_approved_at IS NULL',
+            [req.params.id]
+          ).catch(() => {});
         }
 
         // KYC document approved → email investor

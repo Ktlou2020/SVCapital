@@ -536,13 +536,18 @@
               </select>
             </div>
           </div>
+          <div id="invBulkBar" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.3);border-radius:8px;margin-bottom:8px">
+            <span style="font-size:0.85rem;font-weight:600;color:#1a1a1a"><span id="invBulkCount">0</span> selected</span>
+            <button class="btn btn--primary btn--sm" onclick="bulkTriggerPayout()"><i class="fa-solid fa-money-bill-transfer"></i> Mark Paid Out</button>
+            <button class="btn btn--secondary btn--sm" onclick="document.querySelectorAll('.inv-select-cb').forEach(cb=>cb.checked=false);_invUpdateBulkBar()">Clear</button>
+          </div>
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>Investor</th><th>Pool</th><th>Product</th><th>Amount</th><th>Exp. Return</th><th>Status</th><th>Maturity</th><th>Actions</th>
+                <th style="width:36px"></th><th>Investor</th><th>Pool</th><th>Product</th><th>Amount</th><th>Exp. Return</th><th>Status</th><th>Maturity</th><th>Actions</th>
               </tr></thead>
               <tbody id="investmentsBody">
-                <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
+                <tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
               </tbody>
             </table>
           </div>

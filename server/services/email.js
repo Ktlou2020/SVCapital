@@ -598,6 +598,22 @@ function sendKycRejected(investor, { reason, notes } = {}) {
   });
 }
 
+/* ── 16. FICA re-verification reminder ───────────────────── */
+function sendFicaResubmitReminder(investor) {
+  return _send({
+    to: investor.email,
+    subject: 'Action Required: Please resubmit your FICA documents',
+    html: _wrap(`
+      <h2>FICA Document Re-verification Required</h2>
+      <p>Dear ${investor.first_name},</p>
+      <p>Your FICA verification documents are approaching their 3-year validity period. To comply with South African regulatory requirements, we kindly request that you resubmit your identity documents.</p>
+      <p>Please log in to your SV Capital investor portal and navigate to <strong>My Profile → KYC Documents</strong> to upload updated documents.</p>
+      <a href="https://platform.svcapital.co.za/portal/" class="btn">Resubmit Documents</a>
+      <p>If you have any questions, please contact our support team.</p>
+    `),
+  });
+}
+
 module.exports = {
   sendWelcome,
   sendDepositConfirmed,
@@ -617,4 +633,5 @@ module.exports = {
   sendKycApproved,
   sendKycRejected,
   sendLoginAlert,
+  sendFicaResubmitReminder,
 };

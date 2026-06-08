@@ -12,6 +12,7 @@
 const router  = require('express').Router();
 const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
 const pool    = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const emailService = require('../services/email');
@@ -106,12 +107,26 @@ router.post('/login', async (req, res) => {
 
     const token = signToken(user);
 
+    // Issue refresh token and persist session
+    const refreshToken = uuidv4();
+    await pool.query(
+      'INSERT INTO sessions (user_id, refresh_token, expires_at, ip_address, user_agent) VALUES ($1,$2,NOW()+INTERVAL \'30 days\',$3,$4)',
+      [user.id, refreshToken, newIp || null, req.headers['user-agent'] || null]
+    );
+
     // Set cookie for web clients
     res.cookie('svc_token', token, {
       httpOnly: true,
       secure:   IS_PROD,
       sameSite: IS_PROD ? 'none' : 'lax',
       maxAge:   8 * 60 * 60 * 1000, // 8 hours
+    });
+    res.cookie('svc_refresh', refreshToken, {
+      httpOnly: true,
+      secure:   IS_PROD,
+      sameSite: IS_PROD ? 'none' : 'lax',
+      maxAge:   30 * 24 * 60 * 60 * 1000,
+      path:     '/api/auth',
     });
 
     // Determine redirect URL based on role
@@ -133,6 +148,7 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
+      refreshToken,
       user: {
         id:         user.id,
         email:      user.email,
@@ -227,9 +243,29 @@ router.post('/register', async (req, res) => {
         email: email.toLowerCase().trim(),
         first_name: firstName.trim(),
       }).catch(err => console.error('[email] welcome failed:', err.message)));
+
+      // Referral bonus: create transaction for referrer if referred by a valid referral code
+      if (referredBy) {
+        const { rows: referrers } = await pool.query(
+          'SELECT id FROM investors WHERE referral_code = $1 LIMIT 1', [referredBy]
+        ).catch(() => ({ rows: [] }));
+        if (referrers[0]) {
+          await pool.query(`
+            INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, referred_investor_id, transaction_date, created_at)
+            VALUES (gen_random_uuid(), $1, 'referral_bonus', 500, 'pending', $2, $3, $4, NOW(), NOW())
+          `, [referrers[0].id, 'REF-' + Date.now(), `Referral bonus — ${firstName.trim()} ${lastName.trim()} joined`, invId]).catch(() => {});
+        }
+      }
     }
 
     const token = signToken({ ...newUser, investor_id: newUser.investor_id });
+
+    // Issue refresh token and persist session
+    const refreshToken = uuidv4();
+    await pool.query(
+      'INSERT INTO sessions (user_id, refresh_token, expires_at, ip_address, user_agent) VALUES ($1,$2,NOW()+INTERVAL \'30 days\',$3,$4)',
+      [newUser.id, refreshToken, (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || null, req.headers['user-agent'] || null]
+    );
 
     res.cookie('svc_token', token, {
       httpOnly: true,
@@ -237,9 +273,17 @@ router.post('/register', async (req, res) => {
       sameSite: IS_PROD ? 'none' : 'lax',
       maxAge:   8 * 60 * 60 * 1000,
     });
+    res.cookie('svc_refresh', refreshToken, {
+      httpOnly: true,
+      secure:   IS_PROD,
+      sameSite: IS_PROD ? 'none' : 'lax',
+      maxAge:   30 * 24 * 60 * 60 * 1000,
+      path:     '/api/auth',
+    });
 
     res.status(201).json({
       token,
+      refreshToken,
       user: {
         id:         newUser.id,
         email:      newUser.email,
@@ -282,8 +326,10 @@ router.get('/me', requireAuth, async (req, res) => {
 });
 
 /* ─── POST /api/auth/logout ─── */
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
+  await pool.query('DELETE FROM sessions WHERE refresh_token=$1', [req.cookies?.svc_refresh]).catch(() => {});
   res.clearCookie('svc_token');
+  res.clearCookie('svc_refresh', { path: '/api/auth' });
   res.json({ success: true });
 });
 
@@ -660,6 +706,38 @@ router.post('/2fa/verify-login', async (req, res) => {
     const redirectMap = { admin: '/admin/index.html', director: '/admin/index.html', investor: '/portal/', ifa: '/ifa/index.html', fund_manager: '/fund/index.html', staff: '/team/hub.html' };
     res.json({ token: fullToken, user: { id: user.id, email: user.email, role: user.role, firstName: user.first_name, lastName: user.last_name, investorId: user.investor_id }, redirect: redirectMap[user.role] || '/portal/' });
   } catch (err) { console.error('/2fa/verify-login error:', err.message); res.status(500).json({ error: 'Internal server error.' }); }
+});
+
+/* POST /api/auth/refresh — rotate refresh token, issue new access token */
+router.post('/refresh', async (req, res) => {
+  const rt = req.cookies?.svc_refresh;
+  if (!rt) return res.status(401).json({ error: 'No refresh token' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM sessions WHERE refresh_token=$1 AND expires_at > NOW()', [rt]
+    );
+    if (!rows[0]) { res.clearCookie('svc_refresh', { path: '/api/auth' }); return res.status(401).json({ error: 'Session expired' }); }
+    const { rows: users } = await pool.query('SELECT * FROM users WHERE id=$1', [rows[0].user_id]);
+    if (!users[0] || !users[0].is_active) return res.status(401).json({ error: 'Account inactive' });
+    const newRt = uuidv4();
+    await pool.query('DELETE FROM sessions WHERE id=$1', [rows[0].id]);
+    await pool.query(
+      'INSERT INTO sessions (user_id,refresh_token,expires_at,ip_address,user_agent) VALUES ($1,$2,NOW()+INTERVAL \'30 days\',$3,$4)',
+      [users[0].id, newRt, (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || null, req.headers['user-agent'] || null]
+    );
+    const token = signToken(users[0]);
+    res.cookie('svc_token', token, { httpOnly: true, secure: IS_PROD, sameSite: IS_PROD ? 'none' : 'lax', maxAge: 8 * 60 * 60 * 1000 });
+    res.cookie('svc_refresh', newRt, { httpOnly: true, secure: IS_PROD, sameSite: IS_PROD ? 'none' : 'lax', maxAge: 30 * 24 * 60 * 60 * 1000, path: '/api/auth' });
+    res.json({ token });
+  } catch (e) { res.status(500).json({ error: 'Internal error' }); }
+});
+
+/* POST /api/auth/signout-all — revoke all sessions for current user */
+router.post('/signout-all', requireAuth, async (req, res) => {
+  await pool.query('DELETE FROM sessions WHERE user_id=$1', [req.user.id]).catch(() => {});
+  res.clearCookie('svc_token');
+  res.clearCookie('svc_refresh', { path: '/api/auth' });
+  res.json({ success: true });
 });
 
 module.exports = router;

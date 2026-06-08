@@ -344,6 +344,13 @@ DO $$ BEGIN
   -- Investment pool capacity columns (Feature: waitlist)
   BEGIN ALTER TABLE investment_pools ADD COLUMN max_capacity NUMERIC(15,2) DEFAULT NULL; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investment_pools ADD COLUMN current_invested NUMERIC(15,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- FICA re-verification tracking
+  BEGIN ALTER TABLE investors ADD COLUMN fica_approved_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN fica_resubmit_requested_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Referral tracking on transactions
+  BEGIN ALTER TABLE transactions ADD COLUMN referred_investor_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Term sheet URL on investment pools
+  BEGIN ALTER TABLE investment_pools ADD COLUMN term_sheet_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
 
 CREATE TABLE IF NOT EXISTS investment_waitlist (
@@ -745,6 +752,19 @@ CREATE TABLE IF NOT EXISTS sub_accounts (
   updated_at           TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS sub_accounts_parent_idx ON sub_accounts(parent_investor_id);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID NOT NULL,
+  refresh_token TEXT UNIQUE NOT NULL,
+  expires_at    TIMESTAMPTZ NOT NULL,
+  ip_address    TEXT,
+  user_agent    TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  last_used_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS sessions_user_idx  ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS sessions_token_idx ON sessions(refresh_token);
 `;
 
 async function autoSetup() {
