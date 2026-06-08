@@ -472,3 +472,38 @@
   }
 }
 
+
+/* ─── Rewards Stats Row ─── */
+.rewards-stats-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 16px 0 20px;
+}
+.rewards-stat {
+  flex: 1;
+  min-width: 120px;
+  background: var(--ci-bg-white, #fff);
+  border: 1px solid var(--ci-border, rgba(0,0,0,0.08));
+  border-radius: 12px;
+  padding: 14px 16px;
+  text-align: center;
+}
+.rewards-stat__val {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #1a1a1a;
+  line-height: 1.2;
+}
+.rewards-stat__label {
+  font-size: 0.68rem;
+  color: #9ca3af;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+@media (max-width: 640px) {
+  .rewards-stats-row { gap: 8px; }
+  .rewards-stat { min-width: calc(50% - 4px); padding: 10px 12px; }
+}
