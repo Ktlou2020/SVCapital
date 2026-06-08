@@ -447,6 +447,7 @@
 /* ─── 19. Topbar breadcrumb greeting ───────────────────────── */
 .topbar__breadcrumb {
   font-size: 0.78rem !important;
+  color: #6b7280 !important; /* WCAG AA minimum */
 }
 
 /* ─── 20. Button hover improvements ────────────────────────── */
@@ -1921,7 +1922,7 @@ body {
   font-size: 1rem !important;
   letter-spacing: -0.025em !important;
 }
-.topbar__breadcrumb { color: #9ca3af !important; font-size: 0.71rem !important; margin-top: 1px !important; }
+.topbar__breadcrumb { color: #6b7280 !important; font-size: 0.71rem !important; margin-top: 1px !important; } /* WCAG AA */
 .topbar-btn {
   background: #F2F3F6 !important;
   border: 1px solid rgba(0,0,0,0.08) !important;

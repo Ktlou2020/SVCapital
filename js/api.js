@@ -557,13 +557,40 @@ const Toast = {
    MODAL SYSTEM
    ═══════════════════════════════════════════════ */
 const Modal = {
+  _prevFocus: null,
+  _trapHandler: null,
   open(id) {
     const el = document.getElementById(id);
-    if (el) { el.classList.add('open'); document.body.style.overflow = 'hidden'; }
+    if (!el) return;
+    el.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    Modal._prevFocus = document.activeElement;
+    const focusable = el.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable[0]) focusable[0].focus();
+    // Focus trap
+    Modal._trapHandler = (e) => {
+      if (e.key !== 'Tab') return;
+      const items = [...el.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey ? document.activeElement === first : document.activeElement === last) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      }
+    };
+    el.addEventListener('keydown', Modal._trapHandler);
   },
   close(id) {
     const el = document.getElementById(id);
-    if (el) { el.classList.remove('open'); document.body.style.overflow = ''; }
+    if (!el) return;
+    el.classList.remove('open');
+    document.body.style.overflow = '';
+    el.removeAttribute('role');
+    el.removeAttribute('aria-modal');
+    if (Modal._trapHandler) { el.removeEventListener('keydown', Modal._trapHandler); Modal._trapHandler = null; }
+    if (Modal._prevFocus) { Modal._prevFocus.focus(); Modal._prevFocus = null; }
   },
   closeAll() {
     document.querySelectorAll('.modal-overlay.open').forEach(m => {
