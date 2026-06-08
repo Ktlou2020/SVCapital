@@ -6594,31 +6594,39 @@ async function confirmAccountDeletion() {
 
 const PUSH_PREF_KEY = 'svc_push_pref';
 
+/**
+ * Convert a base64url VAPID public key to a Uint8Array for pushManager.subscribe()
+ */
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64  = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw     = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
 function _initPushNotifToggle() {
-  const toggle = document.getElementById('pushNotifToggle');
-  const slider = document.getElementById('pushNotifSlider');
+  const toggle     = document.getElementById('pushNotifToggle');
+  const slider     = document.getElementById('pushNotifSlider');
   const statusText = document.getElementById('pushNotifStatusText');
   if (!toggle) return;
 
-  const saved = localStorage.getItem(PUSH_PREF_KEY);
+  const saved   = localStorage.getItem(PUSH_PREF_KEY);
   const enabled = saved === 'true';
   toggle.checked = enabled;
   if (slider) {
-    // Manually apply the checked style since it's a hidden input
     slider.style.background = enabled ? '#ff9b0c' : '#ccc';
-    if (enabled) {
-      slider.style.cssText += ';background:#ff9b0c';
-    }
   }
-  if (statusText) statusText.textContent = enabled ? 'Enabled — you will receive investment alerts' : 'Enable to receive investment alerts';
+  if (statusText) statusText.textContent = enabled
+    ? 'Enabled — you will receive investment alerts'
+    : 'Enable to receive investment alerts';
 }
 
 async function togglePushNotifications(checked) {
-  const slider = document.getElementById('pushNotifSlider');
+  const slider     = document.getElementById('pushNotifSlider');
   const statusText = document.getElementById('pushNotifStatusText');
 
   if (checked) {
-    // Check if Notifications API supported
+    // Check browser support
     if (!('Notification' in window)) {
       Toast.info('Push notifications are not supported in this browser. Install the SV Capital app (PWA) for notifications.');
       const toggle = document.getElementById('pushNotifToggle');
@@ -6627,33 +6635,139 @@ async function togglePushNotifications(checked) {
     }
 
     const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-      localStorage.setItem(PUSH_PREF_KEY, 'true');
-      if (slider) slider.style.background = '#ff9b0c';
-      if (statusText) statusText.textContent = 'Enabled — you will receive investment alerts';
-      Toast.success('Push notifications enabled!');
-
-      // Try to subscribe via service worker if available
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.ready.then(reg => {
-          // VAPID subscription would go here once keys are configured
-          console.log('[Push] Service worker ready — VAPID subscription pending key configuration');
-        }).catch(e => console.warn('[Push] SW not ready:', e));
-      }
-    } else {
-      // Permission denied
+    if (permission !== 'granted') {
       localStorage.setItem(PUSH_PREF_KEY, 'false');
       const toggle = document.getElementById('pushNotifToggle');
       if (toggle) toggle.checked = false;
       if (slider) slider.style.background = '#ccc';
       if (statusText) statusText.textContent = 'Permission denied — enable in browser settings';
       Toast.error('Notification permission denied. Please enable in your browser settings.');
+      return;
+    }
+
+    // Get SW registration
+    let swReg = window._swReg;
+    if (!swReg && 'serviceWorker' in navigator) {
+      try { swReg = await navigator.serviceWorker.ready; } catch (_) {}
+    }
+
+    if (!swReg) {
+      Toast.error('Service worker not ready. Please reload and try again.');
+      const toggle = document.getElementById('pushNotifToggle');
+      if (toggle) toggle.checked = false;
+      return;
+    }
+
+    try {
+      // Fetch VAPID public key
+      const keyRes = await fetch('/api/push/vapid-public-key');
+      if (!keyRes.ok) throw new Error('Could not fetch VAPID public key');
+      const { publicKey } = await keyRes.json();
+
+      // Subscribe via push manager
+      const subscription = await swReg.pushManager.subscribe({
+        userVisibleOnly:      true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+
+      // Send subscription to server
+      const token  = (typeof Auth !== 'undefined' ? Auth.getToken() : null) || localStorage.getItem('svc_token');
+      const subRes = await fetch('/api/push/subscribe', {
+        method:  'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          subscription: subscription.toJSON(),
+          userAgent:    navigator.userAgent,
+        }),
+      });
+
+      if (!subRes.ok) throw new Error('Failed to save subscription on server');
+
+      localStorage.setItem(PUSH_PREF_KEY, 'true');
+      if (slider) slider.style.background = '#ff9b0c';
+      if (statusText) statusText.textContent = 'Enabled — you will receive investment alerts';
+      Toast.success('Push notifications enabled!');
+    } catch (err) {
+      console.error('[Push] subscribe error:', err);
+      localStorage.setItem(PUSH_PREF_KEY, 'false');
+      const toggle = document.getElementById('pushNotifToggle');
+      if (toggle) toggle.checked = false;
+      if (slider) slider.style.background = '#ccc';
+      Toast.error('Could not enable push notifications: ' + err.message);
     }
   } else {
+    // Unsubscribe
+    try {
+      let swReg = window._swReg;
+      if (!swReg && 'serviceWorker' in navigator) {
+        try { swReg = await navigator.serviceWorker.ready; } catch (_) {}
+      }
+      if (swReg) {
+        const existing = await swReg.pushManager.getSubscription();
+        if (existing) {
+          const endpoint = existing.endpoint;
+          await existing.unsubscribe();
+          const token = (typeof Auth !== 'undefined' ? Auth.getToken() : null) || localStorage.getItem('svc_token');
+          await fetch('/api/push/unsubscribe', {
+            method:  'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ endpoint }),
+          }).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn('[Push] unsubscribe error:', err);
+    }
     localStorage.setItem(PUSH_PREF_KEY, 'false');
     if (slider) slider.style.background = '#ccc';
     if (statusText) statusText.textContent = 'Disabled';
     Toast.info('Push notifications disabled.');
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PWA INSTALL PROMPT
+   ═══════════════════════════════════════════════════════════════ */
+let _pwaPromptEvt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _pwaPromptEvt = e;
+  if (!localStorage.getItem('pwa_installed') && !localStorage.getItem('pwa_dismissed')) {
+    setTimeout(() => {
+      const banner = document.getElementById('pwaInstallBanner');
+      if (banner) banner.style.display = 'flex';
+    }, 8000);
+  }
+});
+
+window.addEventListener('appinstalled', () => {
+  localStorage.setItem('pwa_installed', '1');
+  const banner = document.getElementById('pwaInstallBanner');
+  if (banner) banner.style.display = 'none';
+  Toast.success('App installed! You can now open SV Capital from your home screen.');
+});
+
+function pwaInstall() {
+  if (!_pwaPromptEvt) return;
+  _pwaPromptEvt.prompt();
+  _pwaPromptEvt.userChoice.then(({ outcome }) => {
+    if (outcome === 'accepted') localStorage.setItem('pwa_installed', '1');
+    _pwaPromptEvt = null;
+    const banner = document.getElementById('pwaInstallBanner');
+    if (banner) banner.style.display = 'none';
+  });
+}
+
+function _dismissPwaPrompt() {
+  const banner = document.getElementById('pwaInstallBanner');
+  if (banner) banner.style.display = 'none';
+  localStorage.setItem('pwa_dismissed', Date.now().toString());
 }
 

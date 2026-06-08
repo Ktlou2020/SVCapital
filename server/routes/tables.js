@@ -17,6 +17,34 @@ const emailService = require('../services/email');
 const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
 
+/* ─── Lazy-load push service (graceful if web-push not installed yet) ─── */
+let _pushSvc = null;
+function _getPush() {
+  if (!_pushSvc) {
+    try { _pushSvc = require('../services/pushService'); } catch (_) {}
+  }
+  return _pushSvc;
+}
+
+/* ─── Fire-and-forget push helper ─── */
+async function _sendPush(investorId, payload) {
+  const ps = _getPush();
+  if (!ps || !investorId) return;
+  try {
+    await ps.sendPushToInvestor(investorId, payload);
+    await ps.logNotification({
+      type:           payload.tag || 'system',
+      title:          payload.title,
+      body:           payload.body,
+      url:            payload.url,
+      recipientCount: 1,
+      sentBy:         'system',
+    });
+  } catch (e) {
+    console.warn('[tables push hook] error:', e.message);
+  }
+}
+
 /* ─── Input Validation ─── */
 const NUMERIC_FIELDS = new Set(['amount','wallet_balance','total_invested','total_returns','annual_rate','max_capacity','current_invested','recurring_amount','xp_points']);
 const STATUS_FIELDS  = { status: ['active','inactive','pending','matured','paid_out','cancelled','rejected','open','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor'], fica_status: ['pending','approved','rejected','not_started'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','reinvest','pending'] };
@@ -431,6 +459,35 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         console.error('[email hook POST] error:', hookErr.message);
       }
     });
+
+    // ── Push hooks (fire-and-forget) ──────────────────────────────────────
+    setImmediate(async () => {
+      try {
+        const created = rows[0];
+
+        // New investment → push investor
+        if (table === 'investments' && created.investor_id) {
+          await _sendPush(created.investor_id, {
+            title: 'Investment confirmed',
+            body:  `Your investment of R${Number(created.amount || 0).toLocaleString('en-ZA')} has been confirmed.`,
+            url:   '/portal/',
+            tag:   'investment.created',
+          });
+        }
+
+        // New pending withdrawal → push investor
+        if (table === 'transactions' && created.type === 'withdrawal' && created.status === 'pending' && created.investor_id) {
+          await _sendPush(created.investor_id, {
+            title: 'Withdrawal request received',
+            body:  `Your withdrawal request of R${Number(created.amount || 0).toLocaleString('en-ZA')} is being processed.`,
+            url:   '/portal/',
+            tag:   'withdrawal.pending',
+          });
+        }
+      } catch (hookErr) {
+        console.error('[push hook POST] error:', hookErr.message);
+      }
+    });
   } catch (err) {
     console.error(`POST /${req.params.table}:`, err.message);
     res.status(500).json({ error: err.message });
@@ -659,6 +716,65 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
         }
       } catch (hookErr) {
         console.error('[email hook PATCH] error:', hookErr.message);
+      }
+    });
+
+    // ── Push hooks (fire-and-forget) ──────────────────────────────────────
+    setImmediate(async () => {
+      try {
+        const updated = rows[0];
+
+        // Deposit confirmed → push
+        if (table === 'transactions' && body.status === 'completed' && updated.type === 'deposit' && updated.investor_id) {
+          await _sendPush(updated.investor_id, {
+            title: 'Deposit confirmed',
+            body:  `R${Number(updated.amount || 0).toLocaleString('en-ZA')} has been credited to your wallet.`,
+            url:   '/portal/',
+            tag:   'deposit.confirmed',
+          });
+        }
+
+        // Investment paid out → push
+        if (table === 'investments' && body.status === 'paid_out' && updated.investor_id) {
+          await _sendPush(updated.investor_id, {
+            title: 'Investment paid out',
+            body:  `Your investment of R${Number(updated.amount || 0).toLocaleString('en-ZA')} has matured and been paid out.`,
+            url:   '/portal/',
+            tag:   'investment.paid_out',
+          });
+        }
+
+        // KYC approved → push
+        if (table === 'kyc_documents' && body.status === 'approved' && updated.investor_id) {
+          await _sendPush(updated.investor_id, {
+            title: 'KYC approved',
+            body:  'Your identity document has been verified. You can now invest.',
+            url:   '/portal/',
+            tag:   'kyc.approved',
+          });
+        }
+
+        // KYC rejected → push
+        if (table === 'kyc_documents' && body.status === 'rejected' && updated.investor_id) {
+          await _sendPush(updated.investor_id, {
+            title: 'KYC document requires attention',
+            body:  'One of your documents could not be verified. Please resubmit.',
+            url:   '/portal/',
+            tag:   'kyc.rejected',
+          });
+        }
+
+        // Support ticket response → push
+        if (table === 'support_tickets' && body.admin_response && updated.investor_id) {
+          await _sendPush(updated.investor_id, {
+            title: 'New response to your support ticket',
+            body:  `A response has been added to your ticket: ${updated.subject || 'Support Request'}`,
+            url:   '/portal/',
+            tag:   'support.response',
+          });
+        }
+      } catch (hookErr) {
+        console.error('[push hook PATCH] error:', hookErr.message);
       }
     });
   } catch (err) {

@@ -105,6 +105,7 @@ app.use('/api/tables',      require('./routes/tables'));
 app.use('/api/fica',        require('./routes/fica'));
 app.use('/api/payments',    require('./routes/payments'));
 app.use('/api/admin',       require('./routes/broadcast'));
+app.use('/api/push',        require('./routes/push'));
 app.use('/api/privacy',     require('./routes/privacy'));
 app.use('/api/withdrawals', require('./routes/withdrawals'));
 

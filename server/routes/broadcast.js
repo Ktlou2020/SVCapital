@@ -4,10 +4,11 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
-const router  = require('express').Router();
-const pool    = require('../db/pool');
+const router      = require('express').Router();
+const pool        = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const smsService = require('../services/sms');
+const smsService  = require('../services/sms');
+const pushService = require('../services/pushService');
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FROM = process.env.FROM_EMAIL || 'SV Capital <noreply@svcapital.co.za>';
@@ -111,10 +112,11 @@ router.post('/broadcast', async (req, res) => {
   if (!message || !message.trim()) {
     return res.status(400).json({ error: 'message is required' });
   }
-  if (!['email', 'sms', 'both'].includes(channel)) {
-    return res.status(400).json({ error: 'channel must be email, sms, or both' });
+  const validChannels = ['email', 'sms', 'both', 'push', 'all'];
+  if (!validChannels.includes(channel)) {
+    return res.status(400).json({ error: 'channel must be email, sms, both, push, or all' });
   }
-  if ((channel === 'email' || channel === 'both') && !subject) {
+  if ((channel === 'email' || channel === 'both' || channel === 'all') && !subject) {
     return res.status(400).json({ error: 'subject is required for email broadcasts' });
   }
 
@@ -125,7 +127,36 @@ router.post('/broadcast', async (req, res) => {
     let failed = 0;
     const total = investors.length;
 
-    // Process in batches of BATCH_SIZE
+    // ── Push channel (handle first, may return early) ────────────────────────
+    if (channel === 'push' || channel === 'all') {
+      const investorIds = investors.map(i => i.id);
+      const pushResult = await pushService.sendPushToAll(investorIds, {
+        title: subject || 'SV Capital',
+        body:  message,
+        url:   '/portal/',
+        icon:  '/assets/logo.png',
+        badge: '/assets/logo.png',
+        tag:   'sv-broadcast',
+      });
+
+      await pushService.logNotification({
+        type:           'broadcast',
+        title:          subject || 'Broadcast',
+        body:           message,
+        url:            '/portal/',
+        recipientCount: pushResult.sent,
+        sentBy:         req.user?.email || 'admin',
+      });
+
+      if (channel === 'push') {
+        console.log(`[broadcast] push segment=${segment} total=${total} sent=${pushResult.sent}`);
+        return res.json({ sent: pushResult.sent, failed: total - pushResult.sent, total });
+      }
+      // For 'all' channel, accumulate push sends and fall through to email/sms
+      sent += pushResult.sent;
+    }
+
+    // ── Email / SMS batches ──────────────────────────────────────────────────
     for (let i = 0; i < investors.length; i += BATCH_SIZE) {
       const batch = investors.slice(i, i + BATCH_SIZE);
       const tasks = batch.map(async (inv) => {
@@ -133,7 +164,7 @@ router.post('/broadcast', async (req, res) => {
         const phone   = inv.phone;
         let ok = true;
 
-        if (channel === 'email' || channel === 'both') {
+        if (channel === 'email' || channel === 'both' || channel === 'all') {
           if (emailTo) {
             const result = await _sendEmail(emailTo, subject, message);
             if (!result.ok) {
@@ -145,7 +176,7 @@ router.post('/broadcast', async (req, res) => {
           }
         }
 
-        if (channel === 'sms' || channel === 'both') {
+        if (channel === 'sms' || channel === 'both' || channel === 'all') {
           if (phone) {
             try {
               await smsService.ENABLED
