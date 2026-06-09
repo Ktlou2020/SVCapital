@@ -105,6 +105,8 @@
     .btn-success:hover { opacity: 0.85; }
     .btn-danger { background: var(--red); color: #fff; }
     .btn-danger:hover { opacity: 0.85; }
+    .btn-warning { background: var(--amber); color: #fff; }
+    .btn-warning:hover { opacity: 0.85; }
     .btn-sm { padding: 5px 11px; font-size: 0.75rem; }
     .btn-xs { padding: 3px 8px; font-size: 0.7rem; }
     /* Tables */
@@ -158,6 +160,9 @@
     .badge-sent { background: rgba(99,102,241,0.2); color: #818cf8; }
     .badge-paid { background: rgba(34,197,94,0.2); color: var(--green); }
     .badge-overdue { background: rgba(239,68,68,0.2); color: var(--red); }
+    .badge-submitted { background:rgba(99,102,241,0.15); color:#6366f1; }
+    .badge-approved  { background:rgba(34,197,94,0.15); color:#22c55e; }
+    .badge-void      { background:rgba(107,114,128,0.15); color:#6b7280; text-decoration:line-through; }
     .badge-asset { background: rgba(0,212,170,0.15); color: var(--teal); }
     .badge-liability { background: rgba(239,68,68,0.15); color: #f87171; }
     .badge-equity { background: rgba(124,92,252,0.15); color: #a78bfa; }
@@ -353,18 +358,65 @@
       <div class="form-group"><label class="form-label">Issue Date *</label><input class="form-control" id="inv-issue-date" type="date" /></div>
       <div class="form-group"><label class="form-label">Due Date *</label><input class="form-control" id="inv-due-date" type="date" /></div>
       <div class="form-group"><label class="form-label">Status</label>
-        <select class="form-control" id="inv-status"><option value="draft">Draft</option><option value="sent">Sent</option></select>
+        <select class="form-control" id="inv-status">
+          <option value="draft">Draft</option>
+          <option value="sent">Sent</option>
+          <option value="submitted">Submitted for Approval</option>
+          <option value="approved">Approved</option>
+          <option value="void">Void</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row cols-2">
+      <div class="form-group"><label class="form-label">Reference</label><input class="form-control" id="inv-reference" placeholder="PO-001 / Contract ref" /></div>
+      <div class="form-group"><label class="form-label">Amounts Are</label>
+        <select class="form-control" id="inv-amounts-are">
+          <option value="excl_vat">Excl. VAT (Tax Exclusive)</option>
+          <option value="incl_vat">Incl. VAT (Tax Inclusive)</option>
+          <option value="no_tax">No Tax</option>
+        </select>
       </div>
     </div>
     <div style="margin-bottom:10px">
       <div style="font-size:0.75rem;font-weight:700;color:var(--muted2);margin-bottom:8px;">LINE ITEMS</div>
       <table class="line-items-table">
-        <thead><tr><th style="width:40%">Description</th><th style="width:12%">Qty</th><th style="width:18%">Unit Price</th><th style="width:12%">VAT %</th><th style="width:15%">Amount</th><th style="width:3%"></th></tr></thead>
+        <thead><tr><th style="width:30%">Description</th><th style="width:10%">Qty</th><th style="width:15%">Unit Price</th><th style="width:10%">VAT %</th><th style="width:20%">Account</th><th style="width:12%">Amount</th><th style="width:3%"></th></tr></thead>
         <tbody id="li-body"></tbody>
       </table>
       <button class="btn btn-secondary btn-sm" onclick="addLineItem()"><i class="fa-solid fa-plus"></i> Add Line</button>
     </div>
     <div class="li-totals" id="li-totals">Subtotal: R0.00 | VAT: R0.00 | <strong>Total: R0.00</strong></div>
+    <div class="form-row cols-2" style="margin-top:14px">
+      <div class="form-group"><label class="form-label">Division Tag</label>
+        <select class="form-control" id="inv-tag-division">
+          <option value="">— None —</option>
+          <option value="operations">Operations</option>
+          <option value="sales">Sales</option>
+          <option value="finance">Finance</option>
+          <option value="hr">HR</option>
+          <option value="marketing">Marketing</option>
+          <option value="it">IT</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Product Tag</label>
+        <select class="form-control" id="inv-tag-product">
+          <option value="">— None —</option>
+          <option value="cattle">Cattle</option>
+          <option value="solar">Solar</option>
+          <option value="property">Property</option>
+          <option value="loans">Short-term Loans</option>
+          <option value="management">Fund Management</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:0">
+      <label class="form-label">Attachment <span style="font-size:0.72rem;color:var(--muted)">(PDF, JPG, PNG — max 5MB)</span></label>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="file" id="inv-attachment" accept=".pdf,.jpg,.jpeg,.png" style="font-size:0.82rem;color:var(--text)" onchange="handleInvAttachment(this)" />
+        <span id="inv-attachment-name" style="font-size:0.78rem;color:var(--muted)"></span>
+      </div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('inv-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveInvoice()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
@@ -568,6 +620,9 @@ function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 /* ── Invoice status calculation ── */
 function calcInvStatus(inv) {
   if (inv.status === 'paid') return 'paid';
+  if (inv.status === 'void') return 'void';
+  if (inv.status === 'submitted') return 'submitted';
+  if (inv.status === 'approved') return 'approved';
   if (inv.status === 'draft') return 'draft';
   if (inv.dueDate && new Date(inv.dueDate) < new Date() && inv.status !== 'paid') return 'overdue';
   return inv.status;
@@ -1005,6 +1060,8 @@ function renderInvBill(bid, biz, type) {
   const rows = data.sort((a,b)=>b.issueDate?.localeCompare(a.issueDate)).map(inv=>{
     const st = calcInvStatus(inv);
     const tot = invTotal(inv);
+    const divTag = inv.tagDivision ? `<span class="badge badge-draft" style="font-size:0.62rem;margin-right:2px">${inv.tagDivision}</span>` : '';
+    const prodTag = inv.tagProduct ? `<span class="badge badge-sent" style="font-size:0.62rem">${inv.tagProduct}</span>` : '';
     return `<tr>
       <td><strong>${inv.number}</strong></td>
       <td>${inv.contactName}</td>
@@ -1012,10 +1069,12 @@ function renderInvBill(bid, biz, type) {
       <td>${fmtDate(inv.dueDate)}</td>
       <td>${fmt(tot.total,currency)}</td>
       <td><span class="badge badge-${st}">${st}</span></td>
+      <td>${inv.reference||'—'}</td>
+      <td>${divTag}${prodTag}</td>
       <td>
-        ${st!=='paid'?`<button class="btn btn-success btn-xs" onclick="markPaid('${inv.id}','${type}')"><i class="fa-solid fa-check"></i> Mark Paid</button>`:''}
+        ${st!=='paid'&&st!=='void'?`<button class="btn btn-success btn-xs" onclick="markPaid('${inv.id}','${type}')"><i class="fa-solid fa-check"></i> Mark Paid</button>`:''}
         <button class="btn btn-secondary btn-xs" onclick="editInv('${inv.id}','${type}')"><i class="fa-solid fa-pencil"></i></button>
-        <button class="btn btn-danger btn-xs" onclick="deleteInv('${inv.id}','${type}')"><i class="fa-solid fa-trash"></i></button>
+        <button class="btn btn-${st==='void'?'danger':'warning'} btn-xs" onclick="voidInv('${inv.id}','${type}')" title="${st==='void'?'Delete permanently':'Void this record'}"><i class="fa-solid fa-${st==='void'?'trash':'ban'}"></i></button>
       </td>
     </tr>`;
   }).join('');
@@ -1030,14 +1089,18 @@ function renderInvBill(bid, biz, type) {
           <th onclick="sortTable(this,'due')">Due Date</th>
           <th onclick="sortTable(this,'amount')">Amount</th>
           <th onclick="sortTable(this,'status')">Status</th>
+          <th>Reference</th>
+          <th>Tags</th>
           <th>Actions</th>
         </tr></thead>
-        <tbody>${rows||'<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)">No '+label.toLowerCase()+'s yet. Click "New '+label+'" to create one.</td></tr>'}</tbody>
+        <tbody>${rows||'<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--muted)">No '+label.toLowerCase()+'s yet. Click "New '+label+'" to create one.</td></tr>'}</tbody>
       </table>
     </div>`;
 }
 
 let lineItems = [];
+let lineItemsCoaOptions = '';
+let invAttachmentData = null;
 function openInv(type) {
   editingInvType = type;
   editingInvId = null;
@@ -1050,7 +1113,18 @@ function openInv(type) {
   document.getElementById('inv-issue-date').value = today;
   document.getElementById('inv-due-date').value = due;
   document.getElementById('inv-status').value = 'draft';
-  lineItems = [{description:'',qty:1,unitPrice:0,vatRate:15}];
+  document.getElementById('inv-reference').value = '';
+  document.getElementById('inv-amounts-are').value = 'excl_vat';
+  document.getElementById('inv-tag-division').value = '';
+  document.getElementById('inv-tag-product').value = '';
+  document.getElementById('inv-attachment-name').textContent = '';
+  const invAttInput = document.getElementById('inv-attachment');
+  if (invAttInput) invAttInput.value = '';
+  invAttachmentData = null;
+  const _bid = getActiveId();
+  const _coa = getCoa(_bid);
+  lineItemsCoaOptions = _coa.filter(a=>a.type==='revenue'||a.type==='expense').map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
+  lineItems = [{description:'',qty:1,unitPrice:0,vatRate:15,accountId:''}];
   renderLineItems();
   openModal('inv-modal');
 }
@@ -1070,14 +1144,26 @@ function editInv(id, type) {
   document.getElementById('inv-issue-date').value = inv.issueDate;
   document.getElementById('inv-due-date').value = inv.dueDate;
   document.getElementById('inv-status').value = inv.status==='paid'?'sent':inv.status;
-  lineItems = inv.lineItems ? JSON.parse(JSON.stringify(inv.lineItems)) : [{description:'',qty:1,unitPrice:0,vatRate:15}];
+  document.getElementById('inv-reference').value = inv.reference || '';
+  document.getElementById('inv-amounts-are').value = inv.amountsAre || 'excl_vat';
+  document.getElementById('inv-tag-division').value = inv.tagDivision || '';
+  document.getElementById('inv-tag-product').value = inv.tagProduct || '';
+  document.getElementById('inv-attachment-name').textContent = inv.attachmentName ? `📎 ${inv.attachmentName}` : '';
+  invAttachmentData = null;
+  const _coa = getCoa(bid);
+  lineItemsCoaOptions = _coa.filter(a=>a.type==='revenue'||a.type==='expense').map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
+  lineItems = inv.lineItems ? JSON.parse(JSON.stringify(inv.lineItems)) : [{description:'',qty:1,unitPrice:0,vatRate:15,accountId:''}];
   renderLineItems();
   openModal('inv-modal');
 }
 
 function renderLineItems() {
   const tbody = document.getElementById('li-body');
-  tbody.innerHTML = lineItems.map((li,i)=>`<tr>
+  tbody.innerHTML = lineItems.map((li,i)=>{
+    const coaOpts = li.accountId
+      ? lineItemsCoaOptions.replace(`value="${li.accountId}"`, `value="${li.accountId}" selected`)
+      : lineItemsCoaOptions;
+    return `<tr>
     <td><input value="${li.description||''}" oninput="lineItems[${i}].description=this.value" /></td>
     <td><input type="number" value="${li.qty||1}" min="0" step="0.01" oninput="lineItems[${i}].qty=parseFloat(this.value)||0;calcLiTotals()" /></td>
     <td><input type="number" value="${li.unitPrice||0}" min="0" step="0.01" oninput="lineItems[${i}].unitPrice=parseFloat(this.value)||0;calcLiTotals()" /></td>
@@ -1085,20 +1171,25 @@ function renderLineItems() {
       <option value="0" ${li.vatRate==0?'selected':''}>0%</option>
       <option value="15" ${li.vatRate==15?'selected':''}>15%</option>
     </select></td>
+    <td><select style="width:100%;font-size:0.75rem" onchange="lineItems[${i}].accountId=this.value">
+      <option value="">— Account —</option>
+      ${coaOpts}
+    </select></td>
     <td>${fmt((li.qty||0)*(li.unitPrice||0)*(1+(li.vatRate||0)/100))}</td>
     <td><button class="btn btn-danger btn-xs" onclick="removeLineItem(${i})"><i class="fa-solid fa-xmark"></i></button></td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
   calcLiTotals();
 }
 
 function addLineItem() {
-  lineItems.push({description:'',qty:1,unitPrice:0,vatRate:15});
+  lineItems.push({description:'',qty:1,unitPrice:0,vatRate:15,accountId:''});
   renderLineItems();
 }
 
 function removeLineItem(i) {
   lineItems.splice(i,1);
-  if (!lineItems.length) lineItems.push({description:'',qty:1,unitPrice:0,vatRate:15});
+  if (!lineItems.length) lineItems.push({description:'',qty:1,unitPrice:0,vatRate:15,accountId:''});
   renderLineItems();
 }
 
@@ -1109,18 +1200,36 @@ function calcLiTotals() {
   document.getElementById('li-totals').innerHTML = `Subtotal: ${fmt(sub,c)} | VAT: ${fmt(vat,c)} | <strong>Total: ${fmt(sub+vat,c)}</strong>`;
 }
 
+function handleInvAttachment(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 5*1024*1024) { showToast('File too large (max 5MB)','error'); input.value=''; return; }
+  const nameEl = document.getElementById('inv-attachment-name');
+  nameEl.textContent = '📎 ' + file.name;
+  invAttachmentData = { name: file.name, size: file.size };
+}
+
 function saveInvoice() {
   const name = document.getElementById('inv-contact-name').value.trim();
   const issueDate = document.getElementById('inv-issue-date').value;
   const dueDate = document.getElementById('inv-due-date').value;
   if (!name||!issueDate||!dueDate) { showToast('Name, issue date and due date are required','error'); return; }
+  const validLines = lineItems.filter(li => li.description.trim() && (li.qty||0)*(li.unitPrice||0) > 0);
+  if (!validLines.length) { showToast('At least one line item with description and price is required','error'); return; }
   const bid = getActiveId();
   const type = editingInvType;
   let data = type==='invoice' ? getInvoices(bid) : getBills(bid);
   const prefix = type==='invoice'?'INV':'BILL';
+  const newFields = {
+    reference: document.getElementById('inv-reference').value.trim(),
+    amountsAre: document.getElementById('inv-amounts-are').value,
+    tagDivision: document.getElementById('inv-tag-division').value,
+    tagProduct: document.getElementById('inv-tag-product').value,
+  };
 
   if (editingInvId) {
-    data = data.map(i=>i.id===editingInvId?{...i,contactName:name,contactEmail:document.getElementById('inv-contact-email').value,issueDate,dueDate,lineItems:JSON.parse(JSON.stringify(lineItems)),status:document.getElementById('inv-status').value}:i);
+    const existingAttachmentName = data.find(i=>i.id===editingInvId)?.attachmentName || null;
+    data = data.map(i=>i.id===editingInvId?{...i,contactName:name,contactEmail:document.getElementById('inv-contact-email').value,issueDate,dueDate,lineItems:JSON.parse(JSON.stringify(lineItems)),status:document.getElementById('inv-status').value,...newFields,attachmentName:invAttachmentData?.name||existingAttachmentName}:i);
   } else {
     const num = String(data.length+1).padStart(3,'0');
     data.push({
@@ -1128,6 +1237,8 @@ function saveInvoice() {
       contactEmail:document.getElementById('inv-contact-email').value,
       issueDate, dueDate, lineItems:JSON.parse(JSON.stringify(lineItems)),
       status:document.getElementById('inv-status').value,
+      ...newFields,
+      attachmentName: invAttachmentData?.name || null,
     });
   }
   lsSet(type==='invoice'?'acct_invoices_'+bid:'acct_bills_'+bid, data);
@@ -1145,13 +1256,22 @@ function markPaid(id, type) {
   if (type==='invoice') renderInvoices(bid,getActiveBiz()); else renderBills(bid,getActiveBiz());
 }
 
-function deleteInv(id, type) {
-  if (!confirm('Delete this record?')) return;
+function voidInv(id, type) {
   const bid = getActiveId();
   let data = type==='invoice' ? getInvoices(bid) : getBills(bid);
-  data = data.filter(i=>i.id!==id);
-  lsSet(type==='invoice'?'acct_invoices_'+bid:'acct_bills_'+bid, data);
-  showToast('Deleted','info');
+  const inv = data.find(i=>i.id===id);
+  if (!inv) return;
+  if (inv.status==='void') {
+    if (!confirm('This is already voided. Permanently delete it?')) return;
+    data = data.filter(i=>i.id!==id);
+    lsSet(type==='invoice'?'acct_invoices_'+bid:'acct_bills_'+bid, data);
+    showToast('Deleted','info');
+  } else {
+    if (!confirm('Void this '+type+'? It cannot be undone.')) return;
+    data = data.map(i=>i.id===id?{...i,status:'void'}:i);
+    lsSet(type==='invoice'?'acct_invoices_'+bid:'acct_bills_'+bid, data);
+    showToast('Voided','info');
+  }
   if (type==='invoice') renderInvoices(bid,getActiveBiz()); else renderBills(bid,getActiveBiz());
 }
 
@@ -1346,7 +1466,17 @@ function refreshFinancials() {
     const retained = revTotal - expTotal;
     const totalLE = totalLiabs + totalEquity + retained;
 
-    body.innerHTML = `
+    const diff = Math.abs(totalAssets - totalLE);
+    const balances = diff < 0.01;
+    const balanceAlert = `<div style="padding:12px 16px;border-radius:8px;margin-bottom:14px;display:flex;align-items:center;gap:12px;background:${balances?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'};border:1px solid ${balances?'rgba(34,197,94,0.3)':'rgba(239,68,68,0.3)'}">
+  <i class="fa-solid ${balances?'fa-check-circle':'fa-exclamation-triangle'}" style="color:${balances?'#22c55e':'#ef4444'};font-size:1.1rem"></i>
+  <div>
+    <div style="font-weight:700;font-size:0.85rem;color:${balances?'#22c55e':'#ef4444'}">${balances?'Balance Sheet Balances ✓':'Balance Sheet Does Not Balance ✗'}</div>
+    <div style="font-size:0.75rem;color:var(--muted)">Assets: ${fmt(totalAssets,currency)} | Liabilities & Equity: ${fmt(totalLE,currency)}${!balances?' | Difference: '+fmt(diff,currency):''}</div>
+  </div>
+</div>`;
+
+    body.innerHTML = balanceAlert + `
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px">
         <button class="btn btn-secondary btn-sm" onclick="exportBalanceCSV()"><i class="fa-solid fa-file-csv"></i> CSV</button>
         <button class="btn btn-primary btn-sm" onclick="downloadFSPdf('balance')"><i class="fa-solid fa-file-pdf"></i> PDF</button>
@@ -1533,29 +1663,154 @@ function renderBudgets(bid, biz) {
   const budgets = getBudgets(bid);
   const now = new Date();
   const tb = document.getElementById('topbar-actions');
-  tb.innerHTML = `<button class="btn btn-primary" onclick="openBudgetModal()"><i class="fa-solid fa-plus"></i> Set Budget</button>`;
+  tb.innerHTML = `
+    <button class="btn btn-secondary" onclick="downloadBudgetTemplate()"><i class="fa-solid fa-download"></i> CSV Template</button>
+    <label class="btn btn-secondary" style="cursor:pointer;margin:0"><i class="fa-solid fa-file-arrow-up"></i> Import CSV <input type="file" accept=".csv" style="display:none" onchange="importBudgetCSV(this)"></label>
+    <button class="btn btn-primary" onclick="openBudgetModal()"><i class="fa-solid fa-plus"></i> Set Budget</button>`;
 
-  const rows = budgets.sort((a,b)=>{
-    if (a.year!==b.year) return b.year-a.year;
-    return b.month-a.month;
-  }).map(b=>{
-    const acc = coa.find(a=>a.id===b.accountId);
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth()+1;
+  const acctList = coa.filter(a=>a.type==='revenue'||a.type==='expense');
+
+  function buildBulkGrid(year, month) {
+    return acctList.map(acc=>{
+      const b = budgets.find(b=>b.accountId===acc.id&&b.year===year&&b.month===month);
+      return `<tr>
+        <td style="font-size:0.78rem">${acc.code}</td>
+        <td style="font-size:0.78rem">${acc.name}</td>
+        <td><span class="badge badge-${acc.type==='revenue'?'sent':'draft'}" style="font-size:0.65rem">${acc.type}</span></td>
+        <td><input type="number" step="0.01" min="0" class="form-control" style="width:120px;font-size:0.82rem" value="${b?b.budgetAmount:''}" placeholder="0.00"
+          onchange="quickSaveBudget('${acc.id}',this.value)" data-accid="${acc.id}" /></td>
+      </tr>`;
+    }).join('');
+  }
+
+  document.getElementById('acct-content').innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+      <label style="font-size:0.82rem;font-weight:600">Year:</label>
+      <select class="form-control" id="bgt-bulk-year" style="width:100px" onchange="refreshBudgetGrid()">
+        ${[curYear-1,curYear,curYear+1].map(y=>`<option value="${y}" ${y===curYear?'selected':''}>${y}</option>`).join('')}
+      </select>
+      <label style="font-size:0.82rem;font-weight:600">Month:</label>
+      <select class="form-control" id="bgt-bulk-month" style="width:140px" onchange="refreshBudgetGrid()">
+        ${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===curMonth?'selected':''}>${MONTHS[i]}</option>`).join('')}
+      </select>
+      <span style="font-size:0.78rem;color:var(--muted)">— set all account budgets for the selected month at once</span>
+    </div>
+    <div class="tbl-wrap" id="budget-bulk-wrap">
+      <table id="budget-bulk-table">
+        <thead><tr><th>Code</th><th>Account</th><th>Type</th><th>Budget Amount (${currency})</th></tr></thead>
+        <tbody id="budget-bulk-body">${buildBulkGrid(curYear,curMonth)}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:0.82rem;font-weight:700;margin-bottom:10px;color:var(--muted2)">ALL SAVED BUDGETS</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Year</th><th>Month</th><th>Account</th><th class="text-right">Budget</th><th>Actions</th></tr></thead>
+          <tbody id="budget-list-body">${buildBudgetListRows(bid,coa,budgets,currency)}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function buildBudgetListRows(bid,coa,budgets,currency) {
+  return budgets.sort((a,b)=>{if(a.year!==b.year)return b.year-a.year;return b.month-a.month;}).map(b=>{
+    const acc=coa.find(a=>a.id===b.accountId);
     return `<tr>
-      <td>${b.year}</td>
-      <td>${MONTHS[b.month-1]}</td>
+      <td>${b.year}</td><td>${MONTHS[b.month-1]}</td>
       <td>${acc?`${acc.code} — ${acc.name}`:'Unknown Account'}</td>
       <td class="text-right">${fmt(b.budgetAmount,currency)}</td>
       <td><button class="btn btn-danger btn-xs" onclick="deleteBudget('${b.accountId}','${b.year}','${b.month}')"><i class="fa-solid fa-trash"></i></button></td>
     </tr>`;
-  }).join('');
+  }).join('') || '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">No budgets yet</td></tr>';
+}
 
-  document.getElementById('acct-content').innerHTML = `
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr><th>Year</th><th>Month</th><th>Account</th><th class="text-right">Budget</th><th>Actions</th></tr></thead>
-        <tbody>${rows||'<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted)">No budgets set yet.</td></tr>'}</tbody>
-      </table>
-    </div>`;
+function quickSaveBudget(accountId, val) {
+  const year  = parseInt(document.getElementById('bgt-bulk-year').value);
+  const month = parseInt(document.getElementById('bgt-bulk-month').value);
+  const budgetAmount = parseFloat(val);
+  if (isNaN(budgetAmount) || budgetAmount < 0) return;
+  const bid = getActiveId();
+  let budgets = getBudgets(bid).filter(b=>!(b.accountId===accountId&&b.year===year&&b.month===month));
+  if (budgetAmount > 0) budgets.push({accountId, year, month, budgetAmount});
+  lsSet('acct_budgets_'+bid, budgets);
+  const biz = getActiveBiz();
+  const coa = getCoa(bid);
+  const currency = biz.currency||'ZAR';
+  const listBody = document.getElementById('budget-list-body');
+  if (listBody) listBody.innerHTML = buildBudgetListRows(bid, coa, getBudgets(bid), currency);
+}
+
+function refreshBudgetGrid() {
+  const year  = parseInt(document.getElementById('bgt-bulk-year').value);
+  const month = parseInt(document.getElementById('bgt-bulk-month').value);
+  const bid   = getActiveId();
+  const coa   = getCoa(bid);
+  const budgets = getBudgets(bid);
+  const acctList = coa.filter(a=>a.type==='revenue'||a.type==='expense');
+  const body = document.getElementById('budget-bulk-body');
+  if (!body) return;
+  body.innerHTML = acctList.map(acc=>{
+    const b = budgets.find(b=>b.accountId===acc.id&&b.year===year&&b.month===month);
+    return `<tr>
+      <td style="font-size:0.78rem">${acc.code}</td>
+      <td style="font-size:0.78rem">${acc.name}</td>
+      <td><span class="badge badge-${acc.type==='revenue'?'sent':'draft'}" style="font-size:0.65rem">${acc.type}</span></td>
+      <td><input type="number" step="0.01" min="0" class="form-control" style="width:120px;font-size:0.82rem" value="${b?b.budgetAmount:''}" placeholder="0.00"
+        onchange="quickSaveBudget('${acc.id}',this.value)" data-accid="${acc.id}" /></td>
+    </tr>`;
+  }).join('');
+}
+
+function downloadBudgetTemplate() {
+  const bid = getActiveId();
+  const coa = getCoa(bid);
+  const now = new Date();
+  const rows = [['account_code','account_name','year','month','budget_amount']];
+  coa.filter(a=>a.type==='revenue'||a.type==='expense').forEach(a=>{
+    rows.push([a.code, a.name, now.getFullYear(), now.getMonth()+1, '']);
+  });
+  csvDown('budget_template.csv', rows);
+}
+
+function importBudgetCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines = e.target.result.split(/\r?\n/).filter(l=>l.trim());
+    if (!lines.length) { showToast('Empty file','error'); return; }
+    const header = lines[0].split(',').map(h=>h.replace(/^"|"$/g,'').trim().toLowerCase());
+    const codeIdx   = header.indexOf('account_code');
+    const yearIdx   = header.indexOf('year');
+    const monthIdx  = header.indexOf('month');
+    const amtIdx    = header.indexOf('budget_amount');
+    if (codeIdx<0||yearIdx<0||monthIdx<0||amtIdx<0) { showToast('CSV must have columns: account_code, year, month, budget_amount','error'); return; }
+
+    const bid = getActiveId();
+    const coa = getCoa(bid);
+    let budgets = getBudgets(bid);
+    let count = 0;
+    lines.slice(1).forEach(line=>{
+      const cols = line.split(',').map(c=>c.replace(/^"|"$/g,'').trim());
+      const code  = cols[codeIdx];
+      const year  = parseInt(cols[yearIdx]);
+      const month = parseInt(cols[monthIdx]);
+      const amt   = parseFloat(cols[amtIdx]);
+      if (!code||isNaN(year)||isNaN(month)||isNaN(amt)||amt<=0) return;
+      const acc = coa.find(a=>a.code===code);
+      if (!acc) return;
+      budgets = budgets.filter(b=>!(b.accountId===acc.id&&b.year===year&&b.month===month));
+      budgets.push({accountId:acc.id, year, month, budgetAmount:amt});
+      count++;
+    });
+    lsSet('acct_budgets_'+bid, budgets);
+    showToast(`${count} budget entries imported`,'success');
+    renderBudgets(bid, getActiveBiz());
+  };
+  reader.readAsText(file);
+  input.value = '';
 }
 
 function openBudgetModal() {
