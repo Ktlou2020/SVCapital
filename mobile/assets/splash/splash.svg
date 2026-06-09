@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732" width="2732" height="2732">
+  <!-- Background -->
+  <rect width="2732" height="2732" fill="#0f1623"/>
+
+  <!-- Radial glow -->
+  <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+    <stop offset="0%" stop-color="#D4AF37" stop-opacity="0.08"/>
+    <stop offset="100%" stop-color="#0f1623" stop-opacity="0"/>
+  </radialGradient>
+  <rect width="2732" height="2732" fill="url(#glow)"/>
+
+  <!-- Gold ring -->
+  <circle cx="1366" cy="1300" r="520" fill="none" stroke="#D4AF37" stroke-width="24" opacity="0.18"/>
+  <circle cx="1366" cy="1300" r="420" fill="none" stroke="#D4AF37" stroke-width="8" opacity="0.10"/>
+
+  <!-- SV monogram — centered -->
+  <!-- S -->
+  <path d="M 1050 1040 Q 1050 970 1120 970 L 1280 970 Q 1350 970 1350 1040 Q 1350 1105 1280 1125 L 1120 1155 Q 1050 1175 1050 1240 Q 1050 1310 1120 1310 L 1350 1310"
+        fill="none" stroke="#D4AF37" stroke-width="72" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- V -->
+  <path d="M 1420 970 L 1590 1310 L 1760 970"
+        fill="none" stroke="#D4AF37" stroke-width="72" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Divider -->
+  <rect x="966" y="1400" width="800" height="5" rx="2.5" fill="#D4AF37" opacity="0.35"/>
+
+  <!-- App name -->
+  <text x="1366" y="1520" font-family="Georgia, serif" font-size="96" font-weight="700"
+        fill="#D4AF37" text-anchor="middle" letter-spacing="28">SV CAPITAL</text>
+  <text x="1366" y="1620" font-family="Arial, sans-serif" font-size="52" font-weight="400"
+        fill="#7a92a8" text-anchor="middle" letter-spacing="8">INVESTOR PORTAL</text>
+</svg>

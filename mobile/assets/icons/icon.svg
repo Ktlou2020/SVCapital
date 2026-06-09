@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="230" fill="#0f1623"/>
+
+  <!-- Gold arc decoration -->
+  <circle cx="512" cy="512" r="380" fill="none" stroke="#D4AF37" stroke-width="18" stroke-dasharray="1800 400" stroke-dashoffset="0" opacity="0.25"/>
+
+  <!-- SV monogram -->
+  <!-- S -->
+  <path d="M 290 340 Q 290 290 340 290 L 430 290 Q 480 290 480 340 Q 480 385 430 400 L 340 420 Q 290 435 290 480 Q 290 530 340 530 L 480 530"
+        fill="none" stroke="#D4AF37" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- V -->
+  <path d="M 540 290 L 650 530 L 760 290"
+        fill="none" stroke="#D4AF37" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Tagline bar -->
+  <rect x="200" y="620" width="624" height="4" rx="2" fill="#D4AF37" opacity="0.4"/>
+
+  <!-- "CAPITAL" text -->
+  <text x="512" y="700" font-family="Georgia, serif" font-size="72" font-weight="700"
+        fill="#D4AF37" text-anchor="middle" letter-spacing="18">CAPITAL</text>
+
+  <!-- Small star accents -->
+  <polygon points="180,480 190,510 220,510 196,528 205,558 180,540 155,558 164,528 140,510 170,510"
+           fill="#D4AF37" opacity="0.35" transform="scale(0.55) translate(170 420)"/>
+  <polygon points="180,480 190,510 220,510 196,528 205,558 180,540 155,558 164,528 140,510 170,510"
+           fill="#D4AF37" opacity="0.35" transform="scale(0.55) translate(1120 420)"/>
+</svg>

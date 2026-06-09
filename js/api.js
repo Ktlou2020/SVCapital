@@ -6,8 +6,9 @@
 'use strict';
 
 /* ─── API Base URL ─── */
-// Always use /api — the Express server handles routing from any subpath
-const _API_BASE = '/api/';
+// In Capacitor native context, window.__SVC_API_BASE__ is injected by mobile/scripts/build.js
+// Otherwise fall back to the relative /api/ path (web / PWA)
+const _API_BASE = (typeof window !== 'undefined' && window.__SVC_API_BASE__) || '/api/';
 
 /* ─── Auth token management ─── */
 const Auth = {
@@ -147,6 +148,7 @@ const Auth = {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Login failed');
     Auth.setToken(data.token, data.user, remember);
+    if (typeof window !== 'undefined' && window.SVC) SVC.track('login', { method: 'password' });
     return data;
   },
 
@@ -163,6 +165,7 @@ const Auth = {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Registration failed');
     Auth.setToken(data.token, data.user, true);
+    if (typeof window !== 'undefined' && window.SVC) SVC.track('sign_up', { method: 'password', has_referral: !!(payload && payload.referredBy) });
     return data;
   },
 
@@ -171,6 +174,7 @@ const Auth = {
    * Works regardless of which login path was used.
    */
   async logout(redirectTo = '/login.html') {
+    if (typeof window !== 'undefined' && window.SVC) SVC.track('svc_logout', {});
     try {
       await fetch(`${_API_BASE}auth/logout`, { method: 'POST', credentials: 'include' });
     } catch (_) {}

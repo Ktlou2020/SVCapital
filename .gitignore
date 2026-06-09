@@ -36,3 +36,9 @@ Thumbs.db
 # dist/ is intentionally committed — it's the Cloudflare Pages build output
 build/
 .cache/
+
+# Capacitor mobile — generated native projects and built web assets
+mobile/www/
+mobile/android/
+mobile/ios/
+mobile/node_modules/

@@ -347,6 +347,7 @@ function navigate(view, btnEl) {
     profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderRecurringStatusSummary(); _renderKycStatusPanel(); },
   };
   if (loaders[view]) loaders[view]();
+  SVC.track('page_view', { page_title: view, page_location: window.location.href + '#' + view, portal_view: view });
 }
 
 /* ═══════════════════════════════════════════════
@@ -467,6 +468,9 @@ async function loadPortalData() {
     // Load waitlist entries for this investor (non-blocking)
     const waitlistRes = await API._fetch('GET', 'tables/investment_waitlist', null, { investor_id: PORTAL.investor.id, limit: 50 }).catch(() => ({ data: [] }));
     PORTAL.waitlist = waitlistRes.data || [];
+
+    SVC.setUser(PORTAL.investor);
+    SVC.track('portal_loaded', { active_investments: PORTAL.investments.filter(i => i.status === 'active').length });
 
     renderOverview();
     renderEquityChart();
@@ -1490,6 +1494,7 @@ async function saveAutoTopUp() {
     await API._fetch('POST', 'payments/auto-topup', { enabled, amount, day });
     Modal.close('autoTopUpModal');
     Toast.success(enabled ? `Auto top-up of ${Utils.rand(amount)} set for the ${day}${day===1?'st':day===2?'nd':day===3?'rd':'th'} of each month` : 'Auto top-up disabled');
+    SVC.track('svc_auto_topup_set', { enabled: !!enabled, amount: amount, day: day });
     await _loadAutoTopUpCard();
   } catch (e) {
     Toast.error(e.message || 'Failed to save auto top-up settings');
@@ -1596,6 +1601,8 @@ function openTopUpModal(gateway) {
   _pmAmount  = 0;
   _pmGateway = null;
   _pmSaId    = null;
+
+  SVC.track('svc_topup_modal_opened', { gateway: gateway || 'default' });
 
   // Reset to step 1
   _pmEl('pmAmount').value = '';
@@ -1740,6 +1747,7 @@ function launchPaystack() {
 
       // Paystack v2 API — replaces deprecated PaystackPop.setup() + openIframe()
       const popup = new PaystackPop();
+      SVC.track('svc_paystack_initiated', { amount: _pmAmount, currency: 'ZAR' });
       popup.newTransaction({
         key:      PAYSTACK_PUBLIC_KEY,
         email:    _pmInvestorEmail(),
@@ -1759,6 +1767,7 @@ function launchPaystack() {
           ]
         },
         onSuccess: async function(transaction) {
+          SVC.track('svc_topup_completed', { amount: _pmAmount, currency: 'ZAR', reference: transaction.reference });
           // Payment authorised by Paystack — ask the server to verify the reference
           // and atomically credit the wallet. This is more reliable than direct DB patching.
           _pmShowOnly('pmStep3Processing');
@@ -2224,6 +2233,7 @@ async function loadMarketplace() {
     PORTAL.pools = res.data || [];
   }
   renderMarketplace();
+  SVC.track('view_item_list', { item_list_id: 'marketplace', item_list_name: 'Investment Pools', items: PORTAL.pools.slice(0, 10).map(p => ({ item_id: p.id, item_name: p.name, item_category: p.product_type })) });
 }
 
 function filterMarket(type, btn) {
@@ -2437,6 +2447,9 @@ function openInvestModal(poolId) {
   const pool = PORTAL.pools.find(p => p.id === poolId);
   if (!pool) return;
 
+  SVC.track('view_item', { items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type }] });
+  SVC.track('select_item', { items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type }] });
+
   const walletBal  = parseFloat(PORTAL.investor?.wallet_balance) || 0;
   const pi         = Utils.productInfo(pool.product_type);
   const meta       = _POOL_META[pool.product_type] || { risk: 'Medium', riskColor: '#f59e0b' };
@@ -2589,6 +2602,12 @@ async function confirmInvestment(pool) {
     Toast.success(`Successfully invested ${Utils.rand(amount)} in ${pool.name}!`);
     Modal.close('investModal');
 
+    SVC.track('purchase', { value: amount, currency: 'ZAR', items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type, price: amount, quantity: 1 }] });
+    SVC.track('svc_investment_created', { pool_id: pool.id, pool_name: pool.name, product_type: pool.product_type, amount: amount, term_months: pool.term_months, annual_rate: pool.annual_rate });
+    if (_pmSaId) {
+      SVC.track('svc_subaccount_invested', { sub_account_id: _pmSaId, amount: amount });
+    }
+
     // Reload data
     PORTAL.investments = [];
     PORTAL.transactions = [];
@@ -2726,6 +2745,7 @@ async function submitMaturityInstruction(inv) {
     await API.investments.update(inv.id, { maturity_instruction: type });
 
     Toast.success('Maturity instruction submitted successfully!');
+    SVC.track('svc_maturity_instruction', { investment_id: inv.id, action: type });
     Modal.close('maturityModal');
     PORTAL.investments = [];
     await loadPortalData();
@@ -3358,6 +3378,7 @@ function saveProfile() { Toast.success('Profile updated successfully'); }
 function copyReferralLink() {
   const link = document.getElementById('referralLink').textContent;
   navigator.clipboard.writeText(link).then(() => Toast.success('Link copied to clipboard!')).catch(() => Toast.error('Copy failed'));
+  SVC.track('svc_referral_link_copied', { referral_code: PORTAL.investor?.referral_code });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -4263,6 +4284,7 @@ function initDarkMode() {
 function toggleDarkMode() {
   const isDark = document.body.classList.contains('dark-mode');
   _applyDark(!isDark);
+  SVC.track('svc_dark_mode_toggle', { dark_mode: !isDark });
 }
 
 function _applyDark(on) {
@@ -5595,6 +5617,8 @@ td:last-child{text-align:right;font-weight:600}
 
   _lastTaxCertHTML = html;
 
+  SVC.track('svc_tax_cert_generated', { tax_year: taxYear });
+
   const win = window.open('', '_blank', 'width=820,height=900');
   if (!win) { Toast.error('Pop-up blocked — please allow pop-ups for this site'); return; }
   win.document.write(html);
@@ -5615,6 +5639,7 @@ function downloadTaxCertPDF(htmlContent) {
     callback: d => {
       d.save('SVC-IT3b-' + new Date().getFullYear() + '.pdf');
       document.body.removeChild(div);
+      SVC.track('svc_pdf_downloaded', { doc_type: 'tax_certificate_it3b' });
     },
     x: 10, y: 10, width: 190, windowWidth: 740,
   });
@@ -6011,6 +6036,7 @@ async function submitEarlyRedemption() {
       category:      'early_redemption',
     });
     Toast.success('Request submitted. Our team will review it and contact you within 2 business days.');
+    SVC.track('svc_support_ticket', { category: 'early_redemption' });
     Modal.close('earlyRedemptionModal');
     _earlyRedemptionInvId = null;
   } catch (e) {
@@ -6085,6 +6111,7 @@ async function submitKycDocument() {
       notes:       [notes, `File: ${_kycFile.name} (${(_kycFile.size / 1024).toFixed(1)} KB)`].filter(Boolean).join(' — '),
     });
     Toast.success('Document submitted! The compliance team will review it within 1–2 business days.');
+    SVC.track('svc_kyc_uploaded', { doc_type: docType });
     Modal.close('kycUploadModal');
     _kycFile = null;
     // Refresh KYC panel wherever visible
@@ -6311,6 +6338,7 @@ function generateInvestmentCertificate(invId) {
     callback: d => {
       d.save(`SVC-CERT-${invId.slice(-8)}.pdf`);
       document.body.removeChild(div);
+      SVC.track('svc_pdf_downloaded', { doc_type: 'investment_certificate', investment_id: invId });
     },
     x: 5, y: 5, width: 200, windowWidth: 700,
   });
@@ -7070,6 +7098,8 @@ async function saveRecurringInvestment() {
     }
 
     Modal.close('recurringModal');
+
+    SVC.track('svc_recurring_investment_set', { enabled: enabled, pool_id: poolId, amount: amount });
 
     if (enabled) {
       const pool = (PORTAL.pools || []).find(p => p.id === poolId);

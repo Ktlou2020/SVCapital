@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Allow HTTPS to SV Capital domains; block all cleartext traffic -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">svcapital.co.za</domain>
+        <domain includeSubdomains="true">railway.app</domain>
+        <domain includeSubdomains="true">paystack.co</domain>
+    </domain-config>
+</network-security-config>

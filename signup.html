@@ -788,6 +788,19 @@
     }
     .intl-info-banner i { color: var(--teal); flex-shrink: 0; margin-top: 2px; }
   </style>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="/js/analytics.js"></script>
 </head>
 <body>
 
@@ -2049,6 +2062,7 @@ function onDrop(e, docType) {
 
 /* ── Submit Registration ── */
 async function submitRegistration() {
+  if (window.SVC) SVC.track('svc_signup_attempted', {});
   hideError();
 
   const missingDocs = REQUIRED_DOCS.filter(k => ficaFiles[k] === null);
