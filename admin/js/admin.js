@@ -2232,79 +2232,171 @@ function renderConversionFunnel() {
   const panel = document.getElementById('funnelPanel');
   if (!panel) return;
 
-  const total = STATE.investors.length;
+  const investors    = STATE.investors   || [];
+  const transactions = STATE.transactions || [];
+  const investments  = STATE.investments  || [];
+  const total = investors.length;
   if (!total) { panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">No investor data</div>'; return; }
 
-  // Compute each stage
-  const ficaSubmitted = STATE.investors.filter(i =>
+  /* ── Stage counts ────────────────────────────────── */
+  const ficaSubmitted = investors.filter(i =>
     ['fica_submitted', 'active'].includes(i.status) ||
     ['fica_submitted', 'approved'].includes(i.fica_status)
   ).length;
 
-  const ficaApproved = STATE.investors.filter(i =>
+  const ficaApproved = investors.filter(i =>
     i.status === 'active' || i.fica_status === 'approved'
   ).length;
 
-  // Investors with at least one completed deposit
-  // Guard against transactions with missing investor_id
   const depositedIds = new Set(
-    (STATE.transactions || [])
+    transactions
       .filter(t => t.type === 'deposit' && t.status === 'completed' && t.investor_id != null)
       .map(t => t.investor_id)
   );
-  const deposited = STATE.investors.filter(i => i.id != null && depositedIds.has(i.id)).length;
+  const deposited = investors.filter(i => i.id != null && depositedIds.has(i.id)).length;
 
-  // Investors with at least one investment
-  // Guard against investments with missing investor_id
-  const investedIds = new Set(
-    (STATE.investments || [])
-      .filter(inv => inv.investor_id != null)
-      .map(inv => inv.investor_id)
+  // Investors grouped by investment count
+  const invCountById = {};
+  investments.filter(inv => inv.investor_id != null).forEach(inv => {
+    invCountById[inv.investor_id] = (invCountById[inv.investor_id] || 0) + 1;
+  });
+  const investedIds  = new Set(Object.keys(invCountById));
+  const invested     = investors.filter(i => i.id != null && investedIds.has(i.id)).length;
+  const multiInvested = investors.filter(i => i.id != null && (invCountById[i.id] || 0) >= 2).length;
+
+  const recurringIds = new Set(
+    investors.filter(i => i.recurring_enabled).map(i => i.id)
   );
-  const invested = STATE.investors.filter(i => i.id != null && investedIds.has(i.id)).length;
+  const recurring = recurringIds.size;
+
+  // Investors who generated a referral bonus for someone else
+  const referrerIds = new Set(
+    transactions
+      .filter(t => t.type === 'referral_bonus' && t.investor_id != null)
+      .map(t => t.investor_id)
+  );
+  const referred = referrerIds.size;
 
   const stages = [
-    { label: 'Signed Up',        count: total,         color: '#6366f1' },
-    { label: 'FICA Submitted',   count: ficaSubmitted,  color: '#3b82f6' },
-    { label: 'FICA Approved',    count: ficaApproved,   color: '#FF9B0C' },
-    { label: 'First Deposit',    count: deposited,      color: '#22c55e' },
-    { label: 'First Investment', count: invested,       color: '#D4AF37' },
+    { label: 'Signed Up',          count: total,         color: '#6366f1', icon: '✍️' },
+    { label: 'FICA Submitted',      count: ficaSubmitted,  color: '#3b82f6', icon: '📋' },
+    { label: 'FICA Approved',       count: ficaApproved,   color: '#FF9B0C', icon: '✅' },
+    { label: 'First Deposit',       count: deposited,      color: '#22c55e', icon: '💳' },
+    { label: 'First Investment',    count: invested,       color: '#D4AF37', icon: '📈' },
+    { label: 'Repeat Investor',     count: multiInvested,  color: '#f97316', icon: '🔄' },
+    { label: 'Recurring Set',       count: recurring,      color: '#a855f7', icon: '⚡' },
+    { label: 'Referred Someone',    count: referred,       color: '#ec4899', icon: '🎁' },
   ];
 
+  /* ── AUM metrics ─────────────────────────────────── */
+  const totalAUM = investors.reduce((s, i) => s + (parseFloat(i.total_invested) || 0), 0);
+  const activeAUM = investors
+    .filter(i => i.id != null && investedIds.has(i.id))
+    .reduce((s, i) => s + (parseFloat(i.total_invested) || 0), 0);
+
+  // Average first investment amount
+  const firstInvByInvestor = {};
+  investments
+    .filter(inv => inv.investor_id != null && inv.created_at)
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .forEach(inv => {
+      if (!firstInvByInvestor[inv.investor_id]) {
+        firstInvByInvestor[inv.investor_id] = parseFloat(inv.amount) || 0;
+      }
+    });
+  const firstInvAmts = Object.values(firstInvByInvestor);
+  const avgFirstInv  = firstInvAmts.length
+    ? firstInvAmts.reduce((s, v) => s + v, 0) / firstInvAmts.length
+    : 0;
+
+  // Avg days signup → first investment
+  const daysToInvest = [];
+  investors.forEach(inv => {
+    if (!inv.id || !inv.created_at || !invCountById[inv.id]) return;
+    const firstInvDate = investments
+      .filter(i => i.investor_id === inv.id && i.created_at)
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0]?.created_at;
+    if (firstInvDate) {
+      const days = (new Date(firstInvDate) - new Date(inv.created_at)) / 86400000;
+      if (days >= 0 && days < 3650) daysToInvest.push(days);
+    }
+  });
+  const avgDays = daysToInvest.length
+    ? Math.round(daysToInvest.reduce((s, v) => s + v, 0) / daysToInvest.length)
+    : null;
+
+  // Most popular product type for first investment
+  const firstInvProducts = {};
+  Object.keys(firstInvByInvestor).forEach(invId => {
+    const inv = investments
+      .filter(i => i.investor_id === invId && i.created_at)
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
+    if (inv?.product_type) {
+      firstInvProducts[inv.product_type] = (firstInvProducts[inv.product_type] || 0) + 1;
+    }
+  });
+  const topProduct = Object.keys(firstInvProducts).sort((a, b) => firstInvProducts[b] - firstInvProducts[a])[0] || '—';
+
+  const fmt = n => 'R' + Number(n).toLocaleString('en-ZA', { maximumFractionDigits: 0 });
+
+  /* ── Render ─────────────────────────────────────── */
   panel.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0">
+    <div style="display:flex;flex-direction:column;gap:10px;padding:4px 0">
       ${stages.map((s, i) => {
         const pct     = total > 0 ? Math.round(s.count / total * 100) : 0;
         const dropOff = i > 0 ? Math.round((1 - s.count / (stages[i-1].count || 1)) * 100) : 0;
+        const dropColor = dropOff > 50 ? '#ef4444' : dropOff > 25 ? '#f97316' : '#f59e0b';
         return `
           <div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
-              <div style="display:flex;align-items:center;gap:8px">
-                <div style="width:10px;height:10px;border-radius:50%;background:${s.color};flex-shrink:0"></div>
-                <span style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${s.label}</span>
-                ${i > 0 && dropOff > 0 ? `<span style="font-size:0.7rem;color:#ef4444;background:rgba(239,68,68,0.12);padding:1px 6px;border-radius:4px">−${dropOff}% drop</span>` : ''}
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <div style="display:flex;align-items:center;gap:7px">
+                <span style="font-size:0.8rem">${s.icon}</span>
+                <span style="font-size:0.81rem;font-weight:600;color:#1a1a1a">${s.label}</span>
+                ${i > 0 && dropOff > 0 ? `<span style="font-size:0.68rem;color:${dropColor};background:${dropColor}22;padding:1px 6px;border-radius:4px">−${dropOff}% drop</span>` : ''}
               </div>
-              <div style="display:flex;gap:12px;align-items:center">
-                <span style="font-size:0.9rem;font-weight:700;color:#1a1a1a">${s.count.toLocaleString()}</span>
-                <span style="font-size:0.78rem;color:var(--text-muted);min-width:36px;text-align:right">${pct}%</span>
+              <div style="display:flex;gap:10px;align-items:center">
+                <span style="font-size:0.88rem;font-weight:700;color:#1a1a1a">${s.count.toLocaleString()}</span>
+                <span style="font-size:0.75rem;color:var(--text-muted);min-width:34px;text-align:right">${pct}%</span>
               </div>
             </div>
-            <div style="height:8px;background:rgba(0,0,0,0.06);border-radius:4px;overflow:hidden">
-              <div style="height:100%;width:${pct}%;background:${s.color};border-radius:4px;transition:width 0.6s ease"></div>
+            <div style="height:6px;background:rgba(0,0,0,0.06);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:${s.color};border-radius:3px;transition:width 0.7s ease"></div>
             </div>
-          </div>
-        `;
+          </div>`;
       }).join('')}
     </div>
-    <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(0,0,0,0.08);display:flex;gap:24px;flex-wrap:wrap">
-      <div style="font-size:0.78rem;color:var(--text-muted)">
-        <span style="font-weight:600;color:#22c55e">${invested > 0 ? Math.round(invested/total*100) : 0}%</span> end-to-end conversion
+
+    <!-- Summary metrics -->
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(0,0,0,0.08);display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px">
+      <div style="background:rgba(212,175,55,0.08);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">End-to-end</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#D4AF37">${invested > 0 ? Math.round(invested/total*100) : 0}%</div>
+        <div style="font-size:0.68rem;color:var(--text-muted)">conversion rate</div>
       </div>
-      <div style="font-size:0.78rem;color:var(--text-muted)">
-        <span style="font-weight:600;color:#FF9B0C">${total}</span> total investors
+      <div style="background:rgba(34,197,94,0.08);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Total AUM</div>
+        <div style="font-size:1.05rem;font-weight:700;color:#22c55e">${fmt(totalAUM)}</div>
+        <div style="font-size:0.68rem;color:var(--text-muted)">all investors</div>
       </div>
-      <div style="font-size:0.78rem;color:var(--text-muted)">
-        <span style="font-weight:600;color:#D4AF37">${invested}</span> active investors
+      <div style="background:rgba(99,102,241,0.08);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Avg 1st Invest</div>
+        <div style="font-size:1.05rem;font-weight:700;color:#6366f1">${avgFirstInv > 0 ? fmt(avgFirstInv) : '—'}</div>
+        <div style="font-size:0.68rem;color:var(--text-muted)">per investor</div>
+      </div>
+      <div style="background:rgba(59,130,246,0.08);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Avg days to invest</div>
+        <div style="font-size:1.05rem;font-weight:700;color:#3b82f6">${avgDays !== null ? avgDays + 'd' : '—'}</div>
+        <div style="font-size:0.68rem;color:var(--text-muted)">signup → 1st investment</div>
+      </div>
+      <div style="background:rgba(249,115,22,0.08);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Top pool</div>
+        <div style="font-size:0.88rem;font-weight:700;color:#f97316;text-transform:capitalize">${topProduct.replace(/_/g,' ')}</div>
+        <div style="font-size:0.68rem;color:var(--text-muted)">1st investment choice</div>
+      </div>
+      <div style="background:rgba(168,85,247,0.08);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Retention</div>
+        <div style="font-size:1.05rem;font-weight:700;color:#a855f7">${invested > 0 ? Math.round(multiInvested/invested*100) : 0}%</div>
+        <div style="font-size:0.68rem;color:var(--text-muted)">made 2+ investments</div>
       </div>
     </div>
   `;

@@ -58,6 +58,7 @@ function toggleNotifPanel() {
     // Force reflow so transition plays
     panel.offsetHeight; // eslint-disable-line no-unused-expressions
     panel.classList.add('notif-panel--open');
+    SVC.track('svc_notifications_opened', { unread_count: document.querySelectorAll('.notif-item.unread').length });
     // Close when clicking outside
     setTimeout(() => {
       document.addEventListener('click', function closePanel(e) {
@@ -347,6 +348,12 @@ function navigate(view, btnEl) {
     profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderRecurringStatusSummary(); _renderKycStatusPanel(); },
   };
   if (loaders[view]) loaders[view]();
+
+  // End timer for the previous view, start one for this view
+  if (navigate._current) SVC.timeEnd('view_' + navigate._current, 'svc_section_time', { section: navigate._current });
+  navigate._current = view;
+  SVC.time('view_' + view);
+
   SVC.track('page_view', { page_title: view, page_location: window.location.href + '#' + view, portal_view: view });
 }
 
@@ -1052,6 +1059,7 @@ function filterMyInvestments(filter, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   renderMyInvestmentCards();
+  SVC.track('svc_filter_changed', { filter_type: 'my_investments', filter_value: filter });
 }
 
 function renderMyInvestmentCards() {
@@ -1164,6 +1172,7 @@ function _switchTxnTab(tab, btn) {
   if (allTab) allTab.style.display = tab === 'all' ? '' : 'none';
   if (retTab) retTab.style.display = tab === 'returns' ? '' : 'none';
   if (tab === 'returns') _renderReturnHistory();
+  SVC.track('svc_tab_changed', { section: 'transactions', tab });
 }
 
 function _renderReturnHistory() {
@@ -1274,6 +1283,7 @@ function _switchWalletTab(tab, btn) {
   if (ov) ov.style.display = tab === 'overview' ? '' : 'none';
   if (rc) rc.style.display = tab === 'recurring' ? '' : 'none';
   if (tab === 'recurring') _renderRecurringTab();
+  SVC.track('svc_tab_changed', { section: 'wallet', tab });
 }
 
 function _renderRecurringTab() {
@@ -2241,6 +2251,7 @@ function filterMarket(type, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   renderMarketplace();
+  SVC.track('svc_filter_changed', { filter_type: 'marketplace', filter_value: type });
 }
 
 const _POOL_META = {
@@ -2602,8 +2613,8 @@ async function confirmInvestment(pool) {
     Toast.success(`Successfully invested ${Utils.rand(amount)} in ${pool.name}!`);
     Modal.close('investModal');
 
-    SVC.track('purchase', { value: amount, currency: 'ZAR', items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type, price: amount, quantity: 1 }] });
-    SVC.track('svc_investment_created', { pool_id: pool.id, pool_name: pool.name, product_type: pool.product_type, amount: amount, term_months: pool.term_months, annual_rate: pool.annual_rate });
+    SVC.track('purchase', { transaction_id: investmentId, value: amount, currency: 'ZAR', items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type, price: amount, quantity: 1 }] });
+    SVC.track('svc_investment_created', { pool_id: pool.id, pool_name: pool.name, product_type: pool.product_type, amount, amount_bucket: _amtBucket(amount), term_months: pool.term_months, annual_rate: parseFloat(pool.annual_rate) || 0, wallet_balance_bucket: _amtBucket(PORTAL.investor?.wallet_balance), total_investments: PORTAL.investments.filter(i => i.investor_id === (PORTAL.investor?.id || DEMO_INVESTOR_ID)).length + 1 });
     if (_pmSaId) {
       SVC.track('svc_subaccount_invested', { sub_account_id: _pmSaId, amount: amount });
     }
@@ -2614,6 +2625,7 @@ async function confirmInvestment(pool) {
     await loadPortalData();
     renderOverview();
   } catch (e) {
+    SVC.error('investment', e.message);
     Toast.error('Investment failed. Please try again.');
     console.error(e);
   }
@@ -3372,7 +3384,10 @@ function openSaDeposit(saId) {
 }
 
 /* ─── Profile ─── */
-function saveProfile() { Toast.success('Profile updated successfully'); }
+function saveProfile() {
+  SVC.track('svc_profile_saved', {});
+  Toast.success('Profile updated successfully');
+}
 
 /* ─── Referral ─── */
 function copyReferralLink() {
@@ -4978,6 +4993,7 @@ async function openSaDetail(saId) {
 
   const isMinor = sa.account_type === 'minor';
   const meta    = SA_TYPE_META[sa.account_type] || SA_TYPE_META.business;
+  SVC.track('svc_subaccount_viewed', { account_type: sa.account_type, kyc_status: sa.kyc_status });
 
   document.getElementById('saDetailTitle').textContent = sa.name;
 
@@ -5370,6 +5386,7 @@ function openWithdrawalModal() {
   const inv      = PORTAL.investor;
   const balance  = parseFloat(inv?.wallet_balance || 0);
   const status   = inv?.bank_account_status;
+  SVC.track('svc_withdrawal_modal_opened', { wallet_balance_bucket: _amtBucket(balance), has_bank_account: !!(inv?.bank_account_number) });
 
   if (!inv?.bank_account_number) {
     content.innerHTML = `
@@ -5476,6 +5493,7 @@ async function confirmWithdrawal() {
       description: `Wallet withdrawal to ${PORTAL.investor?.bank_name || 'bank account'} — ${PORTAL.investor?.bank_account_holder || ''}`,
     });
 
+    SVC.track('svc_withdrawal_requested', { amount, amount_bucket: _amtBucket(amount), currency: 'ZAR', reference: ref });
     Toast.success('Withdrawal request submitted! Funds will be sent within 1–2 business days.');
     Modal.close('withdrawalModal');
     // Refresh wallet view
@@ -5483,6 +5501,7 @@ async function confirmWithdrawal() {
     await loadPortalData();
     loadWallet();
   } catch (e) {
+    SVC.error('withdrawal', e.message);
     Toast.error('Withdrawal failed. Please try again.');
     console.error(e);
   } finally {
