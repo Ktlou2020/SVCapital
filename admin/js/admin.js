@@ -2136,6 +2136,7 @@ async function loadAnalytics() {
   renderTxnFlowChart();
   renderConversionFunnel();
   _renderAnalyticsCharts();
+  loadSignupFriction();
 }
 
 function renderProductVolChart() {
@@ -2397,6 +2398,181 @@ function renderConversionFunnel() {
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Retention</div>
         <div style="font-size:1.05rem;font-weight:700;color:#a855f7">${invested > 0 ? Math.round(multiInvested/invested*100) : 0}%</div>
         <div style="font-size:0.68rem;color:var(--text-muted)">made 2+ investments</div>
+      </div>
+    </div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════
+   SIGNUP FRICTION ANALYSIS
+   ═══════════════════════════════════════════════ */
+async function loadSignupFriction() {
+  const panel = document.getElementById('frictionPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+
+  try {
+    const days = document.getElementById('frictionDaysFilter')?.value || 30;
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+    const res = await fetch(`/api/analytics/signup-friction/summary?days=${days}`, {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    renderSignupFriction(data, panel);
+  } catch (err) {
+    panel.innerHTML = `<div class="text-center text-muted" style="padding:20px">No friction data yet — it will appear once users visit the signup page.</div>`;
+  }
+}
+
+function renderSignupFriction(data, panel) {
+  const { total_sessions = 0, completion_rate = 0, step_funnel = [],
+          top_errors = [], top_error_fields = [], avg_time_per_step = [],
+          device_breakdown = [], client_type_breakdown = [] } = data;
+
+  const stepByNum = {};
+  step_funnel.forEach(s => { stepByNum[s.step] = s.sessions; });
+  const maxSessions = Math.max(...step_funnel.map(s => s.sessions), 1);
+
+  const stepNames = { 1: 'Personal Info', 2: 'Security', 3: 'Profile', 4: 'FICA Docs' };
+  const stepColors = { 1: '#6366f1', 2: '#3b82f6', 3: '#FF9B0C', 4: '#22c55e' };
+
+  function fmtMs(ms) {
+    if (!ms) return '—';
+    if (ms < 60000) return Math.round(ms / 1000) + 's';
+    return Math.floor(ms / 60000) + 'm ' + Math.round((ms % 60000) / 1000) + 's';
+  }
+
+  // Build step funnel rows
+  const funnelHtml = [1, 2, 3, 4].map(step => {
+    const sessions = stepByNum[step] || 0;
+    const prev     = stepByNum[step - 1] || sessions;
+    const pct      = maxSessions > 0 ? Math.round(sessions / maxSessions * 100) : 0;
+    const dropOff  = step > 1 && prev > 0 ? Math.round((1 - sessions / prev) * 100) : 0;
+    const dropColor = dropOff >= 40 ? '#ef4444' : dropOff >= 20 ? '#f97316' : '#f59e0b';
+    const timeRow  = avg_time_per_step.find(t => t.step === step);
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(0,0,0,0.05)">
+        <div style="width:90px;font-size:0.78rem;font-weight:600;color:#1a1a1a;flex-shrink:0">
+          <span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:${stepColors[step]};color:#fff;font-size:0.65rem;font-weight:700;text-align:center;line-height:20px;margin-right:5px">${step}</span>${stepNames[step]}
+        </div>
+        <div style="flex:1;height:8px;background:rgba(0,0,0,0.07);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${stepColors[step]};border-radius:4px;transition:width 0.6s ease"></div>
+        </div>
+        <div style="width:40px;text-align:right;font-size:0.82rem;font-weight:700;color:#1a1a1a">${sessions.toLocaleString()}</div>
+        ${step > 1 && dropOff > 0
+          ? `<div style="width:66px;font-size:0.68rem;color:${dropColor};background:${dropColor}18;padding:2px 6px;border-radius:4px;text-align:center">−${dropOff}% drop</div>`
+          : '<div style="width:66px"></div>'}
+        <div style="width:52px;font-size:0.68rem;color:var(--text-muted);text-align:right">${timeRow ? 'avg ' + fmtMs(timeRow.avg_ms) : ''}</div>
+      </div>`;
+  }).join('');
+
+  // Top errors table
+  const errHtml = top_errors.length
+    ? top_errors.slice(0, 6).map(e => `
+        <tr>
+          <td style="padding:6px 8px;font-size:0.75rem;color:var(--text-muted);white-space:nowrap">Step ${e.step}</td>
+          <td style="padding:6px 8px;font-size:0.75rem;color:#1a1a1a;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.error_message}">${e.error_message}</td>
+          <td style="padding:6px 8px;font-size:0.75rem;font-weight:700;color:#ef4444;text-align:right">${e.count}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="3" style="padding:12px;font-size:0.78rem;color:var(--text-muted);text-align:center">No errors recorded yet</td></tr>';
+
+  // Top friction fields
+  const fieldHtml = top_error_fields.length
+    ? top_error_fields.slice(0, 6).map(f => `
+        <tr>
+          <td style="padding:6px 8px;font-size:0.75rem;color:var(--text-muted);white-space:nowrap">Step ${f.step}</td>
+          <td style="padding:6px 8px;font-size:0.75rem;font-weight:600;color:#1a1a1a">${f.field_name}</td>
+          <td style="padding:6px 8px;font-size:0.75rem;font-weight:700;color:#f97316;text-align:right">${f.count}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="3" style="padding:12px;font-size:0.78rem;color:var(--text-muted);text-align:center">No field data yet</td></tr>';
+
+  // Device chart
+  const totalDev = device_breakdown.reduce((s, d) => s + d.count, 0) || 1;
+  const devHtml = device_breakdown.map(d => {
+    const pct = Math.round(d.count / totalDev * 100);
+    const colors = { mobile: '#a855f7', desktop: '#3b82f6', tablet: '#22c55e' };
+    const c = colors[d.device_type] || '#6b7280';
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+      <div style="width:62px;font-size:0.75rem;color:var(--text-muted);text-transform:capitalize">${d.device_type}</div>
+      <div style="flex:1;height:6px;background:rgba(0,0,0,0.07);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${c};border-radius:3px"></div>
+      </div>
+      <div style="width:32px;text-align:right;font-size:0.75rem;font-weight:600;color:#1a1a1a">${pct}%</div>
+    </div>`;
+  }).join('');
+
+  const completionPct = Math.round(parseFloat(completion_rate) * 100);
+  const biggestDropStep = [1, 2, 3, 4].reduce((worst, step) => {
+    if (step === 1) return worst;
+    const curr = stepByNum[step] || 0;
+    const prev = stepByNum[step - 1] || curr;
+    const drop = prev > 0 ? Math.round((1 - curr / prev) * 100) : 0;
+    return drop > (worst.drop || 0) ? { step, drop } : worst;
+  }, {});
+
+  panel.innerHTML = `
+    <!-- Metric cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px">
+      <div style="background:rgba(99,102,241,0.08);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Total Sessions</div>
+        <div style="font-size:1.3rem;font-weight:800;color:#6366f1">${total_sessions.toLocaleString()}</div>
+        <div style="font-size:0.65rem;color:var(--text-muted)">signup page visits</div>
+      </div>
+      <div style="background:rgba(34,197,94,0.08);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Completion Rate</div>
+        <div style="font-size:1.3rem;font-weight:800;color:#22c55e">${completionPct}%</div>
+        <div style="font-size:0.65rem;color:var(--text-muted)">reached submit</div>
+      </div>
+      ${biggestDropStep.step ? `
+      <div style="background:rgba(239,68,68,0.08);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Biggest Drop-Off</div>
+        <div style="font-size:1.3rem;font-weight:800;color:#ef4444">Step ${biggestDropStep.step}</div>
+        <div style="font-size:0.65rem;color:var(--text-muted)">${biggestDropStep.drop}% don't proceed</div>
+      </div>` : ''}
+      <div style="background:rgba(255,130,21,0.08);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Top Error</div>
+        <div style="font-size:0.82rem;font-weight:700;color:#f97316;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px">${top_errors[0]?.error_message?.slice(0, 40) || '—'}</div>
+        <div style="font-size:0.65rem;color:var(--text-muted)">${top_errors[0] ? top_errors[0].count + ' occurrences' : 'no errors yet'}</div>
+      </div>
+    </div>
+
+    <!-- Step funnel -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Step-by-Step Drop-Off</div>
+      ${funnelHtml}
+    </div>
+
+    <!-- Bottom two-column layout -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <!-- Left: top errors -->
+      <div>
+        <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Most Common Validation Errors</div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th style="font-size:0.65rem;color:var(--text-muted);text-align:left;padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.08)">Step</th>
+            <th style="font-size:0.65rem;color:var(--text-muted);text-align:left;padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.08)">Error</th>
+            <th style="font-size:0.65rem;color:var(--text-muted);text-align:right;padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.08)">#</th>
+          </tr></thead>
+          <tbody>${errHtml}</tbody>
+        </table>
+      </div>
+
+      <!-- Right: field friction + device -->
+      <div>
+        <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Most Friction — Fields</div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+          <thead><tr>
+            <th style="font-size:0.65rem;color:var(--text-muted);text-align:left;padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.08)">Step</th>
+            <th style="font-size:0.65rem;color:var(--text-muted);text-align:left;padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.08)">Field</th>
+            <th style="font-size:0.65rem;color:var(--text-muted);text-align:right;padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.08)">#</th>
+          </tr></thead>
+          <tbody>${fieldHtml}</tbody>
+        </table>
+
+        <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Device Breakdown</div>
+        ${devHtml || '<div style="font-size:0.78rem;color:var(--text-muted)">No device data yet</div>'}
       </div>
     </div>
   `;

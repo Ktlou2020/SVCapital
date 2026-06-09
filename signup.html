@@ -1542,8 +1542,80 @@ let clientType   = 'sa'; // 'sa' | 'intl'
 const ficaFiles   = { id: null, address: null, selfie: null, bank: null, tax: null };
 const REQUIRED_DOCS = ['id', 'address', 'selfie'];
 
+/* ── Signup Friction Tracker ── */
+const _FT = (function() {
+  const SESSION_ID = (Math.random().toString(36).slice(2) + Date.now().toString(36)).slice(0, 32);
+  const ENDPOINT   = '/api/analytics/signup-friction';
+  let _queue = [];
+  const _stepEnterAt = {};
+  let _complete = false;
+
+  function _device() {
+    const w = window.innerWidth;
+    return w < 768 ? 'mobile' : w < 1024 ? 'tablet' : 'desktop';
+  }
+
+  function _flush() {
+    if (!_queue.length) return;
+    const payload = JSON.stringify({ events: [..._queue] });
+    _queue = [];
+    try {
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(ENDPOINT, new Blob([payload], { type: 'application/json' }));
+      } else {
+        fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(() => {});
+      }
+    } catch (_) {}
+  }
+
+  function _push(type, data) {
+    _queue.push(Object.assign({ session_id: SESSION_ID, event_type: type }, data));
+    if (['submit_success', 'submit_error', 'page_abandon'].includes(type)) _flush();
+  }
+
+  setInterval(_flush, 5000);
+  window.addEventListener('beforeunload', () => {
+    if (!_complete) _push('page_abandon', { step: currentStep, device_type: _device() });
+    _flush();
+  });
+
+  return {
+    stepEntered(step) {
+      _stepEnterAt[step] = performance.now();
+      _push('step_view', { step, device_type: _device() });
+    },
+    stepAdvanced(fromStep) {
+      const ms = _stepEnterAt[fromStep] != null ? Math.round(performance.now() - _stepEnterAt[fromStep]) : null;
+      _push('step_advance', { step: fromStep, time_on_step_ms: ms, client_type: clientType });
+    },
+    stepBacked(fromStep) {
+      _push('step_back', { step: fromStep });
+    },
+    validationError(step, msg) {
+      _push('validation_error', { step, error_message: String(msg).slice(0, 200), client_type: clientType });
+    },
+    ficaUploaded(docType) {
+      _push('fica_upload', { step: 4, field_name: docType });
+    },
+    ficaSkipped() {
+      _push('skip_fica', { step: 4 });
+    },
+    submitAttempted() {
+      _push('submit_attempt', { step: 4, device_type: _device() });
+    },
+    submitSuccess() {
+      _complete = true;
+      _push('submit_success', { step: 4, device_type: _device(), client_type: clientType });
+    },
+    submitFailed(msg) {
+      _push('submit_error', { step: 4, error_message: String(msg).slice(0, 200) });
+    },
+  };
+}());
+
 /* ── Bootstrap ── */
 window.addEventListener('DOMContentLoaded', () => {
+  _FT.stepEntered(1);
   prefillReferral();
   initSocialProofCounters();
   initReturnEstimate();
@@ -1796,6 +1868,9 @@ function wireUploadCard(docType) {
 function goToStep(n, dir) {
   if (n > currentStep && !validateStep(currentStep)) return;
 
+  if (dir === 'back') _FT.stepBacked(currentStep);
+  else                _FT.stepAdvanced(currentStep);
+
   [1, 2, 3, 4].forEach(i => {
     document.getElementById(`step${i}`).style.display = 'none';
   });
@@ -1809,6 +1884,7 @@ function goToStep(n, dir) {
   nextEl.addEventListener('animationend', () => nextEl.classList.remove(animClass), { once: true });
 
   currentStep = n;
+  _FT.stepEntered(n);
   updateStepIndicators(n);
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1895,6 +1971,7 @@ function validateStep(n) {
 function v(id) { return document.getElementById(id)?.value?.trim() || ''; }
 
 function showError(msg) {
+  _FT.validationError(currentStep, msg);
   const el = document.getElementById('formError');
   document.getElementById('formErrorMsg').textContent = msg;
   el.style.display = 'block';
@@ -1965,6 +2042,7 @@ function handleFicaFile(input, docType) {
     return;
   }
   ficaFiles[docType] = file;
+  _FT.ficaUploaded(docType);
 
   const card   = document.getElementById(`card-${docType}`);
   const status = document.getElementById(`status-${docType}`);
@@ -2083,10 +2161,12 @@ async function skipFicaAndSubmit() {
     'You can upload them later in your investor portal.'
   );
   if (!confirmed) return;
+  _FT.ficaSkipped();
   _doSubmit(true);
 }
 
 async function _doSubmit(skippedFica) {
+  _FT.submitAttempted();
   const btn     = document.getElementById('submitBtn');
   const btnText = document.getElementById('submitBtnText');
   const spinner = document.getElementById('submitSpinner');
@@ -2158,11 +2238,13 @@ async function _doSubmit(skippedFica) {
         ? 'Please upload your FICA documents in your portal to start investing.'
         : 'Your FICA documents have been submitted and will be reviewed within 1–2 business days.');
 
+    _FT.submitSuccess();
     launchConfetti();
     setTimeout(() => { window.location.href = '/portal/index.html'; }, 4000);
 
   } catch (err) {
     console.error('Registration error:', err);
+    _FT.submitFailed(err.message || 'unknown');
     btn.disabled          = false;
     btnText.style.display = 'inline-flex';
     spinner.style.display = 'none';

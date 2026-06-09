@@ -113,6 +113,7 @@ app.post('/api/investors/push-token', require('./middleware/auth').requireAuth, 
 });
 app.use('/api/privacy',     require('./routes/privacy'));
 app.use('/api/withdrawals', require('./routes/withdrawals'));
+app.use('/api/analytics',  require('./routes/friction'));
 
 /* ─── One-time Provision Endpoint ───────────────────────────────────────────
    GET /api/provision?secret=<PROVISION_SECRET>
