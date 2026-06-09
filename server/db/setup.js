@@ -840,6 +840,17 @@ CREATE TABLE IF NOT EXISTS email_queue (
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS email_queue_status_idx ON email_queue(status, scheduled_at);
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  jti        TEXT NOT NULL UNIQUE,
+  user_id    TEXT NOT NULL,
+  used       BOOLEAN DEFAULT false,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at    TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS pwd_reset_jti_idx ON password_reset_tokens(jti);
 `;
 
 async function autoSetup() {

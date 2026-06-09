@@ -50,16 +50,19 @@ app.use(compression());
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
   .split(',').map(s => s.trim()).filter(Boolean);
 
+const DEFAULT_PROD_ORIGINS = ['https://platform.svcapital.co.za', 'https://svcapital.co.za', 'https://www.svcapital.co.za'];
+const EFFECTIVE_ORIGINS = ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : (IS_PROD ? DEFAULT_PROD_ORIGINS : []);
+if (IS_PROD && ALLOWED_ORIGINS.length === 0) {
+  console.warn(`⚠️  CORS: ALLOWED_ORIGINS env var not set — defaulting to: ${DEFAULT_PROD_ORIGINS.join(', ')}. Set ALLOWED_ORIGINS to override.`);
+}
+
 app.use(cors({
   origin: (origin, cb) => {
     // Same-origin requests (no Origin header) are always allowed
     if (!origin) return cb(null, true);
-    // If no whitelist is configured, allow all origins (dev/unconfig'd deployments)
-    if (ALLOWED_ORIGINS.length === 0) {
-      if (IS_PROD) console.warn('⚠️  CORS: ALLOWED_ORIGINS not set — all origins permitted. Set this env var in production.');
-      return cb(null, true);
-    }
-    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    // In dev with no config, allow all
+    if (EFFECTIVE_ORIGINS.length === 0) return cb(null, true);
+    if (EFFECTIVE_ORIGINS.includes(origin)) return cb(null, true);
     cb(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,
@@ -114,6 +117,7 @@ app.post('/api/investors/push-token', require('./middleware/auth').requireAuth, 
 app.use('/api/privacy',     require('./routes/privacy'));
 app.use('/api/withdrawals', require('./routes/withdrawals'));
 app.use('/api/analytics',  require('./routes/friction'));
+app.use('/api/statements', require('./routes/statements'));
 
 /* ─── One-time Provision Endpoint ───────────────────────────────────────────
    GET /api/provision?secret=<PROVISION_SECRET>
@@ -311,6 +315,13 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   // Start recurring investment cron (1st of month, 03:00 UTC / 05:00 SAST)
   const { startRecurringCron } = require('./jobs/recurringCron');
   startRecurringCron();
+
+  // Email queue processor — runs every 2 minutes
+  const emailQueueCron = require('node-cron');
+  const { processQueue } = require('./services/emailQueue');
+  emailQueueCron.schedule('*/2 * * * *', () => {
+    processQueue().catch(e => console.error('[emailQueue cron]', e.message));
+  });
 });
 
 /* ─── Graceful Shutdown ─── */

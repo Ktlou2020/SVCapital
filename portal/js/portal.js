@@ -17,6 +17,9 @@ const DEMO_INVESTOR_ID = (() => {
   return 'INV-001'; // fallback for demo
 })();
 
+/* Escape user-controlled strings before inserting into innerHTML */
+const _esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
 let PORTAL = {
   investor: null,
   investments: [],
@@ -5343,7 +5346,7 @@ function _renderBankDetailsPanel() {
       <div class="info-row"><span class="info-row__label">Account Type</span><span class="info-row__value" style="text-transform:capitalize">${inv.bank_account_type || '—'}</span></div>
       <div class="info-row"><span class="info-row__label">Verification Status</span><span class="info-row__value"><span class="badge ${s.cls}">${s.label}</span></span></div>
     </div>
-    ${inv.bank_account_notes ? `<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);background:rgba(239,68,68,0.06);border-radius:8px;padding:8px 12px">${inv.bank_account_notes}</div>` : ''}
+    ${inv.bank_account_notes ? `<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);background:rgba(239,68,68,0.06);border-radius:8px;padding:8px 12px">${_esc(inv.bank_account_notes)}</div>` : ''}
   `;
 }
 
@@ -7003,7 +7006,7 @@ function renderMyTickets() {
     return `
       <div class="my-ticket-item" style="padding:12px 14px;border-radius:10px;border:1px solid rgba(0,0,0,0.07);margin-bottom:8px;background:var(--ci-bg-light,#F7F8FA)">
         <div class="my-ticket-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px">
-          <span class="my-ticket-subject" style="font-weight:700;font-size:0.86rem;color:#1a1a1a;flex:1">${t.subject}</span>
+          <span class="my-ticket-subject" style="font-weight:700;font-size:0.86rem;color:#1a1a1a;flex:1">${_esc(t.subject)}</span>
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
             ${unreadBadge}
             ${Utils.statusBadge(t.status)}

@@ -388,10 +388,20 @@ router.post('/forgot-password', async (req, res) => {
     // Always return success to avoid email enumeration
     if (rows.length > 0) {
       const user = rows[0];
+      const crypto = require('crypto');
+      const jti = crypto.randomBytes(16).toString('hex');
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
       const token = jwt.sign(
-        { sub: user.id, purpose: 'password_reset' },
+        { sub: user.id, purpose: 'password_reset', jti },
         process.env.JWT_SECRET,
-        { expiresIn: '30m' }
+        { expiresIn: '15m' }
+      );
+      // Invalidate any previous unused tokens for this user
+      await pool.query('DELETE FROM password_reset_tokens WHERE user_id=$1 AND used=false', [user.id]);
+      // Record this token so it can only be used once
+      await pool.query(
+        'INSERT INTO password_reset_tokens (jti, user_id, expires_at) VALUES ($1, $2, $3)',
+        [jti, user.id, expiresAt]
       );
       const resetLink = `${process.env.BASE_URL || 'https://platform.svcapital.co.za'}/reset-password.html?token=${token}`;
       setImmediate(() => emailService.sendPasswordReset(user.email, user.first_name, resetLink)
@@ -414,9 +424,19 @@ router.post('/reset-password', async (req, res) => {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     if (payload.purpose !== 'password_reset') return res.status(400).json({ error: 'Invalid reset token.' });
 
+    // Enforce one-time-use: check jti in DB and mark as used atomically
+    if (!payload.jti) return res.status(400).json({ error: 'Invalid reset token format.' });
+    const { rows: tokenRows } = await pool.query(
+      `UPDATE password_reset_tokens SET used=true, used_at=NOW()
+       WHERE jti=$1 AND used=false AND expires_at > NOW()
+       RETURNING user_id`,
+      [payload.jti]
+    );
+    if (!tokenRows[0]) return res.status(400).json({ error: 'This reset link has already been used or has expired. Please request a new one.' });
+
     const hash = await bcrypt.hash(password, 12);
     const { rows } = await pool.query(
-      'UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING email',
+      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 RETURNING email',
       [hash, payload.sub]
     );
     if (!rows[0]) return res.status(404).json({ error: 'User not found.' });
