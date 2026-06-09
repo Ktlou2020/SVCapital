@@ -118,6 +118,7 @@ app.use('/api/privacy',     require('./routes/privacy'));
 app.use('/api/withdrawals', require('./routes/withdrawals'));
 app.use('/api/analytics',  require('./routes/friction'));
 app.use('/api/statements', require('./routes/statements'));
+app.use('/api/waitlist',   require('./routes/waitlist'));
 
 /* ─── One-time Provision Endpoint ───────────────────────────────────────────
    GET /api/provision?secret=<PROVISION_SECRET>

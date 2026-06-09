@@ -851,6 +851,15 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS pwd_reset_jti_idx ON password_reset_tokens(jti);
+
+CREATE TABLE IF NOT EXISTS international_waitlist (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  full_name  TEXT NOT NULL,
+  email      TEXT NOT NULL,
+  country    TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (email)
+);
 `;
 
 async function autoSetup() {
