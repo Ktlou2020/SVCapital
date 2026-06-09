@@ -47,7 +47,7 @@ async function _sendPush(investorId, payload) {
 
 /* ─── Input Validation ─── */
 const NUMERIC_FIELDS = new Set(['amount','wallet_balance','total_invested','total_returns','annual_rate','max_capacity','current_invested','recurring_amount','xp_points']);
-const STATUS_FIELDS  = { status: ['active','inactive','pending','matured','paid_out','cancelled','rejected','open','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor'], fica_status: ['pending','approved','rejected','not_started'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','reinvest','pending'] };
+const STATUS_FIELDS  = { status: ['active','inactive','pending','pending_fica','fica_submitted','matured','paid_out','cancelled','rejected','open','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor'], fica_status: ['pending','approved','rejected','not_started','submitted'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','reinvest','pending'] };
 
 function validateBody(table, body, isCreate) {
   const errors = [];
@@ -203,10 +203,20 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
 
     // ─── Role-based data isolation ───
     // Investors only see their own data
-    if (req.user.role === 'investor' && req.user.investorId) {
+    if (req.user.role === 'investor') {
+      let investorId = req.user.investorId;
+      // JWT may lack investorId for older sessions — look it up from users table
+      if (!investorId && req.user.id) {
+        const uRow = await pool.query('SELECT investor_id FROM users WHERE id = $1', [req.user.id]);
+        investorId = uRow.rows[0]?.investor_id || null;
+      }
       if (INVESTOR_COLS[table]) {
-        params.push(req.user.investorId);
-        conditions.push(`${INVESTOR_COLS[table]} = $${params.length}`);
+        if (investorId) {
+          params.push(investorId);
+          conditions.push(`${INVESTOR_COLS[table]} = $${params.length}`);
+        } else {
+          conditions.push('1=0'); // no investor linked — return nothing
+        }
       }
     }
 
