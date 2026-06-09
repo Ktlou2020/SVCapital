@@ -760,6 +760,17 @@
                 <div style="text-align:center;padding:20px;color:#6b7280;font-size:0.85rem">Loading KYC status…</div>
               </div>
             </div>
+
+            <!-- Statement Archive -->
+            <div class="panel" id="statementArchivePanel">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-file-invoice" style="color:var(--gold);margin-right:6px"></i>Monthly Statements</span>
+                <button class="btn btn--ghost btn--sm" onclick="_loadStatementArchive()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+              </div>
+              <div class="panel__body" id="statementArchiveBody">
+                <div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:12px 0">Loading statements…</div>
+              </div>
+            </div>
           </div>
 
           <div>

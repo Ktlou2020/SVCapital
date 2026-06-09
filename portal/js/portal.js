@@ -6918,6 +6918,82 @@ function renderRiskProfile() {
     if (desc) desc.textContent = 'Complete the questionnaire to determine your risk appetite and get tailored pool recommendations.';
     if (btnLabel) btnLabel.textContent = 'Take Questionnaire';
   }
+
+  _loadStatementArchive();
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE: STATEMENT ARCHIVE & TAX CERTIFICATES
+   ═══════════════════════════════════════════════ */
+
+async function _loadStatementArchive() {
+  const el = document.getElementById('statementArchiveBody');
+  if (!el) return;
+  try {
+    const data = await API._fetch('GET', 'statements');
+    const currentYear = new Date().getFullYear();
+    const taxYear = new Date().getMonth() >= 2 ? currentYear : currentYear - 1; // Feb cutoff
+    const taxSection = `
+      <div style="margin-bottom:14px;padding:12px;background:rgba(255,155,12,0.06);border-radius:8px;border:1px solid rgba(255,155,12,0.2)">
+        <div style="font-size:0.84rem;font-weight:700;margin-bottom:6px"><i class="fa-solid fa-file-shield" style="color:var(--gold);margin-right:6px"></i>Tax Certificates</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">Download your annual IT3(b)-style investment income summary for SARS submission.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${[taxYear, taxYear-1, taxYear-2].map(y => `<button class="btn btn--ghost btn--sm" onclick="_downloadTaxCert(${y})" style="font-size:0.75rem"><i class="fa-solid fa-download"></i> ${y}/${y+1}</button>`).join('')}
+        </div>
+      </div>`;
+    if (!data.statements || !data.statements.length) {
+      el.innerHTML = taxSection + '<div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:12px 0">No statements available yet. Statements are generated on the 1st of each month.</div>';
+      return;
+    }
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    el.innerHTML = taxSection + `<div style="display:flex;flex-direction:column;gap:6px">${data.statements.map(s => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface2,#f8f9fa);border-radius:8px">
+        <div style="font-size:0.84rem;font-weight:600">${months[s.period_month-1]} ${s.period_year} Statement</div>
+        <a href="/api/statements/${s.id}/pdf" target="_blank" class="btn btn--ghost btn--sm" style="font-size:0.75rem"><i class="fa-solid fa-download"></i> PDF</a>
+      </div>`).join('')}</div>`;
+  } catch (_) {
+    if (el) el.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:12px 0">Unable to load statements</div>';
+  }
+}
+
+async function _downloadTaxCert(year) {
+  try {
+    Toast.info?.(`Generating ${year} tax certificate…`) || Toast.success?.(`Generating ${year} tax certificate…`);
+    const data = await API._fetch('GET', `statements/tax-cert/${year}`);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    let y = 20;
+    const lh = 7;
+    const fmt = (n) => `R ${parseFloat(n||0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    doc.setFontSize(18); doc.setFont(undefined,'bold');
+    doc.text('SV CAPITAL — Investment Income Certificate', 14, y); y += 10;
+    doc.setFontSize(10); doc.setFont(undefined,'normal');
+    doc.text(`Tax Year: 1 March ${year} — 28 February ${year+1}`, 14, y); y += lh;
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-ZA')}`, 14, y); y += 12;
+    doc.setFont(undefined,'bold'); doc.text('Investor Details', 14, y); y += lh;
+    doc.setFont(undefined,'normal');
+    doc.text(`Name: ${data.investor.first_name} ${data.investor.last_name}`, 14, y); y += lh;
+    doc.text(`Email: ${data.investor.email}`, 14, y); y += lh;
+    doc.text(`ID / Ref: ${data.investor.id}`, 14, y); y += 12;
+    doc.setFont(undefined,'bold'); doc.text('Summary', 14, y); y += lh;
+    doc.setFont(undefined,'normal');
+    doc.text(`Total Deposits:    ${fmt(data.deposits)}`, 14, y); y += lh;
+    doc.text(`Total Withdrawals: ${fmt(data.withdrawals)}`, 14, y); y += lh;
+    doc.text(`Investment Returns: ${fmt(data.totalReturns)}`, 14, y); y += 12;
+    if (data.investments.length) {
+      doc.setFont(undefined,'bold'); doc.text('Matured Investments', 14, y); y += lh;
+      doc.setFont(undefined,'normal');
+      data.investments.forEach(inv => {
+        const ret = parseFloat(inv.actual_return || inv.expected_return || 0);
+        doc.text(`• ${inv.pool_name || 'Investment'} — Return: ${fmt(ret)} — Matured: ${new Date(inv.end_date).toLocaleDateString('en-ZA')}`, 14, y); y += lh;
+        if (y > 270) { doc.addPage(); y = 20; }
+      });
+    }
+    y += 6;
+    doc.setFontSize(8); doc.setTextColor(100);
+    doc.text('This document is for informational purposes. Please consult a tax advisor for official SARS submissions.', 14, y);
+    doc.save(`SVC-TaxCert-${year}-${year+1}.pdf`);
+  } catch (e) { Toast.error('Could not generate tax certificate — please try again.'); }
 }
 
 /* ═══════════════════════════════════════════════
