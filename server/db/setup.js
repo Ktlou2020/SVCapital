@@ -794,6 +794,52 @@ CREATE TABLE IF NOT EXISTS signup_friction_events (
 CREATE INDEX IF NOT EXISTS friction_session_idx ON signup_friction_events(session_id);
 CREATE INDEX IF NOT EXISTS friction_type_idx    ON signup_friction_events(event_type);
 CREATE INDEX IF NOT EXISTS friction_created_idx ON signup_friction_events(created_at);
+
+CREATE TABLE IF NOT EXISTS totp_recovery_codes (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash   TEXT NOT NULL,
+  used        BOOLEAN DEFAULT false,
+  used_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS recovery_codes_user_idx ON totp_recovery_codes(user_id);
+
+CREATE TABLE IF NOT EXISTS user_login_events (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     TEXT NOT NULL,
+  investor_id TEXT,
+  ip_address  TEXT,
+  user_agent  TEXT,
+  login_at    TIMESTAMPTZ DEFAULT NOW(),
+  success     BOOLEAN DEFAULT true
+);
+CREATE INDEX IF NOT EXISTS login_events_user_idx ON user_login_events(user_id, login_at DESC);
+
+CREATE TABLE IF NOT EXISTS investor_statements (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  investor_id   TEXT NOT NULL,
+  period_year   INT NOT NULL,
+  period_month  INT NOT NULL,
+  pdf_data      TEXT,  -- base64 encoded PDF
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(investor_id, period_year, period_month)
+);
+CREATE INDEX IF NOT EXISTS inv_statements_investor_idx ON investor_statements(investor_id, period_year DESC, period_month DESC);
+
+CREATE TABLE IF NOT EXISTS email_queue (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  to_email     TEXT NOT NULL,
+  template     TEXT NOT NULL,
+  payload      JSONB NOT NULL DEFAULT '{}',
+  status       TEXT NOT NULL DEFAULT 'pending',  -- pending, sent, failed, dead
+  attempts     INT NOT NULL DEFAULT 0,
+  last_error   TEXT,
+  scheduled_at TIMESTAMPTZ DEFAULT NOW(),
+  sent_at      TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS email_queue_status_idx ON email_queue(status, scheduled_at);
 `;
 
 async function autoSetup() {

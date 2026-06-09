@@ -19,6 +19,16 @@ const emailService = require('../services/email');
 const audit        = require('../services/audit');
 
 const JWT_SECRET     = process.env.JWT_SECRET || 'svcapital-dev-secret-change-in-production';
+
+function generateRecoveryCodes() {
+  const crypto = require('crypto');
+  const codes = [];
+  for (let i = 0; i < 8; i++) {
+    const raw = crypto.randomBytes(5).toString('hex').toUpperCase(); // 10 chars
+    codes.push(`${raw.slice(0,5)}-${raw.slice(5)}`); // format: XXXXX-XXXXX
+  }
+  return codes;
+}
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
 const IS_PROD        = process.env.NODE_ENV === 'production';
 
@@ -145,6 +155,11 @@ router.post('/login', async (req, res) => {
       description: `${user.role} login: ${user.email}`,
       ip: req.ip,
     }));
+
+    setImmediate(() => pool.query(
+      'INSERT INTO user_login_events (user_id, investor_id, ip_address, user_agent) VALUES ($1, $2, $3, $4)',
+      [user.id, user.investor_id || null, (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim().slice(0, 45), (req.headers['user-agent'] || '').slice(0, 200)]
+    ).catch(e => console.error('[login event]', e.message)));
 
     res.json({
       token,
@@ -659,7 +674,18 @@ router.post('/2fa/enable', requireAuth, async (req, res) => {
     const { verify } = require('../services/totp');
     if (!verify(secret, token)) return res.status(400).json({ error: 'Invalid code — please try again.' });
     await pool.query('UPDATE users SET totp_secret = $1, totp_enabled = true WHERE id = $2', [secret, req.user.id]);
-    res.json({ success: true });
+    const codes = generateRecoveryCodes();
+    // Delete any old codes for this user
+    await pool.query('DELETE FROM totp_recovery_codes WHERE user_id = $1', [req.user.id]);
+    // Insert hashed codes
+    for (const code of codes) {
+      const hash = await bcrypt.hash(code, 10);
+      await pool.query(
+        'INSERT INTO totp_recovery_codes (user_id, code_hash) VALUES ($1, $2)',
+        [req.user.id, hash]
+      );
+    }
+    res.json({ success: true, recoveryCodes: codes }); // send plaintext codes ONCE
   } catch (err) { console.error('/2fa/enable error:', err.message); res.status(500).json({ error: 'Internal server error.' }); }
 });
 
@@ -675,6 +701,33 @@ router.post('/2fa/disable', requireAuth, async (req, res) => {
     await pool.query('UPDATE users SET totp_secret = NULL, totp_enabled = false WHERE id = $1', [req.user.id]);
     res.json({ success: true });
   } catch (err) { console.error('/2fa/disable error:', err.message); res.status(500).json({ error: 'Internal server error.' }); }
+});
+
+/* ─── POST /api/auth/2fa/recover ─── */
+router.post('/2fa/recover', async (req, res) => {
+  try {
+    const { pending2FAToken, recoveryCode } = req.body;
+    if (!pending2FAToken || !recoveryCode) return res.status(400).json({ error: 'pending2FAToken and recoveryCode are required.' });
+    let payload;
+    try { payload = jwt.verify(pending2FAToken, JWT_SECRET); } catch { return res.status(401).json({ error: 'Invalid or expired token.' }); }
+    if (payload.purpose !== '2fa_pending') return res.status(401).json({ error: 'Invalid token.' });
+    const { rows: codes } = await pool.query(
+      'SELECT id, code_hash FROM totp_recovery_codes WHERE user_id = $1 AND used = false',
+      [payload.userId]
+    );
+    let matchedId = null;
+    for (const row of codes) {
+      const ok = await bcrypt.compare(recoveryCode.trim().toUpperCase(), row.code_hash);
+      if (ok) { matchedId = row.id; break; }
+    }
+    if (!matchedId) return res.status(401).json({ error: 'Invalid or already used recovery code.' });
+    await pool.query('UPDATE totp_recovery_codes SET used = true, used_at = NOW() WHERE id = $1', [matchedId]);
+    const { rows: users } = await pool.query('SELECT * FROM users WHERE id = $1', [payload.userId]);
+    if (!users[0]) return res.status(404).json({ error: 'User not found.' });
+    const user = users[0];
+    const fullToken = signToken(user);
+    res.json({ token: fullToken, user: { id: user.id, email: user.email, role: user.role, firstName: user.first_name, lastName: user.last_name, investorId: user.investor_id }, remainingCodes: codes.length - 1 });
+  } catch (err) { console.error('/2fa/recover error:', err.message); res.status(500).json({ error: 'Internal server error.' }); }
 });
 
 /* ─── POST /api/auth/2fa/verify-login ─── */
@@ -706,6 +759,17 @@ router.post('/2fa/verify-login', async (req, res) => {
     const redirectMap = { admin: '/admin/index.html', director: '/admin/index.html', investor: '/portal/', ifa: '/ifa/index.html', fund_manager: '/fund/index.html', staff: '/team/hub.html' };
     res.json({ token: fullToken, user: { id: user.id, email: user.email, role: user.role, firstName: user.first_name, lastName: user.last_name, investorId: user.investor_id }, redirect: redirectMap[user.role] || '/portal/' });
   } catch (err) { console.error('/2fa/verify-login error:', err.message); res.status(500).json({ error: 'Internal server error.' }); }
+});
+
+/* ─── GET /api/auth/login-history ─── */
+router.get('/login-history', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT ip_address, user_agent, login_at FROM user_login_events WHERE user_id = $1 ORDER BY login_at DESC LIMIT 20',
+      [req.user.id]
+    );
+    res.json({ events: rows });
+  } catch (err) { res.status(500).json({ error: 'Internal server error.' }); }
 });
 
 /* POST /api/auth/refresh — rotate refresh token, issue new access token */

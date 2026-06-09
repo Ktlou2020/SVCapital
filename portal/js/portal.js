@@ -5765,11 +5765,23 @@ async function confirm2FASetup() {
   }
   if (errEl) errEl.style.display = 'none';
   try {
-    await API._fetch('POST', 'auth/2fa/enable', { secret: _2faSecret, token: code });
+    const result = await API._fetch('POST', 'auth/2fa/enable', { secret: _2faSecret, token: code });
     _2faSecret = null;
-    Toast.success('Two-factor authentication is now enabled! Your account is secured.');
-    Modal.close('twoFAModal');
-    await load2FAStatus();
+    // Show recovery codes before closing modal
+    const body = document.getElementById('twoFAModalBody');
+    const footer = document.getElementById('twoFAModalFooter');
+    if (body) body.innerHTML = `
+  <div style="text-align:center;margin-bottom:12px">
+    <i class="fa-solid fa-shield-check" style="font-size:2rem;color:var(--green)"></i>
+    <h3 style="margin:10px 0 4px;font-size:1rem">2FA Enabled!</h3>
+    <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px">Save these backup codes somewhere safe. Each code can only be used once if you lose access to your authenticator app.</p>
+  </div>
+  <div style="background:#f8f9fa;border-radius:10px;padding:14px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
+    ${(result.recoveryCodes || []).map(c => `<div style="font-family:monospace;font-size:0.88rem;font-weight:700;text-align:center;padding:6px 10px;background:#fff;border-radius:6px;border:1px solid #e5e7eb">${c}</div>`).join('')}
+  </div>
+  <p style="font-size:0.75rem;color:#ef4444;text-align:center"><i class="fa-solid fa-triangle-exclamation"></i> These codes will not be shown again.</p>
+`;
+    if (footer) footer.innerHTML = `<button class="btn btn--primary btn--full" onclick="Modal.close('twoFAModal');load2FAStatus()"><i class="fa-solid fa-check"></i> I've saved my recovery codes</button>`;
   } catch (e) {
     if (errEl) { errEl.textContent = e.message || 'Invalid code — please try again.'; errEl.style.display = 'block'; }
   }
@@ -6868,6 +6880,9 @@ function renderRiskProfile() {
     radios.forEach(r => { r.checked = r.value === profile; });
   }
 
+  // Load login history
+  _loadLoginHistory();
+
   if (!badge) return;
 
   const configs = {
@@ -6939,6 +6954,30 @@ async function load2FAStatus() {
     if (label) label.textContent = 'Enable 2FA';
     const statusText = document.getElementById('twoFAStatusText');
     if (statusText) statusText.textContent = 'Status unavailable';
+  }
+}
+
+async function _loadLoginHistory() {
+  const el = document.getElementById('loginHistoryList');
+  if (!el) return;
+  try {
+    const data = await API._fetch('GET', 'auth/login-history');
+    if (!data.events || !data.events.length) {
+      el.innerHTML = '<div style="color:var(--text-muted)">No login history yet</div>';
+      return;
+    }
+    el.innerHTML = data.events.slice(0, 5).map(e => {
+      const ua = e.user_agent || '';
+      const device = ua.includes('Mobile') || ua.includes('Android') ? '📱 Mobile' : '💻 Desktop';
+      const browser = ua.includes('Chrome') ? 'Chrome' : ua.includes('Firefox') ? 'Firefox' : ua.includes('Safari') ? 'Safari' : 'Browser';
+      const date = new Date(e.login_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.05)">
+        <div><span style="font-weight:600">${device} · ${browser}</span><br><span style="color:var(--text-muted)">${e.ip_address || 'Unknown IP'}</span></div>
+        <div style="text-align:right;white-space:nowrap">${date}</div>
+      </div>`;
+    }).join('');
+  } catch (_) {
+    if (el) el.innerHTML = '<div style="color:var(--text-muted)">Unable to load login history</div>';
   }
 }
 
