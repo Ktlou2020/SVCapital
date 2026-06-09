@@ -422,10 +422,25 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     if (table === 'transactions' && clean.type === 'deposit' && clean.status === 'completed' && clean.investor_id) {
       setImmediate(async () => {
         try {
+          const platformFee = Math.round(parseFloat(clean.amount) * 0.01 * 100) / 100;
+          const netAmount   = parseFloat(clean.amount) - platformFee;
+
+          // Credit wallet with net amount (after 1% fee)
           await pool.query(
             'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-            [clean.amount, clean.investor_id]
+            [netAmount, clean.investor_id]
           );
+
+          // Record the platform fee as a separate fee transaction for full audit trail
+          if (platformFee > 0) {
+            const feeId = `FEE-${Date.now()}`;
+            await pool.query(
+              `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
+               VALUES ($1, $2, 'fee', $3, 'completed', $4, '1% platform fee on deposit', NOW(), NOW())
+               ON CONFLICT (id) DO NOTHING`,
+              [feeId, clean.investor_id, platformFee, `FEE-${clean.id}`]
+            );
+          }
         } catch (err) {
           console.error('[wallet hook] deposit credit error:', err.message);
         }
