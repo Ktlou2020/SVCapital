@@ -5735,18 +5735,20 @@ async function open2FASetupModal() {
       <button class="btn btn--secondary" onclick="Modal.close('twoFAModal')">Cancel</button>
       <button class="btn btn--primary" onclick="confirm2FASetup()"><i class="fa-solid fa-check"></i> Enable 2FA</button>
     `;
-    // Render QR code using qrcode npm browser build (QRCode.toDataURL / toCanvas)
+    // Render QR code
     const qrEl = document.getElementById('qrCodeCanvas');
-    if (typeof QRCode !== 'undefined' && typeof QRCode.toDataURL === 'function') {
-      QRCode.toDataURL(data.uri, { width: 180, margin: 1, color: { dark: '#000000', light: '#ffffff' } }, (err, url) => {
-        if (err) {
-          qrEl.innerHTML = '<div style="font-size:0.78rem;color:#ef4444">QR generation failed — use the manual key above</div>';
-        } else {
-          qrEl.innerHTML = `<img src="${url}" width="180" height="180" style="border-radius:8px;display:block">`;
-        }
-      });
-    } else {
-      qrEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted)">Scan using your authenticator app with the key shown below.</div>';
+    try {
+      if (typeof QRCode !== 'undefined' && typeof QRCode.toDataURL === 'function') {
+        // Promise-based (more reliable than callback in some browsers)
+        const url = await QRCode.toDataURL(data.uri, { width: 180, margin: 1, color: { dark: '#000000', light: '#ffffff' } });
+        qrEl.innerHTML = `<img src="${url}" width="180" height="180" style="border-radius:8px;display:block">`;
+      } else {
+        throw new Error('QRCode library not available');
+      }
+    } catch (_qrErr) {
+      // Fallback: generate QR via image service (no JS library needed)
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=1&data=${encodeURIComponent(data.uri)}`;
+      qrEl.innerHTML = `<img src="${qrUrl}" width="180" height="180" style="border-radius:8px;display:block" onerror="this.parentElement.innerHTML='<div style=\\'font-size:0.78rem;color:var(--text-muted)\\'>Use the manual key below to set up your authenticator app.</div>'">`;
     }
   } catch (e) {
     body.innerHTML = '<div style="color:#ef4444;text-align:center;padding:20px">Failed to generate 2FA secret. Please try again.</div>';
