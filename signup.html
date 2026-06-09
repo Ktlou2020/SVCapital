@@ -787,6 +787,49 @@
       margin-bottom: 16px; font-size: 0.77rem; color: #1a3a4a; line-height: 1.5;
     }
     .intl-info-banner i { color: var(--teal); flex-shrink: 0; margin-top: 2px; }
+
+    /* ─── International waitlist panel ─── */
+    .intl-waitlist-panel { display: none; }
+    .intl-waitlist-hero {
+      text-align: center; padding: 28px 0 24px;
+    }
+    .intl-waitlist-hero__icon {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: linear-gradient(135deg, rgba(47,140,155,0.12), rgba(255,130,21,0.10));
+      border: 1.5px solid rgba(47,140,155,0.22);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 18px; font-size: 2rem;
+    }
+    .intl-waitlist-hero__title {
+      font-size: 1.35rem; font-weight: 900; color: var(--text-h);
+      letter-spacing: -0.025em; margin-bottom: 10px;
+    }
+    .intl-waitlist-hero__sub {
+      font-size: 0.86rem; color: var(--text-muted);
+      line-height: 1.65; max-width: 380px; margin: 0 auto;
+    }
+    .intl-waitlist-benefits {
+      display: flex; flex-direction: column; gap: 10px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 18px; margin: 20px 0 24px;
+    }
+    .intl-waitlist-benefit {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.8rem; color: var(--text-body);
+    }
+    .intl-waitlist-benefit i { color: var(--orange); flex-shrink: 0; width: 14px; }
+    .intl-waitlist-success {
+      display: none; text-align: center; padding: 16px 0;
+    }
+    .intl-waitlist-success__icon {
+      width: 64px; height: 64px; border-radius: 50%;
+      background: rgba(34,197,94,0.10); border: 2px solid rgba(34,197,94,0.25);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 16px;
+    }
+    .intl-waitlist-success__icon i { font-size: 1.6rem; color: #22c55e; }
+    .intl-waitlist-success__title { font-size: 1.2rem; font-weight: 900; color: var(--text-h); margin-bottom: 8px; }
+    .intl-waitlist-success__sub { font-size: 0.84rem; color: var(--text-muted); line-height: 1.6; }
   </style>
   <!-- Google Analytics 4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
@@ -932,6 +975,114 @@
       <i class="fa-solid fa-circle-exclamation"></i>
       <span id="formErrorMsg" style="margin-left:6px">Please fix the errors above.</span>
     </div>
+
+    <!-- ══ INTERNATIONAL WAITLIST PANEL ══ -->
+    <div class="intl-waitlist-panel" id="intlWaitlistPanel">
+
+      <!-- Citizenship selector (repeated so it stays visible) -->
+      <div class="citizen-toggle">
+        <button type="button" class="citizen-toggle__btn" id="btnCitizenSA2">
+          🇿🇦 South African / SA Resident
+        </button>
+        <button type="button" class="citizen-toggle__btn active" id="btnCitizenIntl2">
+          🌍 International Client
+        </button>
+      </div>
+
+      <div id="intlWaitlistForm">
+        <div class="intl-waitlist-hero">
+          <div class="intl-waitlist-hero__icon">🌍</div>
+          <h3 class="intl-waitlist-hero__title">We're expanding globally!</h3>
+          <p class="intl-waitlist-hero__sub">
+            SV Capital is currently available to South African residents only. We're working hard to bring our platform to more countries — leave your details and we'll notify you the moment we launch in your country.
+          </p>
+        </div>
+
+        <div class="intl-waitlist-benefits">
+          <div class="intl-waitlist-benefit">
+            <i class="fa-solid fa-bell"></i>
+            <span>Be the <strong>first to know</strong> when we launch in your country</span>
+          </div>
+          <div class="intl-waitlist-benefit">
+            <i class="fa-solid fa-gift"></i>
+            <span><strong>Early access bonus</strong> reserved for waitlist members</span>
+          </div>
+          <div class="intl-waitlist-benefit">
+            <i class="fa-solid fa-chart-line"></i>
+            <span>Access <strong>14–21% p.a. returns</strong> on alternative assets</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="wlFullName">Full Name <span>*</span></label>
+          <div class="input-icon-wrap">
+            <i class="icon fa-solid fa-user"></i>
+            <input type="text" class="form-input" id="wlFullName" placeholder="Your full name" autocomplete="name" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="wlEmail">Email Address <span>*</span></label>
+          <div class="input-icon-wrap">
+            <i class="icon fa-solid fa-envelope"></i>
+            <input type="email" class="form-input" id="wlEmail" placeholder="you@example.com" autocomplete="email" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="wlCountry">Country of Residence <span>*</span></label>
+          <select class="form-select" id="wlCountry">
+            <option value="">Select your country</option>
+            <optgroup label="Southern Africa">
+              <option>Zimbabwe</option><option>Namibia</option><option>Botswana</option>
+              <option>Zambia</option><option>Mozambique</option><option>Lesotho</option><option>Eswatini</option>
+            </optgroup>
+            <optgroup label="Other Africa">
+              <option>Kenya</option><option>Nigeria</option><option>Ghana</option><option>Tanzania</option>
+              <option>Uganda</option><option>Rwanda</option><option>Ethiopia</option>
+              <option>Egypt</option><option>Morocco</option>
+            </optgroup>
+            <optgroup label="Europe">
+              <option>United Kingdom</option><option>Germany</option><option>Netherlands</option>
+              <option>France</option><option>Portugal</option><option>Spain</option>
+              <option>Italy</option><option>Switzerland</option><option>Sweden</option><option>Belgium</option>
+            </optgroup>
+            <optgroup label="Americas &amp; Pacific">
+              <option>United States</option><option>Canada</option><option>Australia</option><option>New Zealand</option>
+            </optgroup>
+            <optgroup label="Middle East &amp; Asia">
+              <option>United Arab Emirates</option><option>Saudi Arabia</option><option>Qatar</option>
+              <option>India</option><option>China</option><option>Singapore</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <button type="button" class="btn-primary" id="btnWaitlistSubmit" style="margin-top:8px">
+          <span id="wlBtnText"><i class="fa-solid fa-paper-plane"></i> Join the Waitlist</span>
+          <span id="wlBtnSpinner" style="display:none"><i class="fa-solid fa-spinner fa-spin"></i> Submitting…</span>
+        </button>
+
+        <p style="font-size:0.71rem;color:var(--text-dim);text-align:center;margin-top:12px;line-height:1.5">
+          We respect your privacy. Your details will only be used to notify you about our international launch.
+        </p>
+      </div>
+
+      <div class="intl-waitlist-success" id="intlWaitlistSuccess">
+        <div class="intl-waitlist-success__icon">
+          <i class="fa-solid fa-check"></i>
+        </div>
+        <h3 class="intl-waitlist-success__title">You're on the list!</h3>
+        <p class="intl-waitlist-success__sub">
+          Thanks for your interest in SV Capital.<br>
+          We'll send you an email at <strong id="wlConfirmEmail"></strong> as soon as we're available in your country.
+        </p>
+        <div style="margin-top:20px;padding:14px 16px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.20);border-radius:10px;font-size:0.78rem;color:#16a34a;display:flex;gap:10px;align-items:center">
+          <i class="fa-solid fa-circle-check"></i>
+          <span>Keep an eye on your inbox — we're expanding fast!</span>
+        </div>
+      </div>
+
+    </div><!-- /intlWaitlistPanel -->
 
     <!-- ══ STEP 1: Personal Info ══ -->
     <div id="step1">
@@ -1620,9 +1771,14 @@ window.addEventListener('DOMContentLoaded', () => {
   initSocialProofCounters();
   initReturnEstimate();
 
-  // Citizenship toggle
-  document.getElementById('btnCitizenSA').addEventListener('click',   () => toggleCitizenship('sa'));
-  document.getElementById('btnCitizenIntl').addEventListener('click', () => toggleCitizenship('intl'));
+  // Citizenship toggle (both the in-step1 toggle and the waitlist panel toggle)
+  document.getElementById('btnCitizenSA').addEventListener('click',    () => toggleCitizenship('sa'));
+  document.getElementById('btnCitizenIntl').addEventListener('click',  () => toggleCitizenship('intl'));
+  document.getElementById('btnCitizenSA2').addEventListener('click',   () => toggleCitizenship('sa'));
+  document.getElementById('btnCitizenIntl2').addEventListener('click', () => toggleCitizenship('intl'));
+
+  // Waitlist submit
+  document.getElementById('btnWaitlistSubmit').addEventListener('click', submitIntlWaitlist);
 
   // Phone dial code — update placeholder + format hint
   document.getElementById('phoneDialCode').addEventListener('change', e => {
@@ -1780,29 +1936,47 @@ function toggleCitizenship(type) {
   clientType = type;
   const isSA = type === 'sa';
 
-  document.getElementById('btnCitizenSA').classList.toggle('active', isSA);
-  document.getElementById('btnCitizenIntl').classList.toggle('active', !isSA);
-  document.getElementById('infoStripSA').style.display   = isSA ? '' : 'none';
-  document.getElementById('infoStripIntl').style.display = isSA ? 'none' : '';
-  document.getElementById('saIdGroup').style.display       = isSA ? '' : 'none';
-  document.getElementById('passportGroup').style.display   = isSA ? 'none' : '';
-  document.getElementById('saProvinceGroup').style.display = isSA ? '' : 'none';
-  document.getElementById('intlRegionGroup').style.display = isSA ? 'none' : '';
+  // Sync both toggle button pairs
+  ['btnCitizenSA', 'btnCitizenSA2'].forEach(id =>
+    document.getElementById(id)?.classList.toggle('active', isSA));
+  ['btnCitizenIntl', 'btnCitizenIntl2'].forEach(id =>
+    document.getElementById(id)?.classList.toggle('active', !isSA));
 
-  // Phone dial code: reset to +27 for SA
-  if (isSA) {
-    document.getElementById('phoneDialCode').value = '+27';
-    const ph = document.getElementById('phone');
-    if (ph) ph.placeholder = '71 234 5678';
-    const hint = document.getElementById('phoneHint');
-    if (hint) hint.textContent = 'Enter your number without the leading 0 — e.g. 71 234 5678';
+  // International clients → show waitlist panel, hide regular form flow
+  const waitlistPanel = document.getElementById('intlWaitlistPanel');
+  const formSteps     = document.getElementById('formSteps');
+  const step1         = document.getElementById('step1');
+
+  if (!isSA) {
+    if (waitlistPanel) waitlistPanel.style.display = 'block';
+    if (formSteps) formSteps.style.display = 'none';
+    if (step1) step1.style.display = 'none';
+    hideError();
+    return;
   }
 
-  // Update FICA consent text
+  // SA client → hide waitlist, show step 1
+  if (waitlistPanel) waitlistPanel.style.display = 'none';
+  if (formSteps) formSteps.style.display = '';
+  if (step1) step1.style.display = 'block';
+
+  document.getElementById('infoStripSA').style.display   = '';
+  document.getElementById('infoStripIntl').style.display = 'none';
+  document.getElementById('saIdGroup').style.display       = '';
+  document.getElementById('passportGroup').style.display   = 'none';
+  document.getElementById('saProvinceGroup').style.display = '';
+  document.getElementById('intlRegionGroup').style.display = 'none';
+
+  // Reset phone
+  document.getElementById('phoneDialCode').value = '+27';
+  const ph = document.getElementById('phone');
+  if (ph) ph.placeholder = '71 234 5678';
+  const hint = document.getElementById('phoneHint');
+  if (hint) hint.textContent = 'Enter your number without the leading 0 — e.g. 71 234 5678';
+
+  // Reset FICA consent text
   const ct = document.getElementById('ficaConsentText');
-  if (ct) ct.textContent = isSA
-    ? 'I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.'
-    : 'I confirm that I consent to KYC (Know Your Customer) identity verification in accordance with applicable financial regulations. I understand my passport and identity will be verified by the compliance team.';
+  if (ct) ct.textContent = 'I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.';
 
   // Reset ID validation state
   const idVal = document.getElementById('idValidation');
@@ -1810,6 +1984,52 @@ function toggleCitizenship(type) {
   const idHint = document.getElementById('idHint');
   if (idHint) idHint.style.display = '';
   hideError();
+}
+
+/* ── International waitlist submit ── */
+async function submitIntlWaitlist() {
+  const fullName = document.getElementById('wlFullName')?.value?.trim() || '';
+  const email    = document.getElementById('wlEmail')?.value?.trim() || '';
+  const country  = document.getElementById('wlCountry')?.value || '';
+
+  if (!fullName) { showWlError('Please enter your full name.'); return; }
+  if (!email || !email.includes('@')) { showWlError('Please enter a valid email address.'); return; }
+  if (!country) { showWlError('Please select your country of residence.'); return; }
+
+  const btn     = document.getElementById('btnWaitlistSubmit');
+  const btnText = document.getElementById('wlBtnText');
+  const spinner = document.getElementById('wlBtnSpinner');
+  btn.disabled          = true;
+  btnText.style.display = 'none';
+  spinner.style.display = 'inline-flex';
+
+  try {
+    const res  = await fetch('/api/waitlist/international', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ full_name: fullName, email, country }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Submission failed.');
+
+    // Show success
+    document.getElementById('intlWaitlistForm').style.display = 'none';
+    document.getElementById('wlConfirmEmail').textContent = email;
+    document.getElementById('intlWaitlistSuccess').style.display = 'block';
+    hideError();
+  } catch (err) {
+    btn.disabled          = false;
+    btnText.style.display = 'inline-flex';
+    spinner.style.display = 'none';
+    showWlError(err.message || 'Could not submit. Please try again.');
+  }
+}
+
+function showWlError(msg) {
+  const el = document.getElementById('formError');
+  document.getElementById('formErrorMsg').textContent = msg;
+  el.style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 /* ── SA phone number formatter ── */
