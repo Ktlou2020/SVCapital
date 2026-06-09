@@ -3092,13 +3092,25 @@ const AUDIT_PG   = 50;
 
 async function loadAuditLog() {
   try {
-    const res = await API._fetch('GET', 'tables/audit_events', null, { limit: 50, page: _auditPage, order: 'created_at', direction: 'desc' });
+    // Build server-side query params
+    const typeFilter  = document.getElementById('auditTypeFilter')?.value  || '';
+    const searchQ     = document.getElementById('auditSearchInput')?.value || '';
+    const dateFromVal = document.getElementById('auditDateFrom')?.value    || '';
+    const dateToVal   = document.getElementById('auditDateTo')?.value      || '';
+
+    const params = { limit: AUDIT_PG, page: _auditPage, sort: 'created_at', order: 'desc' };
+    if (typeFilter)  params.event_type = typeFilter;
+    if (searchQ)     params.search     = searchQ;
+    if (dateFromVal) params.date_from  = dateFromVal;
+    if (dateToVal)   params.date_to    = dateToVal;
+
+    const res = await API._fetch('GET', 'tables/audit_events', null, params);
     _auditEvents = res.data || [];
-    renderAuditTable();
+    renderAuditTable(res);
 
     // Wire filters once (guard against double-wiring)
-    const typeF   = document.getElementById('auditTypeFilter');
-    const searchF = document.getElementById('auditSearchInput');
+    const typeF    = document.getElementById('auditTypeFilter');
+    const searchF  = document.getElementById('auditSearchInput');
     const dateFrom = document.getElementById('auditDateFrom');
     const dateTo   = document.getElementById('auditDateTo');
 
@@ -3121,24 +3133,17 @@ function _auditNextPage() {
   loadAuditLog();
 }
 
-function renderAuditTable() {
-  const body   = document.getElementById('auditBody');
+function renderAuditTable(res) {
+  const body = document.getElementById('auditBody');
   if (!body) return;
 
-  const typeFilter   = document.getElementById('auditTypeFilter')?.value || '';
-  const searchQ      = (document.getElementById('auditSearchInput')?.value || '').toLowerCase();
-  const dateFromVal  = document.getElementById('auditDateFrom')?.value || '';
-  const dateToVal    = document.getElementById('auditDateTo')?.value || '';
-
-  // Apply client-side filters to the server-fetched page
-  let items = _auditEvents;
-  if (typeFilter)   items = items.filter(e => (e.event_type || '').includes(typeFilter));
-  if (searchQ)      items = items.filter(e => `${e.event_type} ${e.user_email} ${e.actor_role} ${e.action} ${e.entity_type} ${e.entity_id} ${e.description}`.toLowerCase().includes(searchQ));
-  if (dateFromVal)  items = items.filter(e => e.created_at && new Date(e.created_at) >= new Date(dateFromVal));
-  if (dateToVal)    items = items.filter(e => e.created_at && new Date(e.created_at) <= new Date(dateToVal + 'T23:59:59'));
+  const items = _auditEvents;
+  const total = res?.total ?? items.length;
 
   const footer = document.getElementById('auditFooter');
-  if (footer) footer.textContent = items.length ? `Page ${_auditPage} · ${items.length} events shown` : '0 events';
+  if (footer) footer.textContent = total
+    ? `Page ${_auditPage} · ${items.length} of ${total.toLocaleString()} events`
+    : '0 events';
 
   if (!items.length) {
     body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No audit events found</td></tr>';
@@ -3149,22 +3154,42 @@ function renderAuditTable() {
     return;
   }
 
-  const actionColor = { 'user.login': 'blue', 'kyc.approved': 'green', 'kyc.rejected': 'red', 'transaction.completed': 'green', 'transaction.rejected': 'red', 'investment.paid_out': 'gold', 'withdrawal.approved': 'green', 'withdrawal.rejected': 'red' };
+  const actionColor = {
+    'user.login': 'blue', 'login': 'blue',
+    'kyc.approved': 'green', 'kyc.rejected': 'red',
+    'transaction.completed': 'green', 'transaction.rejected': 'red',
+    'investment.paid_out': 'gold', 'investment.created': 'green',
+    'withdrawal.approved': 'green', 'withdrawal.rejected': 'red',
+    'withdrawal.submitted': 'blue',
+  };
 
-  body.innerHTML = items.map(e => `<tr>
-    <td class="td-muted" style="white-space:nowrap;font-size:0.75rem">${Utils.date(e.created_at)}</td>
-    <td><div style="font-size:0.78rem;font-weight:600;color:#1a1a1a">${e.user_email || e.actor || '—'}</div></td>
-    <td><span style="font-size:0.72rem;color:var(--text-muted)">${e.actor_role || e.role || '—'}</span></td>
-    <td><span class="badge badge--${actionColor[e.event_type] || 'gray'}" style="font-size:0.7rem">${e.event_type || e.action || '—'}</span></td>
-    <td class="td-muted" style="font-size:0.75rem">${e.entity_type ? `${e.entity_type}${e.entity_id ? ' #' + String(e.entity_id).slice(0, 8) : ''}` : (e.target || '—')}</td>
-    <td class="td-muted" style="font-size:0.72rem">${e.ip_address || e.ip || '—'}</td>
-  </tr>`).join('');
+  body.innerHTML = items.map(e => {
+    const action      = e.event_type || '—';
+    const actor       = e.user_email || '—';
+    const actorRole   = e.actor_role || '—';
+    const target      = e.entity_type
+      ? `${e.entity_type}${e.entity_id ? ' #' + String(e.entity_id).slice(0, 8) : ''}`
+      : '—';
+    const ip          = e.ip_address || '—';
+    const desc        = e.description || '';
+    const badgeClass  = actionColor[action] || 'gray';
 
-  // Prev/Next server-side pagination controls
+    return `<tr>
+      <td class="td-muted" style="white-space:nowrap;font-size:0.75rem">${Utils.date(e.created_at)}</td>
+      <td><div style="font-size:0.78rem;font-weight:600;color:#1a1a1a">${actor}</div>
+          ${actorRole !== '—' ? `<div style="font-size:0.68rem;color:var(--text-muted)">${actorRole}</div>` : ''}</td>
+      <td><span class="badge badge--${badgeClass}" style="font-size:0.7rem">${action}</span></td>
+      <td class="td-muted" style="font-size:0.75rem">${target}</td>
+      <td class="td-muted" style="font-size:0.72rem;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${desc}">${desc || '—'}</td>
+      <td class="td-muted" style="font-size:0.72rem">${ip}</td>
+    </tr>`;
+  }).join('');
+
+  // Pagination controls
   const pag = document.getElementById('auditPagination');
   if (pag) {
     const hasPrev = _auditPage > 1;
-    const hasNext = _auditEvents.length === AUDIT_PG; // if we got a full page, there may be more
+    const hasNext = items.length === AUDIT_PG;
     pag.innerHTML = [
       hasPrev ? `<button class="page-btn" onclick="_auditPrevPage()">‹ Prev</button>` : '',
       `<span class="page-btn active" style="cursor:default">${_auditPage}</span>`,
