@@ -148,6 +148,7 @@ const Auth = {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Login failed');
     Auth.setToken(data.token, data.user, remember);
+    if (typeof window !== 'undefined' && window.SVC) SVC.track('login', { method: 'password' });
     return data;
   },
 
@@ -164,6 +165,7 @@ const Auth = {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Registration failed');
     Auth.setToken(data.token, data.user, true);
+    if (typeof window !== 'undefined' && window.SVC) SVC.track('sign_up', { method: 'password', has_referral: !!(payload && payload.referredBy) });
     return data;
   },
 
@@ -172,6 +174,7 @@ const Auth = {
    * Works regardless of which login path was used.
    */
   async logout(redirectTo = '/login.html') {
+    if (typeof window !== 'undefined' && window.SVC) SVC.track('svc_logout', {});
     try {
       await fetch(`${_API_BASE}auth/logout`, { method: 'POST', credentials: 'include' });
     } catch (_) {}

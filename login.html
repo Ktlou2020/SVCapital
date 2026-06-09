@@ -515,6 +515,19 @@
       .login-right { width: 100%; max-width: 100%; min-width: 0; padding: 40px 24px; border-left: none; }
     }
   </style>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="/js/analytics.js"></script>
 </head>
 <body>
 <div class="login-layout">
@@ -888,6 +901,16 @@
     document.getElementById('twoFAStep').style.display = 'none';
     document.getElementById('loginForm').style.display = 'block';
   }
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+      loginForm.addEventListener('submit', function() {
+        if (window.SVC) SVC.track('svc_login_attempted', {});
+      });
+    }
+  });
 </script>
 </body>
 </html>
