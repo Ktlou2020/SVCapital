@@ -415,11 +415,15 @@ async function loadPortalData() {
     const allInvestments = invstRes.data || [];
     const allTxns        = txnRes.data   || [];
 
-    // Find demo investor (INV-002), fall back to second then first in list
-    PORTAL.investor = allInvestors.find(i => i.id === DEMO_INVESTOR_ID)
-                   || allInvestors.find(i => i.status === 'active')
-                   || allInvestors[0]
-                   || null;
+    // Find the logged-in investor — never fall back to a different person's record
+    PORTAL.investor = allInvestors.find(i => i.id === DEMO_INVESTOR_ID) || null;
+
+    // If data isolation returned multiple investors but DEMO_INVESTOR_ID didn't match,
+    // try a direct fetch by ID so we always load the correct profile
+    if (!PORTAL.investor && DEMO_INVESTOR_ID && DEMO_INVESTOR_ID !== 'INV-001') {
+      const directRes = await API.investors.get(DEMO_INVESTOR_ID).catch(() => null);
+      if (directRes && directRes.id) PORTAL.investor = directRes;
+    }
 
     const demoId = PORTAL.investor ? PORTAL.investor.id : DEMO_INVESTOR_ID;
 
@@ -470,7 +474,7 @@ async function loadPortalData() {
     PORTAL.pools        = poolRes.data || [];
 
     // Ensure investor object is never null so statement guard passes
-    if (!PORTAL.investor) PORTAL.investor = { id: demoId, first_name: 'Thabo', last_name: 'Khumalo' };
+    if (!PORTAL.investor) PORTAL.investor = { id: demoId };
 
     // Load waitlist entries for this investor (non-blocking)
     const waitlistRes = await API._fetch('GET', 'tables/investment_waitlist', null, { investor_id: PORTAL.investor.id, limit: 50 }).catch(() => ({ data: [] }));
@@ -484,6 +488,10 @@ async function loadPortalData() {
     renderOnboardingWizard();
     updateStmtQuickStats();
     _renderBankDetailsPanel();
+    // Re-populate profile if user navigated there before data loaded
+    if (document.getElementById('view-profile')?.classList.contains('view--active')) {
+      renderRiskProfile();
+    }
 
     // Load gamification data (non-blocking — don't fail portal if quests fail)
     loadQuestData().catch(err => console.warn('[Quests] load error:', err.message));
