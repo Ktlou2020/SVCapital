@@ -487,7 +487,6 @@ async function loadPortalData() {
     SVC.track('portal_loaded', { active_investments: PORTAL.investments.filter(i => i.status === 'active').length });
 
     renderOverview();
-    renderEquityChart();
     renderOnboardingWizard();
     updateStmtQuickStats();
     _renderBankDetailsPanel();
@@ -637,110 +636,6 @@ function renderOverview() {
   renderPortfolioTrendChart();
   renderAllocationChart();
   renderXPWidget();
-}
-
-/* ─── Equity Curve Chart ─────────────────────────────────────────── */
-function renderEquityChart() {
-  const canvas = document.getElementById('equityChart');
-  if (!canvas) return;
-
-  PORTAL.charts = PORTAL.charts || {};
-  if (PORTAL.charts.equity) { PORTAL.charts.equity.destroy(); PORTAL.charts.equity = null; }
-
-  const now = new Date();
-  const months = [];
-  const monthLabels = [];
-
-  // Build last 12 months
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({ year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleString('en-ZA', { month: 'short' }) });
-    monthLabels.push(d.toLocaleString('en-ZA', { month: 'short' }));
-  }
-
-  // Compute cumulative portfolio value at end of each month
-  // deposits, returns, payout, referral_bonus, adjustment (positive) → ADD
-  // withdrawal → SUBTRACT
-  // investment → NEITHER (money moved wallet→invested, total wealth unchanged)
-  const txns = (PORTAL.transactions || []).slice().sort((a, b) =>
-    new Date(a.transaction_date || a.created_at || 0) - new Date(b.transaction_date || b.created_at || 0)
-  );
-
-  const addTypes = new Set(['deposit', 'return', 'payout', 'referral_bonus', 'adjustment']);
-  const subTypes = new Set(['withdrawal']);
-
-  // Build a running cumulative sum month by month
-  // First, group net delta per month key
-  const deltaMap = {};
-  for (const t of txns) {
-    const raw = t.transaction_date || t.created_at;
-    if (!raw) continue;
-    const d = new Date(raw);
-    if (isNaN(d.getTime())) continue;
-    const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`;
-    const amt = parseFloat(t.amount) || 0;
-    let delta = 0;
-    if (addTypes.has(t.type) && amt > 0) delta = amt;
-    else if (subTypes.has(t.type) && amt > 0) delta = -amt;
-    deltaMap[key] = (deltaMap[key] || 0) + delta;
-  }
-
-  // Compute cumulative values
-  const values = [];
-  let cumulative = 0;
-  for (const m of months) {
-    const key = `${m.year}-${String(m.month).padStart(2,'0')}`;
-    cumulative += (deltaMap[key] || 0);
-    values.push(Math.max(0, Math.round(cumulative)));
-  }
-
-  // Replace last data point with actual current portfolio value (wallet + invested)
-  const currentValue = (parseFloat(PORTAL.investor?.wallet_balance) || 0) +
-                       (parseFloat(PORTAL.investor?.total_invested)  || 0);
-  if (values.length > 0) values[values.length - 1] = Math.max(values[values.length - 1], Math.round(currentValue));
-
-  PORTAL.charts.equity = new Chart(canvas, {
-    type: 'line',
-    data: {
-      labels: monthLabels,
-      datasets: [{
-        label: 'Portfolio Value',
-        data: values,
-        borderColor: '#FF9B0C',
-        backgroundColor: 'rgba(255,155,12,0.1)',
-        fill: true,
-        tension: 0.4,
-        pointRadius: 3,
-        pointBackgroundColor: '#FF9B0C'
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: c => ' R ' + c.parsed.y.toLocaleString('en-ZA')
-          }
-        }
-      },
-      scales: {
-        x: {
-          grid: { display: false },
-          ticks: { color: '#6b7280', font: { size: 10 } }
-        },
-        y: {
-          grid: { color: 'rgba(0,0,0,0.06)' },
-          ticks: {
-            color: '#6b7280',
-            callback: v => 'R' + (v / 1000).toFixed(0) + 'k',
-            font: { size: 10 }
-          }
-        }
-      }
-    }
-  });
 }
 
 /* ─── Onboarding Wizard ──────────────────────────────────────────── */
@@ -2574,15 +2469,17 @@ async function confirmInvestment(pool) {
   const amount = parseFloat(document.getElementById('investAmount').value);
   if (!amount || amount < pool.min_investment) { Toast.error(`Minimum investment is ${Utils.rand(pool.min_investment)}`); return; }
 
-  const wallet = PORTAL.investor?.wallet_balance || 0;
-  if (amount > wallet) { Toast.error('Insufficient wallet balance. Please top up first.'); return; }
+  const wallet = parseFloat(PORTAL.investor?.wallet_balance) || 0;
+  const platformFee = Math.round(amount * 0.01 * 100) / 100;
+  const totalDeducted = amount + platformFee;
+  if (totalDeducted > wallet) { Toast.error(`Insufficient balance. This investment requires ${Utils.rand(totalDeducted)} (${Utils.rand(amount)} + ${Utils.rand(platformFee)} platform fee).`); return; }
 
   try {
     const expectedReturn = amount * pool.annual_rate * (pool.term_months / 12);
     const maturityDate = new Date();
     maturityDate.setMonth(maturityDate.getMonth() + pool.term_months);
 
-    // Create investment
+    // Create investment (server-side fee hook will record the fee transaction separately)
     await API.investments.create({
       id: Utils.genId('INVST'),
       investor_id: DEMO_INVESTOR_ID,
@@ -2601,7 +2498,7 @@ async function confirmInvestment(pool) {
       sub_account_id: _pmSaId || undefined,
     });
 
-    // Record transaction
+    // Record investment transaction
     await API.transactions.create({
       id:          Utils.genId('TXN'),
       investor_id: DEMO_INVESTOR_ID,
@@ -2615,9 +2512,9 @@ async function confirmInvestment(pool) {
       transaction_date: new Date().toISOString(),
     });
 
-    // Update investor wallet and totals
+    // Update investor wallet and totals (wallet decremented by amount + fee)
     await API.investors.update(DEMO_INVESTOR_ID, {
-      wallet_balance: Math.max(0, wallet - amount),
+      wallet_balance: Math.max(0, wallet - totalDeducted),
       total_invested: (parseFloat(PORTAL.investor.total_invested) || 0) + amount
     });
 

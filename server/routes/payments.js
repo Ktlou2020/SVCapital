@@ -46,25 +46,11 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
   if (!invRes.rows[0]) throw new Error(`Investor ${investorId} not found`);
   const investor = invRes.rows[0];
 
-  // Apply 1% platform fee — net amount credited to wallet
-  const platformFee = Math.round(parseFloat(amount) * 0.01 * 100) / 100;
-  const netAmount   = parseFloat(amount) - platformFee;
-
   // Atomic SQL increment — safe against race conditions
   await pool.query(
     'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-    [netAmount, investorId]
+    [parseFloat(amount), investorId]
   );
-
-  // Record platform fee transaction for audit trail and accounting sync
-  if (platformFee > 0) {
-    await pool.query(
-      `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
-       VALUES ($1, $2, 'fee', $3, 'completed', $4, '1% platform fee on deposit', NOW(), NOW())
-       ON CONFLICT (id) DO NOTHING`,
-      [`FEE-${reference}`, investorId, platformFee, `FEE-${reference}`]
-    ).catch(e => console.error('[payments] fee record error:', e.message));
-  }
 
   const sourceLabel = source === 'webhook' ? 'Paystack (confirmed)' : 'Paystack';
   const desc = `Wallet top-up via ${sourceLabel} — R${Number(amount).toLocaleString('en-ZA')} credited`;
