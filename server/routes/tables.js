@@ -779,8 +779,8 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           if (inv[0]) await emailService.sendKycRejected(inv[0], { notes: updated.notes });
         }
 
-        // Pool reopened → notify waitlisted investors
-        if (table === 'investment_pools' && body.status === 'active' && updated.id) {
+        // Pool opened or activated → notify waitlisted investors
+        if (table === 'investment_pools' && (body.status === 'active' || body.status === 'open') && updated.id) {
           (async () => {
             try {
               const { rows: waitlist } = await pool.query(

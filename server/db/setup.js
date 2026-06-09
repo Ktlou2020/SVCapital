@@ -892,6 +892,13 @@ async function autoSetup() {
         BEGIN ALTER TABLE transactions ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE investments ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE audit_events ADD COLUMN actor_role TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE maturity_instructions ADD COLUMN investor_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE maturity_instructions ADD COLUMN pool_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE maturity_instructions ADD COLUMN instruction_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE maturity_instructions ADD COLUMN custom_payout_amount NUMERIC(18,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE maturity_instructions ADD COLUMN submitted_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE maturity_instructions ADD COLUMN total_payout NUMERIC(18,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE maturity_instructions ADD COLUMN reinvest_pool_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
       END $$
     `);
     console.log('✅ Investor FICA + gamification columns ready.');
