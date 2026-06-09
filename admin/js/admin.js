@@ -1256,17 +1256,20 @@ function renderPoolsGrid() {
 
     // Manage dropdown for waitlist/reopen
     const canSetWaitlist = ['open', 'filling', 'active'].includes(p.status);
+    const pid = p.id; // alias for readability inside template
     const manageDropdown = `
       <div style="position:relative;display:inline-block" class="pool-manage-wrap">
-        <button class="btn btn--secondary btn--sm" onclick="togglePoolManageMenu(event,'pool-menu-${p.id}')">
+        <button class="btn btn--secondary btn--sm" onclick="togglePoolManageMenu(event,'pool-menu-${pid}')">
           <i class="fa-solid fa-ellipsis-vertical"></i> Manage
         </button>
-        <div id="pool-menu-${p.id}" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:#ffffff;border:1px solid rgba(0,0,0,0.1);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.12);z-index:99;min-width:160px;overflow:hidden">
-          ${canSetWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="setPoolWaitlist(${JSON.stringify(p.id)});document.getElementById('pool-menu-${p.id}').style.display='none'"><i class="fa-solid fa-clock" style="color:#f59e0b;width:16px"></i> Set to Waitlist</button>` : ''}
-          ${isWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="reopenPool(${JSON.stringify(p.id)});document.getElementById('pool-menu-${p.id}').style.display='none'"><i class="fa-solid fa-door-open" style="color:#22c55e;width:16px"></i> Reopen Pool</button>` : ''}
-          <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="editPool(${JSON.stringify(p.id)});document.getElementById('pool-menu-${p.id}').style.display='none'"><i class="fa-solid fa-pen" style="width:16px"></i> Edit Pool</button>
-          ${p.status === 'open' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="closePool(${JSON.stringify(p.id)});document.getElementById('pool-menu-${p.id}').style.display='none'"><i class="fa-solid fa-lock" style="color:#ef4444;width:16px"></i> Close Pool</button>` : ''}
-          ${p.status === 'matured' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="markPaidOut(${JSON.stringify(p.id)});document.getElementById('pool-menu-${p.id}').style.display='none'"><i class="fa-solid fa-check" style="color:#22c55e;width:16px"></i> Mark Paid Out</button>` : ''}
+        <div id="pool-menu-${pid}" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:#ffffff;border:1px solid rgba(0,0,0,0.1);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.12);z-index:99;min-width:180px;overflow:hidden">
+          ${canSetWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="setPoolWaitlist('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-clock" style="color:#f59e0b;width:16px"></i> Set to Waitlist</button>` : ''}
+          ${isWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="reopenPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-door-open" style="color:#22c55e;width:16px"></i> Reopen Pool</button>` : ''}
+          <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="editPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-pen" style="width:16px"></i> Edit Pool</button>
+          ${p.status === 'open' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="closePool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-lock" style="color:#ef4444;width:16px"></i> Close Pool</button>` : ''}
+          ${p.status === 'matured' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="markPaidOut('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-check" style="color:#22c55e;width:16px"></i> Mark Paid Out</button>` : ''}
+          <div style="height:1px;background:rgba(0,0,0,0.07);margin:4px 0"></div>
+          <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem;color:#ef4444" onclick="deletePool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-trash" style="width:16px"></i> Delete Pool</button>
         </div>
       </div>`;
 
@@ -1479,6 +1482,27 @@ async function markPaidOut(id) {
     Toast.success('Pool marked as paid out');
     await loadPools();
   } catch (e) { Toast.error('Failed to update pool'); }
+}
+
+async function deletePool(id) {
+  const pool = STATE.pools.find(p => p.id === id);
+  const name = pool?.name || id;
+
+  // Check for linked investments before confirming
+  const activeInvestments = (STATE.investments || []).filter(i => i.pool_id === id && i.status === 'active');
+  const warningLine = activeInvestments.length > 0
+    ? `\n\n⚠️  WARNING: This pool has ${activeInvestments.length} active investment(s). Deleting it will unlink those investments from the pool.`
+    : '';
+
+  if (!confirm(`Permanently delete pool "${name}"?\n\nThis cannot be undone.${warningLine}`)) return;
+
+  try {
+    await API.pools.delete(id);
+    Toast.success(`Pool "${name}" deleted`);
+    await loadPools();
+  } catch (e) {
+    Toast.error(e.message || 'Failed to delete pool');
+  }
 }
 
 function editPool(id) {
