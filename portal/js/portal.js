@@ -17,6 +17,9 @@ const DEMO_INVESTOR_ID = (() => {
   return 'INV-001'; // fallback for demo
 })();
 
+/* Escape user-controlled strings before inserting into innerHTML */
+const _esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
 let PORTAL = {
   investor: null,
   investments: [],
@@ -5343,7 +5346,7 @@ function _renderBankDetailsPanel() {
       <div class="info-row"><span class="info-row__label">Account Type</span><span class="info-row__value" style="text-transform:capitalize">${inv.bank_account_type || '—'}</span></div>
       <div class="info-row"><span class="info-row__label">Verification Status</span><span class="info-row__value"><span class="badge ${s.cls}">${s.label}</span></span></div>
     </div>
-    ${inv.bank_account_notes ? `<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);background:rgba(239,68,68,0.06);border-radius:8px;padding:8px 12px">${inv.bank_account_notes}</div>` : ''}
+    ${inv.bank_account_notes ? `<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);background:rgba(239,68,68,0.06);border-radius:8px;padding:8px 12px">${_esc(inv.bank_account_notes)}</div>` : ''}
   `;
 }
 
@@ -5765,11 +5768,23 @@ async function confirm2FASetup() {
   }
   if (errEl) errEl.style.display = 'none';
   try {
-    await API._fetch('POST', 'auth/2fa/enable', { secret: _2faSecret, token: code });
+    const result = await API._fetch('POST', 'auth/2fa/enable', { secret: _2faSecret, token: code });
     _2faSecret = null;
-    Toast.success('Two-factor authentication is now enabled! Your account is secured.');
-    Modal.close('twoFAModal');
-    await load2FAStatus();
+    // Show recovery codes before closing modal
+    const body = document.getElementById('twoFAModalBody');
+    const footer = document.getElementById('twoFAModalFooter');
+    if (body) body.innerHTML = `
+  <div style="text-align:center;margin-bottom:12px">
+    <i class="fa-solid fa-shield-check" style="font-size:2rem;color:var(--green)"></i>
+    <h3 style="margin:10px 0 4px;font-size:1rem">2FA Enabled!</h3>
+    <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px">Save these backup codes somewhere safe. Each code can only be used once if you lose access to your authenticator app.</p>
+  </div>
+  <div style="background:#f8f9fa;border-radius:10px;padding:14px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
+    ${(result.recoveryCodes || []).map(c => `<div style="font-family:monospace;font-size:0.88rem;font-weight:700;text-align:center;padding:6px 10px;background:#fff;border-radius:6px;border:1px solid #e5e7eb">${c}</div>`).join('')}
+  </div>
+  <p style="font-size:0.75rem;color:#ef4444;text-align:center"><i class="fa-solid fa-triangle-exclamation"></i> These codes will not be shown again.</p>
+`;
+    if (footer) footer.innerHTML = `<button class="btn btn--primary btn--full" onclick="Modal.close('twoFAModal');load2FAStatus()"><i class="fa-solid fa-check"></i> I've saved my recovery codes</button>`;
   } catch (e) {
     if (errEl) { errEl.textContent = e.message || 'Invalid code — please try again.'; errEl.style.display = 'block'; }
   }
@@ -6868,6 +6883,9 @@ function renderRiskProfile() {
     radios.forEach(r => { r.checked = r.value === profile; });
   }
 
+  // Load login history
+  _loadLoginHistory();
+
   if (!badge) return;
 
   const configs = {
@@ -6900,6 +6918,82 @@ function renderRiskProfile() {
     if (desc) desc.textContent = 'Complete the questionnaire to determine your risk appetite and get tailored pool recommendations.';
     if (btnLabel) btnLabel.textContent = 'Take Questionnaire';
   }
+
+  _loadStatementArchive();
+}
+
+/* ═══════════════════════════════════════════════
+   FEATURE: STATEMENT ARCHIVE & TAX CERTIFICATES
+   ═══════════════════════════════════════════════ */
+
+async function _loadStatementArchive() {
+  const el = document.getElementById('statementArchiveBody');
+  if (!el) return;
+  try {
+    const data = await API._fetch('GET', 'statements');
+    const currentYear = new Date().getFullYear();
+    const taxYear = new Date().getMonth() >= 2 ? currentYear : currentYear - 1; // Feb cutoff
+    const taxSection = `
+      <div style="margin-bottom:14px;padding:12px;background:rgba(255,155,12,0.06);border-radius:8px;border:1px solid rgba(255,155,12,0.2)">
+        <div style="font-size:0.84rem;font-weight:700;margin-bottom:6px"><i class="fa-solid fa-file-shield" style="color:var(--gold);margin-right:6px"></i>Tax Certificates</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">Download your annual IT3(b)-style investment income summary for SARS submission.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${[taxYear, taxYear-1, taxYear-2].map(y => `<button class="btn btn--ghost btn--sm" onclick="_downloadTaxCert(${y})" style="font-size:0.75rem"><i class="fa-solid fa-download"></i> ${y}/${y+1}</button>`).join('')}
+        </div>
+      </div>`;
+    if (!data.statements || !data.statements.length) {
+      el.innerHTML = taxSection + '<div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:12px 0">No statements available yet. Statements are generated on the 1st of each month.</div>';
+      return;
+    }
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    el.innerHTML = taxSection + `<div style="display:flex;flex-direction:column;gap:6px">${data.statements.map(s => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface2,#f8f9fa);border-radius:8px">
+        <div style="font-size:0.84rem;font-weight:600">${months[s.period_month-1]} ${s.period_year} Statement</div>
+        <a href="/api/statements/${s.id}/pdf" target="_blank" class="btn btn--ghost btn--sm" style="font-size:0.75rem"><i class="fa-solid fa-download"></i> PDF</a>
+      </div>`).join('')}</div>`;
+  } catch (_) {
+    if (el) el.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:12px 0">Unable to load statements</div>';
+  }
+}
+
+async function _downloadTaxCert(year) {
+  try {
+    Toast.info?.(`Generating ${year} tax certificate…`) || Toast.success?.(`Generating ${year} tax certificate…`);
+    const data = await API._fetch('GET', `statements/tax-cert/${year}`);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    let y = 20;
+    const lh = 7;
+    const fmt = (n) => `R ${parseFloat(n||0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    doc.setFontSize(18); doc.setFont(undefined,'bold');
+    doc.text('SV CAPITAL — Investment Income Certificate', 14, y); y += 10;
+    doc.setFontSize(10); doc.setFont(undefined,'normal');
+    doc.text(`Tax Year: 1 March ${year} — 28 February ${year+1}`, 14, y); y += lh;
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-ZA')}`, 14, y); y += 12;
+    doc.setFont(undefined,'bold'); doc.text('Investor Details', 14, y); y += lh;
+    doc.setFont(undefined,'normal');
+    doc.text(`Name: ${data.investor.first_name} ${data.investor.last_name}`, 14, y); y += lh;
+    doc.text(`Email: ${data.investor.email}`, 14, y); y += lh;
+    doc.text(`ID / Ref: ${data.investor.id}`, 14, y); y += 12;
+    doc.setFont(undefined,'bold'); doc.text('Summary', 14, y); y += lh;
+    doc.setFont(undefined,'normal');
+    doc.text(`Total Deposits:    ${fmt(data.deposits)}`, 14, y); y += lh;
+    doc.text(`Total Withdrawals: ${fmt(data.withdrawals)}`, 14, y); y += lh;
+    doc.text(`Investment Returns: ${fmt(data.totalReturns)}`, 14, y); y += 12;
+    if (data.investments.length) {
+      doc.setFont(undefined,'bold'); doc.text('Matured Investments', 14, y); y += lh;
+      doc.setFont(undefined,'normal');
+      data.investments.forEach(inv => {
+        const ret = parseFloat(inv.actual_return || inv.expected_return || 0);
+        doc.text(`• ${inv.pool_name || 'Investment'} — Return: ${fmt(ret)} — Matured: ${new Date(inv.end_date).toLocaleDateString('en-ZA')}`, 14, y); y += lh;
+        if (y > 270) { doc.addPage(); y = 20; }
+      });
+    }
+    y += 6;
+    doc.setFontSize(8); doc.setTextColor(100);
+    doc.text('This document is for informational purposes. Please consult a tax advisor for official SARS submissions.', 14, y);
+    doc.save(`SVC-TaxCert-${year}-${year+1}.pdf`);
+  } catch (e) { Toast.error('Could not generate tax certificate — please try again.'); }
 }
 
 /* ═══════════════════════════════════════════════
@@ -6942,6 +7036,30 @@ async function load2FAStatus() {
   }
 }
 
+async function _loadLoginHistory() {
+  const el = document.getElementById('loginHistoryList');
+  if (!el) return;
+  try {
+    const data = await API._fetch('GET', 'auth/login-history');
+    if (!data.events || !data.events.length) {
+      el.innerHTML = '<div style="color:var(--text-muted)">No login history yet</div>';
+      return;
+    }
+    el.innerHTML = data.events.slice(0, 5).map(e => {
+      const ua = e.user_agent || '';
+      const device = ua.includes('Mobile') || ua.includes('Android') ? '📱 Mobile' : '💻 Desktop';
+      const browser = ua.includes('Chrome') ? 'Chrome' : ua.includes('Firefox') ? 'Firefox' : ua.includes('Safari') ? 'Safari' : 'Browser';
+      const date = new Date(e.login_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.05)">
+        <div><span style="font-weight:600">${device} · ${browser}</span><br><span style="color:var(--text-muted)">${e.ip_address || 'Unknown IP'}</span></div>
+        <div style="text-align:right;white-space:nowrap">${date}</div>
+      </div>`;
+    }).join('');
+  } catch (_) {
+    if (el) el.innerHTML = '<div style="color:var(--text-muted)">Unable to load login history</div>';
+  }
+}
+
 /* ═══════════════════════════════════════════════
    FEATURE 2: TWO-WAY SUPPORT MESSAGING
    ═══════════════════════════════════════════════ */
@@ -6964,7 +7082,7 @@ function renderMyTickets() {
     return `
       <div class="my-ticket-item" style="padding:12px 14px;border-radius:10px;border:1px solid rgba(0,0,0,0.07);margin-bottom:8px;background:var(--ci-bg-light,#F7F8FA)">
         <div class="my-ticket-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px">
-          <span class="my-ticket-subject" style="font-weight:700;font-size:0.86rem;color:#1a1a1a;flex:1">${t.subject}</span>
+          <span class="my-ticket-subject" style="font-weight:700;font-size:0.86rem;color:#1a1a1a;flex:1">${_esc(t.subject)}</span>
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
             ${unreadBadge}
             ${Utils.statusBadge(t.status)}

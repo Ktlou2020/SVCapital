@@ -760,6 +760,17 @@
                 <div style="text-align:center;padding:20px;color:#6b7280;font-size:0.85rem">Loading KYC status…</div>
               </div>
             </div>
+
+            <!-- Statement Archive -->
+            <div class="panel" id="statementArchivePanel">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-file-invoice" style="color:var(--gold);margin-right:6px"></i>Monthly Statements</span>
+                <button class="btn btn--ghost btn--sm" onclick="_loadStatementArchive()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+              </div>
+              <div class="panel__body" id="statementArchiveBody">
+                <div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:12px 0">Loading statements…</div>
+              </div>
+            </div>
           </div>
 
           <div>
@@ -799,6 +810,12 @@
                     </div>
                   </div>
                   <span id="twoFAStatusBadge" style="display:none"></span>
+                </div>
+                <div id="loginHistorySection" style="margin-top:12px">
+                  <div style="font-size:0.78rem;font-weight:700;color:#374151;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+                    <span><i class="fa-solid fa-clock-rotate-left" style="color:var(--gold);margin-right:6px"></i>Recent Logins</span>
+                  </div>
+                  <div id="loginHistoryList" style="font-size:0.75rem;color:var(--text-muted)">Loading…</div>
                 </div>
                 <button class="btn btn--secondary btn--full" onclick="openChangePasswordModal()"><i class="fa-solid fa-key"></i> Change Password</button>
                 <button class="btn btn--secondary btn--full" id="twoFAToggleBtn" onclick="toggle2FA()"><i class="fa-solid fa-mobile"></i> <span id="twoFAToggleLabel">Loading…</span></button>
