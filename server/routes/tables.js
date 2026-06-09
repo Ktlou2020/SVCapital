@@ -193,7 +193,7 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
       return res.status(403).json({ error: 'Forbidden.' });
     }
 
-    let { page = 1, limit = 100, search, sort, order = 'asc', ...filters } = req.query;
+    let { page = 1, limit = 100, search, sort, order = 'asc', date_from, date_to, ...filters } = req.query;
     page  = Math.max(1, parseInt(page));
     limit = Math.min(500, Math.max(1, parseInt(limit)));
     const offset = (page - 1) * limit;
@@ -230,10 +230,20 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
       }
     }
 
+    // Date range filter (used by audit log and other date-ranged tables)
+    if (date_from) {
+      params.push(date_from);
+      conditions.push(`created_at >= $${params.length}::date`);
+    }
+    if (date_to) {
+      params.push(date_to);
+      conditions.push(`created_at < ($${params.length}::date + INTERVAL '1 day')`);
+    }
+
     // Filter by remaining query params (simple equality)
     for (const [key, val] of Object.entries(filters)) {
       // Skip internal params
-      if (['page','limit','search','sort','order'].includes(key)) continue;
+      if (['page','limit','search','sort','order','date_from','date_to'].includes(key)) continue;
       // Validate column names (alphanumeric + underscore only)
       if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) continue;
       params.push(val);
@@ -252,6 +262,8 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         conditions.push(`(email ILIKE $${params.length} OR first_name ILIKE $${params.length} OR last_name ILIKE $${params.length})`);
       } else if (table === 'ifas') {
         conditions.push(`(first_name ILIKE $${params.length} OR last_name ILIKE $${params.length} OR email ILIKE $${params.length} OR company_name ILIKE $${params.length} OR license_number ILIKE $${params.length})`);
+      } else if (table === 'audit_events') {
+        conditions.push(`(event_type ILIKE $${params.length} OR user_email ILIKE $${params.length} OR description ILIKE $${params.length} OR entity_type ILIKE $${params.length} OR ip_address ILIKE $${params.length})`);
       } else {
         conditions.push(`id::text ILIKE $${params.length}`);
       }
@@ -611,7 +623,7 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
         const auditKey = body.status ? `${table}:${body.status}` : (body.bank_account_status ? `${table}:${body.bank_account_status}` : null);
         if (auditKey && auditMap[auditKey]) {
           await audit.log({
-            actorId: actor.id, actorEmail: actor.email, action: auditMap[auditKey],
+            actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: auditMap[auditKey],
             entityType: table, entityId: req.params.id,
             description: `${auditMap[auditKey]} on ${table}#${req.params.id}`,
             ip: req.ip,

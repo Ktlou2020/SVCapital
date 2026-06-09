@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
   id TEXT PRIMARY KEY, event_type TEXT NOT NULL,
   entity_type TEXT, entity_id TEXT,
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-  user_email TEXT, description TEXT, ip_address TEXT, metadata JSONB,
+  user_email TEXT, actor_role TEXT, description TEXT, ip_address TEXT, metadata JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS audit_events_entity_idx ON audit_events(entity_type, entity_id);
@@ -808,6 +808,7 @@ async function autoSetup() {
         BEGIN ALTER TABLE kyc_documents ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE transactions ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE investments ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE audit_events ADD COLUMN actor_role TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
       END $$
     `);
     console.log('✅ Investor FICA + gamification columns ready.');

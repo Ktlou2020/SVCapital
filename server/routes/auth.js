@@ -140,7 +140,7 @@ router.post('/login', async (req, res) => {
     };
 
     setImmediate(() => audit.log({
-      actorId: user.id, actorEmail: user.email, action: 'user.login',
+      actorId: user.id, actorEmail: user.email, actorRole: user.role, action: 'user.login',
       entityType: 'users', entityId: user.id,
       description: `${user.role} login: ${user.email}`,
       ip: req.ip,
