@@ -777,6 +777,23 @@ CREATE TABLE IF NOT EXISTS push_tokens (
   UNIQUE (investor_id, token)
 );
 CREATE INDEX IF NOT EXISTS push_tokens_investor_idx ON push_tokens(investor_id);
+
+-- Signup friction events: anonymous per-session tracking of friction points
+CREATE TABLE IF NOT EXISTS signup_friction_events (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id    TEXT NOT NULL,
+  event_type    TEXT NOT NULL,
+  step          INT,
+  field_name    TEXT,
+  error_message TEXT,
+  time_on_step_ms INT,
+  device_type   TEXT,
+  client_type   TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS friction_session_idx ON signup_friction_events(session_id);
+CREATE INDEX IF NOT EXISTS friction_type_idx    ON signup_friction_events(event_type);
+CREATE INDEX IF NOT EXISTS friction_created_idx ON signup_friction_events(created_at);
 `;
 
 async function autoSetup() {

@@ -823,6 +823,24 @@
           </div>
         </div>
 
+        <!-- Signup Friction Analysis -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-route" style="color:var(--orange);margin-right:8px"></i>Signup Friction Analysis</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <select id="frictionDaysFilter" class="tbl-filter" style="font-size:0.78rem;padding:5px 8px">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+              </select>
+              <button class="btn btn--secondary btn--sm" onclick="loadSignupFriction()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+          </div>
+          <div class="panel__body" id="frictionPanel">
+            <div class="text-center text-muted" style="padding:20px">Loading…</div>
+          </div>
+        </div>
+
         <div class="grid-2 mt-16">
           <div class="panel">
             <div class="panel__header"><span class="panel__title">Risk Profile Breakdown</span></div>

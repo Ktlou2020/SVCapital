@@ -3384,9 +3384,27 @@ function openSaDeposit(saId) {
 }
 
 /* ─── Profile ─── */
-function saveProfile() {
-  SVC.track('svc_profile_saved', {});
-  Toast.success('Profile updated successfully');
+async function saveProfile() {
+  const inv = PORTAL.investor;
+  if (!inv) return;
+
+  const updates = {
+    first_name: document.getElementById('profFirstName')?.value?.trim() || inv.first_name,
+    last_name:  document.getElementById('profLastName')?.value?.trim()  || inv.last_name,
+    phone:      document.getElementById('profPhone')?.value?.trim()     || inv.phone,
+    address:    document.getElementById('profCity')?.value?.trim()      || inv.address,
+    province:   document.getElementById('profProvince')?.value          || inv.province,
+    risk_profile: (document.querySelector('input[name="riskProf"]:checked')?.value) || inv.risk_profile,
+  };
+
+  try {
+    await API._fetch('PATCH', `tables/investors/${inv.id}`, updates);
+    Object.assign(PORTAL.investor, updates);
+    SVC.track('svc_profile_saved', {});
+    Toast.success('Profile updated successfully');
+  } catch (e) {
+    Toast.error('Failed to save profile — please try again.');
+  }
 }
 
 /* ─── Referral ─── */
@@ -6792,6 +6810,42 @@ async function submitRiskQuestionnaire() {
 function renderRiskProfile() {
   const inv = PORTAL.investor;
   if (!inv) return;
+
+  // ── Populate personal info form ───────────────────────────
+  const _set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  _set('profFirstName', inv.first_name);
+  _set('profLastName',  inv.last_name);
+  _set('profEmail',     inv.email);
+  _set('profPhone',     inv.phone);
+  _set('profCity',      inv.address || inv.city);
+
+  // Province dropdown: select matching option
+  const provSel = document.getElementById('profProvince');
+  if (provSel && inv.province) {
+    const opt = [...provSel.options].find(o => o.value === inv.province || o.text === inv.province);
+    if (opt) opt.selected = true;
+  }
+
+  // ── Populate Account Summary sidebar ─────────────────────
+  const _setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+  _setText('profSummaryId',       inv.id);
+  _setText('profSummaryJoined',   inv.date_joined ? new Date(inv.date_joined).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
+  _setText('profSummaryReferral', inv.referral_code);
+
+  const statusEl = document.getElementById('profSummaryStatus');
+  if (statusEl) {
+    const st = (inv.status || 'active').toLowerCase();
+    const statusClass = st === 'active' ? 'badge--green' : st === 'suspended' ? 'badge--red' : 'badge--gray';
+    statusEl.innerHTML = `<span class="badge ${statusClass}">${st.charAt(0).toUpperCase() + st.slice(1)}</span>`;
+  }
+
+  const ficaEl = document.getElementById('profSummaryFica');
+  if (ficaEl) {
+    const kyc = (inv.kyc_status || 'pending').toLowerCase();
+    const kycClass = kyc === 'approved' ? 'badge--green' : kyc === 'rejected' ? 'badge--red' : 'badge--gray';
+    const kycLabel = kyc === 'fica_submitted' ? 'Submitted' : kyc.charAt(0).toUpperCase() + kyc.slice(1);
+    ficaEl.innerHTML = `<span class="badge ${kycClass}">${kycLabel}</span>`;
+  }
 
   const profile = inv.risk_profile || null;
   const badge = document.getElementById('riskProfileBadge');
