@@ -20,7 +20,7 @@
       --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.12);
       --purple: #7c5cfc; --teal: #00d4aa; --text: #e8eaf6; --muted: #6b7280;
       --muted2: #9ca3af; --red: #ef4444; --green: #22c55e; --amber: #f59e0b;
-      --indigo: #6366f1; --sidebar-w: 220px;
+      --indigo: #6366f1; --sidebar-w: 220px; --orange: #f97316; --text-muted: #6b7280;
     }
     html, body { height: 100%; background: var(--bg); font-family: 'Inter', sans-serif; color: var(--text); overflow: hidden; }
     #acct-loader {
@@ -512,6 +512,7 @@
         <button class="nav-btn" data-view="bills" onclick="showView('bills')"><i class="fa-solid fa-receipt"></i> Bills</button>
         <button class="nav-btn" data-view="bank" onclick="showView('bank')"><i class="fa-solid fa-landmark"></i> Bank Transactions</button>
         <button class="nav-btn" data-view="import" onclick="showView('import')"><i class="fa-solid fa-file-arrow-up"></i> Statement Import</button>
+        <button class="nav-btn" data-view="investments" onclick="showView('investments')"><i class="fa-solid fa-link" style="color:var(--orange)"></i> Investments</button>
       </div>
       <div class="nav-group">
         <div class="nav-group-label">Reporting</div>
@@ -678,6 +679,7 @@ const PAGE_META = {
   budgets:     {title:'Budgets', subtitle:'Monthly budget planning per account'},
   reports:     {title:'Reports', subtitle:'Export financial data to CSV'},
   import:      {title:'Statement Import', subtitle:'Upload bank statements and auto-allocate to accounts'},
+  investments: {title:'Investment Sync', subtitle:'Sync investor deposits, withdrawals and investments to accounting'},
 };
 
 function showView(view) {
@@ -717,7 +719,8 @@ function showView(view) {
     case 'mgmt':        renderMgmt(bid, biz); break;
     case 'budgets':     renderBudgets(bid, biz); break;
     case 'reports':     renderReports(bid, biz); break;
-    case 'import':      renderImportView(bid, biz); break;
+    case 'import':       renderImportView(bid, biz); break;
+    case 'investments':  renderInvestmentsView(bid, biz); break;
   }
 }
 
@@ -2739,6 +2742,275 @@ function _confirmImport() {
   showToast(`${toImport.length} transactions imported successfully!`, 'success');
   _importRows = [];
   showView('bank');
+}
+
+/* ═══════════════════════════════════════════════════
+   INVESTMENT SYNC
+═══════════════════════════════════════════════════ */
+
+/* Render the investments view — the main entry-point called by showView */
+function renderInvestmentsView(bid, biz) {
+  document.getElementById('topbar-actions').innerHTML = '';
+  const content = document.getElementById('acct-content');
+  content.innerHTML = `
+    <!-- Investment Sync View -->
+    <div id="view-investments" class="view">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
+          <h2 style="font-size:1rem;font-weight:700;margin:0"><i class="fa-solid fa-link" style="color:var(--orange);margin-right:8px"></i>Investment Accounting Sync</h2>
+          <button class="btn btn-primary" id="syncInvBtn" onclick="syncInvestmentsToAccounting()"><i class="fa-solid fa-rotate"></i> Sync Now</button>
+        </div>
+        <div style="padding:16px 20px">
+          <p style="font-size:0.84rem;color:var(--muted);margin-bottom:12px">Pull all investor deposits, withdrawals and investments from the platform and automatically post the correct double-entry journal entries to this accounting business.</p>
+          <div id="invSyncStatus" style="margin-bottom:12px"></div>
+          <div style="background:rgba(249,115,22,0.07);border-radius:10px;padding:14px;font-size:0.82rem">
+            <div style="font-weight:700;margin-bottom:8px">Journal Entry Rules Applied:</div>
+            <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+              <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1)"><th style="text-align:left;padding:4px 8px">Event</th><th style="text-align:left;padding:4px 8px">Dr</th><th style="text-align:left;padding:4px 8px">Cr</th></tr></thead>
+              <tbody>
+                <tr><td style="padding:4px 8px">Investor Deposit</td><td>Cash and Bank (1000)</td><td>Client Funds Held (2100)</td></tr>
+                <tr style="background:rgba(255,255,255,0.03)"><td style="padding:4px 8px">1% Platform Fee</td><td>Client Funds Held (2100)</td><td>Platform Fee Revenue (4100)</td></tr>
+                <tr><td style="padding:4px 8px">Withdrawal</td><td>Client Funds Held (2100)</td><td>Cash and Bank (1000)</td></tr>
+                <tr style="background:rgba(255,255,255,0.03)"><td style="padding:4px 8px">Investment Allocated</td><td>Client Investment Portfolio (1500)</td><td>Client Funds Held (2100)</td></tr>
+                <tr><td style="padding:4px 8px">Investment Payout</td><td>Client Funds Held (2100)</td><td>Client Investment Portfolio (1500) + Return Income (4200)</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px">
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border)"><h2 style="font-size:1rem;font-weight:700;margin:0"><i class="fa-solid fa-book-open" style="color:var(--orange);margin-right:8px"></i>Investment Ledger</h2></div>
+        <div style="padding:16px 20px">
+          <div id="invLedgerWrap">
+            <div style="color:var(--muted);font-size:0.84rem;text-align:center;padding:20px">Click "Sync Now" to load investment transactions.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  // Populate status and ledger immediately from stored data
+  _renderSyncStatus(bid, (new Set(ls('acct_synced_txn_' + bid) || [])).size + (new Set(ls('acct_synced_inv_' + bid) || [])).size);
+  _renderInvLedger(bid);
+}
+
+/* Ensure the five required COA accounts exist; return a {code → account} map */
+function ensureInvestmentCoa(bid) {
+  const required = [
+    {code:'1000', name:'Cash and Bank',               type:'asset',    category:'current'},
+    {code:'1500', name:'Client Investment Portfolio',  type:'asset',    category:'current'},
+    {code:'2100', name:'Client Funds Held',            type:'liability', category:'current'},
+    {code:'4100', name:'Platform Fee Revenue (1%)',    type:'revenue',  category:'operating'},
+    {code:'4200', name:'Investment Return Income',     type:'revenue',  category:'operating'},
+  ];
+  let coa = getCoa(bid);
+  const byCode = {};
+  for (const a of coa) byCode[a.code] = a;
+  let changed = false;
+  for (const req of required) {
+    if (!byCode[req.code]) {
+      const newAcct = {id: uid(), code: req.code, name: req.name, type: req.type, category: req.category, balance: 0};
+      coa.push(newAcct);
+      byCode[req.code] = newAcct;
+      changed = true;
+    }
+  }
+  if (changed) lsSet('acct_coa_' + bid, coa);
+  return byCode;
+}
+
+/* Render the sync status bar */
+function _renderSyncStatus(bid, totalSynced) {
+  const el = document.getElementById('invSyncStatus');
+  if (!el) return;
+  const lastSync = ls('acct_last_sync_' + bid);
+  const lastSyncStr = lastSync ? new Date(lastSync).toLocaleString('en-ZA') : 'Never';
+  el.innerHTML = `<span style="color:var(--text-muted);font-size:0.78rem"><i class="fa-solid fa-check-circle" style="color:var(--green)"></i> Last synced: ${lastSyncStr} &nbsp;&middot;&nbsp; ${totalSynced} records posted</span>`;
+}
+
+/* Render the investment ledger table */
+function _renderInvLedger(bid) {
+  const el = document.getElementById('invLedgerWrap');
+  if (!el) return;
+  const coa = getCoa(bid);
+  const byId = {};
+  for (const a of coa) byId[a.id] = a;
+  const txns = getTransactions(bid).filter(t => {
+    const acct = byId[t.accountId];
+    return acct && ['1500','2100','4100','4200'].includes(acct.code);
+  }).sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 100);
+
+  if (!txns.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:0.84rem;text-align:center;padding:20px">No investment entries yet.</div>';
+    return;
+  }
+
+  const fmtR = n => `R ${parseFloat(n||0).toLocaleString('en-ZA', {minimumFractionDigits:2})}`;
+  el.innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Account</th><th>Description</th><th>Reference</th><th>Dr</th><th>Cr</th></tr></thead><tbody>
+    ${txns.map(t => {
+      const acct = byId[t.accountId] || {};
+      return `<tr>
+        <td>${t.date}</td>
+        <td><span style="font-weight:600">${acct.code||''}</span> ${acct.name||'Unknown'}</td>
+        <td style="font-size:0.78rem;color:var(--muted)">${t.description||''}</td>
+        <td style="font-size:0.78rem">${t.reference||''}</td>
+        <td style="color:var(--red)">${t.type==='debit' ? fmtR(t.amount) : ''}</td>
+        <td style="color:var(--green)">${t.type==='credit' ? fmtR(t.amount) : ''}</td>
+      </tr>`;
+    }).join('')}
+  </tbody></table></div>`;
+}
+
+/* Main sync function — pulls backend data and posts double-entry journal entries */
+async function syncInvestmentsToAccounting() {
+  try {
+    // 1. Get active business
+    const bid = getActiveId();
+    if (!bid) { showToast('No active business selected', 'error'); return; }
+
+    // 2. Ensure required COA accounts exist
+    const accts = ensureInvestmentCoa(bid);
+
+    // 3. Load already-synced IDs
+    const syncedTxns = new Set(ls('acct_synced_txn_' + bid) || []);
+    const syncedInvs = new Set(ls('acct_synced_inv_' + bid) || []);
+
+    // 4. Fetch from backend — need Auth token
+    const token = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+    if (!token) { showToast('Not authenticated — please log in', 'error'); return; }
+
+    const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+
+    // Disable sync button while running
+    const syncBtn = document.getElementById('syncInvBtn');
+    if (syncBtn) { syncBtn.disabled = true; syncBtn.innerHTML = '<i class="fa-solid fa-rotate fa-spin"></i> Syncing…'; }
+
+    // Fetch all completed transactions and investments in parallel
+    const [txnRes, invRes, invstRes] = await Promise.all([
+      fetch('/api/tables/transactions?type=deposit&status=completed&limit=500', { headers }).then(r => r.json()),
+      fetch('/api/tables/transactions?type=withdrawal&status=completed&limit=500', { headers }).then(r => r.json()),
+      fetch('/api/tables/investments?limit=500', { headers }).then(r => r.json()),
+    ]);
+
+    // Also fetch investor names for context
+    const investorsRes = await fetch('/api/tables/investors?limit=500', { headers }).then(r => r.json());
+    const investorMap = {};
+    for (const inv of (investorsRes.data || [])) {
+      investorMap[inv.id] = inv.first_name + ' ' + inv.last_name;
+    }
+
+    const allDeposits    = txnRes.data   || [];
+    const allWithdrawals = invRes.data   || [];
+    const allInvestments = invstRes.data || [];
+
+    let newEntries = [];
+    let newTxnIds  = [];
+    let newInvIds  = [];
+    let count      = 0;
+
+    const today = new Date().toISOString().split('T')[0];
+
+    // Process deposits
+    for (const t of allDeposits) {
+      if (syncedTxns.has(t.id)) continue;
+      const invName = investorMap[t.investor_id] || t.investor_id || 'Unknown';
+      const amount  = parseFloat(t.amount) || 0;
+      const fee     = Math.round(amount * 0.01 * 100) / 100;
+      const date    = (t.created_at || today).split('T')[0];
+      const ref6    = String(t.id).slice(-6);
+      newEntries.push(
+        {id:uid(), accountId:accts['1000'].id, type:'debit',  amount,     description:`Investor deposit: ${invName} — ${t.reference||''}`,   reference:`DEP-${ref6}`, date},
+        {id:uid(), accountId:accts['2100'].id, type:'credit', amount,     description:`Investor deposit: ${invName} — ${t.reference||''}`,   reference:`DEP-${ref6}`, date},
+        {id:uid(), accountId:accts['2100'].id, type:'debit',  amount:fee, description:`1% platform fee on deposit: ${invName}`,               reference:`FEE-${ref6}`, date},
+        {id:uid(), accountId:accts['4100'].id, type:'credit', amount:fee, description:`1% platform fee on deposit: ${invName}`,               reference:`FEE-${ref6}`, date}
+      );
+      newTxnIds.push(t.id);
+      count++;
+    }
+
+    // Process withdrawals
+    for (const t of allWithdrawals) {
+      if (syncedTxns.has(t.id)) continue;
+      const invName = investorMap[t.investor_id] || t.investor_id || 'Unknown';
+      const amount  = parseFloat(t.amount) || 0;
+      const date    = (t.created_at || today).split('T')[0];
+      const ref6    = String(t.id).slice(-6);
+      newEntries.push(
+        {id:uid(), accountId:accts['2100'].id, type:'debit',  amount, description:`Investor withdrawal: ${invName}`, reference:`WDR-${ref6}`, date},
+        {id:uid(), accountId:accts['1000'].id, type:'credit', amount, description:`Investor withdrawal: ${invName}`, reference:`WDR-${ref6}`, date}
+      );
+      newTxnIds.push(t.id);
+      count++;
+    }
+
+    // Process investments
+    for (const inv of allInvestments) {
+      if (!['active','matured','paid_out'].includes(inv.status)) continue;
+      const invName = investorMap[inv.investor_id] || inv.investor_id || 'Unknown';
+      const amount  = parseFloat(inv.amount) || 0;
+      const date    = (inv.start_date || inv.created_at || today).split('T')[0];
+      const ref6    = String(inv.id).slice(-6);
+
+      if (!syncedInvs.has(inv.id)) {
+        newEntries.push(
+          {id:uid(), accountId:accts['1500'].id, type:'debit',  amount, description:`Investment allocated: ${inv.pool_name||'Pool'} — ${invName}`, reference:`INV-${ref6}`, date},
+          {id:uid(), accountId:accts['2100'].id, type:'credit', amount, description:`Investment allocated: ${inv.pool_name||'Pool'} — ${invName}`, reference:`INV-${ref6}`, date}
+        );
+        newInvIds.push(inv.id);
+        count++;
+      }
+
+      // If paid out, also post the payout entry
+      const payoutKey = inv.id + '-PAYOUT';
+      if (inv.status === 'paid_out' && !syncedInvs.has(payoutKey)) {
+        const ret      = parseFloat(inv.actual_return || inv.expected_return || 0);
+        const total    = amount + ret;
+        const payDate  = (inv.end_date || today).split('T')[0];
+        newEntries.push(
+          {id:uid(), accountId:accts['2100'].id, type:'debit',  amount:total, description:`Investment payout: ${inv.pool_name||'Pool'} — ${invName}`,        reference:`PAY-${ref6}`, date:payDate},
+          {id:uid(), accountId:accts['1500'].id, type:'credit', amount,       description:`Investment payout: ${inv.pool_name||'Pool'} — ${invName}`,        reference:`PAY-${ref6}`, date:payDate},
+          {id:uid(), accountId:accts['4200'].id, type:'credit', amount:ret,   description:`Investment return income: ${inv.pool_name||'Pool'} — ${invName}`, reference:`PAY-${ref6}`, date:payDate}
+        );
+        newInvIds.push(payoutKey);
+        count++;
+      }
+    }
+
+    if (newEntries.length === 0) {
+      showToast('All transactions are already synced — nothing new to post', 'info');
+      _renderSyncStatus(bid, syncedTxns.size + syncedInvs.size);
+      if (syncBtn) { syncBtn.disabled = false; syncBtn.innerHTML = '<i class="fa-solid fa-rotate"></i> Sync Now'; }
+      return;
+    }
+
+    // Post all entries
+    const existingTxns = getTransactions(bid);
+    lsSet('acct_transactions_' + bid, [...existingTxns, ...newEntries]);
+
+    // Save synced IDs
+    newTxnIds.forEach(id => syncedTxns.add(id));
+    newInvIds.forEach(id => syncedInvs.add(id));
+    lsSet('acct_synced_txn_' + bid, [...syncedTxns]);
+    lsSet('acct_synced_inv_' + bid, [...syncedInvs]);
+    lsSet('acct_last_sync_' + bid, new Date().toISOString());
+
+    showToast(`Synced ${count} new transaction${count!==1?'s':''} (${newEntries.length} journal entries posted)`, 'success');
+    _renderSyncStatus(bid, syncedTxns.size + syncedInvs.size);
+    _renderInvLedger(bid);
+
+    // Re-render bank view data if applicable
+    if (typeof renderBank === 'function' && currentView === 'bank') {
+      const biz = getActiveBiz();
+      renderBank(bid, biz);
+    }
+
+    if (syncBtn) { syncBtn.disabled = false; syncBtn.innerHTML = '<i class="fa-solid fa-rotate"></i> Sync Now'; }
+  } catch (err) {
+    console.error('Investment sync error:', err);
+    showToast('Sync failed: ' + (err.message || 'Unknown error'), 'error');
+    const syncBtn = document.getElementById('syncInvBtn');
+    if (syncBtn) { syncBtn.disabled = false; syncBtn.innerHTML = '<i class="fa-solid fa-rotate"></i> Sync Now'; }
+  }
 }
 
 /* ═══════════════════════════════════════════════════

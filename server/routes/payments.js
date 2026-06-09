@@ -49,7 +49,7 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
   // Atomic SQL increment — safe against race conditions
   await pool.query(
     'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-    [amount, investorId]
+    [parseFloat(amount), investorId]
   );
 
   const sourceLabel = source === 'webhook' ? 'Paystack (confirmed)' : 'Paystack';

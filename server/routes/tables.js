@@ -424,7 +424,7 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         try {
           await pool.query(
             'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-            [clean.amount, clean.investor_id]
+            [parseFloat(clean.amount), clean.investor_id]
           );
         } catch (err) {
           console.error('[wallet hook] deposit credit error:', err.message);
@@ -522,6 +522,32 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         console.error('[push hook POST] error:', hookErr.message);
       }
     });
+
+    /* ── Investment fee hook ────────────────────────────────────────────
+       When a new investment is created, charge a 1% platform fee from
+       the investor's wallet and record it as a fee transaction.
+    ───────────────────────────────────────────────────────────────────── */
+    if (table === 'investments' && clean.investor_id && parseFloat(clean.amount) > 0) {
+      setImmediate(async () => {
+        try {
+          const platformFee = Math.round(parseFloat(clean.amount) * 0.01 * 100) / 100;
+          await pool.query(
+            'UPDATE investors SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2',
+            [platformFee, clean.investor_id]
+          );
+          const feeId = `FEE-${clean.id}`;
+          await pool.query(
+            `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
+             VALUES ($1, $2, 'fee', $3, 'completed', $4, '1% platform fee on investment', NOW(), NOW())
+             ON CONFLICT (id) DO NOTHING`,
+            [feeId, clean.investor_id, platformFee, feeId]
+          );
+          console.log(`[investment fee] R${platformFee} charged on investment ${clean.id}`);
+        } catch (err) {
+          console.error('[investment fee hook] error:', err.message);
+        }
+      });
+    }
   } catch (err) {
     console.error(`POST /${req.params.table}:`, err.message);
     res.status(500).json({ error: err.message });
