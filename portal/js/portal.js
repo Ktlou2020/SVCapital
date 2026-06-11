@@ -1017,14 +1017,9 @@ function renderMyInvestmentCards() {
           <span>Matures: ${Utils.date(inv.maturity_date)}</span>
         </div>
 
-        ${inv.status === 'matured' ? `
-          <button class="btn btn--primary btn--full btn--sm" onclick='openMaturityModal(${JSON.stringify(inv.id)})'>
-            <i class="fa-solid fa-hourglass-end"></i> Submit Maturity Instruction
-          </button>
-        ` : ''}
         ${inv.status === 'active' ? `
-          <button class="btn btn--secondary btn--full btn--sm" onclick='openEarlyRedemptionModal(${JSON.stringify(inv.id)})' style="margin-top:6px;font-size:0.76rem;color:var(--text-muted);border-color:rgba(0,0,0,0.12)">
-            <i class="fa-solid fa-right-from-bracket"></i> Request Early Redemption
+          <button class="btn btn--secondary btn--full btn--sm" onclick='openMaturityModal(${JSON.stringify(inv.id)})' style="margin-top:6px;font-size:0.76rem">
+            <i class="fa-solid fa-hourglass-half"></i> Set Maturity Instruction
           </button>
         ` : ''}
         ${isPaidOut ? `
@@ -2547,44 +2542,51 @@ async function loadMaturity() {
 
   const container = document.getElementById('maturityInvestments');
   const matured = PORTAL.investments.filter(i => i.status === 'matured');
-  const active = PORTAL.investments.filter(i => i.status === 'active');
+  const active  = PORTAL.investments.filter(i => i.status === 'active');
 
   let html = '';
 
-  if (matured.length) {
-    html += `<h3 style="font-size:0.85rem;font-weight:700;color:var(--red);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em"><i class="fa-solid fa-exclamation-circle"></i> Requires Instruction (${matured.length})</h3>`;
-    html += matured.map(inv => {
-      const total = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
-      return `<div class="maturity-card">
-        <div class="maturity-card__info">
-          <div class="maturity-card__name">${inv.pool_name}</div>
-          <div class="maturity-card__detail">Matured: ${Utils.date(inv.maturity_date)} · Rate: ${Utils.pct(inv.expected_return_rate)}</div>
-        </div>
-        <div class="maturity-card__payout">
-          <div class="maturity-card__payout-value">${Utils.rand(total)}</div>
-          <div class="maturity-card__payout-label">Total payout value</div>
-        </div>
-        <button class="btn btn--primary" onclick='openMaturityModal(${JSON.stringify(inv.id)})'>
-          <i class="fa-solid fa-paper-plane"></i> Submit Instruction
-        </button>
-      </div>`;
-    }).join('');
-  }
-
   if (active.length) {
-    html += `<h3 style="font-size:0.85rem;font-weight:700;color:var(--text-muted);margin-top:24px;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em">Upcoming Maturities</h3>`;
+    html += `<h3 style="font-size:0.85rem;font-weight:700;color:var(--text-muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em"><i class="fa-solid fa-hourglass-half"></i> Upcoming Maturities (${active.length})</h3>`;
     html += active.map(inv => {
       const days = Utils.daysRemaining(inv.maturity_date);
-      return `<div class="maturity-card" style="border-color:var(--border);opacity:${days > 60 ? '0.6' : '1'}">
+      const hasInstruction = !!inv.maturity_instruction;
+      return `<div class="maturity-card" style="border-color:var(--border)">
         <div class="maturity-card__info">
           <div class="maturity-card__name">${inv.pool_name}</div>
           <div class="maturity-card__detail">Matures: ${Utils.date(inv.maturity_date)} · ${days} days remaining</div>
+          ${hasInstruction ? `<div style="font-size:0.72rem;color:var(--green);margin-top:4px"><i class="fa-solid fa-check-circle"></i> Instruction set: ${inv.maturity_instruction.replace(/_/g,' ')}</div>` : ''}
         </div>
         <div class="maturity-card__payout">
           <div class="maturity-card__payout-value">${Utils.rand(inv.amount + inv.expected_return_amount)}</div>
           <div class="maturity-card__payout-label">Expected payout</div>
         </div>
-        <span class="badge badge--gray">Not yet due</span>
+        <button class="btn ${hasInstruction ? 'btn--secondary' : 'btn--primary'}" onclick='openMaturityModal(${JSON.stringify(inv.id)})'>
+          <i class="fa-solid fa-${hasInstruction ? 'pen' : 'paper-plane'}"></i> ${hasInstruction ? 'Update Instruction' : 'Set Instruction'}
+        </button>
+      </div>`;
+    }).join('');
+  }
+
+  if (matured.length) {
+    html += `<h3 style="font-size:0.85rem;font-weight:700;color:var(--red);margin-top:${active.length ? '24px' : '0'};margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em"><i class="fa-solid fa-exclamation-circle"></i> Matured (${matured.length})</h3>`;
+    html += matured.map(inv => {
+      const total = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
+      const instruction = inv.maturity_instruction;
+      return `<div class="maturity-card">
+        <div class="maturity-card__info">
+          <div class="maturity-card__name">${inv.pool_name}</div>
+          <div class="maturity-card__detail">Matured: ${Utils.date(inv.maturity_date)} · Rate: ${Utils.pct(inv.expected_return_rate)}</div>
+          ${instruction ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px"><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> Instruction: ${instruction.replace(/_/g,' ')}</div>` : ''}
+        </div>
+        <div class="maturity-card__payout">
+          <div class="maturity-card__payout-value">${Utils.rand(total)}</div>
+          <div class="maturity-card__payout-label">Total payout value</div>
+        </div>
+        ${instruction
+          ? `<span class="badge badge--gray" style="text-transform:capitalize">${instruction.replace(/_/g,' ')}</span>`
+          : `<span class="badge" style="background:rgba(239,68,68,0.12);color:#b91c1c">Awaiting instruction</span>`
+        }
       </div>`;
     }).join('');
   }
@@ -2596,11 +2598,24 @@ async function loadMaturity() {
   container.innerHTML = html;
 }
 
-function openMaturityModal(investmentId) {
+async function openMaturityModal(investmentId) {
   const inv = PORTAL.investments.find(i => i.id === investmentId);
   if (!inv) return;
 
-  const total = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
+  const isActive  = inv.status === 'active';
+  const total     = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
+  const existing  = inv.maturity_instruction || '';
+
+  // Fetch open pools of matching product type for reinvest option
+  let reinvestPools = [];
+  try {
+    const poolsRes = await API.pools.list({ limit: 100 });
+    reinvestPools = (poolsRes.data || []).filter(p => p.status === 'open' && p.product_type === inv.product_type);
+  } catch (_) { /* non-fatal */ }
+
+  const reinvestPoolsHtml = reinvestPools.length
+    ? reinvestPools.map(p => `<option value="${p.id}">${p.name} (${Utils.rand(p.min_investment)} min · ${Utils.pct(p.annual_rate)} p.a.)</option>`).join('')
+    : `<option value="" disabled>No open pools available for this product type</option>`;
 
   document.getElementById('maturityModalBody').innerHTML = `
     <div class="info-list mb-16">
@@ -2613,14 +2628,24 @@ function openMaturityModal(investmentId) {
     <div class="form-group">
       <label class="form-label">Instruction Type *</label>
       <select class="form-select" id="matInstructionType">
-        <option value="payout_all">Payout All — Receive full capital + returns</option>
-        <option value="payout_return">Payout Returns Only — Keep capital reinvested</option>
-        <option value="reinvest">Reinvest — Roll over into same product</option>
-        <option value="payout_custom">Custom Payout — Specify amount</option>
+        <option value="payout_all" ${existing==='payout_all'?'selected':''}>Payout All — Receive full capital + returns</option>
+        <option value="payout_return" ${existing==='payout_return'?'selected':''}>Payout Returns Only — Keep capital reinvested</option>
+        <option value="reinvest" ${existing==='reinvest'?'selected':''}>Reinvest — Roll over into same product</option>
+        <option value="payout_custom" ${existing==='payout_custom'?'selected':''}>Custom Payout — Specify amount</option>
       </select>
     </div>
 
-    <div id="customPayoutGroup" style="display:none">
+    <div id="reinvestPoolGroup" style="display:${existing==='reinvest'?'block':'none'}">
+      <div class="form-group">
+        <label class="form-label">Select Pool to Reinvest Into *</label>
+        <select class="form-select" id="matReinvestPool">
+          ${reinvestPoolsHtml}
+        </select>
+        ${!reinvestPools.length ? `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> A suitable open pool will be selected at maturity if none is available now.</div>` : ''}
+      </div>
+    </div>
+
+    <div id="customPayoutGroup" style="display:${existing==='payout_custom'?'block':'none'}">
       <div class="form-group">
         <label class="form-label">Custom Payout Amount (R)</label>
         <input type="number" class="form-input" id="matCustomAmount" placeholder="Amount to withdraw" />
@@ -2628,14 +2653,17 @@ function openMaturityModal(investmentId) {
     </div>
 
     <div style="font-size:0.72rem;color:var(--text-dim);line-height:1.6;margin-top:8px">
-      <i class="fa-solid fa-clock" style="color:var(--gold)"></i> 
-      Instruction must be submitted before <strong>5:00 PM on ${Utils.date(inv.maturity_date)}</strong>. 
-      If not submitted, funds will be automatically reinvested.
+      <i class="fa-solid fa-clock" style="color:var(--gold)"></i>
+      ${isActive
+        ? `You can update this instruction at any time before maturity. If not submitted, funds will be automatically reinvested.`
+        : `Instruction must be submitted before <strong>5:00 PM on ${Utils.date(inv.maturity_date)}</strong>. If not submitted, funds will be automatically reinvested.`
+      }
     </div>
   `;
 
   document.getElementById('matInstructionType').addEventListener('change', e => {
-    document.getElementById('customPayoutGroup').style.display = e.target.value === 'payout_custom' ? 'block' : 'none';
+    document.getElementById('customPayoutGroup').style.display  = e.target.value === 'payout_custom' ? 'block' : 'none';
+    document.getElementById('reinvestPoolGroup').style.display  = e.target.value === 'reinvest'      ? 'block' : 'none';
   });
 
   document.getElementById('maturityConfirmBtn').onclick = () => submitMaturityInstruction(inv);
@@ -2643,10 +2671,12 @@ function openMaturityModal(investmentId) {
 }
 
 async function submitMaturityInstruction(inv) {
-  const type = document.getElementById('matInstructionType').value;
+  const type      = document.getElementById('matInstructionType').value;
   const customAmt = type === 'payout_custom' ? parseFloat(document.getElementById('matCustomAmount').value) : null;
+  const reinvestPoolId = type === 'reinvest' ? (document.getElementById('matReinvestPool')?.value || null) : null;
 
   if (type === 'payout_custom' && (!customAmt || customAmt <= 0)) { Toast.error('Please enter a valid custom payout amount'); return; }
+  if (type === 'reinvest' && !reinvestPoolId) { Toast.error('Please select a pool to reinvest into, or choose another instruction type'); return; }
 
   try {
     await API.maturityInstructions.create({
@@ -2655,8 +2685,10 @@ async function submitMaturityInstruction(inv) {
       investor_id: DEMO_INVESTOR_ID,
       investor_name: `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
       pool_name: inv.pool_name,
+      instruction: type,
       instruction_type: type,
       custom_payout_amount: customAmt || 0,
+      reinvest_pool_id: reinvestPoolId,
       status: 'submitted',
       submitted_date: new Date().toISOString(),
       total_payout: inv.amount + (inv.actual_return_amount || inv.expected_return_amount)
@@ -2664,13 +2696,13 @@ async function submitMaturityInstruction(inv) {
 
     await API.investments.update(inv.id, { maturity_instruction: type });
 
-    Toast.success('Maturity instruction submitted successfully!');
+    Toast.success('Maturity instruction saved successfully!');
     SVC.track('svc_maturity_instruction', { investment_id: inv.id, action: type });
     Modal.close('maturityModal');
     PORTAL.investments = [];
     await loadPortalData();
     loadMaturity();
-  } catch (e) { Toast.error('Failed to submit instruction'); }
+  } catch (e) { Toast.error('Failed to save instruction'); }
 }
 
 /* ═══════════════════════════════════════════════
@@ -5959,48 +5991,6 @@ async function loadReferralDashboard() {
       <td>${bonusCell}</td>
     </tr>
   `}).join('');
-}
-
-/* ═══════════════════════════════════════════════
-   EARLY REDEMPTION REQUEST
-   ═══════════════════════════════════════════════ */
-let _earlyRedemptionInvId = null;
-
-function openEarlyRedemptionModal(invId) {
-  _earlyRedemptionInvId = invId;
-  const inv = PORTAL.investments.find(i => i.id === invId);
-  if (!inv) return;
-  const titleEl = document.getElementById('earlyRedemptionTitle');
-  const infoEl  = document.getElementById('earlyRedemptionInfo');
-  if (titleEl) titleEl.textContent = `Early Redemption — ${inv.pool_name}`;
-  if (infoEl)  infoEl.textContent  = `${Utils.rand(inv.amount)} invested · Matures ${Utils.date(inv.maturity_date)}`;
-  const reason = document.getElementById('earlyRedemptionReason');
-  if (reason) reason.value = '';
-  Modal.open('earlyRedemptionModal');
-}
-
-async function submitEarlyRedemption() {
-  const reason = (document.getElementById('earlyRedemptionReason')?.value || '').trim();
-  if (!reason) { Toast.error('Please provide a reason for your request'); return; }
-  if (!_earlyRedemptionInvId) return;
-  const inv = PORTAL.investments.find(i => i.id === _earlyRedemptionInvId);
-  try {
-    await API.post('support_tickets', {
-      investor_id:   PORTAL.investor.id,
-      investor_name: `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
-      subject:       `Early Redemption Request — ${inv?.pool_name || 'Investment'}`,
-      message:       reason,
-      status:        'open',
-      priority:      'high',
-      category:      'early_redemption',
-    });
-    Toast.success('Request submitted. Our team will review it and contact you within 2 business days.');
-    SVC.track('svc_support_ticket', { category: 'early_redemption' });
-    Modal.close('earlyRedemptionModal');
-    _earlyRedemptionInvId = null;
-  } catch (e) {
-    Toast.error(e.message || 'Failed to submit request. Please try again.');
-  }
 }
 
 /* ═══════════════════════════════════════════════

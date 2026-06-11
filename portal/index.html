@@ -2479,33 +2479,6 @@
   </div>
 </div>
 
-<!-- Early Redemption Modal -->
-<div class="modal-overlay" id="earlyRedemptionModal" onclick="if(event.target===this)Modal.close('earlyRedemptionModal')">
-  <div class="modal" style="max-width:480px">
-    <div class="modal__header">
-      <div>
-        <span class="modal__title" id="earlyRedemptionTitle">Request Early Redemption</span>
-        <div id="earlyRedemptionInfo" style="font-size:0.75rem;color:var(--text-muted)"></div>
-      </div>
-      <button class="modal__close" aria-label="Close" onclick="Modal.close('earlyRedemptionModal')"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-    <div class="modal__body">
-      <div class="info-box" style="background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.18);border-radius:10px;padding:12px 14px;font-size:0.81rem;color:#b91c1c;margin-bottom:16px;line-height:1.5">
-        <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>
-        Early redemption is subject to review and may incur a penalty. Our team will assess your request and respond within 2 business days.
-      </div>
-      <div class="form-group">
-        <label class="form-label">Reason for early redemption <span style="color:#ef4444">*</span></label>
-        <textarea class="form-input" id="earlyRedemptionReason" rows="4" placeholder="Please describe why you need to exit this investment early…" style="resize:vertical"></textarea>
-      </div>
-    </div>
-    <div class="modal__footer">
-      <button class="btn btn--secondary" onclick="Modal.close('earlyRedemptionModal')">Cancel</button>
-      <button class="btn btn--danger" onclick="submitEarlyRedemption()"><i class="fa-solid fa-paper-plane"></i> Submit Request</button>
-    </div>
-  </div>
-</div>
-
 <!-- ── KYC Upload Modal ───────────────────────────────────────────── -->
 <div class="modal-overlay" id="kycUploadModal" onclick="if(event.target===this)Modal.close('kycUploadModal')">
   <div class="modal" style="max-width:480px;width:95vw">
