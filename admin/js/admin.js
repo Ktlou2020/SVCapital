@@ -474,11 +474,11 @@ function renderOpenPoolsWidget() {
         <span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span>
       </div>
       <div class="pool-card__progress-label">
-        <span>${Utils.rand(p.raised_amount)} raised</span>
+        <span>${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)} raised</span>
         <span>${pct}% of ${Utils.rand(p.target_amount)}</span>
       </div>
       <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-      <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">${p.investor_count} investors · Closes ${Utils.date(p.end_date)}</div>
+      <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">${p.live_investor_count ?? p.investor_count ?? 0} investors · Closes ${Utils.date(p.end_date)}</div>
     </div>`;
   }).join('');
 }
@@ -1362,12 +1362,15 @@ function renderPoolsGrid() {
 
         <div class="pool-card__stats">
           <div class="pool-stat"><span class="pool-stat__label">Rate</span><span class="pool-stat__value pool-stat__value--gold">${Utils.pct(p.annual_rate)}</span></div>
-          <div class="pool-stat"><span class="pool-stat__label">Investors</span><span class="pool-stat__value">${p.investor_count}</span></div>
-          <div class="pool-stat"><span class="pool-stat__label">Term</span><span class="pool-stat__value">${p.term_months}mo</span></div>
+          <div class="pool-stat" style="cursor:pointer" onclick='viewPoolInvestors(${JSON.stringify(p.id)})' title="Click to view investors">
+            <span class="pool-stat__label">Investors</span>
+            <span class="pool-stat__value" style="color:var(--gold);text-decoration:underline dotted">${p.live_investor_count ?? p.investor_count ?? 0}</span>
+          </div>
+          <div class="pool-stat"><span class="pool-stat__label">Term</span><span class="pool-stat__value">${p.term_months ?? '—'}mo</span></div>
         </div>
 
         <div class="pool-card__progress-label">
-          <span>${Utils.rand(p.raised_amount)} raised</span>
+          <span>${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)} raised</span>
           <span>${pct}% funded</span>
         </div>
         <div class="progress-bar"><div class="progress-fill${p.product_type.includes('solar') ? ' progress-fill--green' : p.product_type === 'short_term' ? ' progress-fill--blue' : ''}" style="width:${pct}%"></div></div>
@@ -1394,6 +1397,78 @@ function renderPoolsGrid() {
     const isFull = (Number(p.max_capacity) > 0) && (Number(p.current_invested) >= Number(p.max_capacity));
     if (isWaitlist || isFull) _loadWaitlistCount(p.id);
   });
+}
+
+async function viewPoolInvestors(poolId) {
+  const pool = STATE.pools.find(p => p.id === poolId);
+  if (!pool) return;
+
+  const modal = document.getElementById('poolInvestorsModal');
+  const title = document.getElementById('poolInvestorsTitle');
+  const body  = document.getElementById('poolInvestorsBody');
+
+  title.textContent = pool.name;
+  body.innerHTML = '<div class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+  Modal.open('poolInvestorsModal');
+
+  try {
+    const token = localStorage.getItem('svc_token');
+    const res   = await fetch(`/api/tables/investment_pools/${encodeURIComponent(poolId)}/investors`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to load');
+    const { investors, summary } = await res.json();
+
+    const statusColor = { active:'badge--green', matured:'badge--purple', paid_out:'badge--blue', cancelled:'badge--red' };
+
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
+        ${[
+          ['Total Raised',  Utils.rand(summary.total_invested), 'coins',      '#D4AF37'],
+          ['Investors',     summary.investor_count,             'users',      '#3b82f6'],
+          ['Active',        summary.active_count,               'chart-line', '#22c55e'],
+          ['Matured',       summary.matured_count,              'flag-checkered','#8b5cf6'],
+        ].map(([label, val, icon, color]) => `
+          <div style="background:var(--bg-secondary);border-radius:10px;padding:14px;text-align:center">
+            <i class="fa-solid fa-${icon}" style="color:${color};font-size:1.1rem;display:block;margin-bottom:6px"></i>
+            <div style="font-size:1.25rem;font-weight:800;color:var(--text)">${val}</div>
+            <div style="font-size:0.72rem;color:var(--text-muted)">${label}</div>
+          </div>`).join('')}
+      </div>
+      ${investors.length ? `
+      <div style="overflow-x:auto">
+        <table class="data-table" style="table-layout:fixed;width:100%">
+          <thead><tr>
+            <th style="width:22%">Investor</th>
+            <th style="width:14%">Account</th>
+            <th style="width:12%">Amount</th>
+            <th style="width:9%">Rate</th>
+            <th style="width:10%">Status</th>
+            <th style="width:11%">Start Date</th>
+            <th style="width:11%">Maturity</th>
+            <th style="width:11%">Instruction</th>
+          </tr></thead>
+          <tbody>
+            ${investors.map(r => {
+              const name = `${r.first_name||''} ${r.last_name||''}`.trim() || r.investor_id;
+              return `<tr style="cursor:pointer" onclick="viewInvestor('${r.investor_id}');Modal.close('poolInvestorsModal')">
+                <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${r.email||''}</div></td>
+                <td class="clip" style="font-family:monospace;font-size:0.75rem;color:var(--gold)">${r.investor_id}</td>
+                <td class="td-gold fw-700 clip">${Utils.rand(r.amount)}</td>
+                <td class="td-green clip">${r.annual_rate ? Utils.pct(r.annual_rate) : '—'}</td>
+                <td><span class="badge ${statusColor[r.investment_status]||'badge--gray'}">${r.investment_status||'—'}</span></td>
+                <td class="td-muted clip">${Utils.date(r.start_date)}</td>
+                <td class="td-muted clip">${Utils.date(r.end_date)}</td>
+                <td class="clip" style="font-size:0.75rem;color:var(--text-muted)">${r.maturity_instruction?.replace(/_/g,' ')||'—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>` : '<div class="text-center text-muted" style="padding:32px">No investments in this pool yet</div>'}
+    `;
+  } catch (e) {
+    body.innerHTML = `<div class="text-center text-muted" style="padding:32px">Failed to load pool investors</div>`;
+  }
 }
 
 function togglePoolManageMenu(evt, menuId) {
@@ -1688,7 +1763,10 @@ function renderInvestmentsTable() {
         <div class="clip" style="font-size:0.7rem;font-family:monospace;color:var(--text-muted)">${i.investor_id||'—'}</div>
       </td>
       <td class="td-muted clip">${Utils.date(investDate)}</td>
-      <td class="td-strong clip">${i.pool_name||'—'}</td>
+      <td>${i.pool_id
+        ? `<div class="td-strong clip" style="cursor:pointer;color:var(--gold)" onclick="viewPoolInvestors('${i.pool_id}')" title="View pool">${i.pool_name||i.pool_id}</div>`
+        : `<div class="td-muted clip">—</div>`
+      }</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
       <td class="td-green">${i.annual_rate?Utils.pct(i.annual_rate):'—'}</td>
