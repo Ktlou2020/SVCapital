@@ -214,7 +214,8 @@ function navigate(view, btnEl) {
     dashboard: 'Dashboard', investors: 'Investor Management', ifa: 'IFA Management', kyc: 'KYC / FICA',
     pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
     transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
-    auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications', aml: 'AML Compliance Review'
+    auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications', aml: 'AML Compliance Review',
+    migrate: 'Data Migration'
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -4232,5 +4233,78 @@ async function saveManualAdj() {
   } catch (e) {
     Toast.error('Failed to apply adjustment');
     console.error(e);
+  }
+}
+
+/* ════════════════════════════════════════════
+   DATA MIGRATION
+════════════════════════════════════════════ */
+async function runMigration() {
+  const required = ['users', 'pools', 'investments', 'transactions', 'bankAccounts'];
+  for (const name of required) {
+    if (!document.getElementById(`mig-${name}`)?.files[0]) {
+      return Toast.error(`Please select ${name === 'pools' ? 'investmentPools' : name}.json`);
+    }
+  }
+
+  const btn = document.getElementById('migRunBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running migration…';
+
+  const fd = new FormData();
+  fd.append('users',          document.getElementById('mig-users').files[0]);
+  fd.append('pools',          document.getElementById('mig-pools').files[0]);
+  fd.append('investments',    document.getElementById('mig-investments').files[0]);
+  fd.append('transactions',   document.getElementById('mig-transactions').files[0]);
+  fd.append('bankAccounts',   document.getElementById('mig-bankAccounts').files[0]);
+  const addrFile = document.getElementById('mig-addressDetails').files[0];
+  if (addrFile) fd.append('addressDetails', addrFile);
+
+  try {
+    const token = localStorage.getItem('svc_token');
+    const res   = await fetch('/api/migrate/run', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Migration failed');
+
+    const { counts, errors } = data;
+    const errHtml = errors.length
+      ? `<div style="margin-top:12px;padding:10px 12px;background:rgba(239,68,68,0.08);border-radius:8px;font-size:0.78rem;color:#ef4444">
+           <strong>${errors.length} error(s):</strong><br>${errors.map(e => `• ${e}`).join('<br>')}
+         </div>`
+      : '';
+
+    document.getElementById('migResultsContent').innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:12px">
+        ${[
+          ['Investors',    counts.investors,    'users',          '#22c55e'],
+          ['Pools',        counts.pools,        'layer-group',    '#3b82f6'],
+          ['Investments',  counts.investments,  'chart-line',     '#f59e0b'],
+          ['Transactions', counts.transactions, 'arrows-rotate',  '#8b5cf6'],
+          ['KYC Docs',     counts.kyc,          'id-card',        '#06b6d4'],
+        ].map(([label, count, icon, color]) => `
+          <div style="background:var(--bg-secondary);border-radius:8px;padding:14px;text-align:center">
+            <i class="fa-solid fa-${icon}" style="color:${color};font-size:1.2rem;margin-bottom:6px;display:block"></i>
+            <div style="font-size:1.4rem;font-weight:700;color:var(--text)">${count.toLocaleString()}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">${label}</div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="padding:10px 14px;background:rgba(34,197,94,0.08);border-radius:8px;font-size:0.85rem;color:#22c55e;text-align:center">
+        <i class="fa-solid fa-check-circle"></i> Migration complete${errors.length ? ` with ${errors.length} error(s)` : ' — no errors'}
+      </div>
+      ${errHtml}
+    `;
+    document.getElementById('migResults').style.display = 'block';
+    Toast.success('Migration complete!');
+  } catch (e) {
+    Toast.error(e.message || 'Migration failed');
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Run Again';
   }
 }
