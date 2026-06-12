@@ -367,9 +367,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadDashboard() {
   try {
     const [invRes, poolRes, invstRes, txnRes] = await Promise.all([
-      API.investors.list({ limit: 100 }),
-      API.pools.list({ limit: 100 }),
-      API.investments.list({ limit: 100 }),
+      API.investors.list({ limit: 5000 }),
+      API.pools.list({ limit: 1000 }),
+      API.investments.list({ limit: 5000 }),
       API.transactions.list({ limit: 500 })
     ]);
 
@@ -610,7 +610,7 @@ let filteredInvestors = [];
 
 async function loadInvestors() {
   try {
-    const res = await API.investors.list({ limit: 100 });
+    const res = await API.investors.list({ limit: 5000 });
     STATE.investors = res.data || [];
     filteredInvestors = [...STATE.investors];
     renderInvestorStats();
@@ -919,7 +919,7 @@ async function loadWithdrawals() {
   try {
     const [txnRes, invRes] = await Promise.all([
       API._fetch('GET', 'tables/transactions', null, { type: 'withdrawal', limit: 300 }),
-      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 200 })
+      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 })
     ]);
     const all = (txnRes.data || []).filter(t => t.type === 'withdrawal');
     STATE.withdrawals = all;
@@ -1807,7 +1807,7 @@ async function loadTransactions() {
   try {
     const [txnRes, invRes] = await Promise.all([
       API.transactions.list({ limit: 500 }),
-      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 200 })
+      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 })
     ]);
     STATE.transactions = txnRes.data || [];
     if (!STATE.investors.length) STATE.investors = invRes.data || [];
@@ -1996,7 +1996,7 @@ async function loadSupport() {
   try {
     const [tktRes, invRes] = await Promise.all([
       API.tickets.list({ limit: 200 }),
-      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 200 })
+      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 })
     ]);
     STATE.tickets = tktRes.data || [];
     if (!STATE.investors.length) STATE.investors = invRes.data || [];
@@ -3717,7 +3717,7 @@ async function loadAML() {
   try {
     const [flagRes, invRes] = await Promise.all([
       API._fetch('GET', 'tables/support_tickets', null, { category: 'aml_review', limit: 200 }),
-      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 200 })
+      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 })
     ]);
     STATE.amlFlags = flagRes.data || [];
     if (!STATE.investors.length) STATE.investors = invRes.data || [];
