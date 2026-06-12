@@ -17,7 +17,7 @@ const PRODUCT_TYPE_MAP = {
   '12J Investment':             'cattle',
 };
 const POOL_STATUS_MAP       = { MATURED:'matured', ACTIVE:'active', OPEN:'open', CLOSED:'closed' };
-const INVESTMENT_STATUS_MAP = { MATURED:'matured', ACTIVE:'active', PAID_OUT:'paid_out', COMPLETE:'paid_out' };
+const INVESTMENT_STATUS_MAP = { MATURED:'matured', ACTIVE:'active', PAID_OUT:'matured', COMPLETE:'matured', CANCELLED:'cancelled' };
 const TX_TYPE_MAP = {
   'INVESTMENT':'investment', 'RE-INVESTMENT':'investment', 'PAYOUT':'return',
   'DEPOSIT':'deposit', 'WITHDRAWAL':'withdrawal', 'RETURN':'return',
@@ -207,8 +207,8 @@ router.post('/run',
         await pool.query(`
           INSERT INTO investments
             (id, investor_id, pool_id, pool_name, product_type, amount,
-             status, investment_date, maturity_date, expected_return_rate,
-             expected_return_amount, maturity_instruction, updated_at)
+             status, start_date, end_date, annual_rate,
+             expected_return, maturity_instruction, updated_at)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
           ON CONFLICT (id) DO UPDATE SET
             status=EXCLUDED.status, maturity_instruction=EXCLUDED.maturity_instruction, updated_at=NOW()
