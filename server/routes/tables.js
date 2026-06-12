@@ -289,15 +289,46 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
     }
 
     params.push(limit, offset);
-    const query = `
-      SELECT * FROM ${table}
-      ${where}
-      ${orderClause}
-      LIMIT $${params.length - 1} OFFSET $${params.length}
-    `;
+
+    /* ── Special query for investment_pools: enrich with live aggregates ── */
+    let query, countQuery;
+    if (table === 'investment_pools') {
+      const whereClause = where ? where.replace(/\b(status|id|name|product_type|created_at)\b/g, 'ip.$1') : '';
+      query = `
+        SELECT
+          ip.*,
+          COALESCE(agg.live_investor_count, 0)  AS live_investor_count,
+          COALESCE(agg.live_raised,         0)  AS live_raised,
+          COALESCE(agg.live_active_amount,  0)  AS live_active_amount,
+          COALESCE(agg.live_investment_count,0) AS live_investment_count
+        FROM investment_pools ip
+        LEFT JOIN (
+          SELECT
+            pool_id,
+            COUNT(DISTINCT investor_id)                                          AS live_investor_count,
+            SUM(CASE WHEN status IN ('active','matured','paid_out') THEN amount ELSE 0 END) AS live_raised,
+            SUM(CASE WHEN status = 'active'  THEN amount ELSE 0 END)            AS live_active_amount,
+            COUNT(*)                                                             AS live_investment_count
+          FROM investments
+          WHERE pool_id IS NOT NULL
+          GROUP BY pool_id
+        ) agg ON agg.pool_id = ip.id
+        ${whereClause}
+        ${orderClause.replace(/\b(status|id|name|product_type|created_at)\b/g, 'ip.$1')}
+        LIMIT $${params.length - 1} OFFSET $${params.length}
+      `;
+      countQuery = `SELECT COUNT(*) FROM investment_pools ip ${whereClause}`;
+    } else {
+      query = `
+        SELECT * FROM ${table}
+        ${where}
+        ${orderClause}
+        LIMIT $${params.length - 1} OFFSET $${params.length}
+      `;
+      countQuery = `SELECT COUNT(*) FROM ${table} ${where}`;
+    }
 
     const countParams = params.slice(0, -2);
-    const countQuery  = `SELECT COUNT(*) FROM ${table} ${where}`;
 
     const [dataResult, countResult] = await Promise.all([
       pool.query(query, params),
@@ -328,6 +359,48 @@ router.get('/investors/next-account', requireAuth, async (req, res) => {
       WHERE id ~ '^[A-Za-z]+-[0-9]+$'
     `);
     res.json({ account_number: `SV-${rows[0].next_num}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ─── GET /api/tables/investment_pools/:id/investors ─── */
+/* Returns all investors + their investment details for a specific pool */
+router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
+  try {
+    if (!['admin','director','fund_manager'].includes(req.user.role))
+      return res.status(403).json({ error: 'Forbidden.' });
+
+    const { rows } = await pool.query(`
+      SELECT
+        inv.id            AS investment_id,
+        inv.investor_id,
+        inv.amount,
+        inv.status        AS investment_status,
+        inv.start_date,
+        inv.end_date,
+        inv.annual_rate,
+        inv.expected_return,
+        inv.maturity_instruction,
+        i.first_name,
+        i.last_name,
+        i.email,
+        i.phone,
+        i.kyc_status
+      FROM investments inv
+      LEFT JOIN investors i ON i.id = inv.investor_id
+      WHERE inv.pool_id = $1
+      ORDER BY inv.start_date DESC NULLS LAST
+    `, [req.params.id]);
+
+    const summary = {
+      total_invested:   rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0),
+      investor_count:   new Set(rows.map(r => r.investor_id)).size,
+      active_count:     rows.filter(r => r.investment_status === 'active').length,
+      matured_count:    rows.filter(r => r.investment_status === 'matured').length,
+    };
+
+    res.json({ investors: rows, summary });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

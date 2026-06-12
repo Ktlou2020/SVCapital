@@ -512,10 +512,11 @@ const Utils = {
     return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
   },
 
-  /* Pool fill percentage */
+  /* Pool fill percentage — prefer live_raised from server aggregation */
   poolFillPct(pool) {
     if (!pool.target_amount) return 0;
-    return Math.min(100, Math.round((pool.raised_amount / pool.target_amount) * 100));
+    const raised = pool.live_raised ?? pool.raised_amount ?? 0;
+    return Math.min(100, Math.round((raised / pool.target_amount) * 100));
   },
 
   /* Days remaining */
