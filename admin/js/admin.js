@@ -643,7 +643,7 @@ function renderInvestorsTable() {
   document.getElementById('investorCount').textContent = `${filteredInvestors.length.toLocaleString()} investors`;
   document.getElementById('investorsFooterText').textContent = `Showing ${start + 1}–${Math.min(start + INV_PAGE_SIZE, filteredInvestors.length)} of ${filteredInvestors.length.toLocaleString()}`;
 
-  if (!page.length) { body.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding:32px">No investors found</td></tr>'; return; }
+  if (!page.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No investors found</td></tr>'; return; }
 
   body.innerHTML = page.map(inv => {
     const fullName = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || '—';
@@ -651,28 +651,38 @@ function renderInvestorsTable() {
     const activeInvCount = STATE.investments.filter(i => i.investor_id === inv.id && i.status === 'active').length;
     const totalInvCount  = STATE.investments.filter(i => i.investor_id === inv.id).length;
     const kycBadge = inv.kyc_status === 'approved'
-      ? '<span class="badge badge--green" style="font-size:0.7rem"><i class="fa-solid fa-shield-check"></i> Verified</span>'
+      ? '<span class="badge badge--green" style="font-size:0.68rem;padding:2px 6px"><i class="fa-solid fa-shield-check"></i> KYC</span>'
       : inv.kyc_status === 'rejected'
-      ? '<span class="badge badge--red" style="font-size:0.7rem">Rejected</span>'
-      : '<span class="badge badge--yellow" style="font-size:0.7rem">Pending</span>';
-    const province = (inv.province||'').replace(/\s+$/,'') || '—';
+      ? '<span class="badge badge--red" style="font-size:0.68rem;padding:2px 6px">KYC Fail</span>'
+      : '<span class="badge badge--yellow" style="font-size:0.68rem;padding:2px 6px">KYC Pending</span>';
+    const stBadge = Utils.statusBadge(inv.status);
+    const province = (inv.province||'').replace(/\s+$/,'');
     return `<tr style="cursor:pointer" onclick="viewInvestor('${inv.id}')">
       <td onclick="event.stopPropagation()">
         <div class="flex-center gap-8">
-          <div style="width:34px;height:34px;border-radius:50%;background:${color};color:#fff;font-size:0.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${Utils.initials(fullName)}</div>
+          <div style="width:32px;height:32px;border-radius:50%;background:${color};color:#fff;font-size:0.65rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${Utils.initials(fullName)}</div>
           <div>
-            <div class="td-strong">${fullName}</div>
-            <div style="font-size:0.7rem;font-family:monospace;color:var(--text-muted)">${inv.id || ''}</div>
+            <div class="td-strong" style="font-size:0.82rem">${fullName}</div>
+            <div style="font-size:0.68rem;font-family:monospace;color:var(--gold)">${inv.id || ''}</div>
+            ${province ? `<div style="font-size:0.68rem;color:var(--text-muted)">${province}</div>` : ''}
           </div>
         </div>
       </td>
-      <td><div style="font-size:0.78rem">${inv.email || '—'}</div><div class="td-muted">${inv.phone || '—'}</div></td>
-      <td style="font-size:0.8rem">${province}</td>
-      <td>${kycBadge}</td>
-      <td class="td-gold fw-700">${Utils.rand(inv.wallet_balance)}</td>
-      <td><div class="td-strong">${Utils.rand(inv.total_invested)}</div><div class="td-green" style="font-size:0.73rem">${Utils.rand(inv.total_returns)} returns</div></td>
-      <td><div style="font-weight:700">${totalInvCount}</div><div class="td-muted" style="font-size:0.72rem">${activeInvCount} active</div></td>
-      <td class="td-muted">${Utils.date(inv.date_joined)}</td>
+      <td>
+        <div style="font-size:0.76rem">${inv.email || '—'}</div>
+        <div class="td-muted" style="font-size:0.72rem">${inv.phone || '—'}</div>
+      </td>
+      <td>
+        <div style="display:flex;flex-direction:column;gap:3px">${kycBadge}${stBadge}</div>
+      </td>
+      <td>
+        <div class="td-gold fw-700" style="font-size:0.82rem">${Utils.rand(inv.wallet_balance)}</div>
+        <div style="font-size:0.71rem;color:var(--text-muted)">${Utils.rand(inv.total_invested)} invested</div>
+      </td>
+      <td>
+        <div style="font-weight:700;font-size:0.82rem">${totalInvCount}</div>
+        <div class="td-muted" style="font-size:0.7rem">${activeInvCount} active</div>
+      </td>
       <td onclick="event.stopPropagation()">
         <div class="flex-center gap-6">
           <button class="btn btn--secondary btn--sm" onclick='viewInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-eye"></i></button>
@@ -1073,7 +1083,25 @@ async function confirmDeleteInvestor(id) {
   } catch (e) { Toast.error('Failed to delete investor'); }
 }
 
-function openAddInvestorModal() { Modal.open('addInvestorModal'); }
+async function openAddInvestorModal() {
+  Modal.open('addInvestorModal');
+  const el = document.getElementById('newInvAccountNo');
+  if (el) el.textContent = 'Generating…';
+  try {
+    const r = await fetch('/api/tables/investors/next-account', {
+      headers: { Authorization: `Bearer ${localStorage.getItem('svc_token')}` }
+    });
+    if (r.ok) {
+      const d = await r.json();
+      if (el) el.textContent = d.account_number;
+      window._pendingInvestorAccountNo = d.account_number;
+    } else {
+      if (el) el.textContent = '—';
+    }
+  } catch (_) {
+    if (el) el.textContent = '—';
+  }
+}
 
 async function saveNewInvestor() {
   const fn = document.getElementById('newInvFirstName').value.trim();
@@ -1081,9 +1109,11 @@ async function saveNewInvestor() {
   const em = document.getElementById('newInvEmail').value.trim();
   if (!fn || !ln || !em) { Toast.error('First name, last name and email are required'); return; }
 
+  const accountNo = window._pendingInvestorAccountNo || `INV-${Date.now()}`;
+
   try {
     await API.investors.create({
-      id: `INV-${Date.now()}`,
+      id: accountNo,
       first_name: fn, last_name: ln, email: em,
       phone: document.getElementById('newInvPhone').value.trim(),
       id_number: document.getElementById('newInvIdNum').value.trim(),
@@ -1091,12 +1121,12 @@ async function saveNewInvestor() {
       city: document.getElementById('newInvCity').value.trim(),
       province: document.getElementById('newInvProvince').value,
       notes: document.getElementById('newInvNotes').value.trim(),
-      status: 'pending_fica', fica_status: 'pending',
+      status: 'pending', fica_status: 'pending',
       wallet_balance: 0, total_invested: 0, total_returns: 0,
       date_joined: new Date().toISOString(),
-      referral_code: `${fn.slice(0,3).toUpperCase()}${Date.now().toString().slice(-4)}`
     });
-    Toast.success('Investor created successfully');
+    window._pendingInvestorAccountNo = null;
+    Toast.success(`Investor created — Account: ${accountNo}`);
     Modal.close('addInvestorModal');
     await loadInvestors();
   } catch (e) { Toast.error('Failed to create investor'); }
@@ -4293,25 +4323,21 @@ async function saveManualAdj() {
    DATA MIGRATION
 ════════════════════════════════════════════ */
 async function runMigration() {
-  const required = ['users', 'pools', 'investments', 'transactions', 'bankAccounts'];
-  for (const name of required) {
-    if (!document.getElementById(`mig-${name}`)?.files[0]) {
-      return Toast.error(`Please select ${name === 'pools' ? 'investmentPools' : name}.json`);
-    }
+  const fileMap = {
+    users: 'mig-users', pools: 'mig-pools', investments: 'mig-investments',
+    transactions: 'mig-transactions', bankAccounts: 'mig-bankAccounts', addressDetails: 'mig-addressDetails',
+  };
+  const fd = new FormData();
+  let fileCount = 0;
+  for (const [key, elId] of Object.entries(fileMap)) {
+    const f = document.getElementById(elId)?.files[0];
+    if (f) { fd.append(key, f); fileCount++; }
   }
+  if (!fileCount) return Toast.error('Please select at least one JSON file to migrate.');
 
   const btn = document.getElementById('migRunBtn');
   btn.disabled = true;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running migration…';
-
-  const fd = new FormData();
-  fd.append('users',          document.getElementById('mig-users').files[0]);
-  fd.append('pools',          document.getElementById('mig-pools').files[0]);
-  fd.append('investments',    document.getElementById('mig-investments').files[0]);
-  fd.append('transactions',   document.getElementById('mig-transactions').files[0]);
-  fd.append('bankAccounts',   document.getElementById('mig-bankAccounts').files[0]);
-  const addrFile = document.getElementById('mig-addressDetails').files[0];
-  if (addrFile) fd.append('addressDetails', addrFile);
 
   try {
     const token = localStorage.getItem('svc_token');
@@ -4333,11 +4359,11 @@ async function runMigration() {
     document.getElementById('migResultsContent').innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:12px">
         ${[
-          ['Investors',    counts.investors,    'users',          '#22c55e'],
-          ['Pools',        counts.pools,        'layer-group',    '#3b82f6'],
-          ['Investments',  counts.investments,  'chart-line',     '#f59e0b'],
-          ['Transactions', counts.transactions, 'arrows-rotate',  '#8b5cf6'],
-          ['KYC Docs',     counts.kyc,          'id-card',        '#06b6d4'],
+          ['Investors',    counts.investors    ?? 0, 'users',          '#22c55e'],
+          ['Pools',        counts.pools        ?? 0, 'layer-group',    '#3b82f6'],
+          ['Investments',  counts.investments  ?? 0, 'chart-line',     '#f59e0b'],
+          ['Transactions', counts.transactions ?? 0, 'arrows-rotate',  '#8b5cf6'],
+          ['KYC Docs',     counts.kyc          ?? 0, 'id-card',        '#06b6d4'],
         ].map(([label, count, icon, color]) => `
           <div style="background:var(--bg-secondary);border-radius:8px;padding:14px;text-align:center">
             <i class="fa-solid fa-${icon}" style="color:${color};font-size:1.2rem;margin-bottom:6px;display:block"></i>
