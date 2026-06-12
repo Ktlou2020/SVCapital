@@ -108,6 +108,9 @@
       <button class="nav-item" data-view="settings" onclick="navigate('settings', this)">
         <i class="fa-solid fa-gear"></i> Settings
       </button>
+      <button class="nav-item" data-view="migrate" onclick="navigate('migrate', this)">
+        <i class="fa-solid fa-database"></i> Data Migration
+      </button>
     </nav>
 
     <div class="sidebar__footer">
@@ -1046,9 +1049,54 @@
         </div>
       </div>
 
+      <!-- ══════════════════════════════════
+           VIEW: DATA MIGRATION
+      ══════════════════════════════════ -->
+      <div class="view" id="view-migrate">
+        <div style="max-width:680px;margin:0 auto">
+          <div class="panel mb-20">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-database" style="color:var(--orange);margin-right:8px"></i>Firebase Data Migration</span>
+            </div>
+            <div class="panel__body">
+              <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:24px;line-height:1.6">
+                Upload the JSON export files from the previous platform. Safe to run multiple times — existing records are updated, not duplicated. <code>addressDetails.json</code> is optional.
+              </p>
+
+              <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px" id="migFileList">
+                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-users" style="color:var(--orange);width:16px"></i> users.json <span style="color:#ef4444">*</span></label><input class="mig-input" type="file" accept=".json" id="mig-users"></div>
+                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-layer-group" style="color:var(--orange);width:16px"></i> investmentPools.json <span style="color:#ef4444">*</span></label><input class="mig-input" type="file" accept=".json" id="mig-pools"></div>
+                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-chart-line" style="color:var(--orange);width:16px"></i> investments.json <span style="color:#ef4444">*</span></label><input class="mig-input" type="file" accept=".json" id="mig-investments"></div>
+                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-arrows-rotate" style="color:var(--orange);width:16px"></i> transactions.json <span style="color:#ef4444">*</span></label><input class="mig-input" type="file" accept=".json" id="mig-transactions"></div>
+                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-building-columns" style="color:var(--orange);width:16px"></i> bankAccounts.json <span style="color:#ef4444">*</span></label><input class="mig-input" type="file" accept=".json" id="mig-bankAccounts"></div>
+                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-location-dot" style="color:var(--orange);width:16px"></i> addressDetails.json</label><input class="mig-input" type="file" accept=".json" id="mig-addressDetails"></div>
+              </div>
+
+              <button class="btn btn--primary btn--full" id="migRunBtn" onclick="runMigration()">
+                <i class="fa-solid fa-play"></i> Run Migration
+              </button>
+
+              <!-- Results -->
+              <div id="migResults" style="display:none;margin-top:24px">
+                <div style="border-top:1px solid var(--border);padding-top:20px">
+                  <div id="migResultsContent"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 </div>
+
+<!-- Migration view styles -->
+<style>
+.mig-row { display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg-secondary); border-radius:8px; }
+.mig-label { flex:0 0 220px; font-size:0.82rem; color:var(--text); display:flex; align-items:center; gap:8px; }
+.mig-input { flex:1; font-size:0.82rem; color:var(--text-muted); }
+</style>
 
 <!-- Mobile sidebar toggle -->
 <button class="mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">
