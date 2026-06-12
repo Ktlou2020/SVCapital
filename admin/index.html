@@ -329,11 +329,13 @@
            VIEW: INVESTORS
       ══════════════════════════════════ -->
       <div class="view" id="view-investors">
-        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)" id="investorStats">
-          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-check"></i></div></div><div class="stat-card__value" id="is-active">—</div><div class="stat-card__label">Active Investors</div></div>
-          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-clock"></i></div></div><div class="stat-card__value" id="is-pending">—</div><div class="stat-card__label">Pending FICA</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-wallet"></i></div></div><div class="stat-card__value" id="is-wallet">—</div><div class="stat-card__label">Total Wallet Balances</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="is-aum">—</div><div class="stat-card__label">Investor AUM</div></div>
+        <div class="stats-row" style="grid-template-columns:repeat(6,1fr)" id="investorStats">
+          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-users"></i></div></div><div class="stat-card__value" id="is-total">—</div><div class="stat-card__label">Total Investors</div></div>
+          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-check"></i></div></div><div class="stat-card__value" id="is-active">—</div><div class="stat-card__label">Active</div></div>
+          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-clock"></i></div></div><div class="stat-card__value" id="is-pending">—</div><div class="stat-card__label">Pending KYC</div></div>
+          <div class="stat-card stat-card--red" style="--red:#ef4444"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-user-slash"></i></div></div><div class="stat-card__value" id="is-suspended">—</div><div class="stat-card__label">Suspended</div></div>
+          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-wallet"></i></div></div><div class="stat-card__value" id="is-wallet">—</div><div class="stat-card__label">Total Wallets</div></div>
+          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="is-aum">—</div><div class="stat-card__label">AUM</div></div>
         </div>
 
         <div class="table-card">
@@ -343,32 +345,49 @@
               <div class="table-card__sub" id="investorCount">Loading...</div>
             </div>
             <div class="table-card__controls">
-              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search name, email, ID..." id="investorSearch" /></div>
+              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search name, email, ID, phone…" id="investorSearch" /></div>
               <select class="tbl-filter" id="investorStatusFilter">
                 <option value="">All Status</option>
                 <option value="active">Active</option>
-                <option value="pending_fica">Pending FICA</option>
-                <option value="fica_submitted">FICA Submitted</option>
                 <option value="suspended">Suspended</option>
+                <option value="pending">Pending</option>
+              </select>
+              <select class="tbl-filter" id="investorKycFilter">
+                <option value="">All KYC</option>
+                <option value="approved">Verified</option>
+                <option value="pending">Pending</option>
+                <option value="rejected">Rejected</option>
+              </select>
+              <select class="tbl-filter" id="investorProvinceFilter">
+                <option value="">All Provinces</option>
+                <option value="Gauteng">Gauteng</option>
+                <option value="Western Cape">Western Cape</option>
+                <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                <option value="Eastern Cape">Eastern Cape</option>
+                <option value="Limpopo">Limpopo</option>
+                <option value="Mpumalanga">Mpumalanga</option>
+                <option value="North West">North West</option>
+                <option value="Free State">Free State</option>
+                <option value="Northern Cape">Northern Cape</option>
               </select>
               <button class="btn btn--primary btn--sm" onclick="openAddInvestorModal()">
                 <i class="fa-solid fa-plus"></i> Add Investor
               </button>
               <button class="btn btn--secondary btn--sm" onclick="openManualAdjModal()">
-                <i class="fa-solid fa-sliders"></i> Manual Adjustment
+                <i class="fa-solid fa-sliders"></i> Adjustment
               </button>
               <button class="btn btn--secondary btn--sm" onclick="exportInvestorsCSV()">
-                <i class="fa-solid fa-file-csv"></i> Export CSV
+                <i class="fa-solid fa-file-csv"></i> Export
               </button>
             </div>
           </div>
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>Investor</th><th>Contact</th><th>FICA</th><th>Wallet</th><th>Invested</th><th>Returns</th><th>Joined</th><th>Actions</th>
+                <th>Investor</th><th>Contact</th><th>Location</th><th>KYC</th><th>Wallet</th><th>Invested</th><th>Investments</th><th>Joined</th><th>Actions</th>
               </tr></thead>
               <tbody id="investorsBody">
-                <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
+                <tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
               </tbody>
             </table>
           </div>
@@ -525,30 +544,29 @@
         <div class="stats-row" style="grid-template-columns:repeat(5,1fr)">
           <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="inv-total">—</div><div class="stat-card__label">Total Investments</div></div>
           <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-play"></i></div></div><div class="stat-card__value" id="inv-active">—</div><div class="stat-card__label">Active</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-double"></i></div></div><div class="stat-card__value" id="inv-paidout">—</div><div class="stat-card__label">Paid Out</div></div>
           <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hourglass-end"></i></div></div><div class="stat-card__value" id="inv-matured">—</div><div class="stat-card__label">Matured</div></div>
           <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div><div class="stat-card__value" id="inv-capital">—</div><div class="stat-card__label">Capital Deployed</div></div>
+          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div><div class="stat-card__value" id="inv-avgrate">—</div><div class="stat-card__label">Avg. Annual Rate</div></div>
         </div>
 
         <div class="table-card">
           <div class="table-card__header">
             <div><div class="table-card__title">All Investments</div></div>
             <div class="table-card__controls">
-              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search investor, pool..." id="investmentSearch" /></div>
+              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search investor, account, pool…" id="investmentSearch" /></div>
               <select class="tbl-filter" id="investmentProductFilter">
                 <option value="">All Products</option>
                 <option value="cattle">Cattle</option>
-                <option value="solar_7yr">Solar 7yr</option>
-                <option value="solar_6yr">Solar 6yr</option>
-                <option value="solar_5yr">Solar 5yr</option>
-                <option value="short_term">Short-Term</option>
-                <option value="delivery_bike">Delivery Bike</option>
+                <option value="solar">Solar</option>
+                <option value="smme">SMME / Short-Term</option>
+                <option value="delivery_bikes">Delivery Bikes</option>
+                <option value="other">Other</option>
               </select>
               <select class="tbl-filter" id="investmentStatusFilter">
                 <option value="">All Status</option>
                 <option value="active">Active</option>
                 <option value="matured">Matured</option>
-                <option value="paid_out">Paid Out</option>
+                <option value="cancelled">Cancelled</option>
               </select>
             </div>
           </div>
@@ -560,10 +578,10 @@
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th style="width:36px"></th><th>Investor</th><th>Pool</th><th>Product</th><th>Amount</th><th>Exp. Return</th><th>Status</th><th>Maturity</th><th>Actions</th>
+                <th style="width:36px"></th><th>Investor</th><th>Date Invested</th><th>Pool</th><th>Product</th><th>Amount</th><th>Rate</th><th>Status</th><th>Maturity</th><th>Actions</th>
               </tr></thead>
               <tbody id="investmentsBody">
-                <tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
+                <tr><td colspan="10" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
               </tbody>
             </table>
           </div>

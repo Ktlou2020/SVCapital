@@ -620,14 +620,19 @@ async function loadInvestors() {
 }
 
 function renderInvestorStats() {
-  const active = STATE.investors.filter(i => i.status === 'active').length;
-  const pending = STATE.investors.filter(i => ['pending_fica', 'fica_submitted'].includes(i.status)).length;
-  const wallet = STATE.investors.reduce((s, i) => s + (i.wallet_balance || 0), 0);
-  const aum = STATE.investors.reduce((s, i) => s + (i.total_invested || 0), 0);
-  document.getElementById('is-active').textContent = active;
-  document.getElementById('is-pending').textContent = pending;
-  document.getElementById('is-wallet').textContent = Utils.rand(wallet);
-  document.getElementById('is-aum').textContent = Utils.rand(aum);
+  const d = STATE.investors;
+  document.getElementById('is-total').textContent = d.length.toLocaleString();
+  document.getElementById('is-active').textContent = d.filter(i => i.status === 'active').length.toLocaleString();
+  document.getElementById('is-pending').textContent = d.filter(i => i.kyc_status === 'pending').length.toLocaleString();
+  document.getElementById('is-suspended').textContent = d.filter(i => i.status === 'suspended').length.toLocaleString();
+  document.getElementById('is-wallet').textContent = Utils.rand(d.reduce((s, i) => s + (i.wallet_balance || 0), 0));
+  document.getElementById('is-aum').textContent = Utils.rand(d.reduce((s, i) => s + (i.total_invested || 0), 0));
+}
+
+function _invAvatarColor(name) {
+  const p = ['#D4AF37','#3b82f6','#22c55e','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#ef4444'];
+  let h = 0; for (const c of (name||'?')) h = (h<<5) - h + c.charCodeAt(0);
+  return p[Math.abs(h) % p.length];
 }
 
 function renderInvestorsTable() {
@@ -635,54 +640,76 @@ function renderInvestorsTable() {
   const start = (investorPage - 1) * INV_PAGE_SIZE;
   const page = filteredInvestors.slice(start, start + INV_PAGE_SIZE);
 
-  document.getElementById('investorCount').textContent = `${filteredInvestors.length} investors`;
-  document.getElementById('investorsFooterText').textContent = `Showing ${start + 1}–${Math.min(start + INV_PAGE_SIZE, filteredInvestors.length)} of ${filteredInvestors.length}`;
+  document.getElementById('investorCount').textContent = `${filteredInvestors.length.toLocaleString()} investors`;
+  document.getElementById('investorsFooterText').textContent = `Showing ${start + 1}–${Math.min(start + INV_PAGE_SIZE, filteredInvestors.length)} of ${filteredInvestors.length.toLocaleString()}`;
 
-  if (!page.length) { body.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:32px">No investors found</td></tr>'; return; }
+  if (!page.length) { body.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding:32px">No investors found</td></tr>'; return; }
 
-  body.innerHTML = page.map(inv => `
-    <tr>
-      <td><div class="flex-center gap-8">
-        <div class="avatar avatar--sm avatar--gold">${Utils.initials(inv.first_name + ' ' + inv.last_name)}</div>
-        <div>
-          <div class="td-strong">${inv.first_name} ${inv.last_name}</div>
-          <div class="td-muted">${inv.id || ''}</div>
-        </div>
-      </div></td>
-      <td><div class="td-strong" style="font-size:0.78rem">${inv.email}</div><div class="td-muted">${inv.phone || '—'}</div></td>
-      <td>${Utils.statusBadge(inv.fica_status)}</td>
-      <td class="td-gold fw-700">${Utils.rand(inv.wallet_balance)}</td>
-      <td class="td-strong">${Utils.rand(inv.total_invested)}</td>
-      <td class="td-green fw-700">${Utils.rand(inv.total_returns)}</td>
-      <td class="td-muted">${Utils.date(inv.date_joined)}</td>
-      <td>
+  body.innerHTML = page.map(inv => {
+    const fullName = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || '—';
+    const color = _invAvatarColor(fullName);
+    const activeInvCount = STATE.investments.filter(i => i.investor_id === inv.id && i.status === 'active').length;
+    const totalInvCount  = STATE.investments.filter(i => i.investor_id === inv.id).length;
+    const kycBadge = inv.kyc_status === 'approved'
+      ? '<span class="badge badge--green" style="font-size:0.7rem"><i class="fa-solid fa-shield-check"></i> Verified</span>'
+      : inv.kyc_status === 'rejected'
+      ? '<span class="badge badge--red" style="font-size:0.7rem">Rejected</span>'
+      : '<span class="badge badge--yellow" style="font-size:0.7rem">Pending</span>';
+    const province = (inv.province||'').replace(/\s+$/,'') || '—';
+    return `<tr style="cursor:pointer" onclick="viewInvestor('${inv.id}')">
+      <td onclick="event.stopPropagation()">
         <div class="flex-center gap-8">
+          <div style="width:34px;height:34px;border-radius:50%;background:${color};color:#fff;font-size:0.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${Utils.initials(fullName)}</div>
+          <div>
+            <div class="td-strong">${fullName}</div>
+            <div style="font-size:0.7rem;font-family:monospace;color:var(--text-muted)">${inv.id || ''}</div>
+          </div>
+        </div>
+      </td>
+      <td><div style="font-size:0.78rem">${inv.email || '—'}</div><div class="td-muted">${inv.phone || '—'}</div></td>
+      <td style="font-size:0.8rem">${province}</td>
+      <td>${kycBadge}</td>
+      <td class="td-gold fw-700">${Utils.rand(inv.wallet_balance)}</td>
+      <td><div class="td-strong">${Utils.rand(inv.total_invested)}</div><div class="td-green" style="font-size:0.73rem">${Utils.rand(inv.total_returns)} returns</div></td>
+      <td><div style="font-weight:700">${totalInvCount}</div><div class="td-muted" style="font-size:0.72rem">${activeInvCount} active</div></td>
+      <td class="td-muted">${Utils.date(inv.date_joined)}</td>
+      <td onclick="event.stopPropagation()">
+        <div class="flex-center gap-6">
           <button class="btn btn--secondary btn--sm" onclick='viewInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-eye"></i></button>
           <button class="btn btn--danger btn--sm" onclick='confirmDeleteInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-trash"></i></button>
         </div>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 
-  // Pagination
   const pages = Math.ceil(filteredInvestors.length / INV_PAGE_SIZE);
-  const pag = document.getElementById('investorsPagination');
-  pag.innerHTML = Array.from({ length: pages }, (_, i) =>
+  document.getElementById('investorsPagination').innerHTML = Array.from({ length: pages }, (_, i) =>
     `<button class="page-btn ${i + 1 === investorPage ? 'active' : ''}" onclick="investorPage=${i + 1};renderInvestorsTable()">${i + 1}</button>`
   ).join('');
 }
 
 function setupInvestorFilters() {
-  const search = document.getElementById('investorSearch');
+  const search  = document.getElementById('investorSearch');
   const statusF = document.getElementById('investorStatusFilter');
+  const kycF    = document.getElementById('investorKycFilter');
+  const provF   = document.getElementById('investorProvinceFilter');
 
   const filter = Utils.debounce(() => {
-    const q = search.value.toLowerCase();
+    const q  = (search.value || '').toLowerCase();
     const st = statusF.value;
+    const ky = kycF.value;
+    const pv = provF.value;
     filteredInvestors = STATE.investors.filter(inv => {
-      const matchQ = !q || `${inv.first_name} ${inv.last_name} ${inv.email} ${inv.id}`.toLowerCase().includes(q);
+      const name = `${inv.first_name||''} ${inv.last_name||''}`.toLowerCase();
+      const matchQ  = !q  || name.includes(q)
+                          || (inv.email||'').toLowerCase().includes(q)
+                          || (inv.id||'').toLowerCase().includes(q)
+                          || (inv.phone||'').includes(q)
+                          || (inv.id_number||'').includes(q);
       const matchSt = !st || inv.status === st;
-      return matchQ && matchSt;
+      const matchKy = !ky || inv.kyc_status === ky;
+      const matchPv = !pv || (inv.province||'').toLowerCase().includes(pv.toLowerCase());
+      return matchQ && matchSt && matchKy && matchPv;
     });
     investorPage = 1;
     renderInvestorsTable();
@@ -690,6 +717,8 @@ function setupInvestorFilters() {
 
   search.addEventListener('input', filter);
   statusF.addEventListener('change', filter);
+  kycF.addEventListener('change', filter);
+  provF.addEventListener('change', filter);
 }
 
 async function viewInvestor(id) {
@@ -701,105 +730,118 @@ async function viewInvestor(id) {
 
   document.getElementById('invDetailTitle').textContent = `${inv.first_name} ${inv.last_name} — ${inv.id}`;
 
+  /* Parse bank details stored in notes JSON by migration */
+  let bankNotes = {};
+  try { if (inv.notes && inv.notes.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
+  const bankName   = inv.bank_name    || bankNotes.bank_name    || '—';
+  const bankHolder = inv.bank_account_holder || bankNotes.account_holder || '—';
+  const bankAcctRaw= inv.bank_account_number || bankNotes.account_number || '';
+  const bankMasked = bankAcctRaw ? '••••' + String(bankAcctRaw).slice(-4) : '—';
+  const bankBranch = inv.bank_branch_code || bankNotes.branch_code || '—';
+  const bStatus    = inv.bank_account_status || (bankAcctRaw ? 'pending' : 'none');
+  const bCls       = { none:'badge--grey', pending:'badge--yellow', approved:'badge--green', rejected:'badge--red' };
+  const bLbl       = { none:'Not added', pending:'On file', approved:'Verified', rejected:'Rejected' };
+  const avatarColor= _invAvatarColor(`${inv.first_name} ${inv.last_name}`);
+  const totalInvested = invsts.reduce((s,i) => s+(i.amount||0), 0);
+  const activeInvCount= invsts.filter(i=>i.status==='active').length;
+
   document.getElementById('invDetailBody').innerHTML = `
     <div class="grid-2 mb-16">
       <div>
         <div class="flex-center gap-12 mb-16">
-          <div class="avatar avatar--lg avatar--gold">${Utils.initials(inv.first_name + ' ' + inv.last_name)}</div>
+          <div style="width:52px;height:52px;border-radius:50%;background:${avatarColor};color:#fff;font-size:1rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${Utils.initials(inv.first_name + ' ' + inv.last_name)}</div>
           <div>
-            <div style="font-size:1.1rem;font-weight:800;color:#1a1a1a">${inv.first_name} ${inv.last_name}</div>
-            <div style="color:var(--ci-text-muted,#6b7280);font-size:0.8rem">${inv.email}</div>
-            <div class="mt-4">${Utils.statusBadge(inv.status)}</div>
+            <div style="font-size:1.15rem;font-weight:800;color:var(--text)">${inv.first_name||''} ${inv.last_name||''}</div>
+            <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${inv.id||''}</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+              ${Utils.statusBadge(inv.status)}
+              ${inv.kyc_status==='approved'?'<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>':'<span class="badge badge--yellow">KYC Pending</span>'}
+            </div>
           </div>
         </div>
         <div class="info-list">
-          <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${inv.phone || '—'}</span></div>
-          <div class="info-row"><span class="info-row__label">SA ID</span><span class="info-row__value">${inv.id_number || '—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Location</span><span class="info-row__value">${inv.city || '—'}, ${inv.province || '—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value">${inv.risk_profile || '—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Referral Code</span><span class="info-row__value text-gold">${inv.referral_code || '—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${inv.email||'—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${inv.phone||'—'}</span></div>
+          <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${inv.id_number||'—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Province</span><span class="info-row__value">${(inv.province||'').trim()||'—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Address</span><span class="info-row__value" style="font-size:0.78rem">${inv.address||'—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Occupation</span><span class="info-row__value">${inv.occupation||'—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${inv.risk_profile||'—'}</span></div>
           <div class="info-row"><span class="info-row__label">Date Joined</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
         </div>
       </div>
       <div>
-        <div class="panel">
-          <div class="panel__header"><span class="panel__title">Financials</span></div>
+        <div class="panel mb-12">
+          <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-coins" style="color:var(--orange);margin-right:6px"></i>Portfolio Summary</span></div>
           <div class="panel__body">
-            <div class="info-list">
-              <div class="info-row"><span class="info-row__label">Wallet Balance</span><span class="info-row__value text-gold">${Utils.rand(inv.wallet_balance)}</span></div>
-              <div class="info-row"><span class="info-row__label">Total Invested</span><span class="info-row__value">${Utils.rand(inv.total_invested)}</span></div>
-              <div class="info-row"><span class="info-row__label">Total Returns</span><span class="info-row__value text-green">${Utils.rand(inv.total_returns)}</span></div>
-              <div class="info-row"><span class="info-row__label">Effective Return</span><span class="info-row__value text-green">${inv.total_invested ? Utils.pct(inv.total_returns / inv.total_invested) : '—'}</span></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+                <div style="font-size:1.05rem;font-weight:800;color:#D4AF37">${Utils.rand(inv.wallet_balance)}</div>
+                <div style="font-size:0.72rem;color:var(--text-muted)">Wallet</div>
+              </div>
+              <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+                <div style="font-size:1.05rem;font-weight:800;color:var(--text)">${Utils.rand(totalInvested||inv.total_invested)}</div>
+                <div style="font-size:0.72rem;color:var(--text-muted)">Total Invested</div>
+              </div>
+              <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+                <div style="font-size:1.05rem;font-weight:800;color:#22c55e">${Utils.rand(inv.total_returns)}</div>
+                <div style="font-size:0.72rem;color:var(--text-muted)">Returns</div>
+              </div>
+              <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+                <div style="font-size:1.05rem;font-weight:800;color:#3b82f6">${invsts.length} <span style="font-size:0.72rem;font-weight:400">(${activeInvCount} active)</span></div>
+                <div style="font-size:0.72rem;color:var(--text-muted)">Investments</div>
+              </div>
             </div>
           </div>
         </div>
-        <div class="panel mt-12">
-          <div class="panel__header">
-            <span class="panel__title">Admin Notes</span>
-            <button class="btn btn--primary btn--sm" onclick="saveInvestorNotes('${inv.id}')"><i class="fa-solid fa-save"></i> Save</button>
-          </div>
+        <div class="panel mb-12">
+          <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-building-columns" style="color:var(--orange);margin-right:6px"></i>Bank Account</span></div>
           <div class="panel__body">
-            <textarea id="investorNotesTA" class="form-input" style="width:100%;min-height:90px;font-size:0.82rem;resize:vertical" placeholder="Internal notes visible only to admins…"></textarea>
+            <div class="info-list">
+              <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">${bankName}</span></div>
+              <div class="info-row"><span class="info-row__label">Account Holder</span><span class="info-row__value">${bankHolder}</span></div>
+              <div class="info-row"><span class="info-row__label">Account No.</span><span class="info-row__value" style="font-family:monospace">${bankMasked}</span></div>
+              <div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value">${bankBranch}</span></div>
+              <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value"><span class="badge ${bCls[bStatus]}">${bLbl[bStatus]}</span></span></div>
+            </div>
+            ${bStatus==='pending'?`<div style="display:flex;gap:8px;margin-top:10px">
+              <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-check"></i> Approve</button>
+              <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+            </div>`:''}
           </div>
         </div>
       </div>
     </div>
 
-    <div class="mb-12" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Investments (${invsts.length})</div>
+    <div style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:10px"><i class="fa-solid fa-chart-line" style="color:var(--orange);margin-right:6px"></i>Investments (${invsts.length})</div>
     <table class="data-table mb-16">
-      <thead><tr><th>Pool</th><th>Product</th><th>Amount</th><th>Exp. Return</th><th>Status</th><th>Maturity</th></tr></thead>
+      <thead><tr><th>Pool</th><th>Product</th><th>Date Invested</th><th>Amount</th><th>Rate</th><th>Status</th><th>Maturity</th></tr></thead>
       <tbody>${invsts.length ? invsts.map(i => {
         const pi = Utils.productInfo(i.product_type);
         return `<tr>
-          <td class="td-strong">${i.pool_name}</td>
+          <td class="td-strong">${i.pool_name||'—'}</td>
           <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
+          <td class="td-muted">${Utils.date(i.start_date||i.created_at)}</td>
           <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
-          <td class="td-green">${Utils.pct(i.annual_rate)}</td>
+          <td class="td-green">${i.annual_rate?Utils.pct(i.annual_rate):'—'}</td>
           <td>${Utils.statusBadge(i.status)}</td>
           <td class="td-muted">${Utils.date(i.end_date)}</td>
         </tr>`;
-      }).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:16px">No investments</td></tr>'}</tbody>
+      }).join(''):'<tr><td colspan="7" class="text-center text-muted" style="padding:16px">No investments on record</td></tr>'}</tbody>
     </table>
 
-    <div class="mb-12" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Recent Transactions (${txns.length})</div>
-    <table class="data-table">
+    <div style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:10px"><i class="fa-solid fa-arrows-rotate" style="color:var(--orange);margin-right:6px"></i>Transactions (${txns.length})</div>
+    <table class="data-table mb-16">
       <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Reference</th><th>Date</th></tr></thead>
-      <tbody>${txns.slice(0, 5).map(t => `
+      <tbody>${txns.length ? txns.slice(0,10).map(t => `
         <tr>
           <td>${Utils.statusBadge(t.type)}</td>
-          <td class="${t.amount > 0 ? 'td-green' : 'td-red'} fw-700">${t.amount > 0 ? '+' : ''}${Utils.rand(t.amount)}</td>
+          <td class="${(t.amount||0)>=0?'td-green':'td-red'} fw-700">${(t.amount||0)>=0?'+':''}${Utils.rand(Math.abs(t.amount||0))}</td>
           <td>${Utils.statusBadge(t.status)}</td>
-          <td class="td-muted">${t.reference || '—'}</td>
-          <td class="td-muted">${Utils.date(t.created_at)}</td>
-        </tr>
-      `).join('')}</tbody>
+          <td class="td-muted" style="font-size:0.78rem">${t.reference||'—'}</td>
+          <td class="td-muted">${Utils.date(t.transaction_date||t.created_at)}</td>
+        </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:16px">No transactions on record</td></tr>'}</tbody>
     </table>
-
-    ${(() => {
-      const statusMap = { none: 'Not added', pending: 'Pending verification', approved: 'Verified', rejected: 'Rejected' };
-      const statusCls = { none: 'badge--grey', pending: 'badge--yellow', approved: 'badge--green', rejected: 'badge--red' };
-      const bStatus = inv.bank_account_status || 'none';
-      const masked  = inv.bank_account_number ? '••••••' + String(inv.bank_account_number).slice(-4) : '—';
-      return `
-    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Bank Account</div>
-    <div class="panel mb-16">
-      <div class="panel__body">
-        <div class="info-list">
-          <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">${inv.bank_name || '—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Account Holder</span><span class="info-row__value">${inv.bank_account_holder || '—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Account Number</span><span class="info-row__value">${masked}</span></div>
-          <div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value">${inv.bank_branch_code || '—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Type</span><span class="info-row__value" style="text-transform:capitalize">${inv.bank_account_type || '—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Verification Status</span><span class="info-row__value"><span class="badge ${statusCls[bStatus]}">${statusMap[bStatus]}</span></span></div>
-        </div>
-        ${bStatus === 'pending' ? `
-        <div style="display:flex;gap:8px;margin-top:12px">
-          <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-check"></i> Approve Account</button>
-          <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-xmark"></i> Reject Account</button>
-        </div>` : (bStatus === 'approved' ? `<div style="margin-top:8px;font-size:0.78rem;color:#22c55e"><i class="fa-solid fa-check-circle"></i> Account verified — withdrawals are enabled</div>` : '')}
-      </div>
-    </div>`;
-    })()}
 
     <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Admin Notes (Persistent)</div>
     <div class="panel mb-16">
@@ -1574,7 +1616,7 @@ let filteredInvests = [];
 
 async function loadInvestments() {
   try {
-    const res = await API.investments.list({ limit: 200 });
+    const res = await API.investments.list({ limit: 5000 });
     STATE.investments = res.data || [];
     filteredInvests = [...STATE.investments];
     renderInvestmentStats();
@@ -1585,11 +1627,13 @@ async function loadInvestments() {
 
 function renderInvestmentStats() {
   const d = STATE.investments;
-  document.getElementById('inv-total').textContent = d.length;
-  document.getElementById('inv-active').textContent = d.filter(i => i.status === 'active').length;
-  document.getElementById('inv-paidout').textContent = d.filter(i => i.status === 'paid_out').length;
-  document.getElementById('inv-matured').textContent = d.filter(i => i.status === 'matured').length;
+  const withRate = d.filter(i => i.annual_rate > 0);
+  const avgRate = withRate.length ? withRate.reduce((s,i) => s+(i.annual_rate||0), 0) / withRate.length : 0;
+  document.getElementById('inv-total').textContent = d.length.toLocaleString();
+  document.getElementById('inv-active').textContent = d.filter(i => i.status === 'active').length.toLocaleString();
+  document.getElementById('inv-matured').textContent = d.filter(i => i.status === 'matured').length.toLocaleString();
   document.getElementById('inv-capital').textContent = Utils.rand(d.reduce((s, i) => s + (i.amount || 0), 0));
+  document.getElementById('inv-avgrate').textContent = avgRate ? Utils.pct(avgRate) : '—';
 }
 
 function renderInvestmentsTable() {
@@ -1599,17 +1643,24 @@ function renderInvestmentsTable() {
 
   document.getElementById('investmentsFooter').textContent = `${start + 1}–${Math.min(start + INV_PG_SIZE, filteredInvests.length)} of ${filteredInvests.length}`;
 
-  if (!page.length) { body.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding:32px">No investments</td></tr>'; return; }
+  if (!page.length) { body.innerHTML = '<tr><td colspan="10" class="text-center text-muted" style="padding:32px">No investments</td></tr>'; return; }
 
   body.innerHTML = page.map(i => {
     const pi = Utils.productInfo(i.product_type);
+    const investor   = STATE.investors.find(inv => inv.id === i.investor_id);
+    const invName    = i.investor_name || (investor ? `${investor.first_name} ${investor.last_name}` : '—');
+    const investDate = i.start_date || i.created_at;
     return `<tr>
       <td style="width:36px;text-align:center"><input type="checkbox" class="inv-select-cb" value="${i.id}" onchange="_invUpdateBulkBar()" /></td>
-      <td><div class="td-strong">${i.investor_name}</div><div class="td-muted">${i.investor_email}</div></td>
-      <td class="td-strong">${i.pool_name}</td>
+      <td>
+        <div class="td-strong" style="cursor:pointer" onclick="viewInvestor('${i.investor_id}')">${invName}</div>
+        <div style="font-size:0.7rem;font-family:monospace;color:var(--text-muted)">${i.investor_id||'—'}</div>
+      </td>
+      <td class="td-muted">${Utils.date(investDate)}</td>
+      <td class="td-strong">${i.pool_name||'—'}</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
-      <td class="td-green">${Utils.rand(i.expected_return)}</td>
+      <td class="td-green">${i.annual_rate?Utils.pct(i.annual_rate):'—'}</td>
       <td>${Utils.statusBadge(i.status)}</td>
       <td class="td-muted">${Utils.date(i.end_date)}</td>
       <td>
@@ -1664,7 +1715,9 @@ function setupInvestmentFilters() {
     const pr = product.value;
     const st = status.value;
     filteredInvests = STATE.investments.filter(i => {
-      const mq = !q || `${i.investor_name} ${i.pool_name}`.toLowerCase().includes(q);
+      const investor = STATE.investors.find(inv => inv.id === i.investor_id);
+      const invName  = i.investor_name || (investor ? `${investor.first_name} ${investor.last_name}` : '');
+      const mq = !q || `${invName} ${i.pool_name} ${i.investor_id||''}`.toLowerCase().includes(q);
       const mp = !pr || i.product_type === pr;
       const ms = !st || i.status === st;
       return mq && mp && ms;
