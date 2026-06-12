@@ -47,7 +47,7 @@ async function _sendPush(investorId, payload) {
 
 /* ─── Input Validation ─── */
 const NUMERIC_FIELDS = new Set(['amount','wallet_balance','total_invested','total_returns','annual_rate','max_capacity','current_invested','recurring_amount','xp_points']);
-const STATUS_FIELDS  = { status: ['active','inactive','pending','pending_fica','fica_submitted','matured','paid_out','cancelled','rejected','open','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor'], fica_status: ['pending','approved','rejected','not_started','submitted'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','reinvest','pending'] };
+const STATUS_FIELDS  = { status: ['active','inactive','suspended','pending','pending_fica','fica_submitted','matured','paid_out','cancelled','rejected','open','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor'], fica_status: ['pending','approved','rejected','not_started','submitted'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','reinvest','pending'] };
 
 function validateBody(table, body, isCreate) {
   const errors = [];
@@ -310,6 +310,25 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
     res.json({ data: rows, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (err) {
     console.error(`GET /${req.params.table}:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ─── GET /api/tables/investors/next-account ─── */
+router.get('/investors/next-account', requireAuth, async (req, res) => {
+  try {
+    if (!['admin','director','fund_manager'].includes(req.user.role))
+      return res.status(403).json({ error: 'Forbidden.' });
+    const { rows } = await pool.query(`
+      SELECT COALESCE(
+        MAX(CAST(REGEXP_REPLACE(id, '^[A-Za-z]+-', '') AS BIGINT)),
+        100000
+      ) + 1 AS next_num
+      FROM investors
+      WHERE id ~ '^[A-Za-z]+-[0-9]+$'
+    `);
+    res.json({ account_number: `SV-${rows[0].next_num}` });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

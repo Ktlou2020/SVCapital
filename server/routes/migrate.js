@@ -76,14 +76,18 @@ router.post('/run',
 
     let users, pools, investments, transactions, bankAccounts, addresses;
     try {
-      users        = parse('users');
-      pools        = parse('pools');
-      investments  = parse('investments');
-      transactions = parse('transactions');
-      bankAccounts = parse('bankAccounts');
+      users        = parse('users',          false);
+      pools        = parse('pools',          false);
+      investments  = parse('investments',    false);
+      transactions = parse('transactions',   false);
+      bankAccounts = parse('bankAccounts',   false);
       addresses    = parse('addressDetails', false);
     } catch (err) {
       return res.status(400).json({ error: err.message });
+    }
+
+    if (!users.length && !pools.length && !investments.length && !transactions.length && !bankAccounts.length && !addresses.length) {
+      return res.status(400).json({ error: 'No files uploaded. Please select at least one JSON file to migrate.' });
     }
 
     /* ─── Build lookups (all O(n), done once) ─── */
