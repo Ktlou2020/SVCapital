@@ -447,14 +447,14 @@ function renderRecentInvestments() {
     const pi = Utils.productInfo(inv.product_type);
     return `<tr>
       <td><div class="flex-center gap-8">
-        <div class="avatar avatar--sm avatar--gold">${Utils.initials(inv.investor_name)}</div>
-        <span class="td-strong">${inv.investor_name}</span>
+        <div class="avatar avatar--sm avatar--gold" style="flex-shrink:0">${Utils.initials(inv.investor_name)}</div>
+        <span class="td-strong clip">${inv.investor_name}</span>
       </div></td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
-      <td class="td-gold fw-700">${Utils.rand(inv.amount)}</td>
-      <td class="td-green">${Utils.pct(inv.expected_return_rate)}</td>
+      <td class="td-gold fw-700 clip">${Utils.rand(inv.amount)}</td>
+      <td class="td-green clip">${Utils.pct(inv.expected_return_rate)}</td>
       <td>${Utils.statusBadge(inv.status)}</td>
-      <td class="td-muted">${Utils.date(inv.investment_date)}</td>
+      <td class="td-muted clip">${Utils.date(inv.investment_date)}</td>
     </tr>`;
   }).join('');
 }
@@ -996,11 +996,11 @@ function renderWithdrawalsTable() {
     const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id || '—';
     const bank = inv ? (inv.bank_name || '—') : '—';
     return `<tr>
-      <td class="td-muted">${Utils.date(w.created_at || w.transaction_date)}</td>
-      <td><div class="td-strong">${name}</div></td>
-      <td class="td-gold fw-700">${Utils.rand(Math.abs(w.amount))}</td>
-      <td class="td-muted">${bank}</td>
-      <td class="td-muted" style="font-size:0.75rem">${w.reference || '—'}</td>
+      <td class="td-muted clip">${Utils.date(w.created_at || w.transaction_date)}</td>
+      <td><div class="td-strong clip">${name}</div></td>
+      <td class="td-gold fw-700 clip">${Utils.rand(Math.abs(w.amount))}</td>
+      <td class="td-muted clip">${bank}</td>
+      <td class="td-muted clip" style="font-size:0.75rem">${w.reference || '—'}</td>
       <td>
         ${showActions ? `
           <div class="flex-center gap-6">
@@ -1178,9 +1178,9 @@ function renderKYCTable() {
     return `
     <tr>
       <td><input type="checkbox" class="kyc-cb" value="${k.id}" ${!canSelect ? 'disabled' : ''} ${_kycSelected.has(k.id) ? 'checked' : ''} onchange="toggleKycRow('${k.id}', this.checked)" style="${canSelect ? 'cursor:pointer;width:16px;height:16px;accent-color:#FF9B0C' : 'opacity:0.3;width:16px;height:16px'}"></td>
-      <td><div class="td-strong">${k.investor_name}</div><div class="td-muted">${k.investor_id}</div></td>
-      <td>${k.document_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—'}</td>
-      <td class="td-muted">${k.file_name || 'Not uploaded'}</td>
+      <td><div class="td-strong clip">${k.investor_name}</div><div class="td-muted clip">${k.investor_id}</div></td>
+      <td class="clip">${k.document_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—'}</td>
+      <td class="td-muted clip">${k.file_name || 'Not uploaded'}</td>
       <td>${Utils.statusBadge(k.status)}</td>
       <td class="td-muted">${Utils.date(k.submitted_date)}</td>
       <td>
@@ -1684,11 +1684,11 @@ function renderInvestmentsTable() {
     return `<tr>
       <td style="width:36px;text-align:center"><input type="checkbox" class="inv-select-cb" value="${i.id}" onchange="_invUpdateBulkBar()" /></td>
       <td>
-        <div class="td-strong" style="cursor:pointer" onclick="viewInvestor('${i.investor_id}')">${invName}</div>
-        <div style="font-size:0.7rem;font-family:monospace;color:var(--text-muted)">${i.investor_id||'—'}</div>
+        <div class="td-strong clip" style="cursor:pointer" onclick="viewInvestor('${i.investor_id}')">${invName}</div>
+        <div class="clip" style="font-size:0.7rem;font-family:monospace;color:var(--text-muted)">${i.investor_id||'—'}</div>
       </td>
-      <td class="td-muted">${Utils.date(investDate)}</td>
-      <td class="td-strong">${i.pool_name||'—'}</td>
+      <td class="td-muted clip">${Utils.date(investDate)}</td>
+      <td class="td-strong clip">${i.pool_name||'—'}</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
       <td class="td-green">${i.annual_rate?Utils.pct(i.annual_rate):'—'}</td>
@@ -1856,8 +1856,8 @@ function renderMaturityTable() {
   }
   body.innerHTML = STATE.maturity.map(m => `
     <tr>
-      <td class="td-strong">${m.investor_name}</td>
-      <td class="td-muted">${m.pool_name}</td>
+      <td class="td-strong clip">${m.investor_name}</td>
+      <td class="td-muted clip">${m.pool_name}</td>
       <td><span class="badge badge--blue">${m.instruction_type?.replace(/_/g, ' ') || '—'}</span></td>
       <td class="td-gold fw-700">${m.total_payout ? Utils.rand(m.total_payout) : '—'}</td>
       <td>${Utils.statusBadge(m.status)}</td>
@@ -1944,12 +1944,12 @@ function renderTxnTable() {
     const invName = _txnInvName(t);
 
     return `<tr>
-      <td><div class="td-strong">${invName}</div></td>
+      <td><div class="td-strong clip">${invName}</div></td>
       <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ') || '—'}</span></td>
       <td class="${t.amount > 0 ? 'td-green' : 'td-red'} fw-700">${t.amount > 0 ? '+' : ''}${Utils.rand(t.amount)}</td>
       <td>${statusCell}</td>
-      <td class="td-muted" style="font-size:0.75rem">${t.reference || '—'}</td>
-      <td class="td-muted" style="font-size:0.75rem;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.description || '—'}${proofLink}</td>
+      <td class="td-muted clip" style="font-size:0.75rem">${t.reference || '—'}</td>
+      <td class="td-muted" style="font-size:0.75rem"><div class="clip">${t.description || '—'}</div>${proofLink}</td>
       <td class="td-muted">${Utils.date(t.created_at)}</td>
       <td>
         ${isPendingDeposit ? `<button class="btn btn--success btn--sm" onclick="changeTxnStatus('${t.id}', 'completed', '${t.investor_id}', ${t.amount})" title="Approve deposit — credits wallet"><i class="fa-solid fa-check"></i> Approve</button>` : ''}
@@ -2113,8 +2113,8 @@ function renderTicketsTable() {
     const invEmail = t.investor_email || inv?.email || '';
     const needsReply = !t.admin_response && t.status === 'open';
     return `<tr ${needsReply ? 'style="background:rgba(255,155,12,0.05)"' : ''}>
-      <td><div class="td-strong">${invName}</div><div class="td-muted">${invEmail}</div></td>
-      <td class="td-strong" style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.subject}</td>
+      <td><div class="td-strong clip">${invName}</div><div class="td-muted clip">${invEmail}</div></td>
+      <td class="td-strong clip">${t.subject}</td>
       <td><span class="badge badge--gray">${t.category?.replace(/_/g, ' ') || '—'}</span></td>
       <td>${Utils.priorityBadge(t.priority)}</td>
       <td>${Utils.statusBadge(t.status)}</td>
@@ -2802,13 +2802,13 @@ function renderIFATable(filterStatus = '', searchQ = '') {
         <div class="flex-center gap-10">
           <div class="avatar avatar--sm avatar--gold">${initials.toUpperCase()}</div>
           <div>
-            <div class="td-strong">${ifa.first_name} ${ifa.last_name}</div>
-            <div class="td-muted" style="font-size:0.72rem">${ifa.email}</div>
+            <div class="td-strong clip">${ifa.first_name} ${ifa.last_name}</div>
+            <div class="td-muted clip" style="font-size:0.72rem">${ifa.email}</div>
           </div>
         </div>
       </td>
-      <td class="td-strong">${ifa.company_name || '—'}</td>
-      <td><span style="font-family:monospace;font-size:0.78rem;color:var(--text-muted)">${ifa.license_number || '—'}</span></td>
+      <td class="td-strong clip">${ifa.company_name || '—'}</td>
+      <td><span class="clip" style="font-family:monospace;font-size:0.78rem;color:var(--text-muted)">${ifa.license_number || '—'}</span></td>
       <td>
         <span class="badge badge--blue" style="cursor:pointer" onclick="viewIFA('${ifa.id}')">
           <i class="fa-solid fa-users"></i> ${clientCount} client${clientCount !== 1 ? 's' : ''}
@@ -3460,13 +3460,13 @@ function renderAuditTable(res) {
     const badgeClass  = actionColor[action] || 'gray';
 
     return `<tr>
-      <td class="td-muted" style="white-space:nowrap;font-size:0.75rem">${Utils.date(e.created_at)}</td>
-      <td><div style="font-size:0.78rem;font-weight:600;color:#1a1a1a">${actor}</div>
-          ${actorRole !== '—' ? `<div style="font-size:0.68rem;color:var(--text-muted)">${actorRole}</div>` : ''}</td>
-      <td><span class="badge badge--${badgeClass}" style="font-size:0.7rem">${action}</span></td>
-      <td class="td-muted" style="font-size:0.75rem">${target}</td>
-      <td class="td-muted" style="font-size:0.72rem;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${desc}">${desc || '—'}</td>
-      <td class="td-muted" style="font-size:0.72rem">${ip}</td>
+      <td class="td-muted clip" style="font-size:0.75rem">${Utils.date(e.created_at)}</td>
+      <td><div class="clip" style="font-size:0.78rem;font-weight:600">${actor}</div>
+          ${actorRole !== '—' ? `<div class="clip" style="font-size:0.68rem;color:var(--text-muted)">${actorRole}</div>` : ''}</td>
+      <td><span class="badge badge--${badgeClass} clip" style="font-size:0.7rem">${action}</span></td>
+      <td class="td-muted clip" style="font-size:0.75rem">${target}</td>
+      <td class="td-muted clip" style="font-size:0.72rem" title="${desc}">${desc || '—'}</td>
+      <td class="td-muted clip" style="font-size:0.72rem">${ip}</td>
     </tr>`;
   }).join('');
 
@@ -3859,13 +3859,13 @@ function renderAMLTable() {
     const amount   = f.amount || f.transaction_amount || '';
     const canResolve = f.status !== 'resolved' && f.status !== 'closed';
     return `<tr>
-      <td class="td-muted">${Utils.date(f.created_at)}</td>
+      <td class="td-muted clip">${Utils.date(f.created_at)}</td>
       <td>
-        <div class="td-strong">${invName}</div>
-        <div class="td-muted" style="font-size:0.72rem">${f.investor_id || ''}</div>
+        <div class="td-strong clip">${invName}</div>
+        <div class="td-muted clip" style="font-size:0.72rem">${f.investor_id || ''}</div>
       </td>
-      <td class="td-gold fw-700">${amount ? Utils.rand(amount) : '—'}</td>
-      <td style="max-width:200px;font-size:0.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.subject || f.reason || f.message || '—'}</td>
+      <td class="td-gold fw-700 clip">${amount ? Utils.rand(amount) : '—'}</td>
+      <td class="clip" style="font-size:0.8rem">${f.subject || f.reason || f.message || '—'}</td>
       <td>${Utils.priorityBadge ? Utils.priorityBadge(f.priority) : `<span class="badge">${f.priority || '—'}</span>`}</td>
       <td>${statusBadge(f.status)}</td>
       <td>
