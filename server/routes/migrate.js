@@ -7,7 +7,7 @@ const pool    = require('../db/pool');
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
-/* ─── Field mappings (same as CLI script) ─── */
+/* ─── Field mappings ─── */
 const PRODUCT_TYPE_MAP = {
   'Delivery Bike Investment':   'delivery_bikes',
   'Short Term Investment':      'smme',
@@ -17,18 +17,37 @@ const PRODUCT_TYPE_MAP = {
   '12J Investment':             'cattle',
 };
 const POOL_STATUS_MAP       = { MATURED:'matured', ACTIVE:'active', OPEN:'open', CLOSED:'closed' };
-const INVESTMENT_STATUS_MAP = { MATURED:'matured', ACTIVE:'active', PAID_OUT:'paid_out' };
+const INVESTMENT_STATUS_MAP = { MATURED:'matured', ACTIVE:'active', PAID_OUT:'paid_out', COMPLETE:'paid_out' };
 const TX_TYPE_MAP = {
-  'INVESTMENT':'investment', 'RE-INVESTMENT':'reinvestment', 'PAYOUT':'payout',
+  'INVESTMENT':'investment', 'RE-INVESTMENT':'investment', 'PAYOUT':'return',
   'DEPOSIT':'deposit', 'WITHDRAWAL':'withdrawal', 'RETURN':'return',
 };
 const TX_STATUS_MAP  = { SUCCESSFUL:'completed', PENDING:'pending', FAILED:'failed' };
 const KYC_STATUS_MAP = { Approved:'approved', Unverified:'pending', Outstanding:'pending', Pending:'pending' };
+const KYC_DOC_TYPE_MAP = {
+  'ID Document':       'id_document',
+  'Banking Details':   'bank_statement',
+  'Proof of Address':  'proof_of_address',
+};
 
 function extractPoolId(p) {
   if (!p) return null;
   const parts = p.split('/');
   return parts[parts.length - 1];
+}
+
+/* Run items through fn in parallel batches to avoid DB connection exhaustion */
+async function inBatches(items, fn, size = 40) {
+  const counts = { ok: 0 };
+  const errors = [];
+  for (let i = 0; i < items.length; i += size) {
+    const results = await Promise.allSettled(items.slice(i, i + size).map(fn));
+    results.forEach(r => {
+      if (r.status === 'fulfilled') counts.ok++;
+      else errors.push(r.reason?.message || String(r.reason));
+    });
+  }
+  return { ok: counts.ok, errors };
 }
 
 /* ── POST /api/migrate/run ── */
@@ -67,7 +86,7 @@ router.post('/run',
       return res.status(400).json({ error: err.message });
     }
 
-    /* ─── Build lookups ─── */
+    /* ─── Build lookups (all O(n), done once) ─── */
     const bankByUser = {};
     bankAccounts.forEach(ba => {
       if (ba.defaultAccount && ba.status === 'ACTIVE' && ba.userAccountNumber) {
@@ -85,26 +104,35 @@ router.post('/run',
     const poolById = {};
     pools.forEach(p => { if (p._id) poolById[p._id] = p; });
 
-    const counts = { investors: 0, pools: 0, investments: 0, transactions: 0, kyc: 0 };
-    const errors = [];
+    /* Pre-aggregate invested amounts per user — avoids O(n²) scan */
+    const investedByUser = {};
+    investments.forEach(inv => {
+      if (!inv.userAccountNumber) return;
+      if (!['ACTIVE','MATURED','PAID_OUT'].includes(inv.status)) return;
+      investedByUser[inv.userAccountNumber] =
+        (investedByUser[inv.userAccountNumber] || 0) + (parseFloat(inv.investedAmount) || 0);
+    });
+
+    const counts = {};
+    const allErrors = [];
 
     /* ── 1. Investors ── */
-    for (const u of users) {
-      const id = u.userAccountNumber;
-      if (!id) continue;
-      const bank        = bankByUser[id];
-      const addr        = addressByUser[id];
-      const firstName   = u.name    || (u.display_name || '').split(' ')[0] || '';
-      const lastName    = u.surname || (u.display_name || '').split(' ').slice(1).join(' ') || '';
-      const totalInvested = investments
-        .filter(i => i.userAccountNumber === id && ['ACTIVE','MATURED','PAID_OUT'].includes(i.status))
-        .reduce((s, i) => s + (parseFloat(i.investedAmount) || 0), 0);
-      const notes = bank ? JSON.stringify({
-        bank_name: bank.bankName, account_holder: bank.accountHolderName,
-        account_number: bank.accountNumber, branch_code: bank.branchNumber, bank_proof_url: bank.proof || null,
-      }) : null;
+    const investorResult = await inBatches(
+      users.filter(u => u.userAccountNumber),
+      async u => {
+        const id          = u.userAccountNumber;
+        const bank        = bankByUser[id];
+        const addr        = addressByUser[id];
+        const firstName   = u.name    || (u.display_name || '').split(' ')[0] || '';
+        const lastName    = u.surname || (u.display_name || '').split(' ').slice(1).join(' ') || '';
+        const totalInvested = Math.round((investedByUser[id] || 0) * 100) / 100;
+        const notes = bank ? JSON.stringify({
+          bank_name: bank.bankName, account_holder: bank.accountHolderName,
+          account_number: bank.accountNumber, branch_code: bank.branchNumber,
+          bank_proof_url: bank.proof || null,
+        }) : null;
+        const status = u.status === 'ACTIVE' ? 'active' : 'suspended';
 
-      try {
         await pool.query(`
           INSERT INTO investors
             (id, first_name, last_name, email, phone, id_number, date_of_birth,
@@ -123,28 +151,26 @@ router.post('/run',
           id, firstName, lastName, (u.email||'').toLowerCase().trim(), u.phone_number||'',
           u.identityNumber||'',
           u.dateOfBirth ? new Date(u.dateOfBirth).toISOString().split('T')[0] : null,
-          KYC_STATUS_MAP[u.kycStatus] || 'pending',
-          u.status === 'ACTIVE' ? 'active' : 'inactive',
-          parseFloat(u.wallet) || 0,
-          Math.round(totalInvested * 100) / 100,
+          KYC_STATUS_MAP[u.kycStatus] || 'pending', status,
+          parseFloat(u.wallet) || 0, totalInvested,
           (u.riskTolerence || 'Moderate').toLowerCase(),
           u.employmentStatus || null, notes,
           addr?.fullAddress || null, addr?.province?.trim() || null,
           u.created_time ? new Date(u.created_time) : new Date(),
         ]);
-        counts.investors++;
-      } catch (e) { errors.push(`investor ${id}: ${e.message}`); }
-    }
+      }
+    );
+    counts.investors = investorResult.ok;
+    allErrors.push(...investorResult.errors.slice(0, 10).map(e => `investor: ${e}`));
 
     /* ── 2. Pools ── */
-    for (const p of pools) {
-      if (!p._id) continue;
-      const pid = `POOL-MIGR-${p._id}`;
-      let termMonths = null;
-      if (p.launchDate && p.maturityDate) {
-        termMonths = Math.round((new Date(p.maturityDate) - new Date(p.launchDate)) / (1000*60*60*24*30));
-      }
-      try {
+    const poolResult = await inBatches(
+      pools.filter(p => p._id),
+      async p => {
+        const pid = `POOL-MIGR-${p._id}`;
+        let termMonths = null;
+        if (p.launchDate && p.maturityDate)
+          termMonths = Math.round((new Date(p.maturityDate) - new Date(p.launchDate)) / (1000*60*60*24*30));
         await pool.query(`
           INSERT INTO investment_pools
             (id, name, product_type, status, target_amount, annual_rate,
@@ -160,24 +186,24 @@ router.post('/run',
           p.maturityDate ? new Date(p.maturityDate) : null,
           `Migrated from previous platform. Product: ${p.productName}`,
         ]);
-        counts.pools++;
-      } catch (e) { errors.push(`pool ${p._id}: ${e.message}`); }
-    }
+      }
+    );
+    counts.pools = poolResult.ok;
+    allErrors.push(...poolResult.errors.slice(0, 10).map(e => `pool: ${e}`));
 
     /* ── 3. Investments ── */
-    for (const inv of investments) {
-      if (!inv._id || !inv.userAccountNumber) continue;
-      const origPoolId = extractPoolId(inv.pool?.path);
-      const poolId     = origPoolId ? `POOL-MIGR-${origPoolId}` : null;
-      const srcPool    = origPoolId ? poolById[origPoolId] : null;
-      const amount     = parseFloat(inv.investedAmount) || 0;
-      const rate       = parseFloat(srcPool?.returnPercentage) || 0;
-      let matInstr = null;
-      if (inv.maturityInstruction?.instruction) {
-        matInstr = inv.maturityInstruction.instruction.toLowerCase()
-          .replace(/\s+/g,'_').replace('payout_returns','payout_return').replace('payout_all_funds','payout_all');
-      }
-      try {
+    const invResult = await inBatches(
+      investments.filter(inv => inv._id && inv.userAccountNumber),
+      async inv => {
+        const origPoolId = extractPoolId(inv.pool?.path);
+        const srcPool    = origPoolId ? poolById[origPoolId] : null;
+        const amount     = parseFloat(inv.investedAmount) || 0;
+        const rate       = parseFloat(srcPool?.returnPercentage) || 0;
+        let matInstr = null;
+        if (inv.maturityInstruction?.instruction) {
+          matInstr = inv.maturityInstruction.instruction.toLowerCase()
+            .replace(/\s+/g,'_').replace('payout_returns','payout_return').replace('payout_all_funds','payout_all');
+        }
         await pool.query(`
           INSERT INTO investments
             (id, investor_id, pool_id, pool_name, product_type, amount,
@@ -187,21 +213,23 @@ router.post('/run',
           ON CONFLICT (id) DO UPDATE SET
             status=EXCLUDED.status, maturity_instruction=EXCLUDED.maturity_instruction, updated_at=NOW()
         `, [
-          `INV-MIGR-${inv._id}`, inv.userAccountNumber, poolId,
+          `INV-MIGR-${inv._id}`, inv.userAccountNumber,
+          origPoolId ? `POOL-MIGR-${origPoolId}` : null,
           inv.pool?.name||'', PRODUCT_TYPE_MAP[inv.product?.name]||'other', amount,
           INVESTMENT_STATUS_MAP[inv.status]||'active',
           inv.dateInvested  ? new Date(inv.dateInvested)         : new Date(),
           srcPool?.maturityDate ? new Date(srcPool.maturityDate) : null,
           rate, Math.round(amount * rate * 100) / 100, matInstr,
         ]);
-        counts.investments++;
-      } catch (e) { errors.push(`investment ${inv._id}: ${e.message}`); }
-    }
+      }
+    );
+    counts.investments = invResult.ok;
+    allErrors.push(...invResult.errors.slice(0, 10).map(e => `investment: ${e}`));
 
     /* ── 4. Transactions ── */
-    for (const tx of transactions) {
-      if (!tx._id || !tx.userAccountNumber) continue;
-      try {
+    const txResult = await inBatches(
+      transactions.filter(tx => tx._id && tx.userAccountNumber),
+      async tx => {
         await pool.query(`
           INSERT INTO transactions
             (id, investor_id, type, amount, status, reference, description, transaction_date)
@@ -209,42 +237,45 @@ router.post('/run',
           ON CONFLICT (id) DO NOTHING
         `, [
           `TXN-MIGR-${tx._id}`, tx.userAccountNumber,
-          TX_TYPE_MAP[tx.type]||'other', parseFloat(tx.amount)||0,
+          TX_TYPE_MAP[tx.type]||'deposit', parseFloat(tx.amount)||0,
           TX_STATUS_MAP[tx.status]||'completed', tx.txRef||tx._id,
           `${tx.investment?.name||tx.type||''}`.trim()||'Migrated transaction',
           tx.dateCreated ? new Date(tx.dateCreated) : new Date(),
         ]);
-        counts.transactions++;
-      } catch (e) { errors.push(`transaction ${tx._id}: ${e.message}`); }
-    }
+      }
+    );
+    counts.transactions = txResult.ok;
+    allErrors.push(...txResult.errors.slice(0, 10).map(e => `transaction: ${e}`));
 
     /* ── 5. KYC documents ── */
-    for (const u of users) {
-      if (!u.documents?.length || !u.userAccountNumber) continue;
-      for (let i = 0; i < u.documents.length; i++) {
-        const doc     = u.documents[i];
-        const docType = doc.Name === 'ID Document'     ? 'identity'
-                      : doc.Name === 'Banking Details'  ? 'bank'
-                      : doc.Name === 'Proof of Address' ? 'address' : 'other';
-        const status  = doc.Approved || doc.status === 'Approved' ? 'approved' : 'pending';
-        try {
-          await pool.query(`
-            INSERT INTO kyc_documents
-              (id, investor_id, type, status, file_url, uploaded_at, reviewed_at)
-            VALUES ($1,$2,$3,$4,$5,$6,$7)
-            ON CONFLICT (id) DO NOTHING
-          `, [
-            `KYC-MIGR-${u.userAccountNumber}-${docType}-${i}`,
-            u.userAccountNumber, docType, status, doc.URL||'',
-            doc.Date ? new Date(doc.Date) : new Date(),
-            doc.Approved ? new Date(doc.Date) : null,
-          ]);
-          counts.kyc++;
-        } catch (e) { errors.push(`KYC ${u.userAccountNumber} doc ${i}: ${e.message}`); }
-      }
-    }
+    const kycItems = [];
+    users.forEach(u => {
+      if (!u.documents?.length || !u.userAccountNumber) return;
+      u.documents.forEach((doc, i) => kycItems.push({ u, doc, i }));
+    });
 
-    res.json({ ok: true, counts, errors: errors.slice(0, 50) });
+    const kycResult = await inBatches(
+      kycItems,
+      async ({ u, doc, i }) => {
+        const docType = KYC_DOC_TYPE_MAP[doc.Name] || 'other';
+        const status  = doc.Approved || doc.status === 'Approved' ? 'approved' : 'pending';
+        await pool.query(`
+          INSERT INTO kyc_documents
+            (id, investor_id, doc_type, status, file_url, submitted_at, reviewed_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7)
+          ON CONFLICT (id) DO NOTHING
+        `, [
+          `KYC-MIGR-${u.userAccountNumber}-${docType}-${i}`,
+          u.userAccountNumber, docType, status, doc.URL||'',
+          doc.Date ? new Date(doc.Date) : new Date(),
+          doc.Approved ? new Date(doc.Date) : null,
+        ]);
+      }
+    );
+    counts.kyc = kycResult.ok;
+    allErrors.push(...kycResult.errors.slice(0, 10).map(e => `kyc: ${e}`));
+
+    res.json({ ok: true, counts, errors: allErrors });
   }
 );
 
