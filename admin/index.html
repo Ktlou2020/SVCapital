@@ -85,6 +85,7 @@
       </button>
       <button class="nav-item" data-view="withdrawals" onclick="navigate('withdrawals', this)">
         <i class="fa-solid fa-arrow-up-from-bracket"></i> Withdrawals
+        <span class="nav-badge" id="withdrawalBadge" style="display:none">0</span>
       </button>
 
       <div class="nav-section-label">Operations</div>
@@ -101,6 +102,9 @@
       </button>
       <button class="nav-item" data-view="analytics" onclick="navigate('analytics', this)">
         <i class="fa-solid fa-chart-pie"></i> Analytics
+      </button>
+      <button class="nav-item" data-view="compliance" onclick="navigate('compliance', this)">
+        <i class="fa-solid fa-calendar-check"></i> Compliance Calendar
       </button>
       <button class="nav-item" data-view="auditlog" onclick="navigate('auditlog', this)">
         <i class="fa-solid fa-scroll"></i> Audit Log
@@ -521,7 +525,10 @@
             <h2 style="font-size:1rem;font-weight:700;color:var(--white)">Investment Pools</h2>
             <p style="font-size:0.75rem;color:var(--text-muted)">Manage all active and historical investment pools</p>
           </div>
-          <button class="btn btn--primary" onclick="openAddPoolModal()"><i class="fa-solid fa-plus"></i> New Pool</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn--secondary" onclick="exportPoolsCSV()"><i class="fa-solid fa-file-csv"></i> Export</button>
+            <button class="btn btn--primary" onclick="openAddPoolModal()"><i class="fa-solid fa-plus"></i> New Pool</button>
+          </div>
         </div>
 
         <div class="tab-bar">
@@ -568,6 +575,9 @@
                 <option value="matured">Matured</option>
                 <option value="cancelled">Cancelled</option>
               </select>
+              <button class="btn btn--secondary btn--sm" onclick="exportInvestmentsCSV()">
+                <i class="fa-solid fa-file-csv"></i> Export
+              </button>
             </div>
           </div>
           <div id="invBulkBar" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.3);border-radius:8px;margin-bottom:8px">
@@ -601,6 +611,11 @@
             <div>
               <div class="table-card__title">Maturity Instructions</div>
               <div class="table-card__sub">Investor payout and reinvestment instructions</div>
+            </div>
+            <div class="table-card__controls">
+              <button class="btn btn--secondary btn--sm" onclick="exportMaturityCSV()">
+                <i class="fa-solid fa-file-csv"></i> Export
+              </button>
             </div>
           </div>
           <div style="overflow-x:auto">
@@ -677,7 +692,10 @@
               <div class="table-card__title">Pending Withdrawals</div>
               <div style="font-size:0.78rem;color:var(--text-muted)">Approve or reject pending investor withdrawal requests</div>
             </div>
-            <button class="btn btn--secondary btn--sm" onclick="loadWithdrawals()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn--secondary btn--sm" onclick="exportWithdrawalsCSV()"><i class="fa-solid fa-file-csv"></i> Export</button>
+              <button class="btn btn--secondary btn--sm" onclick="loadWithdrawals()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
           </div>
           <div style="overflow-x:auto">
             <table class="data-table">
@@ -872,6 +890,27 @@
             <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="txnFlowChart"></canvas></div></div>
           </div>
         </div>
+
+        <!-- Maturity Forecast -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-calendar-check" style="color:var(--orange);margin-right:8px"></i>Capital Maturity Forecast (Next 6 Months)</span>
+          </div>
+          <div class="panel__body">
+            <div class="chart-wrap chart-wrap--md"><canvas id="maturityForecastChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Investor Cohort Retention -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-people-arrows" style="color:var(--orange);margin-right:8px"></i>Investor Cohort — Monthly New Investors</span>
+          </div>
+          <div class="panel__body">
+            <div class="chart-wrap chart-wrap--md"><canvas id="cohortChart"></canvas></div>
+          </div>
+        </div>
+
       </div>
 
       <!-- ══════════════════════════════════
@@ -1062,6 +1101,37 @@
                   Loading analytics…
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: COMPLIANCE CALENDAR
+      ══════════════════════════════════ -->
+      <div class="view" id="view-compliance">
+        <div class="grid-layout grid-layout--sidebar">
+          <div>
+            <div class="panel mb-20">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-calendar-check" style="color:var(--orange);margin-right:8px"></i>FSCA Compliance Calendar</span>
+                <span style="font-size:0.75rem;color:var(--text-muted)">FSP #52449</span>
+              </div>
+              <div class="panel__body" id="complianceCalBody">Loading...</div>
+            </div>
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title">KYC Expiry Alerts</span></div>
+              <div class="panel__body" id="kycExpiryBody">Loading...</div>
+            </div>
+          </div>
+          <div>
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title">Maturity Action Required</span></div>
+              <div class="panel__body" id="maturityActionBody">Loading...</div>
+            </div>
+            <div class="panel">
+              <div class="panel__header"><span class="panel__title">Document Retention Status</span></div>
+              <div class="panel__body" id="docRetentionBody">Loading...</div>
             </div>
           </div>
         </div>

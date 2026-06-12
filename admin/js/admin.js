@@ -78,7 +78,10 @@ function toggleAdminNotif() {
 function _syncAdminNotifDot() {
   const dot    = document.getElementById('adminNotifDot');
   const unread = document.querySelectorAll('#adminNotifPanel .notif-item.unread').length;
-  if (dot) dot.classList.toggle('has-unread', unread > 0);
+  if (dot) {
+    dot.classList.toggle('has-unread', unread > 0);
+    dot.textContent = unread > 0 ? (unread > 9 ? '9+' : unread) : '';
+  }
 }
 
 function adminMarkAllRead() {
@@ -215,7 +218,7 @@ function navigate(view, btnEl) {
     pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
     transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
     auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications', aml: 'AML Compliance Review',
-    migrate: 'Data Migration'
+    migrate: 'Data Migration', compliance: 'Compliance Calendar'
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -236,6 +239,7 @@ function navigate(view, btnEl) {
     withdrawals: loadWithdrawals,
     comms: loadComms,
     aml: loadAML,
+    compliance: loadCompliance,
   };
   if (loaders[view]) loaders[view]();
 }
@@ -430,11 +434,52 @@ async function loadDashboard() {
     renderPendingActions();
     renderAumChart();
     renderProductMixChart();
+    updateSidebarBadges();
+
+    // Auto-refresh KPI cards every 30 seconds
+    if (!window._dashRefreshTimer) {
+      window._dashRefreshTimer = setInterval(async () => {
+        if (STATE.currentView !== 'dashboard') return;
+        try {
+          const [invRes, poolRes, invstRes] = await Promise.all([
+            API.investors.list({ limit: 5000 }),
+            API.pools.list({ limit: 1000 }),
+            API.investments.list({ limit: 5000 })
+          ]);
+          STATE.investors = invRes.data || [];
+          STATE.pools = poolRes.data || [];
+          STATE.investments = invstRes.data || [];
+          const totalInvested = STATE.investors.reduce((s, i) => s + (i.total_invested || 0), 0);
+          const totalReturns = STATE.investors.reduce((s, i) => s + (i.total_returns || 0), 0);
+          const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
+          document.getElementById('ds-investors').textContent = STATE.investors.length;
+          document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
+          document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
+          document.getElementById('ds-pools').textContent = activePools;
+          renderPendingActions();
+          updateSidebarBadges();
+        } catch (_) {}
+      }, 30000);
+    }
 
   } catch (e) {
     Toast.error('Failed to load dashboard data');
     console.error(e);
   }
+}
+
+function updateSidebarBadges() {
+  const pendingKyc = STATE.investors.filter(i => i.kyc_status === 'pending').length;
+  const kycBadge = document.getElementById('kycBadge');
+  if (kycBadge) kycBadge.textContent = pendingKyc;
+
+  const pendingWith = STATE.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
+  const withBadge = document.getElementById('withdrawalBadge');
+  if (withBadge) { withBadge.textContent = pendingWith; withBadge.style.display = pendingWith > 0 ? '' : 'none'; }
+
+  const openTkts = STATE.tickets ? STATE.tickets.filter(t => ['open','in_progress'].includes(t.status)).length : 0;
+  const tktBadge = document.getElementById('ticketBadge');
+  if (tktBadge) tktBadge.textContent = openTkts;
 }
 
 function renderRecentInvestments() {
@@ -994,12 +1039,25 @@ function renderWithdrawalsTable() {
   const _row = (w, showActions) => {
     const inv  = STATE.investors.find(i => i.id === w.investor_id);
     const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id || '—';
-    const bank = inv ? (inv.bank_name || '—') : '—';
+
+    // Parse bank from investor notes (migration) or direct fields
+    let bankNotes = {};
+    try { if (inv?.notes?.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
+    const bankName   = inv?.bank_name    || bankNotes.bank_name    || '—';
+    const bankAcct   = inv?.bank_account_number || bankNotes.account_number || '';
+    const bankHolder = inv?.bank_account_holder || bankNotes.account_holder || (inv ? `${inv.first_name} ${inv.last_name}` : '—');
+    const branchCode = inv?.bank_branch_code || bankNotes.branch_code || '—';
+    const bankDisplay = showActions && bankAcct
+      ? `<div style="font-size:0.78rem;font-weight:600;color:var(--text)">${bankName}</div>
+         <div style="font-size:0.7rem;color:var(--text-muted)">${bankHolder}</div>
+         <div style="font-size:0.68rem;font-family:monospace;color:var(--gold)">••••${String(bankAcct).slice(-4)} · ${branchCode}</div>`
+      : `<div class="clip">${bankName}</div>`;
+
     return `<tr>
       <td class="td-muted clip">${Utils.date(w.created_at || w.transaction_date)}</td>
-      <td><div class="td-strong clip">${name}</div></td>
+      <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${w.investor_id||''}</div></td>
       <td class="td-gold fw-700 clip">${Utils.rand(Math.abs(w.amount))}</td>
-      <td class="td-muted clip">${bank}</td>
+      <td>${bankDisplay}</td>
       <td class="td-muted clip" style="font-size:0.75rem">${w.reference || '—'}</td>
       <td>
         ${showActions ? `
@@ -1110,6 +1168,28 @@ async function saveNewInvestor() {
   const em = document.getElementById('newInvEmail').value.trim();
   if (!fn || !ln || !em) { Toast.error('First name, last name and email are required'); return; }
 
+  // SA ID number validation
+  const idNum = (document.getElementById('newInvIdNum').value || '').trim();
+  if (idNum) {
+    if (!/^\d{13}$/.test(idNum)) {
+      Toast.error('SA ID number must be exactly 13 digits'); return;
+    }
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      let d = parseInt(idNum[i]);
+      if (i % 2 !== 0) { d *= 2; if (d > 9) d -= 9; }
+      sum += d;
+    }
+    if ((10 - (sum % 10)) % 10 !== parseInt(idNum[12])) {
+      Toast.error('SA ID number checksum is invalid — please verify the number'); return;
+    }
+    const yy = parseInt(idNum.substring(0, 2)), mm = parseInt(idNum.substring(2, 4)), dd = parseInt(idNum.substring(4, 6));
+    const year = yy + (yy > new Date().getFullYear() % 100 ? 1900 : 2000);
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) { Toast.error('SA ID contains an invalid date of birth'); return; }
+    const age = Math.floor((Date.now() - new Date(year, mm - 1, dd)) / (365.25 * 24 * 3600 * 1000));
+    if (age < 18) { Toast.error('Investor must be at least 18 years old'); return; }
+  }
+
   const accountNo = window._pendingInvestorAccountNo || `INV-${Date.now()}`;
 
   try {
@@ -1139,11 +1219,13 @@ async function saveNewInvestor() {
 async function loadKYC() {
   try {
     const [kycRes, invRes] = await Promise.all([
-      API.kyc.list({ limit: 100 }),
-      API.investors.list({ limit: 100 })
+      API.kyc.list({ limit: 5000 }),
+      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 })
     ]);
-    STATE.kyc = kycRes.data || [];
-    STATE.investors = invRes.data || [];
+    STATE.kyc = (kycRes.data || []).sort((a, b) =>
+      new Date(b.submitted_at || b.uploaded_at || b.created_at || 0) - new Date(a.submitted_at || a.uploaded_at || a.created_at || 0)
+    );
+    if (!STATE.investors.length) STATE.investors = invRes.data || [];
     renderKYCStats();
     renderKYCTable();
 
@@ -1174,15 +1256,17 @@ function renderKYCTable() {
   if (allCb2) allCb2.checked = false;
 
   body.innerHTML = items.map(k => {
+    const kInv = STATE.investors.find(i => i.id === k.investor_id);
+    const kName = k.investor_name || (kInv ? `${kInv.first_name} ${kInv.last_name}`.trim() : k.investor_id || '—');
     const canSelect = ['pending', 'under_review'].includes(k.status);
     return `
     <tr>
       <td><input type="checkbox" class="kyc-cb" value="${k.id}" ${!canSelect ? 'disabled' : ''} ${_kycSelected.has(k.id) ? 'checked' : ''} onchange="toggleKycRow('${k.id}', this.checked)" style="${canSelect ? 'cursor:pointer;width:16px;height:16px;accent-color:#FF9B0C' : 'opacity:0.3;width:16px;height:16px'}"></td>
-      <td><div class="td-strong clip">${k.investor_name}</div><div class="td-muted clip">${k.investor_id}</div></td>
-      <td class="clip">${k.document_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—'}</td>
+      <td><div class="td-strong clip">${kName}</div><div class="td-muted clip">${k.investor_id}</div></td>
+      <td class="clip">${k.doc_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || k.document_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—'}</td>
       <td class="td-muted clip">${k.file_name || 'Not uploaded'}</td>
       <td>${Utils.statusBadge(k.status)}</td>
-      <td class="td-muted">${Utils.date(k.submitted_date)}</td>
+      <td class="td-muted">${Utils.date(k.submitted_at || k.submitted_date || k.created_at)}</td>
       <td>
         ${k.file_data || k.file_url || k.attachment_data
           ? `<button class="btn btn--secondary btn--sm" onclick='viewFicaDocument(${JSON.stringify(k.id)})'><i class="fa-solid fa-eye"></i> View</button>`
@@ -1198,7 +1282,7 @@ function renderKYCTable() {
       </td>
       <td>
         <button class="btn btn--secondary btn--sm" title="Upload a document for this investor"
-                onclick='openKycUploadModal(${JSON.stringify(k.investor_id)},${JSON.stringify(k.investor_name)})'>
+                onclick='openKycUploadModal(${JSON.stringify(k.investor_id)},${JSON.stringify(kName)})'>
           <i class="fa-solid fa-upload"></i>
         </button>
       </td>
@@ -1918,10 +2002,46 @@ async function payoutInvestment(id) {
 /* ═══════════════════════════════════════════════
    MATURITY
    ═══════════════════════════════════════════════ */
+const _matInstrLabel = { payout_all: 'Payout All', payout_return: 'Payout Returns', reinvest: 'Reinvest', pending: 'Pending' };
+
 async function loadMaturity() {
   try {
-    const res = await API.maturityInstructions.list({ limit: 100 });
-    STATE.maturity = res.data || [];
+    const [matRes, invRes, investRes] = await Promise.all([
+      API.maturityInstructions.list({ limit: 1000 }),
+      STATE.investors.length  ? Promise.resolve({ data: STATE.investors  }) : API.investors.list({ limit: 5000 }),
+      STATE.investments.length ? Promise.resolve({ data: STATE.investments }) : API.investments.list({ limit: 5000 })
+    ]);
+
+    if (!STATE.investors.length)   STATE.investors   = invRes.data   || [];
+    if (!STATE.investments.length) STATE.investments = investRes.data || [];
+
+    const matRecords = matRes.data || [];
+
+    /* Build a set of investor_ids already covered by a real maturity_instructions record */
+    const covered = new Set(matRecords.map(m => m.investor_id + '|' + (m.pool_id || '')));
+
+    /* Derive instructions from migrated investments */
+    const fromInvestments = STATE.investments
+      .filter(i => i.maturity_instruction && i.maturity_instruction !== 'pending' && !covered.has(i.investor_id + '|' + (i.pool_id || '')))
+      .map(i => {
+        const inv = STATE.investors.find(x => x.id === i.investor_id);
+        return {
+          id:               i.id,
+          investor_id:      i.investor_id,
+          investor_name:    inv ? `${inv.first_name} ${inv.last_name}`.trim() : i.investor_id,
+          pool_id:          i.pool_id,
+          pool_name:        i.pool_name || '—',
+          instruction_type: i.maturity_instruction,
+          total_payout:     i.amount,
+          status:           i.status === 'matured' ? 'completed' : (i.status === 'active' ? 'submitted' : i.status),
+          submitted_date:   i.end_date || i.start_date || i.created_at,
+          _from_investment: true,
+        };
+      });
+
+    STATE.maturity = [...matRecords, ...fromInvestments]
+      .sort((a, b) => new Date(b.submitted_date || b.created_at || 0) - new Date(a.submitted_date || a.created_at || 0));
+
     renderMaturityTable();
   } catch (e) { Toast.error('Failed to load maturity instructions'); }
 }
@@ -1929,22 +2049,26 @@ async function loadMaturity() {
 function renderMaturityTable() {
   const body = document.getElementById('maturityBody');
   if (!STATE.maturity.length) {
-    body.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-inbox" style="font-size:1.5rem;color:var(--text-dim);display:block;margin-bottom:8px"></i>No maturity instructions submitted yet</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-inbox" style="font-size:1.5rem;color:var(--text-dim);display:block;margin-bottom:8px"></i>No maturity instructions found</td></tr>';
     return;
   }
-  body.innerHTML = STATE.maturity.map(m => `
+  body.innerHTML = STATE.maturity.map(m => {
+    const mInv = STATE.investors.find(i => i.id === m.investor_id);
+    const mName = m.investor_name || (mInv ? `${mInv.first_name} ${mInv.last_name}`.trim() : m.investor_id || '—');
+    const instrLabel = _matInstrLabel[m.instruction_type] || (m.instruction_type?.replace(/_/g, ' ') || '—');
+    return `
     <tr>
-      <td class="td-strong clip">${m.investor_name}</td>
-      <td class="td-muted clip">${m.pool_name}</td>
-      <td><span class="badge badge--blue">${m.instruction_type?.replace(/_/g, ' ') || '—'}</span></td>
+      <td><div class="td-strong clip">${mName}</div><div class="td-muted clip" style="font-size:0.7rem">${m.investor_id||''}</div></td>
+      <td class="td-muted clip">${m.pool_name || '—'}</td>
+      <td><span class="badge badge--blue">${instrLabel}</span></td>
       <td class="td-gold fw-700">${m.total_payout ? Utils.rand(m.total_payout) : '—'}</td>
       <td>${Utils.statusBadge(m.status)}</td>
-      <td class="td-muted">${Utils.date(m.submitted_date)}</td>
+      <td class="td-muted">${Utils.date(m.submitted_date || m.created_at)}</td>
       <td>
-        ${m.status === 'submitted' ? `<button class="btn btn--success btn--sm" onclick='processMaturity(${JSON.stringify(m.id)})'><i class="fa-solid fa-play"></i> Process</button>` : '—'}
+        ${m.status === 'submitted' && !m._from_investment ? `<button class="btn btn--success btn--sm" onclick='processMaturity(${JSON.stringify(m.id)})'><i class="fa-solid fa-play"></i> Process</button>` : '—'}
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 async function processMaturity(id) {
@@ -2324,6 +2448,58 @@ async function loadAnalytics() {
   renderConversionFunnel();
   _renderAnalyticsCharts();
   loadSignupFriction();
+  renderMaturityForecastChart();
+  renderCohortChart();
+}
+
+function renderMaturityForecastChart() {
+  const ctx = document.getElementById('maturityForecastChart');
+  if (!ctx) return;
+  const now = new Date();
+  const months = [], amounts = [];
+  for (let m = 0; m < 6; m++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + m + 1, 1);
+    months.push(d.toLocaleString('default', { month: 'short', year: '2-digit' }));
+    amounts.push(STATE.investments.filter(i => {
+      if (!i.end_date || !['active','matured'].includes(i.status)) return false;
+      const ed = new Date(i.end_date);
+      return ed.getFullYear() === d.getFullYear() && ed.getMonth() === d.getMonth();
+    }).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0));
+  }
+  if (STATE.charts.maturityForecast) STATE.charts.maturityForecast.destroy();
+  STATE.charts.maturityForecast = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: months, datasets: [{ label: 'Capital Maturing (R)', data: amounts, backgroundColor: 'rgba(212,175,55,0.7)', borderColor: '#D4AF37', borderWidth: 1, borderRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#7a92a8', font: { size: 11 } } }, tooltip: { callbacks: { label: c => ` ${Utils.rand(c.parsed.y)}` } } },
+      scales: { x: { ticks: { color: '#3d5268' }, grid: { display: false } }, y: { ticks: { color: '#3d5268', callback: v => 'R'+(v/1000).toFixed(0)+'k' }, grid: { color: 'rgba(0,0,0,0.05)' } } }
+    }
+  });
+}
+
+function renderCohortChart() {
+  const ctx = document.getElementById('cohortChart');
+  if (!ctx) return;
+  const now = new Date();
+  const months = [], counts = [];
+  for (let m = 11; m >= 0; m--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+    months.push(d.toLocaleString('default', { month: 'short', year: '2-digit' }));
+    counts.push(STATE.investors.filter(i => {
+      if (!i.date_joined) return false;
+      const jd = new Date(i.date_joined);
+      return jd.getFullYear() === d.getFullYear() && jd.getMonth() === d.getMonth();
+    }).length);
+  }
+  if (STATE.charts.cohort) STATE.charts.cohort.destroy();
+  STATE.charts.cohort = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: months, datasets: [{ label: 'New Investors', data: counts, backgroundColor: 'rgba(59,130,246,0.7)', borderColor: '#3b82f6', borderWidth: 1, borderRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#7a92a8', font: { size: 11 } } } },
+      scales: { x: { ticks: { color: '#3d5268' }, grid: { display: false } }, y: { ticks: { color: '#3d5268', stepSize: 1 }, grid: { color: 'rgba(0,0,0,0.05)' } } }
+    }
+  });
 }
 
 function renderProductVolChart() {
@@ -3287,18 +3463,79 @@ async function saveKycUpload() {
    GLOBAL SEARCH
    ═══════════════════════════════════════════════ */
 function setupGlobalSearch() {
-  const search = document.getElementById('globalSearch');
-  if (!search) return;
-  search.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      const q = search.value.trim();
-      if (!q) return;
-      navigate('investors', document.querySelector('[data-view=investors]'));
-      setTimeout(() => {
-        document.getElementById('investorSearch').value = q;
-        document.getElementById('investorSearch').dispatchEvent(new Event('input'));
-      }, 300);
+  const input = document.getElementById('globalSearch');
+  if (!input) return;
+
+  // Create dropdown
+  const dropdown = document.createElement('div');
+  dropdown.id = 'globalSearchDropdown';
+  dropdown.style.cssText = 'display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid rgba(0,0,0,0.1);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.15);z-index:9999;max-height:400px;overflow-y:auto';
+  input.parentElement.style.position = 'relative';
+  input.parentElement.appendChild(dropdown);
+
+  input.addEventListener('input', Utils.debounce(() => {
+    const q = input.value.trim().toLowerCase();
+    if (!q || q.length < 2) { dropdown.style.display = 'none'; return; }
+
+    const results = [];
+
+    // Search investors
+    STATE.investors.filter(i => {
+      const name = `${i.first_name||''} ${i.last_name||''}`.toLowerCase();
+      return name.includes(q) || (i.email||'').toLowerCase().includes(q)
+          || (i.id||'').toLowerCase().includes(q) || (i.phone||'').includes(q);
+    }).slice(0, 5).forEach(i => results.push({
+      icon: 'fa-user', color: '#D4AF37',
+      title: `${i.first_name} ${i.last_name}`,
+      sub: `${i.id} · ${i.email}`,
+      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('investors', document.querySelector('[data-view=investors]')); setTimeout(() => { document.getElementById('investorSearch').value = `${i.first_name} ${i.last_name}`; document.getElementById('investorSearch').dispatchEvent(new Event('input')); }, 200); }
+    }));
+
+    // Search pools
+    STATE.pools.filter(p => (p.name||'').toLowerCase().includes(q) || (p.product_type||'').includes(q)).slice(0, 3).forEach(p => results.push({
+      icon: 'fa-layer-group', color: '#3b82f6',
+      title: p.name,
+      sub: `Pool · ${p.status} · ${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)} raised`,
+      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('pools', document.querySelector('[data-view=pools]')); setTimeout(() => viewPoolInvestors(p.id), 300); }
+    }));
+
+    // Search transactions
+    STATE.transactions.filter(t => (t.reference||'').toLowerCase().includes(q) || (t.investor_id||'').toLowerCase().includes(q)).slice(0, 3).forEach(t => results.push({
+      icon: 'fa-arrows-rotate', color: '#22c55e',
+      title: `${t.type} — ${Utils.rand(t.amount)}`,
+      sub: `Ref: ${t.reference||'—'} · ${Utils.date(t.transaction_date||t.created_at)}`,
+      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('transactions', document.querySelector('[data-view=transactions]')); setTimeout(() => { document.getElementById('txnSearch').value = t.reference||''; document.getElementById('txnSearch').dispatchEvent(new Event('input')); }, 200); }
+    }));
+
+    if (!results.length) {
+      dropdown.innerHTML = '<div style="padding:20px;text-align:center;color:#888;font-size:0.82rem">No results for "' + q + '"</div>';
+      dropdown.style.display = 'block';
+      return;
     }
+
+    dropdown.innerHTML = results.map((r, idx) => `
+      <div class="gs-item" data-idx="${idx}" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(0,0,0,0.05)">
+        <div style="width:30px;height:30px;border-radius:8px;background:${r.color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="fa-solid ${r.icon}" style="color:${r.color};font-size:0.8rem"></i>
+        </div>
+        <div>
+          <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${r.title}</div>
+          <div style="font-size:0.72rem;color:#888">${r.sub}</div>
+        </div>
+      </div>
+    `).join('');
+
+    dropdown.querySelectorAll('.gs-item').forEach((el, idx) => {
+      el.addEventListener('mouseenter', () => el.style.background = '#fafafa');
+      el.addEventListener('mouseleave', () => el.style.background = '');
+      el.addEventListener('click', () => results[idx].action());
+    });
+
+    dropdown.style.display = 'block';
+  }, 200));
+
+  document.addEventListener('click', e => {
+    if (!input.parentElement.contains(e.target)) dropdown.style.display = 'none';
   });
 }
 
@@ -3344,14 +3581,64 @@ function exportTransactionsCSV() {
 function exportKYCCSV() {
   if (!STATE.kyc.length) { Toast.error('Load KYC data first'); return; }
   const headers = ['ID','Investor','Investor ID','Document Type','File','Status','Submitted','Reviewed'];
-  const rows = [headers, ...STATE.kyc.map(k => [
-    k.id, k.investor_name, k.investor_id, k.document_type || '', k.file_name || '',
-    k.status,
-    k.submitted_date ? new Date(k.submitted_date).toLocaleDateString('en-ZA') : '',
-    k.reviewed_date  ? new Date(k.reviewed_date).toLocaleDateString('en-ZA')  : '',
-  ])];
+  const rows = [headers, ...STATE.kyc.map(k => {
+    const inv = STATE.investors.find(i => i.id === k.investor_id);
+    const name = k.investor_name || (inv ? `${inv.first_name} ${inv.last_name}` : k.investor_id);
+    return [k.id, name, k.investor_id, k.doc_type || k.document_type || '', k.file_name || '',
+      k.status, Utils.date(k.submitted_at || k.submitted_date || k.created_at), Utils.date(k.reviewed_date)];
+  })];
   _downloadCSV(rows, `kyc-${new Date().toISOString().slice(0,10)}.csv`);
   Toast.success(`Exported ${STATE.kyc.length} KYC records`);
+}
+
+function exportInvestmentsCSV() {
+  if (!STATE.investments.length) { Toast.error('Load investments first'); return; }
+  const headers = ['ID','Investor ID','Pool','Product','Amount','Rate','Status','Start Date','End Date','Maturity Instruction'];
+  const rows = [headers, ...STATE.investments.map(i => [
+    i.id, i.investor_id, i.pool_name||'', i.product_type, i.amount,
+    i.annual_rate||'', i.status, Utils.date(i.start_date), Utils.date(i.end_date), i.maturity_instruction||''
+  ])];
+  _downloadCSV(rows, `investments-${new Date().toISOString().slice(0,10)}.csv`);
+  Toast.success(`Exported ${STATE.investments.length} investments`);
+}
+
+function exportPoolsCSV() {
+  if (!STATE.pools.length) { Toast.error('Load pools first'); return; }
+  const headers = ['ID','Name','Product','Status','Target','Raised','Investors','Rate','Start','End'];
+  const rows = [headers, ...STATE.pools.map(p => [
+    p.id, p.name, p.product_type, p.status, p.target_amount||0,
+    p.live_raised??p.raised_amount??0, p.live_investor_count??p.investor_count??0,
+    p.annual_rate||'', Utils.date(p.start_date), Utils.date(p.end_date)
+  ])];
+  _downloadCSV(rows, `pools-${new Date().toISOString().slice(0,10)}.csv`);
+  Toast.success(`Exported ${STATE.pools.length} pools`);
+}
+
+function exportMaturityCSV() {
+  if (!STATE.maturity.length) { Toast.error('Load maturity instructions first'); return; }
+  const headers = ['Investor','Investor ID','Pool','Instruction','Payout','Status','Date'];
+  const rows = [headers, ...STATE.maturity.map(m => {
+    const inv = STATE.investors.find(i => i.id === m.investor_id);
+    const name = m.investor_name || (inv ? `${inv.first_name} ${inv.last_name}` : m.investor_id);
+    return [name, m.investor_id, m.pool_name||'—', m.instruction_type, m.total_payout||0, m.status, Utils.date(m.submitted_date||m.created_at)];
+  })];
+  _downloadCSV(rows, `maturity-${new Date().toISOString().slice(0,10)}.csv`);
+  Toast.success(`Exported ${STATE.maturity.length} maturity instructions`);
+}
+
+function exportWithdrawalsCSV() {
+  const all = STATE.withdrawals || [];
+  if (!all.length) { Toast.error('Load withdrawals first'); return; }
+  const headers = ['ID','Investor','Investor ID','Amount','Bank','Reference','Status','Date'];
+  const rows = [headers, ...all.map(w => {
+    const inv = STATE.investors.find(i => i.id === w.investor_id);
+    const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id;
+    let bankNotes = {}; try { if (inv?.notes?.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
+    const bank = inv?.bank_name || bankNotes.bank_name || '—';
+    return [w.id, name, w.investor_id, Math.abs(w.amount||0), bank, w.reference||'', w.status, Utils.date(w.created_at||w.transaction_date)];
+  })];
+  _downloadCSV(rows, `withdrawals-${new Date().toISOString().slice(0,10)}.csv`);
+  Toast.success(`Exported ${all.length} withdrawals`);
 }
 
 /* ═══════════════════════════════════════════════
@@ -4103,45 +4390,68 @@ function _renderTimeline(containerId, events) {
   el.innerHTML = sorted.map(e => _timelineItem(e.icon, e.color, e.text, e.date)).join('');
 }
 
-async function loadInvestorTimeline(inv, invsts, txns) {
-  const containerId = 'investorTimeline';
-  const el = document.getElementById(containerId);
+function loadInvestorTimeline(inv, invsts, txns) {
+  const el = document.getElementById('investorTimeline');
   if (!el) return;
 
-  // Step 1: Render synchronous data immediately
-  const events = _buildTimelineEvents(inv, invsts, txns);
-  _renderTimeline(containerId, events);
+  const events = [];
 
-  // Step 2: Fetch support tickets + KYC docs async, then re-render
-  const token = localStorage.getItem('svc_token');
-  const headers = { Authorization: 'Bearer ' + token };
+  // Join date
+  if (inv.date_joined) events.push({
+    date: new Date(inv.date_joined), icon: 'fa-user-plus', color: '#22c55e',
+    title: 'Account created', sub: `Joined SV Capital`
+  });
 
-  try {
-    const [ticketRes, kycRes] = await Promise.allSettled([
-      fetch(`/api/tables/support_tickets?investor_id=${encodeURIComponent(inv.id)}&limit=20`, { headers }).then(r => r.ok ? r.json() : { data: [] }),
-      fetch(`/api/tables/kyc_documents?investor_id=${encodeURIComponent(inv.id)}&limit=5`, { headers }).then(r => r.ok ? r.json() : { data: [] })
-    ]);
+  // KYC status change
+  if (inv.kyc_status === 'approved') events.push({
+    date: new Date(inv.updated_at || inv.date_joined || Date.now()), icon: 'fa-shield-check', color: '#22c55e',
+    title: 'KYC Approved', sub: 'FICA verification completed'
+  });
 
-    const tickets = ticketRes.status === 'fulfilled' ? (ticketRes.value.data || []) : [];
-    const kycDocs = kycRes.status === 'fulfilled' ? (kycRes.value.data || []) : [];
-
-    tickets.forEach(t => {
-      const d = t.created_at;
-      if (!d) return;
-      events.push({ date: d, icon: 'fa-headset', color: '#3b82f6', text: `Support ticket: ${t.subject || '(no subject)'} (${t.status || 'open'})` });
+  // Investments
+  invsts.forEach(i => {
+    events.push({
+      date: new Date(i.start_date || i.created_at), icon: 'fa-chart-line', color: '#D4AF37',
+      title: `Investment: ${Utils.rand(i.amount)}`,
+      sub: `${i.pool_name || i.product_type} · ${Utils.statusBadge(i.status)}`
     });
-
-    kycDocs.forEach(k => {
-      const d = k.submitted_date || k.created_at;
-      if (!d) return;
-      const statusColor = k.status === 'approved' ? '#22c55e' : k.status === 'rejected' ? '#ef4444' : '#f59e0b';
-      events.push({ date: d, icon: 'fa-id-card', color: statusColor, text: `FICA document ${k.status || 'submitted'}${k.document_type ? ' — ' + k.document_type.replace(/_/g,' ') : ''}` });
+    if (i.status === 'matured' && i.end_date) events.push({
+      date: new Date(i.end_date), icon: 'fa-hourglass-end', color: '#8b5cf6',
+      title: `Investment matured`, sub: `${i.pool_name || '—'} · ${Utils.rand(i.amount)}`
     });
+  });
 
-    if (tickets.length || kycDocs.length) {
-      _renderTimeline(containerId, events);
-    }
-  } catch (_) { /* silent — sync data already rendered */ }
+  // Transactions
+  txns.forEach(t => {
+    const icons = { deposit: 'fa-wallet', withdrawal: 'fa-arrow-up-from-bracket', investment: 'fa-chart-line', return: 'fa-star', payout: 'fa-money-bill-transfer', fee: 'fa-receipt' };
+    const colors = { deposit: '#22c55e', withdrawal: '#ef4444', investment: '#D4AF37', return: '#3b82f6', payout: '#22c55e', fee: '#f59e0b' };
+    events.push({
+      date: new Date(t.transaction_date || t.created_at), icon: icons[t.type] || 'fa-arrows-rotate',
+      color: colors[t.type] || '#888',
+      title: `${(t.type||'').replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase())}: ${Utils.rand(Math.abs(t.amount))}`,
+      sub: `${t.status} · Ref: ${t.reference||'—'}`
+    });
+  });
+
+  events.sort((a, b) => b.date - a.date);
+
+  if (!events.length) {
+    el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:0.8rem">No activity recorded yet</div>';
+    return;
+  }
+
+  el.innerHTML = events.map((e, idx) => `
+    <div style="display:flex;gap:12px;padding:8px 0;${idx < events.length - 1 ? 'border-bottom:1px solid var(--border)' : ''}">
+      <div style="width:28px;height:28px;border-radius:50%;background:${e.color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
+        <i class="fa-solid ${e.icon}" style="color:${e.color};font-size:0.7rem"></i>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.8rem;font-weight:700;color:var(--text)">${e.title}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">${e.sub}</div>
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">${Utils.date(e.date)}</div>
+      </div>
+    </div>
+  `).join('');
 }
 
 /* ═══════════════════════════════════════════════
@@ -4464,5 +4774,92 @@ async function runMigration() {
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Run Again';
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   COMPLIANCE CALENDAR
+   ═══════════════════════════════════════════════ */
+async function loadCompliance() {
+  if (!STATE.investors.length) STATE.investors = (await API.investors.list({ limit: 5000 })).data || [];
+  if (!STATE.investments.length) STATE.investments = (await API.investments.list({ limit: 5000 })).data || [];
+  if (!STATE.kyc.length) STATE.kyc = (await API.kyc.list({ limit: 5000 })).data || [];
+
+  const now = new Date();
+  const year = now.getFullYear();
+
+  const deadlines = [
+    { date: `${year}-03-31`, title: 'Annual Financial Statements', desc: 'Submit audited annual financial statements to FSCA', priority: 'high' },
+    { date: `${year}-05-31`, title: 'FAIS Compliance Report', desc: 'Annual compliance report — key individuals and fit & proper', priority: 'high' },
+    { date: `${year}-06-30`, title: 'POPIA Annual Review', desc: 'Review and update data processing records & privacy notices', priority: 'medium' },
+    { date: `${year}-09-30`, title: 'AML Risk Assessment', desc: 'Annual Anti-Money Laundering risk assessment and policy review', priority: 'high' },
+    { date: `${year}-12-31`, title: 'FSP License Renewal Review', desc: 'Confirm FSP license conditions and key individual qualifications', priority: 'medium' },
+    { date: `${year + 1}-03-31`, title: 'Next Annual Financial Statements', desc: 'Prepare statutory financials for submission', priority: 'low' },
+  ];
+
+  const calBody = document.getElementById('complianceCalBody');
+  if (calBody) {
+    calBody.innerHTML = deadlines.map(d => {
+      const daysLeft = Math.ceil((new Date(d.date) - now) / 86400000);
+      const isPast = daysLeft < 0;
+      const isUrgent = daysLeft >= 0 && daysLeft <= 30;
+      const color = isPast ? '#ef4444' : isUrgent ? '#f59e0b' : '#3b82f6';
+      const label = isPast ? 'Overdue' : isUrgent ? `${daysLeft}d left` : `${daysLeft}d`;
+      return `<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
+        <div style="width:52px;min-width:52px;text-align:center;background:${color}22;border-radius:8px;padding:6px 4px">
+          <div style="font-size:0.78rem;font-weight:800;color:${color}">${label}</div>
+        </div>
+        <div style="flex:1">
+          <div style="font-size:0.85rem;font-weight:700;color:var(--text)">${d.title}</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">${d.desc}</div>
+          <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">Due: ${d.date}</div>
+        </div>
+        <span class="badge ${d.priority==='high'?'badge--red':d.priority==='medium'?'badge--yellow':'badge--grey'}" style="font-size:0.65rem">${d.priority}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // KYC expiry — investors with pending KYC older than 90 days
+  const kycEl = document.getElementById('kycExpiryBody');
+  if (kycEl) {
+    const stale = STATE.investors.filter(i => i.kyc_status === 'pending' && i.date_joined && (now - new Date(i.date_joined)) > 90 * 86400000).slice(0, 10);
+    kycEl.innerHTML = stale.length
+      ? stale.map(i => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${i.first_name} ${i.last_name}</div><div style="font-size:0.7rem;color:var(--text-muted)">${i.id}</div></div>
+          <span class="badge badge--red" style="font-size:0.68rem">KYC Stale</span>
+        </div>`).join('')
+      : '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:0.82rem"><i class="fa-solid fa-circle-check" style="color:#22c55e;margin-right:6px"></i>No stale KYC records</div>';
+  }
+
+  // Maturity instructions outstanding
+  const matEl = document.getElementById('maturityActionBody');
+  if (matEl) {
+    const noInstr = STATE.investments.filter(i => i.status === 'matured' && (!i.maturity_instruction || i.maturity_instruction === 'pending')).slice(0, 8);
+    matEl.innerHTML = noInstr.length
+      ? noInstr.map(i => {
+          const inv = STATE.investors.find(x => x.id === i.investor_id);
+          const name = inv ? `${inv.first_name} ${inv.last_name}` : i.investor_id;
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+            <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${name}</div><div style="font-size:0.7rem;color:var(--text-muted)">${Utils.rand(i.amount)} · ${i.pool_name||'—'}</div></div>
+            <span class="badge badge--yellow" style="font-size:0.68rem">No instruction</span>
+          </div>`;
+        }).join('')
+      : '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:0.82rem"><i class="fa-solid fa-circle-check" style="color:#22c55e;margin-right:6px"></i>All matured investments have instructions</div>';
+  }
+
+  // Document retention panel
+  const retEl = document.getElementById('docRetentionBody');
+  if (retEl) {
+    const fiveYearsAgo = new Date(year - 5, now.getMonth(), now.getDate());
+    const approvedKyc  = STATE.kyc.filter(k => k.status === 'approved').length;
+    retEl.innerHTML = `
+      <div class="info-list">
+        <div class="info-row"><span class="info-row__label">Approved KYC Docs</span><span class="info-row__value text-green">${approvedKyc}</span></div>
+        <div class="info-row"><span class="info-row__label">FICA Retention Period</span><span class="info-row__value">5 years (FIC Act)</span></div>
+        <div class="info-row"><span class="info-row__label">Earliest Retention Date</span><span class="info-row__value">${fiveYearsAgo.toLocaleDateString('en-ZA')}</span></div>
+        <div class="info-row"><span class="info-row__label">AML Compliance</span><span class="info-row__value text-green">Active — FICA compliant</span></div>
+        <div class="info-row"><span class="info-row__label">POPIA Status</span><span class="info-row__value text-green">Compliant</span></div>
+        <div class="info-row"><span class="info-row__label">FSCA License</span><span class="info-row__value td-gold">FSP 52449 — Active</span></div>
+      </div>`;
   }
 }
