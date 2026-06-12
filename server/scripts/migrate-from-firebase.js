@@ -4,12 +4,13 @@
    ───────────────────────────────────────────────────────────────
    Usage:
      1. Create a folder: migration-data/ in the project root
-     2. Copy the 5 export files into it with these exact names:
+     2. Copy the 6 export files into it with these exact names:
           users.json
           investmentPools.json
           investments.json
           transactions.json
           bankAccounts.json
+          addressDetails.json
      3. Make sure DATABASE_URL is set in your environment
      4. Run:  node server/scripts/migrate-from-firebase.js
    ═══════════════════════════════════════════════════════════════ */
@@ -94,8 +95,9 @@ async function migrate() {
   const investments  = loadFile('investments.json');
   const transactions = loadFile('transactions.json');
   const bankAccounts = loadFile('bankAccounts.json');
+  const addresses    = loadFile('addressDetails.json');
 
-  console.log(`\n📊  Counts: ${users.length} users · ${pools.length} pools · ${investments.length} investments · ${transactions.length} transactions · ${bankAccounts.length} bank accounts\n`);
+  console.log(`\n📊  Counts: ${users.length} users · ${pools.length} pools · ${investments.length} investments · ${transactions.length} transactions · ${bankAccounts.length} bank accounts · ${addresses.length} addresses\n`);
 
   /* ─── Build lookups ─── */
   // Firebase UID → userAccountNumber
@@ -110,6 +112,16 @@ async function migrate() {
     }
   });
 
+  // Most-recent address per userAccountNumber
+  const addressByUser = {};
+  addresses.forEach(a => {
+    if (!a.userAccountNumber) return;
+    const existing = addressByUser[a.userAccountNumber];
+    if (!existing || new Date(a.dateUpdated) > new Date(existing.dateUpdated)) {
+      addressByUser[a.userAccountNumber] = a;
+    }
+  });
+
   // Pool lookup by original _id
   const poolById = {};
   pools.forEach(p => { if (p._id) poolById[p._id] = p; });
@@ -119,7 +131,7 @@ async function migrate() {
   /* ══════════════════════════════════════════════════════════════
      STEP 1 — Investors
   ══════════════════════════════════════════════════════════════ */
-  console.log('👤  [1/5] Migrating investors...');
+  console.log('👤  [1/6] Migrating investors...');
   let investorOk = 0;
 
   for (const u of users) {
@@ -127,6 +139,7 @@ async function migrate() {
     if (!id) continue;
 
     const bank = bankByUser[id];
+    const addr = addressByUser[id];
 
     // Compute total_invested from investment records
     const myInvestments = investments.filter(i => i.userAccountNumber === id);
@@ -147,13 +160,16 @@ async function migrate() {
     const firstName = u.name  || (u.display_name || '').split(' ')[0] || '';
     const lastName  = u.surname || (u.display_name || '').split(' ').slice(1).join(' ') || '';
 
+    const fullAddress = addr?.fullAddress || null;
+    const province    = addr?.province?.trim() || null;
+
     try {
       await pool.query(`
         INSERT INTO investors
           (id, first_name, last_name, email, phone, id_number, date_of_birth,
            kyc_status, status, wallet_balance, total_invested, risk_profile,
-           occupation, notes, date_joined, updated_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())
+           occupation, notes, address, province, date_joined, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW())
         ON CONFLICT (id) DO UPDATE SET
           first_name     = EXCLUDED.first_name,
           last_name      = EXCLUDED.last_name,
@@ -168,6 +184,8 @@ async function migrate() {
           risk_profile   = EXCLUDED.risk_profile,
           occupation     = EXCLUDED.occupation,
           notes          = EXCLUDED.notes,
+          address        = EXCLUDED.address,
+          province       = EXCLUDED.province,
           updated_at     = NOW()
       `, [
         id,
@@ -184,6 +202,8 @@ async function migrate() {
         (u.riskTolerence || 'Moderate').toLowerCase(),
         u.employmentStatus || null,
         notes,
+        fullAddress,
+        province,
         u.created_time ? new Date(u.created_time) : new Date(),
       ]);
       investorOk++;
@@ -197,7 +217,7 @@ async function migrate() {
   /* ══════════════════════════════════════════════════════════════
      STEP 2 — Investment pools
   ══════════════════════════════════════════════════════════════ */
-  console.log('🏊  [2/5] Migrating investment pools...');
+  console.log('🏊  [2/6] Migrating investment pools...');
   let poolOk = 0;
 
   for (const p of pools) {
@@ -245,7 +265,7 @@ async function migrate() {
   /* ══════════════════════════════════════════════════════════════
      STEP 3 — Investments
   ══════════════════════════════════════════════════════════════ */
-  console.log('💰  [3/5] Migrating investments...');
+  console.log('💰  [3/6] Migrating investments...');
   let investOk = 0;
 
   for (const inv of investments) {
@@ -306,7 +326,7 @@ async function migrate() {
   /* ══════════════════════════════════════════════════════════════
      STEP 4 — Transactions
   ══════════════════════════════════════════════════════════════ */
-  console.log('🔄  [4/5] Migrating transactions...');
+  console.log('🔄  [4/6] Migrating transactions...');
   let txOk = 0;
 
   for (const tx of transactions) {
@@ -339,7 +359,7 @@ async function migrate() {
   /* ══════════════════════════════════════════════════════════════
      STEP 5 — KYC documents
   ══════════════════════════════════════════════════════════════ */
-  console.log('📄  [5/5] Migrating KYC documents...');
+  console.log('📄  [5/6] Migrating KYC documents...');
   let kycOk = 0;
 
   for (const u of users) {
