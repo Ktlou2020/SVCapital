@@ -281,8 +281,12 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    // Sort
-    let orderClause = 'ORDER BY created_at DESC NULLS LAST';
+    // Sort — use the original date column for tables that have one
+    const defaultSort = {
+      transactions: 'COALESCE(transaction_date, created_at)',
+      investments:  'COALESCE(start_date, created_at)',
+    };
+    let orderClause = `ORDER BY ${defaultSort[table] || 'created_at'} DESC NULLS LAST`;
     if (sort && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(sort)) {
       const dir = order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
       orderClause = `ORDER BY ${sort} ${dir} NULLS LAST`;

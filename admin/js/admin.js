@@ -439,7 +439,7 @@ async function loadDashboard() {
 
 function renderRecentInvestments() {
   const body = document.getElementById('recentInvestmentsBody');
-  const recent = [...STATE.investments].sort((a, b) => new Date(b.investment_date) - new Date(a.investment_date)).slice(0, 8);
+  const recent = [...STATE.investments].sort((a, b) => new Date(b.start_date || b.created_at) - new Date(a.start_date || a.created_at)).slice(0, 8);
 
   if (!recent.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No investments yet</td></tr>'; return; }
 
@@ -1996,7 +1996,7 @@ function _txnInvName(t) {
 function renderTxnTable() {
   const body = document.getElementById('txnBody');
   const start = (txnPage - 1) * TXN_PG_SIZE;
-  const page = filteredTxns.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(start, start + TXN_PG_SIZE);
+  const page = filteredTxns.sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at)).slice(start, start + TXN_PG_SIZE);
 
   document.getElementById('txnFooter').textContent = `${start + 1}–${Math.min(start + TXN_PG_SIZE, filteredTxns.length)} of ${filteredTxns.length}`;
 
@@ -2028,7 +2028,7 @@ function renderTxnTable() {
       <td>${statusCell}</td>
       <td class="td-muted clip" style="font-size:0.75rem">${t.reference || '—'}</td>
       <td class="td-muted" style="font-size:0.75rem"><div class="clip">${t.description || '—'}</div>${proofLink}</td>
-      <td class="td-muted">${Utils.date(t.created_at)}</td>
+      <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
       <td>
         ${isPendingDeposit ? `<button class="btn btn--success btn--sm" onclick="changeTxnStatus('${t.id}', 'completed', '${t.investor_id}', ${t.amount})" title="Approve deposit — credits wallet"><i class="fa-solid fa-check"></i> Approve</button>` : ''}
       </td>
