@@ -657,34 +657,35 @@ function renderInvestorsTable() {
       : '<span class="badge badge--yellow" style="font-size:0.68rem;padding:2px 6px">KYC Pending</span>';
     const stBadge = Utils.statusBadge(inv.status);
     const province = (inv.province||'').replace(/\s+$/,'');
+    const _trunc = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block';
     return `<tr style="cursor:pointer" onclick="viewInvestor('${inv.id}')">
-      <td onclick="event.stopPropagation()">
-        <div class="flex-center gap-8">
-          <div style="width:32px;height:32px;border-radius:50%;background:${color};color:#fff;font-size:0.65rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${Utils.initials(fullName)}</div>
-          <div>
-            <div class="td-strong" style="font-size:0.82rem">${fullName}</div>
-            <div style="font-size:0.68rem;font-family:monospace;color:var(--gold)">${inv.id || ''}</div>
-            ${province ? `<div style="font-size:0.68rem;color:var(--text-muted)">${province}</div>` : ''}
+      <td style="overflow:hidden" onclick="event.stopPropagation()">
+        <div class="flex-center gap-8" style="min-width:0">
+          <div style="width:30px;height:30px;border-radius:50%;background:${color};color:#fff;font-size:0.63rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${Utils.initials(fullName)}</div>
+          <div style="min-width:0;flex:1">
+            <div class="td-strong" style="font-size:0.81rem;${_trunc}">${fullName}</div>
+            <div style="font-size:0.67rem;font-family:monospace;color:var(--gold);${_trunc}">${inv.id || ''}</div>
+            ${province ? `<div style="font-size:0.67rem;color:var(--text-muted);${_trunc}">${province}</div>` : ''}
           </div>
         </div>
       </td>
-      <td>
-        <div style="font-size:0.76rem">${inv.email || '—'}</div>
-        <div class="td-muted" style="font-size:0.72rem">${inv.phone || '—'}</div>
+      <td style="overflow:hidden">
+        <div style="font-size:0.75rem;${_trunc}">${inv.email || '—'}</div>
+        <div class="td-muted" style="font-size:0.71rem;${_trunc}">${inv.phone || '—'}</div>
       </td>
-      <td>
+      <td style="overflow:hidden">
         <div style="display:flex;flex-direction:column;gap:3px">${kycBadge}${stBadge}</div>
       </td>
-      <td>
-        <div class="td-gold fw-700" style="font-size:0.82rem">${Utils.rand(inv.wallet_balance)}</div>
-        <div style="font-size:0.71rem;color:var(--text-muted)">${Utils.rand(inv.total_invested)} invested</div>
+      <td style="overflow:hidden">
+        <div class="td-gold fw-700" style="font-size:0.81rem;${_trunc}">${Utils.rand(inv.wallet_balance)}</div>
+        <div style="font-size:0.7rem;color:var(--text-muted);${_trunc}">${Utils.rand(inv.total_invested)} invested</div>
       </td>
-      <td>
-        <div style="font-weight:700;font-size:0.82rem">${totalInvCount}</div>
+      <td style="overflow:hidden">
+        <div style="font-weight:700;font-size:0.81rem">${totalInvCount}</div>
         <div class="td-muted" style="font-size:0.7rem">${activeInvCount} active</div>
       </td>
-      <td onclick="event.stopPropagation()">
-        <div class="flex-center gap-6">
+      <td style="overflow:hidden" onclick="event.stopPropagation()">
+        <div class="flex-center gap-5">
           <button class="btn btn--secondary btn--sm" onclick='viewInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-eye"></i></button>
           <button class="btn btn--danger btn--sm" onclick='confirmDeleteInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-trash"></i></button>
         </div>
