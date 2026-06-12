@@ -195,7 +195,7 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
 
     let { page = 1, limit = 100, search, sort, order = 'asc', date_from, date_to, ...filters } = req.query;
     page  = Math.max(1, parseInt(page));
-    limit = Math.min(500, Math.max(1, parseInt(limit)));
+    limit = Math.min(10000, Math.max(1, parseInt(limit)));
     const offset = (page - 1) * limit;
 
     const conditions = [];
