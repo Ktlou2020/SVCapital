@@ -432,6 +432,51 @@ img { max-width: 100%; display: block; }
 
 .page-btn:hover, .page-btn.active { background: var(--gold-glow); border-color: var(--gold); color: var(--gold); }
 
+/* ─── STICKY TABLE HEADERS ─── */
+.data-table thead th {
+  position: sticky;
+  top: var(--header-h, 60px);
+  z-index: 2;
+}
+
+/* ─── EMPTY STATE ─── */
+.empty-state { text-align: center; padding: 52px 24px; }
+.empty-state > i { font-size: 2.4rem; opacity: 0.22; display: block; margin-bottom: 14px; color: var(--text-muted); }
+.empty-state__title { font-weight: 700; font-size: 0.9rem; color: var(--text); margin-bottom: 5px; }
+.empty-state__sub { font-size: 0.78rem; color: var(--text-muted); line-height: 1.7; max-width: 320px; margin: 0 auto; }
+
+/* ─── COPY BUTTON ─── */
+.copy-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-dim); padding: 0 3px;
+  font-size: 0.7rem; vertical-align: middle;
+  transition: color 0.15s; line-height: 1;
+}
+.copy-btn:hover { color: var(--gold); }
+
+/* ─── TABLE DENSITY ─── */
+.table-card.compact .data-table td { padding: 5px 12px !important; }
+.table-card.compact .data-table td .td-muted { font-size: 0.68rem !important; }
+.density-btn { transition: background 0.15s, border-color 0.15s, color 0.15s; }
+.density-btn.on { background: var(--gold-glow) !important; border-color: var(--gold) !important; color: var(--gold) !important; }
+
+/* ─── LAST REFRESHED ─── */
+.last-refreshed { font-size: 0.66rem; color: var(--text-dim); margin-left: 5px; white-space: nowrap; }
+
+/* ─── INLINE FORM VALIDATION ─── */
+.form-input.input--error, .form-select.input--error { border-color: var(--red) !important; }
+.form-input.input--ok { border-color: rgba(34,197,94,0.5) !important; }
+.field-hint { font-size: 0.7rem; margin-top: 3px; line-height: 1.4; }
+.field-hint--error { color: var(--red); }
+.field-hint--ok { color: var(--green); }
+
+/* ─── MOBILE ENHANCEMENTS ─── */
+@media (max-width: 900px) {
+  .topbar__actions > a.btn--sm:not(:last-child) { display: none; }
+  .modal { max-width: calc(100vw - 32px) !important; margin: 16px !important; }
+  .topbar { padding: 0 14px; gap: 10px; }
+}
+
 /* ─── BADGES ─── */
 .badge {
   display: inline-flex;

@@ -18,7 +18,9 @@ let STATE = {
   amlFlags: [],
   adminEmail: null,
   currentView: 'dashboard',
-  charts: {}
+  charts: {},
+  lastRefreshed: {},
+  filters: {}
 };
 
 /* ─── Button loading helper ─── */
@@ -60,6 +62,70 @@ const Confirm = {
     });
   }
 };
+
+/* ─── Copy to clipboard ─── */
+async function copyToClipboard(text, btn) {
+  try {
+    await navigator.clipboard.writeText(String(text));
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<i class="fa-solid fa-check" style="color:var(--green)"></i>';
+      setTimeout(() => { btn.innerHTML = orig; }, 1500);
+    }
+  } catch (_) { Toast.info('Press Ctrl+C to copy'); }
+}
+
+/* ─── Last-refreshed tracker ─── */
+function _markRefreshed(view) { STATE.lastRefreshed[view] = Date.now(); }
+function _refreshedText(view) {
+  const t = STATE.lastRefreshed[view];
+  if (!t) return '';
+  const s = Math.floor((Date.now() - t) / 1000);
+  if (s < 10) return 'just now';
+  if (s < 60) return `${s}s ago`;
+  return `${Math.floor(s / 60)}m ago`;
+}
+function _setRefreshLabel(elId, view) {
+  const el = document.getElementById(elId);
+  if (el) el.textContent = `Updated ${_refreshedText(view)}`;
+}
+
+/* ─── Empty-state row helper ─── */
+function _emptyRow(icon, title, sub, colspan = 6) {
+  return `<tr><td colspan="${colspan}" style="padding:0;border:none">
+    <div class="empty-state">
+      <i class="fa-solid ${icon}"></i>
+      <div class="empty-state__title">${title}</div>
+      <div class="empty-state__sub">${sub}</div>
+    </div>
+  </td></tr>`;
+}
+
+/* ─── Table density toggle ─── */
+function toggleTableDensity(wrapperId, btnId) {
+  const wrapper = document.getElementById(wrapperId);
+  const btn     = document.getElementById(btnId);
+  if (!wrapper) return;
+  const card = wrapper.closest('.table-card') || wrapper;
+  card.classList.toggle('compact');
+  if (btn) btn.classList.toggle('on', card.classList.contains('compact'));
+}
+
+/* ─── Inline form field validation ─── */
+function _setupFieldValidation(inputId, validateFn, hintId) {
+  const input = document.getElementById(inputId);
+  const hint  = hintId ? document.getElementById(hintId) : null;
+  if (!input) return;
+  input.addEventListener('input', () => {
+    const result = validateFn(input.value);
+    input.classList.toggle('input--error', result === false);
+    input.classList.toggle('input--ok', result === true);
+    if (hint) {
+      hint.textContent = typeof result === 'string' ? result : '';
+      hint.className = `field-hint ${result === false ? 'field-hint--error' : result === true ? 'field-hint--ok' : ''}`;
+    }
+  });
+}
 
 /* ─── Admin Welcome Strip ─── */
 function _adminGreeting() {
@@ -262,6 +328,7 @@ function navigate(view, btnEl) {
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
+  sessionStorage.setItem('svc_admin_view', view);
 
   // Lazy-load views
   const loaders = {
@@ -403,6 +470,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadDashboard();
   setupGlobalSearch();
   _syncAdminNotifDot();
+
+  // Keyboard shortcut: / focuses global search
+  document.addEventListener('keydown', e => {
+    if (e.key === '/' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+      e.preventDefault();
+      const gs = document.getElementById('globalSearch');
+      if (gs) { gs.focus(); gs.select(); }
+    }
+  });
+
+  // Restore last active view from session (deep-link fix)
+  const savedView = sessionStorage.getItem('svc_admin_view');
+  if (savedView && savedView !== 'dashboard') {
+    const btn = document.querySelector(`[data-view="${savedView}"]`);
+    if (btn) navigate(savedView, btn);
+  }
 });
 
 /* ═══════════════════════════════════════════════
@@ -698,9 +781,11 @@ async function loadInvestors() {
     const res = await API.investors.list({ limit: 5000 });
     STATE.investors = res.data || [];
     filteredInvestors = [...STATE.investors];
+    _markRefreshed('investors');
     renderInvestorStats();
     renderInvestorsTable();
     setupInvestorFilters();
+    _setRefreshLabel('investorsRefreshed', 'investors');
   } catch (e) { Toast.error('Failed to load investors'); }
 }
 
@@ -728,7 +813,13 @@ function renderInvestorsTable() {
   document.getElementById('investorCount').textContent = `${filteredInvestors.length.toLocaleString()} investors`;
   document.getElementById('investorsFooterText').textContent = `Showing ${start + 1}–${Math.min(start + INV_PAGE_SIZE, filteredInvestors.length)} of ${filteredInvestors.length.toLocaleString()}`;
 
-  if (!page.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No investors found</td></tr>'; return; }
+  if (!page.length) {
+    const hasFilters = filteredInvestors.length < STATE.investors.length;
+    body.innerHTML = hasFilters
+      ? _emptyRow('fa-filter-circle-xmark', 'No matching investors', 'Try adjusting the search or filters above.')
+      : _emptyRow('fa-users', 'No investors yet', 'Create the first investor using the Add Investor button above.');
+    return;
+  }
 
   body.innerHTML = page.map(inv => {
     const fullName = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || '—';
@@ -793,11 +884,21 @@ function setupInvestorFilters() {
   const kycF    = document.getElementById('investorKycFilter');
   const provF   = document.getElementById('investorProvinceFilter');
 
+  // Restore saved filter state
+  const saved = STATE.filters.investors;
+  if (saved) {
+    if (saved.q)  search.value  = saved.q;
+    if (saved.st) statusF.value = saved.st;
+    if (saved.ky) kycF.value    = saved.ky;
+    if (saved.pv) provF.value   = saved.pv;
+  }
+
   const filter = Utils.debounce(() => {
     const q  = (search.value || '').toLowerCase();
     const st = statusF.value;
     const ky = kycF.value;
     const pv = provF.value;
+    STATE.filters.investors = { q, st, ky, pv };
     filteredInvestors = STATE.investors.filter(inv => {
       const name = `${inv.first_name||''} ${inv.last_name||''}`.toLowerCase();
       const matchQ  = !q  || name.includes(q)
@@ -818,6 +919,9 @@ function setupInvestorFilters() {
   statusF.addEventListener('change', filter);
   kycF.addEventListener('change', filter);
   provF.addEventListener('change', filter);
+
+  // Apply saved filters immediately if any
+  if (saved && (saved.q || saved.st || saved.ky || saved.pv)) filter();
 }
 
 async function viewInvestor(id) {
@@ -851,7 +955,7 @@ async function viewInvestor(id) {
           <div style="width:52px;height:52px;border-radius:50%;background:${avatarColor};color:#fff;font-size:1rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${Utils.initials(inv.first_name + ' ' + inv.last_name)}</div>
           <div>
             <div style="font-size:1.15rem;font-weight:800;color:var(--text)">${inv.first_name||''} ${inv.last_name||''}</div>
-            <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${inv.id||''}</div>
+            <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${inv.id||''}<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id||"")},this)' title="Copy account number"><i class="fa-regular fa-copy"></i></button></div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
               ${Utils.statusBadge(inv.status)}
               ${inv.kyc_status==='approved'?'<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>':'<span class="badge badge--yellow">KYC Pending</span>'}
@@ -859,9 +963,9 @@ async function viewInvestor(id) {
           </div>
         </div>
         <div class="info-list">
-          <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${inv.email||'—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${inv.phone||'—'}</span></div>
-          <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${inv.id_number||'—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${inv.email||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.email)},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+          <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${inv.phone||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.phone)},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+          <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${inv.id_number||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id_number)},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
           <div class="info-row"><span class="info-row__label">Province</span><span class="info-row__value">${(inv.province||'').trim()||'—'}</span></div>
           <div class="info-row"><span class="info-row__label">Address</span><span class="info-row__value" style="font-size:0.78rem">${inv.address||'—'}</span></div>
           <div class="info-row"><span class="info-row__label">Occupation</span><span class="info-row__value">${inv.occupation||'—'}</span></div>
@@ -1191,6 +1295,16 @@ async function confirmDeleteInvestor(id, btn) {
 
 async function openAddInvestorModal() {
   Modal.open('addInvestorModal');
+  // Inline validation on key fields
+  _setupFieldValidation('newInvEmail', v => {
+    if (!v) return '';
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? true : false;
+  });
+  _setupFieldValidation('newInvPhone', v => {
+    if (!v) return '';
+    const clean = v.replace(/\s/g,'');
+    return /^(\+27|0)[6-8][0-9]{8}$/.test(clean) ? true : false;
+  });
   const el = document.getElementById('newInvAccountNo');
   if (el) el.textContent = 'Generating…';
   try {
@@ -1297,7 +1411,12 @@ function renderKYCTable() {
   const filter = document.getElementById('kycStatusFilter').value;
   const items = filter ? STATE.kyc.filter(k => k.status === filter) : STATE.kyc;
 
-  if (!items.length) { body.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:32px">No documents found</td></tr>'; return; }
+  if (!items.length) {
+    body.innerHTML = filter === 'pending'
+      ? _emptyRow('fa-circle-check', 'All clear — no pending KYC', 'All submitted documents have been reviewed.', 8)
+      : _emptyRow('fa-id-card', 'No KYC documents found', 'Documents will appear here once investors submit them.', 8);
+    return;
+  }
 
   const allCb2 = document.getElementById('kycSelectAll');
   if (allCb2) allCb2.checked = false;
@@ -1856,6 +1975,7 @@ async function loadInvestments() {
     const res = await API.investments.list({ limit: 5000 });
     STATE.investments = res.data || [];
     filteredInvests = [...STATE.investments];
+    _markRefreshed('investments');
     renderInvestmentStats();
     renderInvestmentsTable();
     setupInvestmentFilters();
@@ -1880,7 +2000,12 @@ function renderInvestmentsTable() {
 
   document.getElementById('investmentsFooter').textContent = `${start + 1}–${Math.min(start + INV_PG_SIZE, filteredInvests.length)} of ${filteredInvests.length}`;
 
-  if (!page.length) { body.innerHTML = '<tr><td colspan="10" class="text-center text-muted" style="padding:32px">No investments</td></tr>'; return; }
+  if (!page.length) {
+    body.innerHTML = filteredInvests.length < STATE.investments.length
+      ? _emptyRow('fa-filter-circle-xmark', 'No matching investments', 'Try adjusting the search or filters above.', 10)
+      : _emptyRow('fa-chart-line', 'No investments yet', 'Investments will appear here once they are created.', 10);
+    return;
+  }
 
   body.innerHTML = page.map(i => {
     const pi = Utils.productInfo(i.product_type);
@@ -1917,6 +2042,7 @@ function renderInvestmentsTable() {
     invPage < pages ? `<button class="page-btn" onclick="invPage++;renderInvestmentsTable()">Next &#8250;</button>` : `<button class="page-btn" disabled style="opacity:0.35">Next &#8250;</button>`,
   ].join('');
 
+  _setRefreshLabel('investmentsRefreshed', 'investments');
   _invUpdateBulkBar();
 }
 
@@ -2148,6 +2274,7 @@ async function loadTransactions() {
     STATE.transactions = txnRes.data || [];
     if (!STATE.investors.length) STATE.investors = invRes.data || [];
     filteredTxns = [...STATE.transactions];
+    _markRefreshed('transactions');
     renderTxnStats();
     renderTxnTable();
     setupTxnFilters();
@@ -2174,7 +2301,12 @@ function renderTxnTable() {
 
   document.getElementById('txnFooter').textContent = `${start + 1}–${Math.min(start + TXN_PG_SIZE, filteredTxns.length)} of ${filteredTxns.length}`;
 
-  if (!page.length) { body.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:32px">No transactions</td></tr>'; return; }
+  if (!page.length) {
+    body.innerHTML = filteredTxns.length < STATE.transactions.length
+      ? _emptyRow('fa-filter-circle-xmark', 'No matching transactions', 'Try clearing the search or type filter.', 8)
+      : _emptyRow('fa-arrows-rotate', 'No transactions yet', 'Transactions will appear here once investors make deposits or withdrawals.', 8);
+    return;
+  }
 
   const typeColors = { deposit: 'green', withdrawal: 'red', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple' };
 
@@ -2200,7 +2332,7 @@ function renderTxnTable() {
       <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ') || '—'}</span></td>
       <td class="${t.amount > 0 ? 'td-green' : 'td-red'} fw-700">${t.amount > 0 ? '+' : ''}${Utils.rand(t.amount)}</td>
       <td>${statusCell}</td>
-      <td class="td-muted clip" style="font-size:0.75rem">${t.reference || '—'}</td>
+      <td class="td-muted clip" style="font-size:0.75rem">${t.reference || '—'}${t.reference ? `<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(t.reference)},this)' title="Copy reference"><i class="fa-regular fa-copy"></i></button>` : ''}</td>
       <td class="td-muted" style="font-size:0.75rem"><div class="clip">${t.description || '—'}</div>${proofLink}</td>
       <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
       <td>
@@ -2216,6 +2348,7 @@ function renderTxnTable() {
     `<span class="page-btn active" style="cursor:default;min-width:60px;text-align:center">${txnPage} / ${pages||1}</span>`,
     txnPage < pages ? `<button class="page-btn" onclick="txnPage++;renderTxnTable()">Next &#8250;</button>` : `<button class="page-btn" disabled style="opacity:0.35">Next &#8250;</button>`,
   ].join('');
+  _setRefreshLabel('txnRefreshed', 'transactions');
 }
 
 function setupTxnFilters() {
@@ -3093,10 +3226,9 @@ function renderIFATable(filterStatus = '', searchQ = '') {
   if (footer) footer.textContent = `Showing ${data.length} of ${STATE.ifas.length} IFAs`;
 
   if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted" style="padding:40px">
-      <i class="fa-solid fa-handshake" style="font-size:2rem;opacity:0.3;margin-bottom:8px;display:block"></i>
-      No IFAs found
-    </td></tr>`;
+    tbody.innerHTML = data.length < STATE.ifas.length
+      ? _emptyRow('fa-filter-circle-xmark', 'No matching IFAs', 'Try adjusting the search above.', 9)
+      : _emptyRow('fa-handshake', 'No IFAs yet', 'Create the first IFA partner using the Add IFA button above.', 9);
     return;
   }
 
@@ -4259,7 +4391,7 @@ function renderAMLTable() {
   const flags = STATE.amlFlags;
 
   if (!flags.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-shield-check" style="color:var(--green);font-size:1.5rem;margin-bottom:8px;display:block"></i>No AML flags found</td></tr>';
+    tbody.innerHTML = _emptyRow('fa-shield-check', 'No AML flags', 'All investors are within normal risk thresholds.', 7);
     return;
   }
 
