@@ -1139,11 +1139,13 @@ async function saveNewInvestor() {
 async function loadKYC() {
   try {
     const [kycRes, invRes] = await Promise.all([
-      API.kyc.list({ limit: 100 }),
-      API.investors.list({ limit: 100 })
+      API.kyc.list({ limit: 5000 }),
+      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 })
     ]);
-    STATE.kyc = kycRes.data || [];
-    STATE.investors = invRes.data || [];
+    STATE.kyc = (kycRes.data || []).sort((a, b) =>
+      new Date(b.submitted_at || b.uploaded_at || b.created_at || 0) - new Date(a.submitted_at || a.uploaded_at || a.created_at || 0)
+    );
+    if (!STATE.investors.length) STATE.investors = invRes.data || [];
     renderKYCStats();
     renderKYCTable();
 
@@ -1174,15 +1176,17 @@ function renderKYCTable() {
   if (allCb2) allCb2.checked = false;
 
   body.innerHTML = items.map(k => {
+    const kInv = STATE.investors.find(i => i.id === k.investor_id);
+    const kName = k.investor_name || (kInv ? `${kInv.first_name} ${kInv.last_name}`.trim() : k.investor_id || '—');
     const canSelect = ['pending', 'under_review'].includes(k.status);
     return `
     <tr>
       <td><input type="checkbox" class="kyc-cb" value="${k.id}" ${!canSelect ? 'disabled' : ''} ${_kycSelected.has(k.id) ? 'checked' : ''} onchange="toggleKycRow('${k.id}', this.checked)" style="${canSelect ? 'cursor:pointer;width:16px;height:16px;accent-color:#FF9B0C' : 'opacity:0.3;width:16px;height:16px'}"></td>
-      <td><div class="td-strong clip">${k.investor_name}</div><div class="td-muted clip">${k.investor_id}</div></td>
-      <td class="clip">${k.document_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—'}</td>
+      <td><div class="td-strong clip">${kName}</div><div class="td-muted clip">${k.investor_id}</div></td>
+      <td class="clip">${k.doc_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || k.document_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—'}</td>
       <td class="td-muted clip">${k.file_name || 'Not uploaded'}</td>
       <td>${Utils.statusBadge(k.status)}</td>
-      <td class="td-muted">${Utils.date(k.submitted_date)}</td>
+      <td class="td-muted">${Utils.date(k.submitted_at || k.submitted_date || k.created_at)}</td>
       <td>
         ${k.file_data || k.file_url || k.attachment_data
           ? `<button class="btn btn--secondary btn--sm" onclick='viewFicaDocument(${JSON.stringify(k.id)})'><i class="fa-solid fa-eye"></i> View</button>`
@@ -1198,7 +1202,7 @@ function renderKYCTable() {
       </td>
       <td>
         <button class="btn btn--secondary btn--sm" title="Upload a document for this investor"
-                onclick='openKycUploadModal(${JSON.stringify(k.investor_id)},${JSON.stringify(k.investor_name)})'>
+                onclick='openKycUploadModal(${JSON.stringify(k.investor_id)},${JSON.stringify(kName)})'>
           <i class="fa-solid fa-upload"></i>
         </button>
       </td>
@@ -1918,10 +1922,46 @@ async function payoutInvestment(id) {
 /* ═══════════════════════════════════════════════
    MATURITY
    ═══════════════════════════════════════════════ */
+const _matInstrLabel = { payout_all: 'Payout All', payout_return: 'Payout Returns', reinvest: 'Reinvest', pending: 'Pending' };
+
 async function loadMaturity() {
   try {
-    const res = await API.maturityInstructions.list({ limit: 100 });
-    STATE.maturity = res.data || [];
+    const [matRes, invRes, investRes] = await Promise.all([
+      API.maturityInstructions.list({ limit: 1000 }),
+      STATE.investors.length  ? Promise.resolve({ data: STATE.investors  }) : API.investors.list({ limit: 5000 }),
+      STATE.investments.length ? Promise.resolve({ data: STATE.investments }) : API.investments.list({ limit: 5000 })
+    ]);
+
+    if (!STATE.investors.length)   STATE.investors   = invRes.data   || [];
+    if (!STATE.investments.length) STATE.investments = investRes.data || [];
+
+    const matRecords = matRes.data || [];
+
+    /* Build a set of investor_ids already covered by a real maturity_instructions record */
+    const covered = new Set(matRecords.map(m => m.investor_id + '|' + (m.pool_id || '')));
+
+    /* Derive instructions from migrated investments */
+    const fromInvestments = STATE.investments
+      .filter(i => i.maturity_instruction && i.maturity_instruction !== 'pending' && !covered.has(i.investor_id + '|' + (i.pool_id || '')))
+      .map(i => {
+        const inv = STATE.investors.find(x => x.id === i.investor_id);
+        return {
+          id:               i.id,
+          investor_id:      i.investor_id,
+          investor_name:    inv ? `${inv.first_name} ${inv.last_name}`.trim() : i.investor_id,
+          pool_id:          i.pool_id,
+          pool_name:        i.pool_name || '—',
+          instruction_type: i.maturity_instruction,
+          total_payout:     i.amount,
+          status:           i.status === 'matured' ? 'completed' : (i.status === 'active' ? 'submitted' : i.status),
+          submitted_date:   i.end_date || i.start_date || i.created_at,
+          _from_investment: true,
+        };
+      });
+
+    STATE.maturity = [...matRecords, ...fromInvestments]
+      .sort((a, b) => new Date(b.submitted_date || b.created_at || 0) - new Date(a.submitted_date || a.created_at || 0));
+
     renderMaturityTable();
   } catch (e) { Toast.error('Failed to load maturity instructions'); }
 }
@@ -1929,22 +1969,26 @@ async function loadMaturity() {
 function renderMaturityTable() {
   const body = document.getElementById('maturityBody');
   if (!STATE.maturity.length) {
-    body.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-inbox" style="font-size:1.5rem;color:var(--text-dim);display:block;margin-bottom:8px"></i>No maturity instructions submitted yet</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-inbox" style="font-size:1.5rem;color:var(--text-dim);display:block;margin-bottom:8px"></i>No maturity instructions found</td></tr>';
     return;
   }
-  body.innerHTML = STATE.maturity.map(m => `
+  body.innerHTML = STATE.maturity.map(m => {
+    const mInv = STATE.investors.find(i => i.id === m.investor_id);
+    const mName = m.investor_name || (mInv ? `${mInv.first_name} ${mInv.last_name}`.trim() : m.investor_id || '—');
+    const instrLabel = _matInstrLabel[m.instruction_type] || (m.instruction_type?.replace(/_/g, ' ') || '—');
+    return `
     <tr>
-      <td class="td-strong clip">${m.investor_name}</td>
-      <td class="td-muted clip">${m.pool_name}</td>
-      <td><span class="badge badge--blue">${m.instruction_type?.replace(/_/g, ' ') || '—'}</span></td>
+      <td><div class="td-strong clip">${mName}</div><div class="td-muted clip" style="font-size:0.7rem">${m.investor_id||''}</div></td>
+      <td class="td-muted clip">${m.pool_name || '—'}</td>
+      <td><span class="badge badge--blue">${instrLabel}</span></td>
       <td class="td-gold fw-700">${m.total_payout ? Utils.rand(m.total_payout) : '—'}</td>
       <td>${Utils.statusBadge(m.status)}</td>
-      <td class="td-muted">${Utils.date(m.submitted_date)}</td>
+      <td class="td-muted">${Utils.date(m.submitted_date || m.created_at)}</td>
       <td>
-        ${m.status === 'submitted' ? `<button class="btn btn--success btn--sm" onclick='processMaturity(${JSON.stringify(m.id)})'><i class="fa-solid fa-play"></i> Process</button>` : '—'}
+        ${m.status === 'submitted' && !m._from_investment ? `<button class="btn btn--success btn--sm" onclick='processMaturity(${JSON.stringify(m.id)})'><i class="fa-solid fa-play"></i> Process</button>` : '—'}
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 async function processMaturity(id) {
