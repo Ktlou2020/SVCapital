@@ -12,7 +12,8 @@
     "pages:build": "rm -rf dist && mkdir -p dist && cp -r assets css js admin ifa fund portal team _data index.html login.html signup.html manifest.json dist/ && echo '[/api/*]\\nurl = https://svcapital-production.up.railway.app/api/:splat\\nstatus = 200' > dist/_redirects",
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
-    "cap:build:android": "npx cap sync android && cd android && ./gradlew bundleRelease"
+    "cap:build:android": "npx cap sync android && cd android && ./gradlew bundleRelease",
+    "migrate:firebase": "node server/scripts/migrate-from-firebase.js"
   },
   "engines": {
     "node": ">=18.0.0"
