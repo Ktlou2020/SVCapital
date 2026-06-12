@@ -1039,16 +1039,20 @@ function renderWithdrawalsTable() {
   const _row = (w, showActions) => {
     const inv  = STATE.investors.find(i => i.id === w.investor_id);
     const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id || '—';
-    let bankNotes = {}; try { if (inv?.notes?.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
-    const bankName   = inv?.bank_name || bankNotes.bank_name || '—';
+
+    // Parse bank from investor notes (migration) or direct fields
+    let bankNotes = {};
+    try { if (inv?.notes?.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
+    const bankName   = inv?.bank_name    || bankNotes.bank_name    || '—';
     const bankAcct   = inv?.bank_account_number || bankNotes.account_number || '';
-    const bankHolder = inv?.bank_account_holder || bankNotes.account_holder || name;
-    const branchCode = inv?.bank_branch_code || bankNotes.branch_code || '';
-    const bankDisplay = showActions
-      ? `<div style="font-size:0.8rem;font-weight:600;color:var(--text)">${bankName}</div>
+    const bankHolder = inv?.bank_account_holder || bankNotes.account_holder || (inv ? `${inv.first_name} ${inv.last_name}` : '—');
+    const branchCode = inv?.bank_branch_code || bankNotes.branch_code || '—';
+    const bankDisplay = showActions && bankAcct
+      ? `<div style="font-size:0.78rem;font-weight:600;color:var(--text)">${bankName}</div>
          <div style="font-size:0.7rem;color:var(--text-muted)">${bankHolder}</div>
-         ${bankAcct ? `<div style="font-size:0.68rem;font-family:monospace;color:var(--gold)">••••${String(bankAcct).slice(-4)}${branchCode ? ' · ' + branchCode : ''}</div>` : ''}`
-      : `<span class="clip">${bankName}</span>`;
+         <div style="font-size:0.68rem;font-family:monospace;color:var(--gold)">••••${String(bankAcct).slice(-4)} · ${branchCode}</div>`
+      : `<div class="clip">${bankName}</div>`;
+
     return `<tr>
       <td class="td-muted clip">${Utils.date(w.created_at || w.transaction_date)}</td>
       <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${w.investor_id||''}</div></td>
@@ -3462,57 +3466,77 @@ function setupGlobalSearch() {
   const input = document.getElementById('globalSearch');
   if (!input) return;
 
+  // Create dropdown
   const dropdown = document.createElement('div');
-  dropdown.id = 'globalSearchDrop';
-  dropdown.style.cssText = 'display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid rgba(0,0,0,0.1);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.15);z-index:9999;max-height:380px;overflow-y:auto';
+  dropdown.id = 'globalSearchDropdown';
+  dropdown.style.cssText = 'display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid rgba(0,0,0,0.1);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.15);z-index:9999;max-height:400px;overflow-y:auto';
   input.parentElement.style.position = 'relative';
   input.parentElement.appendChild(dropdown);
 
   input.addEventListener('input', Utils.debounce(() => {
     const q = input.value.trim().toLowerCase();
     if (!q || q.length < 2) { dropdown.style.display = 'none'; return; }
+
     const results = [];
 
+    // Search investors
     STATE.investors.filter(i => {
       const name = `${i.first_name||''} ${i.last_name||''}`.toLowerCase();
-      return name.includes(q) || (i.email||'').toLowerCase().includes(q) || (i.id||'').toLowerCase().includes(q) || (i.phone||'').includes(q);
+      return name.includes(q) || (i.email||'').toLowerCase().includes(q)
+          || (i.id||'').toLowerCase().includes(q) || (i.phone||'').includes(q);
     }).slice(0, 5).forEach(i => results.push({
       icon: 'fa-user', color: '#D4AF37',
-      title: `${i.first_name} ${i.last_name}`, sub: `${i.id} · ${i.email}`,
-      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('investors', document.querySelector('[data-view=investors]')); setTimeout(() => { const s = document.getElementById('investorSearch'); s.value = `${i.first_name} ${i.last_name}`; s.dispatchEvent(new Event('input')); }, 200); }
+      title: `${i.first_name} ${i.last_name}`,
+      sub: `${i.id} · ${i.email}`,
+      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('investors', document.querySelector('[data-view=investors]')); setTimeout(() => { document.getElementById('investorSearch').value = `${i.first_name} ${i.last_name}`; document.getElementById('investorSearch').dispatchEvent(new Event('input')); }, 200); }
     }));
 
+    // Search pools
     STATE.pools.filter(p => (p.name||'').toLowerCase().includes(q) || (p.product_type||'').includes(q)).slice(0, 3).forEach(p => results.push({
       icon: 'fa-layer-group', color: '#3b82f6',
-      title: p.name, sub: `Pool · ${p.status} · ${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)} raised`,
+      title: p.name,
+      sub: `Pool · ${p.status} · ${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)} raised`,
       action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('pools', document.querySelector('[data-view=pools]')); setTimeout(() => viewPoolInvestors(p.id), 300); }
     }));
 
+    // Search transactions
     STATE.transactions.filter(t => (t.reference||'').toLowerCase().includes(q) || (t.investor_id||'').toLowerCase().includes(q)).slice(0, 3).forEach(t => results.push({
       icon: 'fa-arrows-rotate', color: '#22c55e',
-      title: `${t.type} — ${Utils.rand(t.amount)}`, sub: `Ref: ${t.reference||'—'} · ${Utils.date(t.transaction_date||t.created_at)}`,
-      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('transactions', document.querySelector('[data-view=transactions]')); setTimeout(() => { const s = document.getElementById('txnSearch'); s.value = t.reference||''; s.dispatchEvent(new Event('input')); }, 200); }
+      title: `${t.type} — ${Utils.rand(t.amount)}`,
+      sub: `Ref: ${t.reference||'—'} · ${Utils.date(t.transaction_date||t.created_at)}`,
+      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('transactions', document.querySelector('[data-view=transactions]')); setTimeout(() => { document.getElementById('txnSearch').value = t.reference||''; document.getElementById('txnSearch').dispatchEvent(new Event('input')); }, 200); }
     }));
 
     if (!results.length) {
-      dropdown.innerHTML = `<div style="padding:20px;text-align:center;color:#888;font-size:0.82rem">No results for "${q}"</div>`;
-      dropdown.style.display = 'block'; return;
+      dropdown.innerHTML = '<div style="padding:20px;text-align:center;color:#888;font-size:0.82rem">No results for "' + q + '"</div>';
+      dropdown.style.display = 'block';
+      return;
     }
+
     dropdown.innerHTML = results.map((r, idx) => `
-      <div data-idx="${idx}" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(0,0,0,0.05)">
-        <div style="width:28px;height:28px;border-radius:8px;background:${r.color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <i class="fa-solid ${r.icon}" style="color:${r.color};font-size:0.78rem"></i></div>
-        <div><div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${r.title}</div><div style="font-size:0.72rem;color:#888">${r.sub}</div></div>
-      </div>`).join('');
-    dropdown.querySelectorAll('[data-idx]').forEach(el => {
+      <div class="gs-item" data-idx="${idx}" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(0,0,0,0.05)">
+        <div style="width:30px;height:30px;border-radius:8px;background:${r.color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="fa-solid ${r.icon}" style="color:${r.color};font-size:0.8rem"></i>
+        </div>
+        <div>
+          <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${r.title}</div>
+          <div style="font-size:0.72rem;color:#888">${r.sub}</div>
+        </div>
+      </div>
+    `).join('');
+
+    dropdown.querySelectorAll('.gs-item').forEach((el, idx) => {
       el.addEventListener('mouseenter', () => el.style.background = '#fafafa');
       el.addEventListener('mouseleave', () => el.style.background = '');
-      el.addEventListener('click', () => results[+el.dataset.idx].action());
+      el.addEventListener('click', () => results[idx].action());
     });
+
     dropdown.style.display = 'block';
   }, 200));
 
-  document.addEventListener('click', e => { if (!input.parentElement.contains(e.target)) dropdown.style.display = 'none'; });
+  document.addEventListener('click', e => {
+    if (!input.parentElement.contains(e.target)) dropdown.style.display = 'none';
+  });
 }
 
 /* ═══════════════════════════════════════════════
@@ -4366,45 +4390,68 @@ function _renderTimeline(containerId, events) {
   el.innerHTML = sorted.map(e => _timelineItem(e.icon, e.color, e.text, e.date)).join('');
 }
 
-async function loadInvestorTimeline(inv, invsts, txns) {
-  const containerId = 'investorTimeline';
-  const el = document.getElementById(containerId);
+function loadInvestorTimeline(inv, invsts, txns) {
+  const el = document.getElementById('investorTimeline');
   if (!el) return;
 
-  // Step 1: Render synchronous data immediately
-  const events = _buildTimelineEvents(inv, invsts, txns);
-  _renderTimeline(containerId, events);
+  const events = [];
 
-  // Step 2: Fetch support tickets + KYC docs async, then re-render
-  const token = localStorage.getItem('svc_token');
-  const headers = { Authorization: 'Bearer ' + token };
+  // Join date
+  if (inv.date_joined) events.push({
+    date: new Date(inv.date_joined), icon: 'fa-user-plus', color: '#22c55e',
+    title: 'Account created', sub: `Joined SV Capital`
+  });
 
-  try {
-    const [ticketRes, kycRes] = await Promise.allSettled([
-      fetch(`/api/tables/support_tickets?investor_id=${encodeURIComponent(inv.id)}&limit=20`, { headers }).then(r => r.ok ? r.json() : { data: [] }),
-      fetch(`/api/tables/kyc_documents?investor_id=${encodeURIComponent(inv.id)}&limit=5`, { headers }).then(r => r.ok ? r.json() : { data: [] })
-    ]);
+  // KYC status change
+  if (inv.kyc_status === 'approved') events.push({
+    date: new Date(inv.updated_at || inv.date_joined || Date.now()), icon: 'fa-shield-check', color: '#22c55e',
+    title: 'KYC Approved', sub: 'FICA verification completed'
+  });
 
-    const tickets = ticketRes.status === 'fulfilled' ? (ticketRes.value.data || []) : [];
-    const kycDocs = kycRes.status === 'fulfilled' ? (kycRes.value.data || []) : [];
-
-    tickets.forEach(t => {
-      const d = t.created_at;
-      if (!d) return;
-      events.push({ date: d, icon: 'fa-headset', color: '#3b82f6', text: `Support ticket: ${t.subject || '(no subject)'} (${t.status || 'open'})` });
+  // Investments
+  invsts.forEach(i => {
+    events.push({
+      date: new Date(i.start_date || i.created_at), icon: 'fa-chart-line', color: '#D4AF37',
+      title: `Investment: ${Utils.rand(i.amount)}`,
+      sub: `${i.pool_name || i.product_type} · ${Utils.statusBadge(i.status)}`
     });
-
-    kycDocs.forEach(k => {
-      const d = k.submitted_date || k.created_at;
-      if (!d) return;
-      const statusColor = k.status === 'approved' ? '#22c55e' : k.status === 'rejected' ? '#ef4444' : '#f59e0b';
-      events.push({ date: d, icon: 'fa-id-card', color: statusColor, text: `FICA document ${k.status || 'submitted'}${k.document_type ? ' — ' + k.document_type.replace(/_/g,' ') : ''}` });
+    if (i.status === 'matured' && i.end_date) events.push({
+      date: new Date(i.end_date), icon: 'fa-hourglass-end', color: '#8b5cf6',
+      title: `Investment matured`, sub: `${i.pool_name || '—'} · ${Utils.rand(i.amount)}`
     });
+  });
 
-    if (tickets.length || kycDocs.length) {
-      _renderTimeline(containerId, events);
-    }
-  } catch (_) { /* silent — sync data already rendered */ }
+  // Transactions
+  txns.forEach(t => {
+    const icons = { deposit: 'fa-wallet', withdrawal: 'fa-arrow-up-from-bracket', investment: 'fa-chart-line', return: 'fa-star', payout: 'fa-money-bill-transfer', fee: 'fa-receipt' };
+    const colors = { deposit: '#22c55e', withdrawal: '#ef4444', investment: '#D4AF37', return: '#3b82f6', payout: '#22c55e', fee: '#f59e0b' };
+    events.push({
+      date: new Date(t.transaction_date || t.created_at), icon: icons[t.type] || 'fa-arrows-rotate',
+      color: colors[t.type] || '#888',
+      title: `${(t.type||'').replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase())}: ${Utils.rand(Math.abs(t.amount))}`,
+      sub: `${t.status} · Ref: ${t.reference||'—'}`
+    });
+  });
+
+  events.sort((a, b) => b.date - a.date);
+
+  if (!events.length) {
+    el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:0.8rem">No activity recorded yet</div>';
+    return;
+  }
+
+  el.innerHTML = events.map((e, idx) => `
+    <div style="display:flex;gap:12px;padding:8px 0;${idx < events.length - 1 ? 'border-bottom:1px solid var(--border)' : ''}">
+      <div style="width:28px;height:28px;border-radius:50%;background:${e.color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
+        <i class="fa-solid ${e.icon}" style="color:${e.color};font-size:0.7rem"></i>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.8rem;font-weight:700;color:var(--text)">${e.title}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">${e.sub}</div>
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">${Utils.date(e.date)}</div>
+      </div>
+    </div>
+  `).join('');
 }
 
 /* ═══════════════════════════════════════════════
