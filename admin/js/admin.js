@@ -21,6 +21,46 @@ let STATE = {
   charts: {}
 };
 
+/* ─── Button loading helper ─── */
+async function _withBtn(btn, asyncFn) {
+  if (!btn || btn.disabled) return;
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+  try { return await asyncFn(); }
+  finally { btn.disabled = false; btn.innerHTML = orig; }
+}
+
+/* ─── Custom confirm dialog (replaces browser confirm()) ─── */
+const Confirm = {
+  ask(title, { body = '', confirmLabel = 'Confirm', danger = false } = {}) {
+    return new Promise(resolve => {
+      document.getElementById('confirmModalTitle').textContent = title;
+      document.getElementById('confirmModalBody').textContent = body;
+      const okBtn = document.getElementById('confirmModalOk');
+      const cancelBtn = document.getElementById('confirmModalCancel');
+      okBtn.textContent = confirmLabel;
+      okBtn.className = `btn ${danger ? 'btn--danger' : 'btn--primary'}`;
+
+      const overlay = document.getElementById('confirmModal');
+      overlay.style.display = 'flex';
+      overlay.classList.add('active');
+
+      const cleanup = (result) => {
+        overlay.style.display = 'none';
+        overlay.classList.remove('active');
+        okBtn.replaceWith(okBtn.cloneNode(true));
+        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+        resolve(result);
+      };
+
+      // Re-query after clone
+      document.getElementById('confirmModalOk').addEventListener('click', () => cleanup(true), { once: true });
+      document.getElementById('confirmModalCancel').addEventListener('click', () => cleanup(false), { once: true });
+    });
+  }
+};
+
 /* ─── Admin Welcome Strip ─── */
 function _adminGreeting() {
   const h = new Date().getHours();
@@ -732,16 +772,19 @@ function renderInvestorsTable() {
       <td style="overflow:hidden" onclick="event.stopPropagation()">
         <div class="flex-center gap-5">
           <button class="btn btn--secondary btn--sm" onclick='viewInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-eye"></i></button>
-          <button class="btn btn--danger btn--sm" onclick='confirmDeleteInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-trash"></i></button>
+          <button class="btn btn--danger btn--sm" onclick='confirmDeleteInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-trash"></i></button>
         </div>
       </td>
     </tr>`;
   }).join('');
 
   const pages = Math.ceil(filteredInvestors.length / INV_PAGE_SIZE);
-  document.getElementById('investorsPagination').innerHTML = Array.from({ length: pages }, (_, i) =>
-    `<button class="page-btn ${i + 1 === investorPage ? 'active' : ''}" onclick="investorPage=${i + 1};renderInvestorsTable()">${i + 1}</button>`
-  ).join('');
+  const pag = document.getElementById('investorsPagination');
+  if (pag) pag.innerHTML = [
+    investorPage > 1 ? `<button class="page-btn" onclick="investorPage--;renderInvestorsTable()">&#8249; Prev</button>` : `<button class="page-btn" disabled style="opacity:0.35">&#8249; Prev</button>`,
+    `<span class="page-btn active" style="cursor:default;min-width:60px;text-align:center">${investorPage} / ${pages||1}</span>`,
+    investorPage < pages ? `<button class="page-btn" onclick="investorPage++;renderInvestorsTable()">Next &#8250;</button>` : `<button class="page-btn" disabled style="opacity:0.35">Next &#8250;</button>`,
+  ].join('');
 }
 
 function setupInvestorFilters() {
@@ -861,7 +904,7 @@ async function viewInvestor(id) {
               <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value"><span class="badge ${bCls[bStatus]}">${bLbl[bStatus]}</span></span></div>
             </div>
             ${bStatus==='pending'?`<div style="display:flex;gap:8px;margin-top:10px">
-              <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-check"></i> Approve</button>
+              <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
               <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
             </div>`:''}
           </div>
@@ -926,8 +969,8 @@ async function viewInvestor(id) {
     <div class="flex-between mt-16" style="flex-wrap:wrap;gap:8px">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn--success btn--sm" onclick='depositToInvestor(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, ${inv.wallet_balance || 0})'><i class="fa-solid fa-wallet"></i> Add Funds</button>
-        <button class="btn btn--secondary btn--sm" onclick='approveInvestorFica(${JSON.stringify(inv.id)})'><i class="fa-solid fa-id-card"></i> Approve FICA</button>
-        <button class="btn btn--danger btn--sm" onclick='confirmDeleteInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-trash"></i> Delete</button>
+        <button class="btn btn--secondary btn--sm" onclick='approveInvestorFica(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-id-card"></i> Approve FICA</button>
+        <button class="btn btn--danger btn--sm" onclick='confirmDeleteInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-trash"></i> Delete</button>
       </div>
       <button class="btn btn--primary btn--sm" onclick='Modal.close("investorDetailModal")'><i class="fa-solid fa-check"></i> Done</button>
     </div>
@@ -965,14 +1008,14 @@ async function depositToInvestor(investorId, investorName, currentBalance) {
   } catch (e) { Toast.error('Failed to add funds'); }
 }
 
-async function approveInvestorFica(investorId) {
-  if (!confirm('Approve FICA for this investor?')) return;
-  try {
+async function approveInvestorFica(investorId, btn) {
+  if (!await Confirm.ask('Approve FICA?', { body: 'This investor will be marked as KYC-verified and their account activated.', confirmLabel: 'Approve FICA' })) return;
+  await _withBtn(btn, async () => {
     await API.investors.update(investorId, { fica_status: 'approved', status: 'active' });
     Toast.success('FICA approved — investor is now active');
     Modal.close('investorDetailModal');
     await loadInvestors();
-  } catch (e) { Toast.error('Failed to approve FICA'); }
+  });
 }
 
 async function saveInvestorNotes(investorId) {
@@ -986,14 +1029,14 @@ async function saveInvestorNotes(investorId) {
   } catch (e) { Toast.error('Failed to save notes'); }
 }
 
-async function approveBankAccount(investorId) {
-  if (!confirm('Approve this investor\'s bank account? This will enable wallet withdrawals and send a confirmation email.')) return;
-  try {
+async function approveBankAccount(investorId, btn) {
+  if (!await Confirm.ask('Approve bank account?', { body: 'This will enable withdrawals for this investor and send a confirmation.', confirmLabel: 'Approve' })) return;
+  await _withBtn(btn, async () => {
     await API._fetch('PATCH', `tables/investors/${investorId}`, { bank_account_status: 'approved', bank_account_notes: null });
     Toast.success('Bank account approved — investor can now request withdrawals');
     Modal.close('investorDetailModal');
     await loadInvestors();
-  } catch (e) { Toast.error('Failed to approve bank account'); }
+  });
 }
 
 async function rejectBankAccount(investorId) {
@@ -1062,8 +1105,8 @@ function renderWithdrawalsTable() {
       <td>
         ${showActions ? `
           <div class="flex-center gap-6">
-            <button class="btn btn--success btn--sm" onclick='approveWithdrawal(${JSON.stringify(w.id)})'><i class="fa-solid fa-check"></i> Approve</button>
-            <button class="btn btn--danger btn--sm" onclick='rejectWithdrawalPrompt(${JSON.stringify(w.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+            <button class="btn btn--success btn--sm" onclick='approveWithdrawal(${JSON.stringify(w.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
+            <button class="btn btn--danger btn--sm" onclick='rejectWithdrawalPrompt(${JSON.stringify(w.id)}, this)'><i class="fa-solid fa-xmark"></i> Reject</button>
           </div>
         ` : Utils.statusBadge(w.status)}
       </td>
@@ -1083,63 +1126,67 @@ function renderWithdrawalsTable() {
   }
 }
 
-async function approveWithdrawal(txnId) {
-  if (!confirm('Approve this withdrawal? This will notify the investor.')) return;
-  try {
-    await fetch(`/api/withdrawals/${txnId}/approve`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { Authorization: 'Bearer ' + localStorage.getItem('svc_token'), 'Content-Type': 'application/json' }
-    }).then(r => r.ok ? r : Promise.reject(r));
-    Toast.success('Withdrawal approved — investor notified');
-    await loadWithdrawals();
-  } catch (e) {
-    // Fallback: update status directly
+async function approveWithdrawal(txnId, btn) {
+  if (!await Confirm.ask('Approve this withdrawal?', { body: 'The investor will be notified and the funds released.', confirmLabel: 'Approve' })) return;
+  await _withBtn(btn, async () => {
     try {
-      await API._fetch('PATCH', `tables/transactions/${txnId}`, { status: 'completed' });
-      Toast.success('Withdrawal approved');
+      await fetch(`/api/withdrawals/${txnId}/approve`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Authorization: 'Bearer ' + localStorage.getItem('svc_token'), 'Content-Type': 'application/json' }
+      }).then(r => r.ok ? r : Promise.reject(r));
+      Toast.success('Withdrawal approved — investor notified');
       await loadWithdrawals();
-    } catch (e2) { Toast.error('Failed to approve withdrawal'); }
-  }
+    } catch (e) {
+      // Fallback: update status directly
+      try {
+        await API._fetch('PATCH', `tables/transactions/${txnId}`, { status: 'completed' });
+        Toast.success('Withdrawal approved');
+        await loadWithdrawals();
+      } catch (e2) { Toast.error('Failed to approve withdrawal'); }
+    }
+  });
 }
 
-async function rejectWithdrawalPrompt(txnId) {
+async function rejectWithdrawalPrompt(txnId, btn) {
   const reason = prompt('Reason for rejection (will be sent to investor):');
   if (reason === null) return;
-  try {
-    await fetch(`/api/withdrawals/${txnId}/reject`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { Authorization: 'Bearer ' + localStorage.getItem('svc_token'), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason: reason || 'Withdrawal rejected by admin.' })
-    }).then(r => r.ok ? r : Promise.reject(r));
-    Toast.success('Withdrawal rejected');
-    await loadWithdrawals();
-  } catch (e) {
-    // Fallback: update status directly
+  await _withBtn(btn, async () => {
     try {
-      await API._fetch('PATCH', `tables/transactions/${txnId}`, {
-        status: 'rejected',
-        description: reason || 'Rejected by admin.'
-      });
+      await fetch(`/api/withdrawals/${txnId}/reject`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Authorization: 'Bearer ' + localStorage.getItem('svc_token'), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason || 'Withdrawal rejected by admin.' })
+      }).then(r => r.ok ? r : Promise.reject(r));
       Toast.success('Withdrawal rejected');
       await loadWithdrawals();
-    } catch (e2) { Toast.error('Failed to reject withdrawal'); }
-  }
+    } catch (e) {
+      // Fallback: update status directly
+      try {
+        await API._fetch('PATCH', `tables/transactions/${txnId}`, {
+          status: 'rejected',
+          description: reason || 'Rejected by admin.'
+        });
+        Toast.success('Withdrawal rejected');
+        await loadWithdrawals();
+      } catch (e2) { Toast.error('Failed to reject withdrawal'); }
+    }
+  });
 }
 
 // Keep legacy aliases
 async function processWithdrawal(txnId) { return approveWithdrawal(txnId); }
 async function rejectWithdrawal(txnId) { return rejectWithdrawalPrompt(txnId); }
 
-async function confirmDeleteInvestor(id) {
-  if (!confirm('Are you sure you want to delete this investor? This cannot be undone.')) return;
-  try {
+async function confirmDeleteInvestor(id, btn) {
+  if (!await Confirm.ask('Delete investor?', { body: 'This cannot be undone. All investor data will be permanently removed.', confirmLabel: 'Delete', danger: true })) return;
+  await _withBtn(btn, async () => {
     await API.investors.delete(id);
     Toast.success('Investor deleted');
     Modal.closeAll();
     await loadInvestors();
-  } catch (e) { Toast.error('Failed to delete investor'); }
+  });
 }
 
 async function openAddInvestorModal() {
@@ -1162,7 +1209,7 @@ async function openAddInvestorModal() {
   }
 }
 
-async function saveNewInvestor() {
+async function saveNewInvestor(btn) {
   const fn = document.getElementById('newInvFirstName').value.trim();
   const ln = document.getElementById('newInvLastName').value.trim();
   const em = document.getElementById('newInvEmail').value.trim();
@@ -1192,7 +1239,7 @@ async function saveNewInvestor() {
 
   const accountNo = window._pendingInvestorAccountNo || `INV-${Date.now()}`;
 
-  try {
+  await _withBtn(btn, async () => {
     await API.investors.create({
       id: accountNo,
       first_name: fn, last_name: ln, email: em,
@@ -1210,7 +1257,7 @@ async function saveNewInvestor() {
     Toast.success(`Investor created — Account: ${accountNo}`);
     Modal.close('addInvestorModal');
     await loadInvestors();
-  } catch (e) { Toast.error('Failed to create investor'); }
+  });
 }
 
 /* ═══════════════════════════════════════════════
@@ -1275,8 +1322,8 @@ function renderKYCTable() {
       <td>
         <div class="flex-center gap-8">
           ${k.status === 'under_review' || k.status === 'pending' ? `
-            <button class="btn btn--success btn--sm" onclick='approveKyc(${JSON.stringify(k.id)})'><i class="fa-solid fa-check"></i> Approve</button>
-            <button class="btn btn--danger btn--sm" onclick='rejectKyc(${JSON.stringify(k.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+            <button class="btn btn--success btn--sm" onclick='approveKyc(${JSON.stringify(k.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
+            <button class="btn btn--danger btn--sm" onclick='rejectKyc(${JSON.stringify(k.id)}, this)'><i class="fa-solid fa-xmark"></i> Reject</button>
           ` : `<span class="td-muted" style="font-size:0.75rem">${Utils.date(k.reviewed_date)}</span>`}
         </div>
       </td>
@@ -1342,22 +1389,22 @@ function viewFicaDocument(kycId) {
   Modal.open('ficaDocModal');
 }
 
-async function approveKyc(id) {
-  try {
+async function approveKyc(id, btn) {
+  await _withBtn(btn, async () => {
     await API.kyc.update(id, { status: 'approved', reviewed_by: 'Ayanda Majola', reviewed_date: new Date().toISOString() });
     Toast.success('Document approved');
     await loadKYC();
-  } catch (e) { Toast.error('Failed to approve document'); }
+  });
 }
 
-async function rejectKyc(id) {
+async function rejectKyc(id, btn) {
   const reason = prompt('Rejection reason:');
   if (reason === null) return;
-  try {
+  await _withBtn(btn, async () => {
     await API.kyc.update(id, { status: 'rejected', rejection_reason: reason, reviewed_by: 'Ayanda Majola', reviewed_date: new Date().toISOString() });
     Toast.success('Document rejected');
     await loadKYC();
-  } catch (e) { Toast.error('Failed to reject document'); }
+  });
 }
 
 /* ═══════════════════════════════════════════════
@@ -1593,7 +1640,7 @@ async function _loadWaitlistCount(poolId) {
 }
 
 async function setPoolWaitlist(id) {
-  if (!confirm('Set this pool to Waitlist? New investments will be paused and investors can join a waitlist.')) return;
+  if (!await Confirm.ask('Set pool to Waitlist?', { body: 'New investments will be paused. Investors can join a waitlist.', confirmLabel: 'Set Waitlist' })) return;
   try {
     await API.pools.update(id, { status: 'waitlist' });
     Toast.success('Pool set to Waitlist');
@@ -1602,13 +1649,13 @@ async function setPoolWaitlist(id) {
 }
 
 async function reopenPool(id) {
-  if (!confirm('Reopen this pool to new investments?')) return;
+  if (!await Confirm.ask('Reopen pool?', { body: 'This pool will accept new investments again.', confirmLabel: 'Reopen' })) return;
   try {
     await API.pools.update(id, { status: 'open' });
     Toast.success('Pool reopened');
     // Offer to notify waitlist
     setTimeout(async () => {
-      const notify = confirm('Would you like to notify investors on the waitlist that the pool is now open?');
+      const notify = await Confirm.ask('Notify waitlist investors?', { body: 'An email will be sent to all investors on the waitlist for this pool.', confirmLabel: 'Send Notification' });
       if (notify) await notifyWaitlist(id);
     }, 300);
     await loadPools();
@@ -1674,14 +1721,14 @@ function _autoPoolName() {
   nameEl.value = parts.join(' - ');
 }
 
-async function saveNewPool() {
+async function saveNewPool(btn) {
   const name = document.getElementById('newPoolName').value.trim();
   const type = document.getElementById('newPoolType').value;
   const target = parseFloat(document.getElementById('newPoolTarget').value);
   if (!name) { Toast.error('Pool name is required'); return; }
   const maxCapVal = document.getElementById('newPoolMaxCapacity').value;
   const max_capacity = maxCapVal ? (parseFloat(maxCapVal) || null) : null;
-  try {
+  await _withBtn(btn, async () => {
     await API.pools.create({
       id: `POOL-${type.toUpperCase().slice(0,3)}-${Date.now()}`,
       name: name, product_type: type,
@@ -1698,11 +1745,11 @@ async function saveNewPool() {
     Toast.success('Pool created');
     Modal.close('addPoolModal');
     await loadPools();
-  } catch (e) { Toast.error('Failed to create pool'); }
+  });
 }
 
 async function closePool(id) {
-  if (!confirm('Close this pool to new investments?')) return;
+  if (!await Confirm.ask('Close pool?', { body: 'This pool will no longer accept new investments.', confirmLabel: 'Close Pool' })) return;
   try { await API.pools.update(id, { status: 'closed' }); Toast.success('Pool closed'); await loadPools(); }
   catch (e) { Toast.error('Failed to close pool'); }
 }
@@ -1727,7 +1774,7 @@ async function deletePool(id) {
     ? `\n\n⚠️  WARNING: This pool has ${activeInvestments.length} active investment(s). Deleting it will unlink those investments from the pool.`
     : '';
 
-  if (!confirm(`Permanently delete pool "${name}"?\n\nThis cannot be undone.${warningLine}`)) return;
+  if (!await Confirm.ask(`Delete pool "${name}"?`, { body: `This cannot be undone.${warningLine ? ' ' + warningLine.replace(/\n|⚠️\s*/g, '') : ''}`, confirmLabel: 'Delete Pool', danger: true })) return;
 
   try {
     await API.pools.delete(id);
@@ -1763,7 +1810,7 @@ function editPool(id) {
   Modal.open('editPoolModal');
 }
 
-async function saveEditPool() {
+async function saveEditPool(btn) {
   const id = document.getElementById('editPoolId').value;
   if (!id) return;
 
@@ -1789,12 +1836,12 @@ async function saveEditPool() {
 
   if (!updates.name) { Toast.error('Pool name is required'); return; }
 
-  try {
+  await _withBtn(btn, async () => {
     await API.pools.update(id, updates);
     Toast.success('Pool updated successfully');
     Modal.close('editPoolModal');
     await loadPools();
-  } catch (e) { Toast.error('Failed to update pool'); }
+  });
 }
 
 /* ═══════════════════════════════════════════════
@@ -1863,9 +1910,12 @@ function renderInvestmentsTable() {
   }).join('');
 
   const pages = Math.ceil(filteredInvests.length / INV_PG_SIZE);
-  document.getElementById('investmentsPagination').innerHTML = Array.from({ length: pages }, (_, i) =>
-    `<button class="page-btn ${i + 1 === invPage ? 'active' : ''}" onclick="invPage=${i + 1};renderInvestmentsTable()">${i + 1}</button>`
-  ).join('');
+  const pagInv = document.getElementById('investmentsPagination');
+  if (pagInv) pagInv.innerHTML = [
+    invPage > 1 ? `<button class="page-btn" onclick="invPage--;renderInvestmentsTable()">&#8249; Prev</button>` : `<button class="page-btn" disabled style="opacity:0.35">&#8249; Prev</button>`,
+    `<span class="page-btn active" style="cursor:default;min-width:60px;text-align:center">${invPage} / ${pages||1}</span>`,
+    invPage < pages ? `<button class="page-btn" onclick="invPage++;renderInvestmentsTable()">Next &#8250;</button>` : `<button class="page-btn" disabled style="opacity:0.35">Next &#8250;</button>`,
+  ].join('');
 
   _invUpdateBulkBar();
 }
@@ -1886,7 +1936,7 @@ function _invUpdateBulkBar() {
 async function bulkTriggerPayout() {
   const checked = [...document.querySelectorAll('.inv-select-cb:checked')].map(cb => cb.value);
   if (!checked.length) return Toast.error('Select at least one investment');
-  if (!confirm(`Mark ${checked.length} investment(s) as paid out?`)) return;
+  if (!await Confirm.ask(`Mark ${checked.length} investment(s) paid out?`, { body: 'These investments will be marked as matured/paid out.', confirmLabel: 'Mark Paid Out' })) return;
   let done = 0;
   for (const id of checked) {
     try {
@@ -2160,9 +2210,12 @@ function renderTxnTable() {
   }).join('');
 
   const pages = Math.ceil(filteredTxns.length / TXN_PG_SIZE);
-  document.getElementById('txnPagination').innerHTML = Array.from({ length: pages }, (_, i) =>
-    `<button class="page-btn ${i + 1 === txnPage ? 'active' : ''}" onclick="txnPage=${i + 1};renderTxnTable()">${i + 1}</button>`
-  ).join('');
+  const pagTxn = document.getElementById('txnPagination');
+  if (pagTxn) pagTxn.innerHTML = [
+    txnPage > 1 ? `<button class="page-btn" onclick="txnPage--;renderTxnTable()">&#8249; Prev</button>` : `<button class="page-btn" disabled style="opacity:0.35">&#8249; Prev</button>`,
+    `<span class="page-btn active" style="cursor:default;min-width:60px;text-align:center">${txnPage} / ${pages||1}</span>`,
+    txnPage < pages ? `<button class="page-btn" onclick="txnPage++;renderTxnTable()">Next &#8250;</button>` : `<button class="page-btn" disabled style="opacity:0.35">Next &#8250;</button>`,
+  ].join('');
 }
 
 function setupTxnFilters() {
@@ -2242,7 +2295,7 @@ function openAddTxnModal() {
   Modal.open('addTxnModal');
 }
 
-async function saveNewTxn() {
+async function saveNewTxn(btn) {
   const investorId = document.getElementById('txnInvestorSelect').value;
   const amount     = parseFloat(document.getElementById('txnAmount').value);
   const type       = document.getElementById('txnType').value;
@@ -2251,7 +2304,7 @@ async function saveNewTxn() {
 
   const investor = STATE.investors.find(i => i.id === investorId);
 
-  try {
+  await _withBtn(btn, async () => {
     await API.transactions.create({
       id:          Utils.genId('TXN'),
       investor_id: investorId,
@@ -2272,7 +2325,7 @@ async function saveNewTxn() {
     }
     Modal.close('addTxnModal');
     await loadTransactions();
-  } catch (e) { Toast.error('Failed to record transaction'); }
+  });
 }
 
 /* ═══════════════════════════════════════════════
@@ -3221,7 +3274,7 @@ function openAddIFAModal() {
   Modal.open('addIFAModal');
 }
 
-async function saveNewIFA() {
+async function saveNewIFA(btn) {
   const fn = document.getElementById('newIFAFirstName').value.trim();
   const ln = document.getElementById('newIFALastName').value.trim();
   const em = document.getElementById('newIFAEmail').value.trim();
@@ -3247,14 +3300,12 @@ async function saveNewIFA() {
     date_joined: new Date().toISOString()
   };
 
-  try {
+  await _withBtn(btn, async () => {
     await API.ifas.create(payload);
     Toast.success(`IFA ${fn} ${ln} created successfully`);
     Modal.close('addIFAModal');
     await loadIFAs();
-  } catch (e) {
-    Toast.error('Failed to create IFA');
-  }
+  });
 }
 
 function openLinkClientModal(ifaId) {
@@ -3296,7 +3347,7 @@ async function confirmLinkClient() {
 }
 
 async function unlinkClient(ifaId, investorId) {
-  if (!confirm('Unlink this investor from the IFA?')) return;
+  if (!await Confirm.ask('Unlink investor?', { body: 'This investor will no longer be associated with this IFA.', confirmLabel: 'Unlink' })) return;
   const ifa = STATE.ifas.find(f => f.id === ifaId);
   if (!ifa) return;
 
@@ -3318,7 +3369,7 @@ async function unlinkClient(ifaId, investorId) {
 async function toggleIFAStatus(ifaId, currentStatus) {
   const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
   const label = newStatus === 'active' ? 'activated' : 'deactivated';
-  if (!confirm(`${newStatus === 'active' ? 'Activate' : 'Deactivate'} this IFA?`)) return;
+  if (!await Confirm.ask(`${newStatus === 'active' ? 'Activate' : 'Deactivate'} IFA?`, { body: `This IFA will be ${newStatus === 'active' ? 'reactivated on the platform' : 'deactivated and unable to onboard new clients'}.`, confirmLabel: newStatus === 'active' ? 'Activate' : 'Deactivate', danger: newStatus !== 'active' })) return;
 
   try {
     await API.ifas.update(ifaId, { status: newStatus });
@@ -3331,7 +3382,7 @@ async function toggleIFAStatus(ifaId, currentStatus) {
 }
 
 async function deleteIFA(ifaId) {
-  if (!confirm('Permanently remove this IFA from the platform? This cannot be undone.')) return;
+  if (!await Confirm.ask('Remove IFA?', { body: 'This IFA will be permanently removed. This cannot be undone.', confirmLabel: 'Remove', danger: true })) return;
   try {
     await API.ifas.delete(ifaId);
     Toast.success('IFA removed from platform');
@@ -3687,7 +3738,7 @@ function clearKycSelection() {
 async function bulkApproveKyc() {
   if (!_kycSelected.size) return;
   const ids = [..._kycSelected];
-  if (!confirm(`Approve ${ids.length} document(s)?`)) return;
+  if (!await Confirm.ask(`Approve ${ids.length} document(s)?`, { body: `All selected KYC documents will be marked as approved.`, confirmLabel: 'Approve All' })) return;
   const total = ids.length;
   const approveBtn = document.querySelector('[onclick="bulkApproveKyc()"]');
   const rejectBtn  = document.querySelector('[onclick="bulkRejectKyc()"]');
@@ -3918,8 +3969,7 @@ async function sendBroadcast() {
   const previewCount = document.getElementById('broadcastPreviewCount')?.textContent || '?';
   const chLabel      = { email: 'EMAIL', sms: 'SMS', push: 'PUSH NOTIFICATION', both: 'EMAIL + SMS', all: 'ALL CHANNELS' }[channel] || channel.toUpperCase();
 
-  const confirmed = confirm(`Send ${chLabel} broadcast to ${previewCount} recipients in segment "${segLabel}"?\n\nTitle/Subject: ${subject || '(SMS — no subject)'}\n\nThis cannot be undone.`);
-  if (!confirmed) return;
+  if (!await Confirm.ask(`Send ${chLabel} broadcast?`, { body: `To ${previewCount} recipients in "${segLabel}". Subject: "${subject || '(no subject)'}". This cannot be undone.`, confirmLabel: 'Send Broadcast' })) return;
 
   const btn = document.getElementById('broadcastSendBtn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending…'; }
@@ -4244,7 +4294,7 @@ function renderAMLTable() {
 }
 
 async function resolveAMLFlag(id) {
-  if (!confirm('Mark this AML flag as resolved?')) return;
+  if (!await Confirm.ask('Resolve AML flag?', { body: 'This AML flag will be marked as resolved.', confirmLabel: 'Resolve' })) return;
   try {
     await API._fetch('PATCH', `tables/support_tickets/${id}`, {
       status: 'resolved',
@@ -4656,7 +4706,7 @@ function openManualAdjModal() {
   Modal.open('manualAdjModal');
 }
 
-async function saveManualAdj() {
+async function saveManualAdj(btn) {
   const investorId  = document.getElementById('adjInvestorSelect').value;
   const adjType     = document.querySelector('input[name="adjType"]:checked')?.value || 'credit';
   const rawAmount   = parseFloat(document.getElementById('adjAmount').value);
@@ -4675,10 +4725,10 @@ async function saveManualAdj() {
   const newBalance = Math.round((currentBalance + signedAmount) * 100) / 100;
 
   if (newBalance < 0 && adjType === 'debit') {
-    if (!confirm(`This debit of ${Utils.rand(rawAmount)} will result in a negative wallet balance of ${Utils.rand(newBalance)}. Continue?`)) return;
+    if (!await Confirm.ask(`Negative balance warning`, { body: `This debit of ${Utils.rand(rawAmount)} will result in a negative wallet balance of ${Utils.rand(newBalance)}. Continue?`, confirmLabel: 'Continue' })) return;
   }
 
-  try {
+  await _withBtn(btn, async () => {
     // 1. Record transaction
     await API.transactions.create({
       id:               Utils.genId ? Utils.genId('TXN') : `TXN-${Date.now()}`,
@@ -4702,10 +4752,7 @@ async function saveManualAdj() {
 
     // Reload investors if on investors view
     if (STATE.currentView === 'investors') await loadInvestors();
-  } catch (e) {
-    Toast.error('Failed to apply adjustment');
-    console.error(e);
-  }
+  });
 }
 
 /* ════════════════════════════════════════════

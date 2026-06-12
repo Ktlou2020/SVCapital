@@ -1256,7 +1256,7 @@
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('addInvestorModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveNewInvestor()"><i class="fa-solid fa-plus"></i> Create Investor</button>
+      <button class="btn btn--primary" onclick="saveNewInvestor(this)"><i class="fa-solid fa-plus"></i> Create Investor</button>
     </div>
   </div>
 </div>
@@ -1321,7 +1321,7 @@
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('addPoolModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveNewPool()"><i class="fa-solid fa-plus"></i> Create Pool</button>
+      <button class="btn btn--primary" onclick="saveNewPool(this)"><i class="fa-solid fa-plus"></i> Create Pool</button>
     </div>
   </div>
 </div>
@@ -1364,7 +1364,7 @@
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('addTxnModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveNewTxn()"><i class="fa-solid fa-save"></i> Record</button>
+      <button class="btn btn--primary" onclick="saveNewTxn(this)"><i class="fa-solid fa-save"></i> Record</button>
     </div>
   </div>
 </div>
@@ -1517,7 +1517,7 @@
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('editPoolModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveEditPool()"><i class="fa-solid fa-save"></i> Save Changes</button>
+      <button class="btn btn--primary" onclick="saveEditPool(this)"><i class="fa-solid fa-save"></i> Save Changes</button>
     </div>
   </div>
 </div>
@@ -1570,7 +1570,7 @@
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('addIFAModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveNewIFA()"><i class="fa-solid fa-plus"></i> Create IFA</button>
+      <button class="btn btn--primary" onclick="saveNewIFA(this)"><i class="fa-solid fa-plus"></i> Create IFA</button>
     </div>
   </div>
 </div>
@@ -1639,7 +1639,23 @@
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('manualAdjModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveManualAdj()"><i class="fa-solid fa-sliders"></i> Apply Adjustment</button>
+      <button class="btn btn--primary" onclick="saveManualAdj(this)"><i class="fa-solid fa-sliders"></i> Apply Adjustment</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Dialog Modal -->
+<div class="modal-overlay" id="confirmModal" style="z-index:10000">
+  <div class="modal" style="max-width:420px">
+    <div class="modal__header">
+      <span class="modal__title" id="confirmModalTitle">Confirm Action</span>
+    </div>
+    <div class="modal__body">
+      <p id="confirmModalBody" style="color:var(--text-muted);font-size:0.88rem;line-height:1.6;margin:0"></p>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="confirmModalCancel">Cancel</button>
+      <button class="btn btn--primary" id="confirmModalOk">Confirm</button>
     </div>
   </div>
 </div>
