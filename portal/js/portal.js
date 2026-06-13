@@ -388,6 +388,7 @@ function navigate(view, btnEl) {
 
   const titles = {
     overview: 'Portfolio Overview', investments: 'My Investments',
+    analytics: 'Portfolio Analytics',
     transactions: 'Transactions', wallet: 'Wallet', marketplace: 'Browse Pools',
     maturity: 'Maturity Instructions', profile: 'My Profile',
     support: 'Support', referral: 'Refer & Earn', statement: 'Account Statement',
@@ -398,6 +399,7 @@ function navigate(view, btnEl) {
 
   const loaders = {
     investments: loadMyInvestments,
+    analytics: loadAnalytics,
     transactions: loadMyTransactions,
     wallet: loadWallet,
     marketplace: loadMarketplace,
@@ -7586,4 +7588,330 @@ function _dismissIosBanner() {
   if (el) el.style.display = 'none';
   localStorage.setItem('ios_pwa_dismissed', '1');
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   PORTFOLIO ANALYTICS VIEW
+   ═══════════════════════════════════════════════════════════════ */
+
+async function loadAnalytics() {
+  if (!PORTAL.investments.length && PORTAL.investor) {
+    await loadPortalData();
+  }
+  _renderAnalyticsKPIs();
+  _renderMonthlyReturnsChart();
+  _renderAnalyticsAllocChart();
+  _renderAnalyticsTimeline();
+  updateWealthProjection();
+}
+
+function _renderAnalyticsKPIs() {
+  const all   = PORTAL.investments;
+  const done  = all.filter(i => i.status === 'paid_out' || i.status === 'matured');
+  const capital  = done.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const netRet   = done.reduce((s, i) => s + (parseFloat(i.net_return) || parseFloat(i.expected_return) || 0), 0);
+  const moic     = capital > 0 ? (capital + netRet) / capital : 0;
+  const avgDays  = done.length
+    ? done.reduce((s, i) => {
+        const start = new Date(i.start_date || i.created_at);
+        const end   = new Date(i.end_date || i.maturity_date || i.updated_at);
+        return s + (isNaN(start) || isNaN(end) ? (i.term_days || 0) : Math.max(0, (end - start) / 86400000));
+      }, 0) / done.length
+    : 0;
+  const irr = moic > 0 && avgDays > 0 ? (Math.pow(moic, 365 / avgDays) - 1) : 0;
+
+  const byPool = {};
+  done.forEach(i => {
+    const name = i.pool_name || 'Unknown';
+    if (!byPool[name]) byPool[name] = { capital: 0, ret: 0 };
+    byPool[name].capital += parseFloat(i.amount) || 0;
+    byPool[name].ret     += parseFloat(i.net_return) || parseFloat(i.expected_return) || 0;
+  });
+  let bestPool = '—', bestRate = -Infinity;
+  Object.entries(byPool).forEach(([name, v]) => {
+    const r = v.capital > 0 ? v.ret / v.capital : 0;
+    if (r > bestRate) { bestRate = r; bestPool = name; }
+  });
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('an-moic',    moic > 0 ? moic.toFixed(3) + 'x' : '—');
+  set('an-irr',     irr > 0 ? (irr * 100).toFixed(1) + '% p.a.' : '—');
+  set('an-best',    bestPool !== '—' ? bestPool : (all.length ? (all[0].pool_name || '—') : '—'));
+  set('an-avgdays', avgDays > 0 ? Math.round(avgDays) + ' d' : '—');
+}
+
+function _renderMonthlyReturnsChart() {
+  const ctx = document.getElementById('analyticsMonthlyChart');
+  if (!ctx) return;
+
+  const txns = PORTAL.transactions.filter(t =>
+    (t.type === 'return' || t.type === 'interest' || t.type === 'payout') && t.status !== 'cancelled'
+  );
+
+  const monthly = {};
+  txns.forEach(t => {
+    const d = new Date(t.created_at || t.date);
+    if (isNaN(d)) return;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    monthly[key] = (monthly[key] || 0) + (parseFloat(t.amount) || 0);
+  });
+
+  const sorted = Object.keys(monthly).sort();
+  const last12 = sorted.slice(-12);
+  const labels = last12.map(k => {
+    const [y, m] = k.split('-');
+    return new Date(+y, +m - 1).toLocaleDateString('en-ZA', { month: 'short', year: '2-digit' });
+  });
+  const data = last12.map(k => +monthly[k].toFixed(2));
+
+  if (PORTAL.charts.analyticsMonthly) { PORTAL.charts.analyticsMonthly.destroy(); }
+  PORTAL.charts.analyticsMonthly = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels.length ? labels : ['No data'],
+      datasets: [{
+        label: 'Returns (R)',
+        data: data.length ? data : [0],
+        backgroundColor: 'rgba(255,155,12,0.75)',
+        borderRadius: 6,
+        borderSkipped: false,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => 'R ' + c.raw.toLocaleString('en-ZA') } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { callback: v => 'R' + v.toLocaleString('en-ZA'), font: { size: 11 } } },
+      },
+    },
+  });
+}
+
+function _renderAnalyticsAllocChart() {
+  const ctx = document.getElementById('analyticsAllocChart');
+  const list = document.getElementById('analyticsAllocList');
+  if (!ctx) return;
+
+  const active = PORTAL.investments.filter(i => i.status === 'active' || i.status === 'paid_out' || i.status === 'matured');
+  const byPool = {};
+  active.forEach(i => {
+    const name = i.pool_name || 'Other';
+    byPool[name] = (byPool[name] || 0) + (parseFloat(i.amount) || 0);
+  });
+  const entries = Object.entries(byPool).sort((a, b) => b[1] - a[1]);
+  const total   = entries.reduce((s, [, v]) => s + v, 0);
+  const COLORS  = ['#FF9B0C','#a855f7','#2F8C9B','#22c55e','#ef4444','#3b82f6','#f97316','#8b5cf6'];
+
+  if (PORTAL.charts.analyticsAlloc) { PORTAL.charts.analyticsAlloc.destroy(); }
+  PORTAL.charts.analyticsAlloc = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: entries.map(([n]) => n),
+      datasets: [{ data: entries.map(([,v]) => v), backgroundColor: COLORS, borderWidth: 2, borderColor: '#fff' }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true, cutout: '62%',
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.label + ': R' + c.raw.toLocaleString('en-ZA') } } },
+    },
+  });
+
+  if (list) {
+    list.innerHTML = entries.map(([name, val], i) => `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${COLORS[i % COLORS.length]};flex-shrink:0"></span>
+        <span style="font-size:0.78rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-body)">${_esc(name)}</span>
+        <span style="font-size:0.78rem;font-weight:700;color:var(--text-body)">${total > 0 ? ((val/total)*100).toFixed(1) : 0}%</span>
+      </div>`).join('') || '<p style="font-size:0.78rem;color:var(--text-muted)">No investment data yet.</p>';
+  }
+}
+
+function _renderAnalyticsTimeline() {
+  const tbody = document.getElementById('analyticsTimelineBody');
+  if (!tbody) return;
+  const invs = [...PORTAL.investments].sort((a, b) => new Date(b.start_date || b.created_at) - new Date(a.start_date || a.created_at));
+  if (!invs.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:24px">No investments yet.</td></tr>';
+    return;
+  }
+  const statusBadge = s => {
+    const map = { active:'#22c55e', paid_out:'#3b82f6', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316' };
+    return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${s.replace('_',' ')}</span>`;
+  };
+  const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';
+  tbody.innerHTML = invs.slice(0, 30).map(i => {
+    const capital = parseFloat(i.amount) || 0;
+    const ret     = parseFloat(i.net_return) || parseFloat(i.expected_return) || 0;
+    const rate    = parseFloat(i.interest_rate) || parseFloat(i.rate) || 0;
+    const start   = new Date(i.start_date || i.created_at);
+    const end     = new Date(i.end_date || i.maturity_date);
+    const days    = (!isNaN(start) && !isNaN(end)) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '—');
+    return `<tr>
+      <td style="font-weight:600">${_esc(i.pool_name || 'Pool')}</td>
+      <td>R ${capital.toLocaleString('en-ZA')}</td>
+      <td style="color:#22c55e;font-weight:600">+R ${ret.toLocaleString('en-ZA', {maximumFractionDigits:2})}</td>
+      <td>${rate > 0 ? rate.toFixed(1) + '% p.a.' : '—'}</td>
+      <td>${fmt(i.start_date || i.created_at)}</td>
+      <td>${fmt(i.end_date || i.maturity_date)}</td>
+      <td>${typeof days === 'number' ? days + ' d' : days}</td>
+      <td>${statusBadge(i.status)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function updateWealthProjection() {
+  const capital = parseFloat(document.getElementById('wpCapital')?.value) || 0;
+  const rate    = parseFloat(document.getElementById('wpRate')?.value) || 0;
+  const months  = parseFloat(document.getElementById('wpMonths')?.value) || 0;
+  const ret     = capital * (rate / 100) * (months / 12);
+  const total   = capital + ret;
+  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setEl('wpReturn', '+R ' + ret.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  setEl('wpTotal',  'R '  + total.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+}
+
+function exportAnalyticsCSV() {
+  const rows = [['Pool', 'Invested (R)', 'Return (R)', 'Rate (%)', 'Start', 'End', 'Days', 'Status']];
+  PORTAL.investments.forEach(i => {
+    const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA') : '';
+    const start = new Date(i.start_date || i.created_at);
+    const end   = new Date(i.end_date   || i.maturity_date);
+    const days  = (!isNaN(start) && !isNaN(end)) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '');
+    rows.push([
+      i.pool_name || '', parseFloat(i.amount) || 0,
+      parseFloat(i.net_return) || parseFloat(i.expected_return) || 0,
+      parseFloat(i.interest_rate) || '', fmt(i.start_date || i.created_at),
+      fmt(i.end_date || i.maturity_date), days, i.status || '',
+    ]);
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = `SVC-Analytics-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  Toast.success('Analytics exported!');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   COMMAND PALETTE
+   ═══════════════════════════════════════════════════════════════ */
+
+const PORTAL_CMD_ITEMS = [
+  { label: 'Portfolio Overview',        icon: 'fa-grid-2',          group: 'Navigate', action: () => navigate('overview',      document.querySelector('[data-view=overview]')) },
+  { label: 'My Investments',            icon: 'fa-chart-line',      group: 'Navigate', action: () => navigate('investments',   document.querySelector('[data-view=investments]')) },
+  { label: 'Portfolio Analytics',       icon: 'fa-chart-mixed',     group: 'Navigate', action: () => navigate('analytics',     document.querySelector('[data-view=analytics]')) },
+  { label: 'Transactions',             icon: 'fa-arrows-rotate',   group: 'Navigate', action: () => navigate('transactions',  document.querySelector('[data-view=transactions]')) },
+  { label: 'Wallet',                    icon: 'fa-wallet',          group: 'Navigate', action: () => navigate('wallet',        document.querySelector('[data-view=wallet]')) },
+  { label: 'My Accounts',              icon: 'fa-layer-group',     group: 'Navigate', action: () => navigate('subaccounts',   document.querySelector('[data-view=subaccounts]')) },
+  { label: 'Browse Pools',             icon: 'fa-store',           group: 'Navigate', action: () => navigate('marketplace',   document.querySelector('[data-view=marketplace]')) },
+  { label: 'Maturity Instructions',    icon: 'fa-hourglass-end',   group: 'Navigate', action: () => navigate('maturity',      document.querySelector('[data-view=maturity]')) },
+  { label: 'Earn Rewards',             icon: 'fa-trophy',          group: 'Navigate', action: () => navigate('quests',        document.querySelector('[data-view=quests]')) },
+  { label: 'Learning Hub',             icon: 'fa-graduation-cap',  group: 'Navigate', action: () => navigate('learn',         document.querySelector('[data-view=learn]')) },
+  { label: 'My Profile',               icon: 'fa-user-circle',     group: 'Navigate', action: () => navigate('profile',       document.querySelector('[data-view=profile]')) },
+  { label: 'Support',                  icon: 'fa-headset',         group: 'Navigate', action: () => navigate('support',       document.querySelector('[data-view=support]')) },
+  { label: 'Refer & Earn',             icon: 'fa-share-nodes',     group: 'Navigate', action: () => navigate('referral',      document.querySelector('[data-view=referral]')) },
+  { label: 'Documents',                icon: 'fa-folder-open',     group: 'Navigate', action: () => navigate('documents',     document.querySelector('[data-view=documents]')) },
+  { label: 'Account Statement',        icon: 'fa-file-invoice',    group: 'Navigate', action: () => navigate('statement',     document.querySelector('[data-view=statement]')) },
+  { label: 'Top Up Wallet',            icon: 'fa-plus',            group: 'Actions',  action: () => openTopUpModal() },
+  { label: 'Download Tax Certificate', icon: 'fa-file-shield',     group: 'Actions',  action: () => { navigate('documents', document.querySelector('[data-view=documents]')); } },
+  { label: 'Download Statement PDF',   icon: 'fa-file-pdf',        group: 'Actions',  action: () => downloadStatement() },
+  { label: 'Export Analytics CSV',     icon: 'fa-table',           group: 'Actions',  action: () => exportAnalyticsCSV() },
+  { label: 'Submit Maturity Instruction', icon: 'fa-check-circle', group: 'Actions',  action: () => navigate('maturity', document.querySelector('[data-view=maturity]')) },
+  { label: 'Sign Out',                 icon: 'fa-arrow-right-from-bracket', group: 'Actions', action: () => Auth.logout('../login.html') },
+];
+
+let _portalCmdActive = -1;
+
+function openPortalCmd() {
+  const overlay = document.getElementById('portalCmdOverlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  _portalCmdActive = -1;
+  const inp = document.getElementById('portalCmdInput');
+  if (inp) { inp.value = ''; inp.focus(); }
+  renderPortalCmdResults('');
+}
+
+function closePortalCmd() {
+  const overlay = document.getElementById('portalCmdOverlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function renderPortalCmdResults(q) {
+  const list = document.getElementById('portalCmdList');
+  if (!list) return;
+  _portalCmdActive = -1;
+  const query = (q || '').toLowerCase().trim();
+  const hits = query
+    ? PORTAL_CMD_ITEMS.filter(c => c.label.toLowerCase().includes(query) || c.group.toLowerCase().includes(query))
+    : PORTAL_CMD_ITEMS;
+
+  const groups = {};
+  hits.forEach(c => { (groups[c.group] = groups[c.group] || []).push(c); });
+
+  let html = '';
+  const globalIdx = { i: 0 };
+  Object.entries(groups).forEach(([grp, items]) => {
+    html += `<div style="padding:4px 14px 2px;font-size:0.65rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.3)">${_esc(grp)}</div>`;
+    items.forEach(item => {
+      const idx = globalIdx.i++;
+      html += `<div class="portal-cmd-item" data-idx="${idx}"
+        style="display:flex;align-items:center;gap:12px;padding:9px 14px;cursor:pointer;border-radius:8px;margin:0 6px;transition:background 0.15s"
+        onmouseover="portalCmdHover(${idx})" onclick="portalCmdSelect(${idx})">
+        <i class="fa-solid ${_esc(item.icon)}" style="width:16px;text-align:center;color:rgba(255,155,12,0.8);font-size:0.85rem"></i>
+        <span style="font-size:0.88rem;color:#f0f4ff">${_esc(item.label)}</span>
+      </div>`;
+    });
+  });
+
+  list.innerHTML = html || `<div style="padding:24px;text-align:center;color:rgba(255,255,255,0.35);font-size:0.85rem">No results for "${_esc(q)}"</div>`;
+  list._hits = hits;
+}
+
+function portalCmdHover(idx) {
+  _portalCmdActive = idx;
+  document.querySelectorAll('#portalCmdList .portal-cmd-item').forEach(el => {
+    el.style.background = +el.dataset.idx === idx ? 'rgba(255,155,12,0.12)' : '';
+  });
+}
+
+function portalCmdSelect(idx) {
+  const list = document.getElementById('portalCmdList');
+  const hits = list?._hits || PORTAL_CMD_ITEMS;
+  if (hits[idx]) { closePortalCmd(); hits[idx].action(); }
+}
+
+function portalCmdKeyNav(e) {
+  const list  = document.getElementById('portalCmdList');
+  const items = list?.querySelectorAll('.portal-cmd-item') || [];
+  const count = items.length;
+  if (!count) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _portalCmdActive = (_portalCmdActive + 1) % count;
+    portalCmdHover(_portalCmdActive);
+    items[_portalCmdActive]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _portalCmdActive = (_portalCmdActive - 1 + count) % count;
+    portalCmdHover(_portalCmdActive);
+    items[_portalCmdActive]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (_portalCmdActive >= 0) portalCmdSelect(_portalCmdActive);
+  } else if (e.key === 'Escape') {
+    closePortalCmd();
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    const overlay = document.getElementById('portalCmdOverlay');
+    if (overlay && overlay.style.display !== 'none') closePortalCmd();
+    else openPortalCmd();
+  } else if (e.key === 'Escape') {
+    const overlay = document.getElementById('portalCmdOverlay');
+    if (overlay && overlay.style.display !== 'none') closePortalCmd();
+  }
+});
 

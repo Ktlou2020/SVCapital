@@ -324,7 +324,7 @@ function navigate(view, btnEl) {
     pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
     transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
     auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications', aml: 'AML Compliance Review',
-    migrate: 'Data Migration', compliance: 'Compliance Calendar'
+    migrate: 'Data Migration', compliance: 'Compliance Calendar', reconciliation: 'Financial Reconciliation'
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -347,6 +347,7 @@ function navigate(view, btnEl) {
     comms: loadComms,
     aml: loadAML,
     compliance: loadCompliance,
+    reconciliation: loadReconciliation,
   };
   if (loaders[view]) loaders[view]();
 }
@@ -5184,3 +5185,280 @@ async function loadCompliance() {
       </div>`;
   }
 }
+
+/* ═══════════════════════════════════════════════
+   FINANCIAL RECONCILIATION
+   ═══════════════════════════════════════════════ */
+async function loadReconciliation() {
+  // Ensure base data is loaded
+  if (!STATE.investors.length) STATE.investors = await API.investors.list();
+  if (!STATE.transactions.length) STATE.transactions = await API.transactions.list();
+  if (!STATE.investments.length) STATE.investments = await API.investments.list();
+  renderReconcTable();
+}
+
+function _reconcRows() {
+  return STATE.investors.map(inv => {
+    const txns = STATE.transactions.filter(t => t.investor_id === inv.id);
+    const totalDeposited  = txns.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s,t) => s+(parseFloat(t.amount)||0), 0);
+    const totalInvested   = STATE.investments.filter(i => i.investor_id === inv.id && i.status !== 'cancelled').reduce((s,i) => s+(parseFloat(i.amount)||0), 0);
+    const walletBalance   = parseFloat(inv.wallet_balance) || 0;
+    const expectedWallet  = totalDeposited - totalInvested;
+    const variance        = walletBalance - expectedWallet;
+    const isDiscrepancy   = Math.abs(variance) > 1; // > R1 tolerance
+    return { inv, totalDeposited, totalInvested, walletBalance, expectedWallet, variance, isDiscrepancy };
+  });
+}
+
+function renderReconcTable() {
+  const search    = (document.getElementById('reconcSearch')?.value || '').toLowerCase();
+  const discOnly  = document.getElementById('reconcDiscrepOnly')?.checked || false;
+  const fmt = v => 'R ' + Math.abs(v).toLocaleString('en-ZA', {minimumFractionDigits:2,maximumFractionDigits:2});
+
+  let rows = _reconcRows();
+  if (search) rows = rows.filter(r => `${r.inv.first_name} ${r.inv.last_name} ${r.inv.email||''}`.toLowerCase().includes(search));
+  if (discOnly) rows = rows.filter(r => r.isDiscrepancy);
+
+  const totalDep  = rows.reduce((s,r) => s+r.totalDeposited, 0);
+  const totalInv  = rows.reduce((s,r) => s+r.totalInvested, 0);
+  const totalWal  = rows.reduce((s,r) => s+r.walletBalance, 0);
+  const discCount = rows.filter(r => r.isDiscrepancy).length;
+
+  // Update KPI tiles
+  const statsEl = document.getElementById('reconcStats');
+  if (statsEl) statsEl.innerHTML = `
+    <div style="background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.15);border-radius:12px;padding:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#7a92a8;margin-bottom:6px">Total Deposits</div>
+      <div style="font-size:1.35rem;font-weight:800;color:#D4AF37">${fmt(totalDep)}</div>
+    </div>
+    <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.15);border-radius:12px;padding:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#7a92a8;margin-bottom:6px">Total Invested</div>
+      <div style="font-size:1.35rem;font-weight:800;color:#60a5fa">${fmt(totalInv)}</div>
+    </div>
+    <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.15);border-radius:12px;padding:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#7a92a8;margin-bottom:6px">Total Wallets</div>
+      <div style="font-size:1.35rem;font-weight:800;color:#22c55e">${fmt(totalWal)}</div>
+    </div>
+    <div style="background:${discCount?'rgba(249,115,22,.1)':'rgba(34,197,94,.08)'};border:1px solid ${discCount?'rgba(249,115,22,.25)':'rgba(34,197,94,.15)'};border-radius:12px;padding:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#7a92a8;margin-bottom:6px">Discrepancies</div>
+      <div style="font-size:1.35rem;font-weight:800;color:${discCount?'#f97316':'#22c55e'}">${discCount}</div>
+    </div>`;
+
+  // Update reconciliation badge
+  const badge = document.getElementById('reconcBadge');
+  if (badge) { badge.textContent = discCount; badge.style.display = discCount ? '' : 'none'; }
+
+  const subtitle = document.getElementById('reconcSubtitle');
+  if (subtitle) subtitle.textContent = `${rows.length} investors · ${discCount} discrepancies flagged`;
+
+  const tbody = document.getElementById('reconcBody');
+  if (!tbody) return;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#7a92a8">No records found</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const varColor = r.isDiscrepancy ? (r.variance < 0 ? 'color:#ef4444' : 'color:#f97316') : 'color:#22c55e';
+    const statusBadge = r.isDiscrepancy
+      ? `<span style="background:rgba(249,115,22,.15);color:#f97316;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">⚠ Discrepancy</span>`
+      : `<span style="background:rgba(34,197,94,.12);color:#22c55e;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">✓ Balanced</span>`;
+    return `<tr>
+      <td><div style="font-weight:600;font-size:0.83rem">${r.inv.first_name} ${r.inv.last_name}</div><div style="font-size:0.72rem;color:#7a92a8">${r.inv.email||''}</div></td>
+      <td style="color:#D4AF37;font-size:0.82rem;font-weight:600">${fmt(r.totalDeposited)}</td>
+      <td style="color:#60a5fa;font-size:0.82rem;font-weight:600">${fmt(r.totalInvested)}</td>
+      <td style="color:#22c55e;font-size:0.82rem;font-weight:600">${fmt(r.walletBalance)}</td>
+      <td style="color:#9ca3af;font-size:0.82rem">${fmt(r.expectedWallet)}</td>
+      <td style="font-size:0.82rem;font-weight:700;${varColor}">${r.variance >= 0 ? '+' : '-'}${fmt(r.variance)}</td>
+      <td>${statusBadge}</td>
+    </tr>`;
+  }).join('');
+
+  const footer = document.getElementById('reconcFooter');
+  if (footer) footer.textContent = `${rows.length} investors shown · ${discCount} discrepancy${discCount!==1?'ies':''} · Variance tolerance R1.00`;
+}
+
+function exportReconciliationCSV() {
+  const rows = _reconcRows();
+  if (!rows.length) { Toast.warning('No data to export'); return; }
+  const fmt = v => v.toFixed(2);
+  const headers = ['Investor','Email','Total Deposited','Total Invested','Wallet Balance','Expected Wallet','Variance','Status'];
+  const data = rows.map(r => [
+    `${r.inv.first_name} ${r.inv.last_name}`, r.inv.email||'',
+    fmt(r.totalDeposited), fmt(r.totalInvested), fmt(r.walletBalance),
+    fmt(r.expectedWallet), fmt(r.variance),
+    r.isDiscrepancy ? 'DISCREPANCY' : 'BALANCED'
+  ]);
+  const esc = v => { const s=String(v); return (s.includes(',')||s.includes('"'))?'"'+s.replace(/"/g,'""')+'"':s; };
+  const csv = [headers.map(esc).join(','), ...data.map(r=>r.map(esc).join(','))].join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='reconciliation.csv'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  Toast.success('Reconciliation CSV exported');
+}
+
+/* ═══════════════════════════════════════════════
+   PDF EXPORTS
+   ═══════════════════════════════════════════════ */
+function exportInvestorsPDF() {
+  const jsPDF = window.jspdf?.jsPDF;
+  if (!jsPDF) { Toast.warning('PDF library loading — try again in a moment'); return; }
+  const inv = STATE.investors;
+  if (!inv.length) { Toast.warning('No investors to export'); return; }
+  const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+  doc.setFontSize(16); doc.setTextColor(212,175,55);
+  doc.text('SV Capital — Investor Register', 14, 16);
+  doc.setFontSize(9); doc.setTextColor(100,116,139);
+  doc.text(`Generated: ${new Date().toLocaleDateString('en-ZA')} · ${inv.length} investors · FSP 52449`, 14, 22);
+  doc.autoTable({
+    startY: 27,
+    head: [['Name','Email','Phone','KYC Status','FICA','Province','Wallet Balance','Status']],
+    body: inv.map(i => [
+      `${i.first_name} ${i.last_name}`, i.email||'', i.phone||'',
+      i.kyc_status||'pending', i.fica_status||'pending', i.province||'',
+      'R '+(parseFloat(i.wallet_balance)||0).toFixed(2),
+      i.status||'pending'
+    ]),
+    styles:{ fontSize:7, cellPadding:2.5 },
+    headStyles:{ fillColor:[13,17,23], textColor:[212,175,55], fontStyle:'bold' },
+    alternateRowStyles:{ fillColor:[248,250,252] },
+    theme:'grid'
+  });
+  doc.save('investor_register.pdf');
+  Toast.success('PDF exported');
+}
+
+function exportKYCReportPDF() {
+  const jsPDF = window.jspdf?.jsPDF;
+  if (!jsPDF) { Toast.warning('PDF library loading — try again in a moment'); return; }
+  const docs = STATE.kyc;
+  if (!docs.length) { Toast.warning('No KYC records to export'); return; }
+  const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+  doc.setFontSize(16); doc.setTextColor(212,175,55);
+  doc.text('SV Capital — KYC/FICA Compliance Report', 14, 16);
+  doc.setFontSize(9); doc.setTextColor(100,116,139);
+  const approved = docs.filter(d=>d.status==='approved').length;
+  const pending  = docs.filter(d=>d.status==='pending'||d.status==='under_review').length;
+  doc.text(`Generated: ${new Date().toLocaleDateString('en-ZA')} · ${docs.length} documents · ${approved} approved · ${pending} pending`, 14, 22);
+  doc.autoTable({
+    startY: 27,
+    head: [['Investor ID','Document Type','Status','Submitted','Reviewed By','Reviewed Date']],
+    body: docs.map(d => [
+      d.investor_id||'', (d.document_type||'').replace(/_/g,' '),
+      (d.status||'').toUpperCase(), d.submitted_at ? new Date(d.submitted_at).toLocaleDateString('en-ZA') : '—',
+      d.reviewed_by||'—', d.reviewed_at ? new Date(d.reviewed_at).toLocaleDateString('en-ZA') : '—'
+    ]),
+    styles:{ fontSize:7.5, cellPadding:2.5 },
+    headStyles:{ fillColor:[13,17,23], textColor:[212,175,55], fontStyle:'bold' },
+    alternateRowStyles:{ fillColor:[248,250,252] },
+    theme:'grid'
+  });
+  doc.save('kyc_compliance_report.pdf');
+  Toast.success('KYC report PDF exported');
+}
+
+/* ═══════════════════════════════════════════════
+   COMMAND PALETTE (Ctrl+K)
+   ═══════════════════════════════════════════════ */
+const ADMIN_CMD_ITEMS = [
+  // Views
+  { label:'Dashboard',               icon:'fa-grid-2',                   view:'dashboard' },
+  { label:'Investor Management',     icon:'fa-users',                    view:'investors' },
+  { label:'IFA Management',          icon:'fa-handshake',                view:'ifa' },
+  { label:'KYC / FICA',              icon:'fa-id-card',                  view:'kyc' },
+  { label:'Investment Pools',        icon:'fa-layer-group',              view:'pools' },
+  { label:'Investments',             icon:'fa-chart-line',               view:'investments' },
+  { label:'Maturity Instructions',   icon:'fa-hourglass-end',            view:'maturity' },
+  { label:'Transactions',            icon:'fa-arrows-rotate',            view:'transactions' },
+  { label:'Withdrawals',             icon:'fa-arrow-up-from-bracket',    view:'withdrawals' },
+  { label:'Support Tickets',         icon:'fa-headset',                  view:'support' },
+  { label:'AML Review',              icon:'fa-shield-halved',            view:'aml' },
+  { label:'Communications',          icon:'fa-paper-plane',              view:'comms' },
+  { label:'Analytics',               icon:'fa-chart-pie',                view:'analytics' },
+  { label:'Compliance Calendar',     icon:'fa-calendar-check',           view:'compliance' },
+  { label:'Audit Log',               icon:'fa-scroll',                   view:'auditlog' },
+  { label:'Financial Reconciliation',icon:'fa-scale-balanced',           view:'reconciliation' },
+  { label:'Settings',                icon:'fa-gear',                     view:'settings' },
+  { label:'Data Migration',          icon:'fa-database',                 view:'migrate' },
+  // Actions
+  { label:'Add New Investor',        icon:'fa-user-plus',                action: ()=>{ navigate('investors', document.querySelector('[data-view=investors]')); setTimeout(()=>document.getElementById('openAddInvestorBtn')?.click(),300); } },
+  { label:'Upload KYC Document',     icon:'fa-upload',                   action: ()=>navigate('kyc', document.querySelector('[data-view=kyc]')) },
+  { label:'Create Investment Pool',  icon:'fa-plus-circle',              action: ()=>{ navigate('pools', document.querySelector('[data-view=pools]')); setTimeout(openAddPoolModal, 300); } },
+  { label:'Record Transaction',      icon:'fa-plus',                     action: ()=>{ navigate('transactions', document.querySelector('[data-view=transactions]')); setTimeout(openAddTxnModal, 300); } },
+  { label:'Export Investors CSV',    icon:'fa-file-csv',                 action: ()=>exportInvestorsCSV() },
+  { label:'Export Investors PDF',    icon:'fa-file-pdf',                 action: ()=>exportInvestorsPDF() },
+  { label:'Export KYC CSV',          icon:'fa-file-csv',                 action: ()=>exportKYCCSV() },
+  { label:'Export KYC PDF',          icon:'fa-file-pdf',                 action: ()=>exportKYCReportPDF() },
+  { label:'Export Transactions CSV', icon:'fa-file-csv',                 action: ()=>exportTransactionsCSV() },
+  { label:'Export Reconciliation',   icon:'fa-file-csv',                 action: ()=>exportReconciliationCSV() },
+];
+let _adminCmdActive = -1;
+
+function openAdminCmd() {
+  const ov = document.getElementById('adminCmdOverlay');
+  if (!ov) return;
+  ov.style.display = 'flex';
+  _adminCmdActive = -1;
+  const inp = document.getElementById('adminCmdInput');
+  if (inp) { inp.value = ''; inp.focus(); }
+  renderAdminCmdResults('');
+}
+
+function closeAdminCmd() {
+  const ov = document.getElementById('adminCmdOverlay');
+  if (ov) ov.style.display = 'none';
+}
+
+function renderAdminCmdResults(q) {
+  const el = document.getElementById('adminCmdResults');
+  if (!el) return;
+  _adminCmdActive = -1;
+  const query = (q||'').toLowerCase().trim();
+  const filtered = query ? ADMIN_CMD_ITEMS.filter(c => c.label.toLowerCase().includes(query)) : ADMIN_CMD_ITEMS;
+  if (!filtered.length) {
+    el.innerHTML = `<div style="padding:20px;text-align:center;color:#7a92a8;font-size:13px">No results for "${q}"</div>`;
+    el._filtered = []; return;
+  }
+  el.innerHTML = filtered.map((c,i) =>
+    `<div class="adm-cmd-item" data-idx="${i}" onmouseenter="adminCmdHover(${i})" onclick="adminCmdSelect(${i})"
+      style="display:flex;align-items:center;gap:12px;padding:10px 18px;cursor:pointer;transition:background .1s;color:#e8edf2;font-size:13px">
+      <i class="fa-solid ${c.icon}" style="width:16px;text-align:center;color:#7a92a8;font-size:13px"></i>
+      <span>${c.label}</span>
+      ${c.view?`<kbd style="margin-left:auto;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:4px;font-size:10px;padding:1px 6px;color:#7a92a8">${c.view}</kbd>`:''}
+    </div>`
+  ).join('');
+  el._filtered = filtered;
+}
+
+function adminCmdHover(idx) {
+  _adminCmdActive = idx;
+  document.querySelectorAll('.adm-cmd-item').forEach((el,i) => {
+    el.style.background = i === idx ? 'rgba(212,175,55,.1)' : '';
+  });
+}
+
+function adminCmdSelect(idx) {
+  const el = document.getElementById('adminCmdResults');
+  const filtered = el?._filtered || ADMIN_CMD_ITEMS;
+  const item = filtered[idx];
+  if (!item) return;
+  closeAdminCmd();
+  if (item.action) { item.action(); return; }
+  if (item.view) navigate(item.view, document.querySelector(`[data-view="${item.view}"]`));
+}
+
+function adminCmdKeyNav(e) {
+  const el = document.getElementById('adminCmdResults');
+  const filtered = el?._filtered || [];
+  const count = filtered.length;
+  if (!count) return;
+  if (e.key==='ArrowDown') { e.preventDefault(); adminCmdHover((_adminCmdActive+1)%count); }
+  if (e.key==='ArrowUp')   { e.preventDefault(); adminCmdHover((_adminCmdActive-1+count)%count); }
+  if (e.key==='Enter')     { e.preventDefault(); if (_adminCmdActive>=0) adminCmdSelect(_adminCmdActive); else if(count>0) adminCmdSelect(0); }
+  if (e.key==='Escape')    { closeAdminCmd(); }
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key==='k') { e.preventDefault(); openAdminCmd(); }
+  if (e.key==='Escape') { const ov=document.getElementById('adminCmdOverlay'); if(ov&&ov.style.display!=='none') closeAdminCmd(); }
+});

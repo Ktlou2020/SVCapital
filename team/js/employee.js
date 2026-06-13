@@ -216,6 +216,7 @@ function navigate(view, btn) {
     feed:         renderActivityFeed,
     journal:      renderJournal,
     eva:          renderEvaPayslip,
+    payslips:     renderPayslips,
     profile:      renderProfile,
     calendar:     renderLeaveCalendar
   };
@@ -3699,3 +3700,284 @@ window.navigate = function(view, btn) {
 
 // Export syncOnboardingProgress for use from window scope
 window.syncOnboardingProgress = syncOnboardingProgress;
+
+/* ═══════════════════════════════════════════════════════════════
+   VIEW: MY PAYSLIPS
+   ═══════════════════════════════════════════════════════════════ */
+
+function renderPayslips() {
+  const el = document.getElementById('view-payslips');
+  if (!el) return;
+
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  const ytdYear   = new Date().getFullYear();
+  const ytdSlips  = _payslips.filter(p => p.pay_period && p.pay_period.startsWith(String(ytdYear)));
+  const ytdGross  = ytdSlips.reduce((s, p) => s + (Number(p.gross_pay) || 0), 0);
+  const ytdNett   = ytdSlips.reduce((s, p) => s + (Number(p.nett_pay)  || 0), 0);
+  const ytdEva    = ytdSlips.reduce((s, p) => s + (Number(p.eva_bonus) || 0), 0);
+  const latest    = _payslips[0] || null;
+  const latestNett = latest ? Number(latest.nett_pay) || 0 : 0;
+
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>My Payslips</h1><div class="view-sub">Full pay history, YTD summary & individual downloads</div></div>
+      <div class="view-header-actions">
+        <button class="btn btn--secondary" onclick="exportPayslipsCSV()"><i class="fa-solid fa-table"></i> Export CSV</button>
+        <button class="btn btn--primary" onclick="exportPayslipsPDF()"><i class="fa-solid fa-file-pdf"></i> Full History PDF</button>
+      </div>
+    </div>
+
+    <!-- YTD KPI tiles -->
+    <div class="cards-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
+      <div class="stat-card">
+        <div class="stat-card-icon" style="background:rgba(124,92,252,0.15);color:var(--accent)"><i class="fa-solid fa-coins"></i></div>
+        <div class="stat-card-val">R ${ytdGross.toLocaleString('en-ZA',{maximumFractionDigits:0})}</div>
+        <div class="stat-card-lbl">Gross Pay YTD ${ytdYear}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-icon" style="background:rgba(0,212,170,0.15);color:var(--accent2)"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+        <div class="stat-card-val">R ${ytdNett.toLocaleString('en-ZA',{maximumFractionDigits:0})}</div>
+        <div class="stat-card-lbl">Nett Pay YTD ${ytdYear}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-icon" style="background:rgba(249,200,70,0.15);color:var(--gold)"><i class="fa-solid fa-bolt"></i></div>
+        <div class="stat-card-val">R ${ytdEva.toLocaleString('en-ZA',{maximumFractionDigits:0})}</div>
+        <div class="stat-card-lbl">EVA Bonuses YTD</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-icon" style="background:rgba(255,91,91,0.12);color:#ff5b5b"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+        <div class="stat-card-val">R ${latestNett.toLocaleString('en-ZA',{maximumFractionDigits:0})}</div>
+        <div class="stat-card-lbl">Last Month Nett</div>
+      </div>
+    </div>
+
+    ${_payslips.length === 0
+      ? `<div class="chart-container" style="text-align:center;padding:48px;color:var(--muted)">
+           <i class="fa-solid fa-file-invoice-dollar" style="font-size:2.5rem;margin-bottom:14px;display:block;opacity:0.25"></i>
+           <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px">No payslips on record yet</div>
+           <div style="font-size:0.78rem">Payslips are generated at the end of each pay period by the finance team.</div>
+         </div>`
+      : `<div class="chart-container" style="padding:0;overflow-x:auto">
+           <table class="data-table" style="min-width:600px">
+             <thead>
+               <tr>
+                 <th>Pay Period</th>
+                 <th>Base Salary</th>
+                 <th>EVA Bonus</th>
+                 <th>Gross Pay</th>
+                 <th>Deductions</th>
+                 <th>Nett Pay</th>
+                 <th>Status</th>
+                 <th></th>
+               </tr>
+             </thead>
+             <tbody id="payslipsTableBody">
+               ${_payslips.map((p, i) => {
+                 const [yr, mo] = (p.pay_period || '—').split('-');
+                 const moLabel = MONTHS[(parseInt(mo, 10) || 1) - 1] || mo;
+                 const gross  = Number(p.gross_pay) || 0;
+                 const nett   = Number(p.nett_pay)  || 0;
+                 const base   = Number(p.base_salary) || Number(p.basic_salary) || 0;
+                 const eva    = Number(p.eva_bonus) || 0;
+                 const ded    = gross - nett;
+                 const st     = p.status || 'pending';
+                 const stCol  = st === 'paid' ? '#00d4aa' : st === 'finalised' ? '#7c5cfc' : '#f9c846';
+                 return `<tr>
+                   <td style="font-weight:700">${moLabel} ${yr}</td>
+                   <td>R ${base.toLocaleString('en-ZA',{maximumFractionDigits:2})}</td>
+                   <td style="color:var(--gold)">R ${eva.toLocaleString('en-ZA',{maximumFractionDigits:2})}</td>
+                   <td>R ${gross.toLocaleString('en-ZA',{maximumFractionDigits:2})}</td>
+                   <td style="color:#ff5b5b">−R ${ded.toLocaleString('en-ZA',{maximumFractionDigits:2})}</td>
+                   <td style="font-weight:800;color:var(--accent2)">R ${nett.toLocaleString('en-ZA',{maximumFractionDigits:2})}</td>
+                   <td><span style="background:${stCol}18;color:${stCol};border:1px solid ${stCol}40;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700">${st}</span></td>
+                   <td><button class="btn btn--secondary btn--sm" id="psDl-${i}" data-pid="${p.id}"><i class="fa-solid fa-download"></i></button></td>
+                 </tr>`;
+               }).join('')}
+             </tbody>
+           </table>
+         </div>`
+    }`;
+
+  _payslips.forEach((p, i) => {
+    document.getElementById(`psDl-${i}`)?.addEventListener('click', () => downloadPayslip(p.id));
+  });
+}
+
+function exportPayslipsCSV() {
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const rows = [['Pay Period','Base Salary','EVA Bonus','Gross Pay','Deductions','Nett Pay','Status']];
+  _payslips.forEach(p => {
+    const [yr, mo] = (p.pay_period || '').split('-');
+    const moLabel  = MONTHS[(parseInt(mo,10)||1)-1] || mo;
+    const gross    = Number(p.gross_pay)   || 0;
+    const nett     = Number(p.nett_pay)    || 0;
+    const base     = Number(p.base_salary) || Number(p.basic_salary) || 0;
+    const eva      = Number(p.eva_bonus)   || 0;
+    rows.push([`${moLabel} ${yr}`, base.toFixed(2), eva.toFixed(2), gross.toFixed(2), (gross-nett).toFixed(2), nett.toFixed(2), p.status||'pending']);
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = `SVC-Payslips-${_emp?.first_name||'Employee'}-${new Date().getFullYear()}.csv`;
+  a.click(); showToast('Payslips CSV exported', 'success');
+}
+
+function exportPayslipsPDF() {
+  if (!window.jspdf) { showToast('PDF library not loaded', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(124,92,252);
+  doc.text('SV Capital — Payslip History', 14, 18);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(107,114,128);
+  doc.text(`Employee: ${_emp?.first_name||''} ${_emp?.last_name||''} · ${_emp?.role||''} · Generated: ${new Date().toLocaleDateString('en-ZA')}`, 14, 25);
+
+  const rows = _payslips.map(p => {
+    const [yr, mo] = (p.pay_period||'').split('-');
+    const moLabel  = MONTHS[(parseInt(mo,10)||1)-1]||mo;
+    const gross    = Number(p.gross_pay)   || 0;
+    const nett     = Number(p.nett_pay)    || 0;
+    const base     = Number(p.base_salary) || Number(p.basic_salary) || 0;
+    const eva      = Number(p.eva_bonus)   || 0;
+    return [`${moLabel} ${yr}`, `R ${base.toFixed(2)}`, `R ${eva.toFixed(2)}`, `R ${gross.toFixed(2)}`, `-R ${(gross-nett).toFixed(2)}`, `R ${nett.toFixed(2)}`, p.status||'pending'];
+  });
+
+  doc.autoTable({
+    startY: 30,
+    head: [['Period','Base','EVA Bonus','Gross','Deductions','Nett','Status']],
+    body: rows,
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [124,92,252], textColor: 255, fontStyle:'bold' },
+    alternateRowStyles: { fillColor: [245,245,252] },
+    columnStyles: { 5: { fontStyle:'bold', textColor:[0,212,170] } },
+    margin: { left:14, right:14 },
+  });
+
+  doc.save(`SVC-Payslips-${_emp?.first_name||'Employee'}-${new Date().getFullYear()}.pdf`);
+  showToast('Payslip history PDF downloaded', 'success');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   COMMAND PALETTE
+   ═══════════════════════════════════════════════════════════════ */
+
+const EMP_CMD_ITEMS = [
+  { label:'Dashboard',           icon:'fa-house',              group:'Navigate', action:()=>navigate('dashboard',   document.querySelector('[data-view=dashboard]')) },
+  { label:'My Courses',          icon:'fa-book-open',          group:'Navigate', action:()=>navigate('courses',     document.querySelector('[data-view=courses]')) },
+  { label:'Learning Paths',      icon:'fa-road',               group:'Navigate', action:()=>navigate('paths',       document.querySelector('[data-view=paths]')) },
+  { label:'My KPIs',             icon:'fa-chart-bar',          group:'Navigate', action:()=>navigate('kpis',        document.querySelector('[data-view=kpis]')) },
+  { label:'My OKRs',             icon:'fa-bullseye',           group:'Navigate', action:()=>navigate('okrs',        document.querySelector('[data-view=okrs]')) },
+  { label:'Feedback & Kudos',    icon:'fa-hands-clapping',     group:'Navigate', action:()=>navigate('feedback',    document.querySelector('[data-view=feedback]')) },
+  { label:'Pulse Survey',        icon:'fa-poll',               group:'Navigate', action:()=>navigate('pulse',       document.querySelector('[data-view=pulse]')) },
+  { label:'1-on-1s',             icon:'fa-comments',           group:'Navigate', action:()=>navigate('oneonone',    document.querySelector('[data-view=oneonone]')) },
+  { label:'Daily Check-in',      icon:'fa-sun',                group:'Navigate', action:()=>navigate('checkin',     document.querySelector('[data-view=checkin]')) },
+  { label:'My Leave',            icon:'fa-umbrella-beach',     group:'Navigate', action:()=>navigate('leave',       document.querySelector('[data-view=leave]')) },
+  { label:'Leave Calendar',      icon:'fa-calendar-days',      group:'Navigate', action:()=>navigate('calendar',    document.querySelector('[data-view=calendar]')) },
+  { label:'EVA Statement',       icon:'fa-money-bill-trend-up',group:'Navigate', action:()=>navigate('eva',         document.querySelector('[data-view=eva]')) },
+  { label:'My Payslips',         icon:'fa-file-invoice-dollar',group:'Navigate', action:()=>navigate('payslips',    document.querySelector('[data-view=payslips]')) },
+  { label:'Achievements',        icon:'fa-trophy',             group:'Navigate', action:()=>navigate('achievements',document.querySelector('[data-view=achievements]')) },
+  { label:'Activity Feed',       icon:'fa-bolt',               group:'Navigate', action:()=>navigate('feed',        document.querySelector('[data-view=feed]')) },
+  { label:'Journal',             icon:'fa-pen-to-square',      group:'Navigate', action:()=>navigate('journal',     document.querySelector('[data-view=journal]')) },
+  { label:'My Profile',          icon:'fa-id-card',            group:'Navigate', action:()=>navigate('profile',     document.querySelector('[data-view=profile]')) },
+  { label:'Export Payslips CSV', icon:'fa-table',              group:'Actions',  action:()=>{ navigate('payslips',document.querySelector('[data-view=payslips]')); setTimeout(exportPayslipsCSV,300); } },
+  { label:'Download Payslips PDF',icon:'fa-file-pdf',          group:'Actions',  action:()=>{ navigate('payslips',document.querySelector('[data-view=payslips]')); setTimeout(exportPayslipsPDF,300); } },
+  { label:'Generate AI Course',  icon:'fa-robot',              group:'Actions',  action:()=>{ if(typeof openAiGenModal==='function') openAiGenModal(); } },
+  { label:'Go to Team Dashboard',icon:'fa-people-group',       group:'Actions',  action:()=>{ window.location.href='index.html'; } },
+  { label:'Go to App Hub',       icon:'fa-grid-2',             group:'Actions',  action:()=>{ window.location.href='hub.html'; } },
+];
+
+let _empCmdActive = -1;
+
+function openEmpCmd() {
+  const overlay = document.getElementById('empCmdOverlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  _empCmdActive = -1;
+  const inp = document.getElementById('empCmdInput');
+  if (inp) { inp.value = ''; inp.focus(); }
+  renderEmpCmdResults('');
+}
+
+function closeEmpCmd() {
+  const overlay = document.getElementById('empCmdOverlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function renderEmpCmdResults(q) {
+  const list = document.getElementById('empCmdList');
+  if (!list) return;
+  _empCmdActive = -1;
+  const query = (q || '').toLowerCase().trim();
+  const hits  = query ? EMP_CMD_ITEMS.filter(c => c.label.toLowerCase().includes(query) || c.group.toLowerCase().includes(query)) : EMP_CMD_ITEMS;
+
+  const groups = {};
+  hits.forEach(c => { (groups[c.group] = groups[c.group] || []).push(c); });
+
+  let html = '';
+  const gIdx = { i: 0 };
+  Object.entries(groups).forEach(([grp, items]) => {
+    html += `<div style="padding:4px 14px 2px;font-size:0.63rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.25)">${grp}</div>`;
+    items.forEach(item => {
+      const idx = gIdx.i++;
+      html += `<div class="emp-cmd-item" data-idx="${idx}"
+        style="display:flex;align-items:center;gap:12px;padding:9px 14px;cursor:pointer;border-radius:8px;margin:0 6px;transition:background 0.12s"
+        onmouseover="empCmdHover(${idx})" onclick="empCmdSelect(${idx})">
+        <i class="fa-solid ${item.icon}" style="width:16px;text-align:center;color:rgba(124,92,252,0.85);font-size:0.85rem"></i>
+        <span style="font-size:0.88rem;color:#e2e4f0">${item.label}</span>
+      </div>`;
+    });
+  });
+
+  list.innerHTML = html || `<div style="padding:24px;text-align:center;color:rgba(255,255,255,0.3);font-size:0.85rem">No results for "${q}"</div>`;
+  list._hits = hits;
+}
+
+function empCmdHover(idx) {
+  _empCmdActive = idx;
+  document.querySelectorAll('#empCmdList .emp-cmd-item').forEach(el => {
+    el.style.background = +el.dataset.idx === idx ? 'rgba(124,92,252,0.15)' : '';
+  });
+}
+
+function empCmdSelect(idx) {
+  const list = document.getElementById('empCmdList');
+  const hits = list?._hits || EMP_CMD_ITEMS;
+  if (hits[idx]) { closeEmpCmd(); hits[idx].action(); }
+}
+
+function empCmdKeyNav(e) {
+  const list  = document.getElementById('empCmdList');
+  const items = list?.querySelectorAll('.emp-cmd-item') || [];
+  const count = items.length;
+  if (!count) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _empCmdActive = (_empCmdActive + 1) % count;
+    empCmdHover(_empCmdActive);
+    items[_empCmdActive]?.scrollIntoView({ block:'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _empCmdActive = (_empCmdActive - 1 + count) % count;
+    empCmdHover(_empCmdActive);
+    items[_empCmdActive]?.scrollIntoView({ block:'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (_empCmdActive >= 0) empCmdSelect(_empCmdActive);
+  } else if (e.key === 'Escape') {
+    closeEmpCmd();
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    const overlay = document.getElementById('empCmdOverlay');
+    if (overlay && overlay.style.display !== 'none') closeEmpCmd();
+    else openEmpCmd();
+  } else if (e.key === 'Escape') {
+    const overlay = document.getElementById('empCmdOverlay');
+    if (overlay && overlay.style.display !== 'none') closeEmpCmd();
+  }
+});

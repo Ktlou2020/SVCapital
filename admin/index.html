@@ -115,6 +115,10 @@
       <button class="nav-item" data-view="migrate" onclick="navigate('migrate', this)">
         <i class="fa-solid fa-database"></i> Data Migration
       </button>
+      <button class="nav-item" data-view="reconciliation" onclick="navigate('reconciliation', this)">
+        <i class="fa-solid fa-scale-balanced"></i> Reconciliation
+        <span class="nav-badge" id="reconcBadge" style="display:none;background:#f97316">!</span>
+      </button>
     </nav>
 
     <div class="sidebar__footer">
@@ -141,6 +145,10 @@
         <i class="fa-solid fa-magnifying-glass"></i>
         <input type="text" placeholder="Search investors, pools, transactions..." id="globalSearch" />
       </div>
+      <button onclick="openAdminCmd()" title="Command Palette (Ctrl+K)"
+        style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 12px;color:#7a92a8;font-size:12px;cursor:pointer;font-family:monospace;display:flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0">
+        <i class="fa-solid fa-magnifying-glass" style="font-size:11px"></i> ⌘K
+      </button>
       <div class="topbar__actions">
         <div style="position:relative">
           <button class="topbar-btn" title="Notifications" onclick="toggleAdminNotif()" id="adminNotifBtn">
@@ -1187,6 +1195,55 @@
         </div>
       </div>
 
+      <!-- ────────────────────────── RECONCILIATION ───────────────────────── -->
+      <div class="view" id="view-reconciliation">
+        <!-- KPI tiles -->
+        <div class="stats-grid stats-grid--4" id="reconcStats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px"></div>
+
+        <!-- Filter bar -->
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;flex:1;min-width:200px">
+            <i class="fa-solid fa-magnifying-glass" style="color:#7a92a8;font-size:12px"></i>
+            <input type="text" id="reconcSearch" placeholder="Search investor…" style="background:none;border:none;outline:none;color:#e8edf2;font-size:13px;width:100%" oninput="renderReconcTable()">
+          </div>
+          <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:#7a92a8;cursor:pointer">
+            <input type="checkbox" id="reconcDiscrepOnly" onchange="renderReconcTable()" style="accent-color:#f97316">
+            Discrepancies only
+          </label>
+          <button class="btn btn--secondary btn--sm" onclick="exportReconciliationCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+          <button class="btn btn--secondary btn--sm" onclick="loadReconciliation()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+        </div>
+
+        <!-- Table -->
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Financial Reconciliation</div>
+              <div class="table-card__sub" id="reconcSubtitle">Deposits vs investments vs wallet balances</div>
+            </div>
+          </div>
+          <div class="table-card__body" style="overflow-x:auto">
+            <table class="data-table" style="table-layout:fixed;width:100%">
+              <thead>
+                <tr>
+                  <th style="width:22%">Investor</th>
+                  <th style="width:13%">Total Deposited</th>
+                  <th style="width:13%">Total Invested</th>
+                  <th style="width:13%">Wallet Balance</th>
+                  <th style="width:13%">Expected Wallet</th>
+                  <th style="width:13%">Variance</th>
+                  <th style="width:13%">Status</th>
+                </tr>
+              </thead>
+              <tbody id="reconcBody">
+                <tr><td colspan="7" style="text-align:center;padding:40px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-card__footer" id="reconcFooter" style="padding:10px 18px;font-size:12px;color:#7a92a8"></div>
+        </div>
+      </div>
+
     </main>
   </div>
 </div>
@@ -1672,9 +1729,26 @@
   </div>
 </div>
 
+<!-- Command Palette -->
+<div id="adminCmdOverlay" onclick="if(event.target===this)closeAdminCmd()"
+  style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9900;backdrop-filter:blur(4px);align-items:flex-start;justify-content:center;padding-top:80px">
+  <div style="background:#111720;border:1px solid rgba(212,175,55,.3);border-radius:14px;width:100%;max-width:580px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.7)">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.07)">
+      <i class="fa-solid fa-magnifying-glass" style="color:#7a92a8;font-size:14px"></i>
+      <input type="text" id="adminCmdInput" placeholder="Search views, investors, actions… (↑↓ Enter)" autocomplete="off"
+        style="flex:1;background:none;border:none;outline:none;color:#e8edf2;font-size:15px;font-family:inherit"
+        oninput="renderAdminCmdResults(this.value)" onkeydown="adminCmdKeyNav(event)">
+      <kbd style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:4px;font-size:10px;padding:2px 6px;color:#7a92a8">ESC</kbd>
+    </div>
+    <div id="adminCmdResults" style="max-height:420px;overflow-y:auto;padding:8px 0"></div>
+  </div>
+</div>
+
 <!-- Toast Container -->
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=2"></script>
 <script src="js/admin.js"></script>
 <script src="../js/sv-intelligence.js"></script>
