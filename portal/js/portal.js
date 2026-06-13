@@ -46,6 +46,67 @@ function _skeletonCards(count) {
   ).join('');
 }
 
+/* ─── Button loading state helper ─── */
+async function _withBtn(btn, asyncFn) {
+  if (!btn || btn.disabled) return;
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+  try { await asyncFn(); } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+/* ─── Copy to clipboard ─── */
+async function _copyText(text, btn) {
+  try {
+    await navigator.clipboard.writeText(String(text));
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<i class="fa-solid fa-check" style="color:#22c55e"></i>';
+      setTimeout(() => { btn.innerHTML = orig; }, 1500);
+    }
+    Toast.success('Copied!');
+  } catch (_) { Toast.info('Press Ctrl+C to copy'); }
+}
+
+/* ─── Confirm dialog (replaces browser confirm()) ─── */
+const Confirm = {
+  ask(message, { title = 'Are you sure?', confirmLabel = 'Confirm', confirmClass = 'btn--danger', cancelLabel = 'Cancel' } = {}) {
+    return new Promise(resolve => {
+      let el = document.getElementById('portalConfirmModal');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'portalConfirmModal';
+        el.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center';
+        el.innerHTML = `
+          <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+            <div id="pcTitle" style="font-size:1.05rem;font-weight:800;color:#1a1a1a;margin-bottom:8px"></div>
+            <div id="pcMsg"   style="font-size:0.88rem;color:#6b7280;line-height:1.6;margin-bottom:20px"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end">
+              <button id="pcCancel"  class="btn btn--secondary" style="min-width:90px"></button>
+              <button id="pcConfirm" class="btn btn--primary"   style="min-width:90px"></button>
+            </div>
+          </div>`;
+        document.body.appendChild(el);
+      }
+      el.style.display = 'flex';
+      document.getElementById('pcTitle').textContent = title;
+      document.getElementById('pcMsg').textContent   = message;
+      const cancelBtn  = document.getElementById('pcCancel');
+      const confirmBtn = document.getElementById('pcConfirm');
+      cancelBtn.textContent  = cancelLabel;
+      confirmBtn.textContent = confirmLabel;
+      confirmBtn.className   = `btn ${confirmClass}`;
+      const done = (val) => { el.style.display = 'none'; resolve(val); };
+      cancelBtn.onclick  = () => done(false);
+      confirmBtn.onclick = () => done(true);
+      el.onclick = (e) => { if (e.target === el) done(false); };
+    });
+  }
+};
+
 /* ─── Notifications ─── */
 function toggleNotifPanel() {
   const panel = document.getElementById('notifPanel');
@@ -510,9 +571,9 @@ function renderOverview() {
   const inv = PORTAL.investor;
   if (!inv) return;
 
-  const totalInvested = parseFloat(inv.total_invested) || 0;
-  const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0);
-  const totalRet      = parseFloat(inv.total_returns) || 0;
+  const totalInvested = PORTAL.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const totalRet      = PORTAL.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+  const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0) + totalRet;
   const returnPct     = totalInvested > 0 ? (totalRet / totalInvested * 100).toFixed(1) : '0';
   const activeCount = PORTAL.investments.filter(i => i.status === 'active').length;
   const firstName   = inv.first_name || 'Investor';
@@ -626,7 +687,7 @@ function renderOverview() {
   const perfReturns  = document.getElementById('perf-returns');
   const perfRate     = document.getElementById('perf-rate');
   const perfPools    = document.getElementById('perf-pools');
-  if (perfInvested) perfInvested.textContent = Utils.rand(inv.total_invested || 0);
+  if (perfInvested) perfInvested.textContent = Utils.rand(totalInvested);
   if (perfReturns)  perfReturns.textContent  = '+' + Utils.rand(totalRet);
   if (perfRate)     perfRate.textContent     = returnPct + '% p.a.';
   if (perfPools)    perfPools.textContent    = activeCount + ' active';
@@ -1053,7 +1114,18 @@ function renderMyTxnTable() {
 
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red' };
 
-  if (!sorted.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No transactions found</td></tr>'; return; }
+  if (!sorted.length) {
+    body.innerHTML = `<tr><td colspan="6" style="padding:0;border:none">
+      <div class="empty-state">
+        <i class="fa-solid fa-receipt"></i>
+        <div class="empty-state__title">No transactions yet</div>
+        <div class="empty-state__sub">Top up your wallet or make an investment to see activity here.<br>
+          <a href="#" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))" style="color:var(--gold)">Go to Wallet →</a>
+        </div>
+      </div>
+    </td></tr>`;
+    return;
+  }
 
   body.innerHTML = sorted.map(t => `<tr>
     <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ')}</span></td>
@@ -1131,7 +1203,9 @@ function _refreshWalletUI(balance) {
   // Overview total portfolio value (invested + wallet + returns)
   const inv = PORTAL.investor;
   if (inv) {
-    const totalValue = (parseFloat(inv.total_invested) || 0) + balance + (parseFloat(inv.total_returns) || 0);
+    const liveInvested = PORTAL.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+    const liveReturns  = PORTAL.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+    const totalValue   = liveInvested + balance + liveReturns;
     const povTotal = document.getElementById('pov-total');
     if (povTotal) povTotal.textContent = Utils.rand(totalValue);
   }
@@ -1157,7 +1231,16 @@ async function loadWallet() {
     .filter(t => ['deposit', 'return', 'payout', 'referral_bonus', 'withdrawal'].includes(t.type))
     .slice(0, 8);
 
-  if (!walletTxns.length) { activity.innerHTML = '<div class="empty-state" style="padding:16px"><i class="fa-solid fa-wallet"></i><p>No wallet activity yet.</p></div>'; return; }
+  if (!walletTxns.length) {
+    activity.innerHTML = `<div class="empty-state">
+      <i class="fa-solid fa-wallet"></i>
+      <div class="empty-state__title">No wallet activity yet</div>
+      <div class="empty-state__sub">Your deposits, returns, and payouts will appear here once you top up.<br>
+        <a href="#" onclick="openTopUpModal()" style="color:var(--gold)">Top Up Now →</a>
+      </div>
+    </div>`;
+    return;
+  }
 
   activity.innerHTML = walletTxns.map(t => {
     const isOut = t.type === 'withdrawal';
@@ -1254,7 +1337,8 @@ function _renderRecurringTab() {
 }
 
 async function _cancelRecurring() {
-  if (!confirm('Cancel your recurring investment? You can set it up again at any time.')) return;
+  const ok = await Confirm.ask('Cancel your recurring investment? You can set it up again at any time.', { confirmLabel: 'Yes, Cancel', confirmClass: 'btn--danger' });
+  if (!ok) return;
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
   try {
     await API._fetch('PATCH', `tables/investors/${investorId}`, {
@@ -1415,7 +1499,8 @@ async function saveAutoTopUp() {
 }
 
 async function _cancelAutoTopUp() {
-  if (!confirm('Cancel auto top-up? Your saved card will remain on file.')) return;
+  const ok = await Confirm.ask('Cancel auto top-up? Your saved card will remain on file.', { confirmLabel: 'Yes, Cancel', confirmClass: 'btn--danger' });
+  if (!ok) return;
   try {
     await API._fetch('POST', 'payments/auto-topup', { enabled: false });
     Toast.success('Auto top-up cancelled');
@@ -1424,7 +1509,8 @@ async function _cancelAutoTopUp() {
 }
 
 async function _removeTopUpCard() {
-  if (!confirm('Remove your saved card? This will also cancel auto top-up.')) return;
+  const ok = await Confirm.ask('Remove your saved card? This will also cancel auto top-up.', { confirmLabel: 'Yes, Remove', confirmClass: 'btn--danger' });
+  if (!ok) return;
   try {
     await API._fetch('DELETE', 'payments/topup-card');
     _autoTopUpCard = null;
@@ -2439,7 +2525,8 @@ function openInvestModal(poolId) {
     </div>
   `;
 
-  document.getElementById('investConfirmBtn').onclick = () => confirmInvestment(pool);
+  const invBtn = document.getElementById('investConfirmBtn');
+  invBtn.onclick = () => _withBtn(invBtn, () => confirmInvestment(pool));
   Modal.open('investModal');
 }
 
@@ -2666,7 +2753,8 @@ async function openMaturityModal(investmentId) {
     document.getElementById('reinvestPoolGroup').style.display  = e.target.value === 'reinvest'      ? 'block' : 'none';
   });
 
-  document.getElementById('maturityConfirmBtn').onclick = () => submitMaturityInstruction(inv);
+  const matBtn = document.getElementById('maturityConfirmBtn');
+  matBtn.onclick = () => _withBtn(matBtn, () => submitMaturityInstruction(inv));
   Modal.open('maturityModal');
 }
 
@@ -2747,7 +2835,7 @@ function removeTicketAttachment() {
   if (status) status.style.display = 'none';
 }
 
-async function submitTicket() {
+async function submitTicket(btn) {
   const subject = document.getElementById('tktSubject').value.trim();
   const message = document.getElementById('tktMessage').value.trim();
   if (!subject || !message) { Toast.error('Subject and message are required'); return; }
@@ -2757,6 +2845,7 @@ async function submitTicket() {
     attachmentInfo = `\n\n📎 Attachment: ${_tktAttachFile.name} (${(_tktAttachFile.size/1024).toFixed(1)} KB)\nData: ${_tktAttachBase64}`;
   }
 
+  await _withBtn(btn, async () => {
   try {
     await API.tickets.create({
       id:             Utils.genId('TKT'),
@@ -2777,6 +2866,7 @@ async function submitTicket() {
     removeTicketAttachment();
     await loadSupport();
   } catch (e) { Toast.error('Failed to submit ticket'); }
+  });
 }
 
 /* ─── FAQ ─── */
@@ -6744,6 +6834,18 @@ function renderRiskProfile() {
   _setText('profSummaryJoined',   inv.date_joined ? new Date(inv.date_joined).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
   _setText('profSummaryReferral', inv.referral_code);
 
+  // Add copy buttons for investor ID and referral code
+  ['profSummaryId', 'profSummaryReferral'].forEach(elId => {
+    const el = document.getElementById(elId);
+    if (!el || el.nextElementSibling?.classList?.contains('copy-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.title = 'Copy';
+    btn.innerHTML = '<i class="fa-solid fa-copy"></i>';
+    btn.onclick = () => _copyText(el.textContent, btn);
+    el.after(btn);
+  });
+
   const statusEl = document.getElementById('profSummaryStatus');
   if (statusEl) {
     const st = (inv.status || 'active').toLowerCase();
@@ -6957,7 +7059,11 @@ let _activeTicketId = null;
 function renderMyTickets() {
   const body = document.getElementById('myTicketsBody');
   if (!PORTAL.tickets.length) {
-    body.innerHTML = '<div class="empty-state" style="padding:16px"><i class="fa-solid fa-ticket"></i><p>No support tickets yet.</p></div>';
+    body.innerHTML = `<div class="empty-state">
+      <i class="fa-solid fa-headset"></i>
+      <div class="empty-state__title">No support tickets yet</div>
+      <div class="empty-state__sub">Use the form below to submit a ticket if you have questions or need assistance with your account.</div>
+    </div>`;
     return;
   }
 

@@ -897,7 +897,7 @@
                     <button onclick="removeTicketAttachment()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:0.72rem;font-weight:700;padding:0 4px" title="Remove"><i class="fa-solid fa-xmark"></i></button>
                   </div>
                 </div>
-                <button class="btn btn--primary btn--full" onclick="submitTicket()"><i class="fa-solid fa-paper-plane"></i> Submit Ticket</button>
+                <button class="btn btn--primary btn--full" onclick="submitTicket(this)"><i class="fa-solid fa-paper-plane"></i> Submit Ticket</button>
               </div>
             </div>
 
@@ -2381,7 +2381,7 @@
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('recurringModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveRecurringInvestment()"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
+      <button class="btn btn--primary" onclick="_withBtn(this, saveRecurringInvestment)"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
     </div>
   </div>
 </div>
@@ -2447,7 +2447,7 @@
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('autoTopUpModal')">Cancel</button>
-      <button class="btn btn--primary" id="atuSaveBtn" onclick="saveAutoTopUp()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+      <button class="btn btn--primary" id="atuSaveBtn" onclick="_withBtn(this, saveAutoTopUp)"><i class="fa-solid fa-floppy-disk"></i> Save</button>
     </div>
   </div>
 </div>
