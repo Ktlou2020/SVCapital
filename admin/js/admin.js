@@ -505,9 +505,9 @@ async function loadDashboard() {
     STATE.investments = invstRes.data || [];
     STATE.transactions = txnRes.data || [];
 
-    // KPI cards
-    const totalInvested = STATE.investors.reduce((s, i) => s + (i.total_invested || 0), 0);
-    const totalReturns = STATE.investors.reduce((s, i) => s + (i.total_returns || 0), 0);
+    // KPI cards — compute from live tables, not denormalized investor fields
+    const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+    const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
     const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
 
     document.getElementById('ds-investors').textContent = STATE.investors.length;
@@ -572,8 +572,8 @@ async function loadDashboard() {
           STATE.investors = invRes.data || [];
           STATE.pools = poolRes.data || [];
           STATE.investments = invstRes.data || [];
-          const totalInvested = STATE.investors.reduce((s, i) => s + (i.total_invested || 0), 0);
-          const totalReturns = STATE.investors.reduce((s, i) => s + (i.total_returns || 0), 0);
+          const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+          const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
           const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
           document.getElementById('ds-investors').textContent = STATE.investors.length;
           document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
@@ -791,12 +791,15 @@ async function loadInvestors() {
 
 function renderInvestorStats() {
   const d = STATE.investors;
+  // AUM computed from live investments table (not stale investor.total_invested field)
+  const liveAUM = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const totalWallet = d.reduce((s, i) => s + (parseFloat(i.wallet_balance) || 0), 0);
   document.getElementById('is-total').textContent = d.length.toLocaleString();
   document.getElementById('is-active').textContent = d.filter(i => i.status === 'active').length.toLocaleString();
   document.getElementById('is-pending').textContent = d.filter(i => i.kyc_status === 'pending').length.toLocaleString();
   document.getElementById('is-suspended').textContent = d.filter(i => i.status === 'suspended').length.toLocaleString();
-  document.getElementById('is-wallet').textContent = Utils.rand(d.reduce((s, i) => s + (i.wallet_balance || 0), 0));
-  document.getElementById('is-aum').textContent = Utils.rand(d.reduce((s, i) => s + (i.total_invested || 0), 0));
+  document.getElementById('is-wallet').textContent = Utils.rand(totalWallet);
+  document.getElementById('is-aum').textContent = Utils.rand(liveAUM);
 }
 
 function _invAvatarColor(name) {
@@ -821,11 +824,22 @@ function renderInvestorsTable() {
     return;
   }
 
+  // Pre-compute live invested totals from investments table (faster than filtering per row)
+  const liveInvestedMap = {};
+  const liveActiveCountMap = {};
+  const liveTotalCountMap = {};
+  STATE.investments.forEach(i => {
+    liveInvestedMap[i.investor_id] = (liveInvestedMap[i.investor_id] || 0) + (parseFloat(i.amount) || 0);
+    liveTotalCountMap[i.investor_id] = (liveTotalCountMap[i.investor_id] || 0) + 1;
+    if (i.status === 'active') liveActiveCountMap[i.investor_id] = (liveActiveCountMap[i.investor_id] || 0) + 1;
+  });
+
   body.innerHTML = page.map(inv => {
     const fullName = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || '—';
     const color = _invAvatarColor(fullName);
-    const activeInvCount = STATE.investments.filter(i => i.investor_id === inv.id && i.status === 'active').length;
-    const totalInvCount  = STATE.investments.filter(i => i.investor_id === inv.id).length;
+    const activeInvCount = liveActiveCountMap[inv.id] || 0;
+    const totalInvCount  = liveTotalCountMap[inv.id] || 0;
+    const liveInvested   = liveInvestedMap[inv.id] || 0;
     const kycBadge = inv.kyc_status === 'approved'
       ? '<span class="badge badge--green" style="font-size:0.68rem;padding:2px 6px"><i class="fa-solid fa-shield-check"></i> KYC</span>'
       : inv.kyc_status === 'rejected'
@@ -853,8 +867,8 @@ function renderInvestorsTable() {
         <div style="display:flex;flex-direction:column;gap:3px">${kycBadge}${stBadge}</div>
       </td>
       <td style="overflow:hidden">
-        <div class="td-gold fw-700" style="font-size:0.81rem;${_trunc}">${Utils.rand(inv.wallet_balance)}</div>
-        <div style="font-size:0.7rem;color:var(--text-muted);${_trunc}">${Utils.rand(inv.total_invested)} invested</div>
+        <div class="td-gold fw-700" style="font-size:0.81rem;${_trunc}">${Utils.rand(parseFloat(inv.wallet_balance) || 0)}</div>
+        <div style="font-size:0.7rem;color:var(--text-muted);${_trunc}">${Utils.rand(liveInvested)} invested</div>
       </td>
       <td style="overflow:hidden">
         <div style="font-weight:700;font-size:0.81rem">${totalInvCount}</div>
@@ -1567,6 +1581,22 @@ function renderPoolsGrid() {
   const grid = document.getElementById('poolsGrid');
   const pools = poolFilter === 'all' ? STATE.pools : STATE.pools.filter(p => p.status === poolFilter);
 
+  // Augment pools with live aggregates from STATE.investments
+  if (STATE.investments.length) {
+    const poolInvMap = {};
+    STATE.investments.forEach(i => {
+      if (!i.pool_id) return;
+      if (!poolInvMap[i.pool_id]) poolInvMap[i.pool_id] = [];
+      poolInvMap[i.pool_id].push(i);
+    });
+    pools.forEach(p => {
+      const invs = poolInvMap[p.id] || [];
+      const active = invs.filter(i => i.status !== 'cancelled');
+      p.live_raised = active.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+      p.live_investor_count = new Set(active.map(i => i.investor_id)).size;
+    });
+  }
+
   if (!pools.length) { grid.innerHTML = '<div class="text-center text-muted" style="grid-column:1/-1;padding:32px">No pools found</div>'; return; }
 
   grid.innerHTML = pools.map(p => {
@@ -1984,12 +2014,14 @@ async function loadInvestments() {
 
 function renderInvestmentStats() {
   const d = STATE.investments;
-  const withRate = d.filter(i => i.annual_rate > 0);
-  const avgRate = withRate.length ? withRate.reduce((s,i) => s+(i.annual_rate||0), 0) / withRate.length : 0;
+  const active = d.filter(i => i.status === 'active');
+  const withRate = active.filter(i => i.annual_rate > 0);
+  const avgRate = withRate.length ? withRate.reduce((s,i) => s+(parseFloat(i.annual_rate)||0), 0) / withRate.length : 0;
+  const activeCapital = active.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
   document.getElementById('inv-total').textContent = d.length.toLocaleString();
-  document.getElementById('inv-active').textContent = d.filter(i => i.status === 'active').length.toLocaleString();
+  document.getElementById('inv-active').textContent = active.length.toLocaleString();
   document.getElementById('inv-matured').textContent = d.filter(i => i.status === 'matured').length.toLocaleString();
-  document.getElementById('inv-capital').textContent = Utils.rand(d.reduce((s, i) => s + (i.amount || 0), 0));
+  document.getElementById('inv-capital').textContent = Utils.rand(activeCapital);
   document.getElementById('inv-avgrate').textContent = avgRate ? Utils.pct(avgRate) : '—';
 }
 
@@ -2838,11 +2870,9 @@ function renderConversionFunnel() {
     { label: 'Referred Someone',    count: referred,       color: '#ec4899', icon: '🎁' },
   ];
 
-  /* ── AUM metrics ─────────────────────────────────── */
-  const totalAUM = investors.reduce((s, i) => s + (parseFloat(i.total_invested) || 0), 0);
-  const activeAUM = investors
-    .filter(i => i.id != null && investedIds.has(i.id))
-    .reduce((s, i) => s + (parseFloat(i.total_invested) || 0), 0);
+  /* ── AUM metrics — computed from live investments table ───────────── */
+  const totalAUM  = investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const activeAUM = investments.filter(i => i.status === 'active' && i.investor_id != null && investedIds.has(i.investor_id)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
 
   // Average first investment amount
   const firstInvByInvestor = {};
@@ -4275,10 +4305,10 @@ async function exportAumReport() {
   const today = new Date().toISOString().slice(0, 10);
   const now   = new Date().toLocaleString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-  // Aggregate totals
-  const totalWallet   = STATE.investors.reduce((s, i) => s + (i.wallet_balance  || 0), 0);
-  const totalInvested = STATE.investors.reduce((s, i) => s + (i.total_invested  || 0), 0);
-  const totalReturns  = STATE.investors.reduce((s, i) => s + (i.total_returns   || 0), 0);
+  // Aggregate totals — from live tables
+  const totalWallet   = STATE.investors.reduce((s, i) => s + (parseFloat(i.wallet_balance) || 0), 0);
+  const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
   const activeInvCount = STATE.investments.filter(i => i.status === 'active').length;
   const totalAUM      = totalWallet + totalInvested;
 
