@@ -518,6 +518,7 @@
         <div class="nav-group-label">Reporting</div>
         <button class="nav-btn" data-view="financials" onclick="showView('financials')"><i class="fa-solid fa-chart-bar"></i> Financial Statements</button>
         <button class="nav-btn" data-view="mgmt" onclick="showView('mgmt')"><i class="fa-solid fa-table-cells"></i> Management Accounts</button>
+        <button class="nav-btn" data-view="fund_analytics" onclick="showView('fund_analytics')" style="color:var(--amber)"><i class="fa-solid fa-star" style="color:var(--amber)"></i> Fund Analytics</button>
         <button class="nav-btn" data-view="reports" onclick="showView('reports')"><i class="fa-solid fa-file-export"></i> Reports</button>
       </div>
     </nav>
@@ -679,7 +680,8 @@ const PAGE_META = {
   budgets:     {title:'Budgets', subtitle:'Monthly budget planning per account'},
   reports:     {title:'Reports', subtitle:'Export financial data to CSV'},
   import:      {title:'Statement Import', subtitle:'Upload bank statements and auto-allocate to accounts'},
-  investments: {title:'Investment Sync', subtitle:'Sync investor deposits, withdrawals and investments to accounting'},
+  investments:   {title:'Investment Sync', subtitle:'Sync investor deposits, withdrawals and investments to accounting'},
+  fund_analytics:{title:'Fund Analytics',  subtitle:'AUM, performance metrics, investor returns and platform revenue'},
 };
 
 function showView(view) {
@@ -719,8 +721,9 @@ function showView(view) {
     case 'mgmt':        renderMgmt(bid, biz); break;
     case 'budgets':     renderBudgets(bid, biz); break;
     case 'reports':     renderReports(bid, biz); break;
-    case 'import':       renderImportView(bid, biz); break;
-    case 'investments':  renderInvestmentsView(bid, biz); break;
+    case 'import':         renderImportView(bid, biz); break;
+    case 'investments':    renderInvestmentsView(bid, biz); break;
+    case 'fund_analytics': renderFundAnalytics(bid, biz); break;
   }
 }
 
@@ -799,6 +802,22 @@ function renderDashboard(bid, biz) {
         <tbody>${bills.slice(-5).reverse().map(b=>`<tr><td>${b.contactName}</td><td>${fmt(invTotal(b).total,currency)}</td><td><span class="badge badge-${calcInvStatus(b)}">${calcInvStatus(b)}</span></td></tr>`).join('')||'<tr><td colspan="3" class="text-muted" style="text-align:center;padding:20px">No bills yet</td></tr>'}</tbody>
         </table>
       </div>
+    </div>
+    <div class="chart-wrap" style="margin-top:20px">
+      <div class="chart-title">Monthly P&amp;L Trend — Last 12 Months</div>
+      <canvas id="dash-trend-chart" height="90"></canvas>
+    </div>
+    <div id="dash-fund-kpis"></div>
+    <div style="margin-top:20px;padding:16px 20px;background:var(--surface);border:1px solid var(--border);border-radius:12px">
+      <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Quick Actions</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="showView('invoices');editingInvType='invoice';setTimeout(()=>openModal('inv-modal'),50)"><i class="fa-solid fa-plus"></i> New Invoice</button>
+        <button class="btn btn-secondary btn-sm" onclick="showView('bills');editingInvType='bill';setTimeout(()=>openModal('inv-modal'),50)"><i class="fa-solid fa-plus"></i> New Bill</button>
+        <button class="btn btn-secondary btn-sm" onclick="showView('bank');setTimeout(()=>openModal('txn-modal'),50)"><i class="fa-solid fa-plus"></i> Record Transaction</button>
+        <button class="btn btn-secondary btn-sm" onclick="showView('investments')"><i class="fa-solid fa-rotate"></i> Sync Investments</button>
+        <button class="btn btn-secondary btn-sm" onclick="showView('fund_analytics')"><i class="fa-solid fa-star" style="color:var(--amber)"></i> Fund Analytics</button>
+        <button class="btn btn-secondary btn-sm" onclick="showView('financials')"><i class="fa-solid fa-chart-bar"></i> Financials</button>
+      </div>
     </div>`;
 
   // Charts
@@ -844,6 +863,77 @@ function renderDashboard(bid, biz) {
       const ctx2 = pieCtx.getContext('2d');
       ctx2.fillStyle='#6b7280'; ctx2.font='14px Inter'; ctx2.textAlign='center';
       ctx2.fillText('No expense data', pieCtx.width/2, pieCtx.height/2);
+    }
+
+    // Monthly P&L trend — 12 months
+    const trendCtx = document.getElementById('dash-trend-chart');
+    if (trendCtx) {
+      const nowT = new Date();
+      const months12 = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(nowT.getFullYear(), nowT.getMonth() - i, 1);
+        months12.push({ year: d.getFullYear(), month: d.getMonth() + 1, label: MONTHS[d.getMonth()].slice(0,3) });
+      }
+      const allTxnsT = getTransactions(bid);
+      const coaT = getCoa(bid);
+      const coaByIdT = {};
+      for (const a of coaT) coaByIdT[a.id] = a;
+      const revTrend = months12.map(m =>
+        allTxnsT.filter(t => { const a = coaByIdT[t.accountId]; const d = new Date(t.date); return a && a.type==='revenue' && d.getFullYear()===m.year && d.getMonth()+1===m.month; })
+          .reduce((s,t) => s + (t.type==='credit'?t.amount:-t.amount), 0)
+      );
+      const expTrend = months12.map(m =>
+        allTxnsT.filter(t => { const a = coaByIdT[t.accountId]; const d = new Date(t.date); return a && a.type==='expense' && d.getFullYear()===m.year && d.getMonth()+1===m.month; })
+          .reduce((s,t) => s + Math.abs(t.type==='credit'?t.amount:-t.amount), 0)
+      );
+      if (dashCharts.trend) dashCharts.trend.destroy();
+      dashCharts.trend = new Chart(trendCtx, {
+        type: 'bar',
+        data: {
+          labels: months12.map(m => m.label),
+          datasets: [
+            { label: 'Revenue',  data: revTrend,  backgroundColor: 'rgba(34,197,94,0.7)',  borderRadius: 4 },
+            { label: 'Expenses', data: expTrend,  backgroundColor: 'rgba(239,68,68,0.6)',  borderRadius: 4 },
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: '#9ca3af', font: { size: 11 } } } },
+          scales: {
+            x: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(255,255,255,0.04)' } },
+            y: { ticks: { color: '#6b7280', callback: v => 'R' + v.toLocaleString() }, grid: { color: 'rgba(255,255,255,0.04)' } },
+          }
+        }
+      });
+    }
+
+    // Fund KPIs from synced GL accounts
+    const kpiEl = document.getElementById('dash-fund-kpis');
+    if (kpiEl) {
+      const coaK = getCoa(bid);
+      const txnsK = getTransactions(bid);
+      const byCodeK = {};
+      for (const a of coaK) byCodeK[a.code] = a;
+      function fundBalK(code) {
+        const acc = byCodeK[code];
+        if (!acc) return null;
+        let b = acc.balance || 0;
+        txnsK.filter(t => t.accountId === acc.id).forEach(t => { b += t.type==='credit'?t.amount:-t.amount; });
+        return b;
+      }
+      const aum = fundBalK('1500'), feeRev = fundBalK('4100'), retInc = fundBalK('4200');
+      if (aum !== null) {
+        kpiEl.innerHTML = `<div style="margin-top:20px">
+          <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">
+            <i class="fa-solid fa-link" style="color:var(--orange)"></i> Fund Metrics (from Investment Sync)
+            <button class="btn btn-secondary btn-xs" style="margin-left:12px" onclick="showView('fund_analytics')">View Analytics</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+            <div class="metric-card"><div class="metric-label">Total AUM</div><div class="metric-value" style="color:var(--purple)">${fmt(aum,currency)}</div><div class="metric-sub">Client Investment Portfolio</div></div>
+            <div class="metric-card"><div class="metric-label">Platform Revenue</div><div class="metric-value" style="color:var(--amber)">${fmt(feeRev||0,currency)}</div><div class="metric-sub">Management fees earned</div></div>
+            <div class="metric-card"><div class="metric-label">Returns Income</div><div class="metric-value" style="color:var(--green)">${fmt(retInc||0,currency)}</div><div class="metric-sub">Investment return income</div></div>
+          </div></div>`;
+      }
     }
   });
 }
@@ -1588,6 +1678,12 @@ function refreshMgmt() {
     const b=budgets.find(b=>b.accountId===accId&&b.year===year&&b.month===month);
     return b?b.budgetAmount:0;
   }
+  function ytd(accId) {
+    return getTransactions(bid).filter(t => {
+      const d = new Date(t.date);
+      return t.accountId === accId && d.getFullYear() === year && d.getMonth()+1 <= month;
+    }).reduce((s,t) => s + (t.type==='credit'?t.amount:-t.amount), 0);
+  }
 
   const rvAccts = coa.filter(a=>a.type==='revenue');
   const exAccts = coa.filter(a=>a.type==='expense');
@@ -1596,13 +1692,15 @@ function refreshMgmt() {
     return accts.map(a=>{
       const act = Math.abs(actual(a.id));
       const bgt = budget(a.id);
-      const variance = isExpense ? bgt - act : act - bgt; // fav if positive
+      const ytdAct = Math.abs(ytd(a.id));
+      const variance = isExpense ? bgt - act : act - bgt;
       const varPct = bgt!==0 ? ((variance/bgt)*100).toFixed(1)+'%' : '—';
       const favourable = variance >= 0;
       return `<tr>
         <td>${a.code} — ${a.name}</td>
         <td class="text-right">${fmt(bgt,currency)}</td>
         <td class="text-right">${fmt(act,currency)}</td>
+        <td class="text-right" style="color:var(--purple);font-weight:600">${fmt(ytdAct,currency)}</td>
         <td class="text-right ${favourable?'var-pos':'var-neg'}">${favourable?'+':''}${fmt(variance,currency)}</td>
         <td class="text-right ${favourable?'var-pos':'var-neg'}">${varPct}</td>
       </tr>`;
@@ -1611,10 +1709,13 @@ function refreshMgmt() {
 
   const totalRevBgt = rvAccts.reduce((s,a)=>s+budget(a.id),0);
   const totalRevAct = rvAccts.reduce((s,a)=>s+Math.abs(actual(a.id)),0);
+  const totalRevYtd = rvAccts.reduce((s,a)=>s+Math.abs(ytd(a.id)),0);
   const totalExpBgt = exAccts.reduce((s,a)=>s+budget(a.id),0);
   const totalExpAct = exAccts.reduce((s,a)=>s+Math.abs(actual(a.id)),0);
+  const totalExpYtd = exAccts.reduce((s,a)=>s+Math.abs(ytd(a.id)),0);
   const netBgt = totalRevBgt - totalExpBgt;
   const netAct = totalRevAct - totalExpAct;
+  const netYtd = totalRevYtd - totalExpYtd;
 
   document.getElementById('mgmt-body').innerHTML = `
     <div class="tbl-wrap">
@@ -1623,25 +1724,28 @@ function refreshMgmt() {
           <th>Account</th>
           <th class="text-right">Budget</th>
           <th class="text-right">Actual</th>
+          <th class="text-right" style="color:var(--purple)">YTD</th>
           <th class="text-right">Variance</th>
           <th class="text-right">Var %</th>
         </tr></thead>
         <tbody>
-          <tr><td colspan="5" class="stmt-section">Revenue</td></tr>
+          <tr><td colspan="6" class="stmt-section">Revenue</td></tr>
           ${rows(rvAccts,false)}
           <tr style="font-weight:700;border-top:2px solid var(--border2)">
             <td>Total Revenue</td>
             <td class="text-right">${fmt(totalRevBgt,currency)}</td>
             <td class="text-right">${fmt(totalRevAct,currency)}</td>
+            <td class="text-right" style="color:var(--purple);font-weight:700">${fmt(totalRevYtd,currency)}</td>
             <td class="text-right ${totalRevAct>=totalRevBgt?'var-pos':'var-neg'}">${fmt(totalRevAct-totalRevBgt,currency)}</td>
             <td class="text-right ${totalRevAct>=totalRevBgt?'var-pos':'var-neg'}">${totalRevBgt?((totalRevAct-totalRevBgt)/totalRevBgt*100).toFixed(1)+'%':'—'}</td>
           </tr>
-          <tr><td colspan="5" class="stmt-section">Expenses</td></tr>
+          <tr><td colspan="6" class="stmt-section">Expenses</td></tr>
           ${rows(exAccts,true)}
           <tr style="font-weight:700;border-top:2px solid var(--border2)">
             <td>Total Expenses</td>
             <td class="text-right">${fmt(totalExpBgt,currency)}</td>
             <td class="text-right">${fmt(totalExpAct,currency)}</td>
+            <td class="text-right" style="color:var(--purple);font-weight:700">${fmt(totalExpYtd,currency)}</td>
             <td class="text-right ${totalExpAct<=totalExpBgt?'var-pos':'var-neg'}">${fmt(totalExpBgt-totalExpAct,currency)}</td>
             <td class="text-right ${totalExpAct<=totalExpBgt?'var-pos':'var-neg'}">${totalExpBgt?((totalExpBgt-totalExpAct)/totalExpBgt*100).toFixed(1)+'%':'—'}</td>
           </tr>
@@ -1649,6 +1753,7 @@ function refreshMgmt() {
             <td style="color:var(--purple)">Net Profit</td>
             <td class="text-right" style="color:var(--purple)">${fmt(netBgt,currency)}</td>
             <td class="text-right" style="color:${netAct>=0?'var(--green)':'var(--red)'}">${fmt(netAct,currency)}</td>
+            <td class="text-right" style="color:${netYtd>=0?'var(--green)':'var(--red)'};font-weight:700">${fmt(netYtd,currency)}</td>
             <td class="text-right ${netAct>=netBgt?'var-pos':'var-neg'}">${fmt(netAct-netBgt,currency)}</td>
             <td class="text-right ${netAct>=netBgt?'var-pos':'var-neg'}">${netBgt?((netAct-netBgt)/netBgt*100).toFixed(1)+'%':'—'}</td>
           </tr>
@@ -1866,6 +1971,8 @@ function renderReports(bid, biz) {
         {icon:'fa-file-invoice-dollar',label:'Invoices',desc:'All customer invoices',fn:'exportInvoicesCSV()'},
         {icon:'fa-receipt',label:'Bills',desc:'All supplier bills',fn:'exportBillsCSV()'},
         {icon:'fa-landmark',label:'Bank Transactions',desc:'All transactions',fn:'exportTxnCSV()'},
+        {icon:'fa-user-circle',label:'Investor Statement',desc:'PDF statement for a specific investor',fn:'openInvestorStatementModal()'},
+        {icon:'fa-file-zipper',label:'Full Financial Pack',desc:'All statements in one PDF download',fn:'downloadFullFinancialPack()'},
       ].map(r=>`<div class="metric-card" style="cursor:pointer" onclick="${r.fn}">
         <div style="font-size:1.5rem;color:var(--purple);margin-bottom:10px"><i class="fa-solid ${r.icon}"></i></div>
         <div style="font-weight:700;margin-bottom:4px">${r.label}</div>
@@ -2750,9 +2857,56 @@ function _confirmImport() {
 
 /* Render the investments view — the main entry-point called by showView */
 function renderInvestmentsView(bid, biz) {
-  document.getElementById('topbar-actions').innerHTML = '';
+  const currency = biz.currency || 'ZAR';
+  document.getElementById('topbar-actions').innerHTML = `<button class="btn btn-secondary btn-sm" onclick="showView('fund_analytics')"><i class="fa-solid fa-star" style="color:var(--amber)"></i> Fund Analytics</button>`;
   const content = document.getElementById('acct-content');
+
+  // Compute fund metrics from synced COA
+  const coaInv = getCoa(bid);
+  const txnsInv = getTransactions(bid);
+  const coaByCodeInv = {};
+  for (const a of coaInv) coaByCodeInv[a.code] = a;
+  function _invBal(code) {
+    const acc = coaByCodeInv[code];
+    if (!acc) return 0;
+    let b = acc.balance || 0;
+    txnsInv.filter(t => t.accountId === acc.id).forEach(t => { b += t.type==='credit'?t.amount:-t.amount; });
+    return b;
+  }
+  const invAum = _invBal('1500');
+  const invClientFunds = _invBal('2100');
+  const invPlatformRev = _invBal('4100');
+  const invReturnInc = _invBal('4200');
+  const syncedCount = (ls('acct_synced_txn_' + bid)||[]).length + (ls('acct_synced_inv_' + bid)||[]).length;
+
   content.innerHTML = `
+    <div class="metric-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:20px">
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-chart-line" style="color:var(--purple)"></i> Total AUM</div>
+        <div class="metric-value" style="color:var(--purple)">${fmt(invAum,currency)}</div>
+        <div class="metric-sub">Client Investment Portfolio</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-piggy-bank" style="color:var(--teal)"></i> Client Funds Held</div>
+        <div class="metric-value" style="color:var(--teal)">${fmt(invClientFunds,currency)}</div>
+        <div class="metric-sub">Deposits awaiting investment</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-percent" style="color:var(--amber)"></i> Platform Revenue</div>
+        <div class="metric-value" style="color:var(--amber)">${fmt(invPlatformRev,currency)}</div>
+        <div class="metric-sub">1% management fees earned</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-trophy" style="color:var(--green)"></i> Returns Income</div>
+        <div class="metric-value" style="color:var(--green)">${fmt(invReturnInc,currency)}</div>
+        <div class="metric-sub">Investment return income</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-database" style="color:var(--indigo)"></i> Synced Records</div>
+        <div class="metric-value">${syncedCount}</div>
+        <div class="metric-sub">GL entries posted from platform</div>
+      </div>
+    </div>
     <!-- Investment Sync View -->
     <div id="view-investments" class="view">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:16px">
@@ -3014,6 +3168,365 @@ async function syncInvestmentsToAccounting() {
 }
 
 /* ═══════════════════════════════════════════════════
+   CUSTOM CONFIRM MODAL
+═══════════════════════════════════════════════════ */
+function _acctConfirm(message, confirmLabel = 'Confirm', confirmClass = 'btn-primary') {
+  return new Promise(resolve => {
+    let el = document.getElementById('acctConfirmModal');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'acctConfirmModal';
+      el.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;align-items:center;justify-content:center;padding:20px';
+      el.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:24px;max-width:400px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,0.5)">
+        <div id="acm-msg" style="font-size:0.88rem;color:var(--muted2);line-height:1.6;margin-bottom:20px"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button id="acm-cancel" class="btn btn-secondary">Cancel</button>
+          <button id="acm-ok" class="btn btn-primary" style="min-width:90px"></button>
+        </div></div>`;
+      document.body.appendChild(el);
+    }
+    el.style.display = 'flex';
+    document.getElementById('acm-msg').textContent = message;
+    const okBtn = document.getElementById('acm-ok');
+    okBtn.textContent = confirmLabel;
+    okBtn.className = `btn ${confirmClass}`;
+    const done = v => { el.style.display = 'none'; resolve(v); };
+    document.getElementById('acm-cancel').onclick = () => done(false);
+    okBtn.onclick = () => done(true);
+    el.onclick = e => { if (e.target === el) done(false); };
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   FUND ANALYTICS VIEW
+═══════════════════════════════════════════════════ */
+function renderFundAnalytics(bid, biz) {
+  const currency = biz.currency || 'ZAR';
+  const tb = document.getElementById('topbar-actions');
+  tb.innerHTML = `
+    <button class="btn btn-secondary btn-sm" onclick="showView('investments')"><i class="fa-solid fa-rotate"></i> Sync Investments</button>
+    <button class="btn btn-primary btn-sm" onclick="exportFundAnalyticsPdf()"><i class="fa-solid fa-file-pdf"></i> PDF Report</button>`;
+
+  const coa = getCoa(bid);
+  const allTxns = getTransactions(bid);
+  const coaByCode = {};
+  for (const a of coa) coaByCode[a.code] = a;
+  const coaById = {};
+  for (const a of coa) coaById[a.id] = a;
+
+  function accBal(code) {
+    const acc = coaByCode[code];
+    if (!acc) return 0;
+    let b = acc.balance || 0;
+    allTxns.filter(t => t.accountId === acc.id).forEach(t => { b += t.type==='credit'?t.amount:-t.amount; });
+    return b;
+  }
+
+  const aum         = accBal('1500');
+  const clientFunds = accBal('2100');
+  const platformRev = accBal('4100');
+  const returnInc   = accBal('4200');
+  const syncedCount = (ls('acct_synced_txn_' + bid)||[]).length + (ls('acct_synced_inv_' + bid)||[]).length;
+  const lastSync    = ls('acct_last_sync_' + bid);
+  const lastSyncStr = lastSync ? new Date(lastSync).toLocaleString('en-ZA') : 'Never synced';
+
+  // Build 12-month arrays
+  const nowFA = new Date();
+  const months12 = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(nowFA.getFullYear(), nowFA.getMonth() - i, 1);
+    months12.push({ year: d.getFullYear(), month: d.getMonth()+1, label: MONTHS[d.getMonth()].slice(0,3)+' '+String(d.getFullYear()).slice(2) });
+  }
+
+  function monthlyTxnSum(code, type) {
+    const acc = coaByCode[code];
+    if (!acc) return months12.map(()=>0);
+    return months12.map(m => allTxns.filter(t => {
+      const d = new Date(t.date);
+      return t.accountId === acc.id && t.type === type && d.getFullYear()===m.year && d.getMonth()+1===m.month;
+    }).reduce((s,t) => s + (parseFloat(t.amount)||0), 0));
+  }
+
+  const depData = monthlyTxnSum('1000','debit');
+  const wdData  = monthlyTxnSum('1000','credit');
+  const feeData = monthlyTxnSum('4100','credit');
+  const retData = monthlyTxnSum('4200','credit');
+
+  const content = document.getElementById('acct-content');
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:12px">
+      <i class="fa-solid fa-circle-info" style="color:var(--indigo);font-size:1.1rem"></i>
+      <div>
+        <div style="font-size:0.82rem;font-weight:700">Last Investment Sync: <span style="color:var(--teal)">${lastSyncStr}</span></div>
+        <div style="font-size:0.75rem;color:var(--muted)">${syncedCount} GL entries posted · Run Investment Sync to refresh</div>
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="showView('investments');setTimeout(syncInvestmentsToAccounting,100)"><i class="fa-solid fa-rotate"></i> Sync Now</button>
+    </div>
+    <div class="metric-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-chart-line" style="color:var(--purple)"></i> Total AUM</div>
+        <div class="metric-value" style="color:var(--purple)">${fmt(aum,currency)}</div>
+        <div class="metric-sub">Client Investment Portfolio (1500)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-piggy-bank" style="color:var(--teal)"></i> Client Funds Held</div>
+        <div class="metric-value" style="color:var(--teal)">${fmt(clientFunds,currency)}</div>
+        <div class="metric-sub">Deposits awaiting deployment (2100)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-percent" style="color:var(--amber)"></i> Platform Revenue</div>
+        <div class="metric-value" style="color:var(--amber)">${fmt(platformRev,currency)}</div>
+        <div class="metric-sub">1% management fees (4100)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label"><i class="fa-solid fa-trophy" style="color:var(--green)"></i> Returns Income</div>
+        <div class="metric-value" style="color:var(--green)">${fmt(returnInc,currency)}</div>
+        <div class="metric-sub">Investment returns paid (4200)</div>
+      </div>
+    </div>
+    <div class="chart-wrap" style="margin-top:20px">
+      <div class="chart-title">Monthly Cash Flow — Last 12 Months (Deposits vs Withdrawals)</div>
+      <canvas id="fa-cashflow-chart" height="130"></canvas>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px">
+      <div class="chart-wrap">
+        <div class="chart-title">Platform Revenue (Monthly Fees)</div>
+        <canvas id="fa-fee-chart" height="160"></canvas>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-title">Investment Returns Income (Monthly)</div>
+        <canvas id="fa-returns-chart" height="160"></canvas>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="margin-top:20px">
+      <div style="padding:14px 18px;font-size:0.85rem;font-weight:700;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <span><i class="fa-solid fa-book-open" style="color:var(--orange);margin-right:8px"></i>Fund GL Audit Trail (Last 50 Entries)</span>
+        <button class="btn btn-secondary btn-sm" onclick="exportFundLedgerCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+      </div>
+      <div id="fa-audit-wrap" style="padding:0"></div>
+    </div>`;
+
+  requestAnimationFrame(() => {
+    const labels12 = months12.map(m => m.label);
+    const chartDefaults = {
+      responsive: true,
+      plugins: { legend: { labels: { color: '#9ca3af', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { ticks: { color: '#6b7280', callback: v => 'R'+v.toLocaleString() }, grid: { color: 'rgba(255,255,255,0.04)' } },
+      }
+    };
+
+    const cfCtx = document.getElementById('fa-cashflow-chart');
+    if (cfCtx) new Chart(cfCtx, {
+      type: 'bar',
+      data: { labels: labels12, datasets: [
+        { label: 'Cash In (Deposits)',    data: depData, backgroundColor: 'rgba(34,197,94,0.7)',   borderRadius: 5 },
+        { label: 'Cash Out (Withdrawals)',data: wdData,  backgroundColor: 'rgba(239,68,68,0.65)',  borderRadius: 5 },
+      ]},
+      options: chartDefaults
+    });
+
+    const feeCtx = document.getElementById('fa-fee-chart');
+    if (feeCtx) new Chart(feeCtx, {
+      type: 'line',
+      data: { labels: labels12, datasets: [
+        { label: 'Platform Fees', data: feeData, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.12)', fill: true, tension: 0.4, pointRadius: 4 }
+      ]},
+      options: { ...chartDefaults, plugins: { legend: { display: false } } }
+    });
+
+    const retCtx = document.getElementById('fa-returns-chart');
+    if (retCtx) new Chart(retCtx, {
+      type: 'line',
+      data: { labels: labels12, datasets: [
+        { label: 'Return Income', data: retData, borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.12)', fill: true, tension: 0.4, pointRadius: 4 }
+      ]},
+      options: { ...chartDefaults, plugins: { legend: { display: false } } }
+    });
+
+    // Fund GL audit trail
+    const invAcctCodes = ['1500','2100','4100','4200'];
+    const auditTxns = allTxns.filter(t => {
+      const acc = coaById[t.accountId];
+      return acc && invAcctCodes.includes(acc.code);
+    }).sort((a,b) => new Date(b.date)-new Date(a.date)).slice(0,50);
+
+    const auditEl = document.getElementById('fa-audit-wrap');
+    if (auditEl) {
+      if (!auditTxns.length) {
+        auditEl.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted);font-size:0.84rem"><i class="fa-solid fa-rotate" style="font-size:1.5rem;margin-bottom:10px;display:block"></i>No fund entries yet — run Investment Sync to pull live data</div>';
+      } else {
+        const fmtR = n => 'R ' + parseFloat(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
+        auditEl.innerHTML = `<table><thead><tr><th>Date</th><th>Account</th><th>Description</th><th>Reference</th><th class="text-right">Dr</th><th class="text-right">Cr</th></tr></thead><tbody>
+          ${auditTxns.map(t => {
+            const acc = coaById[t.accountId]||{};
+            return `<tr>
+              <td>${t.date}</td>
+              <td><span style="font-size:0.7rem;font-weight:700;color:var(--purple);background:rgba(124,92,252,0.12);padding:1px 6px;border-radius:4px">${acc.code||''}</span> <span style="font-size:0.78rem">${acc.name||''}</span></td>
+              <td style="font-size:0.78rem;color:var(--muted)">${t.description||''}</td>
+              <td style="font-size:0.75rem;color:var(--muted)">${t.reference||''}</td>
+              <td class="text-right" style="color:var(--red);font-size:0.8rem">${t.type==='debit'?fmtR(t.amount):''}</td>
+              <td class="text-right" style="color:var(--green);font-size:0.8rem">${t.type==='credit'?fmtR(t.amount):''}</td>
+            </tr>`;
+          }).join('')}
+        </tbody></table>`;
+      }
+    }
+  });
+}
+
+function exportFundLedgerCSV() {
+  const bid = getActiveId();
+  const coa = getCoa(bid);
+  const allTxns = getTransactions(bid);
+  const coaById = {};
+  for (const a of coa) coaById[a.id] = a;
+  const invAcctCodes = ['1500','2100','4100','4200'];
+  const auditTxns = allTxns.filter(t => { const acc = coaById[t.accountId]; return acc && invAcctCodes.includes(acc.code); });
+  csvDown('fund-gl-ledger.csv', [
+    ['Date','Account Code','Account Name','Type','Amount','Description','Reference'],
+    ...auditTxns.map(t => {
+      const acc = coaById[t.accountId]||{};
+      return [t.date, acc.code||'', acc.name||'', t.type, t.amount, t.description||'', t.reference||''];
+    })
+  ]);
+}
+
+function exportFundAnalyticsPdf() {
+  if (!window.jspdf) { showToast('PDF library not loaded yet — try again in a moment', 'error'); return; }
+  const bid = getActiveId();
+  const biz = getActiveBiz();
+  if (!bid) return;
+  const currency = biz?.currency || 'ZAR';
+  const coa = getCoa(bid);
+  const allTxns = getTransactions(bid);
+  const coaByCode = {};
+  for (const a of coa) coaByCode[a.code] = a;
+  function ab(code) {
+    const acc = coaByCode[code];
+    if (!acc) return 0;
+    let b = acc.balance || 0;
+    allTxns.filter(t => t.accountId === acc.id).forEach(t => { b += t.type==='credit'?t.amount:-t.amount; });
+    return b;
+  }
+  const { doc, startY } = _pdfInit('Fund Analytics Report', new Date().toLocaleDateString('en-ZA'));
+  const body = [
+    [{ content: 'FUND METRICS', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [26,34,53], textColor: [255,155,12] } }],
+    ['Total AUM (Client Investment Portfolio)', fmt(ab('1500'),currency)],
+    ['Client Funds Held', fmt(ab('2100'),currency)],
+    ['Platform Revenue (1% Fees)', fmt(ab('4100'),currency)],
+    ['Investment Return Income', fmt(ab('4200'),currency)],
+    [{ content: 'SYNC STATUS', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [26,34,53], textColor: [255,155,12] } }],
+    ['Total Records Synced', String((ls('acct_synced_txn_'+bid)||[]).length + (ls('acct_synced_inv_'+bid)||[]).length)],
+    ['Last Sync', ls('acct_last_sync_'+bid) ? new Date(ls('acct_last_sync_'+bid)).toLocaleString('en-ZA') : 'Never'],
+  ];
+  _pdfTable(doc, [['Metric', 'Value']], body, startY, { columnStyles: { 1: { halign: 'right' } } });
+  _pdfFooter(doc);
+  doc.save('Fund_Analytics_Report.pdf');
+}
+
+/* ─── Investor Statement ─── */
+function openInvestorStatementModal() {
+  let el = document.getElementById('invStmtModal');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'invStmtModal';
+    el.className = 'modal-backdrop';
+    el.innerHTML = `<div class="modal">
+      <button class="modal-close" onclick="closeModal('invStmtModal')"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal-title">Generate Investor Statement</div>
+      <div class="modal-sub">Pull transactions for a specific investor from the synced GL</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Investor Name (partial match)</label>
+          <input class="form-control" id="ist-name" placeholder="e.g. John Smith" />
+        </div>
+      </div>
+      <div class="form-row cols-2">
+        <div class="form-group"><label class="form-label">From Date</label><input class="form-control" id="ist-from" type="date" /></div>
+        <div class="form-group"><label class="form-label">To Date</label><input class="form-control" id="ist-to" type="date" /></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('invStmtModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="generateInvestorStatementPdf()"><i class="fa-solid fa-file-pdf"></i> Generate PDF</button>
+      </div>
+    </div>`;
+    document.body.appendChild(el);
+  }
+  const now = new Date();
+  const y = now.getFullYear();
+  document.getElementById('ist-from').value = `${y}-01-01`;
+  document.getElementById('ist-to').value   = now.toISOString().split('T')[0];
+  openModal('invStmtModal');
+}
+
+function generateInvestorStatementPdf() {
+  if (!window.jspdf) { showToast('PDF library not loading yet', 'error'); return; }
+  const bid = getActiveId();
+  const biz = getActiveBiz();
+  if (!bid) return;
+  const currency = biz?.currency || 'ZAR';
+  const name  = (document.getElementById('ist-name')?.value || '').trim().toLowerCase();
+  const from  = document.getElementById('ist-from')?.value;
+  const to    = document.getElementById('ist-to')?.value;
+
+  const coa = getCoa(bid);
+  const allTxns = getTransactions(bid);
+  const coaById = {};
+  for (const a of coa) coaById[a.id] = a;
+  const invAcctCodes = ['1500','2100','4100','4200'];
+
+  let txns = allTxns.filter(t => {
+    const acc = coaById[t.accountId];
+    if (!acc || !invAcctCodes.includes(acc.code)) return false;
+    if (name && !(t.description||'').toLowerCase().includes(name)) return false;
+    if (from && t.date < from) return false;
+    if (to   && t.date > to)   return false;
+    return true;
+  }).sort((a,b) => new Date(a.date)-new Date(b.date));
+
+  if (!txns.length) { showToast('No matching transactions found', 'error'); return; }
+
+  const { doc, startY } = _pdfInit('Investor Statement', `${fmtDate(from)} — ${fmtDate(to)} · Filter: ${name || 'All investors'}`);
+  const body = txns.map(t => {
+    const acc = coaById[t.accountId]||{};
+    return [
+      fmtDate(t.date),
+      (acc.code||'') + ' ' + (acc.name||''),
+      t.description||'',
+      t.reference||'',
+      t.type==='debit'  ? fmt(t.amount,currency) : '',
+      t.type==='credit' ? fmt(t.amount,currency) : '',
+    ];
+  });
+  _pdfTable(doc, [['Date','Account','Description','Reference','Dr','Cr']], body, startY, {
+    columnStyles: { 4:{halign:'right'}, 5:{halign:'right'} }
+  });
+  _pdfFooter(doc);
+  const safeName = name ? '_'+name.replace(/\s+/g,'_') : '';
+  doc.save(`Investor_Statement${safeName}.pdf`);
+  closeModal('invStmtModal');
+  showToast('Investor statement exported!', 'success');
+}
+
+/* ─── Full Financial Pack ─── */
+function downloadFullFinancialPack() {
+  if (!window.jspdf) { showToast('PDF library not loaded yet', 'error'); return; }
+  const bid = getActiveId();
+  if (!bid) { showToast('No active business', 'error'); return; }
+  showToast('Generating full financial pack…', 'info');
+  setTimeout(() => {
+    try {
+      downloadFSPdf('income');
+      setTimeout(() => downloadFSPdf('balance'), 600);
+      setTimeout(() => downloadFSPdf('cashflow'), 1200);
+      setTimeout(() => { showToast('Full financial pack exported (3 PDFs)', 'success'); }, 1400);
+    } catch(e) { showToast('Export failed: ' + e.message, 'error'); }
+  }, 200);
+}
+
+/* ═══════════════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
@@ -3023,10 +3536,9 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     const bid = getActiveId();
     if (bid && !getTransactions(bid).length && !getInvoices(bid).length) {
-      if (confirm('Would you like to load demo data to see the app in action?')) {
-        seedDemoData(bid);
-        showToast('Demo data loaded!', 'success');
-      }
+      _acctConfirm('Load sample transactions and invoices to explore the app?', 'Load Demo Data', 'btn-primary').then(ok => {
+        if (ok) { seedDemoData(bid); showToast('Demo data loaded — explore the dashboard!', 'success'); showView('dashboard'); }
+      });
     }
     updateSidebarBiz();
     showView('dashboard');
