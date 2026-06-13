@@ -154,7 +154,8 @@ function navigate(view, btnEl) {
     audit:        'Audit Trail',
     fees:         'Fee Ledger & Revenue',
     risk:         'Risk Dashboard',
-    notifications:'Notification Centre'
+    notifications:'Notification Centre',
+    'investor-summary':'Investor Summary'
   };
   const el = document.getElementById('topTitle');
   if (el) el.textContent = titles[view] || view;
@@ -172,7 +173,8 @@ function navigate(view, btnEl) {
     audit:        loadAuditTrail,
     fees:         loadFees,
     risk:         loadRiskDashboard,
-    notifications:loadNotifications
+    notifications:loadNotifications,
+    'investor-summary':loadInvestorSummary
   };
   if (loaders[view]) loaders[view]();
 }
@@ -288,6 +290,7 @@ function renderDashboard() {
   renderUpcomingPayoutsWidget();
   renderRunTypeChart();
   renderReturnsChart();
+  renderEventTicker();
 }
 
 function renderDashboardRunsTable() {
@@ -1072,7 +1075,18 @@ function renderReportsSummary() {
   set('rpt-net',         fmt.rand(totalNet));
   set('rpt-avg-rate',    fmt.pct(avgRate));
   set('rpt-avg-alpha',   (meanAlpha>=0?'+':'')+fmt.bps(meanAlpha)+' avg');
-  set('rpt-fee-income',  fmt.rand(completed.reduce((s,r)=>s+(r.management_fee_amount||0)+(r.performance_fee_amount||0),0)));
+  const totalFeeIncome = completed.reduce((s,r)=>s+(r.management_fee_amount||0)+(r.performance_fee_amount||0),0);
+  set('rpt-fee-income', fmt.rand(totalFeeIncome));
+
+  // Performance intelligence — MOIC, IRR proxy, avg term, fee drag
+  const avgDays   = completed.length ? completed.reduce((s,r)=>s+(r.term_days||0),0)/completed.length : 0;
+  const moic      = totalCap > 0 ? (totalCap + totalNet) / totalCap : 0;
+  const annReturn = avgDays > 0 && moic > 0 ? (Math.pow(moic, 365/avgDays) - 1) : 0;
+  const feeDrag   = totalGross > 0 ? totalFeeIncome / totalGross : 0;
+  set('rpt-moic',     moic > 0 ? moic.toFixed(3)+'x' : '—');
+  set('rpt-irr',      annReturn > 0 ? fmt.pct(annReturn) : '—');
+  set('rpt-avg-days', avgDays > 0 ? Math.round(avgDays)+' d' : '—');
+  set('rpt-fee-pct',  feeDrag > 0 ? (feeDrag*100).toFixed(1)+'%' : '—');
 }
 
 function renderProductPerformanceChart() {
@@ -3387,4 +3401,346 @@ async function printTaxCertificate(allocId) {
   win.document.write(html);
   win.document.close();
   win.focus();
+}
+
+/* ═══════════════════════════════════════════════
+   EVENT TICKER — live run/payout activity strip
+═══════════════════════════════════════════════ */
+function renderEventTicker() {
+  const el = document.getElementById('dashEventTicker');
+  if (!el) return;
+  const events = [];
+  S.runs.filter(r => r.status === 'in_progress').forEach(r => {
+    events.push({ icon:'fa-play-circle', color:'#f59e0b', text:`<b>${r.run_name}</b> is in progress — ${fmt.rand(r.capital_deployed)} deployed` });
+  });
+  S.schedules.filter(s => s.status === 'processing').forEach(s => {
+    events.push({ icon:'fa-circle-dot', color:'#60a5fa', text:`Payout processing: <b>${s.investor_name||'Investor'}</b> — ${fmt.rand(s.payout_amount||0)}` });
+  });
+  S.runs.filter(r => r.status === 'completed').slice(0,3).forEach(r => {
+    events.push({ icon:'fa-circle-check', color:'#4ade80', text:`Run completed: <b>${r.run_name}</b> — net return ${fmt.rand(r.total_return_net||0)}` });
+  });
+  if (!events.length) { el.innerHTML = ''; return; }
+  const items = events.map(e =>
+    `<div style="display:inline-flex;align-items:center;gap:7px;padding:6px 14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:20px;white-space:nowrap;font-size:12px;color:rgba(255,255,255,.8)">
+      <i class="fa-solid ${e.icon}" style="color:${e.color};font-size:11px"></i>${e.text}
+    </div>`
+  ).join('');
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none">
+      <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:1px;flex-shrink:0">Live</span>
+      ${items}
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════
+   INVESTOR SUMMARY VIEW
+═══════════════════════════════════════════════ */
+async function loadInvestorSummary() {
+  try {
+    const allocData = await fetch(BASE + 'tables/investor_allocations', { headers: authHeaders() }).then(r => r.json());
+    S.allocations = allocData.rows || allocData || [];
+  } catch(e) {
+    if (!S.allocations.length) S.allocations = [];
+  }
+  renderInvestorSummaryTable();
+}
+
+function renderInvestorSummaryTable() {
+  const search = (document.getElementById('invSearch')?.value || '').toLowerCase();
+  const prodFilter = document.getElementById('invProductFilter')?.value || '';
+
+  let rows = S.allocations;
+  if (prodFilter) rows = rows.filter(a => (a.product_type||'').includes(prodFilter));
+
+  const byInvestor = {};
+  rows.forEach(a => {
+    const name = a.investor_name || 'Unknown';
+    if (search && !name.toLowerCase().includes(search)) return;
+    if (!byInvestor[name]) byInvestor[name] = [];
+    byInvestor[name].push(a);
+  });
+
+  const investors = Object.entries(byInvestor);
+  const totalCapital  = investors.reduce((s,[,allocs]) => s + allocs.reduce((ss,a)=>ss+(parseFloat(a.capital_amount)||0),0), 0);
+  const totalExpected = investors.reduce((s,[,allocs]) => s + allocs.reduce((ss,a)=>ss+(parseFloat(a.expected_payout)||0),0), 0);
+  const moics = investors.map(([,allocs]) => {
+    const cap = allocs.reduce((s,a)=>s+(parseFloat(a.capital_amount)||0),0);
+    const exp = allocs.reduce((s,a)=>s+(parseFloat(a.expected_payout)||0),0);
+    return cap > 0 ? exp/cap : 0;
+  }).filter(m => m > 0);
+  const avgMoic = moics.length ? moics.reduce((s,v)=>s+v,0)/moics.length : 0;
+
+  const setEl = (id,v) => { const e=document.getElementById(id); if(e) e.textContent=v; };
+  setEl('inv-total',   investors.length);
+  setEl('inv-capital', fmt.rand(totalCapital));
+  setEl('inv-expected',fmt.rand(totalExpected));
+  setEl('inv-moic',    avgMoic > 0 ? avgMoic.toFixed(3)+'x' : '—');
+  const subtitle = document.getElementById('invSubtitle');
+  if (subtitle) subtitle.textContent = `${investors.length} investors · ${rows.length} allocations`;
+
+  const tbody = document.getElementById('invSummaryBody');
+  if (!tbody) return;
+  if (!investors.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><i class="fa-solid fa-users-slash"></i><p>No investors found</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = investors.map(([name, allocs]) => {
+    const capital  = allocs.reduce((s,a)=>s+(parseFloat(a.capital_amount)||0),0);
+    const expected = allocs.reduce((s,a)=>s+(parseFloat(a.expected_payout)||0),0);
+    const moic     = capital > 0 ? expected/capital : 0;
+    const products = [...new Set(allocs.map(a=>a.product_type).filter(Boolean))];
+    const statuses = [...new Set(allocs.map(a=>a.status).filter(Boolean))];
+    const statusBadges = statuses.map(s => allocationStatusBadge(s)).join(' ');
+    const prodBadges   = products.map(p => productBadge(p)).join(' ');
+    return `<tr class="row--clickable" onclick="showInvestorDetail('${encodeURIComponent(name)}')">
+      <td><div class="td-h">${name}</div></td>
+      <td class="td-m">${allocs.length}</td>
+      <td>${prodBadges || '<span class="td-m">—</span>'}</td>
+      <td class="td-gold">${fmt.rand(capital)}</td>
+      <td class="td-green">${fmt.rand(expected)}</td>
+      <td class="${moic>=1.1?'td-green':moic>0?'td-teal':'td-m'} fw7">${moic>0?moic.toFixed(3)+'x':'—'}</td>
+      <td>${statusBadges || '<span class="td-m">—</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function showInvestorDetail(encodedName) {
+  const name = decodeURIComponent(encodedName);
+  const allocs = S.allocations.filter(a => a.investor_name === name);
+  T.show(`${name} — ${allocs.length} allocation(s)`, 'info');
+}
+
+function allocationStatusBadge(status) {
+  const map = { active:'badge--green', committed:'badge--blue', matured:'badge--gray', cancelled:'badge--red', defaulted:'badge--red' };
+  return `<span class="badge ${map[status]||'badge--gray'}">${status||'unknown'}</span>`;
+}
+
+function exportInvestorSummaryCSV() {
+  if (!S.allocations.length) { T.warn('No allocations to export'); return; }
+  const headers = ['Investor','Product','Capital','Expected Payout','Status','Start Date','End Date'];
+  const data = S.allocations.map(a => [
+    a.investor_name||'', a.product_type||'', a.capital_amount||0,
+    a.expected_payout||0, a.status||'', a.start_date||'', a.end_date||''
+  ]);
+  _csvDownload('investor_summary.csv', headers, data);
+}
+
+/* ═══════════════════════════════════════════════
+   EXPORT HELPERS
+═══════════════════════════════════════════════ */
+function exportReportsCSV() {
+  const completed = S.runs.filter(r => r.status === 'completed');
+  if (!completed.length) { T.warn('No completed runs to export'); return; }
+  const headers = ['Run Name','Product','Capital','Gross Return','Net Return','Actual Rate','Benchmark Rate','Alpha bps','Term Days','Total Fees'];
+  const data = completed.map(r => [
+    r.run_name||'', (r.product_type||'').replace(/_/g,' '),
+    r.capital_deployed||0, r.total_return_gross||0, r.total_return_net||0,
+    ((r.actual_rate||0)*100).toFixed(4)+'%',
+    ((r.benchmark_rate||0)*100).toFixed(4)+'%',
+    (((r.actual_rate||0)-(r.benchmark_rate||0))*10000).toFixed(1),
+    r.term_days||0,
+    (r.management_fee_amount||0)+(r.performance_fee_amount||0)
+  ]);
+  _csvDownload('fund_runs_report.csv', headers, data);
+}
+
+function _csvDownload(filename, headers, rows) {
+  const esc = v => { const s=String(v); return (s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s; };
+  const csv = [headers.map(esc).join(','), ...rows.map(r=>r.map(esc).join(','))].join('\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  T.show('CSV download started', 'success');
+}
+
+function exportFundRunsPDF() {
+  const jsPDF = window.jspdf?.jsPDF;
+  if (!jsPDF) { T.warn('PDF library not loaded'); return; }
+  const completed = S.runs.filter(r => r.status === 'completed');
+  if (!completed.length) { T.warn('No completed runs to export'); return; }
+  const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+  doc.setFontSize(16); doc.setTextColor(212,175,55);
+  doc.text('SV Capital — Fund Runs Report', 14, 16);
+  doc.setFontSize(9); doc.setTextColor(100,116,139);
+  doc.text(`Generated: ${new Date().toLocaleDateString('en-ZA')} · ${completed.length} completed runs`, 14, 22);
+  doc.autoTable({
+    startY: 27,
+    head: [['Run Name','Product','Capital','Gross Ret','Net Ret','Rate','Alpha','Days','Fees']],
+    body: completed.map(r => [
+      r.run_name||'',
+      (r.product_type||'').replace(/_/g,' '),
+      fmt.rand(r.capital_deployed),
+      fmt.rand(r.total_return_gross),
+      fmt.rand(r.total_return_net),
+      fmt.pct(r.actual_rate),
+      (((r.actual_rate||0)-(r.benchmark_rate||0))*10000).toFixed(1)+' bps',
+      r.term_days||'—',
+      fmt.rand((r.management_fee_amount||0)+(r.performance_fee_amount||0))
+    ]),
+    styles:{ fontSize:8, cellPadding:3 },
+    headStyles:{ fillColor:[26,31,46], textColor:[212,175,55], fontStyle:'bold' },
+    alternateRowStyles:{ fillColor:[245,247,250] },
+    theme:'grid'
+  });
+  doc.save('fund_runs_report.pdf');
+  T.show('PDF download started', 'success');
+}
+
+/* ═══════════════════════════════════════════════
+   COMMAND PALETTE (Ctrl+K)
+═══════════════════════════════════════════════ */
+const CMD_VIEWS = [
+  { label:'Dashboard',            icon:'fa-gauge-high',           view:'dashboard' },
+  { label:'Fund Runs',            icon:'fa-play-circle',          view:'runs' },
+  { label:'Payout Schedules',     icon:'fa-calendar-days',        view:'schedules' },
+  { label:'Investor Allocations', icon:'fa-users-between-lines',  view:'allocations' },
+  { label:'Investor Summary',     icon:'fa-users',                view:'investor-summary' },
+  { label:'Pool Overview',        icon:'fa-layer-group',          view:'pools' },
+  { label:'Reports & Analytics',  icon:'fa-chart-mixed',          view:'reports' },
+  { label:'Fund Intelligence',    icon:'fa-brain',                view:'intelligence' },
+  { label:'Cash Flow Forecast',   icon:'fa-chart-gantt',          view:'forecast' },
+  { label:'Fee Ledger',           icon:'fa-receipt',              view:'fees' },
+  { label:'Risk Dashboard',       icon:'fa-triangle-exclamation', view:'risk' },
+  { label:'Audit Trail',          icon:'fa-shield-check',         view:'audit' },
+  { label:'Notification Centre',  icon:'fa-bell',                 view:'notifications' },
+  { label:'Return Calculator',    icon:'fa-calculator',           view:'calculator' },
+  { label:'New Fund Run',         icon:'fa-plus',                 action: () => { navigate('runs', document.querySelector('[data-view=runs]')); setTimeout(openNewRunModal,150); } },
+  { label:'Scenario Comparison',  icon:'fa-flask',                action: () => openScenarioModal() },
+  { label:'Export Reports CSV',   icon:'fa-file-csv',             action: () => exportReportsCSV() },
+  { label:'Export Reports PDF',   icon:'fa-file-pdf',             action: () => exportFundRunsPDF() },
+];
+let _cmdActive = -1;
+
+function openCmdPalette() {
+  const ov = document.getElementById('cmdPaletteOverlay');
+  if (!ov) return;
+  ov.style.display = 'flex';
+  _cmdActive = -1;
+  const inp = document.getElementById('cmdInput');
+  if (inp) { inp.value = ''; inp.focus(); }
+  renderCmdResults('');
+}
+
+function closeCmdPalette() {
+  const ov = document.getElementById('cmdPaletteOverlay');
+  if (ov) ov.style.display = 'none';
+}
+
+function renderCmdResults(q) {
+  const el = document.getElementById('cmdResults');
+  if (!el) return;
+  _cmdActive = -1;
+  const query = (q||'').toLowerCase().trim();
+  const filtered = query ? CMD_VIEWS.filter(c => c.label.toLowerCase().includes(query)) : CMD_VIEWS;
+  if (!filtered.length) {
+    el.innerHTML = `<div style="padding:20px;text-align:center;color:rgba(255,255,255,.3);font-size:13px">No results for "${q}"</div>`;
+    el._filtered = [];
+    return;
+  }
+  el.innerHTML = filtered.map((c,i) =>
+    `<div class="cmd-item" data-idx="${i}" onmouseenter="cmdHover(${i})" onclick="cmdSelect(${i})"
+      style="display:flex;align-items:center;gap:12px;padding:10px 18px;cursor:pointer;transition:background .1s;color:rgba(255,255,255,.85);font-size:13px">
+      <i class="fa-solid ${c.icon}" style="width:16px;text-align:center;color:rgba(255,255,255,.4);font-size:13px"></i>
+      <span>${c.label}</span>
+      ${c.view ? `<kbd style="margin-left:auto;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:4px;font-size:10px;padding:1px 6px;color:rgba(255,255,255,.3)">${c.view}</kbd>` : ''}
+    </div>`
+  ).join('');
+  el._filtered = filtered;
+}
+
+function cmdHover(idx) {
+  _cmdActive = idx;
+  document.querySelectorAll('.cmd-item').forEach((el,i) => {
+    el.style.background = i === idx ? 'rgba(212,175,55,.12)' : '';
+  });
+}
+
+function cmdSelect(idx) {
+  const el = document.getElementById('cmdResults');
+  const filtered = el?._filtered || CMD_VIEWS;
+  const item = filtered[idx];
+  if (!item) return;
+  closeCmdPalette();
+  if (item.action) { item.action(); return; }
+  if (item.view) navigate(item.view, document.querySelector(`[data-view="${item.view}"]`));
+}
+
+function cmdKeyNav(e) {
+  const el = document.getElementById('cmdResults');
+  const filtered = el?._filtered || [];
+  const count = filtered.length;
+  if (!count) return;
+  if (e.key === 'ArrowDown')  { e.preventDefault(); cmdHover((_cmdActive+1)%count); }
+  if (e.key === 'ArrowUp')    { e.preventDefault(); cmdHover((_cmdActive-1+count)%count); }
+  if (e.key === 'Enter')      { e.preventDefault(); if (_cmdActive>=0) cmdSelect(_cmdActive); else if (count>0) cmdSelect(0); }
+  if (e.key === 'Escape')     { closeCmdPalette(); }
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key==='k') { e.preventDefault(); openCmdPalette(); }
+  if (e.key==='Escape') { const ov=document.getElementById('cmdPaletteOverlay'); if(ov&&ov.style.display!=='none') closeCmdPalette(); }
+});
+
+/* ═══════════════════════════════════════════════
+   SCENARIO COMPARISON
+═══════════════════════════════════════════════ */
+const SCENARIOS = [
+  { label:'Base Case',    capital:1000000, rate:0.18, days:180 },
+  { label:'Bull Case',    capital:1000000, rate:0.22, days:180 },
+  { label:'Conservative', capital:1000000, rate:0.14, days:180 }
+];
+
+function openScenarioModal() {
+  M.open('scenarioModal');
+  renderScenarioInputs();
+}
+
+function renderScenarioInputs() {
+  const grid = document.getElementById('scenarioGrid');
+  if (!grid) return;
+  grid.innerHTML = SCENARIOS.map((s,i) => `
+    <div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:16px">
+      <div style="font-size:12px;font-weight:700;color:#D4AF37;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">${s.label}</div>
+      <div class="f-group" style="margin-bottom:10px">
+        <label class="f-label" style="font-size:11px">Capital (R)</label>
+        <input type="number" class="f-input" style="font-size:13px;padding:6px 10px" value="${s.capital}"
+          oninput="SCENARIOS[${i}].capital=+this.value;updateScenarios()">
+      </div>
+      <div class="f-group" style="margin-bottom:10px">
+        <label class="f-label" style="font-size:11px">Rate (%)</label>
+        <input type="number" class="f-input" style="font-size:13px;padding:6px 10px" value="${(s.rate*100).toFixed(2)}" step="0.1"
+          oninput="SCENARIOS[${i}].rate=+this.value/100;updateScenarios()">
+      </div>
+      <div class="f-group">
+        <label class="f-label" style="font-size:11px">Term (days)</label>
+        <input type="number" class="f-input" style="font-size:13px;padding:6px 10px" value="${s.days}"
+          oninput="SCENARIOS[${i}].days=+this.value;updateScenarios()">
+      </div>
+    </div>`
+  ).join('');
+  updateScenarios();
+}
+
+function updateScenarios() {
+  const results = document.getElementById('scenarioResults');
+  if (!results) return;
+  results.innerHTML = SCENARIOS.map(s => {
+    const grossRet = s.capital * s.rate * (s.days/365);
+    const mgmtFee  = grossRet * 0.15;
+    const netRet   = grossRet - mgmtFee;
+    const moic     = (s.capital + netRet) / s.capital;
+    const ann      = s.days > 0 ? (Math.pow(moic, 365/s.days) - 1) : 0;
+    return `<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:14px">
+      <div style="font-size:11px;font-weight:700;color:#D4AF37;margin-bottom:10px;text-transform:uppercase">${s.label}</div>
+      <div style="display:flex;flex-direction:column;gap:7px;font-size:12px">
+        <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Gross Return</span><span style="color:#4ade80;font-weight:600">${fmt.rand(grossRet)}</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Mgmt Fee (15%)</span><span style="color:#f59e0b">${fmt.rand(mgmtFee)}</span></div>
+        <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,.08);padding-top:7px"><span style="color:rgba(255,255,255,.7);font-weight:600">Net Return</span><span style="color:#4ade80;font-weight:700">${fmt.rand(netRet)}</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">MOIC</span><span style="color:#c084fc;font-weight:600">${moic.toFixed(3)}x</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Ann. Return</span><span style="color:#2dd4bf;font-weight:600">${fmt.pct(ann)}</span></div>
+      </div>
+    </div>`;
+  }).join('');
 }
