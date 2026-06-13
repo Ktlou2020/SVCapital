@@ -319,11 +319,20 @@
             </div>
 
             <!-- Pending Actions -->
-            <div class="panel">
+            <div class="panel mb-20">
               <div class="panel__header">
                 <span class="panel__title">Pending Actions</span>
               </div>
               <div class="panel__body" id="pendingActionsWidget">Loading...</div>
+            </div>
+
+            <!-- Activity Feed -->
+            <div class="panel">
+              <div class="panel__header">
+                <span class="panel__title">Recent Activity</span>
+                <span class="last-refreshed" id="activityRefreshed"></span>
+              </div>
+              <div class="panel__body" style="padding:0" id="activityFeedWidget">Loading...</div>
             </div>
           </div>
         </div>
@@ -1220,7 +1229,7 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Add New Investor</span>
-      <button class="modal__close" onclick="Modal.close('addInvestorModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('addInvestorModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <div class="form-group" style="margin-bottom:16px">
@@ -1269,7 +1278,7 @@
   <div class="modal modal--lg">
     <div class="modal__header">
       <span class="modal__title" id="invDetailTitle">Investor Profile</span>
-      <button class="modal__close" onclick="Modal.close('investorDetailModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('investorDetailModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="invDetailBody">Loading...</div>
   </div>
@@ -1280,7 +1289,7 @@
   <div class="modal modal--lg" style="max-width:900px">
     <div class="modal__header">
       <span class="modal__title" id="poolInvestorsTitle">Pool Investors</span>
-      <button class="modal__close" onclick="Modal.close('poolInvestorsModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('poolInvestorsModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="poolInvestorsBody">Loading...</div>
   </div>
@@ -1291,7 +1300,7 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Create Investment Pool</span>
-      <button class="modal__close" onclick="Modal.close('addPoolModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('addPoolModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <div class="form-row form-row--2">
@@ -1334,7 +1343,7 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Record Transaction</span>
-      <button class="modal__close" onclick="Modal.close('addTxnModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('addTxnModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <div class="form-group"><label class="form-label">Investor</label><select class="form-select" id="txnInvestorSelect"><option value="">Select investor…</option></select></div>
@@ -1377,7 +1386,7 @@
   <div class="modal modal--lg">
     <div class="modal__header">
       <span class="modal__title" id="ticketModalTitle">Support Ticket</span>
-      <button class="modal__close" onclick="Modal.close('ticketModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('ticketModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="ticketModalBody">Loading...</div>
     <div class="modal__footer">
@@ -1392,7 +1401,7 @@
   <div class="modal modal--lg">
     <div class="modal__header">
       <span class="modal__title"><i class="fa-solid fa-upload" style="color:var(--orange);margin-right:8px"></i>Upload KYC / FICA Document</span>
-      <button class="modal__close" onclick="Modal.close('kycUploadModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('kycUploadModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <form id="kycUploadForm" onsubmit="event.preventDefault()">
@@ -1454,7 +1463,7 @@
   <div class="modal modal--lg">
     <div class="modal__header">
       <span class="modal__title" id="ficaDocTitle">FICA Document</span>
-      <button class="modal__close" onclick="Modal.close('ficaDocModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('ficaDocModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="ficaDocContainer" style="min-height:300px">Loading...</div>
     <div class="modal__footer">
@@ -1469,7 +1478,7 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Edit Investment Pool</span>
-      <button class="modal__close" onclick="Modal.close('editPoolModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('editPoolModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <input type="hidden" id="editPoolId" />
@@ -1530,7 +1539,7 @@
   <div class="modal modal--lg">
     <div class="modal__header">
       <span class="modal__title" id="ifaDetailTitle">IFA Details</span>
-      <button class="modal__close" onclick="Modal.close('ifaDetailModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('ifaDetailModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="ifaDetailBody">Loading...</div>
     <div class="modal__footer">
@@ -1544,7 +1553,7 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Add New IFA</span>
-      <button class="modal__close" onclick="Modal.close('addIFAModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('addIFAModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <div class="form-row form-row--2">
@@ -1583,7 +1592,7 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Link Investor to IFA</span>
-      <button class="modal__close" onclick="Modal.close('linkClientModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('linkClientModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <input type="hidden" id="linkClientIFAId" />
@@ -1607,7 +1616,7 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Manual Adjustment</span>
-      <button class="modal__close" onclick="Modal.close('manualAdjModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('manualAdjModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <div class="form-group">

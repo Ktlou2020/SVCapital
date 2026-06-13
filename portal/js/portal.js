@@ -46,6 +46,67 @@ function _skeletonCards(count) {
   ).join('');
 }
 
+/* ─── Button loading state helper ─── */
+async function _withBtn(btn, asyncFn) {
+  if (!btn || btn.disabled) return;
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+  try { await asyncFn(); } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+/* ─── Copy to clipboard ─── */
+async function _copyText(text, btn) {
+  try {
+    await navigator.clipboard.writeText(String(text));
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<i class="fa-solid fa-check" style="color:#22c55e"></i>';
+      setTimeout(() => { btn.innerHTML = orig; }, 1500);
+    }
+    Toast.success('Copied!');
+  } catch (_) { Toast.info('Press Ctrl+C to copy'); }
+}
+
+/* ─── Confirm dialog (replaces browser confirm()) ─── */
+const Confirm = {
+  ask(message, { title = 'Are you sure?', confirmLabel = 'Confirm', confirmClass = 'btn--danger', cancelLabel = 'Cancel' } = {}) {
+    return new Promise(resolve => {
+      let el = document.getElementById('portalConfirmModal');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'portalConfirmModal';
+        el.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center';
+        el.innerHTML = `
+          <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+            <div id="pcTitle" style="font-size:1.05rem;font-weight:800;color:#1a1a1a;margin-bottom:8px"></div>
+            <div id="pcMsg"   style="font-size:0.88rem;color:#6b7280;line-height:1.6;margin-bottom:20px"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end">
+              <button id="pcCancel"  class="btn btn--secondary" style="min-width:90px"></button>
+              <button id="pcConfirm" class="btn btn--primary"   style="min-width:90px"></button>
+            </div>
+          </div>`;
+        document.body.appendChild(el);
+      }
+      el.style.display = 'flex';
+      document.getElementById('pcTitle').textContent = title;
+      document.getElementById('pcMsg').textContent   = message;
+      const cancelBtn  = document.getElementById('pcCancel');
+      const confirmBtn = document.getElementById('pcConfirm');
+      cancelBtn.textContent  = cancelLabel;
+      confirmBtn.textContent = confirmLabel;
+      confirmBtn.className   = `btn ${confirmClass}`;
+      const done = (val) => { el.style.display = 'none'; resolve(val); };
+      cancelBtn.onclick  = () => done(false);
+      confirmBtn.onclick = () => done(true);
+      el.onclick = (e) => { if (e.target === el) done(false); };
+    });
+  }
+};
+
 /* ─── Notifications ─── */
 function toggleNotifPanel() {
   const panel = document.getElementById('notifPanel');
@@ -358,6 +419,14 @@ function navigate(view, btnEl) {
   SVC.time('view_' + view);
 
   SVC.track('page_view', { page_title: view, page_location: window.location.href + '#' + view, portal_view: view });
+
+  // Sync mobile bottom nav active state
+  document.querySelectorAll('.mbn-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+}
+
+function _mbnSetActive(btn) {
+  document.querySelectorAll('.mbn-item').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
 }
 
 /* ═══════════════════════════════════════════════
@@ -370,15 +439,15 @@ function _startPolling() {
   _pollTimer = setInterval(async () => {
     if (document.hidden) return; // skip when tab is backgrounded
     try {
-      const invRes = await API.investors.list({ limit: 1 });
-      const fresh = (invRes.data || [])[0];
+      const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
+      const fresh = await API.investors.get(investorId).catch(() => null);
       if (fresh && PORTAL.investor && fresh.id === PORTAL.investor.id) {
         const balChanged = parseFloat(fresh.wallet_balance) !== parseFloat(PORTAL.investor.wallet_balance);
         Object.assign(PORTAL.investor, fresh);
         if (balChanged) {
           _refreshWalletUI(parseFloat(PORTAL.investor.wallet_balance) || 0);
           const povWal = document.getElementById('pov-wallet');
-          if (povWal) povWal.textContent = Utils.rand(PORTAL.investor.wallet_balance);
+          if (povWal) _animateNum(povWal, parseFloat(PORTAL.investor.wallet_balance) || 0, 'R ', '', 600);
         }
       }
     } catch(_) {}
@@ -510,9 +579,9 @@ function renderOverview() {
   const inv = PORTAL.investor;
   if (!inv) return;
 
-  const totalInvested = parseFloat(inv.total_invested) || 0;
-  const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0);
-  const totalRet      = parseFloat(inv.total_returns) || 0;
+  const totalInvested = PORTAL.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const totalRet      = PORTAL.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+  const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0) + totalRet;
   const returnPct     = totalInvested > 0 ? (totalRet / totalInvested * 100).toFixed(1) : '0';
   const activeCount = PORTAL.investments.filter(i => i.status === 'active').length;
   const firstName   = inv.first_name || 'Investor';
@@ -626,7 +695,7 @@ function renderOverview() {
   const perfReturns  = document.getElementById('perf-returns');
   const perfRate     = document.getElementById('perf-rate');
   const perfPools    = document.getElementById('perf-pools');
-  if (perfInvested) perfInvested.textContent = Utils.rand(inv.total_invested || 0);
+  if (perfInvested) perfInvested.textContent = Utils.rand(totalInvested);
   if (perfReturns)  perfReturns.textContent  = '+' + Utils.rand(totalRet);
   if (perfRate)     perfRate.textContent     = returnPct + '% p.a.';
   if (perfPools)    perfPools.textContent    = activeCount + ' active';
@@ -1053,7 +1122,18 @@ function renderMyTxnTable() {
 
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red' };
 
-  if (!sorted.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">No transactions found</td></tr>'; return; }
+  if (!sorted.length) {
+    body.innerHTML = `<tr><td colspan="6" style="padding:0;border:none">
+      <div class="empty-state">
+        <i class="fa-solid fa-receipt"></i>
+        <div class="empty-state__title">No transactions yet</div>
+        <div class="empty-state__sub">Top up your wallet or make an investment to see activity here.<br>
+          <a href="#" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))" style="color:var(--gold)">Go to Wallet →</a>
+        </div>
+      </div>
+    </td></tr>`;
+    return;
+  }
 
   body.innerHTML = sorted.map(t => `<tr>
     <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ')}</span></td>
@@ -1131,7 +1211,9 @@ function _refreshWalletUI(balance) {
   // Overview total portfolio value (invested + wallet + returns)
   const inv = PORTAL.investor;
   if (inv) {
-    const totalValue = (parseFloat(inv.total_invested) || 0) + balance + (parseFloat(inv.total_returns) || 0);
+    const liveInvested = PORTAL.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+    const liveReturns  = PORTAL.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+    const totalValue   = liveInvested + balance + liveReturns;
     const povTotal = document.getElementById('pov-total');
     if (povTotal) povTotal.textContent = Utils.rand(totalValue);
   }
@@ -1157,7 +1239,16 @@ async function loadWallet() {
     .filter(t => ['deposit', 'return', 'payout', 'referral_bonus', 'withdrawal'].includes(t.type))
     .slice(0, 8);
 
-  if (!walletTxns.length) { activity.innerHTML = '<div class="empty-state" style="padding:16px"><i class="fa-solid fa-wallet"></i><p>No wallet activity yet.</p></div>'; return; }
+  if (!walletTxns.length) {
+    activity.innerHTML = `<div class="empty-state">
+      <i class="fa-solid fa-wallet"></i>
+      <div class="empty-state__title">No wallet activity yet</div>
+      <div class="empty-state__sub">Your deposits, returns, and payouts will appear here once you top up.<br>
+        <a href="#" onclick="openTopUpModal()" style="color:var(--gold)">Top Up Now →</a>
+      </div>
+    </div>`;
+    return;
+  }
 
   activity.innerHTML = walletTxns.map(t => {
     const isOut = t.type === 'withdrawal';
@@ -1254,7 +1345,8 @@ function _renderRecurringTab() {
 }
 
 async function _cancelRecurring() {
-  if (!confirm('Cancel your recurring investment? You can set it up again at any time.')) return;
+  const ok = await Confirm.ask('Cancel your recurring investment? You can set it up again at any time.', { confirmLabel: 'Yes, Cancel', confirmClass: 'btn--danger' });
+  if (!ok) return;
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
   try {
     await API._fetch('PATCH', `tables/investors/${investorId}`, {
@@ -1415,7 +1507,8 @@ async function saveAutoTopUp() {
 }
 
 async function _cancelAutoTopUp() {
-  if (!confirm('Cancel auto top-up? Your saved card will remain on file.')) return;
+  const ok = await Confirm.ask('Cancel auto top-up? Your saved card will remain on file.', { confirmLabel: 'Yes, Cancel', confirmClass: 'btn--danger' });
+  if (!ok) return;
   try {
     await API._fetch('POST', 'payments/auto-topup', { enabled: false });
     Toast.success('Auto top-up cancelled');
@@ -1424,7 +1517,8 @@ async function _cancelAutoTopUp() {
 }
 
 async function _removeTopUpCard() {
-  if (!confirm('Remove your saved card? This will also cancel auto top-up.')) return;
+  const ok = await Confirm.ask('Remove your saved card? This will also cancel auto top-up.', { confirmLabel: 'Yes, Remove', confirmClass: 'btn--danger' });
+  if (!ok) return;
   try {
     await API._fetch('DELETE', 'payments/topup-card');
     _autoTopUpCard = null;
@@ -1924,7 +2018,6 @@ async function _showDepositSuccess(gateway, reference) {
     `<strong style="color:#22c55e">${fmtBase}</strong> successfully credited to your wallet` +
     (fee > 0 ? `<br><span style="font-size:0.75rem;color:#6b7280">R${fee.toFixed(2)} gateway fee charged by ${gateway === 'paystack' ? 'Paystack' : 'Ozow'}</span>` : '');
   _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
-  PORTAL.transactions = [];
   await loadPortalData();
   loadWallet();
 }
@@ -2015,7 +2108,6 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
         const fmtBase = `R${_pmAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         _pmEl('pmSuccessAmount').textContent = `${fmtBase} deposit registered — awaiting bank confirmation`;
         _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
-        PORTAL.transactions = [];
         await loadPortalData();
         loadWallet();
       } else {
@@ -2035,7 +2127,6 @@ function closePaymentModal() {
   Modal.close('topUpModal');
   // If success was shown, refresh wallet display
   if (_pmEl('pmStep3Success') && _pmEl('pmStep3Success').style.display !== 'none') {
-    PORTAL.transactions = [];
     loadPortalData().then(() => loadWallet());
   }
 }
@@ -2118,7 +2209,6 @@ function closePaymentModal() {
 
       Toast.success(`Ozow payment successful! R${ozowAmount ? ozowAmount.toLocaleString('en-ZA') : ''} has been credited to your wallet.`);
       navigate('wallet', document.querySelector('[data-view=wallet]'));
-      PORTAL.transactions = [];
       loadPortalData().then(() => loadWallet());
     }, 800);
 
@@ -2439,7 +2529,8 @@ function openInvestModal(poolId) {
     </div>
   `;
 
-  document.getElementById('investConfirmBtn').onclick = () => confirmInvestment(pool);
+  const invBtn = document.getElementById('investConfirmBtn');
+  invBtn.onclick = () => _withBtn(invBtn, () => confirmInvestment(pool));
   Modal.open('investModal');
 }
 
@@ -2523,8 +2614,6 @@ async function confirmInvestment(pool) {
     }
 
     // Reload data
-    PORTAL.investments = [];
-    PORTAL.transactions = [];
     await loadPortalData();
     renderOverview();
   } catch (e) {
@@ -2666,7 +2755,8 @@ async function openMaturityModal(investmentId) {
     document.getElementById('reinvestPoolGroup').style.display  = e.target.value === 'reinvest'      ? 'block' : 'none';
   });
 
-  document.getElementById('maturityConfirmBtn').onclick = () => submitMaturityInstruction(inv);
+  const matBtn = document.getElementById('maturityConfirmBtn');
+  matBtn.onclick = () => _withBtn(matBtn, () => submitMaturityInstruction(inv));
   Modal.open('maturityModal');
 }
 
@@ -2747,7 +2837,7 @@ function removeTicketAttachment() {
   if (status) status.style.display = 'none';
 }
 
-async function submitTicket() {
+async function submitTicket(btn) {
   const subject = document.getElementById('tktSubject').value.trim();
   const message = document.getElementById('tktMessage').value.trim();
   if (!subject || !message) { Toast.error('Subject and message are required'); return; }
@@ -2757,6 +2847,7 @@ async function submitTicket() {
     attachmentInfo = `\n\n📎 Attachment: ${_tktAttachFile.name} (${(_tktAttachFile.size/1024).toFixed(1)} KB)\nData: ${_tktAttachBase64}`;
   }
 
+  await _withBtn(btn, async () => {
   try {
     await API.tickets.create({
       id:             Utils.genId('TKT'),
@@ -2777,6 +2868,7 @@ async function submitTicket() {
     removeTicketAttachment();
     await loadSupport();
   } catch (e) { Toast.error('Failed to submit ticket'); }
+  });
 }
 
 /* ─── FAQ ─── */
@@ -4362,8 +4454,8 @@ function _checkAutoStartTour() {
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
   const key = `svc_tour_done_${investorId}`;
   if (!localStorage.getItem(key)) {
-    // Small delay so overview renders first
-    setTimeout(startTour, 1200);
+    // Wait for next paint after overview renders, then start
+    requestAnimationFrame(() => setTimeout(startTour, 400));
   }
 }
 
@@ -4458,39 +4550,40 @@ function _renderTourStep(idx) {
     nextBtn.className = 'tour-next-btn';
   }
 
-  // Position spotlight + tooltip
-  _positionTour(step);
+  // Scroll target into view first, then position after layout settles
+  if (step.target && step.type !== 'center') {
+    const el = document.querySelector(step.target);
+    if (el) el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+  }
+  requestAnimationFrame(() => _positionTour(step));
 }
 
 function _positionTour(step) {
   const spotlight = document.getElementById('tourSpotlight');
   const tooltip   = document.getElementById('tourTooltip');
 
-  if (step.type === 'center' || !step.target) {
-    // Centre: no spotlight, centred tooltip
+  const _centerTooltip = () => {
     spotlight.style.cssText = 'display:none';
     tooltip.style.cssText   = `
       display:flex; position:fixed;
       top:50%; left:50%; transform:translate(-50%,-50%);
       z-index:10002; max-width:440px; width:calc(100vw - 32px);`;
-    return;
-  }
+  };
+
+  if (step.type === 'center' || !step.target) { _centerTooltip(); return; }
 
   const el = document.querySelector(step.target);
-  if (!el) {
-    // Element not visible — just centre
-    spotlight.style.cssText = 'display:none';
-    tooltip.style.cssText   = `
-      display:flex; position:fixed;
-      top:50%; left:50%; transform:translate(-50%,-50%);
-      z-index:10002; max-width:440px; width:calc(100vw - 32px);`;
-    return;
-  }
+  if (!el) { _centerTooltip(); return; }
 
-  const pad  = 8;
-  const r    = el.getBoundingClientRect();
-  const vw   = window.innerWidth;
-  const vh   = window.innerHeight;
+  const r  = el.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  // If element is invisible (hidden sidebar on mobile, display:none, zero size), centre tooltip
+  const isVisible = r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw;
+  if (!isVisible) { _centerTooltip(); return; }
+
+  const pad = 8;
 
   // Spotlight
   spotlight.style.cssText = `
@@ -4500,35 +4593,38 @@ function _positionTour(step) {
     border-radius:12px;
     box-shadow: 0 0 0 9999px rgba(0,0,0,0.72);
     z-index:10001; pointer-events:none;
-    transition: all 0.4s cubic-bezier(0.22,1,0.36,1);`;
+    transition: all 0.35s cubic-bezier(0.22,1,0.36,1);`;
 
   // Tooltip positioning
-  const ttW  = Math.min(340, vw - 32);
+  const ttW    = Math.min(340, vw - 32);
+  const ttHEst = 220; // estimated tooltip height
   let left, top, transform = '';
 
   if (step.position === 'right') {
-    left = Math.min(r.right + 16, vw - ttW - 8);
+    left = r.right + 16;
     top  = r.top + r.height / 2;
     transform = 'translateY(-50%)';
+    // If tooltip would overflow right edge, flip to left
+    if (left + ttW + 8 > vw) { left = r.left - ttW - 16; }
   } else if (step.position === 'bottom') {
     left = r.left + r.width / 2;
     top  = r.bottom + 16;
     transform = 'translateX(-50%)';
-    // If out of viewport bottom, flip up
-    if (top + 250 > vh) { top = r.top - 16; transform = 'translateX(-50%) translateY(-100%)'; }
+    if (top + ttHEst > vh) { top = r.top - 16; transform = 'translateX(-50%) translateY(-100%)'; }
   } else if (step.position === 'top') {
     left = r.left + r.width / 2;
     top  = r.top - 16;
     transform = 'translateX(-50%) translateY(-100%)';
-    if (top - 250 < 0) { top = r.bottom + 16; transform = 'translateX(-50%)'; }
+    if (top - ttHEst < 0) { top = r.bottom + 16; transform = 'translateX(-50%)'; }
   } else {
     left = r.left - ttW - 16;
     top  = r.top + r.height / 2;
     transform = 'translateY(-50%)';
   }
 
-  // Clamp horizontally
+  // Clamp horizontally and vertically
   left = Math.max(8, Math.min(left, vw - ttW - 8));
+  top  = Math.max(8, Math.min(top,  vh - ttHEst - 8));
 
   tooltip.style.cssText = `
     display:flex; position:fixed;
@@ -5454,8 +5550,6 @@ async function confirmWithdrawal() {
     SVC.track('svc_withdrawal_requested', { amount, amount_bucket: _amtBucket(amount), currency: 'ZAR', reference: ref });
     Toast.success('Withdrawal request submitted! Funds will be sent within 1–2 business days.');
     Modal.close('withdrawalModal');
-    // Refresh wallet view
-    PORTAL.transactions = [];
     await loadPortalData();
     loadWallet();
   } catch (e) {
@@ -6744,6 +6838,18 @@ function renderRiskProfile() {
   _setText('profSummaryJoined',   inv.date_joined ? new Date(inv.date_joined).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
   _setText('profSummaryReferral', inv.referral_code);
 
+  // Add copy buttons for investor ID and referral code
+  ['profSummaryId', 'profSummaryReferral'].forEach(elId => {
+    const el = document.getElementById(elId);
+    if (!el || el.nextElementSibling?.classList?.contains('copy-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.title = 'Copy';
+    btn.innerHTML = '<i class="fa-solid fa-copy"></i>';
+    btn.onclick = () => _copyText(el.textContent, btn);
+    el.after(btn);
+  });
+
   const statusEl = document.getElementById('profSummaryStatus');
   if (statusEl) {
     const st = (inv.status || 'active').toLowerCase();
@@ -6957,7 +7063,11 @@ let _activeTicketId = null;
 function renderMyTickets() {
   const body = document.getElementById('myTicketsBody');
   if (!PORTAL.tickets.length) {
-    body.innerHTML = '<div class="empty-state" style="padding:16px"><i class="fa-solid fa-ticket"></i><p>No support tickets yet.</p></div>';
+    body.innerHTML = `<div class="empty-state">
+      <i class="fa-solid fa-headset"></i>
+      <div class="empty-state__title">No support tickets yet</div>
+      <div class="empty-state__sub">Use the form below to submit a ticket if you have questions or need assistance with your account.</div>
+    </div>`;
     return;
   }
 

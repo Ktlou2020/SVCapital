@@ -478,6 +478,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       const gs = document.getElementById('globalSearch');
       if (gs) { gs.focus(); gs.select(); }
     }
+
+    // Arrow-key table navigation
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+      const row = document.activeElement.closest('tr[tabindex]');
+      if (!row) return;
+      e.preventDefault();
+      const rows = [...row.closest('tbody').querySelectorAll('tr[tabindex="0"]')];
+      const idx  = rows.indexOf(row);
+      const next = e.key === 'ArrowDown' ? rows[idx + 1] : rows[idx - 1];
+      if (next) { next.focus(); next.scrollIntoView({ block: 'nearest' }); }
+    }
+
+    // Escape closes open modals
+    if (e.key === 'Escape') {
+      const open = document.querySelector('.modal-overlay[style*="flex"], .modal-overlay.open');
+      if (open) { const id = open.id; if (id) Modal.close(id); }
+    }
   });
 
   // Restore last active view from session (deep-link fix)
@@ -555,6 +572,8 @@ async function loadDashboard() {
     renderRecentInvestments();
     renderOpenPoolsWidget();
     renderPendingActions();
+    _markRefreshed('activity');
+    renderActivityFeed();
     renderAumChart();
     renderProductMixChart();
     updateSidebarBadges();
@@ -676,6 +695,99 @@ function renderPendingActions() {
       <i class="fa-solid fa-arrow-right" style="margin-left:auto;color:var(--text-dim);font-size:0.7rem"></i>
     </div>
   `).join('');
+}
+
+function renderActivityFeed() {
+  const el = document.getElementById('activityFeedWidget');
+  if (!el) return;
+
+  const events = [];
+
+  // New investor registrations
+  STATE.investors.forEach(inv => {
+    const ts = inv.created_at || inv.registration_date;
+    if (!ts) return;
+    events.push({
+      ts: new Date(ts),
+      icon: 'fa-user-plus', color: '#2F8C9B',
+      text: `<strong>${_esc(inv.first_name)} ${_esc(inv.last_name)}</strong> registered`,
+      sub: inv.email || inv.id,
+      view: 'investors',
+    });
+  });
+
+  // New investments
+  STATE.investments.forEach(inv => {
+    const ts = inv.start_date || inv.created_at;
+    if (!ts) return;
+    events.push({
+      ts: new Date(ts),
+      icon: 'fa-coins', color: '#D4AF37',
+      text: `<strong>${_esc(inv.investor_name || inv.investor_id)}</strong> invested ${Utils.rand(inv.amount)}`,
+      sub: _esc(inv.pool_name || inv.pool_id || ''),
+      view: 'investments',
+    });
+  });
+
+  // Completed transactions (returns/payouts)
+  STATE.transactions.filter(t => ['return','payout'].includes(t.type) && t.status === 'completed').forEach(t => {
+    const ts = t.transaction_date || t.created_at;
+    if (!ts) return;
+    events.push({
+      ts: new Date(ts),
+      icon: 'fa-arrow-trend-up', color: '#22c55e',
+      text: `<strong>${_esc(t.investor_name || t.investor_id)}</strong> received ${Utils.rand(t.amount)} ${t.type}`,
+      sub: _esc(t.reference || ''),
+      view: 'transactions',
+    });
+  });
+
+  // KYC submissions
+  STATE.investors.filter(i => ['pending_fica','fica_submitted'].includes(i.status)).forEach(inv => {
+    const ts = inv.updated_at || inv.created_at;
+    if (!ts) return;
+    events.push({
+      ts: new Date(ts),
+      icon: 'fa-id-card', color: '#f59e0b',
+      text: `<strong>${_esc(inv.first_name)} ${_esc(inv.last_name)}</strong> submitted KYC docs`,
+      sub: inv.id,
+      view: 'kyc',
+    });
+  });
+
+  // Sort descending and take top 12
+  events.sort((a, b) => b.ts - a.ts);
+  const recent = events.slice(0, 12);
+
+  if (!recent.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:12px"><i class="fa-solid fa-bolt"></i><div class="empty-state__title">No activity yet</div></div>';
+    return;
+  }
+
+  const _fmtRelative = (ts) => {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 60)  return 'just now';
+    if (s < 3600) return `${Math.floor(s/60)}m ago`;
+    if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+    return ts.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
+  };
+
+  el.innerHTML = recent.map((e, i) => `
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:11px 16px;${i < recent.length-1 ? 'border-bottom:1px solid var(--border)' : ''};cursor:pointer;transition:background 0.15s"
+         onmouseover="this.style.background='var(--dark-2)'" onmouseout="this.style.background=''"
+         onclick="navigate('${e.view}', document.querySelector('[data-view=${e.view}]'))">
+      <div style="width:30px;height:30px;border-radius:50%;background:${e.color}18;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+        <i class="fa-solid ${e.icon}" style="color:${e.color};font-size:0.75rem"></i>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.79rem;color:var(--text);line-height:1.4">${e.text}</div>
+        ${e.sub ? `<div style="font-size:0.7rem;color:var(--text-dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.sub}</div>` : ''}
+      </div>
+      <div style="font-size:0.68rem;color:var(--text-dim);white-space:nowrap;flex-shrink:0;margin-top:2px">${_fmtRelative(e.ts)}</div>
+    </div>
+  `).join('');
+
+  _setRefreshLabel('activityRefreshed', 'activity');
 }
 
 function renderAumChart() {
@@ -848,7 +960,7 @@ function renderInvestorsTable() {
     const stBadge = Utils.statusBadge(inv.status);
     const province = (inv.province||'').replace(/\s+$/,'');
     const _trunc = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block';
-    return `<tr style="cursor:pointer" onclick="viewInvestor('${inv.id}')">
+    return `<tr style="cursor:pointer" tabindex="0" onclick="viewInvestor('${inv.id}')" onkeydown="if(event.key==='Enter')viewInvestor('${inv.id}')">
       <td style="overflow:hidden" onclick="event.stopPropagation()">
         <div class="flex-center gap-8" style="min-width:0">
           <div style="width:30px;height:30px;border-radius:50%;background:${color};color:#fff;font-size:0.63rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${Utils.initials(fullName)}</div>
@@ -2044,7 +2156,7 @@ function renderInvestmentsTable() {
     const investor   = STATE.investors.find(inv => inv.id === i.investor_id);
     const invName    = i.investor_name || (investor ? `${investor.first_name} ${investor.last_name}` : '—');
     const investDate = i.start_date || i.created_at;
-    return `<tr>
+    return `<tr tabindex="0">
       <td style="width:36px;text-align:center"><input type="checkbox" class="inv-select-cb" value="${i.id}" onchange="_invUpdateBulkBar()" /></td>
       <td>
         <div class="td-strong clip" style="cursor:pointer" onclick="viewInvestor('${i.investor_id}')">${invName}</div>

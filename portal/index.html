@@ -897,7 +897,7 @@
                     <button onclick="removeTicketAttachment()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:0.72rem;font-weight:700;padding:0 4px" title="Remove"><i class="fa-solid fa-xmark"></i></button>
                   </div>
                 </div>
-                <button class="btn btn--primary btn--full" onclick="submitTicket()"><i class="fa-solid fa-paper-plane"></i> Submit Ticket</button>
+                <button class="btn btn--primary btn--full" onclick="submitTicket(this)"><i class="fa-solid fa-paper-plane"></i> Submit Ticket</button>
               </div>
             </div>
 
@@ -2381,7 +2381,7 @@
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('recurringModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveRecurringInvestment()"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
+      <button class="btn btn--primary" onclick="_withBtn(this, saveRecurringInvestment)"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
     </div>
   </div>
 </div>
@@ -2447,7 +2447,7 @@
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('autoTopUpModal')">Cancel</button>
-      <button class="btn btn--primary" id="atuSaveBtn" onclick="saveAutoTopUp()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+      <button class="btn btn--primary" id="atuSaveBtn" onclick="_withBtn(this, saveAutoTopUp)"><i class="fa-solid fa-floppy-disk"></i> Save</button>
     </div>
   </div>
 </div>
@@ -2528,6 +2528,30 @@
     </div>
   </div>
 </div>
+
+<!-- ══ MOBILE BOTTOM NAV ══ -->
+<nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Main navigation">
+  <button class="mbn-item active" data-view="overview" onclick="navigate('overview', this); _mbnSetActive(this)" aria-label="Overview">
+    <i class="fa-solid fa-house"></i>
+    <span>Home</span>
+  </button>
+  <button class="mbn-item" data-view="investments" onclick="navigate('investments', this); _mbnSetActive(this)" aria-label="My Investments">
+    <i class="fa-solid fa-chart-line"></i>
+    <span>Invest</span>
+  </button>
+  <button class="mbn-item" data-view="wallet" onclick="navigate('wallet', this); _mbnSetActive(this)" aria-label="Wallet">
+    <i class="fa-solid fa-wallet"></i>
+    <span>Wallet</span>
+  </button>
+  <button class="mbn-item" data-view="marketplace" onclick="navigate('marketplace', this); _mbnSetActive(this)" aria-label="Marketplace">
+    <i class="fa-solid fa-store"></i>
+    <span>Market</span>
+  </button>
+  <button class="mbn-item" data-view="profile" onclick="navigate('profile', this); _mbnSetActive(this)" aria-label="Profile">
+    <i class="fa-solid fa-user"></i>
+    <span>Profile</span>
+  </button>
+</nav>
 
 <script src="../js/api.js?v=2"></script>
 <script src="js/portal.js?v=2"></script>
