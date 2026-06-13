@@ -1071,7 +1071,7 @@ async function viewInvestor(id) {
   const bCls       = { none:'badge--grey', pending:'badge--yellow', approved:'badge--green', rejected:'badge--red' };
   const bLbl       = { none:'Not added', pending:'On file', approved:'Verified', rejected:'Rejected' };
   const avatarColor= _invAvatarColor(`${inv.first_name} ${inv.last_name}`);
-  const totalInvested = invsts.reduce((s,i) => s+(i.amount||0), 0);
+  const totalInvested = invsts.reduce((s,i) => s+(parseFloat(i.amount)||0), 0);
   const activeInvCount= invsts.filter(i=>i.status==='active').length;
 
   document.getElementById('invDetailBody').innerHTML = `
@@ -2427,10 +2427,10 @@ async function loadTransactions() {
 
 function renderTxnStats() {
   const d = STATE.transactions;
-  document.getElementById('txn-deposits').textContent = Utils.rand(d.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.amount || 0), 0));
-  document.getElementById('txn-invested').textContent = Utils.rand(Math.abs(d.filter(t => t.type === 'investment').reduce((s, t) => s + (t.amount || 0), 0)));
-  document.getElementById('txn-returns').textContent = Utils.rand(d.filter(t => t.type === 'return').reduce((s, t) => s + (t.amount || 0), 0));
-  document.getElementById('txn-count').textContent = d.length;
+  document.getElementById('txn-deposits').textContent = Utils.rand(d.filter(t => t.type === 'deposit').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0));
+  document.getElementById('txn-invested').textContent = Utils.rand(Math.abs(d.filter(t => t.type === 'investment').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)));
+  document.getElementById('txn-returns').textContent  = Utils.rand(d.filter(t => t.type === 'return').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0));
+  document.getElementById('txn-count').textContent    = d.length;
 }
 
 function _txnInvName(t) {

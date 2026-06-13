@@ -6054,7 +6054,7 @@ async function loadReferralDashboard() {
   const approved = referred.filter(i => !['pending_fica', 'suspended'].includes(i.status));
   const invested = referred.filter(i => (i.total_invested || 0) > 0);
   const bonuses  = (PORTAL.transactions || []).filter(t => t.type === 'referral_bonus');
-  const totalBonus = bonuses.reduce((s, t) => s + (t.amount || 0), 0);
+  const totalBonus = bonuses.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
 
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('refStatTotal',    referred.length);
