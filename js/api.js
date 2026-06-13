@@ -539,10 +539,13 @@ const Toast = {
   },
   show(message, type = 'info', duration = 4000) {
     if (!this.container) this.init();
+    // Cap at 4 visible toasts — remove oldest when exceeded
+    const existing = this.container.querySelectorAll('.toast');
+    if (existing.length >= 4) existing[0].remove();
     const icons = { success: 'fa-check-circle', error: 'fa-circle-xmark', info: 'fa-circle-info', warning: 'fa-triangle-exclamation' };
     const toast = document.createElement('div');
     toast.className = `toast toast--${type}`;
-    toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span class="toast__msg">${message}</span>`;
+    toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span class="toast__msg">${message}</span><button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;margin-left:4px;padding:0 2px;font-size:0.9rem;line-height:1" title="Dismiss">&times;</button>`;
     this.container.appendChild(toast);
     setTimeout(() => {
       toast.style.animation = 'none';

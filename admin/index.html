@@ -383,9 +383,12 @@
               <button class="btn btn--secondary btn--sm" onclick="exportInvestorsCSV()">
                 <i class="fa-solid fa-file-csv"></i> Export
               </button>
+              <button class="btn btn--secondary btn--sm density-btn" id="invDensityBtn" onclick="toggleTableDensity('investorsCard','invDensityBtn')" title="Toggle compact view">
+                <i class="fa-solid fa-bars-staggered"></i>
+              </button>
             </div>
           </div>
-          <div style="overflow-x:auto">
+          <div style="overflow-x:auto" id="investorsCard">
             <table class="data-table" id="investorsTable" style="table-layout:fixed;width:100%">
               <thead><tr>
                 <th style="width:25%">Investor</th><th style="width:21%">Contact</th><th style="width:16%">KYC / Status</th><th style="width:16%">Portfolio</th><th style="width:10%">Investments</th><th style="width:12%">Actions</th>
@@ -396,7 +399,7 @@
             </table>
           </div>
           <div class="table-card__footer">
-            <span id="investorsFooterText">—</span>
+            <span id="investorsFooterText">—</span><span class="last-refreshed" id="investorsRefreshed"></span>
             <div class="pagination" id="investorsPagination"></div>
           </div>
         </div>
@@ -596,7 +599,7 @@
             </table>
           </div>
           <div class="table-card__footer">
-            <span id="investmentsFooter">—</span>
+            <span id="investmentsFooter">—</span><span class="last-refreshed" id="investmentsRefreshed"></span>
             <div class="pagination" id="investmentsPagination"></div>
           </div>
         </div>
@@ -675,7 +678,7 @@
             </table>
           </div>
           <div class="table-card__footer">
-            <span id="txnFooter">—</span>
+            <span id="txnFooter">—</span><span class="last-refreshed" id="txnRefreshed"></span>
             <div class="pagination" id="txnPagination"></div>
           </div>
         </div>
