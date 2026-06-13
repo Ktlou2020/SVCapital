@@ -434,9 +434,8 @@ img { max-width: 100%; display: block; }
 
 /* ─── STICKY TABLE HEADERS ─── */
 .data-table thead th {
-  position: sticky;
-  top: var(--header-h, 60px);
   z-index: 2;
+  background: var(--dark-3);
 }
 
 /* ─── EMPTY STATE ─── */
