@@ -99,9 +99,11 @@ let _employees  = [];
 let _onboarding = [];
 let _courses    = [];
 let _payslips   = [];
+let _kpiScores  = [];
 let _editingEmp = null;
 let _selectedColor = '#7c5cfc';
 let _currentView   = 'overview';
+let _dirCharts  = {};
 
 /* ═══ INIT ════════════════════════════════════════════════════════ */
 window.addEventListener('DOMContentLoaded', async () => {
@@ -169,16 +171,18 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadAll() {
-  const [emps, ob, courses, payslips] = await Promise.all([
+  const [emps, ob, courses, payslips, kpis] = await Promise.all([
     fetchAll('employees'),
     fetchAll('employee_onboarding'),
     fetchAll('employee_courses'),
     fetchAll('payslips'),
+    fetchAll('kpi_scores').catch(() => []),
   ]);
   _employees  = emps;
   _onboarding = ob;
   _courses    = courses;
   _payslips   = payslips;
+  _kpiScores  = kpis;
 
   if (!emps.length) {
     try {
@@ -206,13 +210,14 @@ async function loadAll() {
 
 /* ═══ NAVIGATION ═══════════════════════════════════════════════════ */
 const PAGE_META = {
-  overview:   { title:'Dashboard',       sub:'Platform overview and quick stats' },
-  employees:  { title:'All Employees',   sub:'Manage your full team roster' },
-  create:     { title:'Add Employee',    sub:'Create a new employee and start their onboarding journey' },
-  onboarding: { title:'Onboarding',      sub:'Track new employee onboarding progress' },
-  access:     { title:'Access & Roles',  sub:'Role-based access control matrix' },
-  courses:    { title:'Course Library',  sub:'All available training courses' },
-  payslips:   { title:'Payslips',        sub:'Generate and manage employee payslips' },
+  overview:    { title:'Dashboard',        sub:'Platform overview and quick stats' },
+  employees:   { title:'All Employees',    sub:'Manage your full team roster' },
+  create:      { title:'Add Employee',     sub:'Create a new employee and start their onboarding journey' },
+  onboarding:  { title:'Onboarding',       sub:'Track new employee onboarding progress' },
+  access:      { title:'Access & Roles',   sub:'Role-based access control matrix' },
+  courses:     { title:'Course Library',   sub:'All available training courses' },
+  payslips:    { title:'Payslips',         sub:'Generate and manage employee payslips' },
+  performance: { title:'Performance',      sub:'KPI leaderboard, scores and team analytics' },
 };
 
 function navTo(view, btn) {
@@ -231,17 +236,27 @@ function navTo(view, btn) {
   const actEl = document.getElementById('topbarActions');
   actEl.innerHTML = '';
   if (view === 'employees') {
-    actEl.innerHTML = `<button class="btn btn--gold btn--sm" onclick="navTo('create',document.querySelector('[data-view=create]'))"><i class="fa-solid fa-user-plus"></i> Add Employee</button>`;
+    actEl.innerHTML = `
+      <button class="btn btn--ghost btn--sm" onclick="exportEmployeesCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+      <button class="btn btn--ghost btn--sm" onclick="exportEmployeesPDF()"><i class="fa-solid fa-file-pdf"></i> Export PDF</button>
+      <button class="btn btn--gold btn--sm" onclick="navTo('create',document.querySelector('[data-view=create]'))"><i class="fa-solid fa-user-plus"></i> Add Employee</button>`;
+  } else if (view === 'payslips') {
+    actEl.innerHTML = `<button class="btn btn--ghost btn--sm" onclick="exportPayslipsSummaryCSV()"><i class="fa-solid fa-file-csv"></i> Export Summary</button>`;
+  } else if (view === 'performance') {
+    actEl.innerHTML = `<button class="btn btn--ghost btn--sm" onclick="exportPerformanceCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>`;
+  } else if (view === 'onboarding') {
+    actEl.innerHTML = `<button class="btn btn--ghost btn--sm" onclick="exportOnboardingCSV()"><i class="fa-solid fa-file-csv"></i> Export</button>`;
   }
 
   // Render view content
   const renders = {
-    overview:   renderOverview,
-    employees:  renderEmployees,
-    onboarding: renderOnboardingView,
-    access:     renderAccessMatrix,
-    courses:    renderCourseLibrary,
-    payslips:   renderPayslips,
+    overview:    renderOverview,
+    employees:   renderEmployees,
+    onboarding:  renderOnboardingView,
+    access:      renderAccessMatrix,
+    courses:     renderCourseLibrary,
+    payslips:    renderPayslips,
+    performance: renderPerformanceView,
   };
   if (renders[view]) renders[view]();
 }
@@ -249,9 +264,8 @@ function navTo(view, btn) {
 /* ═══ OVERVIEW ══════════════════════════════════════════════════════ */
 function renderOverview() {
   const active    = _employees.filter(e => e.status === 'active').length;
-  const totalOb   = _onboarding.length;
-  const doneOb    = _onboarding.filter(o => o.status === 'completed').length;
   const inProgOb  = _onboarding.filter(o => o.status === 'in_progress').length;
+  const doneOb    = _onboarding.filter(o => o.status === 'completed').length;
 
   document.getElementById('overviewStats').innerHTML = `
     <div class="dir-stat">
@@ -271,6 +285,36 @@ function renderOverview() {
       <div><div class="dir-stat-val">${_courses.length}</div><div class="dir-stat-label">Courses Available</div></div>
     </div>
   `;
+
+  // Second KPI row — performance intel
+  const nettTotal = _payslips.reduce((s,p) => s+(parseFloat(p.nett_pay)||0), 0);
+  const latestMonth = _payslips.length ? _payslips.sort((a,b) => (b.pay_period||'').localeCompare(a.pay_period||''))[0].pay_period : null;
+  const monthPayslips = latestMonth ? _payslips.filter(p => p.pay_period === latestMonth) : [];
+  const monthNett = monthPayslips.reduce((s,p) => s+(parseFloat(p.nett_pay)||0), 0);
+  const avgKpi = _kpiScores.length ? (_kpiScores.reduce((s,k) => s+(parseFloat(k.overall_score)||0), 0) / _kpiScores.length) : null;
+  const totalXP = _employees.reduce((s,e) => s+(parseInt(e.xp_total)||0), 0);
+  const stats2El = document.getElementById('overviewStats2');
+  if (stats2El) stats2El.innerHTML = `
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(124,92,252,0.1);color:#a78bfa"><i class="fa-solid fa-chart-bar"></i></div>
+      <div><div class="dir-stat-val">${avgKpi !== null ? avgKpi.toFixed(1)+'%' : '—'}</div><div class="dir-stat-label">Avg KPI Score</div></div>
+    </div>
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(245,158,11,0.1);color:#f59e0b"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+      <div><div class="dir-stat-val">${zarM(monthNett)}</div><div class="dir-stat-label">Nett Payroll${latestMonth?' ('+latestMonth+')':''}</div></div>
+    </div>
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(16,185,129,0.1);color:#10b981"><i class="fa-solid fa-circle-check"></i></div>
+      <div><div class="dir-stat-val">${doneOb}</div><div class="dir-stat-label">Onboarding Completed</div></div>
+    </div>
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(0,212,170,0.1);color:#00d4aa"><i class="fa-solid fa-star"></i></div>
+      <div><div class="dir-stat-val">${totalXP.toLocaleString()}</div><div class="dir-stat-label">Total Team XP</div></div>
+    </div>
+  `;
+
+  renderDeptChart();
+  renderActivityFeed();
 
   // Recent employees (last 5 by start_date)
   const recent = [..._employees].sort((a,b) => new Date(b.start_date||b.created_at||0) - new Date(a.start_date||a.created_at||0)).slice(0,5);
@@ -324,10 +368,16 @@ function renderEmployees() {
 }
 
 function filterEmployees() {
-  const q = (document.getElementById('empSearch')?.value||'').toLowerCase();
-  _empFilteredList = _employees.filter(e =>
-    `${e.first_name} ${e.last_name} ${e.email} ${e.role} ${e.department}`.toLowerCase().includes(q)
-  );
+  const q      = (document.getElementById('empSearch')?.value||'').toLowerCase();
+  const dept   = document.getElementById('empDeptFilter')?.value || '';
+  const status = document.getElementById('empStatusFilter')?.value || '';
+  _empFilteredList = _employees.filter(e => {
+    if (q && !`${e.first_name} ${e.last_name} ${e.email} ${e.role} ${e.department}`.toLowerCase().includes(q)) return false;
+    if (dept && e.department !== dept) return false;
+    if (status && e.status !== status) return false;
+    return true;
+  });
+  document.getElementById('empCount').textContent = _empFilteredList.length;
   renderEmpTable(_empFilteredList);
 }
 
@@ -1627,6 +1677,365 @@ function renderDirHelp(view) {
     </div>
   `;
 }
+
+/* ═══ DEPT CHART ══════════════════════════════════════════════════ */
+function renderDeptChart() {
+  const ctx = document.getElementById('deptChart');
+  if (!ctx) return;
+  if (_dirCharts.dept) { _dirCharts.dept.destroy(); }
+  const deptCounts = {};
+  _employees.filter(e => e.status === 'active').forEach(e => {
+    const d = e.department || 'Other';
+    deptCounts[d] = (deptCounts[d] || 0) + 1;
+  });
+  const labels = Object.keys(deptCounts);
+  const values = Object.values(deptCounts);
+  const palette = ['#7c5cfc','#f59e0b','#10b981','#00d4aa','#60a5fa','#f87171','#a78bfa','#34d399'];
+  _dirCharts.dept = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label:'Headcount', data: values, backgroundColor: palette.slice(0, labels.length), borderRadius: 6, borderSkipped: false }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color:'#9ca3af', font:{size:11} }, grid: { display: false } },
+        y: { ticks: { color:'#9ca3af', stepSize:1 }, grid: { color:'rgba(255,255,255,0.04)' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+/* ═══ ACTIVITY FEED ══════════════════════════════════════════════ */
+function renderActivityFeed() {
+  const el = document.getElementById('dirActivityFeed');
+  if (!el) return;
+  const events = [];
+  [..._employees].sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0)).slice(0,3).forEach(e => {
+    events.push({ icon:'fa-user-plus', color:'#10b981', text:`<b>${e.first_name} ${e.last_name}</b> joined as ${e.role||'employee'}`, date: e.created_at });
+  });
+  _onboarding.filter(o => o.status === 'completed').slice(0,3).forEach(ob => {
+    const emp = _employees.find(e => e.id === ob.employee_id);
+    if (emp) events.push({ icon:'fa-rocket', color:'#f59e0b', text:`<b>${emp.first_name} ${emp.last_name}</b> completed onboarding`, date: ob.updated_at });
+  });
+  _onboarding.filter(o => o.status === 'in_progress').slice(0,2).forEach(ob => {
+    const emp = _employees.find(e => e.id === ob.employee_id);
+    const pct = ob.tasks_total > 0 ? Math.round((ob.tasks_completed||0)/ob.tasks_total*100) : 0;
+    if (emp) events.push({ icon:'fa-spinner', color:'#60a5fa', text:`<b>${emp.first_name} ${emp.last_name}</b> — onboarding ${pct}% complete`, date: ob.updated_at });
+  });
+  events.sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+  if (!events.length) { el.innerHTML = `<div style="color:var(--muted);font-size:0.78rem;text-align:center;padding:20px">No recent activity</div>`; return; }
+  el.innerHTML = events.slice(0,8).map(ev => `
+    <div style="display:flex;align-items:flex-start;gap:10px;font-size:0.8rem">
+      <div style="width:24px;height:24px;border-radius:6px;background:${ev.color}1a;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+        <i class="fa-solid ${ev.icon}" style="color:${ev.color};font-size:0.7rem"></i>
+      </div>
+      <div style="flex:1;line-height:1.45;color:var(--muted2)">${ev.text}${ev.date ? `<span style="display:block;font-size:0.68rem;color:var(--muted);margin-top:1px">${fmtDate(ev.date)}</span>` : ''}</div>
+    </div>`).join('');
+}
+
+/* ═══ PERFORMANCE VIEW ═══════════════════════════════════════════ */
+function renderPerformanceView() {
+  const empData = _employees.map(e => {
+    const scores = _kpiScores.filter(k => k.employee_id === e.id);
+    const latest = scores.sort((a,b) => (b.period||'').localeCompare(a.period||''))[0];
+    return { ...e, kpi: latest ? parseFloat(latest.overall_score)||0 : null };
+  }).sort((a,b) => (b.kpi||0) - (a.kpi||0));
+
+  const withKpi = empData.filter(e => e.kpi !== null);
+  const avgKpi = withKpi.length ? withKpi.reduce((s,e)=>s+e.kpi,0)/withKpi.length : 0;
+  const topKpi = withKpi[0]?.kpi || 0;
+  const totalPayroll = _payslips.reduce((s,p)=>s+(parseFloat(p.nett_pay)||0),0);
+  const avgEva = _employees.length ? _employees.reduce((s,e)=>s+(parseFloat(e.eva_weight)||0),0)/_employees.length : 0;
+
+  const perfStats = document.getElementById('perfStats');
+  if (perfStats) perfStats.innerHTML = `
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(124,92,252,.1);color:#a78bfa"><i class="fa-solid fa-chart-bar"></i></div>
+      <div><div class="dir-stat-val">${avgKpi.toFixed(1)}%</div><div class="dir-stat-label">Avg KPI Score</div></div>
+    </div>
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(16,185,129,.1);color:#10b981"><i class="fa-solid fa-trophy"></i></div>
+      <div><div class="dir-stat-val">${topKpi.toFixed(1)}%</div><div class="dir-stat-label">Top Score</div></div>
+    </div>
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(245,158,11,.1);color:#f59e0b"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+      <div><div class="dir-stat-val">${zarM(totalPayroll)}</div><div class="dir-stat-label">Total Payroll (all time)</div></div>
+    </div>
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(0,212,170,.1);color:#00d4aa"><i class="fa-solid fa-scale-balanced"></i></div>
+      <div><div class="dir-stat-val">${avgEva.toFixed(2)}x</div><div class="dir-stat-label">Avg EVA Weight</div></div>
+    </div>
+  `;
+
+  // KPI radar chart — avg scores per dimension
+  const dims = ['strategy','execution','client','compliance','innovation','leadership','teamwork','growth'];
+  const dimLabels = ['Strategy','Execution','Client','Compliance','Innovation','Leadership','Teamwork','Growth'];
+  const dimAvgs = dims.map(d => {
+    const vals = _kpiScores.map(k => parseFloat(k[d+'_score'])||0).filter(v=>v>0);
+    return vals.length ? vals.reduce((s,v)=>s+v,0)/vals.length : 0;
+  });
+  const radarCtx = document.getElementById('perfRadarChart');
+  if (radarCtx) {
+    if (_dirCharts.perfRadar) _dirCharts.perfRadar.destroy();
+    _dirCharts.perfRadar = new Chart(radarCtx, {
+      type: 'radar',
+      data: {
+        labels: dimLabels,
+        datasets: [{
+          label: 'Team Avg', data: dimAvgs,
+          backgroundColor: 'rgba(124,92,252,0.15)', borderColor: '#7c5cfc', borderWidth: 2,
+          pointBackgroundColor: '#7c5cfc', pointRadius: 3
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { r: {
+          ticks: { display: false, stepSize: 25 },
+          grid: { color: 'rgba(255,255,255,0.07)' },
+          angleLines: { color: 'rgba(255,255,255,0.07)' },
+          pointLabels: { color: '#9ca3af', font: { size: 10 } },
+          min: 0, max: 100
+        }}
+      }
+    });
+  }
+
+  // Dept avg score bar chart
+  const deptCtx = document.getElementById('perfDeptChart');
+  if (deptCtx) {
+    if (_dirCharts.perfDept) _dirCharts.perfDept.destroy();
+    const deptMap = {};
+    empData.forEach(e => {
+      if (e.kpi === null) return;
+      const d = e.department || 'Other';
+      if (!deptMap[d]) deptMap[d] = [];
+      deptMap[d].push(e.kpi);
+    });
+    const dLabels = Object.keys(deptMap);
+    const dAvgs = dLabels.map(d => deptMap[d].reduce((s,v)=>s+v,0)/deptMap[d].length);
+    const palette = ['#7c5cfc','#f59e0b','#10b981','#00d4aa','#60a5fa','#f87171','#a78bfa','#34d399'];
+    _dirCharts.perfDept = new Chart(deptCtx, {
+      type: 'bar',
+      data: { labels: dLabels, datasets: [{ label:'Avg KPI %', data: dAvgs.map(v=>+v.toFixed(1)), backgroundColor: palette.slice(0,dLabels.length), borderRadius:5 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color:'#9ca3af', font:{size:11} }, grid: { display:false } },
+          y: { ticks: { color:'#9ca3af', callback:v=>v+'%' }, grid: { color:'rgba(255,255,255,0.04)' }, min:0, max:100 }
+        }
+      }
+    });
+  }
+
+  // Leaderboard table
+  const tbody = document.getElementById('perfLeaderboard');
+  if (!tbody) return;
+  if (!empData.length) { tbody.innerHTML = `<tr><td colspan="7"><div class="dir-empty">No employee data</div></td></tr>`; return; }
+  const LEVELS = [{level:1,title:'Analyst',minXP:0},{level:2,title:'Associate',minXP:500},{level:3,title:'Senior',minXP:1200},{level:4,title:'Lead',minXP:2500},{level:5,title:'Director',minXP:4500},{level:6,title:'MVP',minXP:7000}];
+  function xpLevel(xp) { return [...LEVELS].reverse().find(l => (xp||0) >= l.minXP) || LEVELS[0]; }
+  tbody.innerHTML = empData.map((e, i) => {
+    const lv = xpLevel(e.xp_total);
+    const kpiColor = e.kpi === null ? '#6b7280' : e.kpi >= 75 ? '#10b981' : e.kpi >= 50 ? '#f59e0b' : '#ef4444';
+    return `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:22px;text-align:center;font-size:0.75rem;font-weight:700;color:${i<3?'#f59e0b':'#6b7280'}">${i+1}</div>
+          <div class="emp-row-avatar" style="background:${e.avatar_color||'#7c5cfc'}">${e.avatar_initials||'?'}</div>
+          <div><div class="emp-row-name">${e.first_name} ${e.last_name}</div><div class="emp-row-email">${e.role||''}</div></div>
+        </div>
+      </td>
+      <td style="color:var(--muted2);font-size:0.8rem">${e.department||'—'}</td>
+      <td><span style="font-weight:700;color:${kpiColor}">${e.kpi !== null ? e.kpi.toFixed(1)+'%' : '—'}</span></td>
+      <td style="color:var(--muted2)">${e.eva_weight||'1.0'}x</td>
+      <td style="color:var(--muted2)">${(e.xp_total||0).toLocaleString()} XP</td>
+      <td><span style="background:${lv.color}22;color:${lv.color};border-radius:6px;padding:2px 8px;font-size:0.72rem;font-weight:700">${lv.title}</span></td>
+      <td>${statusChip(e.status)}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ═══ CSV / PDF EXPORTS ══════════════════════════════════════════ */
+function _dirCsvDownload(filename, headers, rows) {
+  const esc = v => { const s=String(v==null?'':v); return (s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s; };
+  const csv = [headers.map(esc).join(','), ...rows.map(r=>r.map(esc).join(','))].join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=filename; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  showToast('CSV export started', 'success');
+}
+
+function exportEmployeesCSV() {
+  if (!_employees.length) { showToast('No employees to export', 'error'); return; }
+  const headers = ['First Name','Last Name','Email','Role','Department','Level','Status','Start Date','Salary','EVA Weight'];
+  const rows = _employees.map(e => [
+    e.first_name, e.last_name, e.email, e.role, e.department,
+    LEVEL_LABELS[e.level]||e.level, e.status, e.start_date||'', e.salary||'', e.eva_weight||''
+  ]);
+  _dirCsvDownload('employees.csv', headers, rows);
+}
+
+function exportEmployeesPDF() {
+  const jsPDF = window.jspdf?.jsPDF;
+  if (!jsPDF) { showToast('PDF library not loaded', 'error'); return; }
+  if (!_employees.length) { showToast('No employees to export', 'error'); return; }
+  const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+  doc.setFontSize(16); doc.setTextColor(245,158,11);
+  doc.text('SV Capital — Employee Register', 14, 16);
+  doc.setFontSize(9); doc.setTextColor(100,116,139);
+  doc.text(`Generated: ${new Date().toLocaleDateString('en-ZA')} · ${_employees.length} employees`, 14, 22);
+  doc.autoTable({
+    startY: 27,
+    head: [['Name','Email','Role','Dept','Level','Status','Start Date']],
+    body: _employees.map(e => [
+      `${e.first_name} ${e.last_name}`, e.email||'', e.role||'',
+      e.department||'', LEVEL_LABELS[e.level]||e.level||'',
+      e.status||'', e.start_date||''
+    ]),
+    styles:{ fontSize:8, cellPadding:3 },
+    headStyles:{ fillColor:[17,19,24], textColor:[245,158,11], fontStyle:'bold' },
+    alternateRowStyles:{ fillColor:[245,247,250] },
+    theme:'grid'
+  });
+  doc.save('employees.pdf');
+  showToast('PDF export started', 'success');
+}
+
+function exportPayslipsSummaryCSV() {
+  if (!_payslips.length) { showToast('No payslips to export', 'error'); return; }
+  const headers = ['Employee ID','Pay Period','Gross Pay','PAYE','UIF','Other Ded','Nett Pay','Notes'];
+  const rows = _payslips.map(p => [
+    p.employee_id||'', p.pay_period||'',
+    p.gross_pay||0, p.paye||0, p.uif||0, p.other_deductions||0, p.nett_pay||0, p.notes||''
+  ]);
+  _dirCsvDownload('payslips_summary.csv', headers, rows);
+}
+
+function exportOnboardingCSV() {
+  if (!_onboarding.length) { showToast('No onboarding records to export', 'error'); return; }
+  const headers = ['Employee','Role','Status','Tasks Done','Tasks Total','Progress %','Start Date','Buddy'];
+  const rows = _onboarding.map(ob => {
+    const emp = _employees.find(e => e.id === ob.employee_id);
+    const pct = ob.tasks_total > 0 ? Math.round((ob.tasks_completed||0)/ob.tasks_total*100) : 0;
+    return [
+      emp ? `${emp.first_name} ${emp.last_name}` : ob.employee_id,
+      emp?.role||'', ob.status||'', ob.tasks_completed||0, ob.tasks_total||0, pct+'%',
+      ob.start_date||'', ob.buddy_name||''
+    ];
+  });
+  _dirCsvDownload('onboarding_report.csv', headers, rows);
+}
+
+function exportPerformanceCSV() {
+  const headers = ['Employee','Department','Role','KPI Score','EVA Weight','XP','Level','Status'];
+  const rows = _employees.map(e => {
+    const scores = _kpiScores.filter(k => k.employee_id === e.id);
+    const latest = scores.sort((a,b)=>(b.period||'').localeCompare(a.period||''))[0];
+    const kpi = latest ? parseFloat(latest.overall_score)||0 : '';
+    return [
+      `${e.first_name} ${e.last_name}`, e.department||'', e.role||'',
+      kpi !== '' ? kpi.toFixed(1)+'%' : '—',
+      e.eva_weight||'1.0', e.xp_total||0, LEVEL_LABELS[e.level]||e.level||'', e.status||''
+    ];
+  });
+  _dirCsvDownload('performance_report.csv', headers, rows);
+}
+
+/* ═══ COMMAND PALETTE ════════════════════════════════════════════ */
+const DIR_CMD_ITEMS = [
+  { label:'Dashboard',       icon:'fa-gauge-high',          view:'overview' },
+  { label:'All Employees',   icon:'fa-users',               view:'employees' },
+  { label:'Add Employee',    icon:'fa-user-plus',           view:'create' },
+  { label:'Onboarding',      icon:'fa-rocket',              view:'onboarding' },
+  { label:'Access & Roles',  icon:'fa-key',                 view:'access' },
+  { label:'Course Library',  icon:'fa-graduation-cap',      view:'courses' },
+  { label:'Payslips',        icon:'fa-file-invoice-dollar', view:'payslips' },
+  { label:'Performance',     icon:'fa-chart-bar',           view:'performance' },
+  { label:'Export Employees CSV', icon:'fa-file-csv',       action: ()=>exportEmployeesCSV() },
+  { label:'Export Employees PDF', icon:'fa-file-pdf',       action: ()=>exportEmployeesPDF() },
+  { label:'Export Payslips CSV',  icon:'fa-file-csv',       action: ()=>exportPayslipsSummaryCSV() },
+  { label:'Export Onboarding CSV',icon:'fa-file-csv',       action: ()=>exportOnboardingCSV() },
+  { label:'Export Performance CSV',icon:'fa-file-csv',      action: ()=>exportPerformanceCSV() },
+  { label:'App Hub',         icon:'fa-grid-2',              href:'hub.html' },
+  { label:'My Dashboard',    icon:'fa-user-circle',         href:'employee.html' },
+  { label:'Team Dashboard',  icon:'fa-people-group',        href:'index.html' },
+];
+let _dirCmdActive = -1;
+
+function openDirCmdPalette() {
+  const ov = document.getElementById('dirCmdOverlay');
+  if (!ov) return;
+  ov.style.display = 'flex';
+  _dirCmdActive = -1;
+  const inp = document.getElementById('dirCmdInput');
+  if (inp) { inp.value = ''; inp.focus(); }
+  renderDirCmdResults('');
+}
+
+function closeDirCmdPalette() {
+  const ov = document.getElementById('dirCmdOverlay');
+  if (ov) ov.style.display = 'none';
+}
+
+function renderDirCmdResults(q) {
+  const el = document.getElementById('dirCmdResults');
+  if (!el) return;
+  _dirCmdActive = -1;
+  const query = (q||'').toLowerCase().trim();
+  const filtered = query ? DIR_CMD_ITEMS.filter(c=>c.label.toLowerCase().includes(query)) : DIR_CMD_ITEMS;
+  if (!filtered.length) {
+    el.innerHTML = `<div style="padding:20px;text-align:center;color:#6b7280;font-size:13px">No results for "${q}"</div>`;
+    el._filtered = []; return;
+  }
+  el.innerHTML = filtered.map((c,i) =>
+    `<div class="dir-cmd-item" data-idx="${i}" onmouseenter="dirCmdHover(${i})" onclick="dirCmdSelect(${i})"
+      style="display:flex;align-items:center;gap:12px;padding:10px 18px;cursor:pointer;transition:background .1s;color:#e8eaf6;font-size:13px">
+      <i class="fa-solid ${c.icon}" style="width:16px;text-align:center;color:#6b7280;font-size:13px"></i>
+      <span>${c.label}</span>
+      ${c.view?`<kbd style="margin-left:auto;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:4px;font-size:10px;padding:1px 6px;color:#6b7280">${c.view}</kbd>`:''}
+    </div>`
+  ).join('');
+  el._filtered = filtered;
+}
+
+function dirCmdHover(idx) {
+  _dirCmdActive = idx;
+  document.querySelectorAll('.dir-cmd-item').forEach((el,i) => {
+    el.style.background = i === idx ? 'rgba(245,158,11,.1)' : '';
+  });
+}
+
+function dirCmdSelect(idx) {
+  const el = document.getElementById('dirCmdResults');
+  const filtered = el?._filtered || DIR_CMD_ITEMS;
+  const item = filtered[idx];
+  if (!item) return;
+  closeDirCmdPalette();
+  if (item.action) { item.action(); return; }
+  if (item.href)   { window.location.href = item.href; return; }
+  if (item.view)   navTo(item.view, document.querySelector(`[data-view="${item.view}"]`));
+}
+
+function dirCmdKeyNav(e) {
+  const el = document.getElementById('dirCmdResults');
+  const filtered = el?._filtered || [];
+  const count = filtered.length;
+  if (!count) return;
+  if (e.key==='ArrowDown')  { e.preventDefault(); dirCmdHover((_dirCmdActive+1)%count); }
+  if (e.key==='ArrowUp')    { e.preventDefault(); dirCmdHover((_dirCmdActive-1+count)%count); }
+  if (e.key==='Enter')      { e.preventDefault(); if (_dirCmdActive>=0) dirCmdSelect(_dirCmdActive); else if(count>0) dirCmdSelect(0); }
+  if (e.key==='Escape')     { closeDirCmdPalette(); }
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key==='k') { e.preventDefault(); openDirCmdPalette(); }
+  if (e.key==='Escape') { const ov=document.getElementById('dirCmdOverlay'); if(ov&&ov.style.display!=='none') closeDirCmdPalette(); }
+});
 
 // Auto-update help panel when navigating
 const _dirOrigNavTo = navTo;
