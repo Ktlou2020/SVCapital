@@ -392,6 +392,8 @@ img { max-width: 100%; display: block; }
 .data-table tbody tr:last-child td { border-bottom: none; }
 
 .data-table tbody tr:hover { background: var(--surface); }
+.data-table tbody tr:focus { outline: 2px solid var(--gold); outline-offset: -2px; background: var(--surface); }
+.data-table tbody tr[tabindex]:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
 
 .data-table .td-muted { color: var(--text-muted); font-size: 0.75rem; }
 .data-table .td-strong { font-weight: 700; color: var(--white); }

@@ -2529,6 +2529,30 @@
   </div>
 </div>
 
+<!-- ══ MOBILE BOTTOM NAV ══ -->
+<nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Main navigation">
+  <button class="mbn-item active" data-view="overview" onclick="navigate('overview', this); _mbnSetActive(this)" aria-label="Overview">
+    <i class="fa-solid fa-house"></i>
+    <span>Home</span>
+  </button>
+  <button class="mbn-item" data-view="investments" onclick="navigate('investments', this); _mbnSetActive(this)" aria-label="My Investments">
+    <i class="fa-solid fa-chart-line"></i>
+    <span>Invest</span>
+  </button>
+  <button class="mbn-item" data-view="wallet" onclick="navigate('wallet', this); _mbnSetActive(this)" aria-label="Wallet">
+    <i class="fa-solid fa-wallet"></i>
+    <span>Wallet</span>
+  </button>
+  <button class="mbn-item" data-view="marketplace" onclick="navigate('marketplace', this); _mbnSetActive(this)" aria-label="Marketplace">
+    <i class="fa-solid fa-store"></i>
+    <span>Market</span>
+  </button>
+  <button class="mbn-item" data-view="profile" onclick="navigate('profile', this); _mbnSetActive(this)" aria-label="Profile">
+    <i class="fa-solid fa-user"></i>
+    <span>Profile</span>
+  </button>
+</nav>
+
 <script src="../js/api.js?v=2"></script>
 <script src="js/portal.js?v=2"></script>
 <script src="../js/sv-intelligence.js"></script>

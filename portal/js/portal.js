@@ -419,6 +419,14 @@ function navigate(view, btnEl) {
   SVC.time('view_' + view);
 
   SVC.track('page_view', { page_title: view, page_location: window.location.href + '#' + view, portal_view: view });
+
+  // Sync mobile bottom nav active state
+  document.querySelectorAll('.mbn-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+}
+
+function _mbnSetActive(btn) {
+  document.querySelectorAll('.mbn-item').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
 }
 
 /* ═══════════════════════════════════════════════
@@ -431,15 +439,15 @@ function _startPolling() {
   _pollTimer = setInterval(async () => {
     if (document.hidden) return; // skip when tab is backgrounded
     try {
-      const invRes = await API.investors.list({ limit: 1 });
-      const fresh = (invRes.data || [])[0];
+      const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
+      const fresh = await API.investors.get(investorId).catch(() => null);
       if (fresh && PORTAL.investor && fresh.id === PORTAL.investor.id) {
         const balChanged = parseFloat(fresh.wallet_balance) !== parseFloat(PORTAL.investor.wallet_balance);
         Object.assign(PORTAL.investor, fresh);
         if (balChanged) {
           _refreshWalletUI(parseFloat(PORTAL.investor.wallet_balance) || 0);
           const povWal = document.getElementById('pov-wallet');
-          if (povWal) povWal.textContent = Utils.rand(PORTAL.investor.wallet_balance);
+          if (povWal) _animateNum(povWal, parseFloat(PORTAL.investor.wallet_balance) || 0, 'R ', '', 600);
         }
       }
     } catch(_) {}
@@ -2010,7 +2018,6 @@ async function _showDepositSuccess(gateway, reference) {
     `<strong style="color:#22c55e">${fmtBase}</strong> successfully credited to your wallet` +
     (fee > 0 ? `<br><span style="font-size:0.75rem;color:#6b7280">R${fee.toFixed(2)} gateway fee charged by ${gateway === 'paystack' ? 'Paystack' : 'Ozow'}</span>` : '');
   _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
-  PORTAL.transactions = [];
   await loadPortalData();
   loadWallet();
 }
@@ -2101,7 +2108,6 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
         const fmtBase = `R${_pmAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         _pmEl('pmSuccessAmount').textContent = `${fmtBase} deposit registered — awaiting bank confirmation`;
         _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
-        PORTAL.transactions = [];
         await loadPortalData();
         loadWallet();
       } else {
@@ -2121,7 +2127,6 @@ function closePaymentModal() {
   Modal.close('topUpModal');
   // If success was shown, refresh wallet display
   if (_pmEl('pmStep3Success') && _pmEl('pmStep3Success').style.display !== 'none') {
-    PORTAL.transactions = [];
     loadPortalData().then(() => loadWallet());
   }
 }
@@ -2204,7 +2209,6 @@ function closePaymentModal() {
 
       Toast.success(`Ozow payment successful! R${ozowAmount ? ozowAmount.toLocaleString('en-ZA') : ''} has been credited to your wallet.`);
       navigate('wallet', document.querySelector('[data-view=wallet]'));
-      PORTAL.transactions = [];
       loadPortalData().then(() => loadWallet());
     }, 800);
 
@@ -2610,8 +2614,6 @@ async function confirmInvestment(pool) {
     }
 
     // Reload data
-    PORTAL.investments = [];
-    PORTAL.transactions = [];
     await loadPortalData();
     renderOverview();
   } catch (e) {
@@ -4452,8 +4454,8 @@ function _checkAutoStartTour() {
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
   const key = `svc_tour_done_${investorId}`;
   if (!localStorage.getItem(key)) {
-    // Small delay so overview renders first
-    setTimeout(startTour, 1200);
+    // Wait for next paint after overview renders, then start
+    requestAnimationFrame(() => setTimeout(startTour, 400));
   }
 }
 
@@ -4548,39 +4550,40 @@ function _renderTourStep(idx) {
     nextBtn.className = 'tour-next-btn';
   }
 
-  // Position spotlight + tooltip
-  _positionTour(step);
+  // Scroll target into view first, then position after layout settles
+  if (step.target && step.type !== 'center') {
+    const el = document.querySelector(step.target);
+    if (el) el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+  }
+  requestAnimationFrame(() => _positionTour(step));
 }
 
 function _positionTour(step) {
   const spotlight = document.getElementById('tourSpotlight');
   const tooltip   = document.getElementById('tourTooltip');
 
-  if (step.type === 'center' || !step.target) {
-    // Centre: no spotlight, centred tooltip
+  const _centerTooltip = () => {
     spotlight.style.cssText = 'display:none';
     tooltip.style.cssText   = `
       display:flex; position:fixed;
       top:50%; left:50%; transform:translate(-50%,-50%);
       z-index:10002; max-width:440px; width:calc(100vw - 32px);`;
-    return;
-  }
+  };
+
+  if (step.type === 'center' || !step.target) { _centerTooltip(); return; }
 
   const el = document.querySelector(step.target);
-  if (!el) {
-    // Element not visible — just centre
-    spotlight.style.cssText = 'display:none';
-    tooltip.style.cssText   = `
-      display:flex; position:fixed;
-      top:50%; left:50%; transform:translate(-50%,-50%);
-      z-index:10002; max-width:440px; width:calc(100vw - 32px);`;
-    return;
-  }
+  if (!el) { _centerTooltip(); return; }
 
-  const pad  = 8;
-  const r    = el.getBoundingClientRect();
-  const vw   = window.innerWidth;
-  const vh   = window.innerHeight;
+  const r  = el.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  // If element is invisible (hidden sidebar on mobile, display:none, zero size), centre tooltip
+  const isVisible = r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw;
+  if (!isVisible) { _centerTooltip(); return; }
+
+  const pad = 8;
 
   // Spotlight
   spotlight.style.cssText = `
@@ -4590,35 +4593,38 @@ function _positionTour(step) {
     border-radius:12px;
     box-shadow: 0 0 0 9999px rgba(0,0,0,0.72);
     z-index:10001; pointer-events:none;
-    transition: all 0.4s cubic-bezier(0.22,1,0.36,1);`;
+    transition: all 0.35s cubic-bezier(0.22,1,0.36,1);`;
 
   // Tooltip positioning
-  const ttW  = Math.min(340, vw - 32);
+  const ttW    = Math.min(340, vw - 32);
+  const ttHEst = 220; // estimated tooltip height
   let left, top, transform = '';
 
   if (step.position === 'right') {
-    left = Math.min(r.right + 16, vw - ttW - 8);
+    left = r.right + 16;
     top  = r.top + r.height / 2;
     transform = 'translateY(-50%)';
+    // If tooltip would overflow right edge, flip to left
+    if (left + ttW + 8 > vw) { left = r.left - ttW - 16; }
   } else if (step.position === 'bottom') {
     left = r.left + r.width / 2;
     top  = r.bottom + 16;
     transform = 'translateX(-50%)';
-    // If out of viewport bottom, flip up
-    if (top + 250 > vh) { top = r.top - 16; transform = 'translateX(-50%) translateY(-100%)'; }
+    if (top + ttHEst > vh) { top = r.top - 16; transform = 'translateX(-50%) translateY(-100%)'; }
   } else if (step.position === 'top') {
     left = r.left + r.width / 2;
     top  = r.top - 16;
     transform = 'translateX(-50%) translateY(-100%)';
-    if (top - 250 < 0) { top = r.bottom + 16; transform = 'translateX(-50%)'; }
+    if (top - ttHEst < 0) { top = r.bottom + 16; transform = 'translateX(-50%)'; }
   } else {
     left = r.left - ttW - 16;
     top  = r.top + r.height / 2;
     transform = 'translateY(-50%)';
   }
 
-  // Clamp horizontally
+  // Clamp horizontally and vertically
   left = Math.max(8, Math.min(left, vw - ttW - 8));
+  top  = Math.max(8, Math.min(top,  vh - ttHEst - 8));
 
   tooltip.style.cssText = `
     display:flex; position:fixed;
@@ -5544,8 +5550,6 @@ async function confirmWithdrawal() {
     SVC.track('svc_withdrawal_requested', { amount, amount_bucket: _amtBucket(amount), currency: 'ZAR', reference: ref });
     Toast.success('Withdrawal request submitted! Funds will be sent within 1–2 business days.');
     Modal.close('withdrawalModal');
-    // Refresh wallet view
-    PORTAL.transactions = [];
     await loadPortalData();
     loadWallet();
   } catch (e) {
