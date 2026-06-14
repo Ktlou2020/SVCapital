@@ -12,6 +12,8 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const pool   = require('../db/pool');
+
+const stripHtml = (str) => (str || '').replace(/<[^>]*>/g, '').replace(/[<>]/g, '').trim();
 const { requireAuth, requireRole } = require('../middleware/auth');
 
 /* ─── GET /api/users ─── */
@@ -67,7 +69,9 @@ router.get('/:id', requireAuth, requireRole('admin', 'director'), async (req, re
 /* ─── POST /api/users ─── */
 router.post('/', requireAuth, requireRole('admin', 'director'), async (req, res) => {
   try {
-    const { email, password, role = 'investor', firstName, lastName, investorId, ifaId } = req.body;
+    const { email, password, role = 'investor', investorId, ifaId } = req.body;
+    const firstName = stripHtml(req.body.firstName);
+    const lastName  = stripHtml(req.body.lastName);
     if (!email || !password || !firstName || !lastName)
       return res.status(400).json({ error: 'email, password, firstName, lastName required.' });
 
@@ -80,7 +84,7 @@ router.post('/', requireAuth, requireRole('admin', 'director'), async (req, res)
       INSERT INTO users (email, password_hash, role, first_name, last_name, investor_id, ifa_id)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING id, email, role, first_name, last_name, investor_id, ifa_id, is_active, created_at
-    `, [email.toLowerCase().trim(), hash, role, firstName.trim(), lastName.trim(),
+    `, [email.toLowerCase().trim(), hash, role, firstName, lastName,
         investorId || null, ifaId || null]);
 
     res.status(201).json(user);
@@ -92,7 +96,9 @@ router.post('/', requireAuth, requireRole('admin', 'director'), async (req, res)
 /* ─── PUT /api/users/:id ─── */
 router.put('/:id', requireAuth, requireRole('admin', 'director'), async (req, res) => {
   try {
-    const { email, firstName, lastName, role, isActive, investorId, ifaId } = req.body;
+    const { email, role, isActive, investorId, ifaId } = req.body;
+    const firstName = req.body.firstName != null ? stripHtml(req.body.firstName) : undefined;
+    const lastName  = req.body.lastName  != null ? stripHtml(req.body.lastName)  : undefined;
     const { rows: [user] } = await pool.query(`
       UPDATE users SET
         email       = COALESCE($1, email),
@@ -105,7 +111,7 @@ router.put('/:id', requireAuth, requireRole('admin', 'director'), async (req, re
         updated_at  = NOW()
       WHERE id = $8
       RETURNING id, email, role, first_name, last_name, is_active, investor_id, ifa_id, updated_at
-    `, [email, firstName, lastName, role,
+    `, [email, firstName ?? null, lastName ?? null, role,
         isActive !== undefined ? isActive : null,
         investorId, ifaId, req.params.id]);
     if (!user) return res.status(404).json({ error: 'User not found.' });
