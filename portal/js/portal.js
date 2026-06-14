@@ -274,7 +274,7 @@ function loadNotifications() {
         title: 'Bank account not verified',
         sub: inv.bank_account_notes || 'Your bank details could not be verified. Please update and resubmit.',
         time: 'Action required',
-        action: "navigate('settings',document.querySelector('[data-view=settings]'))",
+        action: "navigate('profile',document.querySelector('[data-view=profile]'))",
         unread: true,
       });
     }
@@ -5842,7 +5842,7 @@ function renderOnboardingChecklist() {
       label: 'Complete your FICA verification',
       desc: 'Submit your ID document and proof of address.',
       done: inv.fica_status === 'approved',
-      action: "navigate('kyc', document.querySelector('[data-view=kyc]'))",
+      action: "navigate('profile', document.querySelector('[data-view=profile]'))",
       actionLabel: 'Go to KYC',
     },
     {
