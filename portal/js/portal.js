@@ -7048,7 +7048,7 @@ async function _loadLoginHistory() {
       const browser = ua.includes('Chrome') ? 'Chrome' : ua.includes('Firefox') ? 'Firefox' : ua.includes('Safari') ? 'Safari' : 'Browser';
       const date = new Date(e.login_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.05)">
-        <div><span style="font-weight:600">${device} · ${browser}</span><br><span style="color:var(--text-muted)">${e.ip_address || 'Unknown IP'}</span></div>
+        <div><span style="font-weight:600">${device} · ${browser}</span><br><span style="color:var(--text-muted)">${_esc(e.ip_address) || 'Unknown IP'}</span></div>
         <div style="text-align:right;white-space:nowrap">${date}</div>
       </div>`;
     }).join('');
@@ -7330,7 +7330,7 @@ function _renderRecurringStatusSummary() {
   if (inv && inv.recurring_enabled && inv.recurring_amount) {
     const pool = (PORTAL.pools || []).find(p => p.id === inv.recurring_pool_id);
     summaryEl.style.display = '';
-    summaryEl.innerHTML = `<i class="fa-solid fa-check-circle" style="color:#22c55e"></i> <strong>Active:</strong> ${Utils.rand(inv.recurring_amount)}/month into ${pool ? pool.name : 'selected pool'}`;
+    summaryEl.innerHTML = `<i class="fa-solid fa-check-circle" style="color:#22c55e"></i> <strong>Active:</strong> ${Utils.rand(inv.recurring_amount)}/month into ${pool ? _esc(pool.name) : 'selected pool'}`;
   } else {
     summaryEl.style.display = 'none';
   }
