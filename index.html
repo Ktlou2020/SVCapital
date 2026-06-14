@@ -72,6 +72,16 @@
     .partner-chip i { font-size:1.4rem; }
     .partner-chip strong { display:block;font-size:0.88rem;font-weight:700;color:#e2e8f0;line-height:1.2; }
     .partner-chip span { font-size:0.72rem;color:#4a6080; }
+
+    /* Dark-background contrast overrides — home-ci.css forces #1a1a1a on .section-title; these dark sections need light text */
+    .why-section .section-eyebrow { color: var(--ci-orange, #FF8215) !important; }
+    .why-section .section-title { color: #f0f4f8 !important; }
+    .why-section .section-title em,
+    .why-section .section-title span { color: var(--ci-orange, #FF8215) !important; }
+    .why-section .section-sub { color: rgba(255,255,255,0.62) !important; }
+    .why-card p { color: #8ea3b8 !important; }
+    .partners-label { color: #8ea3b8 !important; }
+    .partner-chip span { color: #8ea3b8 !important; }
   </style>
 </head>
 <body>
