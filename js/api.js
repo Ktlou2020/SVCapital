@@ -545,7 +545,17 @@ const Toast = {
     const icons = { success: 'fa-check-circle', error: 'fa-circle-xmark', info: 'fa-circle-info', warning: 'fa-triangle-exclamation' };
     const toast = document.createElement('div');
     toast.className = `toast toast--${type}`;
-    toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span class="toast__msg">${message}</span><button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;margin-left:4px;padding:0 2px;font-size:0.9rem;line-height:1" title="Dismiss">&times;</button>`;
+    const icon = document.createElement('i');
+    icon.className = `fa-solid ${icons[type] || icons.info}`;
+    const msg = document.createElement('span');
+    msg.className = 'toast__msg';
+    msg.textContent = message;
+    const dismiss = document.createElement('button');
+    dismiss.setAttribute('style', 'background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;margin-left:4px;padding:0 2px;font-size:0.9rem;line-height:1');
+    dismiss.title = 'Dismiss';
+    dismiss.textContent = '×';
+    dismiss.addEventListener('click', () => toast.remove());
+    toast.append(icon, msg, dismiss);
     this.container.appendChild(toast);
     setTimeout(() => {
       toast.style.animation = 'none';

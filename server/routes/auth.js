@@ -18,6 +18,11 @@ const { requireAuth } = require('../middleware/auth');
 const emailService = require('../services/email');
 const audit        = require('../services/audit');
 
+/* Strip HTML tags from user-controlled text fields to prevent stored XSS */
+function stripHtml(str) {
+  return (str || '').replace(/<[^>]*>/g, '').replace(/[<>]/g, '').trim();
+}
+
 const JWT_SECRET     = process.env.JWT_SECRET || 'svcapital-dev-secret-change-in-production';
 
 function generateRecoveryCodes() {
@@ -33,7 +38,8 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
 const IS_PROD        = process.env.NODE_ENV === 'production';
 
 if (IS_PROD && !process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET env var is not set. All tokens are signed with a public default — set this in Railway immediately.');
+  console.error('FATAL: JWT_SECRET env var is not set. Refusing to start — all tokens would be forgeable.');
+  process.exit(1);
 }
 
 function signToken(user) {
@@ -196,10 +202,12 @@ router.post('/login', async (req, res) => {
 router.post('/register', async (req, res) => {
   try {
     const {
-      email, password, firstName, lastName, phone,
+      email, password, phone,
       idNumber, province, occupation, role = 'investor',
       riskProfile = 'moderate', referredBy = '', notes = '',
     } = req.body;
+    const firstName = stripHtml(req.body.firstName);
+    const lastName  = stripHtml(req.body.lastName);
 
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       return res.status(400).json({ error: 'Valid email address is required.' });
@@ -484,8 +492,8 @@ async function issueStaffJwt(emp, res) {
   return { token, role: jwtRole };
 }
 
-const MAX_LOGIN_ATTEMPTS = 5;
-const LOCKOUT_MINUTES    = 15;
+const MAX_LOGIN_ATTEMPTS = 3;
+const LOCKOUT_MINUTES    = 30;
 
 /* ─── POST /api/auth/staff-lookup ───────────────────────────────────────────
    Returns employee display fields for the email-lookup step.
@@ -803,6 +811,10 @@ router.post('/refresh', async (req, res) => {
     if (!rows[0]) { res.clearCookie('svc_refresh', { path: '/api/auth' }); return res.status(401).json({ error: 'Session expired' }); }
     const { rows: users } = await pool.query('SELECT * FROM users WHERE id=$1', [rows[0].user_id]);
     if (!users[0] || !users[0].is_active) return res.status(401).json({ error: 'Account inactive' });
+    const currentIp = (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+    if (rows[0].ip_address && currentIp && rows[0].ip_address !== currentIp) {
+      console.warn(`[auth/refresh] IP change for user ${rows[0].user_id}: ${rows[0].ip_address} → ${currentIp}`);
+    }
     const newRt = uuidv4();
     await pool.query('DELETE FROM sessions WHERE id=$1', [rows[0].id]);
     await pool.query(

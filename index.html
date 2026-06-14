@@ -40,6 +40,39 @@
     });
   </script>
   <script src="/js/analytics.js"></script>
+  <style>
+    /* Hero social proof */
+    .hero-social-proof { display:flex;align-items:center;gap:12px;margin-top:28px; }
+    .investor-avatars { display:flex; }
+    .inv-av { width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;color:#fff;border:2px solid #0d1117;margin-left:-8px;letter-spacing:0; }
+    .inv-av:first-child { margin-left:0; }
+    .hero-social-text { font-size:0.82rem;color:rgba(255,255,255,0.75);line-height:1.4; }
+    .hero-social-text strong { color:#fff;font-size:0.9rem; }
+    .live-dot-wrap { display:inline-flex;align-items:center;gap:5px;margin-top:3px;font-size:0.72rem;color:#22c55e; }
+    .live-dot-pulse { width:7px;height:7px;background:#22c55e;border-radius:50%;animation:pulse-dot 2s infinite; }
+    @keyframes pulse-dot { 0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.6)} 50%{box-shadow:0 0 0 6px rgba(34,197,94,0)} }
+
+    /* Why section */
+    .why-section { padding: 80px 0; background: var(--bg, #0d1117); }
+    .why-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:48px; }
+    @media(max-width:900px){ .why-grid{grid-template-columns:repeat(2,1fr);} }
+    @media(max-width:600px){ .why-grid{grid-template-columns:1fr;} }
+    .why-card { background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:28px;transition:all 0.3s ease; }
+    .why-card:hover { background:rgba(255,255,255,0.05);border-color:rgba(212,175,55,0.2);transform:translateY(-3px); }
+    .why-card__icon { width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;margin-bottom:16px; }
+    .why-card h3 { font-size:1rem;font-weight:700;color:#f0f4f8;margin-bottom:10px; }
+    .why-card p { font-size:0.85rem;color:#6b7280;line-height:1.7; }
+
+    /* Partner strip */
+    .partners-section { padding:40px 0;border-top:1px solid rgba(255,255,255,0.06);border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.01); }
+    .partners-label { text-align:center;font-size:0.75rem;color:#4a6080;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:24px; }
+    .partners-row { display:flex;justify-content:center;flex-wrap:wrap;gap:16px; }
+    .partner-chip { display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 20px;transition:all 0.2s; }
+    .partner-chip:hover { background:rgba(255,255,255,0.07);border-color:rgba(212,175,55,0.25); }
+    .partner-chip i { font-size:1.4rem; }
+    .partner-chip strong { display:block;font-size:0.88rem;font-weight:700;color:#e2e8f0;line-height:1.2; }
+    .partner-chip span { font-size:0.72rem;color:#4a6080; }
+  </style>
 </head>
 <body>
 
@@ -51,7 +84,6 @@
       <a href="#" class="nav-logo">
         <img src="assets/logo.png" alt="SV Capital" class="nav-logo-img" width="36" height="36">
         <span class="logo-sv">SV</span><span class="logo-capital">CAPITAL</span>
-        <span class="logo-badge">FSP 52449</span>
       </a>
 
       <button class="nav-mobile-toggle" id="mobileToggle" aria-label="Open menu">
@@ -108,7 +140,7 @@
         <div class="hero-trust">
           <div class="trust-item">
             <i class="fa-solid fa-shield-halved"></i>
-            <span>FSCA Regulated · FSP 52449</span>
+            <span>FSCA Regulated</span>
           </div>
           <div class="trust-divider"></div>
           <div class="trust-item">
@@ -119,6 +151,19 @@
           <div class="trust-item">
             <i class="fa-solid fa-coins"></i>
             <span>R200M+ Invested</span>
+          </div>
+        </div>
+        <div class="hero-social-proof">
+          <div class="investor-avatars">
+            <div class="inv-av" style="background:linear-gradient(135deg,#7c3aed,#a78bfa)">NK</div>
+            <div class="inv-av" style="background:linear-gradient(135deg,#059669,#34d399)">TM</div>
+            <div class="inv-av" style="background:linear-gradient(135deg,#d97706,#fbbf24)">LP</div>
+            <div class="inv-av" style="background:linear-gradient(135deg,#dc2626,#f87171)">SS</div>
+            <div class="inv-av" style="background:linear-gradient(135deg,#0891b2,#67e8f9)">+</div>
+          </div>
+          <div class="hero-social-text">
+            <strong id="liveInvestorCount">3,000+</strong> investors already growing wealth
+            <div class="live-dot-wrap"><span class="live-dot-pulse"></span> Live</div>
           </div>
         </div>
       </div>
@@ -236,7 +281,7 @@
       <div class="stats-ticker__sep"></div>
       <div class="stats-ticker__item">
         <i class="fa-solid fa-shield-halved"></i>
-        <strong>FSCA</strong> Regulated · FSP 52449
+        <strong>FSCA</strong> Regulated
       </div>
       <div class="stats-ticker__sep"></div>
       <div class="stats-ticker__item">
@@ -272,7 +317,7 @@
       <div class="stats-ticker__sep"></div>
       <div class="stats-ticker__item">
         <i class="fa-solid fa-shield-halved"></i>
-        <strong>FSCA</strong> Regulated · FSP 52449
+        <strong>FSCA</strong> Regulated
       </div>
       <div class="stats-ticker__sep"></div>
       <div class="stats-ticker__item">
@@ -537,6 +582,51 @@
     </div>
   </section>
 
+  <hr class="section-rule" />
+
+  <!-- WHY SV CAPITAL -->
+  <section class="why-section">
+    <div class="container">
+      <div class="section-header" data-reveal="up">
+        <div class="section-eyebrow">Why Investors Choose Us</div>
+        <h2 class="section-title">Built different. Built for you.</h2>
+        <p class="section-sub">We're not a bank, a unit trust, or a money market account. We're something better.</p>
+      </div>
+      <div class="why-grid">
+        <div class="why-card" data-reveal="up" data-reveal-delay="0">
+          <div class="why-card__icon" style="background:rgba(212,175,55,0.12);color:#D4AF37"><i class="fa-solid fa-layer-group"></i></div>
+          <h3>Real Tangible Assets</h3>
+          <p>Your money funds real cattle, real solar panels, real bikes — not derivatives, not speculation. You can see, touch, and track exactly what your investment is doing.</p>
+        </div>
+        <div class="why-card" data-reveal="up" data-reveal-delay="100">
+          <div class="why-card__icon" style="background:rgba(34,197,94,0.12);color:#22c55e"><i class="fa-solid fa-chart-line"></i></div>
+          <h3>Inflation-Beating Returns</h3>
+          <p>SA inflation runs at ~5–6%. Our products average 12–21% p.a. Your money doesn't just hold its value — it grows meaningfully against the cost of living.</p>
+        </div>
+        <div class="why-card" data-reveal="up" data-reveal-delay="200">
+          <div class="why-card__icon" style="background:rgba(99,102,241,0.12);color:#818cf8"><i class="fa-solid fa-eye"></i></div>
+          <h3>Full Transparency</h3>
+          <p>Live pool progress, partner documentation, and real-time portfolio tracking — all in your dashboard. No black boxes. You always know exactly where every rand is.</p>
+        </div>
+        <div class="why-card" data-reveal="up" data-reveal-delay="300">
+          <div class="why-card__icon" style="background:rgba(20,184,166,0.12);color:#2dd4bf"><i class="fa-solid fa-coins"></i></div>
+          <h3>Start from R500</h3>
+          <p>Alternative investments used to require millions. We've made them accessible from R500. Whether you're a first-time investor or a high-net-worth individual, there's a product for you.</p>
+        </div>
+        <div class="why-card" data-reveal="up" data-reveal-delay="400">
+          <div class="why-card__icon" style="background:rgba(239,68,68,0.12);color:#f87171"><i class="fa-solid fa-shield-halved"></i></div>
+          <h3>FSCA Regulated</h3>
+          <p>All fund flows are managed through a licensed Financial Services Provider authorised by the Financial Sector Conduct Authority. Your capital moves through a regulated, compliant entity.</p>
+        </div>
+        <div class="why-card" data-reveal="up" data-reveal-delay="500">
+          <div class="why-card__icon" style="background:rgba(251,146,60,0.12);color:#fb923c"><i class="fa-solid fa-handshake"></i></div>
+          <h3>Vetted Partners Only</h3>
+          <p>Beefcor, The Solar Experts, MoolaLend, OnFleet — all household names in their sectors, all subject to SV Capital's rigorous due diligence before a single rand is deployed.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ═══════════════════════════════════════════════
        CALCULATOR
   ═══════════════════════════════════════════════ -->
@@ -731,6 +821,43 @@
     </div>
   </section>
 
+  <!-- PARTNER ECOSYSTEM -->
+  <section class="partners-section">
+    <div class="container">
+      <p class="partners-label">Our vetted investment partners</p>
+      <div class="partners-row">
+        <div class="partner-chip">
+          <i class="fa-solid fa-cow" style="color:#D4AF37"></i>
+          <div>
+            <strong>Beefcor</strong>
+            <span>Cattle Feedlot</span>
+          </div>
+        </div>
+        <div class="partner-chip">
+          <i class="fa-solid fa-solar-panel" style="color:#4CAF50"></i>
+          <div>
+            <strong>The Solar Experts</strong>
+            <span>Clean Energy</span>
+          </div>
+        </div>
+        <div class="partner-chip">
+          <i class="fa-solid fa-building-columns" style="color:#818cf8"></i>
+          <div>
+            <strong>MoolaLend</strong>
+            <span>SMME Finance</span>
+          </div>
+        </div>
+        <div class="partner-chip">
+          <i class="fa-solid fa-motorcycle" style="color:#fb923c"></i>
+          <div>
+            <strong>OnFleet</strong>
+            <span>Last-Mile Delivery</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ═══════════════════════════════════════════════
        IMPACT / STATS
   ═══════════════════════════════════════════════ -->
@@ -823,7 +950,7 @@
             <div class="compliance-item">
               <div class="compliance-item__icon"><i class="fa-solid fa-certificate"></i></div>
               <div>
-                <strong>FSP License #52449</strong>
+                <strong>FSCA Authorised</strong>
                 <p>Authorised by the FSCA to manage short-term and long-term deposits</p>
               </div>
             </div>
@@ -872,52 +999,6 @@
   </section>
 
   <!-- ═══════════════════════════════════════════════
-       TEAM
-  ═══════════════════════════════════════════════ -->
-  <section class="team-section" id="team">
-    <div class="container">
-      <div class="section-header" data-reveal="up">
-        <div class="section-eyebrow">Leadership</div>
-        <h2 class="section-title">Built by believers.</h2>
-        <p class="section-sub">Two chartered finance professionals with a shared mission: democratise access to alternative investments in Africa.</p>
-      </div>
-
-      <div class="team-grid">
-        <div class="team-card" data-reveal="up">
-          <div class="team-card__avatar">
-            <div class="team-avatar-ring"></div>
-            <div class="team-avatar-placeholder">AM</div>
-          </div>
-          <div class="team-card__content">
-            <span class="team-credential"><i class="fa-solid fa-certificate"></i> CA(SA) · Finance Pioneer</span>
-            <h3>Ayanda Majola</h3>
-            <span class="team-card__role">Co-Founder &amp; CEO</span>
-            <p>Chartered Accountant turned alternative investment pioneer. Ayanda's vision is to empower future generations and build generational wealth across Africa through transformative investment strategies.</p>
-            <a href="https://za.linkedin.com/in/ayanda-majola-72350bb9" class="team-linkedin" target="_blank">
-              <i class="fa-brands fa-linkedin"></i> LinkedIn Profile
-            </a>
-          </div>
-        </div>
-        <div class="team-card" data-reveal="up" data-reveal-delay="150">
-          <div class="team-card__avatar">
-            <div class="team-avatar-ring"></div>
-            <div class="team-avatar-placeholder">KT</div>
-          </div>
-          <div class="team-card__content">
-            <span class="team-credential"><i class="fa-solid fa-chart-line"></i> Finance Strategy · Operations</span>
-            <h3>Kagiso Tloubatla</h3>
-            <span class="team-card__role">Co-Founder &amp; COO</span>
-            <p>Finance strategist driving operational excellence at SV Capital. Kagiso brings deep expertise in financial structures and a relentless focus on building systems that scale across the African continent.</p>
-            <a href="https://za.linkedin.com/in/kagiso-tloubatla-b0097462" class="team-linkedin" target="_blank">
-              <i class="fa-brands fa-linkedin"></i> LinkedIn Profile
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════════════════════════════════════
        TESTIMONIALS
   ═══════════════════════════════════════════════ -->
   <section class="testimonials-section">
@@ -957,6 +1038,17 @@
             <div>
               <strong>Lerato P.</strong>
               <div class="testimonial-verified">Verified Investor · Solar 7yr</div>
+            </div>
+          </div>
+        </div>
+        <div class="testimonial-card" data-reveal="up" data-reveal-delay="400">
+          <div class="testimonial-stars">★★★★★</div>
+          <p>"The delivery bike investment was my entry point — R3,100 and I started earning weekly. Two years later I have a diversified portfolio across cattle and solar too. The platform makes it so easy to track everything."</p>
+          <div class="testimonial-author">
+            <div class="author-avatar">SK</div>
+            <div>
+              <strong>Sipho K.</strong>
+              <div class="testimonial-verified">Verified Investor · Delivery + Cattle</div>
             </div>
           </div>
         </div>
@@ -1014,7 +1106,7 @@
         </div>
         <div class="final-cta-trust">
           <span><i class="fa-solid fa-lock"></i> FSCA Regulated</span>
-          <span><i class="fa-solid fa-shield-halved"></i> SmartVest FSP 52449</span>
+          <span><i class="fa-solid fa-shield-halved"></i> SmartVest Protected</span>
           <span><i class="fa-solid fa-star"></i> Top 40 SA Start-Up 2018</span>
         </div>
       </div>

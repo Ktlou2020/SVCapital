@@ -98,7 +98,7 @@ const FAQ_DATA = {
   general: [
     {
       q: 'Who owns and runs SV Capital?',
-      a: 'SV Capital is a privately owned company co-founded by Ayanda Majola (CEO) and Kagiso Tloubatla (COO). Ayanda is a Chartered Accountant with a passion for transformative African investments, and Kagiso brings deep expertise in finance and operational excellence.'
+      a: 'SV Capital is a South African alternative investment platform founded by experienced finance professionals with deep expertise in chartered accounting and financial strategy. Our mission is simple: democratise access to real, asset-backed investments for every South African, from R500.'
     },
     {
       q: 'How do I get started?',

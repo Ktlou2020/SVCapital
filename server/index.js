@@ -51,7 +51,8 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
   .split(',').map(s => s.trim()).filter(Boolean);
 
 const DEFAULT_PROD_ORIGINS = ['https://platform.svcapital.co.za', 'https://svcapital.co.za', 'https://www.svcapital.co.za'];
-const EFFECTIVE_ORIGINS = ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : (IS_PROD ? DEFAULT_PROD_ORIGINS : []);
+const DEFAULT_DEV_ORIGINS  = ['http://localhost:3000', 'http://localhost:8080', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:8080'];
+const EFFECTIVE_ORIGINS = ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : (IS_PROD ? DEFAULT_PROD_ORIGINS : DEFAULT_DEV_ORIGINS);
 if (IS_PROD && ALLOWED_ORIGINS.length === 0) {
   console.warn(`⚠️  CORS: ALLOWED_ORIGINS env var not set — defaulting to: ${DEFAULT_PROD_ORIGINS.join(', ')}. Set ALLOWED_ORIGINS to override.`);
 }
@@ -60,8 +61,6 @@ app.use(cors({
   origin: (origin, cb) => {
     // Same-origin requests (no Origin header) are always allowed
     if (!origin) return cb(null, true);
-    // In dev with no config, allow all
-    if (EFFECTIVE_ORIGINS.length === 0) return cb(null, true);
     if (EFFECTIVE_ORIGINS.includes(origin)) return cb(null, true);
     cb(new Error(`CORS: origin ${origin} not allowed`));
   },
@@ -97,9 +96,24 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many login attempts — please try again in 15 minutes.' },
 });
+const staffPinLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many PIN attempts from this device — please try again in 15 minutes.' },
+});
 
 app.use('/api/', apiLimiter);
 app.use('/api/auth/', authLimiter);
+app.use('/api/auth/staff-token', staffPinLimiter);
+app.use('/api/auth/staff-lookup', staffPinLimiter);
+
+/* Prevent caching of all API responses */
+app.use('/api/', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
 
 /* ─── API Routes ─── */
 app.use('/api/auth',        require('./routes/auth'));
@@ -128,7 +142,10 @@ app.use('/api/migrate',   require('./routes/migrate'));
    Remove or disable this route once the platform is fully set up.
    ──────────────────────────────────────────────────────────────────────── */
 app.get('/api/provision', async (req, res) => {
-  const secret = process.env.PROVISION_SECRET || 'svc-provision-2026';
+  const secret = process.env.PROVISION_SECRET;
+  if (!secret) {
+    return res.status(403).json({ error: 'Provision endpoint is disabled — set PROVISION_SECRET env var to enable.' });
+  }
   if (req.query.secret !== secret) {
     return res.status(403).json({ error: 'Forbidden.' });
   }
@@ -136,8 +153,11 @@ app.get('/api/provision', async (req, res) => {
     const pool   = require('./db/pool');
     const bcrypt = require('bcryptjs');
 
-    const cooPassword = process.env.COO_PASSWORD || 'SvCap!C00#2026';
-    const cooHash     = await bcrypt.hash(cooPassword, 12);
+    const cooPassword = process.env.COO_PASSWORD;
+    if (!cooPassword) {
+      return res.status(500).json({ error: 'COO_PASSWORD env var not set.' });
+    }
+    const cooHash = await bcrypt.hash(cooPassword, 12);
 
     // 1. Wipe and re-create the main login user (JWT auth)
     await pool.query('DELETE FROM users');
@@ -181,8 +201,8 @@ app.get('/api/provision', async (req, res) => {
       loginUser:      users,
       employeeRecord: employees,
       loginDetails: {
-        mainLogin:    { url: '/login.html',       email: 'coo@svcapital.co.za', password: cooPassword, redirectsTo: '/admin/index.html' },
-        teamLogin:    { url: '/team/login.html',  email: 'coo@svcapital.co.za', pin: '9001 (last 4 digits of ID number)', redirectsTo: '/team/hub.html' },
+        mainLogin:    { url: '/login.html',       email: 'coo@svcapital.co.za', redirectsTo: '/admin/index.html' },
+        teamLogin:    { url: '/team/login.html',  email: 'coo@svcapital.co.za', pin: 'last 4 digits of ID number', redirectsTo: '/team/hub.html' },
       },
     });
   } catch (err) {

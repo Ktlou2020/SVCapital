@@ -26,35 +26,51 @@ router.post('/request', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'amount must be a positive number.' });
     }
 
-    // Fetch investor for balance check
-    const { rows: [investor] } = await pool.query(
-      'SELECT id, first_name, last_name, email, wallet_balance FROM investors WHERE id = $1',
-      [investorId]
-    );
-    if (!investor) return res.status(404).json({ error: 'Investor record not found.' });
-
-    if (parseFloat(investor.wallet_balance) < numAmount) {
-      return res.status(400).json({
-        error: `Insufficient wallet balance. Available: R${parseFloat(investor.wallet_balance).toFixed(2)}.`,
-      });
-    }
-
     const reference = 'WD-' + require('crypto').randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase();
     const description = `Withdrawal request${bank_name ? ` to ${bank_name}` : ''}${bank_account_number ? ` (${bank_account_number})` : ''}`;
 
-    // Insert pending withdrawal transaction
-    await pool.query(
-      `INSERT INTO transactions
-         (id, investor_id, type, amount, status, reference, description, notes, created_at, updated_at)
-       VALUES (gen_random_uuid(), $1, 'withdrawal', $2, 'pending', $3, $4, $5, NOW(), NOW())`,
-      [investorId, numAmount, reference, description, notes || null]
-    );
+    // Use a serializable transaction + FOR UPDATE to prevent double-spend race conditions
+    const client = await pool.connect();
+    let investor;
+    try {
+      await client.query('BEGIN');
 
-    // Deduct from wallet immediately on request
-    await pool.query(
-      'UPDATE investors SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2',
-      [numAmount, investorId]
-    );
+      const { rows: [row] } = await client.query(
+        'SELECT id, first_name, last_name, email, wallet_balance FROM investors WHERE id = $1 FOR UPDATE',
+        [investorId]
+      );
+      if (!row) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Investor record not found.' });
+      }
+      investor = row;
+
+      if (parseFloat(investor.wallet_balance) < numAmount) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: `Insufficient wallet balance. Available: R${parseFloat(investor.wallet_balance).toFixed(2)}.`,
+        });
+      }
+
+      await client.query(
+        `INSERT INTO transactions
+           (id, investor_id, type, amount, status, reference, description, notes, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1, 'withdrawal', $2, 'pending', $3, $4, $5, NOW(), NOW())`,
+        [investorId, numAmount, reference, description, notes || null]
+      );
+
+      await client.query(
+        'UPDATE investors SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2',
+        [numAmount, investorId]
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
 
     // Fire-and-forget email
     setImmediate(() => emailService.sendWithdrawalRequested(investor, { amount: numAmount, reference })

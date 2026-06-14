@@ -680,8 +680,8 @@ const PAGE_META = {
   budgets:     {title:'Budgets', subtitle:'Monthly budget planning per account'},
   reports:     {title:'Reports', subtitle:'Export financial data to CSV'},
   import:      {title:'Statement Import', subtitle:'Upload bank statements and auto-allocate to accounts'},
-  investments:   {title:'Investment Sync', subtitle:'Sync investor deposits, withdrawals and investments to accounting'},
-  fund_analytics:{title:'Fund Analytics',  subtitle:'AUM, performance metrics, investor returns and platform revenue'},
+  investments:   {title:'Investment Sync', subtitle:'Sync investor deposits, withdrawals and investments — posted to Smartvest Financial Services (FSP 52449)'},
+  fund_analytics:{title:'Fund Analytics',  subtitle:'AUM, performance metrics and returns — Smartvest Financial Services (FSP 52449)'},
 };
 
 function showView(view) {
@@ -907,11 +907,13 @@ function renderDashboard(bid, biz) {
       });
     }
 
-    // Fund KPIs from synced GL accounts
+    // Fund KPIs — always read from Smartvest Financial Services GL
     const kpiEl = document.getElementById('dash-fund-kpis');
     if (kpiEl) {
-      const coaK = getCoa(bid);
-      const txnsK = getTransactions(bid);
+      const svBizK = getSmartvestBiz();
+      const kBid   = svBizK ? svBizK.id : bid;
+      const coaK   = getCoa(kBid);
+      const txnsK  = getTransactions(kBid);
       const byCodeK = {};
       for (const a of coaK) byCodeK[a.code] = a;
       function fundBalK(code) {
@@ -924,14 +926,14 @@ function renderDashboard(bid, biz) {
       const aum = fundBalK('1500'), feeRev = fundBalK('4100'), retInc = fundBalK('4200');
       if (aum !== null) {
         kpiEl.innerHTML = `<div style="margin-top:20px">
-          <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">
-            <i class="fa-solid fa-link" style="color:var(--orange)"></i> Fund Metrics (from Investment Sync)
-            <button class="btn btn-secondary btn-xs" style="margin-left:12px" onclick="showView('fund_analytics')">View Analytics</button>
+          <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+            <i class="fa-solid fa-shield-halved" style="color:var(--purple)"></i> Fund Metrics — Smartvest Financial Services (FSP ${SMARTVEST_FSP_NUM})
+            <button class="btn btn-secondary btn-xs" style="margin-left:auto" onclick="showView('fund_analytics')">View Analytics</button>
           </div>
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
-            <div class="metric-card"><div class="metric-label">Total AUM</div><div class="metric-value" style="color:var(--purple)">${fmt(aum,currency)}</div><div class="metric-sub">Client Investment Portfolio</div></div>
-            <div class="metric-card"><div class="metric-label">Platform Revenue</div><div class="metric-value" style="color:var(--amber)">${fmt(feeRev||0,currency)}</div><div class="metric-sub">Management fees earned</div></div>
-            <div class="metric-card"><div class="metric-label">Returns Income</div><div class="metric-value" style="color:var(--green)">${fmt(retInc||0,currency)}</div><div class="metric-sub">Investment return income</div></div>
+            <div class="metric-card"><div class="metric-label">Total AUM</div><div class="metric-value" style="color:var(--purple)">${fmt(aum,currency)}</div><div class="metric-sub">Client Investment Portfolio (1500)</div></div>
+            <div class="metric-card"><div class="metric-label">Platform Revenue</div><div class="metric-value" style="color:var(--amber)">${fmt(feeRev||0,currency)}</div><div class="metric-sub">Management fees earned (4100)</div></div>
+            <div class="metric-card"><div class="metric-label">Returns Income</div><div class="metric-value" style="color:var(--green)">${fmt(retInc||0,currency)}</div><div class="metric-sub">Investment return income (4200)</div></div>
           </div></div>`;
       }
     }
@@ -963,14 +965,18 @@ function renderBusinesses() {
       <thead><tr><th>Business Name</th><th>Reg Number</th><th>VAT</th><th>Currency</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>
         ${bizList.map(b=>`<tr>
-          <td><strong>${b.name}</strong></td>
+          <td>
+            <strong>${b.name}</strong>
+            ${b.isFSP ? `<span style="margin-left:8px;background:rgba(124,92,252,0.15);color:var(--purple);border:1px solid rgba(124,92,252,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">FSP ${b.fspNumber||SMARTVEST_FSP_NUM}</span>` : ''}
+            ${b.isFSP ? `<span style="margin-left:4px;background:rgba(249,115,22,0.12);color:var(--orange);border:1px solid rgba(249,115,22,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">Investments</span>` : ''}
+          </td>
           <td>${b.registrationNumber||'—'}</td>
           <td>${b.vatNumber||'—'}</td>
           <td>${b.currency||'ZAR'}</td>
           <td>${b.id===activeId?'<span class="badge badge-paid">Active</span>':'<span class="badge badge-draft">Inactive</span>'}</td>
           <td>
             ${b.id!==activeId?`<button class="btn btn-secondary btn-xs" onclick="switchBiz('${b.id}')"><i class="fa-solid fa-check"></i> Set Active</button>`:''}
-            <button class="btn btn-danger btn-xs" onclick="deleteBiz('${b.id}')"><i class="fa-solid fa-trash"></i></button>
+            ${!b.isFSP?`<button class="btn btn-danger btn-xs" onclick="deleteBiz('${b.id}')"><i class="fa-solid fa-trash"></i></button>`:'<span style="font-size:0.7rem;color:var(--muted)">FSP entity</span>'}
           </td>
         </tr>`).join('')}
       </tbody>
@@ -2856,7 +2862,18 @@ function _confirmImport() {
 ═══════════════════════════════════════════════════ */
 
 /* Render the investments view — the main entry-point called by showView */
-function renderInvestmentsView(bid, biz) {
+function renderInvestmentsView(_bid, _biz) {
+  // Investments are always accounted for under Smartvest Financial Services
+  const svBiz = getSmartvestBiz();
+  const bid    = svBiz ? svBiz.id : _bid;
+  const biz    = svBiz || _biz;
+
+  if (svBiz && svBiz.id !== _bid) {
+    // Auto-switch the active business to Smartvest FSP so all downstream reads align
+    lsSet('acct_active', svBiz.id);
+    updateSidebarBiz();
+  }
+
   const currency = biz.currency || 'ZAR';
   document.getElementById('topbar-actions').innerHTML = `<button class="btn btn-secondary btn-sm" onclick="showView('fund_analytics')"><i class="fa-solid fa-star" style="color:var(--amber)"></i> Fund Analytics</button>`;
   const content = document.getElementById('acct-content');
@@ -2909,13 +2926,22 @@ function renderInvestmentsView(bid, biz) {
     </div>
     <!-- Investment Sync View -->
     <div id="view-investments" class="view">
+      <!-- FSP Attribution Banner -->
+      <div style="display:flex;align-items:center;gap:14px;background:rgba(124,92,252,0.07);border:1px solid rgba(124,92,252,0.25);border-radius:12px;padding:14px 18px;margin-bottom:16px">
+        <div style="width:38px;height:38px;border-radius:10px;background:rgba(124,92,252,0.15);color:var(--purple);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-shield-halved"></i></div>
+        <div style="flex:1">
+          <div style="font-size:0.88rem;font-weight:800;color:var(--text)">Smartvest Financial Services</div>
+          <div style="font-size:0.75rem;color:var(--muted)">FSP Licence No. ${SMARTVEST_FSP_NUM} · All investment transactions are posted to this entity's general ledger</div>
+        </div>
+        <span style="background:rgba(34,197,94,0.1);color:var(--green);border:1px solid rgba(34,197,94,0.25);border-radius:20px;padding:3px 12px;font-size:0.72rem;font-weight:700">Active FSP Entity</span>
+      </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:16px">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
           <h2 style="font-size:1rem;font-weight:700;margin:0"><i class="fa-solid fa-link" style="color:var(--orange);margin-right:8px"></i>Investment Accounting Sync</h2>
           <button class="btn btn-primary" id="syncInvBtn" onclick="syncInvestmentsToAccounting()"><i class="fa-solid fa-rotate"></i> Sync Now</button>
         </div>
         <div style="padding:16px 20px">
-          <p style="font-size:0.84rem;color:var(--muted);margin-bottom:12px">Pull all investor deposits, withdrawals and investments from the platform and automatically post the correct double-entry journal entries to this accounting business.</p>
+          <p style="font-size:0.84rem;color:var(--muted);margin-bottom:12px">Pull all investor deposits, withdrawals and investments from the platform and post double-entry journal entries to <strong style="color:var(--text)">Smartvest Financial Services</strong> — the licensed FSP entity that holds all client funds.</p>
           <div id="invSyncStatus" style="margin-bottom:12px"></div>
           <div style="background:rgba(249,115,22,0.07);border-radius:10px;padding:14px;font-size:0.82rem">
             <div style="font-weight:700;margin-bottom:8px">Journal Entry Rules Applied:</div>
@@ -3018,9 +3044,10 @@ function _renderInvLedger(bid) {
 /* Main sync function — pulls backend data and posts double-entry journal entries */
 async function syncInvestmentsToAccounting() {
   try {
-    // 1. Get active business
-    const bid = getActiveId();
-    if (!bid) { showToast('No active business selected', 'error'); return; }
+    // 1. Always sync to Smartvest Financial Services FSP entity
+    const svBiz = getSmartvestBiz();
+    if (!svBiz) { showToast('Smartvest Financial Services entity not found — reloading may fix this', 'error'); return; }
+    const bid = svBiz.id;
 
     // 2. Ensure required COA accounts exist
     const accts = ensureInvestmentCoa(bid);
@@ -3200,7 +3227,12 @@ function _acctConfirm(message, confirmLabel = 'Confirm', confirmClass = 'btn-pri
 /* ═══════════════════════════════════════════════════
    FUND ANALYTICS VIEW
 ═══════════════════════════════════════════════════ */
-function renderFundAnalytics(bid, biz) {
+function renderFundAnalytics(_bid, _biz) {
+  // Fund analytics always reads from Smartvest Financial Services
+  const svBiz = getSmartvestBiz();
+  const bid    = svBiz ? svBiz.id : _bid;
+  const biz    = svBiz || _biz;
+
   const currency = biz.currency || 'ZAR';
   const tb = document.getElementById('topbar-actions');
   tb.innerHTML = `
@@ -3254,11 +3286,11 @@ function renderFundAnalytics(bid, biz) {
 
   const content = document.getElementById('acct-content');
   content.innerHTML = `
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:12px">
-      <i class="fa-solid fa-circle-info" style="color:var(--indigo);font-size:1.1rem"></i>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;padding:14px 18px;background:rgba(124,92,252,0.07);border:1px solid rgba(124,92,252,0.25);border-radius:12px">
+      <i class="fa-solid fa-shield-halved" style="color:var(--purple);font-size:1.1rem"></i>
       <div>
-        <div style="font-size:0.82rem;font-weight:700">Last Investment Sync: <span style="color:var(--teal)">${lastSyncStr}</span></div>
-        <div style="font-size:0.75rem;color:var(--muted)">${syncedCount} GL entries posted · Run Investment Sync to refresh</div>
+        <div style="font-size:0.82rem;font-weight:800;color:var(--text)">Smartvest Financial Services · FSP ${SMARTVEST_FSP_NUM}</div>
+        <div style="font-size:0.75rem;color:var(--muted)">Last sync: ${lastSyncStr} · ${syncedCount} GL entries posted · All AUM and returns are reflected in this entity's books</div>
       </div>
       <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="showView('investments');setTimeout(syncInvestmentsToAccounting,100)"><i class="fa-solid fa-rotate"></i> Sync Now</button>
     </div>
@@ -3527,6 +3559,75 @@ function downloadFullFinancialPack() {
 }
 
 /* ═══════════════════════════════════════════════════
+   SMARTVEST FSP SEED
+   Ensures "Smartvest Financial Services" always exists
+   as the designated FSP entity for investment accounting.
+═══════════════════════════════════════════════════ */
+const SMARTVEST_FSP_NAME = 'Smartvest Financial Services';
+const SMARTVEST_FSP_REG  = 'K2021/000000/07';   // placeholder — update to actual reg number
+const SMARTVEST_FSP_VAT  = '4380314789';          // placeholder — update to actual VAT
+const SMARTVEST_FSP_NUM  = '52449';
+
+function getSmartvestBiz() {
+  return getBizList().find(b => b.name === SMARTVEST_FSP_NAME) || null;
+}
+
+function getSmartvestId() {
+  return getSmartvestBiz()?.id || null;
+}
+
+function seedSmartvestFSP() {
+  const existing = getSmartvestBiz();
+  if (existing) return existing; // already seeded
+
+  const id  = 'sv-fsp-' + Date.now().toString(36);
+  const biz = {
+    id,
+    name:               SMARTVEST_FSP_NAME,
+    registrationNumber: SMARTVEST_FSP_REG,
+    vatNumber:          SMARTVEST_FSP_VAT,
+    fspNumber:          SMARTVEST_FSP_NUM,
+    country:            'ZA',
+    currency:           'ZAR',
+    isFSP:              true,
+    createdAt:          new Date().toISOString(),
+  };
+
+  const list = getBizList();
+  list.unshift(biz); // put it first
+  lsSet('acct_businesses', list);
+
+  // Build COA: start with defaults, then override/add FSP-specific accounts
+  const coa = DEFAULT_COA.map(a => {
+    const override = {
+      '4100': { name: 'Platform Fee Revenue (1%)',   category: 'operating' },
+      '4200': { name: 'Investment Return Income',    category: 'operating' },
+    }[a.code];
+    return { ...a, id: uid(), ...(override || {}) };
+  });
+
+  // Add FSP-specific accounts that are not in DEFAULT_COA
+  const existingCodes = new Set(coa.map(a => a.code));
+  const fspExtra = [
+    { code: '1500', name: 'Client Investment Portfolio', type: 'asset',     category: 'current',   balance: 0 },
+    { code: '2100', name: 'Client Funds Held (FSP)',     type: 'liability', category: 'current',   balance: 0 },
+    { code: '4300', name: 'Performance Fee Income',      type: 'revenue',   category: 'operating', balance: 0 },
+    { code: '4400', name: 'Management Fee Income',       type: 'revenue',   category: 'operating', balance: 0 },
+    { code: '6800', name: 'FSP Compliance Costs',        type: 'expense',   category: 'operating', balance: 0 },
+    { code: '6810', name: 'Fund Administration Costs',   type: 'expense',   category: 'operating', balance: 0 },
+  ];
+  for (const acct of fspExtra) {
+    if (!existingCodes.has(acct.code)) coa.push({ ...acct, id: uid() });
+  }
+  lsSet('acct_coa_' + id, coa);
+
+  // Set as active if nothing is active yet
+  if (!getActiveId()) lsSet('acct_active', id);
+
+  return biz;
+}
+
+/* ═══════════════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
@@ -3534,6 +3635,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Check if we need to auto-seed demo data
   setTimeout(() => {
+    seedSmartvestFSP(); // always ensure the FSP entity exists
     const bid = getActiveId();
     if (bid && !getTransactions(bid).length && !getInvoices(bid).length) {
       _acctConfirm('Load sample transactions and invoices to explore the app?', 'Load Demo Data', 'btn-primary').then(ok => {

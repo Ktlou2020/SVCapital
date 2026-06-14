@@ -274,7 +274,7 @@ function loadNotifications() {
         title: 'Bank account not verified',
         sub: inv.bank_account_notes || 'Your bank details could not be verified. Please update and resubmit.',
         time: 'Action required',
-        action: "navigate('settings',document.querySelector('[data-view=settings]'))",
+        action: "navigate('profile',document.querySelector('[data-view=profile]'))",
         unread: true,
       });
     }
@@ -811,7 +811,7 @@ function renderOverviewInvestments() {
 
     return `<tr>
       <td>
-        <div class="td-strong">${inv.pool_name}</div>
+        <div class="td-strong">${_esc(inv.pool_name)}</div>
         <div style="margin-top:4px">
           <div class="progress-bar" style="width:120px;height:4px"><div class="progress-fill" style="width:${progress}%"></div></div>
         </div>
@@ -1062,7 +1062,7 @@ function renderMyInvestmentCards() {
           <div>
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
               <i class="fa-solid ${pi.icon}" style="color:${pi.color}"></i>
-              <span class="my-inv-card__name">${inv.pool_name}</span>
+              <span class="my-inv-card__name">${_esc(inv.pool_name)}</span>
             </div>
             <div class="my-inv-card__partner">${inv.investor_id}</div>
           </div>
@@ -2646,7 +2646,7 @@ async function loadMaturity() {
       const hasInstruction = !!inv.maturity_instruction;
       return `<div class="maturity-card" style="border-color:var(--border)">
         <div class="maturity-card__info">
-          <div class="maturity-card__name">${inv.pool_name}</div>
+          <div class="maturity-card__name">${_esc(inv.pool_name)}</div>
           <div class="maturity-card__detail">Matures: ${Utils.date(inv.maturity_date)} · ${days} days remaining</div>
           ${hasInstruction ? `<div style="font-size:0.72rem;color:var(--green);margin-top:4px"><i class="fa-solid fa-check-circle"></i> Instruction set: ${inv.maturity_instruction.replace(/_/g,' ')}</div>` : ''}
         </div>
@@ -2668,7 +2668,7 @@ async function loadMaturity() {
       const instruction = inv.maturity_instruction;
       return `<div class="maturity-card">
         <div class="maturity-card__info">
-          <div class="maturity-card__name">${inv.pool_name}</div>
+          <div class="maturity-card__name">${_esc(inv.pool_name)}</div>
           <div class="maturity-card__detail">Matured: ${Utils.date(inv.maturity_date)} · Rate: ${Utils.pct(inv.expected_return_rate)}</div>
           ${instruction ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px"><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> Instruction: ${instruction.replace(/_/g,' ')}</div>` : ''}
         </div>
@@ -2712,7 +2712,7 @@ async function openMaturityModal(investmentId) {
 
   document.getElementById('maturityModalBody').innerHTML = `
     <div class="info-list mb-16">
-      <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${inv.pool_name}</span></div>
+      <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(inv.pool_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Capital</span><span class="info-row__value">${Utils.rand(inv.amount)}</span></div>
       <div class="info-row"><span class="info-row__label">Returns</span><span class="info-row__value text-green">${Utils.rand(inv.actual_return_amount || inv.expected_return_amount)}</span></div>
       <div class="info-row"><span class="info-row__label">Total Payout</span><span class="info-row__value text-gold fw-700">${Utils.rand(total)}</span></div>
@@ -2921,7 +2921,7 @@ function updateStmtQuickStats() {
   }
 
   previewEl.innerHTML = `<div style="display:flex;flex-direction:column;gap:0">
-    ${qsr('Investor', `${investor.first_name||'Thabo'} ${investor.last_name||'Khumalo'}`)}
+    ${qsr('Investor', `${_esc(investor.first_name||'Thabo')} ${_esc(investor.last_name||'Khumalo')}`)}
     ${qsr('Investor ID', investor.id||'INV-002')}
     ${qsr('Total Investments', investments.length)}
     ${qsr('Total Transactions', transactions.length)}
@@ -3186,7 +3186,7 @@ function buildStatementHTML(opts) {
       const statusColor = inv.status === 'active' ? '#2F8C9B' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
       return `<tr style="border-bottom:1px solid #f0f0f0">
         <td style="padding:8px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${inv.id}</td>
-        <td style="padding:8px 10px;font-size:11px;font-weight:600;color:#1a1a1a">${inv.pool_name || '—'}</td>
+        <td style="padding:8px 10px;font-size:11px;font-weight:600;color:#1a1a1a">${_esc(inv.pool_name) || '—'}</td>
         <td style="padding:8px 10px">
           <span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em">${info.label}</span>
         </td>
@@ -5654,8 +5654,8 @@ td:last-child{text-align:right;font-weight:600}
   <table>
     <thead><tr><th>Account Holder Details</th><th></th></tr></thead>
     <tbody>
-      <tr><td>Full Name</td><td>${inv.first_name || ''} ${inv.last_name || ''}</td></tr>
-      <tr><td>Email Address</td><td>${inv.email || '—'}</td></tr>
+      <tr><td>Full Name</td><td>${_esc(inv.first_name)} ${_esc(inv.last_name)}</td></tr>
+      <tr><td>Email Address</td><td>${_esc(inv.email || '—')}</td></tr>
       <tr><td>SA ID / Passport</td><td>${inv.id_number || '—'}</td></tr>
       <tr><td>Investor Account</td><td>${inv.id || '—'}</td></tr>
     </tbody>
@@ -5842,7 +5842,7 @@ function renderOnboardingChecklist() {
       label: 'Complete your FICA verification',
       desc: 'Submit your ID document and proof of address.',
       done: inv.fica_status === 'approved',
-      action: "navigate('kyc', document.querySelector('[data-view=kyc]'))",
+      action: "navigate('profile', document.querySelector('[data-view=profile]'))",
       actionLabel: 'Go to KYC',
     },
     {
@@ -6080,7 +6080,7 @@ async function loadReferralDashboard() {
       : `<span style="color:#f59e0b">Pending</span>`;
     return `
     <tr>
-      <td><div style="font-weight:600;font-size:0.82rem;color:#1a1a1a">${r.first_name} ${r.last_name}</div></td>
+      <td><div style="font-weight:600;font-size:0.82rem;color:#1a1a1a">${_esc(r.first_name)} ${_esc(r.last_name)}</div></td>
       <td>${Utils.statusBadge(r.fica_status || r.status)}</td>
       <td>${(r.total_invested || 0) > 0
         ? `<span class="badge badge--green">Invested</span>`
@@ -6294,7 +6294,7 @@ function _renderCertificatesTable() {
   body.innerHTML = investments.map(inv => {
     const pi = Utils.productInfo(inv.product_type);
     return `<tr>
-      <td class="td-strong">${inv.pool_name || '—'}</td>
+      <td class="td-strong">${_esc(inv.pool_name) || '—'}</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700">${Utils.rand(inv.amount)}</td>
       <td>${Utils.pct(inv.expected_return_rate || inv.annual_rate)}</td>
@@ -6354,7 +6354,7 @@ function generateInvestmentCertificate(invId) {
     <div style="border:2px solid #ff9b0c;border-radius:8px;padding:24px;margin-bottom:20px">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <tr><td style="padding:6px 0;color:#6b7280;width:45%">Certificate Number</td><td style="font-weight:700;color:#1a1a1a">${certNo}</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280">Investor Name</td><td style="font-weight:700">${investor.first_name} ${investor.last_name}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Investor Name</td><td style="font-weight:700">${_esc(investor.first_name)} ${_esc(investor.last_name)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Investor ID</td><td style="font-weight:700">${investor.id}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Investment Pool</td><td style="font-weight:700">${inv.pool_name||pool.name||'—'}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Amount Invested</td><td style="font-weight:700;color:#ff9b0c;font-size:16px">${Utils.rand(inv.amount)}</td></tr>
