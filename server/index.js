@@ -37,10 +37,23 @@ app.use(helmet({
       scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc:      ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'cdnjs.cloudflare.com'],
       fontSrc:       ["'self'", 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com'],
-      imgSrc:        ["'self'", 'data:', 'blob:', '*'],
+      // Narrowed from '*' — external images only allowed from trusted chart/QR sources
+      imgSrc:        ["'self'", 'data:', 'blob:', 'api.qrserver.com', 'chart.googleapis.com'],
       connectSrc:    ["'self'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com', 'api.paystack.co', '*.paystack.co', 'pay.ozow.com'],
       frameSrc:      ["'self'", 'checkout.paystack.com'],
       objectSrc:     ["'none'"],
+    },
+  },
+  // Disable browser features not used by this financial platform
+  permissionsPolicy: {
+    features: {
+      camera:             [],
+      microphone:         [],
+      geolocation:        [],
+      usb:                [],
+      payment:            ["'self'", 'checkout.paystack.com'],
+      fullscreen:         ["'self'"],
+      displayCapture:     [],
     },
   },
 }));

@@ -3,6 +3,9 @@
    ═══════════════════════════════════════════════ */
 'use strict';
 
+/* Escape user-controlled strings before inserting into innerHTML */
+const _esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
 /* ─── State ─── */
 let STATE = {
   investors: [],
@@ -1081,8 +1084,8 @@ async function viewInvestor(id) {
         <div class="flex-center gap-12 mb-16">
           <div style="width:52px;height:52px;border-radius:50%;background:${avatarColor};color:#fff;font-size:1rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${Utils.initials(inv.first_name + ' ' + inv.last_name)}</div>
           <div>
-            <div style="font-size:1.15rem;font-weight:800;color:var(--text)">${inv.first_name||''} ${inv.last_name||''}</div>
-            <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${inv.id||''}<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id||"")},this)' title="Copy account number"><i class="fa-regular fa-copy"></i></button></div>
+            <div style="font-size:1.15rem;font-weight:800;color:var(--text)">${_esc(inv.first_name)||''} ${_esc(inv.last_name)||''}</div>
+            <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${_esc(inv.id)||''}<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id||"")},this)' title="Copy account number"><i class="fa-regular fa-copy"></i></button></div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
               ${Utils.statusBadge(inv.status)}
               ${inv.kyc_status==='approved'?'<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>':'<span class="badge badge--yellow">KYC Pending</span>'}
@@ -1090,13 +1093,13 @@ async function viewInvestor(id) {
           </div>
         </div>
         <div class="info-list">
-          <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${inv.email||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.email)},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-          <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${inv.phone||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.phone)},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-          <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${inv.id_number||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id_number)},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-          <div class="info-row"><span class="info-row__label">Province</span><span class="info-row__value">${(inv.province||'').trim()||'—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Address</span><span class="info-row__value" style="font-size:0.78rem">${inv.address||'—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Occupation</span><span class="info-row__value">${inv.occupation||'—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${inv.risk_profile||'—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${_esc(inv.email)||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.email)},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+          <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(inv.phone)||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.phone)},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+          <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${_esc(inv.id_number)||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id_number)},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+          <div class="info-row"><span class="info-row__label">Province</span><span class="info-row__value">${_esc((inv.province||'').trim())||'—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Address</span><span class="info-row__value" style="font-size:0.78rem">${_esc(inv.address)||'—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Occupation</span><span class="info-row__value">${_esc(inv.occupation)||'—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${_esc(inv.risk_profile)||'—'}</span></div>
           <div class="info-row"><span class="info-row__label">Date Joined</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
         </div>
       </div>
@@ -2269,9 +2272,9 @@ function viewInvestmentDetail(id) {
   document.getElementById('invDetailTitle').textContent = `Investment — ${inv.pool_name}`;
   document.getElementById('invDetailBody').innerHTML = `
     <div class="grid-2 mb-16" style="gap:12px">
-      <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value td-strong">${inv.investor_name}</span></div>
-      <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value td-muted">${inv.investor_email || '—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${inv.pool_name}</span></div>
+      <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value td-strong">${_esc(inv.investor_name)}</span></div>
+      <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value td-muted">${_esc(inv.investor_email) || '—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(inv.pool_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Product</span><span class="info-row__value"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></span></div>
       <div class="info-row"><span class="info-row__label">Invested Amount</span><span class="info-row__value td-gold fw-700">${Utils.rand(inv.amount)}</span></div>
       <div class="info-row"><span class="info-row__label">Expected Return</span><span class="info-row__value td-green">${Utils.rand(inv.expected_return)}</span></div>
@@ -2711,8 +2714,8 @@ async function viewTicket(id) {
   document.getElementById('ticketModalTitle').textContent = `Ticket #${tkt.id} — ${tkt.subject}`;
   document.getElementById('ticketModalBody').innerHTML = `
     <div class="grid-2 mb-16" style="gap:12px">
-      <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value">${tktInvName}${tktEmail ? ` <span style="color:var(--text-muted);font-size:0.78rem">&lt;${tktEmail}&gt;</span>` : ''}</span></div>
-      <div class="info-row"><span class="info-row__label">Category</span><span class="info-row__value">${tkt.category?.replace(/_/g, ' ')}</span></div>
+      <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value">${_esc(tktInvName)}${tktEmail ? ` <span style="color:var(--text-muted);font-size:0.78rem">&lt;${_esc(tktEmail)}&gt;</span>` : ''}</span></div>
+      <div class="info-row"><span class="info-row__label">Category</span><span class="info-row__value">${_esc(tkt.category?.replace(/_/g, ' '))}</span></div>
       <div class="info-row"><span class="info-row__label">Priority</span><span class="info-row__value">${Utils.priorityBadge(tkt.priority)}</span></div>
       <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value">${Utils.statusBadge(tkt.status)}</span></div>
       <div class="info-row"><span class="info-row__label">Submitted</span><span class="info-row__value td-muted">${Utils.date(tkt.created_at)}</span></div>
@@ -2720,7 +2723,7 @@ async function viewTicket(id) {
     </div>
     <div class="panel mb-12">
       <div class="panel__header"><span class="panel__title">Investor Message</span></div>
-      <div class="panel__body" style="font-size:0.85rem;color:var(--text-muted);white-space:pre-wrap">${tkt.message || '—'}</div>
+      <div class="panel__body" style="font-size:0.85rem;color:var(--text-muted);white-space:pre-wrap">${_esc(tkt.message) || '—'}</div>
     </div>
     <div class="form-group">
       <label class="form-label">Admin Response</label>
@@ -3464,15 +3467,15 @@ function viewIFA(ifaId) {
         <div class="flex-center gap-12 mb-16">
           <div class="avatar avatar--lg avatar--gold">${initials.toUpperCase()}</div>
           <div>
-            <div style="font-size:1.1rem;font-weight:800;color:#1a1a1a">${ifa.first_name} ${ifa.last_name}</div>
-            <div style="color:var(--ci-text-muted,#6b7280);font-size:0.8rem">${ifa.email}</div>
-            <div style="color:var(--text-muted);font-size:0.75rem;margin-top:2px">${ifa.company_name || ''}</div>
-            <div class="mt-6"><span class="badge" style="background:${statusColor}20;color:${statusColor}">${ifa.status}</span></div>
+            <div style="font-size:1.1rem;font-weight:800;color:#1a1a1a">${_esc(ifa.first_name)} ${_esc(ifa.last_name)}</div>
+            <div style="color:var(--ci-text-muted,#6b7280);font-size:0.8rem">${_esc(ifa.email)}</div>
+            <div style="color:var(--text-muted);font-size:0.75rem;margin-top:2px">${_esc(ifa.company_name) || ''}</div>
+            <div class="mt-6"><span class="badge" style="background:${statusColor}20;color:${statusColor}">${_esc(ifa.status)}</span></div>
           </div>
         </div>
         <div class="info-list">
-          <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${ifa.phone || '—'}</span></div>
-          <div class="info-row"><span class="info-row__label">FSP License</span><span class="info-row__value td-gold">${ifa.license_number || '—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(ifa.phone) || '—'}</span></div>
+          <div class="info-row"><span class="info-row__label">FSP License</span><span class="info-row__value td-gold">${_esc(ifa.license_number) || '—'}</span></div>
           <div class="info-row"><span class="info-row__label">Commission Rate</span><span class="info-row__value">${(ifa.commission_rate || 0).toFixed(2)}%</span></div>
           <div class="info-row"><span class="info-row__label">Date Joined</span><span class="info-row__value">${Utils.date(ifa.date_joined)}</span></div>
         </div>
@@ -3513,10 +3516,10 @@ function viewIFA(ifaId) {
               <td>
                 <div class="flex-center gap-8">
                   <div class="avatar avatar--sm">${Utils.initials(c.first_name + ' ' + c.last_name)}</div>
-                  <span class="td-strong">${c.first_name} ${c.last_name}</span>
+                  <span class="td-strong">${_esc(c.first_name)} ${_esc(c.last_name)}</span>
                 </div>
               </td>
-              <td class="td-muted">${c.email}</td>
+              <td class="td-muted">${_esc(c.email)}</td>
               <td>${Utils.statusBadge(c.fica_status || c.status)}</td>
               <td class="td-gold fw-700">${Utils.rand(c.wallet_balance)}</td>
               <td class="td-green">${Utils.rand(c.total_invested)}</td>
@@ -4168,12 +4171,12 @@ function renderAuditTable(res) {
 
     return `<tr>
       <td class="td-muted clip" style="font-size:0.75rem">${Utils.date(e.created_at)}</td>
-      <td><div class="clip" style="font-size:0.78rem;font-weight:600">${actor}</div>
-          ${actorRole !== '—' ? `<div class="clip" style="font-size:0.68rem;color:var(--text-muted)">${actorRole}</div>` : ''}</td>
-      <td><span class="badge badge--${badgeClass} clip" style="font-size:0.7rem">${action}</span></td>
-      <td class="td-muted clip" style="font-size:0.75rem">${target}</td>
-      <td class="td-muted clip" style="font-size:0.72rem" title="${desc}">${desc || '—'}</td>
-      <td class="td-muted clip" style="font-size:0.72rem">${ip}</td>
+      <td><div class="clip" style="font-size:0.78rem;font-weight:600">${_esc(actor)}</div>
+          ${actorRole !== '—' ? `<div class="clip" style="font-size:0.68rem;color:var(--text-muted)">${_esc(actorRole)}</div>` : ''}</td>
+      <td><span class="badge badge--${badgeClass} clip" style="font-size:0.7rem">${_esc(action)}</span></td>
+      <td class="td-muted clip" style="font-size:0.75rem">${_esc(target)}</td>
+      <td class="td-muted clip" style="font-size:0.72rem" title="${_esc(desc)}">${_esc(desc) || '—'}</td>
+      <td class="td-muted clip" style="font-size:0.72rem">${_esc(ip)}</td>
     </tr>`;
   }).join('');
 
@@ -4395,10 +4398,10 @@ async function loadPushAnalytics() {
         ${recent.map(n => `
           <tr style="border-bottom:1px solid var(--border)">
             <td style="padding:4px 6px;color:var(--text-dim);white-space:nowrap">${dateStr(n.created_at)}</td>
-            <td style="padding:4px 6px;font-weight:600">${n.title || '—'}</td>
-            <td style="padding:4px 6px;color:var(--text-muted)">${(n.body || '').slice(0, 50)}${(n.body || '').length > 50 ? '…' : ''}</td>
+            <td style="padding:4px 6px;font-weight:600">${_esc(n.title) || '—'}</td>
+            <td style="padding:4px 6px;color:var(--text-muted)">${_esc((n.body || '').slice(0, 50))}${(n.body || '').length > 50 ? '…' : ''}</td>
             <td style="padding:4px 6px;text-align:right">${n.recipient_count ?? 0}</td>
-            <td style="padding:4px 6px"><span class="badge badge--blue">${n.notification_type || 'system'}</span></td>
+            <td style="padding:4px 6px"><span class="badge badge--blue">${_esc(n.notification_type) || 'system'}</span></td>
           </tr>
         `).join('')}
       </tbody>
@@ -5279,7 +5282,7 @@ function renderReconcTable() {
       ? `<span style="background:rgba(249,115,22,.15);color:#f97316;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">⚠ Discrepancy</span>`
       : `<span style="background:rgba(34,197,94,.12);color:#22c55e;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">✓ Balanced</span>`;
     return `<tr>
-      <td><div style="font-weight:600;font-size:0.83rem">${r.inv.first_name} ${r.inv.last_name}</div><div style="font-size:0.72rem;color:#7a92a8">${r.inv.email||''}</div></td>
+      <td><div style="font-weight:600;font-size:0.83rem">${_esc(r.inv.first_name)} ${_esc(r.inv.last_name)}</div><div style="font-size:0.72rem;color:#7a92a8">${_esc(r.inv.email)||''}</div></td>
       <td style="color:#D4AF37;font-size:0.82rem;font-weight:600">${fmt(r.totalDeposited)}</td>
       <td style="color:#60a5fa;font-size:0.82rem;font-weight:600">${fmt(r.totalInvested)}</td>
       <td style="color:#22c55e;font-size:0.82rem;font-weight:600">${fmt(r.walletBalance)}</td>
@@ -5432,7 +5435,7 @@ function renderAdminCmdResults(q) {
   const query = (q||'').toLowerCase().trim();
   const filtered = query ? ADMIN_CMD_ITEMS.filter(c => c.label.toLowerCase().includes(query)) : ADMIN_CMD_ITEMS;
   if (!filtered.length) {
-    el.innerHTML = `<div style="padding:20px;text-align:center;color:#7a92a8;font-size:13px">No results for "${q}"</div>`;
+    el.innerHTML = `<div style="padding:20px;text-align:center;color:#7a92a8;font-size:13px">No results for "${_esc(q)}"</div>`;
     el._filtered = []; return;
   }
   el.innerHTML = filtered.map((c,i) =>
