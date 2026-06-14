@@ -108,17 +108,8 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
   const secretKey = (process.env.PAYSTACK_SECRET_KEY || '').trim();
 
   if (!secretKey) {
-    // No secret key — log warning and fall back to trusting the client reference
-    // Set PAYSTACK_SECRET_KEY in Railway env vars for production security
-    console.warn('[payments] PAYSTACK_SECRET_KEY not set — processing without server verification');
-    try {
-      const result = await creditWallet(resolvedInvestorId, Number(walletCredit), reference, req.user?.email);
-      aml.checkDeposit(pool, resolvedInvestorId, Number(walletCredit), reference).catch(e => console.error('[aml]', e.message));
-      return res.json({ success: true, verified: false, ...result });
-    } catch (err) {
-      console.error('[payments] creditWallet error:', err.message);
-      return res.status(500).json({ error: err.message });
-    }
+    console.error('[payments] PAYSTACK_SECRET_KEY not set — rejecting payment verification request');
+    return res.status(503).json({ error: 'Payment verification is unavailable. Please contact support.' });
   }
 
   // Verify with Paystack REST API
@@ -138,12 +129,12 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
     }
 
     // Use wallet_credit from metadata (base amount, excluding gateway fee)
-    // Fall back to full transaction amount if metadata missing
+    // Fall back to full transaction amount if metadata missing.
+    // Always credit the authenticated user — never trust investor_id from Paystack metadata.
     const creditAmount = Number(psData.data.metadata?.wallet_credit) || (psData.data.amount / 100);
-    const psInvestorId = psData.data.metadata?.investor_id || resolvedInvestorId;
 
-    const result = await creditWallet(psInvestorId, creditAmount, reference, req.user?.email);
-    aml.checkDeposit(pool, psInvestorId, creditAmount, reference).catch(e => console.error('[aml]', e.message));
+    const result = await creditWallet(resolvedInvestorId, creditAmount, reference, req.user?.email);
+    aml.checkDeposit(pool, resolvedInvestorId, creditAmount, reference).catch(e => console.error('[aml]', e.message));
 
     // Save reusable authorization code for future auto top-ups
     let authSaved = false;
@@ -157,7 +148,7 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
            ON CONFLICT (investor_id) DO UPDATE SET
              authorization_code=$2, email=$3, card_type=$4, last4=$5,
              exp_month=$6, exp_year=$7, bank=$8, channel=$9, updated_at=NOW()`,
-          [psInvestorId, auth.authorization_code, psData.data.customer.email,
+          [resolvedInvestorId, auth.authorization_code, psData.data.customer.email,
            auth.card_type, auth.last4, auth.exp_month, auth.exp_year, auth.bank, auth.channel]
         );
         authSaved = true;

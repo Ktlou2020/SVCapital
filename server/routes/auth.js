@@ -33,7 +33,8 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
 const IS_PROD        = process.env.NODE_ENV === 'production';
 
 if (IS_PROD && !process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET env var is not set. All tokens are signed with a public default — set this in Railway immediately.');
+  console.error('FATAL: JWT_SECRET env var is not set. Refusing to start — all tokens would be forgeable.');
+  process.exit(1);
 }
 
 function signToken(user) {

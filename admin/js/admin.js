@@ -1587,10 +1587,12 @@ function viewFicaDocument(kycId) {
   const doc = STATE.kyc.find(k => k.id === kycId);
   if (!doc) return;
 
-  const data = doc.file_data || doc.attachment_data || doc.file_url || '';
+  const rawData = doc.file_data || doc.attachment_data || doc.file_url || '';
   const fileName = doc.file_name || 'Document';
-  const isDataUrl = data.startsWith('data:');
-  const isPdf = fileName.toLowerCase().endsWith('.pdf') || data.includes('application/pdf');
+  const isDataUrl = rawData.startsWith('data:application/pdf') || rawData.startsWith('data:image/');
+  const isHttpUrl = rawData.startsWith('https://') || rawData.startsWith('http://');
+  const data = (isDataUrl || isHttpUrl) ? rawData : '';
+  const isPdf = fileName.toLowerCase().endsWith('.pdf') || rawData.includes('application/pdf');
 
   document.getElementById('ficaDocTitle').textContent = `${doc.document_type?.replace(/_/g,' ') || 'FICA Document'} — ${doc.investor_name}`;
 
@@ -1598,11 +1600,25 @@ function viewFicaDocument(kycId) {
   if (!data) {
     container.innerHTML = '<div class="empty-state"><i class="fa-solid fa-file-slash"></i><p>No file data available</p></div>';
   } else if (isPdf && isDataUrl) {
-    container.innerHTML = `<embed src="${data}" type="application/pdf" style="width:100%;height:520px;border:none;border-radius:8px" />`;
-  } else if (isPdf && data.startsWith('http')) {
-    container.innerHTML = `<iframe src="${data}" style="width:100%;height:520px;border:none;border-radius:8px"></iframe>`;
+    const embed = document.createElement('embed');
+    embed.type = 'application/pdf';
+    embed.setAttribute('style', 'width:100%;height:520px;border:none;border-radius:8px');
+    embed.src = data;
+    container.innerHTML = '';
+    container.appendChild(embed);
+  } else if (isPdf && isHttpUrl) {
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('style', 'width:100%;height:520px;border:none;border-radius:8px');
+    iframe.src = data;
+    container.innerHTML = '';
+    container.appendChild(iframe);
   } else if (isDataUrl) {
-    container.innerHTML = `<img src="${data}" alt="${fileName}" style="max-width:100%;border-radius:8px;display:block;margin:0 auto" />`;
+    const img = document.createElement('img');
+    img.alt = fileName;
+    img.setAttribute('style', 'max-width:100%;border-radius:8px;display:block;margin:0 auto');
+    img.src = data;
+    container.innerHTML = '';
+    container.appendChild(img);
   } else {
     container.innerHTML = `<div style="text-align:center;padding:24px">
       <i class="fa-solid fa-file" style="font-size:3rem;color:#FF8215;margin-bottom:12px"></i>

@@ -128,7 +128,10 @@ app.use('/api/migrate',   require('./routes/migrate'));
    Remove or disable this route once the platform is fully set up.
    ──────────────────────────────────────────────────────────────────────── */
 app.get('/api/provision', async (req, res) => {
-  const secret = process.env.PROVISION_SECRET || 'svc-provision-2026';
+  const secret = process.env.PROVISION_SECRET;
+  if (!secret) {
+    return res.status(403).json({ error: 'Provision endpoint is disabled — set PROVISION_SECRET env var to enable.' });
+  }
   if (req.query.secret !== secret) {
     return res.status(403).json({ error: 'Forbidden.' });
   }
@@ -136,8 +139,11 @@ app.get('/api/provision', async (req, res) => {
     const pool   = require('./db/pool');
     const bcrypt = require('bcryptjs');
 
-    const cooPassword = process.env.COO_PASSWORD || 'SvCap!C00#2026';
-    const cooHash     = await bcrypt.hash(cooPassword, 12);
+    const cooPassword = process.env.COO_PASSWORD;
+    if (!cooPassword) {
+      return res.status(500).json({ error: 'COO_PASSWORD env var not set.' });
+    }
+    const cooHash = await bcrypt.hash(cooPassword, 12);
 
     // 1. Wipe and re-create the main login user (JWT auth)
     await pool.query('DELETE FROM users');
@@ -181,8 +187,8 @@ app.get('/api/provision', async (req, res) => {
       loginUser:      users,
       employeeRecord: employees,
       loginDetails: {
-        mainLogin:    { url: '/login.html',       email: 'coo@svcapital.co.za', password: cooPassword, redirectsTo: '/admin/index.html' },
-        teamLogin:    { url: '/team/login.html',  email: 'coo@svcapital.co.za', pin: '9001 (last 4 digits of ID number)', redirectsTo: '/team/hub.html' },
+        mainLogin:    { url: '/login.html',       email: 'coo@svcapital.co.za', redirectsTo: '/admin/index.html' },
+        teamLogin:    { url: '/team/login.html',  email: 'coo@svcapital.co.za', pin: 'last 4 digits of ID number', redirectsTo: '/team/hub.html' },
       },
     });
   } catch (err) {
