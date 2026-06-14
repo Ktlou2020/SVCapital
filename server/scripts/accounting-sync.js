@@ -52,16 +52,16 @@ const SEED_TRANSACTIONS = [
 ];
 
 const SEED_INVESTMENTS = [
-  { id: 'INV-TXN-001', investor_id: 'INV-001', pool_name: 'Cattle Finance Q1 2024',  amount: 100000, status: 'matured', start_date: '2024-01-15', end_date: '2024-07-15', actual_return: 7415,  expected_return: 7415  },
-  { id: 'INV-TXN-002', investor_id: 'INV-001', pool_name: 'Solar Energy 7-Year',      amount: 75000,  status: 'active',  start_date: '2024-03-01', end_date: null,         actual_return: 0,     expected_return: 16050 },
-  { id: 'INV-TXN-003', investor_id: 'INV-001', pool_name: 'Delivery Bikes Cycle 3',   amount: 50000,  status: 'active',  start_date: '2024-02-01', end_date: null,         actual_return: 0,     expected_return: 8000  },
-  { id: 'INV-TXN-004', investor_id: 'INV-002', pool_name: 'Cattle Finance Q1 2024',  amount: 80000,  status: 'matured', start_date: '2024-01-15', end_date: '2024-07-15', actual_return: 5932,  expected_return: 5932  },
-  { id: 'INV-TXN-005', investor_id: 'INV-002', pool_name: 'Solar Energy 7-Year',      amount: 60000,  status: 'active',  start_date: '2024-03-01', end_date: null,         actual_return: 0,     expected_return: 12840 },
-  { id: 'INV-TXN-006', investor_id: 'INV-003', pool_name: 'SMME Short-Term Q2',       amount: 30000,  status: 'active',  start_date: '2024-04-01', end_date: null,         actual_return: 0,     expected_return: 1741.5},
-  { id: 'INV-TXN-007', investor_id: 'INV-003', pool_name: 'Delivery Bikes Cycle 3',   amount: 40000,  status: 'active',  start_date: '2024-02-01', end_date: null,         actual_return: 0,     expected_return: 6400  },
-  { id: 'INV-TXN-008', investor_id: 'INV-004', pool_name: 'Solar Energy 7-Year',      amount: 150000, status: 'active',  start_date: '2024-03-01', end_date: null,         actual_return: 0,     expected_return: 32100 },
-  { id: 'INV-TXN-009', investor_id: 'INV-004', pool_name: 'Cattle Finance Q1 2024',  amount: 100000, status: 'matured', start_date: '2024-01-15', end_date: '2024-07-15', actual_return: 7415,  expected_return: 7415  },
-  { id: 'INV-TXN-010', investor_id: 'INV-005', pool_name: 'SMME Short-Term Q2',       amount: 25000,  status: 'active',  start_date: '2024-04-01', end_date: null,         actual_return: 0,     expected_return: 1451.25 },
+  { id:'INV-TXN-001', investor_id:'INV-001', pool_name:'Cattle Finance Q1 2024',  product_type:'cattle',     amount:100000, status:'matured',    start_date:'2024-01-15', end_date:'2024-07-15', actual_return:7415,   expected_return:7415   },
+  { id:'INV-TXN-002', investor_id:'INV-001', pool_name:'Solar Energy 7-Year',      product_type:'solar',      amount:75000,  status:'active',     start_date:'2024-03-01', end_date:null,         actual_return:0,      expected_return:16050  },
+  { id:'INV-TXN-003', investor_id:'INV-001', pool_name:'Delivery Bikes Cycle 3',   product_type:'delivery',   amount:50000,  status:'active',     start_date:'2024-02-01', end_date:null,         actual_return:0,      expected_return:8000   },
+  { id:'INV-TXN-004', investor_id:'INV-002', pool_name:'Cattle Finance Q1 2024',  product_type:'cattle',     amount:80000,  status:'matured',    start_date:'2024-01-15', end_date:'2024-07-15', actual_return:5932,   expected_return:5932   },
+  { id:'INV-TXN-005', investor_id:'INV-002', pool_name:'Solar Energy 7-Year',      product_type:'solar',      amount:60000,  status:'active',     start_date:'2024-03-01', end_date:null,         actual_return:0,      expected_return:12840  },
+  { id:'INV-TXN-006', investor_id:'INV-003', pool_name:'SMME Short-Term Q2',       product_type:'short_term', amount:30000,  status:'active',     start_date:'2024-04-01', end_date:null,         actual_return:0,      expected_return:1741.5 },
+  { id:'INV-TXN-007', investor_id:'INV-003', pool_name:'Delivery Bikes Cycle 3',   product_type:'delivery',   amount:40000,  status:'active',     start_date:'2024-02-01', end_date:null,         actual_return:0,      expected_return:6400   },
+  { id:'INV-TXN-008', investor_id:'INV-004', pool_name:'Solar Energy 7-Year',      product_type:'solar',      amount:150000, status:'active',     start_date:'2024-03-01', end_date:null,         actual_return:0,      expected_return:32100  },
+  { id:'INV-TXN-009', investor_id:'INV-004', pool_name:'Cattle Finance Q1 2024',  product_type:'cattle',     amount:100000, status:'matured',    start_date:'2024-01-15', end_date:'2024-07-15', actual_return:7415,   expected_return:7415   },
+  { id:'INV-TXN-010', investor_id:'INV-005', pool_name:'SMME Short-Term Q2',       product_type:'short_term', amount:25000,  status:'active',     start_date:'2024-04-01', end_date:null,         actual_return:0,      expected_return:1451.25},
 ];
 
 /* ═══════════════════════════════════════════════════════════
@@ -284,28 +284,215 @@ async function main() {
   console.log(`  Active AUM               ${ZAR(aum)}`);
   console.log(`  Total Returns Paid Out   ${ZAR(totalReturns)}`);
 
-  // Build localStorage state
-  const biz = {
-    id:                 FSP_BIZ_ID,
-    name:               'Smartvest Financial Services',
-    registrationNumber: 'K2021/000000/07',
-    vatNumber:          '4380314789',
-    fspNumber:          '52449',
-    country:            'ZA',
-    currency:           'ZAR',
-    isFSP:              true,
-    createdAt:          new Date().toISOString(),
+  /* ── SPV Inter-company entity definitions ── */
+  const PRODUCT_SPV_MAP = { cattle:'SVC Farming Pty Ltd', short_term:'MoolaLend Pty Ltd', solar:'Solar SPV 1', delivery:'OnFleet Pty Ltd' };
+  const RAISING_FEE_RATE     = 0.02;
+  const PERFORMANCE_FEE_RATE = 0.20;
+  const SPV_LOAN_ACCT  = { 'SVC Farming Pty Ltd':'1600', 'MoolaLend Pty Ltd':'1601', 'Solar SPV 1':'1602', 'OnFleet Pty Ltd':'1603' };
+  const SPV_ASSET_ACCT = { cattle:'1400', short_term:'1300', solar:'1200', delivery:'1200' };
+  const SPV_REV_ACCT   = { cattle:'4000', short_term:'4000', solar:'4000', delivery:'4000' };
+
+  const HOLDING_BIZ_ID = 'sv-holding';
+  const SPV_IDS = { 'SVC Farming Pty Ltd':'svc-farming', 'MoolaLend Pty Ltd':'moolalend', 'Solar SPV 1':'solar-spv-1', 'OnFleet Pty Ltd':'onfleet-spv' };
+
+  /* COA definitions for each entity */
+  const mkCoa = defs => defs.map(a => ({ ...a, id: uid() }));
+  function byCode(coaArr) { const m = {}; for (const a of coaArr) m[a.code] = a; return m; }
+
+  const holdingCoa = mkCoa([
+    { code:'1000', name:'Cash and Bank',                        type:'asset',     category:'current',   balance:0 },
+    { code:'1300', name:'Due from Smartvest Financial Services',type:'asset',     category:'current',   balance:0 },
+    { code:'1600', name:'Loan to SVC Farming Pty Ltd',         type:'asset',     category:'current',   balance:0 },
+    { code:'1601', name:'Loan to MoolaLend Pty Ltd',           type:'asset',     category:'current',   balance:0 },
+    { code:'1602', name:'Loan to Solar SPV 1',                 type:'asset',     category:'current',   balance:0 },
+    { code:'1603', name:'Loan to OnFleet Pty Ltd',             type:'asset',     category:'current',   balance:0 },
+    { code:'2100', name:'Investor Funding Payable',            type:'liability', category:'current',   balance:0 },
+    { code:'2200', name:'Due to Smartvest Financial Services', type:'liability', category:'current',   balance:0 },
+    { code:'3000', name:'Share Capital',                       type:'equity',    category:'equity',    balance:0 },
+    { code:'3100', name:'Retained Earnings',                   type:'equity',    category:'equity',    balance:0 },
+    { code:'4000', name:'Upfront Raising Fee Income (2%)',     type:'revenue',   category:'operating', balance:0 },
+    { code:'4100', name:'Performance Fee Income (20%)',        type:'revenue',   category:'operating', balance:0 },
+    { code:'6000', name:'Salaries & Wages',                    type:'expense',   category:'operating', balance:0 },
+    { code:'6400', name:'Professional Fees & Legal',           type:'expense',   category:'operating', balance:0 },
+    { code:'6700', name:'Other Expenses',                      type:'expense',   category:'other',     balance:0 },
+  ]);
+  const spvCoaDefs = {
+    'SVC Farming Pty Ltd': mkCoa([
+      { code:'1000', name:'Cash and Bank',                          type:'asset',     category:'current',   balance:0 },
+      { code:'1100', name:'Accounts Receivable — Beefcor',         type:'asset',     category:'current',   balance:0 },
+      { code:'1400', name:'Biological Assets — Cattle (IAS 41)',   type:'asset',     category:'fixed',     balance:0 },
+      { code:'1410', name:'Fair Value Adjustment — Cattle',        type:'asset',     category:'fixed',     balance:0 },
+      { code:'2000', name:'Accounts Payable — Beefcor',            type:'liability', category:'current',   balance:0 },
+      { code:'2500', name:'Loan from SV Capital Pty Ltd',          type:'liability', category:'long_term', balance:0 },
+      { code:'3000', name:'Share Capital (100% SV Capital)',       type:'equity',    category:'equity',    balance:0 },
+      { code:'3100', name:'Retained Earnings',                     type:'equity',    category:'equity',    balance:0 },
+      { code:'4000', name:'Livestock Sales Income',                type:'revenue',   category:'operating', balance:0 },
+      { code:'4200', name:'Fair Value Gain — Biological Assets',   type:'revenue',   category:'other',     balance:0 },
+      { code:'5000', name:'Beefcor Management & Operating Fees',  type:'expense',   category:'cogs',      balance:0 },
+      { code:'5100', name:'Veterinary & Animal Health Costs',      type:'expense',   category:'operating', balance:0 },
+    ]),
+    'MoolaLend Pty Ltd': mkCoa([
+      { code:'1000', name:'Cash and Bank',                         type:'asset',     category:'current',   balance:0 },
+      { code:'1300', name:'Short-term Loan Receivables',           type:'asset',     category:'current',   balance:0 },
+      { code:'1310', name:'Loan Loss Provision (contra)',          type:'asset',     category:'current',   balance:0 },
+      { code:'2500', name:'Loan from SV Capital Pty Ltd',          type:'liability', category:'long_term', balance:0 },
+      { code:'3000', name:'Share Capital (100% SV Capital)',       type:'equity',    category:'equity',    balance:0 },
+      { code:'3100', name:'Retained Earnings',                     type:'equity',    category:'equity',    balance:0 },
+      { code:'4000', name:'Interest Income',                       type:'revenue',   category:'operating', balance:0 },
+      { code:'4100', name:'Origination Fee Income',                type:'revenue',   category:'operating', balance:0 },
+      { code:'5000', name:'Bad Debt Expense',                      type:'expense',   category:'cogs',      balance:0 },
+    ]),
+    'Solar SPV 1': mkCoa([
+      { code:'1000', name:'Cash and Bank',                           type:'asset',     category:'current',   balance:0 },
+      { code:'1200', name:'Solar Energy Systems — at Cost (IAS 16)', type:'asset',     category:'fixed',     balance:0 },
+      { code:'1210', name:'Accumulated Depreciation — Solar',        type:'asset',     category:'fixed',     balance:0 },
+      { code:'2500', name:'Loan from SV Capital Pty Ltd',            type:'liability', category:'long_term', balance:0 },
+      { code:'3000', name:'Share Capital (100% SV Capital)',         type:'equity',    category:'equity',    balance:0 },
+      { code:'3100', name:'Retained Earnings',                       type:'equity',    category:'equity',    balance:0 },
+      { code:'4000', name:'Solar Energy Revenue / PPA Income',       type:'revenue',   category:'operating', balance:0 },
+      { code:'5200', name:'Solar Experts Operating Fees',            type:'expense',   category:'operating', balance:0 },
+      { code:'6600', name:'Depreciation — Solar Systems',            type:'expense',   category:'operating', balance:0 },
+    ]),
+    'OnFleet Pty Ltd': mkCoa([
+      { code:'1000', name:'Cash and Bank',                            type:'asset',     category:'current',   balance:0 },
+      { code:'1200', name:'Delivery Fleet — Bikes, at Cost (IAS 16)', type:'asset',     category:'fixed',     balance:0 },
+      { code:'1210', name:'Accumulated Depreciation — Fleet',         type:'asset',     category:'fixed',     balance:0 },
+      { code:'2500', name:'Loan from SV Capital Pty Ltd',             type:'liability', category:'long_term', balance:0 },
+      { code:'3000', name:'Share Capital (100% SV Capital)',          type:'equity',    category:'equity',    balance:0 },
+      { code:'3100', name:'Retained Earnings',                        type:'equity',    category:'equity',    balance:0 },
+      { code:'4000', name:'Delivery Service Revenue',                 type:'revenue',   category:'operating', balance:0 },
+      { code:'5000', name:'Bike Maintenance & Repairs',               type:'expense',   category:'cogs',      balance:0 },
+      { code:'6600', name:'Depreciation — Delivery Fleet',            type:'expense',   category:'operating', balance:0 },
+    ]),
   };
 
+  /* Generate inter-company journal entries */
+  const hByCode   = byCode(holdingCoa);
+  const spvTxns   = {}; // {[spvId]: [...entries]}
+  const holdingTxns = [];
+
+  for (const inv of investments) {
+    const spvName    = PRODUCT_SPV_MAP[inv.product_type];
+    if (!spvName) continue;
+    const spvId      = SPV_IDS[spvName];
+    const spvCoa     = spvCoaDefs[spvName];
+    const sByCode    = byCode(spvCoa);
+    const amount     = parseFloat(inv.amount) || 0;
+    const raisingFee = Math.round(amount * RAISING_FEE_RATE * 100) / 100;
+    const loanCode   = SPV_LOAN_ACCT[spvName] || '1600';
+    const assetCode  = SPV_ASSET_ACCT[inv.product_type] || '1500';
+    const date       = (inv.start_date || '').toString().split('T')[0];
+    const ref6       = String(inv.id).slice(-6);
+    const poolLabel  = inv.pool_name || 'Pool';
+    spvTxns[spvId]   = spvTxns[spvId] || [];
+
+    // SV Capital: receive capital, earn raising fee, deploy to SPV
+    if (hByCode['1000'] && hByCode['2200']) holdingTxns.push(
+      { id:uid(), accountId:hByCode['1000'].id, type:'debit',  amount, description:`Capital in — ${poolLabel}`, reference:`INV-${ref6}`, date },
+      { id:uid(), accountId:hByCode['2200'].id, type:'credit', amount, description:`Capital via Smartvest FSP`, reference:`INV-${ref6}`, date }
+    );
+    if (raisingFee > 0 && hByCode['2200'] && hByCode['4000']) holdingTxns.push(
+      { id:uid(), accountId:hByCode['2200'].id, type:'debit',  amount:raisingFee, description:`2% raising fee — ${poolLabel}`, reference:`RFE-${ref6}`, date },
+      { id:uid(), accountId:hByCode['4000'].id, type:'credit', amount:raisingFee, description:`2% raising fee — ${poolLabel}`, reference:`RFE-${ref6}`, date }
+    );
+    if (hByCode[loanCode] && hByCode['1000']) holdingTxns.push(
+      { id:uid(), accountId:hByCode[loanCode].id, type:'debit',  amount, description:`Loan to ${spvName} — ${poolLabel}`, reference:`INV-${ref6}`, date },
+      { id:uid(), accountId:hByCode['1000'].id,   type:'credit', amount, description:`Cash deployed to ${spvName}`, reference:`INV-${ref6}`, date }
+    );
+
+    // SPV: receive loan, acquire asset
+    if (sByCode['1000'] && sByCode['2500']) spvTxns[spvId].push(
+      { id:uid(), accountId:sByCode['1000'].id, type:'debit',  amount, description:`Loan from SV Capital — ${poolLabel}`, reference:`INV-${ref6}`, date },
+      { id:uid(), accountId:sByCode['2500'].id, type:'credit', amount, description:`Loan from SV Capital Pty Ltd`, reference:`INV-${ref6}`, date }
+    );
+    if (sByCode[assetCode] && sByCode['1000']) spvTxns[spvId].push(
+      { id:uid(), accountId:sByCode[assetCode].id, type:'debit',  amount, description:`Asset acquired — ${poolLabel}`, reference:`ACQ-${ref6}`, date },
+      { id:uid(), accountId:sByCode['1000'].id,    type:'credit', amount, description:`Payment for asset — ${poolLabel}`, reference:`ACQ-${ref6}`, date }
+    );
+
+    // Payout / maturity
+    if (inv.status === 'matured' || inv.status === 'paid_out') {
+      const ret      = parseFloat(inv.actual_return || inv.expected_return || 0);
+      const perfFee  = Math.round(ret * PERFORMANCE_FEE_RATE * 100) / 100;
+      const revCode  = SPV_REV_ACCT[inv.product_type] || '4000';
+      const payDate  = (inv.end_date || new Date().toISOString()).toString().split('T')[0];
+
+      // SPV: dispose asset, repay loan
+      if (ret > 0 && sByCode['1000'] && sByCode[assetCode] && sByCode[revCode]) spvTxns[spvId].push(
+        { id:uid(), accountId:sByCode['1000'].id,    type:'debit',  amount:amount+ret, description:`Asset disposal proceeds — ${poolLabel}`, reference:`PAY-${ref6}`, date:payDate },
+        { id:uid(), accountId:sByCode[assetCode].id, type:'credit', amount,            description:`Asset disposed — ${poolLabel}`, reference:`PAY-${ref6}`, date:payDate },
+        { id:uid(), accountId:sByCode[revCode].id,   type:'credit', amount:ret,        description:`Return on ${poolLabel}`, reference:`PAY-${ref6}`, date:payDate }
+      );
+      if (sByCode['2500'] && sByCode['1000']) spvTxns[spvId].push(
+        { id:uid(), accountId:sByCode['2500'].id, type:'debit',  amount:amount+ret, description:`Loan repayment to SV Capital — ${poolLabel}`, reference:`PAY-${ref6}`, date:payDate },
+        { id:uid(), accountId:sByCode['1000'].id, type:'credit', amount:amount+ret, description:`Cash paid to SV Capital`, reference:`PAY-${ref6}`, date:payDate }
+      );
+      // SV Capital: receive repayment, retain perf fee
+      if (hByCode['1000'] && hByCode[loanCode]) holdingTxns.push(
+        { id:uid(), accountId:hByCode['1000'].id,    type:'debit',  amount:amount+ret, description:`SPV repayment — ${poolLabel}`, reference:`PAY-${ref6}`, date:payDate },
+        { id:uid(), accountId:hByCode[loanCode].id,  type:'credit', amount,            description:`Loan repaid by ${spvName}`, reference:`PAY-${ref6}`, date:payDate }
+      );
+      if (perfFee > 0 && hByCode['4100'] && hByCode['1000']) holdingTxns.push(
+        { id:uid(), accountId:hByCode['4100'].id, type:'credit', amount:perfFee,        description:`20% perf fee — ${poolLabel}`, reference:`PFE-${ref6}`, date:payDate },
+        { id:uid(), accountId:hByCode['1000'].id, type:'debit',  amount:perfFee,        description:`Perf fee retained — ${poolLabel}`, reference:`PFE-${ref6}`, date:payDate }
+      );
+    }
+  }
+
+  // Compute intercompany summaries for reporting
+  const totalRaisingFees = investments.reduce((s, i) => s + Math.round(parseFloat(i.amount||0) * RAISING_FEE_RATE * 100) / 100, 0);
+  const totalPerfFees    = investments.filter(i => i.status === 'matured' || i.status === 'paid_out')
+    .reduce((s, i) => s + Math.round(parseFloat(i.actual_return || i.expected_return || 0) * PERFORMANCE_FEE_RATE * 100) / 100, 0);
+
+  console.log('\n── SV Capital Pty Ltd (Holding) ─────────────────────────');
+  console.log(`  Raising Fees Earned (2%)     ${ZAR(totalRaisingFees)}`);
+  console.log(`  Performance Fees (20%)       ${ZAR(totalPerfFees)}`);
+  console.log('\n── SPV Deployment Summary ───────────────────────────────');
+  for (const [spvName, spvId] of Object.entries(SPV_IDS)) {
+    const spvInvs = investments.filter(i => PRODUCT_SPV_MAP[i.product_type] === spvName);
+    const deployed = spvInvs.reduce((s, i) => s + parseFloat(i.amount || 0), 0);
+    const active   = spvInvs.filter(i => i.status === 'active').reduce((s, i) => s + parseFloat(i.amount || 0), 0);
+    console.log(`  ${spvName.padEnd(30)} Deployed: ${ZAR(deployed).padStart(14)}  Active: ${ZAR(active)}`);
+  }
+
+  /* ── Build localStorage entities ── */
+  const now = new Date().toISOString();
+
+  const fspBiz = {
+    id: FSP_BIZ_ID, name:'Smartvest Financial Services',
+    registrationNumber:'K2021/000000/07', vatNumber:'4380314789',
+    fspNumber:'52449', country:'ZA', currency:'ZAR', isFSP:true, createdAt:now,
+  };
+  const holdingBiz = {
+    id: HOLDING_BIZ_ID, name:'SV Capital Pty Ltd',
+    registrationNumber:'K2019/000001/07', country:'ZA', currency:'ZAR',
+    isHolding:true, createdAt:now,
+  };
+  const spvBizList = Object.entries(SPV_IDS).map(([name, id]) => ({
+    id, name, country:'ZA', currency:'ZAR', parentEntity:'SV Capital Pty Ltd',
+    productType: Object.entries(PRODUCT_SPV_MAP).find(([,n])=>n===name)?.[0] || '',
+    createdAt: now,
+  }));
+
+  const allBizzes = [fspBiz, holdingBiz, ...spvBizList];
+
+  // Build localStorage state
   const lsState = {
-    'acct_businesses':              [biz],
-    'acct_active':                  FSP_BIZ_ID,
-    [`acct_coa_${FSP_BIZ_ID}`]:     coa,
+    'acct_businesses': allBizzes,
+    'acct_active':     FSP_BIZ_ID,
+    [`acct_coa_${FSP_BIZ_ID}`]:          coa,
     [`acct_transactions_${FSP_BIZ_ID}`]: entries,
     [`acct_synced_txn_${FSP_BIZ_ID}`]:   syncedTxn,
     [`acct_synced_inv_${FSP_BIZ_ID}`]:   syncedInv,
-    [`acct_last_sync_${FSP_BIZ_ID}`]:    new Date().toISOString(),
+    [`acct_last_sync_${FSP_BIZ_ID}`]:    now,
+    [`acct_coa_${HOLDING_BIZ_ID}`]:          holdingCoa,
+    [`acct_transactions_${HOLDING_BIZ_ID}`]: holdingTxns,
   };
+  // Add each SPV's COA and transactions
+  for (const [spvName, spvId] of Object.entries(SPV_IDS)) {
+    lsState[`acct_coa_${spvId}`]          = spvCoaDefs[spvName];
+    lsState[`acct_transactions_${spvId}`] = spvTxns[spvId] || [];
+  }
 
   // Write JSON output
   const outPath = path.join(__dirname, '../../team/accounting-state.json');
