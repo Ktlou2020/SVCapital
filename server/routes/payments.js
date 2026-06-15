@@ -220,9 +220,11 @@ router.post('/paystack/webhook', async (req, res) => {
 router.post('/ozow-hash', requireAuth, (req, res) => {
   const siteCode   = (process.env.OZOW_SITE_CODE   || '').trim();
   const privateKey = (process.env.OZOW_PRIVATE_KEY || '').trim();
+  // IsTest is server-controlled — set OZOW_IS_TEST=true in env for sandbox
+  const isTestEnv  = (process.env.OZOW_IS_TEST || 'false').trim().toLowerCase() === 'true' ? 'true' : 'false';
 
-  if (!siteCode)   return res.status(503).json({ error: 'OZOW_SITE_CODE not configured on server.' });
-  if (!privateKey) return res.status(503).json({ error: 'OZOW_PRIVATE_KEY not configured on server.' });
+  if (!siteCode)   return res.status(503).json({ error: 'OZOW_SITE_CODE not configured. Set it in Railway → Variables.' });
+  if (!privateKey) return res.status(503).json({ error: 'OZOW_PRIVATE_KEY not configured. Set it in Railway → Variables (use the Private Key, NOT the API Key).' });
 
   const {
     countryCode  = 'ZA',
@@ -234,26 +236,26 @@ router.post('/ozow-hash', requireAuth, (req, res) => {
     cancelUrl  = '',
     errorUrl   = '',
     successUrl,
-    isTest     = 'false',
   } = req.body;
 
   if (!amount || !transactionRef || !successUrl)
     return res.status(400).json({ error: 'amount, transactionRef and successUrl are required.' });
 
   const lc = v => String(v).toLowerCase();
-  // notifyUrl is optional but MUST be in the hash if provided (Ozow spec §3.2)
+  // notifyUrl is optional but MUST be in the hash when provided (Ozow spec §3.2)
   const hashParts = [
     lc(siteCode), lc(countryCode), lc(currencyCode),
     lc(amount), lc(transactionRef), lc(bankRef),
   ];
   if (notifyUrl) hashParts.push(lc(notifyUrl));
-  hashParts.push(lc(cancelUrl), lc(errorUrl), lc(successUrl), lc(String(isTest)));
+  hashParts.push(lc(cancelUrl), lc(errorUrl), lc(successUrl), isTestEnv);
   const payload = hashParts.join('') + privateKey;
 
   const hash = crypto.createHash('sha512').update(payload).digest('hex').toLowerCase();
 
-  console.log('[Ozow] hash generated — ref:', transactionRef, 'siteCode:', siteCode, 'isTest:', isTest, 'payloadLen:', payload.length - privateKey.length);
-  return res.json({ hash, siteCode });
+  console.log('[Ozow] hash — ref:', transactionRef, 'siteCode:', siteCode,
+    'isTest:', isTestEnv, 'pkLen:', privateKey.length, 'payloadLen:', hashParts.join('').length);
+  return res.json({ hash, siteCode, isTest: isTestEnv });
 });
 
 /* ──────────────────────────────────────────────────────────
