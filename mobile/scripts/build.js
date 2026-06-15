@@ -49,7 +49,13 @@ for (const f of ['sw.js', 'manifest.json']) {
   if (fs.existsSync(src)) fs.copyFileSync(src, path.join(WWW, f));
 }
 
-// Patch index.html: inject native config before </head>
+// Copy native bridge script
+const nativeSrc = path.join(__dirname, '../src/native.js');
+fs.mkdirSync(path.join(WWW, 'js'), { recursive: true });
+fs.copyFileSync(nativeSrc, path.join(WWW, 'js', 'native.js'));
+console.log('[build] Copied native.js');
+
+// Patch index.html: inject native config + bridge script before </head>
 const indexPath = path.join(WWW, 'index.html');
 if (fs.existsSync(indexPath)) {
   let html = fs.readFileSync(indexPath, 'utf8');
@@ -59,7 +65,8 @@ if (fs.existsSync(indexPath)) {
   <script>
     window.__SVC_NATIVE__ = true;
     window.__SVC_API_BASE__ = '${API_BASE}';
-  </script>`;
+  </script>
+  <script src="js/native.js"></script>`;
 
   html = html.replace('</head>', inject + '\n</head>');
   fs.writeFileSync(indexPath, html, 'utf8');
