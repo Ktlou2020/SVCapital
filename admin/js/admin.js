@@ -1225,8 +1225,9 @@ async function depositToInvestor(investorId, investorName, currentBalance) {
   const amount = parseFloat(amtStr);
   if (!amount || amount <= 0) { Toast.error('Invalid amount'); return; }
   try {
-    const newBalance = Math.round((currentBalance + amount) * 100) / 100;
-    await API.investors.update(investorId, { wallet_balance: newBalance });
+    // Creating a completed deposit transaction triggers the server-side wallet
+    // credit hook atomically — do NOT also update wallet_balance directly or
+    // the balance is credited twice.
     await API.transactions.create({
       id:          Utils.genId('TXN'),
       investor_id: investorId,
@@ -1778,6 +1779,7 @@ function renderPoolsGrid() {
             <span class="pool-stat__value" style="color:var(--gold);text-decoration:underline dotted">${p.live_investor_count ?? p.investor_count ?? 0}</span>
           </div>
           <div class="pool-stat"><span class="pool-stat__label">Term</span><span class="pool-stat__value">${p.term_months ?? '—'}mo</span></div>
+          ${p.management_fee_pct > 0 ? `<div class="pool-stat"><span class="pool-stat__label">Mgt Fee</span><span class="pool-stat__value" style="color:#f59e0b">${(Number(p.management_fee_pct) * 100).toFixed(2)}% (${p.management_fee_frequency || 'once'})</span></div>` : ''}
         </div>
 
         <div class="pool-card__progress-label">
@@ -1850,13 +1852,14 @@ async function viewPoolInvestors(poolId) {
       <div style="overflow-x:auto">
         <table class="data-table" style="table-layout:fixed;width:100%">
           <thead><tr>
-            <th style="width:22%">Investor</th>
-            <th style="width:14%">Account</th>
-            <th style="width:12%">Amount</th>
-            <th style="width:9%">Rate</th>
-            <th style="width:10%">Status</th>
-            <th style="width:11%">Start Date</th>
-            <th style="width:11%">Maturity</th>
+            <th style="width:20%">Investor</th>
+            <th style="width:12%">Account</th>
+            <th style="width:11%">Amount</th>
+            <th style="width:8%">Rate</th>
+            <th style="width:9%">EVA</th>
+            <th style="width:9%">Status</th>
+            <th style="width:10%">Start</th>
+            <th style="width:10%">Maturity</th>
             <th style="width:11%">Instruction</th>
           </tr></thead>
           <tbody>
@@ -1867,6 +1870,7 @@ async function viewPoolInvestors(poolId) {
                 <td class="clip" style="font-family:monospace;font-size:0.75rem;color:var(--gold)">${r.investor_id}</td>
                 <td class="td-gold fw-700 clip">${Utils.rand(r.amount)}</td>
                 <td class="td-green clip">${r.annual_rate ? Utils.pct(r.annual_rate) : '—'}</td>
+                <td class="clip" style="font-size:0.75rem;color:#8b5cf6">${r.eva_amount > 0 ? Utils.rand(r.eva_amount) : '—'}</td>
                 <td><span class="badge ${statusColor[r.investment_status]||'badge--gray'}">${r.investment_status||'—'}</span></td>
                 <td class="td-muted clip">${Utils.date(r.start_date)}</td>
                 <td class="td-muted clip">${Utils.date(r.end_date)}</td>
@@ -2001,6 +2005,16 @@ function _autoPoolName() {
   nameEl.value = parts.join(' - ');
 }
 
+function _autoCalcMaturityDate(openDateId, termId, closeDateId) {
+  const openVal = document.getElementById(openDateId)?.value;
+  const termVal = parseInt(document.getElementById(termId)?.value) || 0;
+  const closeEl = document.getElementById(closeDateId);
+  if (!closeEl || !openVal || !termVal) return;
+  const d = new Date(openVal);
+  d.setMonth(d.getMonth() + termVal);
+  closeEl.value = d.toISOString().split('T')[0];
+}
+
 async function saveNewPool(btn) {
   const name = document.getElementById('newPoolName').value.trim();
   const type = document.getElementById('newPoolType').value;
@@ -2011,7 +2025,7 @@ async function saveNewPool(btn) {
   await _withBtn(btn, async () => {
     await API.pools.create({
       id: `POOL-${type.toUpperCase().slice(0,3)}-${Date.now()}`,
-      name: name, product_type: type,
+      name, product_type: type,
       target_amount: target || 0, raised_amount: 0,
       min_investment: parseFloat(document.getElementById('newPoolMin').value) || 500,
       term_months: parseInt(document.getElementById('newPoolTerm').value) || 12,
@@ -2021,6 +2035,10 @@ async function saveNewPool(btn) {
       end_date: document.getElementById('newPoolCloseDate').value ? new Date(document.getElementById('newPoolCloseDate').value).toISOString() : '',
       status: 'open', investor_count: 0,
       max_capacity,
+      management_fee_pct:       parseFloat(document.getElementById('newPoolMgtFeePct')?.value) || 0,
+      management_fee_frequency: document.getElementById('newPoolMgtFeeFreq')?.value || 'once',
+      operational_fee_pct:      parseFloat(document.getElementById('newPoolOpFeePct')?.value) || 0,
+      operational_fee_frequency: document.getElementById('newPoolOpFeeFreq')?.value || 'annual',
     });
     Toast.success('Pool created');
     Modal.close('addPoolModal');
@@ -2086,6 +2104,14 @@ function editPool(id) {
   document.getElementById('editPoolOpenDate').value    = toDateVal(pool.start_date);
   document.getElementById('editPoolCloseDate').value   = toDateVal(pool.end_date);
   document.getElementById('editPoolMaxCapacity').value = pool.max_capacity || '';
+  const mgtFeeEl = document.getElementById('editPoolMgtFeePct');
+  if (mgtFeeEl) mgtFeeEl.value = pool.management_fee_pct || 0;
+  const mgtFeeFreqEl = document.getElementById('editPoolMgtFeeFreq');
+  if (mgtFeeFreqEl) mgtFeeFreqEl.value = pool.management_fee_frequency || 'once';
+  const opFeeEl = document.getElementById('editPoolOpFeePct');
+  if (opFeeEl) opFeeEl.value = pool.operational_fee_pct || 0;
+  const opFeeFreqEl = document.getElementById('editPoolOpFeeFreq');
+  if (opFeeFreqEl) opFeeFreqEl.value = pool.operational_fee_frequency || 'annual';
 
   Modal.open('editPoolModal');
 }
@@ -2112,6 +2138,10 @@ async function saveEditPool(btn) {
     start_date:     toISO(document.getElementById('editPoolOpenDate').value),
     end_date:       toISO(document.getElementById('editPoolCloseDate').value),
     max_capacity:   maxCapVal2 ? (parseFloat(maxCapVal2) || null) : null,
+    management_fee_pct:        parseFloat(document.getElementById('editPoolMgtFeePct')?.value) || 0,
+    management_fee_frequency:  document.getElementById('editPoolMgtFeeFreq')?.value || 'once',
+    operational_fee_pct:       parseFloat(document.getElementById('editPoolOpFeePct')?.value) || 0,
+    operational_fee_frequency: document.getElementById('editPoolOpFeeFreq')?.value || 'annual',
   };
 
   if (!updates.name) { Toast.error('Pool name is required'); return; }
@@ -3301,22 +3331,16 @@ async function loadSettings() {
 
 function renderSettings() {
   const body = document.getElementById('settingsBody');
-  const categories = {};
-  STATE.settings.forEach(s => {
-    if (!categories[s.category]) categories[s.category] = [];
-    categories[s.category].push(s);
-  });
-
-  body.innerHTML = Object.entries(categories).map(([cat, items]) => `
-    <div style="margin-bottom:24px">
-      <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-dim);font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">${cat.replace(/_/g, ' ')}</div>
-      ${items.map(s => `
-        <div class="form-group">
-          <label class="form-label">${s.label}</label>
-          <input type="text" class="form-input" data-setting-id="${s.id}" value="${s.value}" />
-          ${s.description ? `<div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">${s.description}</div>` : ''}
-        </div>
-      `).join('')}
+  if (!STATE.settings.length) {
+    body.innerHTML = '<div class="text-center text-muted" style="padding:32px">No settings found</div>';
+    return;
+  }
+  // platform_settings uses `key` as PK (not `id`) and `description` (not `label`)
+  body.innerHTML = STATE.settings.map(s => `
+    <div class="form-group">
+      <label class="form-label">${s.key ? s.key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—'}</label>
+      <input type="text" class="form-input" data-setting-id="${s.key}" value="${_esc(s.value || '')}" />
+      ${s.description ? `<div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">${_esc(s.description)}</div>` : ''}
     </div>
   `).join('');
 }

@@ -411,7 +411,7 @@ function navigate(view, btnEl) {
     subaccounts: loadSubAccounts,
     referral: loadReferralDashboard,
     documents: loadDocuments,
-    profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderRecurringStatusSummary(); _renderKycStatusPanel(); },
+    profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderKycStatusPanel(); },
   };
   if (loaders[view]) loaders[view]();
 
@@ -832,12 +832,16 @@ function renderOverviewTxns() {
 
   if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No transactions yet</td></tr>'; return; }
 
-  body.innerHTML = recent.map(t => `<tr>
-    <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ')}</span></td>
-    <td class="${t.amount > 0 ? 'td-green' : 'td-red'} fw-700">${t.amount > 0 ? '+' : ''}${Utils.rand(t.amount)}</td>
-    <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
-    <td class="td-muted">${Utils.date(t.transaction_date)}</td>
-  </tr>`).join('');
+  const _txnIsPositive = t => !['withdrawal', 'fee', 'investment'].includes(t.type);
+  body.innerHTML = recent.map(t => {
+    const pos = _txnIsPositive(t);
+    return `<tr>
+      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ')}</span></td>
+      <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
+      <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
+      <td class="td-muted">${Utils.date(t.transaction_date)}</td>
+    </tr>`;
+  }).join('');
 }
 
 function renderPortfolioTrendChart() {
@@ -1043,7 +1047,9 @@ function filterMyInvestments(filter, btn) {
 
 function renderMyInvestmentCards() {
   const grid = document.getElementById('myInvestmentsGrid');
-  const items = PORTAL.myInvFilter === 'all' ? PORTAL.investments : PORTAL.investments.filter(i => i.status === PORTAL.myInvFilter);
+  const productFilter = document.getElementById('myInvProductFilter')?.value || '';
+  let items = PORTAL.myInvFilter === 'all' ? PORTAL.investments : PORTAL.investments.filter(i => i.status === PORTAL.myInvFilter);
+  if (productFilter) items = items.filter(i => i.product_type === productFilter);
 
   if (!items.length) {
     grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="fa-solid fa-chart-line"></i><p>No investments in this category. <br><a href="#" onclick="navigate(\'marketplace\',null)" style="color:var(--gold)">Explore pools →</a></p></div>';
@@ -1139,14 +1145,18 @@ function renderMyTxnTable() {
     return;
   }
 
-  body.innerHTML = sorted.map(t => `<tr>
-    <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ')}</span></td>
-    <td class="${t.amount > 0 ? 'td-green' : 'td-red'} fw-700">${t.amount > 0 ? '+' : ''}${Utils.rand(t.amount)}</td>
-    <td>${Utils.statusBadge(t.status)}</td>
-    <td class="td-muted" style="font-size:0.72rem">${t.reference || '—'}</td>
-    <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
-    <td class="td-muted">${Utils.date(t.transaction_date)}</td>
-  </tr>`).join('');
+  const _isPosTxn = t => !['withdrawal', 'fee', 'investment'].includes(t.type);
+  body.innerHTML = sorted.map(t => {
+    const pos = _isPosTxn(t);
+    return `<tr>
+      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ')}</span></td>
+      <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
+      <td>${Utils.statusBadge(t.status)}</td>
+      <td class="td-muted" style="font-size:0.72rem">${t.reference || '—'}</td>
+      <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
+      <td class="td-muted">${Utils.date(t.transaction_date)}</td>
+    </tr>`;
+  }).join('');
 }
 
 function _switchTxnTab(tab, btn) {
@@ -2568,7 +2578,7 @@ async function confirmInvestment(pool) {
     const maturityDate = new Date();
     maturityDate.setMonth(maturityDate.getMonth() + pool.term_months);
 
-    // Create investment (server-side fee hook will record the fee transaction separately)
+    // Create investment (server-side hook deducts wallet + fee atomically)
     await API.investments.create({
       id: Utils.genId('INVST'),
       investor_id: DEMO_INVESTOR_ID,
@@ -2584,7 +2594,9 @@ async function confirmInvestment(pool) {
       end_date: maturityDate.toISOString().split('T')[0],
       term_months: pool.term_months,
       payout_option: 'reinvest',
+      maturity_instruction: 'reinvest',   // default: roll into next open pool of same product
       sub_account_id: _pmSaId || undefined,
+      is_reinvestment: false,
     });
 
     // Record investment transaction
@@ -2601,11 +2613,8 @@ async function confirmInvestment(pool) {
       transaction_date: new Date().toISOString(),
     });
 
-    // Update investor wallet and totals (wallet decremented by amount + fee)
-    await API.investors.update(DEMO_INVESTOR_ID, {
-      wallet_balance: Math.max(0, wallet - totalDeducted),
-      total_invested: (parseFloat(PORTAL.investor.total_invested) || 0) + amount
-    });
+    // Wallet deduction and total_invested update are handled atomically server-side
+    // in the investment creation hook — do not also set wallet_balance here.
 
     Toast.success(`Successfully invested ${Utils.rand(amount)} in ${pool.name}!`);
     Modal.close('investModal');
@@ -2804,7 +2813,10 @@ async function submitMaturityInstruction(inv) {
 async function loadSupport() {
   try {
     const res = await API.tickets.list({ limit: 100 });
-    PORTAL.tickets = (res.data || []).filter(t => t.investor_id === DEMO_INVESTOR_ID);
+    // Exclude system-generated tickets (AML checks etc.) from client view
+    PORTAL.tickets = (res.data || []).filter(t =>
+      t.investor_id === DEMO_INVESTOR_ID && !t.is_system && t.category !== 'aml_review'
+    );
     renderMyTickets();
   } catch (e) { Toast.error('Failed to load tickets'); }
 }
@@ -3229,7 +3241,7 @@ function buildStatementHTML(opts) {
   // ─── TRANSACTION LEDGER ───
   if (incTransactions) {
     const txnRows = transactions.length > 0 ? transactions.map(t => {
-      const isPos = t.type !== 'withdrawal' && t.type !== 'fee';
+      const isPos = t.type !== 'withdrawal' && t.type !== 'fee' && t.type !== 'investment';
       const amt = isPos ? `+${fmtNum(Math.abs(t.amount))}` : `-${fmtNum(Math.abs(t.amount))}`;
       const amtColor = isPos ? '#22C55E' : '#EF4444';
       const typeMap = {deposit:'Deposit',withdrawal:'Withdrawal',investment:'Investment',return:'Return',payout:'Payout',fee:'Fee',referral_bonus:'Referral Bonus'};
@@ -3327,7 +3339,7 @@ function buildStatementHTML(opts) {
           <div style="font-size:9px;color:#9ca3af">Authorised Financial Services Provider · FSP License #52449 · Regulated by the FSCA</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:9px;color:#9ca3af">info@svcapital.co.za · www.svcapital.co.za</div>
+          <div style="font-size:9px;color:#9ca3af">enquiry@svcapital.co.za · www.svcapital.co.za</div>
           <div style="font-size:9px;color:#c1c7d0;margin-top:2px">This statement is computer generated and does not require a signature.</div>
         </div>
       </div>
@@ -6258,7 +6270,13 @@ async function _renderKycDocsList() {
               <td class="td-muted">${Utils.date(d.created_at)}</td>
               <td>${Utils.statusBadge(d.status)}</td>
               <td class="td-muted" style="font-size:0.72rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.notes || '—'}</td>
-              <td>${d.file_url ? `<a href="${d.file_url}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-download"></i> Download</a>` : '—'}</td>
+              <td>${
+                d.file_url
+                  ? `<a href="${d.file_url}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-download"></i> View</a>`
+                  : d.file_data
+                    ? `<button class="btn btn--secondary btn--sm" onclick="_viewKycDoc(${JSON.stringify(d.id)})"><i class="fa-solid fa-eye"></i> View</button>`
+                    : '—'
+              }</td>
             </tr>`).join('')}
           </tbody>
         </table>
@@ -6268,6 +6286,37 @@ async function _renderKycDocsList() {
       No documents uploaded yet. Upload your ID and proof of address to get verified.
     </div>`}
   `;
+}
+
+function _viewKycDoc(docId) {
+  const inv = PORTAL.investor;
+  if (!inv) return;
+  // Re-fetch docs to get file_data (may be stripped in list view)
+  API.kyc.list({ investor_id: inv.id, limit: 20 }).then(res => {
+    const doc = (res.data || []).find(d => d.id === docId);
+    if (!doc) { Toast.error('Document not found'); return; }
+    const rawData = doc.file_data || doc.file_url || '';
+    if (!rawData) { Toast.error('No file data available for this document'); return; }
+    if (rawData.startsWith('data:')) {
+      try {
+        const [header, b64] = rawData.split(',');
+        const mime = header.match(/:(.*?);/)?.[1] || 'application/octet-stream';
+        const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+        const blob = new Blob([bytes], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const w = window.open(url, '_blank', 'noopener');
+        if (!w) {
+          const a = document.createElement('a');
+          a.href = rawData; a.download = doc.file_name || 'document'; a.click();
+        }
+      } catch (_) {
+        const w = window.open('', '_blank');
+        if (w) w.document.write(`<title>Document</title><body style="margin:0;background:#000"><img src="${rawData}" style="max-width:100%"></body>`);
+      }
+    } else {
+      window.open(rawData, '_blank', 'noopener,noreferrer');
+    }
+  }).catch(() => Toast.error('Could not load document'));
 }
 
 function loadDocuments() {

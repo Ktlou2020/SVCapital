@@ -121,10 +121,14 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
     const psData = await psRes.json();
 
     if (!psData.status || psData.data?.status !== 'success') {
-      console.error('[payments] Paystack verification failed:', JSON.stringify(psData));
+      const psMsg = psData.message || '';
+      const hint = psMsg.toLowerCase().includes('not found')
+        ? ' — likely test/live key mismatch: PAYSTACK_PUBLIC_KEY and PAYSTACK_SECRET_KEY must both be from the same environment (both test or both live)'
+        : '';
+      console.error('[payments] Paystack verification failed:', JSON.stringify(psData), hint);
       return res.status(400).json({
         error: 'Payment not verified by Paystack',
-        details: psData.message || 'Verification returned non-success status',
+        details: psMsg || 'Verification returned non-success status',
       });
     }
 

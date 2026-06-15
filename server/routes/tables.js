@@ -386,6 +386,8 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
         inv.annual_rate,
         inv.expected_return,
         inv.maturity_instruction,
+        inv.is_reinvestment,
+        COALESCE(inv.eva_amount, 0) AS eva_amount,
         i.first_name,
         i.last_name,
         i.email,
@@ -515,7 +517,8 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
        which is idempotent, so double-credits are prevented there.
        This hook covers non-gateway deposits created via the tables API.
     ───────────────────────────────────────────────────────────────────── */
-    if (table === 'transactions' && clean.type === 'deposit' && clean.status === 'completed' && clean.investor_id) {
+    if (table === 'transactions' && clean.status === 'completed' && clean.investor_id &&
+        (clean.type === 'deposit' || clean.type === 'return' || clean.type === 'payout' || clean.type === 'referral_bonus')) {
       setImmediate(async () => {
         try {
           await pool.query(
@@ -523,7 +526,7 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
             [parseFloat(clean.amount), clean.investor_id]
           );
         } catch (err) {
-          console.error('[wallet hook] deposit credit error:', err.message);
+          console.error('[wallet hook] credit error:', err.message);
         }
       });
     }
@@ -619,18 +622,31 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       }
     });
 
-    /* ── Investment fee hook ────────────────────────────────────────────
-       When a new investment is created, charge a 1% platform fee from
-       the investor's wallet and record it as a fee transaction.
+    /* ── Investment hook ─────────────────────────────────────────────────
+       When a new investment is created:
+       1. Deduct the investment amount + 1% platform fee from the wallet
+       2. Increment total_invested
+       3. Record a fee transaction
+       4. Calculate EVA (20% of net-VAT management fee) on new funds only
     ───────────────────────────────────────────────────────────────────── */
     if (table === 'investments' && clean.investor_id && parseFloat(clean.amount) > 0) {
       setImmediate(async () => {
         try {
-          const platformFee = Math.round(parseFloat(clean.amount) * 0.01 * 100) / 100;
+          const investAmt   = parseFloat(clean.amount);
+          const platformFee = Math.round(investAmt * 0.01 * 100) / 100;
+          const totalDeduct = investAmt + platformFee;
+
+          // Atomically deduct amount + fee from wallet and update total_invested
           await pool.query(
-            'UPDATE investors SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2',
-            [platformFee, clean.investor_id]
+            `UPDATE investors
+               SET wallet_balance  = GREATEST(0, wallet_balance - $1),
+                   total_invested  = COALESCE(total_invested, 0) + $2,
+                   updated_at      = NOW()
+             WHERE id = $3`,
+            [totalDeduct, investAmt, clean.investor_id]
           );
+
+          // Record the platform fee as a separate transaction
           const feeId = `FEE-${clean.id}`;
           await pool.query(
             `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
@@ -638,9 +654,28 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
              ON CONFLICT (id) DO NOTHING`,
             [feeId, clean.investor_id, platformFee, feeId]
           );
-          console.log(`[investment fee] R${platformFee} charged on investment ${clean.id}`);
+
+          // EVA calculation — only on new funds (not reinvestments)
+          if (!clean.is_reinvestment && clean.pool_id) {
+            const poolRes = await pool.query(
+              'SELECT management_fee_pct FROM investment_pools WHERE id = $1',
+              [clean.pool_id]
+            );
+            const mgtFeePct = parseFloat(poolRes.rows[0]?.management_fee_pct) || 0;
+            if (mgtFeePct > 0) {
+              const grossMgtFee = investAmt * mgtFeePct;
+              const netMgtFee   = grossMgtFee / 1.15;   // net of 15% South African VAT
+              const evaAmount   = Math.round(netMgtFee * 0.20 * 100) / 100;
+              await pool.query(
+                'UPDATE investments SET eva_amount = $1 WHERE id = $2',
+                [evaAmount, clean.id]
+              );
+            }
+          }
+
+          console.log(`[investment hook] R${platformFee} fee + R${investAmt} deducted from wallet for investment ${clean.id}`);
         } catch (err) {
-          console.error('[investment fee hook] error:', err.message);
+          console.error('[investment hook] error:', err.message);
         }
       });
     }
@@ -762,15 +797,23 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           });
         }
 
-        // Deposit confirmed → email + SMS investor
-        if (table === 'transactions' && body.status === 'completed' && updated.type === 'deposit' && updated.investor_id) {
-          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
-          if (inv[0]) {
-            const gateway = updated.description?.includes('Paystack') ? 'Paystack'
-                          : updated.description?.includes('Ozow')     ? 'Ozow'
-                          : 'EFT';
-            await emailService.sendDepositConfirmed(inv[0], updated.amount, updated.reference || updated.id, gateway);
-            await smsService.sendDepositConfirmed(inv[0].phone, inv[0].first_name, updated.amount);
+        // Deposit / return / payout confirmed → credit wallet + email investor
+        if (table === 'transactions' && body.status === 'completed' && updated.investor_id &&
+            (updated.type === 'deposit' || updated.type === 'return' || updated.type === 'payout' || updated.type === 'referral_bonus')) {
+          // Credit wallet atomically
+          await pool.query(
+            'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+            [parseFloat(updated.amount), updated.investor_id]
+          );
+          if (updated.type === 'deposit') {
+            const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
+            if (inv[0]) {
+              const gateway = updated.description?.includes('Paystack') ? 'Paystack'
+                            : updated.description?.includes('Ozow')     ? 'Ozow'
+                            : 'EFT';
+              await emailService.sendDepositConfirmed(inv[0], updated.amount, updated.reference || updated.id, gateway);
+              await smsService.sendDepositConfirmed(inv[0].phone, inv[0].first_name, updated.amount);
+            }
           }
         }
 
