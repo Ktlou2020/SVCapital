@@ -361,7 +361,21 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investments ADD COLUMN eva_amount NUMERIC(12,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- System-generated tickets (AML checks etc — hidden from client view)
   BEGIN ALTER TABLE support_tickets ADD COLUMN is_system BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Compliance calendar — admin can add custom deadline items
+  BEGIN ALTER TABLE compliance_calendar ADD COLUMN id TEXT; EXCEPTION WHEN undefined_table THEN NULL; END;
 END $$;
+
+CREATE TABLE IF NOT EXISTS compliance_calendar (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  title TEXT NOT NULL,
+  description TEXT,
+  due_date DATE NOT NULL,
+  priority TEXT DEFAULT 'medium',
+  status TEXT DEFAULT 'pending',
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
 CREATE TABLE IF NOT EXISTS investment_waitlist (
   id TEXT PRIMARY KEY,

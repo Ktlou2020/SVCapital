@@ -1145,6 +1145,37 @@
             </div>
           </div>
           <div>
+            <!-- Add Compliance Item -->
+            <div class="panel mb-20">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-plus" style="color:var(--orange);margin-right:6px"></i>Add Calendar Item</span>
+              </div>
+              <div class="panel__body">
+                <div class="form-group mb-10">
+                  <label class="form-label">Title *</label>
+                  <input type="text" class="form-input" id="compCalTitle" placeholder="e.g. Board Meeting — Q2 Review">
+                </div>
+                <div class="form-group mb-10">
+                  <label class="form-label">Description</label>
+                  <input type="text" class="form-input" id="compCalDesc" placeholder="Optional details">
+                </div>
+                <div class="form-row form-row--2 mb-10">
+                  <div class="form-group">
+                    <label class="form-label">Due Date *</label>
+                    <input type="date" class="form-input" id="compCalDate">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Priority</label>
+                    <select class="form-select" id="compCalPriority">
+                      <option value="high">High</option>
+                      <option value="medium" selected>Medium</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+                </div>
+                <button class="btn btn--primary btn--full" onclick="addComplianceItem()"><i class="fa-solid fa-plus"></i> Add Item</button>
+              </div>
+            </div>
             <div class="panel mb-20">
               <div class="panel__header"><span class="panel__title">Maturity Action Required</span></div>
               <div class="panel__body" id="maturityActionBody">Loading...</div>

@@ -187,10 +187,10 @@ router.post('/:txId/reject', requireAuth, requireRole('admin', 'director'), asyn
       [reason || null, txId]
     );
 
-    // Refund wallet
+    // Refund wallet — use absolute value in case amount is stored as negative
     await pool.query(
       'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-      [tx.amount, tx.investor_id]
+      [Math.abs(parseFloat(tx.amount)), tx.investor_id]
     );
 
     // Fire-and-forget notifications

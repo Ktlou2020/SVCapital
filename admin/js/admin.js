@@ -246,7 +246,7 @@ function loadAdminNotifications(investors, transactions, tickets) {
       icon: 'fa-money-bill-transfer', iconBg: 'rgba(239,68,68,0.1)', iconColor: '#ef4444',
       title: `${pendingWith.length} withdrawal${pendingWith.length === 1 ? '' : 's'} pending`,
       sub: `${Utils.rand(total)} total awaiting processing.`,
-      action: "navigate('transactions',document.querySelector('[data-view=transactions]'));toggleAdminNotif()",
+      action: "navigate('withdrawals',document.querySelector('[data-view=withdrawals]'));toggleAdminNotif()",
       unread: true,
     });
   }
@@ -2740,6 +2740,11 @@ async function viewTicket(id) {
     }),
   ].join('');
 
+  const isBankVerification = tkt.category === 'bank_verification';
+  const isFicaSubmission   = tkt.category === 'fica_submission' || tkt.category === 'fica';
+  const hasProof           = !!(tkt.proof_attached || tkt.proof_filename || tkt.file_url);
+  const showActionBtns     = (isBankVerification || isFicaSubmission || hasProof) && tkt.status !== 'resolved' && tkt.status !== 'closed';
+
   document.getElementById('ticketModalTitle').textContent = `Ticket #${tkt.id} — ${tkt.subject}`;
   document.getElementById('ticketModalBody').innerHTML = `
     <div class="grid-2 mb-16" style="gap:12px">
@@ -2750,6 +2755,21 @@ async function viewTicket(id) {
       <div class="info-row"><span class="info-row__label">Submitted</span><span class="info-row__value td-muted">${Utils.date(tkt.created_at)}</span></div>
       ${tkt.responded_at ? `<div class="info-row"><span class="info-row__label">Last Response</span><span class="info-row__value td-muted">${Utils.date(tkt.responded_at)}</span></div>` : ''}
     </div>
+    ${hasProof ? `<div class="panel mb-12" style="border:1.5px solid rgba(255,155,12,0.3)">
+      <div class="panel__header" style="background:rgba(255,155,12,0.08)"><span class="panel__title"><i class="fa-solid fa-paperclip" style="color:#ff9b0c;margin-right:6px"></i>Document Attached</span></div>
+      <div class="panel__body">
+        ${tkt.file_url ? `<a href="${_esc(tkt.file_url)}" target="_blank" class="btn btn--secondary btn--sm"><i class="fa-solid fa-eye"></i> View Document</a>` : ''}
+        ${tkt.proof_filename ? `<span style="font-size:0.8rem;color:var(--text-muted);margin-left:8px">${_esc(tkt.proof_filename)}</span>` : ''}
+      </div>
+    </div>` : ''}
+    ${showActionBtns ? `<div style="display:flex;gap:10px;margin-bottom:16px;padding:12px;background:rgba(99,102,241,0.06);border-radius:8px;border:1px solid rgba(99,102,241,0.15)">
+      <div style="flex:1">
+        <div style="font-size:0.78rem;font-weight:700;color:var(--text);margin-bottom:4px">${isBankVerification ? 'Bank Account Verification' : 'Document Review'}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Approve or decline the submitted ${isBankVerification ? 'bank account details' : 'documents'}. This will update the investor record.</div>
+      </div>
+      <button class="btn btn--success btn--sm" id="ticketApproveBtn"><i class="fa-solid fa-check"></i> Approve</button>
+      <button class="btn btn--danger btn--sm" id="ticketDeclineBtn"><i class="fa-solid fa-xmark"></i> Decline</button>
+    </div>` : ''}
     <div class="panel mb-12">
       <div class="panel__header"><span class="panel__title">Investor Message</span></div>
       <div class="panel__body" style="font-size:0.85rem;color:var(--text-muted);white-space:pre-wrap">${_esc(tkt.message) || '—'}</div>
@@ -2775,6 +2795,32 @@ async function viewTicket(id) {
       </div>
     </div>
   `;
+
+  if (showActionBtns && tkt.investor_id) {
+    const _doTicketAction = async (approve) => {
+      const confirmMsg = approve
+        ? (isBankVerification ? 'Approve this bank account? The investor will be notified.' : 'Approve FICA documents? The investor will be marked as KYC-verified.')
+        : (isBankVerification ? 'Decline this bank account? The investor will be asked to resubmit.' : 'Decline these documents? The investor will be asked to resubmit.');
+      if (!await Confirm.ask(approve ? 'Confirm Approval' : 'Confirm Decline', { body: confirmMsg, confirmLabel: approve ? 'Approve' : 'Decline', danger: !approve })) return;
+      try {
+        const invUpdate = isBankVerification
+          ? (approve ? { bank_account_status: 'approved' } : { bank_account_status: 'rejected' })
+          : (approve ? { kyc_status: 'approved', status: 'active' } : { kyc_status: 'rejected' });
+        await API.investors.update(tkt.investor_id, invUpdate);
+        await API.tickets.update(id, {
+          status:         'resolved',
+          admin_response: document.getElementById('ticketResponse').value || (approve ? 'Your submission has been approved.' : 'Your submission was declined. Please resubmit with correct details.'),
+          responded_at:   new Date().toISOString(),
+        });
+        Toast.success(approve ? 'Approved — investor record updated and ticket resolved' : 'Declined — investor will be asked to resubmit');
+        Modal.close('ticketModal');
+        await loadSupport();
+        await loadInvestors();
+      } catch (e) { Toast.error('Action failed: ' + (e.message || 'Unknown error')); }
+    };
+    document.getElementById('ticketApproveBtn')?.addEventListener('click', () => _doTicketAction(true));
+    document.getElementById('ticketDeclineBtn')?.addEventListener('click', () => _doTicketAction(false));
+  }
 
   document.getElementById('ticketSaveBtn').onclick = async () => {
     try {
@@ -5154,33 +5200,55 @@ async function loadCompliance() {
   const now = new Date();
   const year = now.getFullYear();
 
-  const deadlines = [
-    { date: `${year}-03-31`, title: 'Annual Financial Statements', desc: 'Submit audited annual financial statements to FSCA', priority: 'high' },
-    { date: `${year}-05-31`, title: 'FAIS Compliance Report', desc: 'Annual compliance report — key individuals and fit & proper', priority: 'high' },
-    { date: `${year}-06-30`, title: 'POPIA Annual Review', desc: 'Review and update data processing records & privacy notices', priority: 'medium' },
-    { date: `${year}-09-30`, title: 'AML Risk Assessment', desc: 'Annual Anti-Money Laundering risk assessment and policy review', priority: 'high' },
-    { date: `${year}-12-31`, title: 'FSP License Renewal Review', desc: 'Confirm FSP license conditions and key individual qualifications', priority: 'medium' },
-    { date: `${year + 1}-03-31`, title: 'Next Annual Financial Statements', desc: 'Prepare statutory financials for submission', priority: 'low' },
+  const staticDeadlines = [
+    { date: `${year}-03-31`, title: 'Annual Financial Statements', desc: 'Submit audited annual financial statements to FSCA', priority: 'high', _static: true },
+    { date: `${year}-05-31`, title: 'FAIS Compliance Report', desc: 'Annual compliance report — key individuals and fit & proper', priority: 'high', _static: true },
+    { date: `${year}-06-30`, title: 'POPIA Annual Review', desc: 'Review and update data processing records & privacy notices', priority: 'medium', _static: true },
+    { date: `${year}-09-30`, title: 'AML Risk Assessment', desc: 'Annual Anti-Money Laundering risk assessment and policy review', priority: 'high', _static: true },
+    { date: `${year}-12-31`, title: 'FSP License Renewal Review', desc: 'Confirm FSP license conditions and key individual qualifications', priority: 'medium', _static: true },
+    { date: `${year + 1}-03-31`, title: 'Next Annual Financial Statements', desc: 'Prepare statutory financials for submission', priority: 'low', _static: true },
   ];
+
+  // Load custom calendar items from the database
+  let customItems = [];
+  try {
+    const calRes = await API._fetch('GET', 'tables/compliance_calendar', null, { limit: 200 });
+    customItems = (calRes.data || []).map(c => ({
+      id:    c.id,
+      date:  c.due_date ? c.due_date.split('T')[0] : '',
+      title: c.title,
+      desc:  c.description || '',
+      priority: c.priority || 'medium',
+      status:   c.status || 'pending',
+    }));
+  } catch (_) {}
+
+  const allDeadlines = [...staticDeadlines, ...customItems].sort((a, b) => new Date(a.date) - new Date(b.date));
 
   const calBody = document.getElementById('complianceCalBody');
   if (calBody) {
-    calBody.innerHTML = deadlines.map(d => {
+    calBody.innerHTML = allDeadlines.map(d => {
       const daysLeft = Math.ceil((new Date(d.date) - now) / 86400000);
       const isPast = daysLeft < 0;
       const isUrgent = daysLeft >= 0 && daysLeft <= 30;
-      const color = isPast ? '#ef4444' : isUrgent ? '#f59e0b' : '#3b82f6';
-      const label = isPast ? 'Overdue' : isUrgent ? `${daysLeft}d left` : `${daysLeft}d`;
-      return `<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
+      const isDone   = d.status === 'completed';
+      const color = isDone ? '#22c55e' : isPast ? '#ef4444' : isUrgent ? '#f59e0b' : '#3b82f6';
+      const label = isDone ? 'Done' : isPast ? 'Overdue' : isUrgent ? `${daysLeft}d left` : `${daysLeft}d`;
+      const deleteBtn = !d._static ? `<button class="btn btn--danger btn--sm" style="margin-left:6px;padding:2px 8px;font-size:0.68rem" onclick='deleteComplianceItem(${JSON.stringify(d.id)})'><i class="fa-solid fa-trash"></i></button>` : '';
+      const doneBtn   = !d._static && d.status !== 'completed' ? `<button class="btn btn--success btn--sm" style="margin-left:4px;padding:2px 8px;font-size:0.68rem" onclick='markComplianceDone(${JSON.stringify(d.id)})'><i class="fa-solid fa-check"></i></button>` : '';
+      return `<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)${isDone ? ';opacity:0.55' : ''}">
         <div style="width:52px;min-width:52px;text-align:center;background:${color}22;border-radius:8px;padding:6px 4px">
           <div style="font-size:0.78rem;font-weight:800;color:${color}">${label}</div>
         </div>
         <div style="flex:1">
-          <div style="font-size:0.85rem;font-weight:700;color:var(--text)">${d.title}</div>
-          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">${d.desc}</div>
+          <div style="font-size:0.85rem;font-weight:700;color:var(--text)${isDone ? ';text-decoration:line-through' : ''}">${_esc(d.title)}</div>
+          ${d.desc ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">${_esc(d.desc)}</div>` : ''}
           <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">Due: ${d.date}</div>
         </div>
-        <span class="badge ${d.priority==='high'?'badge--red':d.priority==='medium'?'badge--yellow':'badge--grey'}" style="font-size:0.65rem">${d.priority}</span>
+        <div style="display:flex;align-items:center;gap:0">
+          <span class="badge ${d.priority==='high'?'badge--red':d.priority==='medium'?'badge--yellow':'badge--grey'}" style="font-size:0.65rem">${d.priority}</span>
+          ${doneBtn}${deleteBtn}
+        </div>
       </div>`;
     }).join('');
   }
@@ -5228,6 +5296,49 @@ async function loadCompliance() {
         <div class="info-row"><span class="info-row__label">FSCA License</span><span class="info-row__value td-gold">FSP 52449 — Active</span></div>
       </div>`;
   }
+}
+
+async function addComplianceItem() {
+  const titleEl    = document.getElementById('compCalTitle');
+  const descEl     = document.getElementById('compCalDesc');
+  const dateEl     = document.getElementById('compCalDate');
+  const priorityEl = document.getElementById('compCalPriority');
+  const title      = titleEl?.value.trim();
+  const dueDate    = dateEl?.value;
+  if (!title) { Toast.error('Title is required'); return; }
+  if (!dueDate) { Toast.error('Due date is required'); return; }
+  try {
+    await API._fetch('POST', 'tables/compliance_calendar', {
+      title,
+      description: descEl?.value.trim() || null,
+      due_date:    dueDate,
+      priority:    priorityEl?.value || 'medium',
+      status:      'pending',
+      created_by:  STATE.adminEmail || null,
+    });
+    Toast.success('Compliance item added');
+    if (titleEl) titleEl.value = '';
+    if (descEl)  descEl.value = '';
+    if (dateEl)  dateEl.value = '';
+    await loadCompliance();
+  } catch (e) { Toast.error('Failed to add item: ' + (e.message || 'error')); }
+}
+
+async function deleteComplianceItem(id) {
+  if (!await Confirm.ask('Delete this compliance item?', { body: 'This cannot be undone.', confirmLabel: 'Delete', danger: true })) return;
+  try {
+    await API._fetch('DELETE', `tables/compliance_calendar/${id}`);
+    Toast.success('Item removed');
+    await loadCompliance();
+  } catch (e) { Toast.error('Failed to remove item'); }
+}
+
+async function markComplianceDone(id) {
+  try {
+    await API._fetch('PATCH', `tables/compliance_calendar/${id}`, { status: 'completed' });
+    Toast.success('Marked as completed');
+    await loadCompliance();
+  } catch (e) { Toast.error('Failed to update item'); }
 }
 
 /* ═══════════════════════════════════════════════
