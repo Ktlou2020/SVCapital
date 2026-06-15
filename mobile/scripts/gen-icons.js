@@ -90,16 +90,35 @@ async function run() {
       await sharp(ICON_SRC).resize(size, size).png().toFile(path.join(IOS_ASSETS, name));
       console.log(`[icons] iOS ${name}: ${size}x${size}`);
     }
-    // Write Contents.json for Xcode
+    // Write Contents.json for Xcode asset catalog
     const contents = {
-      images: IOS_ICONS.map(({ name, size }) => ({
-        filename: name, idiom: size >= 76 ? 'ipad' : 'iphone',
-        scale: name.includes('@3x') ? '3x' : name.includes('@2x') ? '2x' : '1x',
-        size: `${Math.round(size/(name.includes('@3x')?3:name.includes('@2x')?2:1))}x${Math.round(size/(name.includes('@3x')?3:name.includes('@2x')?2:1))}`,
-      })),
+      images: [
+        // iPhone
+        { idiom:'iphone', scale:'2x', size:'20x20',   filename:'Icon-20@2x.png'    },
+        { idiom:'iphone', scale:'3x', size:'20x20',   filename:'Icon-20@3x.png'    },
+        { idiom:'iphone', scale:'2x', size:'29x29',   filename:'Icon-29@2x.png'    },
+        { idiom:'iphone', scale:'3x', size:'29x29',   filename:'Icon-29@3x.png'    },
+        { idiom:'iphone', scale:'2x', size:'40x40',   filename:'Icon-40@2x.png'    },
+        { idiom:'iphone', scale:'3x', size:'40x40',   filename:'Icon-40@3x.png'    },
+        { idiom:'iphone', scale:'2x', size:'60x60',   filename:'Icon-60@2x.png'    },
+        { idiom:'iphone', scale:'3x', size:'60x60',   filename:'Icon-60@3x.png'    },
+        // iPad
+        { idiom:'ipad',   scale:'1x', size:'20x20',   filename:'Icon-20.png'       },
+        { idiom:'ipad',   scale:'2x', size:'20x20',   filename:'Icon-20@2x.png'    },
+        { idiom:'ipad',   scale:'1x', size:'29x29',   filename:'Icon-29.png'       },
+        { idiom:'ipad',   scale:'2x', size:'29x29',   filename:'Icon-29@2x.png'    },
+        { idiom:'ipad',   scale:'1x', size:'40x40',   filename:'Icon-40.png'       },
+        { idiom:'ipad',   scale:'2x', size:'40x40',   filename:'Icon-40@2x.png'    },
+        { idiom:'ipad',   scale:'1x', size:'76x76',   filename:'Icon-76.png'       },
+        { idiom:'ipad',   scale:'2x', size:'76x76',   filename:'Icon-76@2x.png'    },
+        { idiom:'ipad',   scale:'2x', size:'83.5x83.5', filename:'Icon-83.5@2x.png' },
+        // App Store (1024×1024)
+        { idiom:'ios-marketing', scale:'1x', size:'1024x1024', filename:'ItunesArtwork@2x.png' },
+      ],
       info: { author: 'xcode', version: 1 },
     };
     fs.writeFileSync(path.join(IOS_ASSETS, 'Contents.json'), JSON.stringify(contents, null, 2));
+    console.log('[icons] iOS Contents.json written');
   } else {
     console.warn('[icons] iOS dir not found — run npm run add:ios first (requires macOS)');
   }
