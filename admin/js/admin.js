@@ -1361,50 +1361,67 @@ function renderWithdrawalsTable() {
 }
 
 async function approveWithdrawal(txnId, btn) {
-  if (!await Confirm.ask('Approve this withdrawal?', { body: 'The investor will be notified and the funds released.', confirmLabel: 'Approve' })) return;
+  if (!txnId) { Toast.error('Invalid withdrawal ID'); return; }
+  if (!await Confirm.ask('Approve this withdrawal?', { body: 'The investor will be notified and the funds released to their bank account.', confirmLabel: 'Approve' })) return;
   await _withBtn(btn, async () => {
     try {
-      await fetch(`/api/withdrawals/${txnId}/approve`, {
+      const res = await fetch(`/api/withdrawals/${txnId}/approve`, {
         method: 'POST',
         credentials: 'include',
-        headers: { Authorization: 'Bearer ' + localStorage.getItem('svc_token'), 'Content-Type': 'application/json' }
-      }).then(r => r.ok ? r : Promise.reject(r));
-      Toast.success('Withdrawal approved — investor notified');
+        headers: { Authorization: 'Bearer ' + (localStorage.getItem('svc_token') || ''), 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Server error ${res.status}`);
+      }
+      Toast.success('Withdrawal approved — investor notified by email and SMS');
       await loadWithdrawals();
     } catch (e) {
-      // Fallback: update status directly
-      try {
-        await API._fetch('PATCH', `tables/transactions/${txnId}`, { status: 'completed' });
-        Toast.success('Withdrawal approved');
-        await loadWithdrawals();
-      } catch (e2) { Toast.error('Failed to approve withdrawal'); }
+      Toast.error('Could not approve withdrawal: ' + (e.message || 'unknown error'));
+      console.error('[approveWithdrawal]', e);
     }
   });
 }
 
-async function rejectWithdrawalPrompt(txnId, btn) {
-  const reason = prompt('Reason for rejection (will be sent to investor):');
-  if (reason === null) return;
+/* Reject: collect reason via in-page modal, then call the dedicated endpoint */
+let _rejectingTxnId = null;
+let _rejectBtn = null;
+
+function rejectWithdrawalPrompt(txnId, btn) {
+  if (!txnId) { Toast.error('Invalid withdrawal ID'); return; }
+  _rejectingTxnId = txnId;
+  _rejectBtn = btn;
+  document.getElementById('rejectReasonInput').value = '';
+  const overlay = document.getElementById('rejectModal');
+  overlay.style.display = 'flex';
+  overlay.classList.add('active');
+  setTimeout(() => document.getElementById('rejectReasonInput')?.focus(), 100);
+}
+
+async function _submitRejection() {
+  const reason = (document.getElementById('rejectReasonInput')?.value || '').trim();
+  const txnId = _rejectingTxnId;
+  const btn   = _rejectBtn;
+  document.getElementById('rejectModal').style.display = 'none';
+  document.getElementById('rejectModal').classList.remove('active');
+  if (!txnId) return;
   await _withBtn(btn, async () => {
     try {
-      await fetch(`/api/withdrawals/${txnId}/reject`, {
+      const res = await fetch(`/api/withdrawals/${txnId}/reject`, {
         method: 'POST',
         credentials: 'include',
-        headers: { Authorization: 'Bearer ' + localStorage.getItem('svc_token'), 'Content-Type': 'application/json' },
+        headers: { Authorization: 'Bearer ' + (localStorage.getItem('svc_token') || ''), 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: reason || 'Withdrawal rejected by admin.' })
-      }).then(r => r.ok ? r : Promise.reject(r));
-      Toast.success('Withdrawal rejected');
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Server error ${res.status}`);
+      }
+      Toast.success('Withdrawal rejected — investor notified and funds returned to wallet');
       await loadWithdrawals();
     } catch (e) {
-      // Fallback: update status directly
-      try {
-        await API._fetch('PATCH', `tables/transactions/${txnId}`, {
-          status: 'rejected',
-          description: reason || 'Rejected by admin.'
-        });
-        Toast.success('Withdrawal rejected');
-        await loadWithdrawals();
-      } catch (e2) { Toast.error('Failed to reject withdrawal'); }
+      Toast.error('Could not reject withdrawal: ' + (e.message || 'unknown error'));
+      console.error('[rejectWithdrawal]', e);
     }
   });
 }

@@ -961,6 +961,26 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
             tag:   'support.response',
           });
         }
+
+        // Withdrawal completed → push
+        if (table === 'transactions' && body.status === 'completed' && updated.type === 'withdrawal' && updated.investor_id) {
+          await _sendPush(updated.investor_id, {
+            title: 'Withdrawal processed',
+            body:  `R${Number(updated.amount || 0).toLocaleString('en-ZA')} has been sent to your bank account.`,
+            url:   '/portal/',
+            tag:   'withdrawal.approved',
+          });
+        }
+
+        // Withdrawal rejected → push
+        if (table === 'transactions' && body.status === 'rejected' && updated.type === 'withdrawal' && updated.investor_id) {
+          await _sendPush(updated.investor_id, {
+            title: 'Withdrawal request declined',
+            body:  `Your withdrawal of R${Number(updated.amount || 0).toLocaleString('en-ZA')} was declined. Funds returned to your wallet.`,
+            url:   '/portal/',
+            tag:   'withdrawal.rejected',
+          });
+        }
       } catch (hookErr) {
         console.error('[push hook PATCH] error:', hookErr.message);
       }

@@ -5522,43 +5522,29 @@ function _withdrawCalc() {
 }
 
 async function confirmWithdrawal() {
-  const balance  = parseFloat(PORTAL.investor?.wallet_balance || 0);
-  const amount   = parseFloat(document.getElementById('wdAmount')?.value || 0);
+  const balance = parseFloat(PORTAL.investor?.wallet_balance || 0);
+  const amount  = parseFloat(document.getElementById('wdAmount')?.value || 0);
 
-  if (!amount || amount < 50)  { Toast.error('Minimum withdrawal is R50'); return; }
-  if (amount > balance)        { Toast.error('Amount exceeds available balance'); return; }
+  if (!amount || amount < 50) { Toast.error('Minimum withdrawal is R50'); return; }
+  if (amount > balance)       { Toast.error('Amount exceeds available balance'); return; }
 
   const btn = document.getElementById('withdrawalConfirmBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
 
-  const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
-  const ref = `WD-${Date.now()}`;
-
   try {
-    // Deduct from wallet
-    await API._fetch('PATCH', `tables/investors/${investorId}`, {
-      wallet_balance: balance - amount,
+    const result = await API._fetch('POST', 'withdrawals/request', {
+      amount,
+      bank_account_number: PORTAL.investor?.bank_account_number || undefined,
+      bank_name:           PORTAL.investor?.bank_name           || undefined,
     });
-    if (PORTAL.investor) PORTAL.investor.wallet_balance = balance - amount;
-
-    // Create pending withdrawal transaction
-    await API._fetch('POST', 'tables/transactions', {
-      investor_id: investorId,
-      type:        'withdrawal',
-      amount:      amount,
-      status:      'pending',
-      reference:   ref,
-      description: `Wallet withdrawal to ${PORTAL.investor?.bank_name || 'bank account'} — ${PORTAL.investor?.bank_account_holder || ''}`,
-    });
-
-    SVC.track('svc_withdrawal_requested', { amount, amount_bucket: _amtBucket(amount), currency: 'ZAR', reference: ref });
+    SVC.track('svc_withdrawal_requested', { amount, amount_bucket: _amtBucket(amount), currency: 'ZAR', reference: result.reference });
     Toast.success('Withdrawal request submitted! Funds will be sent within 1–2 business days.');
     Modal.close('withdrawalModal');
     await loadPortalData();
     loadWallet();
   } catch (e) {
     SVC.error('withdrawal', e.message);
-    Toast.error('Withdrawal failed. Please try again.');
+    Toast.error(e.message || 'Withdrawal failed. Please try again.');
     console.error(e);
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Request Withdrawal'; }
