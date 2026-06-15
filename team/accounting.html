@@ -680,7 +680,7 @@ const PAGE_META = {
   budgets:     {title:'Budgets', subtitle:'Monthly budget planning per account'},
   reports:     {title:'Reports', subtitle:'Export financial data to CSV'},
   import:      {title:'Statement Import', subtitle:'Upload bank statements and auto-allocate to accounts'},
-  investments:   {title:'Investment Sync', subtitle:'Sync investor deposits, withdrawals and investments — posted to Smartvest Financial Services (FSP 52449)'},
+  investments:   {title:'Investment Sync', subtitle:'Sync deposits & investments — posts to Smartvest FSP, SV Capital Pty Ltd, and the relevant SPV entity'},
   fund_analytics:{title:'Fund Analytics',  subtitle:'AUM, performance metrics and returns — Smartvest Financial Services (FSP 52449)'},
 };
 
@@ -967,8 +967,12 @@ function renderBusinesses() {
         ${bizList.map(b=>`<tr>
           <td>
             <strong>${b.name}</strong>
-            ${b.isFSP ? `<span style="margin-left:8px;background:rgba(124,92,252,0.15);color:var(--purple);border:1px solid rgba(124,92,252,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">FSP ${b.fspNumber||SMARTVEST_FSP_NUM}</span>` : ''}
-            ${b.isFSP ? `<span style="margin-left:4px;background:rgba(249,115,22,0.12);color:var(--orange);border:1px solid rgba(249,115,22,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">Investments</span>` : ''}
+            ${b.isFSP    ? `<span style="margin-left:8px;background:rgba(124,92,252,0.15);color:var(--purple);border:1px solid rgba(124,92,252,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">FSP ${b.fspNumber||SMARTVEST_FSP_NUM}</span>` : ''}
+            ${b.isFSP    ? `<span style="margin-left:4px;background:rgba(249,115,22,0.12);color:var(--orange);border:1px solid rgba(249,115,22,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">Platform Fee</span>` : ''}
+            ${b.isHolding? `<span style="margin-left:8px;background:rgba(212,175,55,0.15);color:#D4AF37;border:1px solid rgba(212,175,55,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">Holding Co.</span>` : ''}
+            ${b.isHolding? `<span style="margin-left:4px;background:rgba(34,197,94,0.1);color:var(--green);border:1px solid rgba(34,197,94,0.25);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">Raising + Perf Fees</span>` : ''}
+            ${b.parentEntity && !b.isFSP && !b.isHolding ? `<span style="margin-left:8px;background:rgba(96,165,250,0.12);color:#60a5fa;border:1px solid rgba(96,165,250,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">SPV</span>` : ''}
+            ${b.productType? `<span style="margin-left:4px;background:rgba(255,255,255,0.05);color:var(--muted2);border:1px solid var(--border);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">${b.productType}</span>` : ''}
           </td>
           <td>${b.registrationNumber||'—'}</td>
           <td>${b.vatNumber||'—'}</td>
@@ -976,7 +980,7 @@ function renderBusinesses() {
           <td>${b.id===activeId?'<span class="badge badge-paid">Active</span>':'<span class="badge badge-draft">Inactive</span>'}</td>
           <td>
             ${b.id!==activeId?`<button class="btn btn-secondary btn-xs" onclick="switchBiz('${b.id}')"><i class="fa-solid fa-check"></i> Set Active</button>`:''}
-            ${!b.isFSP?`<button class="btn btn-danger btn-xs" onclick="deleteBiz('${b.id}')"><i class="fa-solid fa-trash"></i></button>`:'<span style="font-size:0.7rem;color:var(--muted)">FSP entity</span>'}
+            ${(!b.isFSP && !b.isHolding && !b.parentEntity)?`<button class="btn btn-danger btn-xs" onclick="deleteBiz('${b.id}')"><i class="fa-solid fa-trash"></i></button>`:`<span style="font-size:0.7rem;color:var(--muted)">${b.isFSP?'FSP':b.isHolding?'Holding':'SPV'} — managed</span>`}
           </td>
         </tr>`).join('')}
       </tbody>
@@ -3041,6 +3045,109 @@ function _renderInvLedger(bid) {
   </tbody></table></div>`;
 }
 
+/* ── Inter-company journal helpers ── */
+function getCoaByCode(bid) {
+  const byCode = {};
+  for (const a of getCoa(bid)) byCode[a.code] = a;
+  return byCode;
+}
+const _SPV_LOAN_ACCT = {
+  'SVC Farming Pty Ltd': '1600',
+  'MoolaLend Pty Ltd':   '1601',
+  'Solar SPV 1':         '1602',
+  'OnFleet Pty Ltd':     '1603',
+};
+const _SPV_ASSET_ACCT    = { cattle:'1400', short_term:'1300', solar:'1200', delivery:'1200' };
+const _SPV_REVENUE_ACCT  = { cattle:'4000', short_term:'4000', solar:'4000', delivery:'4000' };
+
+function _postSpvDeployJournals(inv, amount, invName, date, ref6, holdingEntries, spvEntries, syncedInvs) {
+  if (syncedInvs.has(inv.id)) return;
+  const spvName  = PRODUCT_SPV_MAP[inv.product_type];
+  const hBiz     = getBizByName('SV Capital Pty Ltd');
+  const spvBiz   = spvName ? getBizByName(spvName) : null;
+  const raisingFee = Math.round(amount * RAISING_FEE_RATE * 100) / 100;
+  const loanCode   = _SPV_LOAN_ACCT[spvName] || '1600';
+  const assetCode  = _SPV_ASSET_ACCT[inv.product_type] || '1500';
+  const poolLabel  = inv.pool_name || 'Pool';
+
+  if (hBiz) {
+    const h = getCoaByCode(hBiz.id);
+    // Receive capital from Smartvest FSP, deduct raising fee, deploy to SPV
+    if (h['1000'] && h['2200']) holdingEntries.push(
+      {id:uid(), accountId:h['1000'].id, type:'debit',  amount, description:`Capital in from Smartvest FSP — ${poolLabel}: ${invName}`, reference:`INV-${ref6}`, date},
+      {id:uid(), accountId:h['2200'].id, type:'credit', amount, description:`Capital received via Smartvest FSP`, reference:`INV-${ref6}`, date}
+    );
+    if (h['2200'] && h['4000'] && raisingFee > 0) holdingEntries.push(
+      {id:uid(), accountId:h['2200'].id, type:'debit',  amount:raisingFee, description:`2% raising fee — ${poolLabel}`, reference:`RFE-${ref6}`, date},
+      {id:uid(), accountId:h['4000'].id, type:'credit', amount:raisingFee, description:`2% raising fee — ${poolLabel}`, reference:`RFE-${ref6}`, date}
+    );
+    if (h[loanCode] && h['1000']) holdingEntries.push(
+      {id:uid(), accountId:h[loanCode].id, type:'debit',  amount, description:`Loan deployed to ${spvName||'SPV'} — ${poolLabel}`, reference:`INV-${ref6}`, date},
+      {id:uid(), accountId:h['1000'].id,   type:'credit', amount, description:`Cash deployed to ${spvName||'SPV'}`, reference:`INV-${ref6}`, date}
+    );
+  }
+
+  if (spvBiz) {
+    const s = getCoaByCode(spvBiz.id);
+    spvEntries[spvBiz.id] = spvEntries[spvBiz.id] || [];
+    // Receive loan from SV Capital, purchase asset
+    if (s['1000'] && s['2500']) spvEntries[spvBiz.id].push(
+      {id:uid(), accountId:s['1000'].id, type:'debit',  amount, description:`Loan received from SV Capital — ${poolLabel}`, reference:`INV-${ref6}`, date},
+      {id:uid(), accountId:s['2500'].id, type:'credit', amount, description:`Loan from SV Capital Pty Ltd`, reference:`INV-${ref6}`, date}
+    );
+    if (s[assetCode] && s['1000']) spvEntries[spvBiz.id].push(
+      {id:uid(), accountId:s[assetCode].id, type:'debit',  amount, description:`Asset acquired — ${poolLabel}: ${invName}`, reference:`ACQ-${ref6}`, date},
+      {id:uid(), accountId:s['1000'].id,    type:'credit', amount, description:`Payment for asset — ${poolLabel}`, reference:`ACQ-${ref6}`, date}
+    );
+  }
+}
+
+function _postSpvPayoutJournals(inv, amount, ret, invName, payDate, ref6, holdingEntries, spvEntries, syncedInvs) {
+  const payoutKey = inv.id + '-PAYOUT';
+  if (syncedInvs.has(payoutKey)) return;
+  const spvName   = PRODUCT_SPV_MAP[inv.product_type];
+  const hBiz      = getBizByName('SV Capital Pty Ltd');
+  const spvBiz    = spvName ? getBizByName(spvName) : null;
+  const perfFee   = Math.round(ret * PERFORMANCE_FEE_RATE * 100) / 100;
+  const netReturn = ret - perfFee;
+  const loanCode  = _SPV_LOAN_ACCT[spvName] || '1600';
+  const assetCode = _SPV_ASSET_ACCT[inv.product_type] || '1500';
+  const revCode   = _SPV_REVENUE_ACCT[inv.product_type] || '4000';
+  const poolLabel = inv.pool_name || 'Pool';
+
+  if (spvBiz) {
+    const s = getCoaByCode(spvBiz.id);
+    spvEntries[spvBiz.id] = spvEntries[spvBiz.id] || [];
+    // Dispose asset, recognise income, repay loan to SV Capital
+    if (s['1000'] && s[assetCode] && s[revCode] && ret > 0) spvEntries[spvBiz.id].push(
+      {id:uid(), accountId:s['1000'].id,    type:'debit',  amount:amount+ret, description:`Asset disposal proceeds — ${poolLabel}`, reference:`PAY-${ref6}`, date:payDate},
+      {id:uid(), accountId:s[assetCode].id, type:'credit', amount,            description:`Asset disposed — ${poolLabel}`, reference:`PAY-${ref6}`, date:payDate},
+      {id:uid(), accountId:s[revCode].id,   type:'credit', amount:ret,        description:`Return on ${poolLabel}: ${invName}`, reference:`PAY-${ref6}`, date:payDate}
+    );
+    if (s['2500'] && s['1000'] && amount > 0) spvEntries[spvBiz.id].push(
+      {id:uid(), accountId:s['2500'].id, type:'debit',  amount:amount+ret, description:`Loan repayment to SV Capital — ${poolLabel}`, reference:`PAY-${ref6}`, date:payDate},
+      {id:uid(), accountId:s['1000'].id, type:'credit', amount:amount+ret, description:`Cash paid to SV Capital`, reference:`PAY-${ref6}`, date:payDate}
+    );
+  }
+
+  if (hBiz) {
+    const h = getCoaByCode(hBiz.id);
+    // Receive repayment + return, retain performance fee, pass remainder to Smartvest
+    if (h['1000'] && h[loanCode]) holdingEntries.push(
+      {id:uid(), accountId:h['1000'].id,    type:'debit',  amount:amount+ret, description:`SPV repayment received — ${poolLabel}`, reference:`PAY-${ref6}`, date:payDate},
+      {id:uid(), accountId:h[loanCode].id,  type:'credit', amount,            description:`Loan repaid by ${spvName||'SPV'}`, reference:`PAY-${ref6}`, date:payDate}
+    );
+    if (perfFee > 0 && h['4100']) holdingEntries.push(
+      {id:uid(), accountId:h['4100'].id, type:'credit', amount:perfFee,  description:`20% performance fee — ${poolLabel}`, reference:`PFE-${ref6}`, date:payDate},
+      {id:uid(), accountId:h['1000'].id, type:'debit',  amount:perfFee,  description:`Performance fee retained — ${poolLabel}`, reference:`PFE-${ref6}`, date:payDate}
+    );
+    if (h['2200'] && h['1000'] && netReturn > 0) holdingEntries.push(
+      {id:uid(), accountId:h['2200'].id, type:'credit', amount:amount+netReturn, description:`Return passed to Smartvest FSP — ${poolLabel}`, reference:`PAY-${ref6}`, date:payDate},
+      {id:uid(), accountId:h['1000'].id, type:'debit',  amount:amount+netReturn, description:`Transferred back to Smartvest`, reference:`PAY-${ref6}`, date:payDate}
+    );
+  }
+}
+
 /* Main sync function — pulls backend data and posts double-entry journal entries */
 async function syncInvestmentsToAccounting() {
   try {
@@ -3084,7 +3191,9 @@ async function syncInvestmentsToAccounting() {
     const allWithdrawals = invRes.data   || [];
     const allInvestments = invstRes.data || [];
 
-    let newEntries = [];
+    let newEntries   = [];  // Smartvest FSP entries
+    let holdingEntries = []; // SV Capital Pty Ltd entries
+    let spvEntries   = {}; // {[spvBid]: [...entries]}
     let newTxnIds  = [];
     let newInvIds  = [];
     let count      = 0;
@@ -3137,6 +3246,8 @@ async function syncInvestmentsToAccounting() {
           {id:uid(), accountId:accts['1500'].id, type:'debit',  amount, description:`Investment allocated: ${inv.pool_name||'Pool'} — ${invName}`, reference:`INV-${ref6}`, date},
           {id:uid(), accountId:accts['2100'].id, type:'credit', amount, description:`Investment allocated: ${inv.pool_name||'Pool'} — ${invName}`, reference:`INV-${ref6}`, date}
         );
+        // Inter-company: SV Capital deploys to SPV; SPV acquires asset
+        _postSpvDeployJournals(inv, amount, invName, date, ref6, holdingEntries, spvEntries, syncedInvs);
         newInvIds.push(inv.id);
         count++;
       }
@@ -3152,6 +3263,8 @@ async function syncInvestmentsToAccounting() {
           {id:uid(), accountId:accts['1500'].id, type:'credit', amount,       description:`Investment payout: ${inv.pool_name||'Pool'} — ${invName}`,        reference:`PAY-${ref6}`, date:payDate},
           {id:uid(), accountId:accts['4200'].id, type:'credit', amount:ret,   description:`Investment return income: ${inv.pool_name||'Pool'} — ${invName}`, reference:`PAY-${ref6}`, date:payDate}
         );
+        // Inter-company: SPV disposes asset + repays SV Capital; SV Capital retains perf fee
+        _postSpvPayoutJournals(inv, amount, ret, invName, payDate, ref6, holdingEntries, spvEntries, syncedInvs);
         newInvIds.push(payoutKey);
         count++;
       }
@@ -3164,9 +3277,25 @@ async function syncInvestmentsToAccounting() {
       return;
     }
 
-    // Post all entries
+    // Post all entries to Smartvest FSP
     const existingTxns = getTransactions(bid);
     lsSet('acct_transactions_' + bid, [...existingTxns, ...newEntries]);
+
+    // Post inter-company entries to SV Capital Pty Ltd (holding)
+    if (holdingEntries.length) {
+      const hBiz = getBizByName('SV Capital Pty Ltd');
+      if (hBiz) {
+        const existing = getTransactions(hBiz.id);
+        lsSet('acct_transactions_' + hBiz.id, [...existing, ...holdingEntries]);
+      }
+    }
+    // Post inter-company entries to each SPV
+    for (const [spvBid, entries] of Object.entries(spvEntries)) {
+      if (entries.length) {
+        const existing = getTransactions(spvBid);
+        lsSet('acct_transactions_' + spvBid, [...existing, ...entries]);
+      }
+    }
 
     // Save synced IDs
     newTxnIds.forEach(id => syncedTxns.add(id));
@@ -3175,7 +3304,10 @@ async function syncInvestmentsToAccounting() {
     lsSet('acct_synced_inv_' + bid, [...syncedInvs]);
     lsSet('acct_last_sync_' + bid, new Date().toISOString());
 
-    showToast(`Synced ${count} new transaction${count!==1?'s':''} (${newEntries.length} journal entries posted)`, 'success');
+    const icHoldingCount = holdingEntries.length;
+    const icSpvCount     = Object.values(spvEntries).reduce((s, e) => s + e.length, 0);
+    const icInfo         = (icHoldingCount + icSpvCount) > 0 ? ` + ${icHoldingCount + icSpvCount} inter-company entries across ${Object.keys(spvEntries).length + 1} entities` : '';
+    showToast(`Synced ${count} new transaction${count!==1?'s':''} (${newEntries.length} FSP entries${icInfo})`, 'success');
     _renderSyncStatus(bid, syncedTxns.size + syncedInvs.size);
     _renderInvLedger(bid);
 
@@ -3568,6 +3700,22 @@ const SMARTVEST_FSP_REG  = 'K2021/000000/07';   // placeholder — update to act
 const SMARTVEST_FSP_VAT  = '4380314789';          // placeholder — update to actual VAT
 const SMARTVEST_FSP_NUM  = '52449';
 
+/* ── Product-type → SPV entity names ── */
+const PRODUCT_SPV_MAP = {
+  cattle:     'SVC Farming Pty Ltd',
+  short_term: 'MoolaLend Pty Ltd',
+  solar:      'Solar SPV 1',
+  delivery:   'OnFleet Pty Ltd',
+};
+/* Revenue rates retained at each level */
+const RAISING_FEE_RATE     = 0.02;  // 2% upfront — SV Capital Pty Ltd
+const PERFORMANCE_FEE_RATE = 0.20;  // 20% of net return — SV Capital Pty Ltd
+// Platform fee (1%) already defined in Smartvest sync logic
+
+function getBizByName(name) {
+  return getBizList().find(b => b.name === name) || null;
+}
+
 function getSmartvestBiz() {
   return getBizList().find(b => b.name === SMARTVEST_FSP_NAME) || null;
 }
@@ -3628,6 +3776,187 @@ function seedSmartvestFSP() {
 }
 
 /* ═══════════════════════════════════════════════════
+   SV CAPITAL PTY LTD — Holding Company
+   Retains: raising fees (2%) + performance fees (20%)
+   Parent of all SPVs.
+═══════════════════════════════════════════════════ */
+function seedSVCapitalHolding() {
+  const name = 'SV Capital Pty Ltd';
+  if (getBizByName(name)) return getBizByName(name);
+  const id  = 'sv-holding-' + Date.now().toString(36);
+  const biz = { id, name, registrationNumber: 'K2019/000001/07', vatNumber: '', country: 'ZA', currency: 'ZAR', isHolding: true, createdAt: new Date().toISOString() };
+  const list = getBizList(); list.push(biz); lsSet('acct_businesses', list);
+  const coa = [
+    // Assets
+    { code:'1000', name:'Cash and Bank',                        type:'asset',     category:'current',   balance:0 },
+    { code:'1300', name:'Due from Smartvest Financial Services',type:'asset',     category:'current',   balance:0 },
+    { code:'1600', name:'Loan to SVC Farming Pty Ltd',         type:'asset',     category:'current',   balance:0 },
+    { code:'1601', name:'Loan to MoolaLend Pty Ltd',           type:'asset',     category:'current',   balance:0 },
+    { code:'1602', name:'Loan to Solar SPV 1',                 type:'asset',     category:'current',   balance:0 },
+    { code:'1603', name:'Loan to OnFleet Pty Ltd',             type:'asset',     category:'current',   balance:0 },
+    { code:'1700', name:'Investment in SVC Farming Pty Ltd',   type:'asset',     category:'fixed',     balance:0 },
+    { code:'1701', name:'Investment in MoolaLend Pty Ltd',     type:'asset',     category:'fixed',     balance:0 },
+    { code:'1702', name:'Investment in Solar SPV 1',           type:'asset',     category:'fixed',     balance:0 },
+    { code:'1703', name:'Investment in OnFleet Pty Ltd',       type:'asset',     category:'fixed',     balance:0 },
+    // Liabilities
+    { code:'2100', name:'Investor Funding Payable',            type:'liability', category:'current',   balance:0 },
+    { code:'2200', name:'Due to Smartvest Financial Services', type:'liability', category:'current',   balance:0 },
+    // Equity
+    { code:'3000', name:'Share Capital',                       type:'equity',    category:'equity',    balance:0 },
+    { code:'3100', name:'Retained Earnings',                   type:'equity',    category:'equity',    balance:0 },
+    // Revenue — only raising fees and performance fees flow here
+    { code:'4000', name:'Upfront Raising Fee Income (2%)',     type:'revenue',   category:'operating', balance:0 },
+    { code:'4100', name:'Performance Fee Income (20% of return)',type:'revenue', category:'operating', balance:0 },
+    { code:'4200', name:'Dividend Income from Subsidiaries',   type:'revenue',   category:'other',     balance:0 },
+    // Expenses
+    { code:'6000', name:'Salaries & Wages',                    type:'expense',   category:'operating', balance:0 },
+    { code:'6400', name:'Professional Fees & Legal',           type:'expense',   category:'operating', balance:0 },
+    { code:'6500', name:'Bank Charges',                        type:'expense',   category:'operating', balance:0 },
+    { code:'6700', name:'Other Expenses',                      type:'expense',   category:'other',     balance:0 },
+  ].map(a => ({ ...a, id: uid() }));
+  lsSet('acct_coa_' + id, coa);
+  return biz;
+}
+
+/* ═══════════════════════════════════════════════════
+   SVC FARMING PTY LTD — Cattle / Biological Assets
+   Deployer: Beefcor (farmer / operator)
+   Assets: Biological Assets — Cattle (IFRS IAS 41)
+═══════════════════════════════════════════════════ */
+function seedSVCFarming() {
+  const name = 'SVC Farming Pty Ltd';
+  if (getBizByName(name)) return getBizByName(name);
+  const id  = 'svc-farming-' + Date.now().toString(36);
+  const biz = { id, name, registrationNumber: 'K2021/000002/07', country: 'ZA', currency: 'ZAR', parentEntity: 'SV Capital Pty Ltd', productType: 'cattle', createdAt: new Date().toISOString() };
+  const list = getBizList(); list.push(biz); lsSet('acct_businesses', list);
+  const coa = [
+    // Assets
+    { code:'1000', name:'Cash and Bank',                          type:'asset',     category:'current',   balance:0 },
+    { code:'1100', name:'Accounts Receivable — Beefcor',         type:'asset',     category:'current',   balance:0 },
+    { code:'1400', name:'Biological Assets — Cattle (IAS 41)',   type:'asset',     category:'fixed',     balance:0 },
+    { code:'1410', name:'Fair Value Adjustment — Cattle',        type:'asset',     category:'fixed',     balance:0 },
+    { code:'1500', name:'Farm Equipment (PPE)',                   type:'asset',     category:'fixed',     balance:0 },
+    { code:'1510', name:'Accumulated Depreciation — Equipment',  type:'asset',     category:'fixed',     balance:0 },
+    // Liabilities
+    { code:'2000', name:'Accounts Payable — Beefcor',            type:'liability', category:'current',   balance:0 },
+    { code:'2100', name:'VAT Control',                           type:'liability', category:'current',   balance:0 },
+    { code:'2500', name:'Loan from SV Capital Pty Ltd',          type:'liability', category:'long_term', balance:0 },
+    // Equity
+    { code:'3000', name:'Share Capital (100% SV Capital)',       type:'equity',    category:'equity',    balance:0 },
+    { code:'3100', name:'Retained Earnings',                     type:'equity',    category:'equity',    balance:0 },
+    // Revenue
+    { code:'4000', name:'Livestock Sales Income',                type:'revenue',   category:'operating', balance:0 },
+    { code:'4100', name:'Agricultural Produce Income',           type:'revenue',   category:'operating', balance:0 },
+    { code:'4200', name:'Fair Value Gain — Biological Assets',   type:'revenue',   category:'other',     balance:0 },
+    // Expenses
+    { code:'5000', name:'Beefcor Management & Operating Fees',  type:'expense',   category:'cogs',      balance:0 },
+    { code:'5100', name:'Veterinary & Animal Health Costs',      type:'expense',   category:'operating', balance:0 },
+    { code:'5200', name:'Feed & Grazing Costs',                  type:'expense',   category:'operating', balance:0 },
+    { code:'5300', name:'Transport & Logistics',                 type:'expense',   category:'operating', balance:0 },
+    { code:'6600', name:'Depreciation — Farm Equipment',         type:'expense',   category:'operating', balance:0 },
+    { code:'6700', name:'Other Farm Expenses',                   type:'expense',   category:'other',     balance:0 },
+  ].map(a => ({ ...a, id: uid() }));
+  lsSet('acct_coa_' + id, coa);
+  return biz;
+}
+
+/* ═══════════════════════════════════════════════════
+   MOOLALEND PTY LTD — Short-Term Lending SPV
+   Deploys capital as short-term loans to borrowers
+═══════════════════════════════════════════════════ */
+function seedMoolaLend() {
+  const name = 'MoolaLend Pty Ltd';
+  if (getBizByName(name)) return getBizByName(name);
+  const id  = 'moolalend-' + Date.now().toString(36);
+  const biz = { id, name, registrationNumber: 'K2021/000003/07', country: 'ZA', currency: 'ZAR', parentEntity: 'SV Capital Pty Ltd', productType: 'short_term', createdAt: new Date().toISOString() };
+  const list = getBizList(); list.push(biz); lsSet('acct_businesses', list);
+  const coa = [
+    { code:'1000', name:'Cash and Bank',                         type:'asset',     category:'current',   balance:0 },
+    { code:'1300', name:'Short-term Loan Receivables',           type:'asset',     category:'current',   balance:0 },
+    { code:'1310', name:'Loan Loss Provision (contra)',          type:'asset',     category:'current',   balance:0 },
+    { code:'1100', name:'Accrued Interest Receivable',          type:'asset',     category:'current',   balance:0 },
+    { code:'2000', name:'Accounts Payable',                      type:'liability', category:'current',   balance:0 },
+    { code:'2100', name:'VAT Control',                           type:'liability', category:'current',   balance:0 },
+    { code:'2500', name:'Loan from SV Capital Pty Ltd',          type:'liability', category:'long_term', balance:0 },
+    { code:'3000', name:'Share Capital (100% SV Capital)',       type:'equity',    category:'equity',    balance:0 },
+    { code:'3100', name:'Retained Earnings',                     type:'equity',    category:'equity',    balance:0 },
+    { code:'4000', name:'Interest Income',                       type:'revenue',   category:'operating', balance:0 },
+    { code:'4100', name:'Origination Fee Income',                type:'revenue',   category:'operating', balance:0 },
+    { code:'4200', name:'Late Payment Fee Income',               type:'revenue',   category:'other',     balance:0 },
+    { code:'5000', name:'Bad Debt Expense',                      type:'expense',   category:'cogs',      balance:0 },
+    { code:'5100', name:'Credit Assessment Costs',               type:'expense',   category:'operating', balance:0 },
+    { code:'6500', name:'Bank Charges',                          type:'expense',   category:'operating', balance:0 },
+    { code:'6700', name:'Other Operating Expenses',              type:'expense',   category:'other',     balance:0 },
+  ].map(a => ({ ...a, id: uid() }));
+  lsSet('acct_coa_' + id, coa);
+  return biz;
+}
+
+/* ═══════════════════════════════════════════════════
+   SOLAR SPV 1 — Solar Energy Asset SPV
+   Assets: Solar energy systems (PPE — IFRS IAS 16)
+═══════════════════════════════════════════════════ */
+function seedSolarSPV1() {
+  const name = 'Solar SPV 1';
+  if (getBizByName(name)) return getBizByName(name);
+  const id  = 'solar-spv-1-' + Date.now().toString(36);
+  const biz = { id, name, registrationNumber: 'K2022/000004/07', country: 'ZA', currency: 'ZAR', parentEntity: 'SV Capital Pty Ltd', productType: 'solar', createdAt: new Date().toISOString() };
+  const list = getBizList(); list.push(biz); lsSet('acct_businesses', list);
+  const coa = [
+    { code:'1000', name:'Cash and Bank',                           type:'asset',     category:'current',   balance:0 },
+    { code:'1100', name:'Accounts Receivable',                     type:'asset',     category:'current',   balance:0 },
+    { code:'1200', name:'Solar Energy Systems — at Cost (IAS 16)', type:'asset',     category:'fixed',     balance:0 },
+    { code:'1210', name:'Accumulated Depreciation — Solar Systems',type:'asset',     category:'fixed',     balance:0 },
+    { code:'2000', name:'Accounts Payable',                        type:'liability', category:'current',   balance:0 },
+    { code:'2100', name:'VAT Control',                             type:'liability', category:'current',   balance:0 },
+    { code:'2500', name:'Loan from SV Capital Pty Ltd',            type:'liability', category:'long_term', balance:0 },
+    { code:'3000', name:'Share Capital (100% SV Capital)',         type:'equity',    category:'equity',    balance:0 },
+    { code:'3100', name:'Retained Earnings',                       type:'equity',    category:'equity',    balance:0 },
+    { code:'4000', name:'Solar Energy Revenue / PPA Income',       type:'revenue',   category:'operating', balance:0 },
+    { code:'4100', name:'Equipment Lease Income',                  type:'revenue',   category:'operating', balance:0 },
+    { code:'5000', name:'Maintenance & Repairs',                   type:'expense',   category:'cogs',      balance:0 },
+    { code:'5100', name:'Insurance',                               type:'expense',   category:'operating', balance:0 },
+    { code:'5200', name:'Solar Experts Operating Fees',            type:'expense',   category:'operating', balance:0 },
+    { code:'6600', name:'Depreciation — Solar Systems',            type:'expense',   category:'operating', balance:0 },
+    { code:'6700', name:'Other Operating Expenses',                type:'expense',   category:'other',     balance:0 },
+  ].map(a => ({ ...a, id: uid() }));
+  lsSet('acct_coa_' + id, coa);
+  return biz;
+}
+
+/* ═══════════════════════════════════════════════════
+   ONFLEET PTY LTD — Delivery Bikes SPV
+   Assets: Delivery bikes / fleet (PPE — IFRS IAS 16)
+═══════════════════════════════════════════════════ */
+function seedOnFleetSPV() {
+  const name = 'OnFleet Pty Ltd';
+  if (getBizByName(name)) return getBizByName(name);
+  const id  = 'onfleet-spv-' + Date.now().toString(36);
+  const biz = { id, name, registrationNumber: 'K2022/000005/07', country: 'ZA', currency: 'ZAR', parentEntity: 'SV Capital Pty Ltd', productType: 'delivery', createdAt: new Date().toISOString() };
+  const list = getBizList(); list.push(biz); lsSet('acct_businesses', list);
+  const coa = [
+    { code:'1000', name:'Cash and Bank',                            type:'asset',     category:'current',   balance:0 },
+    { code:'1100', name:'Accounts Receivable',                      type:'asset',     category:'current',   balance:0 },
+    { code:'1200', name:'Delivery Fleet — Bikes, at Cost (IAS 16)', type:'asset',     category:'fixed',     balance:0 },
+    { code:'1210', name:'Accumulated Depreciation — Fleet',         type:'asset',     category:'fixed',     balance:0 },
+    { code:'2000', name:'Accounts Payable',                         type:'liability', category:'current',   balance:0 },
+    { code:'2100', name:'VAT Control',                              type:'liability', category:'current',   balance:0 },
+    { code:'2500', name:'Loan from SV Capital Pty Ltd',             type:'liability', category:'long_term', balance:0 },
+    { code:'3000', name:'Share Capital (100% SV Capital)',          type:'equity',    category:'equity',    balance:0 },
+    { code:'3100', name:'Retained Earnings',                        type:'equity',    category:'equity',    balance:0 },
+    { code:'4000', name:'Delivery Service Revenue',                 type:'revenue',   category:'operating', balance:0 },
+    { code:'4100', name:'Bike Lease Income',                        type:'revenue',   category:'operating', balance:0 },
+    { code:'5000', name:'Bike Maintenance & Repairs',               type:'expense',   category:'cogs',      balance:0 },
+    { code:'5100', name:'Insurance — Fleet',                        type:'expense',   category:'operating', balance:0 },
+    { code:'5200', name:'Driver / Rider Costs',                     type:'expense',   category:'operating', balance:0 },
+    { code:'6600', name:'Depreciation — Delivery Fleet',            type:'expense',   category:'operating', balance:0 },
+    { code:'6700', name:'Other Operating Expenses',                 type:'expense',   category:'other',     balance:0 },
+  ].map(a => ({ ...a, id: uid() }));
+  lsSet('acct_coa_' + id, coa);
+  return biz;
+}
+
+/* ═══════════════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
@@ -3635,7 +3964,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Check if we need to auto-seed demo data
   setTimeout(() => {
-    seedSmartvestFSP(); // always ensure the FSP entity exists
+    // Seed all entities in the SV Capital corporate structure
+    seedSmartvestFSP();   // FSP — platform fees only
+    seedSVCapitalHolding(); // Holding — raising fees + performance fees
+    seedSVCFarming();     // SPV — cattle / biological assets
+    seedMoolaLend();      // SPV — short-term lending
+    seedSolarSPV1();      // SPV — solar energy systems
+    seedOnFleetSPV();     // SPV — delivery bikes
     const bid = getActiveId();
     if (bid && !getTransactions(bid).length && !getInvoices(bid).length) {
       _acctConfirm('Load sample transactions and invoices to explore the app?', 'Load Demo Data', 'btn-primary').then(ok => {
