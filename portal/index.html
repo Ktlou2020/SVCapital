@@ -448,11 +448,22 @@
           <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-layer-group"></i></div></div><div class="stat-card__value" id="mi-count">—</div><div class="stat-card__label">Total Investments</div></div>
         </div>
 
-        <div class="tab-bar">
-          <button class="tab-btn active" onclick="filterMyInvestments('all', this)">All</button>
-          <button class="tab-btn" onclick="filterMyInvestments('active', this)">Active</button>
-          <button class="tab-btn" onclick="filterMyInvestments('paid_out', this)">Paid Out</button>
-          <button class="tab-btn" onclick="filterMyInvestments('matured', this)">Matured</button>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px">
+          <div class="tab-bar" style="margin-bottom:0">
+            <button class="tab-btn active" onclick="filterMyInvestments('all', this)">All</button>
+            <button class="tab-btn" onclick="filterMyInvestments('active', this)">Active</button>
+            <button class="tab-btn" onclick="filterMyInvestments('paid_out', this)">Paid Out</button>
+            <button class="tab-btn" onclick="filterMyInvestments('matured', this)">Matured</button>
+          </div>
+          <select class="form-select" id="myInvProductFilter" style="min-width:160px;height:34px;font-size:0.8rem" onchange="renderMyInvestmentCards()">
+            <option value="">All Products</option>
+            <option value="cattle">Cattle</option>
+            <option value="solar_7yr">Solar (7yr)</option>
+            <option value="solar_6yr">Solar (6yr)</option>
+            <option value="solar_5yr">Solar (5yr)</option>
+            <option value="short_term">Short Term</option>
+            <option value="delivery_bike">Delivery Bikes</option>
+          </select>
         </div>
 
         <div id="myInvestmentsGrid" class="grid-3">
@@ -935,14 +946,7 @@
               </div>
             </div>
 
-            <div class="panel mb-16">
-              <div class="panel__header"><span class="panel__title">Recurring Investment</span></div>
-              <div class="panel__body">
-                <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px">Automatically invest a fixed amount each month into your chosen pool.</div>
-                <div id="recurringStatusSummary" style="display:none;padding:10px 14px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;font-size:0.82rem;margin-bottom:12px"></div>
-                <button class="btn btn--secondary btn--full" onclick="openRecurringModal()"><i class="fa-solid fa-rotate"></i> Set Up Recurring Investment</button>
-              </div>
-            </div>
+            <!-- Recurring investments managed via Wallet → Recurring tab -->
 
             <div class="panel">
               <div class="panel__header"><span class="panel__title">Privacy &amp; Data (POPIA)</span></div>

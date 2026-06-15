@@ -1779,6 +1779,7 @@ function renderPoolsGrid() {
             <span class="pool-stat__value" style="color:var(--gold);text-decoration:underline dotted">${p.live_investor_count ?? p.investor_count ?? 0}</span>
           </div>
           <div class="pool-stat"><span class="pool-stat__label">Term</span><span class="pool-stat__value">${p.term_months ?? '—'}mo</span></div>
+          ${p.management_fee_pct > 0 ? `<div class="pool-stat"><span class="pool-stat__label">Mgt Fee</span><span class="pool-stat__value" style="color:#f59e0b">${(Number(p.management_fee_pct) * 100).toFixed(2)}% (${p.management_fee_frequency || 'once'})</span></div>` : ''}
         </div>
 
         <div class="pool-card__progress-label">
@@ -1851,13 +1852,14 @@ async function viewPoolInvestors(poolId) {
       <div style="overflow-x:auto">
         <table class="data-table" style="table-layout:fixed;width:100%">
           <thead><tr>
-            <th style="width:22%">Investor</th>
-            <th style="width:14%">Account</th>
-            <th style="width:12%">Amount</th>
-            <th style="width:9%">Rate</th>
-            <th style="width:10%">Status</th>
-            <th style="width:11%">Start Date</th>
-            <th style="width:11%">Maturity</th>
+            <th style="width:20%">Investor</th>
+            <th style="width:12%">Account</th>
+            <th style="width:11%">Amount</th>
+            <th style="width:8%">Rate</th>
+            <th style="width:9%">EVA</th>
+            <th style="width:9%">Status</th>
+            <th style="width:10%">Start</th>
+            <th style="width:10%">Maturity</th>
             <th style="width:11%">Instruction</th>
           </tr></thead>
           <tbody>
@@ -1868,6 +1870,7 @@ async function viewPoolInvestors(poolId) {
                 <td class="clip" style="font-family:monospace;font-size:0.75rem;color:var(--gold)">${r.investor_id}</td>
                 <td class="td-gold fw-700 clip">${Utils.rand(r.amount)}</td>
                 <td class="td-green clip">${r.annual_rate ? Utils.pct(r.annual_rate) : '—'}</td>
+                <td class="clip" style="font-size:0.75rem;color:#8b5cf6">${r.eva_amount > 0 ? Utils.rand(r.eva_amount) : '—'}</td>
                 <td><span class="badge ${statusColor[r.investment_status]||'badge--gray'}">${r.investment_status||'—'}</span></td>
                 <td class="td-muted clip">${Utils.date(r.start_date)}</td>
                 <td class="td-muted clip">${Utils.date(r.end_date)}</td>

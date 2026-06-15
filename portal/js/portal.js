@@ -411,7 +411,7 @@ function navigate(view, btnEl) {
     subaccounts: loadSubAccounts,
     referral: loadReferralDashboard,
     documents: loadDocuments,
-    profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderRecurringStatusSummary(); _renderKycStatusPanel(); },
+    profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderKycStatusPanel(); },
   };
   if (loaders[view]) loaders[view]();
 
@@ -1047,7 +1047,9 @@ function filterMyInvestments(filter, btn) {
 
 function renderMyInvestmentCards() {
   const grid = document.getElementById('myInvestmentsGrid');
-  const items = PORTAL.myInvFilter === 'all' ? PORTAL.investments : PORTAL.investments.filter(i => i.status === PORTAL.myInvFilter);
+  const productFilter = document.getElementById('myInvProductFilter')?.value || '';
+  let items = PORTAL.myInvFilter === 'all' ? PORTAL.investments : PORTAL.investments.filter(i => i.status === PORTAL.myInvFilter);
+  if (productFilter) items = items.filter(i => i.product_type === productFilter);
 
   if (!items.length) {
     grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="fa-solid fa-chart-line"></i><p>No investments in this category. <br><a href="#" onclick="navigate(\'marketplace\',null)" style="color:var(--gold)">Explore pools →</a></p></div>';
@@ -1143,14 +1145,18 @@ function renderMyTxnTable() {
     return;
   }
 
-  body.innerHTML = sorted.map(t => `<tr>
-    <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ')}</span></td>
-    <td class="${t.amount > 0 ? 'td-green' : 'td-red'} fw-700">${t.amount > 0 ? '+' : ''}${Utils.rand(t.amount)}</td>
-    <td>${Utils.statusBadge(t.status)}</td>
-    <td class="td-muted" style="font-size:0.72rem">${t.reference || '—'}</td>
-    <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
-    <td class="td-muted">${Utils.date(t.transaction_date)}</td>
-  </tr>`).join('');
+  const _isPosTxn = t => !['withdrawal', 'fee', 'investment'].includes(t.type);
+  body.innerHTML = sorted.map(t => {
+    const pos = _isPosTxn(t);
+    return `<tr>
+      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ')}</span></td>
+      <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
+      <td>${Utils.statusBadge(t.status)}</td>
+      <td class="td-muted" style="font-size:0.72rem">${t.reference || '—'}</td>
+      <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
+      <td class="td-muted">${Utils.date(t.transaction_date)}</td>
+    </tr>`;
+  }).join('');
 }
 
 function _switchTxnTab(tab, btn) {
@@ -2572,7 +2578,7 @@ async function confirmInvestment(pool) {
     const maturityDate = new Date();
     maturityDate.setMonth(maturityDate.getMonth() + pool.term_months);
 
-    // Create investment (server-side fee hook will record the fee transaction separately)
+    // Create investment (server-side hook deducts wallet + fee atomically)
     await API.investments.create({
       id: Utils.genId('INVST'),
       investor_id: DEMO_INVESTOR_ID,
@@ -2588,7 +2594,9 @@ async function confirmInvestment(pool) {
       end_date: maturityDate.toISOString().split('T')[0],
       term_months: pool.term_months,
       payout_option: 'reinvest',
+      maturity_instruction: 'reinvest',   // default: roll into next open pool of same product
       sub_account_id: _pmSaId || undefined,
+      is_reinvestment: false,
     });
 
     // Record investment transaction

@@ -386,6 +386,8 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
         inv.annual_rate,
         inv.expected_return,
         inv.maturity_instruction,
+        inv.is_reinvestment,
+        COALESCE(inv.eva_amount, 0) AS eva_amount,
         i.first_name,
         i.last_name,
         i.email,
