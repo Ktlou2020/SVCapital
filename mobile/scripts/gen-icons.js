@@ -87,7 +87,12 @@ async function run() {
   if (fs.existsSync(path.join(__dirname, '../ios'))) {
     fs.mkdirSync(IOS_ASSETS, { recursive: true });
     for (const { name, size } of IOS_ICONS) {
-      await sharp(ICON_SRC).resize(size, size).png().toFile(path.join(IOS_ASSETS, name));
+      // flatten removes alpha channel — Apple rejects transparent App Store icons
+      await sharp(ICON_SRC)
+        .resize(size, size)
+        .flatten({ background: '#0f1623' })
+        .png()
+        .toFile(path.join(IOS_ASSETS, name));
       console.log(`[icons] iOS ${name}: ${size}x${size}`);
     }
     // Write Contents.json for Xcode asset catalog
