@@ -230,6 +230,7 @@ router.post('/ozow-hash', requireAuth, (req, res) => {
     amount,
     transactionRef,
     bankRef    = '',
+    notifyUrl  = '',
     cancelUrl  = '',
     errorUrl   = '',
     successUrl,
@@ -240,15 +241,18 @@ router.post('/ozow-hash', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'amount, transactionRef and successUrl are required.' });
 
   const lc = v => String(v).toLowerCase();
-  const payload =
-    lc(siteCode) + lc(countryCode) + lc(currencyCode) +
-    lc(amount) + lc(transactionRef) + lc(bankRef) +
-    lc(cancelUrl) + lc(errorUrl) + lc(successUrl) +
-    lc(String(isTest)) + privateKey;
+  // notifyUrl is optional but MUST be in the hash if provided (Ozow spec §3.2)
+  const hashParts = [
+    lc(siteCode), lc(countryCode), lc(currencyCode),
+    lc(amount), lc(transactionRef), lc(bankRef),
+  ];
+  if (notifyUrl) hashParts.push(lc(notifyUrl));
+  hashParts.push(lc(cancelUrl), lc(errorUrl), lc(successUrl), lc(String(isTest)));
+  const payload = hashParts.join('') + privateKey;
 
   const hash = crypto.createHash('sha512').update(payload).digest('hex').toLowerCase();
 
-  console.log('[Ozow] hash generated for ref:', transactionRef);
+  console.log('[Ozow] hash generated — ref:', transactionRef, 'siteCode:', siteCode, 'isTest:', isTest, 'payloadLen:', payload.length - privateKey.length);
   return res.json({ hash, siteCode });
 });
 
