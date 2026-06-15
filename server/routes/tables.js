@@ -116,6 +116,7 @@ const ALLOWED_TABLES = {
   quest_completions:     'id',   // read via generic API; writes via /api/quests/*
   users:                 'id',   // limited, no password_hash exposed
   investment_waitlist:   'id',
+  compliance_calendar:   'id',
 };
 
 /* ─── Tables that require admin/director role for READ ─── */
@@ -126,6 +127,7 @@ const ADMIN_ONLY_TABLES = new Set([
   'employees', 'employee_onboarding', 'employee_courses',
   'course_progress', 'activity_feed',
   'fica_checks',
+  'compliance_calendar',
 ]);
 
 /* ─── Tables that require admin/director role for WRITE (stricter than read) ─── */
