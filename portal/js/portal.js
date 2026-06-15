@@ -6703,13 +6703,10 @@ function downloadStatement() {
   const boxW = (W - 28 - 9) / 4;
   stats.forEach(([label, value, color], i) => {
     const bx = 14 + i * (boxW + 3);
-    doc.setFillColor(...color, 0.08);
-    doc.setFillColor(color[0], color[1], color[2]);
-    doc.setGState && doc.setGState(doc.GState({ opacity: 0.07 }));
     doc.setFillColor(247, 248, 250);
     doc.roundedRect(bx, y, boxW, 24, 2, 2, 'F');
     doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...color);
+    doc.setTextColor(color[0], color[1], color[2]);
     doc.text(label.toUpperCase(), bx + boxW / 2, y + 8, { align: 'center' });
     doc.setFontSize(10); doc.setFont('helvetica', 'bold');
     doc.setTextColor(26, 26, 26);
