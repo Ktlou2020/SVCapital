@@ -10,7 +10,15 @@ const router       = require('express').Router();
 const pool         = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const emailService = require('../services/email');
+const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
+
+/* Lazy-load push service */
+let _push = null;
+function getPush() {
+  if (!_push) { try { _push = require('../services/pushService'); } catch (_) {} }
+  return _push;
+}
 
 /* ─── POST /api/withdrawals/request ─── */
 router.post('/request', requireAuth, async (req, res) => {
@@ -88,16 +96,20 @@ router.post('/:txId/approve', requireAuth, requireRole('admin', 'director'), asy
   try {
     const { txId } = req.params;
 
-    // Fetch the transaction
+    // Fetch the transaction (separate queries to avoid JOIN failure if bank_name column is missing)
     const { rows: [tx] } = await pool.query(
-      `SELECT t.*, i.email, i.first_name, i.last_name, i.bank_name
-       FROM transactions t
-       JOIN investors i ON i.id = t.investor_id
-       WHERE t.id = $1 AND t.type = 'withdrawal' AND t.status = 'pending'`,
+      `SELECT * FROM transactions WHERE id = $1 AND type = 'withdrawal' AND status = 'pending'`,
       [txId]
     );
     if (!tx) {
       return res.status(404).json({ error: 'Pending withdrawal transaction not found.' });
+    }
+    const { rows: [investor] } = await pool.query(
+      `SELECT id, email, first_name, last_name, phone, bank_name FROM investors WHERE id = $1`,
+      [tx.investor_id]
+    );
+    if (!investor) {
+      return res.status(404).json({ error: 'Investor record not found.' });
     }
 
     // Mark as completed
@@ -106,13 +118,28 @@ router.post('/:txId/approve', requireAuth, requireRole('admin', 'director'), asy
       [txId]
     );
 
-    // Fire-and-forget email
-    const investor = { email: tx.email, first_name: tx.first_name, last_name: tx.last_name };
-    setImmediate(() => emailService.sendWithdrawalProcessed(investor, {
-      amount: tx.amount,
-      reference: tx.reference,
-      bankName: tx.bank_name || null,
-    }).catch(err => console.error('[email] sendWithdrawalProcessed failed:', err.message)));
+    // Fire-and-forget notifications
+    setImmediate(async () => {
+      try {
+        await emailService.sendWithdrawalProcessed(investor, {
+          amount: tx.amount, reference: tx.reference, bankName: investor.bank_name || null,
+        });
+      } catch (err) { console.error('[email] sendWithdrawalProcessed failed:', err.message); }
+      try {
+        await smsService.sendWithdrawalProcessed(investor.phone, investor.first_name, tx.amount);
+      } catch (err) { console.error('[sms] sendWithdrawalProcessed failed:', err.message); }
+      try {
+        const ps = getPush();
+        if (ps && investor.id) {
+          await ps.sendPushToInvestor(investor.id, {
+            title: 'Withdrawal processed',
+            body:  `R${Number(tx.amount).toLocaleString('en-ZA')} has been sent to your bank account.`,
+            url:   '/portal/',
+            tag:   'withdrawal.approved',
+          });
+        }
+      } catch (err) { console.error('[push] withdrawal.approved failed:', err.message); }
+    });
 
     // Audit
     setImmediate(() => audit.log({
@@ -138,16 +165,20 @@ router.post('/:txId/reject', requireAuth, requireRole('admin', 'director'), asyn
     const { txId } = req.params;
     const { reason } = req.body;
 
-    // Fetch the transaction
+    // Fetch transaction and investor separately (avoids JOIN failure on optional columns)
     const { rows: [tx] } = await pool.query(
-      `SELECT t.*, i.email, i.first_name, i.last_name
-       FROM transactions t
-       JOIN investors i ON i.id = t.investor_id
-       WHERE t.id = $1 AND t.type = 'withdrawal' AND t.status = 'pending'`,
+      `SELECT * FROM transactions WHERE id = $1 AND type = 'withdrawal' AND status = 'pending'`,
       [txId]
     );
     if (!tx) {
       return res.status(404).json({ error: 'Pending withdrawal transaction not found.' });
+    }
+    const { rows: [investor] } = await pool.query(
+      `SELECT id, email, first_name, last_name, phone FROM investors WHERE id = $1`,
+      [tx.investor_id]
+    );
+    if (!investor) {
+      return res.status(404).json({ error: 'Investor record not found.' });
     }
 
     // Mark as rejected and store reason
@@ -162,13 +193,28 @@ router.post('/:txId/reject', requireAuth, requireRole('admin', 'director'), asyn
       [tx.amount, tx.investor_id]
     );
 
-    // Fire-and-forget email
-    const investor = { email: tx.email, first_name: tx.first_name, last_name: tx.last_name };
-    setImmediate(() => emailService.sendWithdrawalRejected(investor, {
-      amount: tx.amount,
-      reference: tx.reference,
-      reason: reason || null,
-    }).catch(err => console.error('[email] sendWithdrawalRejected failed:', err.message)));
+    // Fire-and-forget notifications
+    setImmediate(async () => {
+      try {
+        await emailService.sendWithdrawalRejected(investor, {
+          amount: tx.amount, reference: tx.reference, reason: reason || null,
+        });
+      } catch (err) { console.error('[email] sendWithdrawalRejected failed:', err.message); }
+      try {
+        await smsService.sendWithdrawalRejected(investor.phone, investor.first_name, tx.amount);
+      } catch (err) { console.error('[sms] sendWithdrawalRejected failed:', err.message); }
+      try {
+        const ps = getPush();
+        if (ps && investor.id) {
+          await ps.sendPushToInvestor(investor.id, {
+            title: 'Withdrawal request declined',
+            body:  `Your withdrawal of R${Number(tx.amount).toLocaleString('en-ZA')} was declined. Funds returned to your wallet.`,
+            url:   '/portal/',
+            tag:   'withdrawal.rejected',
+          });
+        }
+      } catch (err) { console.error('[push] withdrawal.rejected failed:', err.message); }
+    });
 
     // Audit
     setImmediate(() => audit.log({
