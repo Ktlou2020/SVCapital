@@ -1853,7 +1853,6 @@ async function launchOzow() {
   const cancelUrl    = `${baseUrl}?payment=cancelled&gw=ozow`;
   const errorUrl     = `${baseUrl}?payment=error&gw=ozow`;
   const amountFmt    = totalCharged.toFixed(2);
-  const isTest       = 'false'; // ⚠️ Change to 'true' while testing in Ozow sandbox
 
   // Persist amount to sessionStorage so it survives the redirect
   try {
@@ -1864,7 +1863,7 @@ async function launchOzow() {
 
   try {
     // Server generates the SHA-512 hash using OZOW_PRIVATE_KEY (never leaves server).
-    // Server also returns the OZOW_SITE_CODE so the frontend doesn't need it hardcoded.
+    // Server also returns OZOW_SITE_CODE and isTest so the frontend doesn't need them hardcoded.
     const hashRes = await API._fetch('POST', 'payments/ozow-hash', {
       countryCode:    'ZA',
       currencyCode:   'ZAR',
@@ -1874,10 +1873,10 @@ async function launchOzow() {
       cancelUrl,
       errorUrl,
       successUrl,
-      isTest,
     });
     const hash     = hashRes.hash;
     const siteCode = hashRes.siteCode;
+    const isTest   = hashRes.isTest || 'false';
     if (!hash || !siteCode) throw new Error('Invalid response from payment server');
 
     // Pre-record a pending deposit (base amount — fee stays with gateway)

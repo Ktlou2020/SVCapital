@@ -797,7 +797,7 @@ CREATE INDEX IF NOT EXISTS friction_created_idx ON signup_friction_events(create
 
 CREATE TABLE IF NOT EXISTS totp_recovery_codes (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   code_hash   TEXT NOT NULL,
   used        BOOLEAN DEFAULT false,
   used_at     TIMESTAMPTZ,
