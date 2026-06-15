@@ -1582,22 +1582,17 @@ function renderKYCTable() {
       <td class="td-muted">${Utils.date(k.submitted_at || k.submitted_date || k.created_at)}</td>
       <td>
         ${k.file_data || k.file_url || k.attachment_data
-          ? `<button class="btn btn--secondary btn--sm" onclick='viewFicaDocument(${JSON.stringify(k.id)})'><i class="fa-solid fa-eye"></i> View</button>`
+          ? `<button class="btn btn--secondary btn--sm" title="Open document in new tab" onclick='viewFicaDocument(${JSON.stringify(k.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</button>`
           : `<span class="td-muted" style="font-size:0.72rem">No file</span>`}
       </td>
       <td>
-        <div class="flex-center gap-8">
+        <div style="display:flex;gap:4px;flex-wrap:nowrap;align-items:center">
           ${k.status === 'under_review' || k.status === 'pending' ? `
-            <button class="btn btn--success btn--sm" onclick='approveKyc(${JSON.stringify(k.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
-            <button class="btn btn--danger btn--sm" onclick='rejectKyc(${JSON.stringify(k.id)}, this)'><i class="fa-solid fa-xmark"></i> Reject</button>
-          ` : `<span class="td-muted" style="font-size:0.75rem">${Utils.date(k.reviewed_date)}</span>`}
+            <button class="btn btn--success btn--sm" title="Approve document" onclick='approveKyc(${JSON.stringify(k.id)}, this)'><i class="fa-solid fa-check"></i></button>
+            <button class="btn btn--danger btn--sm" title="Reject document" onclick='rejectKyc(${JSON.stringify(k.id)}, this)'><i class="fa-solid fa-xmark"></i></button>
+            <button class="btn btn--secondary btn--sm" title="Upload document for investor" onclick='openKycUploadModal(${JSON.stringify(k.investor_id)},${JSON.stringify(kName)})'><i class="fa-solid fa-upload"></i></button>
+          ` : `<span class="td-muted" style="font-size:0.75rem">${Utils.date(k.reviewed_date || k.reviewed_at)}</span>`}
         </div>
-      </td>
-      <td>
-        <button class="btn btn--secondary btn--sm" title="Upload a document for this investor"
-                onclick='openKycUploadModal(${JSON.stringify(k.investor_id)},${JSON.stringify(kName)})'>
-          <i class="fa-solid fa-upload"></i>
-        </button>
       </td>
     </tr>
   `}).join('');
@@ -1609,66 +1604,53 @@ function viewFicaDocument(kycId) {
 
   const rawData = doc.file_data || doc.attachment_data || doc.file_url || '';
   const fileName = doc.file_name || 'Document';
-  const isDataUrl = rawData.startsWith('data:application/pdf') || rawData.startsWith('data:image/');
+  const isDataUrl = rawData.startsWith('data:');
   const isHttpUrl = rawData.startsWith('https://') || rawData.startsWith('http://');
-  const data = (isDataUrl || isHttpUrl) ? rawData : '';
-  const isPdf = fileName.toLowerCase().endsWith('.pdf') || rawData.includes('application/pdf');
 
-  document.getElementById('ficaDocTitle').textContent = `${doc.document_type?.replace(/_/g,' ') || 'FICA Document'} — ${doc.investor_name}`;
-
-  const container = document.getElementById('ficaDocContainer');
-  if (!data) {
-    container.innerHTML = '<div class="empty-state"><i class="fa-solid fa-file-slash"></i><p>No file data available</p></div>';
-  } else if (isPdf && isDataUrl) {
-    const embed = document.createElement('embed');
-    embed.type = 'application/pdf';
-    embed.setAttribute('style', 'width:100%;height:520px;border:none;border-radius:8px');
-    embed.src = data;
-    container.innerHTML = '';
-    container.appendChild(embed);
-  } else if (isPdf && isHttpUrl) {
-    const iframe = document.createElement('iframe');
-    iframe.setAttribute('style', 'width:100%;height:520px;border:none;border-radius:8px');
-    iframe.src = data;
-    container.innerHTML = '';
-    container.appendChild(iframe);
-  } else if (isDataUrl) {
-    const img = document.createElement('img');
-    img.alt = fileName;
-    img.setAttribute('style', 'max-width:100%;border-radius:8px;display:block;margin:0 auto');
-    img.src = data;
-    container.innerHTML = '';
-    container.appendChild(img);
-  } else {
-    container.innerHTML = `<div style="text-align:center;padding:24px">
-      <i class="fa-solid fa-file" style="font-size:3rem;color:#FF8215;margin-bottom:12px"></i>
-      <p style="font-size:0.9rem;font-weight:700;color:#1a1a1a">${fileName}</p>
-      <a href="${data}" download="${fileName}" class="btn btn--primary" style="margin-top:12px">
-        <i class="fa-solid fa-download"></i> Download File
-      </a>
-    </div>`;
+  if (!rawData) {
+    Toast.error('No file attached to this document record.');
+    return;
   }
 
-  // Set up download button
-  const dlBtn = document.getElementById('ficaDocDownload');
-  if (dlBtn) {
-    if (isDataUrl) {
-      dlBtn.onclick = () => {
+  if (isHttpUrl) {
+    // HTTP URLs: open directly in new tab
+    window.open(rawData, '_blank', 'noopener,noreferrer');
+    return;
+  }
+
+  if (isDataUrl) {
+    // Data URLs: convert to blob and open in new tab
+    try {
+      const [header, b64] = rawData.split(',');
+      const mime = header.match(/:(.*?);/)?.[1] || 'application/octet-stream';
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime });
+      const blobUrl = URL.createObjectURL(blob);
+      const w = window.open(blobUrl, '_blank', 'noopener');
+      if (!w) {
+        // Popup blocked fallback: download the file instead
         const a = document.createElement('a');
-        a.href = data;
+        a.href = rawData;
         a.download = fileName;
         a.click();
-      };
-      dlBtn.style.display = 'inline-flex';
-    } else if (data.startsWith('http')) {
-      dlBtn.onclick = () => window.open(data, '_blank');
-      dlBtn.style.display = 'inline-flex';
-    } else {
-      dlBtn.style.display = 'none';
+      }
+    } catch (e) {
+      // Fallback: open data URL directly
+      const w = window.open('', '_blank');
+      if (w) {
+        w.document.write(`<title>${_esc(fileName)}</title><body style="margin:0;background:#000"><img src="${rawData}" style="max-width:100%;display:block;margin:auto"></body>`);
+      }
     }
+    return;
   }
 
-  Modal.open('ficaDocModal');
+  // Unknown format — download
+  const a = document.createElement('a');
+  a.href = rawData;
+  a.download = fileName;
+  a.click();
 }
 
 async function approveKyc(id, btn) {
@@ -3802,12 +3784,14 @@ async function saveKycUpload() {
 
   try {
     await API.kyc.create({
-      id:           `FICA-${Date.now()}`,
-      investor_id:  investorId,
-      doc_type:     docType,
-      file_name:    fileName,
-      status:       statusVal,
-      notes:        `Uploaded via admin: ${invName}. Size: ${fileSize}. MIME: ${mimeType}.`
+      id:            `FICA-${Date.now()}`,
+      investor_id:   investorId,
+      investor_name: invName || undefined,
+      doc_type:      docType,
+      file_name:     fileName,
+      file_data:     fileData,
+      status:        statusVal,
+      notes:         `Uploaded via admin: ${invName}. Size: ${fileSize}. MIME: ${mimeType}.`
     });
     Toast.success('Document uploaded successfully');
     Modal.close('kycUploadModal');

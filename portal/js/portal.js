@@ -6135,13 +6135,24 @@ async function submitKycDocument() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting…'; }
 
   try {
+    // Read file as base64 data URL so it can be stored and viewed by compliance team
+    const fileData = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = e => resolve(e.target.result);
+      reader.onerror = () => reject(new Error('Could not read file'));
+      reader.readAsDataURL(_kycFile);
+    });
+
+    const inv = PORTAL.investor;
     const notes = (document.getElementById('kycNotes')?.value || '').trim();
     await API.kyc.create({
-      investor_id: PORTAL.investor?.id || DEMO_INVESTOR_ID,
-      doc_type:    docType,
-      status:      'pending',
-      file_name:   _kycFile.name,
-      notes:       [notes, `File: ${_kycFile.name} (${(_kycFile.size / 1024).toFixed(1)} KB)`].filter(Boolean).join(' — '),
+      investor_id:   inv?.id || DEMO_INVESTOR_ID,
+      investor_name: inv ? `${inv.first_name} ${inv.last_name}`.trim() : undefined,
+      doc_type:      docType,
+      status:        'pending',
+      file_name:     _kycFile.name,
+      file_data:     fileData,
+      notes:         [notes, `File: ${_kycFile.name} (${(_kycFile.size / 1024).toFixed(1)} KB)`].filter(Boolean).join(' — '),
     });
     Toast.success('Document submitted! The compliance team will review it within 1–2 business days.');
     SVC.track('svc_kyc_uploaded', { doc_type: docType });
@@ -6453,8 +6464,9 @@ function _pdfInfoRow(doc, label, value, y, labelX = 14, valueX = 75) {
 
 /* downloadCertificate(investmentId) */
 function downloadCertificate(investmentId) {
-  const inv = PORTAL.investments.find(i => i.id === investmentId);
-  if (!inv) { Toast.error('Investment not found'); return; }
+  try {
+  const inv = PORTAL.investments.find(i => String(i.id) === String(investmentId));
+  if (!inv) { Toast.error('Investment not found — please refresh and try again.'); return; }
   const investor = PORTAL.investor;
   const pool = PORTAL.pools.find(p => p.id === inv.pool_id) || {};
 
@@ -6559,6 +6571,10 @@ function downloadCertificate(investmentId) {
   _pdfFooter(doc);
   doc.save(`SVC-Certificate-${inv.id}.pdf`);
   Toast.success('Certificate downloaded!');
+  } catch (err) {
+    console.error('[downloadCertificate]', err);
+    Toast.error('Could not generate certificate: ' + (err.message || 'unknown error'));
+  }
 }
 
 /* downloadReceipt(transactionId) */
