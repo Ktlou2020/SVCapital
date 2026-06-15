@@ -6302,7 +6302,7 @@ function _renderCertificatesTable() {
       <td class="td-muted">${Utils.date(inv.maturity_date || inv.end_date)}</td>
       <td>${Utils.statusBadge(inv.status)}</td>
       <td style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn--primary btn--sm" onclick="generateInvestmentCertificate('${inv.id}')">
+        <button class="btn btn--primary btn--sm" onclick="downloadCertificate('${inv.id}')">
           <i class="fa-solid fa-file-pdf"></i> Certificate
         </button>
         ${(() => { const pool = PORTAL.pools.find(p => p.id === inv.pool_id); return pool && pool.term_sheet_url ? `<a href="${pool.term_sheet_url}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-file-contract"></i> Term Sheet</a>` : ''; })()}
