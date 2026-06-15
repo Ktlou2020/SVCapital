@@ -351,6 +351,16 @@ DO $$ BEGIN
   BEGIN ALTER TABLE transactions ADD COLUMN referred_investor_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Term sheet URL on investment pools
   BEGIN ALTER TABLE investment_pools ADD COLUMN term_sheet_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Fee management columns on investment pools
+  BEGIN ALTER TABLE investment_pools ADD COLUMN management_fee_pct NUMERIC(8,4) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investment_pools ADD COLUMN management_fee_frequency TEXT DEFAULT 'once'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investment_pools ADD COLUMN operational_fee_pct NUMERIC(8,4) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investment_pools ADD COLUMN operational_fee_frequency TEXT DEFAULT 'annual'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- EVA tracking on investments (20% of net-VAT management fee, new funds only)
+  BEGIN ALTER TABLE investments ADD COLUMN is_reinvestment BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investments ADD COLUMN eva_amount NUMERIC(12,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- System-generated tickets (AML checks etc — hidden from client view)
+  BEGIN ALTER TABLE support_tickets ADD COLUMN is_system BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
 
 CREATE TABLE IF NOT EXISTS investment_waitlist (

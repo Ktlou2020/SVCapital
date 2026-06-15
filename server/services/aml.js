@@ -63,8 +63,8 @@ async function checkDeposit(pool, investorId, amount, reference) {
 
   await pool.query(
     `INSERT INTO support_tickets
-       (id, investor_id, subject, message, category, priority, status, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, 'aml_review', 'high', 'open', NOW(), NOW())`,
+       (id, investor_id, subject, message, category, priority, status, is_system, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, 'aml_review', 'high', 'open', true, NOW(), NOW())`,
     [ticketId, investorId, subject, message]
   );
 
