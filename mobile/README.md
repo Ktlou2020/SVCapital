@@ -50,16 +50,21 @@ npm run add:ios      # macOS only
 
 ### 2. Copy native configs
 
-After running `cap add android`, copy these files into the generated project:
+After running `cap add android` / `cap add ios`, copy these files into the generated projects:
 
 ```bash
 # Android
-cp -r android-config/app/src/main/res/*          android/app/src/main/res/
+cp -r android-config/app/src/main/res/*               android/app/src/main/res/
 cp    android-config/app/src/main/AndroidManifest.xml  android/app/src/main/
 
-# iOS — copy Info.plist into Xcode project
-cp ios-config/App/App/Info.plist  ios/App/App/
+# iOS — copy Info.plist and Privacy Manifest into Xcode project
+cp ios-config/App/App/Info.plist        ios/App/App/
+cp ios-config/App/App/PrivacyInfo.xcprivacy  ios/App/App/
 ```
+
+> **Note:** `PrivacyInfo.xcprivacy` (Apple Privacy Manifest) is **required** for App Store
+> submissions since May 2024. After copying it, open Xcode → project navigator → right-click
+> `App/App` group → **Add Files to "App"** → select `PrivacyInfo.xcprivacy`.
 
 ### 3. Generate icons & splash screens
 
@@ -103,11 +108,35 @@ npm run build
 
 ### iOS (App Store)
 
-1. `npm run sync`
-2. Open Xcode: `npm run open:ios`
-3. Set **Team** and **Bundle Identifier** in Signing settings
-4. **Product → Archive**
-5. Upload via Xcode Organiser or `xcrun altool`
+**Prerequisites:** Mac with Xcode 15+, Apple Developer account ($99/year at developer.apple.com)
+
+#### One-time setup
+1. Enrol in Apple Developer Programme and create an App ID `co.za.svcapital.investor` in [App Store Connect](https://appstoreconnect.apple.com)
+2. Create a new app listing: **Finance** category, **4+** age rating
+3. Add Privacy Policy URL: `https://svcapital.co.za/popia.html`
+
+#### Build & submit
+1. `npm run add:ios` (first time only — generates `ios/` folder)
+2. Copy native configs:
+   ```bash
+   cp ios-config/App/App/Info.plist             ios/App/App/
+   cp ios-config/App/App/PrivacyInfo.xcprivacy  ios/App/App/
+   ```
+   Then in Xcode: right-click `App/App` group → **Add Files to "App"** → select `PrivacyInfo.xcprivacy`
+3. Generate icons: `npm install -D sharp && node scripts/gen-icons.js`
+4. `npm run sync`
+5. Open Xcode: `npm run open:ios`
+6. Select your **Team** in Signing & Capabilities tab
+7. Confirm **Bundle Identifier** is `co.za.svcapital.investor`
+8. Enable **Push Notifications** capability (+ toggle in Signing & Capabilities)
+9. Enable **Associated Domains** capability → add `applinks:svcapital.co.za`
+10. **Product → Archive** → Validate → **Distribute App → App Store Connect**
+11. In App Store Connect: add screenshots (6.7" required), fill metadata, submit for review
+
+#### App Store review notes
+- The app requires login — provide Apple a demo investor account in the review notes
+- Mention FICA/KYC is for regulatory compliance (South African FSP obligation)
+- The camera permission is used for document scanning during KYC verification
 
 ---
 
