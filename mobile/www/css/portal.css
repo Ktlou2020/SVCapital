@@ -1,0 +1,615 @@
+/* ═══════════════════════════════════════════════
+   SV CAPITAL — Investor Portal Additional Styles
+   ═══════════════════════════════════════════════ */
+
+/* ─── Portfolio Hero ─── */
+.portfolio-hero {
+  background: linear-gradient(135deg, var(--dark-3) 0%, var(--dark-4) 100%);
+  border: 1px solid var(--border-gold);
+  border-radius: var(--radius-xl);
+  padding: 28px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.portfolio-hero::before {
+  content: '';
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(212,175,55,0.12), transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.portfolio-hero__left { grid-column: 1; }
+
+.portfolio-hero__label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.portfolio-hero__value {
+  font-size: 2.8rem;
+  font-weight: 900;
+  color: var(--white);
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.portfolio-hero__return {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--green);
+  background: var(--green-bg);
+  border: 1px solid rgba(34,197,94,0.25);
+  padding: 4px 12px;
+  border-radius: 100px;
+}
+
+.portfolio-hero__right {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  display: flex;
+  align-items: center;
+}
+
+.portfolio-hero__chart { width: 100%; height: 180px; position: relative; }
+
+.portfolio-hero__stats {
+  grid-column: 1;
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.ph-stat { display: flex; flex-direction: column; gap: 2px; }
+.ph-stat__label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); font-weight: 700; }
+.ph-stat__value { font-size: 1rem; font-weight: 800; color: var(--white); }
+
+/* ─── Wallet Card ─── */
+.wallet-card {
+  background: linear-gradient(135deg, #1a2640 0%, #0d1829 100%);
+  border: 1px solid var(--border-gold);
+  border-radius: var(--radius-xl);
+  padding: 28px;
+  position: relative;
+  overflow: hidden;
+}
+
+.wallet-card::before {
+  content: '';
+  position: absolute;
+  bottom: -40px; right: -40px;
+  width: 180px; height: 180px;
+  background: radial-gradient(circle, rgba(212,175,55,0.1), transparent 70%);
+  border-radius: 50%;
+}
+
+.wallet-card__label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.wallet-card__value {
+  font-size: 3rem;
+  font-weight: 900;
+  color: var(--gold);
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.wallet-card__sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.wallet-card__actions { display: flex; gap: 10px; }
+
+/* ─── Section Banner ─── */
+.section-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.section-banner__title { font-size: 1.1rem; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+.section-banner__sub { font-size: 0.8rem; color: var(--text-muted); max-width: 500px; }
+
+/* ─── Market Pool Cards ─── */
+.market-pool-card {
+  background: var(--dark-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.market-pool-card:hover { border-color: var(--border-gold); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(212,175,55,0.12); }
+
+.market-pool-card__icon {
+  font-size: 1.8rem;
+  margin-bottom: 2px;
+}
+
+.market-pool-card__title { font-size: 1rem; font-weight: 700; color: var(--white); }
+.market-pool-card__partner { font-size: 0.72rem; color: var(--text-dim); }
+
+.market-pool-card__rate {
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--gold);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.market-pool-card__rate-label { font-size: 0.72rem; color: var(--text-dim); }
+
+.market-pool-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.mps { background: var(--dark-3); border-radius: var(--radius-sm); padding: 8px; text-align: center; }
+.mps__label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); display: block; margin-bottom: 2px; }
+.mps__value { font-size: 0.85rem; font-weight: 800; color: var(--white); }
+
+/* ─── Risk Banner ─── */
+.risk-banner {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: rgba(239,68,68,0.07);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.risk-banner i { color: var(--orange); flex-shrink: 0; font-size: 0.9rem; margin-top: 2px; }
+.risk-banner strong { color: var(--orange); }
+
+/* ─── Investment card (my investments) ─── */
+.my-inv-card {
+  background: var(--dark-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: var(--transition);
+}
+
+.my-inv-card:hover { border-color: var(--border-gold); }
+.my-inv-card--paidout { opacity: 0.7; }
+
+.my-inv-card__header { display: flex; justify-content: space-between; align-items: flex-start; }
+.my-inv-card__name { font-size: 0.95rem; font-weight: 700; color: var(--white); }
+.my-inv-card__partner { font-size: 0.7rem; color: var(--text-dim); margin-top: 2px; }
+
+.my-inv-progress { }
+.my-inv-progress__label { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 4px; }
+
+.my-inv-card__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mic-stat { background: var(--dark-3); border-radius: var(--radius-sm); padding: 8px; text-align: center; }
+.mic-stat__label { font-size: 0.62rem; text-transform: uppercase; color: var(--text-dim); display: block; margin-bottom: 2px; }
+.mic-stat__value { font-size: 0.88rem; font-weight: 800; color: var(--white); }
+.mic-stat__value--gold { color: var(--gold); }
+.mic-stat__value--green { color: var(--green); }
+
+/* ─── Quick FAQ ─── */
+.faq-quick-item { border-bottom: 1px solid var(--border); }
+.faq-quick-q {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+  gap: 12px;
+}
+.faq-quick-q i { color: var(--gold); font-size: 0.72rem; flex-shrink: 0; transition: transform 0.3s ease; }
+.faq-quick-item.open .faq-quick-q i { transform: rotate(180deg); }
+.faq-quick-a { font-size: 0.78rem; color: var(--text-muted); line-height: 1.6; padding: 0 0 12px; display: none; }
+.faq-quick-item.open .faq-quick-a { display: block; }
+
+/* ─── Notification Dropdown ─── */
+.notif-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.notif-item:last-child { border-bottom: none; }
+.notif-item:hover { background: rgba(255,130,21,0.04); }
+.notif-item.unread { background: rgba(255,130,21,0.06); }
+.notif-item.unread .notif-title { font-weight: 700; color: #1a1a1a; }
+.notif-icon {
+  width: 36px; height: 36px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+}
+.notif-body { flex: 1; min-width: 0; }
+.notif-title { font-size: 0.82rem; font-weight: 600; color: #303030; margin-bottom: 2px; }
+.notif-sub { font-size: 0.73rem; color: #6b7280; line-height: 1.4; }
+.notif-time { font-size: 0.68rem; color: #9ca3af; margin-top: 4px; }
+
+/* ─── Referral ─── */
+.referral-hero {
+  background: linear-gradient(135deg, #1a2a1a 0%, var(--dark-3) 100%);
+  border: 1px solid rgba(34,197,94,0.2);
+  border-radius: var(--radius-xl);
+  padding: 28px;
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.referral-hero__icon {
+  font-size: 2.5rem;
+  color: var(--gold);
+  background: var(--gold-glow);
+  border: 1px solid var(--border-gold);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  flex-shrink: 0;
+}
+
+.referral-hero__title { font-size: 1.2rem; font-weight: 800; color: var(--white); margin-bottom: 6px; }
+.referral-hero__sub { font-size: 0.85rem; color: var(--text-muted); line-height: 1.6; }
+
+.referral-code {
+  font-size: 2.5rem;
+  font-weight: 900;
+  color: var(--gold);
+  letter-spacing: 0.15em;
+  font-family: 'Courier New', monospace;
+  margin-bottom: 4px;
+}
+
+.referral-link-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--dark-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+.referral-link-box span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ref-step { display: flex; gap: 14px; align-items: flex-start; }
+.ref-step__num {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+  color: #1a1200;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900; font-size: 0.8rem;
+  flex-shrink: 0;
+}
+.ref-step strong { display: block; color: var(--white); font-size: 0.85rem; margin-bottom: 2px; }
+.ref-step p { font-size: 0.78rem; color: var(--text-muted); line-height: 1.5; }
+
+/* ─── Support tickets list ─── */
+.my-ticket-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.my-ticket-item:last-child { border-bottom: none; }
+.my-ticket-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
+.my-ticket-subject { font-size: 0.82rem; font-weight: 600; color: var(--white); flex: 1; }
+.my-ticket-meta { font-size: 0.72rem; color: var(--text-dim); }
+.my-ticket-response { font-size: 0.78rem; color: var(--text-muted); margin-top: 6px; padding: 8px 10px; background: var(--dark-3); border-radius: var(--radius-sm); border-left: 3px solid var(--gold); }
+
+/* ─── Maturity pending card ─── */
+.maturity-card {
+  background: var(--dark-2);
+  border: 1px solid var(--border-gold);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.maturity-card__info { flex: 1; }
+.maturity-card__name { font-size: 0.95rem; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+.maturity-card__detail { font-size: 0.78rem; color: var(--text-muted); }
+.maturity-card__payout { text-align: right; }
+.maturity-card__payout-value { font-size: 1.2rem; font-weight: 800; color: var(--gold); }
+.maturity-card__payout-label { font-size: 0.7rem; color: var(--text-dim); }
+
+@media (max-width: 768px) {
+  .portfolio-hero { grid-template-columns: 1fr; }
+  .portfolio-hero__right { grid-column: 1; grid-row: auto; }
+  .portfolio-hero__stats { grid-column: 1; }
+  .referral-hero { flex-direction: column; }
+}
+
+/* ─────────────────────────────────────────
+   SV CAPITAL CI OVERRIDES FOR PORTAL
+   ───────────────────────────────────────── */
+
+/* Sidebar logo link */
+.sv-portal-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  width: 100%;
+}
+
+/* Portfolio hero – CI gradient */
+.portfolio-hero {
+  background: linear-gradient(135deg, #1a3a4a 0%, #0d2535 100%) !important;
+  border: 1px solid rgba(255,130,21,0.15) !important;
+}
+
+.portfolio-hero::before {
+  background: radial-gradient(circle, rgba(255,130,21,0.10), transparent 70%) !important;
+}
+
+/* Wallet card – CI teal */
+.wallet-card {
+  background: linear-gradient(135deg, #2F8C9B 0%, #1E6E7A 100%) !important;
+}
+
+/* Referral step numbers – CI orange */
+.ref-step__num {
+  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  color: #fff !important;
+}
+
+.ref-step strong { color: #1a1a1a !important; }
+
+/* Referral link box */
+.referral-link-box {
+  background: rgba(0,0,0,0.03) !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  color: #303030 !important;
+}
+
+/* Portfolio hero stat values */
+.ph-stat__value { color: #ffffff !important; }
+.ph-stat__label { color: rgba(255,255,255,0.55) !important; }
+
+/* Portfolio hero return badge */
+.portfolio-hero__return {
+  background: rgba(34,197,94,0.15) !important;
+  color: #86efac !important;
+}
+
+/* Section banner CI orange */
+.section-banner {
+  background: linear-gradient(135deg, #FF9B0C 0%, #FF5229 100%) !important;
+}
+
+/* Panel backgrounds - light */
+.panel {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06) !important;
+}
+
+.panel__header {
+  border-bottom: 1px solid rgba(0,0,0,0.07) !important;
+}
+
+.panel__title {
+  color: #1a1a1a !important;
+  font-weight: 700 !important;
+}
+
+/* Investment cards */
+.investment-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+/* Market pool cards */
+.market-pool-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+
+.market-pool-card:hover {
+  border-color: rgba(255,130,21,0.25) !important;
+  box-shadow: 0 6px 24px rgba(255,130,21,0.10) !important;
+}
+
+/* FAQ */
+.faq-quick-item {
+  border-bottom: 1px solid rgba(0,0,0,0.07) !important;
+}
+
+/* Ticket items */
+.my-ticket-item {
+  border-bottom: 1px solid rgba(0,0,0,0.07) !important;
+}
+
+/* My Statement view - responsive */
+@media (max-width: 900px) {
+  #view-statement > div:first-child + div {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+
+/* ─── Rewards Stats Row ─── */
+.rewards-stats-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 16px 0 20px;
+}
+.rewards-stat {
+  flex: 1;
+  min-width: 120px;
+  background: var(--ci-bg-white, #fff);
+  border: 1px solid var(--ci-border, rgba(0,0,0,0.08));
+  border-radius: 12px;
+  padding: 14px 16px;
+  text-align: center;
+}
+.rewards-stat__val {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #1a1a1a;
+  line-height: 1.2;
+}
+.rewards-stat__label {
+  font-size: 0.68rem;
+  color: #9ca3af;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+@media (max-width: 640px) {
+  .rewards-stats-row { gap: 8px; }
+  .rewards-stat { min-width: calc(50% - 4px); padding: 10px 12px; }
+}
+
+/* ═══════════════════════════════════════════════
+   MOBILE SIDEBAR BACKDROP
+   ═══════════════════════════════════════════════ */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 199;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+@media (max-width: 900px) {
+  .sidebar-backdrop { display: block; pointer-events: none; }
+  .sidebar-backdrop--visible {
+    pointer-events: auto;
+    opacity: 1;
+  }
+  /* Sidebar sits above backdrop on mobile */
+  .sidebar { z-index: 200; }
+}
+
+/* ═══════════════════════════════════════════════
+   MOBILE HAMBURGER BUTTON
+   ═══════════════════════════════════════════════ */
+.sidebar-toggle-btn {
+  display: none;
+}
+@media (max-width: 900px) {
+  .sidebar-toggle-btn { display: flex !important; }
+}
+
+/* ═══════════════════════════════════════════════
+   MOBILE LAYOUT OVERRIDES
+   ═══════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Prevent horizontal overflow */
+  body { overflow-x: hidden; }
+  .page-content { padding: 12px 14px !important; }
+
+  /* Portfolio hero: single column on small screens */
+  .portfolio-hero {
+    grid-template-columns: 1fr !important;
+    padding: 20px 16px !important;
+  }
+  .portfolio-hero__right { display: none !important; }
+  .portfolio-hero__left { grid-column: 1; }
+  .portfolio-hero__stats {
+    grid-column: 1 !important;
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+    padding-bottom: 4px;
+    gap: 16px !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .portfolio-hero__stats::-webkit-scrollbar { display: none; }
+  .ph-stat { flex-shrink: 0; }
+  .portfolio-hero__value { font-size: 2rem !important; }
+
+  /* Topbar: hide website link on mobile */
+  .topbar__actions .btn[href*="index.html"] { display: none; }
+
+  /* Larger tap targets for nav items */
+  .nav-item { min-height: 44px !important; padding: 10px 16px !important; }
+  .topbar-btn { min-width: 40px !important; min-height: 40px !important; }
+
+  /* Tables: horizontal scroll */
+  .data-table { font-size: 0.78rem; }
+  .table-card { overflow-x: auto; }
+
+  /* Modals: full width on mobile */
+  .modal__box {
+    width: calc(100% - 24px) !important;
+    max-width: 100% !important;
+    margin: 12px !important;
+    max-height: 92vh;
+    overflow-y: auto;
+  }
+
+  /* Grid layouts stack on mobile */
+  .grid-layout { grid-template-columns: 1fr !important; }
+
+  /* Wallet sub-tabs: full width */
+  .wallet-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Quest view rewards stats */
+  .rewards-stats-row { overflow-x: auto; flex-wrap: nowrap !important; }
+  .rewards-stat { flex-shrink: 0; }
+
+  /* Hide sign out text on very small screens, keep icon */
+  .topbar__actions .btn--secondary[href*="login"] .fa-arrow-right-from-bracket + * { display: none; }
+}
+
+@media (max-width: 480px) {
+  .portfolio-hero__value { font-size: 1.7rem !important; }
+  .ph-stat__value { font-size: 0.85rem !important; }
+  .welcome-name { font-size: 1.2rem !important; }
+  .topbar { padding: 10px 12px !important; }
+  /* Sign out button: icon only */
+  .topbar__actions .btn--secondary[href*="login"] { padding: 6px 8px !important; }
+}

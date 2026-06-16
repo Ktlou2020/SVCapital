@@ -38,7 +38,7 @@ build/
 .cache/
 
 # Capacitor mobile — generated native projects and built web assets
-mobile/www/
+# mobile/www/ is committed so GitHub Desktop pull keeps it in sync without needing build.js
 mobile/android/
 mobile/ios/
 mobile/node_modules/
