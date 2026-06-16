@@ -64,22 +64,26 @@ fs.mkdirSync(path.join(WWW, 'js'), { recursive: true });
 fs.copyFileSync(nativeSrc, path.join(WWW, 'js', 'native.js'));
 console.log('[build] Copied native.js');
 
-// Patch index.html: inject native config + bridge script before </head>
-const indexPath = path.join(WWW, 'index.html');
-if (fs.existsSync(indexPath)) {
-  let html = fs.readFileSync(indexPath, 'utf8');
-
-  const inject = `
+// Patch all HTML files: inject native config + bridge script before </head>
+const nativeConfigScript = `
   <!-- ── Capacitor native config injected by build.js ── -->
   <script>
     window.__SVC_NATIVE__ = true;
     window.__SVC_API_BASE__ = '${API_BASE}';
   </script>
-  <script src="js/native.js"></script>`;
+  <script src="/js/native.js"></script>`;
 
-  html = html.replace('</head>', inject + '\n</head>');
-  fs.writeFileSync(indexPath, html, 'utf8');
-  console.log('[build] Injected native config into index.html');
+const htmlFilesToPatch = ['index.html', 'login.html', 'signup.html', 'reset-password.html'];
+for (const htmlFile of htmlFilesToPatch) {
+  const htmlPath = path.join(WWW, htmlFile);
+  if (fs.existsSync(htmlPath)) {
+    let html = fs.readFileSync(htmlPath, 'utf8');
+    if (!html.includes('__SVC_NATIVE__')) {
+      html = html.replace('</head>', nativeConfigScript + '\n</head>');
+      fs.writeFileSync(htmlPath, html, 'utf8');
+      console.log(`[build] Injected native config into ${htmlFile}`);
+    }
+  }
 }
 
 console.log('[build] www/ built successfully from portal/');
