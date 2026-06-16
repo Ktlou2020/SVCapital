@@ -304,7 +304,7 @@
     });
 
     // Tell the server to clear the httpOnly cookie
-    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+    fetch((window.__SVC_API_BASE__ || '/api/') + 'auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
 
     window.location.replace(LOGIN_URL());
   }

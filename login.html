@@ -791,7 +791,7 @@
     btnTxt.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Sending…';
 
     try {
-      await fetch('/api/auth/forgot-password', {
+      await fetch((window.__SVC_API_BASE__ || '/api/') + 'auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -844,7 +844,7 @@
     btn.disabled = true; btn.classList.add('loading');
     btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Signing in…';
     try {
-      const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ email, password }) });
+      const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ email, password }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Invalid credentials.');
       if (data.requires2FA) {
@@ -883,7 +883,7 @@
     btn.disabled = true; btn.textContent = 'Verifying…';
     if (errEl) errEl.style.display = 'none';
     try {
-      const res = await fetch('/api/auth/2fa/verify-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ pending2FAToken: _pending2FAToken, token: code }) });
+      const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'auth/2fa/verify-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ pending2FAToken: _pending2FAToken, token: code }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Invalid code.');
       localStorage.setItem('svc_token', data.token);
