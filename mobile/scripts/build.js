@@ -86,4 +86,18 @@ for (const htmlFile of htmlFilesToPatch) {
   }
 }
 
+// Create www/portal/ so the server's post-login redirect to /portal/ resolves correctly.
+// The portal files are at www/ root (not www/portal/), so we just redirect.
+const portalRedirectDir = path.join(WWW, 'portal');
+fs.mkdirSync(portalRedirectDir, { recursive: true });
+fs.writeFileSync(path.join(portalRedirectDir, 'index.html'),
+`<!DOCTYPE html><html><head>
+  <script>
+    window.__SVC_NATIVE__ = true;
+    window.__SVC_API_BASE__ = '${API_BASE}';
+  </script>
+  <script>window.location.replace('/');</script>
+</head></html>`);
+console.log('[build] Created www/portal/ redirect');
+
 console.log('[build] www/ built successfully from portal/');
