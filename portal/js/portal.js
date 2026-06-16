@@ -3494,7 +3494,7 @@ async function loadQuestData() {
   try {
     const token = Auth.getToken();
     if (!token) return;
-    const res  = await fetch('/api/quests/my', {
+    const res  = await fetch((window.__SVC_API_BASE__ || '/api/') + 'quests/my', {
       headers: { 'Authorization': `Bearer ${token}` },
       credentials: 'include',
     });
@@ -3553,7 +3553,7 @@ async function _autoClaimMilestones() {
 async function _postQuestComplete(questId, data) {
   const token = Auth.getToken();
   if (!token) return null;
-  const res = await fetch('/api/quests/complete', {
+  const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'quests/complete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     credentials: 'include',
@@ -7507,7 +7507,7 @@ async function togglePushNotifications(checked) {
 
     try {
       // Fetch VAPID public key
-      const keyRes = await fetch('/api/push/vapid-public-key');
+      const keyRes = await fetch((window.__SVC_API_BASE__ || '/api/') + 'push/vapid-public-key');
       if (!keyRes.ok) throw new Error('Could not fetch VAPID public key');
       const { publicKey } = await keyRes.json();
 
@@ -7519,7 +7519,7 @@ async function togglePushNotifications(checked) {
 
       // Send subscription to server
       const token  = (typeof Auth !== 'undefined' ? Auth.getToken() : null) || localStorage.getItem('svc_token');
-      const subRes = await fetch('/api/push/subscribe', {
+      const subRes = await fetch((window.__SVC_API_BASE__ || '/api/') + 'push/subscribe', {
         method:  'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -7558,7 +7558,7 @@ async function togglePushNotifications(checked) {
           const endpoint = existing.endpoint;
           await existing.unsubscribe();
           const token = (typeof Auth !== 'undefined' ? Auth.getToken() : null) || localStorage.getItem('svc_token');
-          await fetch('/api/push/unsubscribe', {
+          await fetch((window.__SVC_API_BASE__ || '/api/') + 'push/unsubscribe', {
             method:  'DELETE',
             headers: {
               'Content-Type': 'application/json',

@@ -2004,7 +2004,7 @@ async function submitIntlWaitlist() {
   spinner.style.display = 'inline-flex';
 
   try {
-    const res  = await fetch('/api/waitlist/international', {
+    const res  = await fetch((window.__SVC_API_BASE__ || '/api/') + 'waitlist/international', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ full_name: fullName, email, country }),
