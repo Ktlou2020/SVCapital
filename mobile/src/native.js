@@ -12,7 +12,8 @@
   async function initStatusBar() {
     if (!P.StatusBar) return;
     await P.StatusBar.setStyle({ style: 'DARK' });
-    await P.StatusBar.setBackgroundColor({ color: '#0f1623' });
+    // setBackgroundColor is Android-only — ignore on iOS
+    await P.StatusBar.setBackgroundColor({ color: '#0f1623' }).catch(() => {});
     await P.StatusBar.setOverlaysWebView({ overlay: false });
   }
 

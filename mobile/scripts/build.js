@@ -49,6 +49,15 @@ for (const f of ['sw.js', 'manifest.json']) {
   if (fs.existsSync(src)) fs.copyFileSync(src, path.join(WWW, f));
 }
 
+// Copy root HTML pages the portal may redirect to
+for (const f of ['login.html', 'signup.html']) {
+  const src = path.join(ROOT, f);
+  if (fs.existsSync(src)) {
+    fs.copyFileSync(src, path.join(WWW, f));
+    console.log(`[build] Copied ${f}`);
+  }
+}
+
 // Copy native bridge script
 const nativeSrc = path.join(__dirname, '../src/native.js');
 fs.mkdirSync(path.join(WWW, 'js'), { recursive: true });
