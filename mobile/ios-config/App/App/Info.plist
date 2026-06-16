@@ -106,6 +106,10 @@
         </dict>
     </dict>
 
+    <!-- Export compliance: app only uses standard HTTPS/TLS (exempt from EAR) -->
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+
     <!-- Capacitor bridge config -->
     <key>WKAppBoundDomains</key>
     <array>
