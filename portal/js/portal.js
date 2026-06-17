@@ -347,7 +347,7 @@ function renderTaskCompletionPanel() {
   const riskReady = !!inv.risk_profile;
   const ficaReady = (inv.fica_status || inv.kyc_status || inv.status || '').toLowerCase() === 'approved';
   const tasks = [
-    { label: 'Complete FICA verification', done: ficaReady, tone: '#FF8215', action: 'openKycUploadModal()', cta: 'Upload documents' },
+    { label: 'Complete FICA/KYC verification', done: ficaReady, tone: '#FF8215', action: 'openKycUploadModal()', cta: 'Upload documents' },
     { label: 'Add a withdrawal bank account', done: bankReady, tone: '#2F8C9B', action: 'openBankDetailsModal()', cta: 'Add bank account' },
     { label: 'Fund your wallet', done: hasWallet, tone: '#22c55e', action: 'openTopUpModal()', cta: 'Top up wallet' },
     { label: 'Confirm your risk profile', done: riskReady, tone: '#a855f7', action: 'navigate(\'profile\', document.querySelector(\'[data-view=profile]\'))', cta: 'Review profile' },
@@ -459,9 +459,9 @@ function renderWalletReadinessPanel() {
   let accent = '#FF9B0C';
 
   if (!ficaApproved) {
-    headline = 'Complete FICA first to unlock investing.';
+    headline = 'Complete FICA/KYC first to unlock investing.';
     subcopy = 'Once verified, you can fund your wallet and invest without hitting a dead-end later.';
-    ctaLabel = 'Complete FICA';
+    ctaLabel = 'Complete FICA/KYC';
     ctaAction = "navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()";
     accent = '#2F8C9B';
   } else if (affordable.length) {
@@ -502,7 +502,7 @@ function renderWalletReadinessPanel() {
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Verification</div>
-          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#2F8C9B'};margin-top:6px">${ficaApproved ? 'FICA approved' : 'FICA still needed'}</div>
+          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#2F8C9B'};margin-top:6px">${ficaApproved ? 'FICA/KYC approved' : 'FICA/KYC still needed'}</div>
           <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.'}</div>
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
@@ -545,10 +545,10 @@ function renderMarketConversionPanel(pools) {
   let accent = '#2F8C9B';
 
   if (!ficaApproved) {
-    title = 'Your first investment is blocked by pending FICA.';
+    title = 'Your first investment is blocked by pending FICA/KYC.';
     sub = 'Complete verification before funding more or choosing an amount so your first investment can go through cleanly.';
     action = "navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()";
-    actionLabel = 'Complete FICA';
+    actionLabel = 'Complete FICA/KYC';
     accent = '#2F8C9B';
   } else if (affordable.length) {
     title = `You can invest right now in ${affordable.length} open pool${affordable.length === 1 ? '' : 's'}.`;
@@ -959,7 +959,7 @@ function loadNotifications() {
     if (inv.fica_status === 'rejected' || inv.kyc_status === 'rejected') {
       notifs.push({
         icon: 'fa-triangle-exclamation', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
-        title: 'FICA verification unsuccessful',
+        title: 'FICA/KYC verification unsuccessful',
         sub: 'Your documents could not be verified. Please re-upload and resubmit.',
         time: 'Action required',
         action: "navigate('fica',document.querySelector('[data-view=fica]'))",
@@ -968,7 +968,7 @@ function loadNotifications() {
     } else if (inv.fica_status === 'pending' || inv.kyc_status === 'pending' || inv.status === 'fica_submitted') {
       notifs.push({
         icon: 'fa-clock', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
-        title: 'FICA verification in progress',
+        title: 'FICA/KYC verification in progress',
         sub: 'Your documents are under review — typically 1–2 business days.',
         time: 'Pending',
         action: null,
@@ -978,7 +978,7 @@ function loadNotifications() {
       notifs.push({
         icon: 'fa-shield-halved', iconBg: 'rgba(168,85,247,0.1)', iconColor: '#a855f7',
         title: 'Identity verified',
-        sub: 'Your FICA verification is complete. You can invest in all available pools.',
+        sub: 'Your FICA/KYC verification is complete. You can invest in all available pools.',
         time: inv.fica_verified_at ? Utils.timeAgo(inv.fica_verified_at) : 'Approved',
         action: null,
         unread: false,
@@ -1546,7 +1546,6 @@ function renderOverviewInvestments() {
 
   body.innerHTML = active.map(inv => {
     const pi = Utils.productInfo(inv.product_type);
-    const days = Utils.daysRemaining(inv.maturity_date);
     const pool = PORTAL.pools.find(p => p.id === inv.pool_id);
     const progress = pool ? Utils.poolFillPct(pool) : 100;
 
@@ -1559,8 +1558,8 @@ function renderOverviewInvestments() {
       </td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700">${Utils.rand(inv.amount)}</td>
-      <td class="td-green">${Utils.rand(inv.expected_return_amount)}</td>
-      <td class="${days <= 30 ? 'td-gold' : 'td-muted'} fw-700">${days !== null ? days + ' days' : '—'}</td>
+      <td class="td-muted">${Utils.date(inv.investment_date)}</td>
+      <td class="td-muted">${Utils.date(inv.maturity_date)}</td>
       <td>${Utils.statusBadge(inv.status)}</td>
     </tr>`;
   }).join('');
@@ -1570,6 +1569,7 @@ function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
   const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date)).slice(0, 5);
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red' };
+  const _txnLabel = s => { const r = (s || '').replace(/_/g, ' '); return r.charAt(0).toUpperCase() + r.slice(1); };
 
   if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No transactions yet</td></tr>'; return; }
 
@@ -1577,7 +1577,7 @@ function renderOverviewTxns() {
   body.innerHTML = recent.map(t => {
     const pos = _txnIsPositive(t);
     return `<tr>
-      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ')}</span></td>
+      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${_txnLabel(t.type)}</span></td>
       <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
       <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
       <td class="td-muted">${Utils.date(t.transaction_date)}</td>
@@ -1707,7 +1707,7 @@ function renderAllocationChart() {
   const ctx = document.getElementById('allocationChart');
   if (!ctx) return;
 
-  const colors = ['#D4AF37', '#22c55e', '#3b82f6', '#f97316', '#a855f7', '#ec4899', '#14b8a6'];
+  const colors = ['#FF8215', '#22c55e', '#FF9B0C', '#16a34a', '#f97316', '#a855f7', '#14b8a6'];
 
   const activeInvests = PORTAL.investments.filter(i => i.status === 'active');
   const allocation = {};
@@ -1728,7 +1728,7 @@ function renderAllocationChart() {
     type: 'doughnut',
     data: {
       labels,
-      datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderColor: 'var(--dark-2)', borderWidth: 3, hoverOffset: 4 }]
+      datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderColor: '#ffffff', borderWidth: 3, hoverOffset: 4 }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -1750,11 +1750,11 @@ function renderAllocationChart() {
     const amt = values[idx];
     const pct = total > 0 ? ((amt / total) * 100).toFixed(1) : '0';
     const color = colors[idx] || '#8ea3b8';
-    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
       <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
-      <span style="flex:1;font-size:0.8rem;color:#c9d6e3">${label}</span>
-      <span style="font-size:0.8rem;font-weight:600;color:#f0f4f8">${Utils.rand(amt)}</span>
-      <span style="font-size:0.72rem;color:#9ca3af;min-width:38px;text-align:right">${pct}%</span>
+      <span style="flex:1;font-size:0.82rem;color:#374151;font-weight:500">${label}</span>
+      <span style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${Utils.rand(amt)}</span>
+      <span style="font-size:0.75rem;color:#6b7280;min-width:38px;text-align:right">${pct}%</span>
     </div>`;
   }).join('');
 }
@@ -1843,9 +1843,20 @@ function renderMyInvestmentCards() {
         </div>
 
         ${inv.status === 'active' ? `
-          <button class="btn btn--secondary btn--full btn--sm" onclick='openMaturityModal(${JSON.stringify(inv.id)})' style="margin-top:6px;font-size:0.76rem">
-            <i class="fa-solid fa-hourglass-half"></i> Set Maturity Instruction
-          </button>
+          <div style="margin-top:10px;padding:10px 12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;justify-content:space-between;font-size:0.78rem">
+              <span style="color:#6b7280">Amount invested</span>
+              <span style="font-weight:700;color:#1a1a1a">${Utils.rand(inv.amount)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.78rem">
+              <span style="color:#6b7280">Launch date</span>
+              <span style="font-weight:600;color:#374151">${Utils.date(inv.investment_date)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.78rem">
+              <span style="color:#6b7280">Maturity date</span>
+              <span style="font-weight:600;color:#374151">${Utils.date(inv.maturity_date)}</span>
+            </div>
+          </div>
         ` : ''}
         ${isPaidOut ? `
           <div style="font-size:0.75rem;color:var(--text-muted);text-align:center">
@@ -1877,6 +1888,7 @@ function renderMyTxnTable() {
   const sorted = [...items].sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
 
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red' };
+  const _txnLabel = s => { const r = (s || '').replace(/_/g, ' '); return r.charAt(0).toUpperCase() + r.slice(1); };
 
   if (!sorted.length) {
     body.innerHTML = `<tr><td colspan="6" style="padding:0;border:none">
@@ -1895,7 +1907,7 @@ function renderMyTxnTable() {
   body.innerHTML = sorted.map(t => {
     const pos = _isPosTxn(t);
     return `<tr>
-      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ')}</span></td>
+      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${_txnLabel(t.type)}</span></td>
       <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
       <td>${Utils.statusBadge(t.status)}</td>
       <td class="td-muted" style="font-size:0.72rem">${t.reference || '—'}</td>
@@ -3115,10 +3127,10 @@ function renderMarketplace() {
     } else if (!ficaApproved) {
       ctaHtml = `<div style="display:flex;flex-direction:column;gap:6px;margin-top:2px">
                    <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.18);border-radius:8px;font-size:0.78rem;color:#2F8C9B">
-                     <i class="fa-solid fa-shield-halved"></i> Complete FICA before your first investment
+                     <i class="fa-solid fa-shield-halved"></i> Complete FICA/KYC before your first investment
                    </div>
                    <button class="btn btn--secondary btn--full" onclick="navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()">
-                     <i class="fa-solid fa-upload"></i> Complete FICA
+                     <i class="fa-solid fa-upload"></i> Complete FICA/KYC
                    </button>
                  </div>`;
     } else if (canInvest) {
@@ -3237,7 +3249,7 @@ function openInvestModal(poolId) {
   const pool = PORTAL.pools.find(p => p.id === poolId);
   if (!pool) return;
   if (!_isInvestorFicaApproved(PORTAL.investor)) {
-    Toast.info('Complete FICA verification before making your first investment.');
+    Toast.info('Complete FICA/KYC verification before making your first investment.');
     navigate('profile', document.querySelector('[data-view=profile]'));
     openKycUploadModal();
     return;
@@ -3347,7 +3359,7 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest) {
 
 async function confirmInvestment(pool) {
   if (!_isInvestorFicaApproved(PORTAL.investor)) {
-    Toast.error('Your FICA verification must be approved before you can invest.');
+    Toast.error('Your FICA/KYC verification must be approved before you can invest.');
     navigate('profile', document.querySelector('[data-view=profile]'));
     openKycUploadModal();
     return;
@@ -5204,7 +5216,7 @@ const TOUR_STEPS = [
     type: 'center',
     icon: 'fa-hand-wave',
     title: 'Welcome to your Investor Portal!',
-    body: 'Let us give you a quick tour of everything available to you. It takes about 2 minutes and you\'ll earn <strong>100 XP</strong> when you\'re done.',
+    body: 'Let us give you a quick tour of everything available to you. It takes about 2 minutes and you\'ll earn <strong>100 Experience Points</strong> when you\'re done.',
   },
   {
     id: 'portfolio_hero',
@@ -5236,7 +5248,7 @@ const TOUR_STEPS = [
     position: 'right',
     icon: 'fa-store',
     title: 'Browse Investment Pools',
-    body: 'Explore open pools across solar, cattle, loans, and delivery bikes. Each shows its rate, term, and how much is still available.',
+    body: 'Explore open pools across solar, cattle, and delivery bikes. Each shows its rate, term, and how much is still available.',
   },
   {
     id: 'nav_maturity',
@@ -6137,7 +6149,7 @@ async function submitSaFica() {
       file_name:      _saFicaFile.name,
       notes:          `FICA document for sub-account: ${sa?.name || _saFicaSaId}. File: ${_saFicaFile.name} (${((_saFicaFile.size)/1024).toFixed(1)} KB)`,
     });
-    Toast.success('FICA document submitted! The admin team will review it within 1-2 business days.');
+    Toast.success('FICA/KYC document submitted! The admin team will review it within 1–2 business days.');
     Modal.close('saFicaModal');
   } catch (e) {
     Toast.error('Upload failed. Please try again.');
@@ -6695,11 +6707,11 @@ function renderOnboardingChecklist() {
   const steps = [
     {
       id: 'fica',
-      label: 'Complete your FICA verification',
+      label: 'Complete your FICA/KYC verification',
       desc: 'Submit your ID document and proof of address.',
       done: inv.fica_status === 'approved',
       action: "navigate('profile', document.querySelector('[data-view=profile]'))",
-      actionLabel: 'Go to KYC',
+      actionLabel: 'Go to FICA/KYC',
     },
     {
       id: 'wallet',
