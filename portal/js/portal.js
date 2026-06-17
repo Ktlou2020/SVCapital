@@ -4211,7 +4211,6 @@ function getProductInfo(type) {
 }
 
 function printStatement() {
-  // Use statementDocument container (which holds the rendered HTML)
   const doc = document.getElementById('statementDocument');
   if (!doc || !doc.innerHTML.trim()) {
     Toast.error('Please generate a statement first, then print.');
@@ -4231,14 +4230,49 @@ function printStatement() {
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    html,body{height:auto;width:100%}
     body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#1a1a1a}
-    @page{size:A4;margin:0}
-    @media print{.no-print{display:none!important}.print-body{padding-top:0!important}}
-    .no-print{position:fixed;top:0;left:0;right:0;background:#1a1a1a;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;z-index:999;box-shadow:0 2px 12px rgba(0,0,0,0.3)}
+
+    /* Screen toolbar — sticky so it doesn't overlay content */
+    .no-print{position:sticky;top:0;background:#1a1a1a;padding:10px 24px;display:flex;justify-content:space-between;align-items:center;z-index:999;box-shadow:0 2px 12px rgba(0,0,0,0.3)}
     .no-print span{color:#fff;font-size:13px;font-weight:600;font-family:'Poppins',sans-serif}
     .no-print button{background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;padding:8px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif}
     .no-print button:hover{opacity:0.9}
-    .print-body{padding-top:50px}
+
+    /* A4 page with proper margins — prevents edge clipping */
+    @page{size:A4 portrait;margin:14mm 12mm}
+
+    @media print{
+      /* Hide toolbar */
+      .no-print{display:none!important}
+
+      /* Remove overflow wrappers so tables aren't clipped */
+      [style*="overflow-x"]{overflow:visible!important;width:100%!important}
+
+      /* Tables scale to fit printable width */
+      table{width:100%!important;min-width:0!important}
+      td,th{word-break:break-word;overflow-wrap:break-word}
+
+      /* Repeat headers on continuation pages */
+      thead{display:table-header-group}
+      tfoot{display:table-footer-group}
+
+      /* Avoid splitting a row across pages */
+      tr{page-break-inside:avoid}
+
+      /* Keep section headings with the first row of content */
+      section{page-break-inside:auto}
+      section > div:first-child{page-break-after:avoid;page-break-inside:avoid}
+
+      /* KPI boxes: keep together */
+      .kpi-grid{page-break-inside:avoid}
+
+      /* Preserve background colours in PDF */
+      *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+
+      /* Body padding already 0 when no toolbar */
+      body{padding:0}
+    }
   </style>
 </head>
 <body>
@@ -4246,7 +4280,7 @@ function printStatement() {
     <span>SV Capital — Account Statement</span>
     <button onclick="window.print()">⬇&nbsp; Save as PDF / Print</button>
   </div>
-  <div class="print-body">${doc.innerHTML}</div>
+  <div>${doc.innerHTML}</div>
 </body>
 </html>`);
   printWin.document.close();
