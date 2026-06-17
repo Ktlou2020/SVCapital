@@ -1569,7 +1569,7 @@ function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
   const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date)).slice(0, 5);
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red' };
-  const _txnLabel = s => { const r = (s || '').replace(/_/g, ' '); return r.charAt(0).toUpperCase() + r.slice(1); };
+  const _txnLabel = s => (s || '').replace(/_/g, ' ').toUpperCase();
 
   if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No transactions yet</td></tr>'; return; }
 
@@ -1776,6 +1776,18 @@ function renderMyInvestmentStats() {
   document.getElementById('mi-expected').textContent = Utils.rand(d.reduce((s, i) => s + (parseFloat(i.expected_return_amount) || 0), 0));
   document.getElementById('mi-earned').textContent   = Utils.rand(d.reduce((s, i) => s + (parseFloat(i.actual_return_amount) || 0), 0));
   document.getElementById('mi-count').textContent    = d.length;
+
+  // Dynamically populate product filter from investor's actual product types
+  const sel = document.getElementById('myInvProductFilter');
+  if (sel) {
+    const types = [...new Set(d.map(i => i.product_type).filter(Boolean))];
+    const current = sel.value;
+    sel.innerHTML = '<option value="">All Products</option>' +
+      types.map(t => {
+        const info = Utils.productInfo(t);
+        return `<option value="${t}"${current === t ? ' selected' : ''}>${info.label}</option>`;
+      }).join('');
+  }
 }
 
 function filterMyInvestments(filter, btn) {
@@ -1833,7 +1845,7 @@ function renderMyInvestmentCards() {
 
         <div class="my-inv-card__stats">
           <div class="mic-stat"><span class="mic-stat__label">Invested</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(inv.amount)}</span></div>
-          <div class="mic-stat"><span class="mic-stat__label">${isPaidOut ? 'Actual Return' : 'Exp. Return'}</span><span class="mic-stat__value mic-stat__value--green">${isPaidOut ? Utils.rand(inv.actual_return_amount) : Utils.rand(inv.expected_return_amount)}</span></div>
+          ${isPaidOut ? `<div class="mic-stat"><span class="mic-stat__label">Actual Return</span><span class="mic-stat__value mic-stat__value--green">${Utils.rand(inv.actual_return_amount)}</span></div>` : ''}
           <div class="mic-stat"><span class="mic-stat__label">Rate p.a.</span><span class="mic-stat__value">${Utils.pct(inv.expected_return_rate)}</span></div>
         </div>
 
@@ -1888,7 +1900,7 @@ function renderMyTxnTable() {
   const sorted = [...items].sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
 
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red' };
-  const _txnLabel = s => { const r = (s || '').replace(/_/g, ' '); return r.charAt(0).toUpperCase() + r.slice(1); };
+  const _txnLabel = s => (s || '').replace(/_/g, ' ').toUpperCase();
 
   if (!sorted.length) {
     body.innerHTML = `<tr><td colspan="6" style="padding:0;border:none">
@@ -5531,13 +5543,13 @@ function goFundWallet() {
 const SA_TYPE_META = {
   business: {
     icon: 'fa-building',       label: 'Business',
-    color: '#2f8c9b',          bg: 'linear-gradient(135deg,#1a3d42 0%,#2f8c9b 100%)',
+    color: '#FF8215',          bg: 'linear-gradient(135deg,#1a1a2e 0%,#FF8215 100%)',
     tagline: 'Invest through your registered company',
     ficaDocs: ['Company Registration Certificate (COR14.3 / COR15.1A)', 'Company Tax Clearance Certificate', 'CIPC CoR39 or similar', 'Authorised signatory ID (copy)'],
   },
   trust:    {
     icon: 'fa-scale-balanced',  label: 'Trust',
-    color: '#7c5cfc',           bg: 'linear-gradient(135deg,#2d1d6e 0%,#7c5cfc 100%)',
+    color: '#FF9B0C',           bg: 'linear-gradient(135deg,#1a1a2e 0%,#FF9B0C 100%)',
     tagline: 'Invest through a family or business trust',
     ficaDocs: ['Trust Deed (certified copy)', 'Letters of Authority (Master of Court)', 'Trustee(s) ID documents', 'Trust tax clearance certificate'],
   },
@@ -5598,7 +5610,7 @@ async function loadSubAccounts() {
     const res = await API._fetch('GET', 'tables/sub_accounts', null, { limit: 200 });
     const all = res.data || (Array.isArray(res) ? res : []);
     const myId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
-    PORTAL.subAccounts = all.filter(a => a.parent_investor_id === myId);
+    PORTAL.subAccounts = all.filter(a => String(a.parent_investor_id) === String(myId));
   } catch (e) {
     console.warn('loadSubAccounts:', e);
     PORTAL.subAccounts = [];
@@ -8661,9 +8673,8 @@ function _renderAnalyticsTimeline() {
   }
   const statusBadge = s => {
     const map = { active:'#22c55e', paid_out:'#3b82f6', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316' };
-    const label = (s || '').replace(/_/g, ' ');
-    const labelSentence = label.charAt(0).toUpperCase() + label.slice(1);
-    return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${labelSentence}</span>`;
+    const label = (s || '').replace(/_/g, ' ').toUpperCase();
+    return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap;letter-spacing:0.04em">${label}</span>`;
   };
   const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';
   tbody.innerHTML = invs.slice(0, 30).map(i => {

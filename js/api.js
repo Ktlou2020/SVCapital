@@ -487,7 +487,7 @@ const Utils = {
       waived:           ['badge--gray',   'Waived'],
     };
     const [cls, label] = map[status] || ['badge--gray', status];
-    return `<span class="badge ${cls}">${label}</span>`;
+    return `<span class="badge ${cls}" style="text-transform:uppercase;letter-spacing:0.04em">${label}</span>`;
   },
 
   /* Priority badge */
