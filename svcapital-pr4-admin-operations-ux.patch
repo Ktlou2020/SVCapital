@@ -1,0 +1,928 @@
+diff --git a/admin/js/admin.js b/admin/js/admin.js
+index f1c75f5..fc161fa 100644
+--- a/admin/js/admin.js
++++ b/admin/js/admin.js
+@@ -130,6 +130,114 @@ function _setupFieldValidation(inputId, validateFn, hintId) {
+   });
+ }
+ 
++/* ─── Admin Ops UX helpers ─── */
++let _activeTicketContext = null;
++
++function _daysAgoLabel(dateVal) {
++  const ts = new Date(dateVal || 0).getTime();
++  if (!ts) return '—';
++  const diff = Date.now() - ts;
++  const days = Math.floor(diff / 86400000);
++  if (days <= 0) return 'today';
++  if (days === 1) return '1 day ago';
++  return `${days} days ago`;
++}
++
++function _flashRow(el) {
++  if (!el) return;
++  const orig = el.style.boxShadow;
++  const origBg = el.style.background;
++  el.style.transition = 'background 0.45s ease, box-shadow 0.45s ease';
++  el.style.background = 'rgba(255,155,12,0.12)';
++  el.style.boxShadow = 'inset 0 0 0 1px rgba(255,155,12,0.35)';
++  setTimeout(() => {
++    el.style.background = origBg || '';
++    el.style.boxShadow = orig || '';
++  }, 1800);
++}
++
++function _ensureActionReasonModal() {
++  if (document.getElementById('actionReasonModal')) return;
++  const overlay = document.createElement('div');
++  overlay.id = 'actionReasonModal';
++  overlay.className = 'modal-overlay';
++  overlay.style.display = 'none';
++  overlay.innerHTML = `
++    <div class="modal" style="max-width:560px;width:min(92vw,560px)">
++      <div class="modal__header">
++        <span class="modal__title" id="actionReasonTitle">Add reason</span>
++        <button class="modal__close" aria-label="Close" id="actionReasonClose"><i class="fa-solid fa-xmark"></i></button>
++      </div>
++      <div class="modal__body">
++        <div id="actionReasonIntro" style="font-size:0.84rem;color:var(--text-muted);line-height:1.55;margin-bottom:12px"></div>
++        <textarea class="form-textarea" id="actionReasonInput" rows="5" placeholder="Explain what needs attention..."></textarea>
++        <div id="actionReasonHint" style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">Be specific so the investor knows exactly what to fix.</div>
++      </div>
++      <div class="modal__footer">
++        <button class="btn btn--secondary" id="actionReasonCancel">Cancel</button>
++        <button class="btn btn--danger" id="actionReasonConfirm">Submit</button>
++      </div>
++    </div>`;
++  overlay.addEventListener('click', (e) => { if (e.target === overlay) _closeActionReasonModal(); });
++  document.body.appendChild(overlay);
++  document.getElementById('actionReasonClose')?.addEventListener('click', _closeActionReasonModal);
++}
++
++function _closeActionReasonModal() {
++  const overlay = document.getElementById('actionReasonModal');
++  if (!overlay) return;
++  overlay.style.display = 'none';
++  overlay.classList.remove('active');
++}
++
++function openActionReasonModal({ title = 'Add reason', intro = '', placeholder = 'Type details...', confirmLabel = 'Submit', initialValue = '', danger = true, minLength = 6, onSubmit }) {
++  _ensureActionReasonModal();
++  const overlay = document.getElementById('actionReasonModal');
++  const titleEl = document.getElementById('actionReasonTitle');
++  const introEl = document.getElementById('actionReasonIntro');
++  const input = document.getElementById('actionReasonInput');
++  const hint = document.getElementById('actionReasonHint');
++  const oldConfirm = document.getElementById('actionReasonConfirm');
++  const oldCancel = document.getElementById('actionReasonCancel');
++  const confirmBtn = oldConfirm.cloneNode(true);
++  const cancelBtn = oldCancel.cloneNode(true);
++  oldConfirm.replaceWith(confirmBtn);
++  oldCancel.replaceWith(cancelBtn);
++
++  titleEl.textContent = title;
++  introEl.textContent = intro;
++  input.placeholder = placeholder;
++  input.value = initialValue || '';
++  hint.textContent = `Minimum ${minLength} characters. Make the next step clear.`;
++  confirmBtn.textContent = confirmLabel;
++  confirmBtn.className = `btn ${danger ? 'btn--danger' : 'btn--primary'}`;
++
++  overlay.style.display = 'flex';
++  overlay.classList.add('active');
++  setTimeout(() => input.focus(), 30);
++
++  cancelBtn.addEventListener('click', _closeActionReasonModal, { once: true });
++  confirmBtn.addEventListener('click', async () => {
++    const value = (input.value || '').trim();
++    if (value.length < minLength) {
++      hint.textContent = `Please enter at least ${minLength} characters so the next action is clear.`;
++      hint.style.color = '#ef4444';
++      input.focus();
++      return;
++    }
++    hint.style.color = 'var(--text-muted)';
++    confirmBtn.disabled = true;
++    cancelBtn.disabled = true;
++    try {
++      await onSubmit(value);
++      _closeActionReasonModal();
++    } finally {
++      confirmBtn.disabled = false;
++      cancelBtn.disabled = false;
++    }
++  });
++}
++
+ /* ─── Admin Welcome Strip ─── */
+ function _adminGreeting() {
+   const h = new Date().getHours();
+@@ -437,6 +545,7 @@ function _populateAdminIdentity(jwtUser) {
+    ═══════════════════════════════════════════════ */
+ document.addEventListener('DOMContentLoaded', async () => {
+   Toast.init();
++  _ensureActionReasonModal();
+ 
+   // ─── Require authentication ───
+   if (typeof Auth !== 'undefined') {
+@@ -546,6 +655,7 @@ async function loadDashboard() {
+     try {
+       const tktRes = await API.tickets.list({ limit: 50 });
+       tickets = tktRes.data || [];
++      STATE.tickets = tickets;
+       openTickets = tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
+       const tktBadge = document.getElementById('ticketBadge');
+       if (tktBadge) tktBadge.textContent = openTickets;
+@@ -679,13 +789,21 @@ function renderPendingActions() {
+   const actions = [];
+ 
+   const pendingFica = STATE.investors.filter(i => i.status === 'pending_fica' || i.fica_status === 'submitted').length;
+-  if (pendingFica) actions.push({ icon: 'fa-id-card', color: 'var(--orange)', text: `${pendingFica} FICA review(s) pending`, view: 'kyc' });
++  if (pendingFica) actions.push({ icon: 'fa-id-card', color: 'var(--orange)', text: `${pendingFica} FICA review(s) pending`, sub: 'Review identity documents before investors can fund or invest.', view: 'kyc', cta: 'Open KYC', priority: 1 });
++
++  const pendingWithdrawals = STATE.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
++  if (pendingWithdrawals) actions.push({ icon: 'fa-arrow-up-from-bracket', color: '#ef4444', text: `${pendingWithdrawals} withdrawal request(s) waiting`, sub: 'Approve or reject payouts to keep cash movement on time.', view: 'withdrawals', cta: 'Review withdrawals', priority: 2 });
++
++  const openSupport = (STATE.tickets || []).filter(t => t.status === 'open' || t.status === 'in_progress').length;
++  if (openSupport) actions.push({ icon: 'fa-headset', color: 'var(--blue)', text: `${openSupport} support ticket(s) need replies`, sub: 'Resolve investor questions before they become complaints or churn risk.', view: 'support', cta: 'Open support', priority: 3 });
+ 
+   const noInstruction = STATE.investments.filter(i => i.status === 'matured' && i.maturity_instruction === 'pending').length;
+-  if (noInstruction) actions.push({ icon: 'fa-hourglass-end', color: 'var(--red)', text: `${noInstruction} maturity instructions missing`, view: 'maturity' });
++  if (noInstruction) actions.push({ icon: 'fa-hourglass-end', color: 'var(--red)', text: `${noInstruction} maturity instruction(s) missing`, sub: 'Investors are waiting to reinvest or pay out matured capital.', view: 'maturity', cta: 'Review maturities', priority: 4 });
+ 
+-  const openTickets = STATE.transactions.filter(t => t.status === 'pending').length;
+-  if (openTickets) actions.push({ icon: 'fa-arrows-rotate', color: 'var(--blue)', text: `${openTickets} pending transaction(s)`, view: 'transactions' });
++  const pendingTransactions = STATE.transactions.filter(t => t.status === 'pending' && t.type !== 'withdrawal').length;
++  if (pendingTransactions) actions.push({ icon: 'fa-arrows-rotate', color: 'var(--green)', text: `${pendingTransactions} transaction(s) pending`, sub: 'Clear deposits, returns and reconciliations to keep reporting current.', view: 'transactions', cta: 'Open transactions', priority: 5 });
++
++  actions.sort((a, b) => a.priority - b.priority);
+ 
+   if (!actions.length) {
+     el.innerHTML = '<div class="empty-state" style="padding:16px"><i class="fa-solid fa-check-circle" style="color:var(--green)"></i><p>All clear! No pending actions.</p></div>';
+@@ -693,12 +811,18 @@ function renderPendingActions() {
+   }
+ 
+   el.innerHTML = actions.map(a => `
+-    <div class="flex-center gap-8" style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="navigate('${a.view}', document.querySelector('[data-view=${a.view}]'))">
+-      <i class="fa-solid ${a.icon}" style="color:${a.color};width:16px;text-align:center"></i>
+-      <span style="font-size:0.8rem;color:var(--text)">${a.text}</span>
+-      <i class="fa-solid fa-arrow-right" style="margin-left:auto;color:var(--text-dim);font-size:0.7rem"></i>
+-    </div>
+-  `).join('');
++    <button type="button" style="width:100%;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:#fff;margin-bottom:10px;cursor:pointer;transition:transform .15s ease, box-shadow .15s ease" onclick="navigate('${a.view}', document.querySelector('[data-view=${a.view}]'))" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.08)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
++      <div style="display:flex;align-items:flex-start;gap:12px">
++        <div style="width:34px;height:34px;border-radius:10px;background:${a.color}18;display:flex;align-items:center;justify-content:center;flex-shrink:0">
++          <i class="fa-solid ${a.icon}" style="color:${a.color};font-size:0.8rem"></i>
++        </div>
++        <div style="min-width:0;flex:1">
++          <div style="font-size:0.8rem;font-weight:800;color:var(--text);line-height:1.35">${a.text}</div>
++          <div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px;line-height:1.45">${a.sub}</div>
++          <div style="margin-top:8px;font-size:0.72rem;font-weight:800;color:${a.color}">${a.cta} →</div>
++        </div>
++      </div>
++    </button>`).join('');
+ }
+ 
+ function renderActivityFeed() {
+@@ -1275,22 +1399,105 @@ async function approveBankAccount(investorId, btn) {
+ }
+ 
+ async function rejectBankAccount(investorId) {
+-  const reason = prompt('Reason for rejection (will be visible to investor):');
+-  if (reason === null) return;
+-  try {
+-    await API._fetch('PATCH', `tables/investors/${investorId}`, {
+-      bank_account_status: 'rejected',
+-      bank_account_notes:  reason || 'Bank account details could not be verified.',
+-    });
+-    Toast.success('Bank account rejected');
+-    Modal.close('investorDetailModal');
+-    await loadInvestors();
+-  } catch (e) { Toast.error('Failed to reject bank account'); }
++  const inv = STATE.investors.find(i => i.id === investorId);
++  const invName = inv ? `${inv.first_name || ''} ${inv.last_name || ''}`.trim() : 'this investor';
++  openActionReasonModal({
++    title: 'Reject bank account',
++    intro: `Tell ${invName} exactly what must be corrected before withdrawals can be enabled.`,
++    placeholder: 'Example: Account holder name does not match your investor profile. Please upload a stamped bank letter or recent bank statement showing the correct account holder and account number.',
++    confirmLabel: 'Reject account',
++    onSubmit: async (reason) => {
++      try {
++        await API._fetch('PATCH', `tables/investors/${investorId}`, {
++          bank_account_status: 'rejected',
++          bank_account_notes: reason,
++        });
++        Toast.success('Bank account rejected with investor guidance saved');
++        Modal.close('investorDetailModal');
++        await loadInvestors();
++      } catch (e) {
++        Toast.error('Failed to reject bank account');
++      }
++    }
++  });
+ }
+ 
+ /* ═══════════════════════════════════════════════
+    WITHDRAWALS — Feature 5: Approval Workflow
+    ═══════════════════════════════════════════════ */
++function _ensureWithdrawalOpsCard() {
++  const view = document.getElementById('view-withdrawals');
++  if (!view || document.getElementById('withdrawalOpsCard')) return;
++  const firstCard = view.querySelector('.table-card');
++  const card = document.createElement('div');
++  card.id = 'withdrawalOpsCard';
++  card.className = 'panel mb-16';
++  card.innerHTML = '<div class="panel__body" style="padding:18px">Loading withdrawal queue…</div>';
++  if (firstCard) view.insertBefore(card, firstCard);
++  else view.prepend(card);
++}
++
++function focusOldestWithdrawal() {
++  const next = [...(STATE.withdrawals || [])]
++    .filter(w => w.status === 'pending')
++    .sort((a, b) => new Date(a.created_at || a.transaction_date || 0) - new Date(b.created_at || b.transaction_date || 0))[0];
++  if (!next) { Toast.info('No pending withdrawals right now'); return; }
++  const row = document.querySelector(`#withdrawalsPendingBody tr[data-withdrawal-id="${next.id}"]`);
++  if (row) {
++    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
++    _flashRow(row);
++  }
++}
++
++function renderWithdrawalOpsCard() {
++  _ensureWithdrawalOpsCard();
++  const card = document.getElementById('withdrawalOpsCard');
++  if (!card) return;
++  const withdrawals = STATE.withdrawals || [];
++  const pending = withdrawals.filter(w => w.status === 'pending');
++  const completedToday = withdrawals.filter(w => ['approved', 'completed', 'rejected'].includes(w.status) && (Date.now() - new Date(w.updated_at || w.created_at || 0).getTime()) < 86400000).length;
++  const totalPending = pending.reduce((sum, w) => sum + Math.abs(parseFloat(w.amount) || 0), 0);
++  const missingBank = pending.filter(w => {
++    const inv = STATE.investors.find(i => i.id === w.investor_id);
++    return !(inv?.bank_account_number || inv?.bank_name);
++  }).length;
++  const oldest = [...pending].sort((a, b) => new Date(a.created_at || a.transaction_date || 0) - new Date(b.created_at || b.transaction_date || 0))[0];
++  const oldestLabel = oldest ? `${oldest.investor_id || 'Investor'} · ${_daysAgoLabel(oldest.created_at || oldest.transaction_date)}` : 'Queue is clear';
++
++  card.innerHTML = `
++    <div class="panel__header" style="padding-bottom:0">
++      <span class="panel__title"><i class="fa-solid fa-money-check-dollar" style="color:#ef4444;margin-right:8px"></i>Withdrawal Queue</span>
++      <span id="withdrawalOpsMeta" style="font-size:0.72rem;color:var(--text-muted)"></span>
++    </div>
++    <div class="panel__body" style="padding-top:14px">
++      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;align-items:stretch">
++        <div style="border:1px solid rgba(239,68,68,0.16);background:rgba(239,68,68,0.05);border-radius:14px;padding:14px 16px">
++          <div style="font-size:0.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#b91c1c;margin-bottom:6px">Queue status</div>
++          <div style="font-size:0.92rem;font-weight:800;color:var(--text);line-height:1.4">${_esc(oldestLabel)}</div>
++          <div style="font-size:0.76rem;color:var(--text-muted);margin-top:6px">Prioritise the oldest pending payout first to keep turnaround expectations consistent.</div>
++          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
++            <button class="btn btn--primary btn--sm" onclick="focusOldestWithdrawal()"><i class="fa-solid fa-clock"></i> Focus oldest</button>
++            <button class="btn btn--secondary btn--sm" onclick="loadWithdrawals()"><i class="fa-solid fa-rotate"></i> Refresh queue</button>
++            <button class="btn btn--secondary btn--sm" onclick="exportWithdrawalsCSV()"><i class="fa-solid fa-file-csv"></i> Export queue</button>
++          </div>
++        </div>
++        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
++          ${[
++            ['Pending requests', pending.length, '#ef4444'],
++            ['Pending amount', Utils.rand(totalPending), '#b91c1c'],
++            ['Missing bank details', missingBank, '#f59e0b'],
++            ['Processed today', completedToday, '#22c55e'],
++          ].map(([label, value, color]) => `
++            <div style="border:1px solid rgba(0,0,0,0.08);background:#fff;border-radius:12px;padding:12px 14px">
++              <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px">${label}</div>
++              <div style="font-size:1.15rem;font-weight:800;color:${color}">${value}</div>
++            </div>`).join('')}
++        </div>
++      </div>
++    </div>`;
++  _setRefreshLabel('withdrawalOpsMeta', 'withdrawals');
++}
++
+ async function loadWithdrawals() {
+   try {
+     const [txnRes, invRes] = await Promise.all([
+@@ -1300,7 +1507,9 @@ async function loadWithdrawals() {
+     const all = (txnRes.data || []).filter(t => t.type === 'withdrawal');
+     STATE.withdrawals = all;
+     if (!STATE.investors.length) STATE.investors = invRes.data || [];
++    _markRefreshed('withdrawals');
+     renderWithdrawalsTable();
++    renderWithdrawalOpsCard();
+   } catch (e) {
+     Toast.error('Failed to load withdrawals');
+     console.error(e);
+@@ -1331,7 +1540,7 @@ function renderWithdrawalsTable() {
+          <div style="font-size:0.68rem;font-family:monospace;color:var(--gold)">••••${String(bankAcct).slice(-4)} · ${branchCode}</div>`
+       : `<div class="clip">${bankName}</div>`;
+ 
+-    return `<tr>
++    return `<tr data-withdrawal-id="${w.id}">
+       <td class="td-muted clip">${Utils.date(w.created_at || w.transaction_date)}</td>
+       <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${w.investor_id||''}</div></td>
+       <td class="td-gold fw-700 clip">${Utils.rand(Math.abs(w.amount))}</td>
+@@ -1359,6 +1568,7 @@ function renderWithdrawalsTable() {
+       ? completed.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(w => _row(w, false)).join('')
+       : '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No completed withdrawals</td></tr>';
+   }
++  renderWithdrawalOpsCard();
+ }
+ 
+ async function approveWithdrawal(txnId, btn) {
+@@ -1525,6 +1735,99 @@ async function saveNewInvestor(btn) {
+ /* ═══════════════════════════════════════════════
+    KYC / FICA
+    ═══════════════════════════════════════════════ */
++function _getActionableKycQueue() {
++  return [...(STATE.kyc || [])]
++    .filter(k => ['pending', 'under_review'].includes(k.status))
++    .sort((a, b) => new Date(a.submitted_at || a.uploaded_at || a.created_at || 0) - new Date(b.submitted_at || b.uploaded_at || b.created_at || 0));
++}
++
++function _setKycFilter(value) {
++  const el = document.getElementById('kycStatusFilter');
++  if (!el) return;
++  el.value = value || '';
++  renderKYCTable();
++  renderKycOpsCard();
++}
++
++function _ensureKycOpsCard() {
++  const view = document.getElementById('view-kyc');
++  if (!view || document.getElementById('kycOpsCard')) return;
++  const stats = view.querySelector('.stats-row');
++  const card = document.createElement('div');
++  card.id = 'kycOpsCard';
++  card.className = 'panel mb-16';
++  card.style.marginTop = '16px';
++  card.innerHTML = '<div class="panel__body" style="padding:18px">Loading review queue…</div>';
++  if (stats && stats.nextSibling) stats.insertAdjacentElement('afterend', card);
++  else view.prepend(card);
++}
++
++function focusNextKycReview() {
++  const next = _getActionableKycQueue()[0];
++  if (!next) { Toast.info('No actionable KYC documents right now'); return; }
++  _setKycFilter(next.status === 'under_review' ? 'under_review' : 'pending');
++  setTimeout(() => {
++    const row = document.querySelector(`#kycBody .kyc-cb[value="${next.id}"]`)?.closest('tr');
++    if (row) {
++      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
++      _flashRow(row);
++    }
++    if (next.file_data || next.file_url || next.attachment_data) viewFicaDocument(next.id);
++  }, 50);
++}
++
++function renderKycOpsCard() {
++  _ensureKycOpsCard();
++  const card = document.getElementById('kycOpsCard');
++  if (!card) return;
++  const docs = STATE.kyc || [];
++  const actionable = _getActionableKycQueue();
++  const pending = docs.filter(k => k.status === 'pending').length;
++  const review = docs.filter(k => k.status === 'under_review').length;
++  const uploadedToday = docs.filter(k => {
++    const ts = new Date(k.submitted_at || k.uploaded_at || k.created_at || 0).getTime();
++    return ts && (Date.now() - ts) < 86400000;
++  }).length;
++  const missingFile = docs.filter(k => ['pending', 'under_review'].includes(k.status) && !(k.file_data || k.file_url || k.attachment_data)).length;
++  const next = actionable[0];
++  const nextLabel = next
++    ? `${next.investor_name || next.investor_id || 'Investor'} · ${(next.doc_type || next.document_type || 'document').replace(/_/g, ' ')} · ${_daysAgoLabel(next.submitted_at || next.uploaded_at || next.created_at)}`
++    : 'No pending reviews';
++
++  card.innerHTML = `
++    <div class="panel__header" style="padding-bottom:0">
++      <span class="panel__title"><i class="fa-solid fa-shield-check" style="color:var(--orange);margin-right:8px"></i>KYC Review Queue</span>
++      <span id="kycOpsMeta" style="font-size:0.72rem;color:var(--text-muted)"></span>
++    </div>
++    <div class="panel__body" style="padding-top:14px">
++      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;align-items:stretch">
++        <div style="border:1px solid rgba(255,155,12,0.18);background:rgba(255,155,12,0.06);border-radius:14px;padding:14px 16px">
++          <div style="font-size:0.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#b97900;margin-bottom:6px">Recommended next review</div>
++          <div style="font-size:0.92rem;font-weight:800;color:var(--text);line-height:1.4">${_esc(nextLabel)}</div>
++          <div style="font-size:0.76rem;color:var(--text-muted);margin-top:6px">${next ? 'Start with the oldest actionable submission to keep turnaround times predictable.' : 'Bulk actions and uploads are still available below.'}</div>
++          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
++            <button class="btn btn--primary btn--sm" onclick="focusNextKycReview()"><i class="fa-solid fa-play"></i> Review next</button>
++            <button class="btn btn--secondary btn--sm" onclick="_setKycFilter('pending')"><i class="fa-solid fa-filter"></i> Pending only</button>
++            <button class="btn btn--secondary btn--sm" onclick="openKycUploadModal('','')"><i class="fa-solid fa-upload"></i> Upload for investor</button>
++          </div>
++        </div>
++        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
++          ${[
++            ['Pending', pending, '#f59e0b', "_setKycFilter('pending')"],
++            ['Under review', review, '#3b82f6', "_setKycFilter('under_review')"],
++            ['Uploaded today', uploadedToday, '#22c55e', "_setKycFilter('')"],
++            ['Missing file', missingFile, '#ef4444', "_setKycFilter('')"],
++          ].map(([label, value, color, action]) => `
++            <button type="button" onclick="${action}" style="text-align:left;border:1px solid rgba(0,0,0,0.08);background:#fff;border-radius:12px;padding:12px 14px;cursor:pointer">
++              <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px">${label}</div>
++              <div style="font-size:1.2rem;font-weight:800;color:${color}">${value}</div>
++            </button>`).join('')}
++        </div>
++      </div>
++    </div>`;
++  _setRefreshLabel('kycOpsMeta', 'kyc');
++}
++
+ async function loadKYC() {
+   try {
+     const [kycRes, invRes] = await Promise.all([
+@@ -1535,10 +1838,19 @@ async function loadKYC() {
+       new Date(b.submitted_at || b.uploaded_at || b.created_at || 0) - new Date(a.submitted_at || a.uploaded_at || a.created_at || 0)
+     );
+     if (!STATE.investors.length) STATE.investors = invRes.data || [];
++    _markRefreshed('kyc');
+     renderKYCStats();
+     renderKYCTable();
++    renderKycOpsCard();
+ 
+-    document.getElementById('kycStatusFilter').addEventListener('change', renderKYCTable);
++    const filterEl = document.getElementById('kycStatusFilter');
++    if (filterEl && !filterEl._kycWired) {
++      filterEl.addEventListener('change', () => {
++        renderKYCTable();
++        renderKycOpsCard();
++      });
++      filterEl._kycWired = true;
++    }
+   } catch (e) { Toast.error('Failed to load KYC data'); }
+ }
+ 
+@@ -1552,6 +1864,7 @@ function renderKYCStats() {
+   document.getElementById('kyc-approved').textContent = approved;
+   document.getElementById('kyc-rejected').textContent = rejected;
+   document.getElementById('kycBadge').textContent = pending + review;
++  renderKycOpsCard();
+ }
+ 
+ function renderKYCTable() {
+@@ -1663,12 +1976,20 @@ async function approveKyc(id, btn) {
+ }
+ 
+ async function rejectKyc(id, btn) {
+-  const reason = prompt('Rejection reason:');
+-  if (reason === null) return;
+-  await _withBtn(btn, async () => {
+-    await API.kyc.update(id, { status: 'rejected', rejection_reason: reason, reviewed_by: 'Ayanda Majola', reviewed_date: new Date().toISOString() });
+-    Toast.success('Document rejected');
+-    await loadKYC();
++  const doc = STATE.kyc.find(k => k.id === id);
++  const label = doc?.doc_type || doc?.document_type || 'document';
++  openActionReasonModal({
++    title: 'Reject KYC document',
++    intro: `Explain what is wrong with this ${(label || 'document').replace(/_/g, ' ')} so the investor can resubmit correctly.`,
++    placeholder: 'Example: The proof of address is older than 3 months. Please upload a recent municipal bill or bank statement showing your current residential address.',
++    confirmLabel: 'Reject document',
++    onSubmit: async (reason) => {
++      await _withBtn(btn, async () => {
++        await API.kyc.update(id, { status: 'rejected', rejection_reason: reason, reviewed_by: 'Ayanda Majola', reviewed_date: new Date().toISOString() });
++        Toast.success('Document rejected with investor guidance saved');
++        await loadKYC();
++      });
++    }
+   });
+ }
+ 
+@@ -2547,6 +2868,8 @@ function renderTxnTable() {
+ function setupTxnFilters() {
+   const search = document.getElementById('txnSearch');
+   const type = document.getElementById('txnTypeFilter');
++  if (!search || !type) return;
++  if (search._txnWired && type._txnWired) return;
+ 
+   const filter = Utils.debounce(() => {
+     const q = search.value.toLowerCase();
+@@ -2563,6 +2886,8 @@ function setupTxnFilters() {
+ 
+   search.addEventListener('input', filter);
+   type.addEventListener('change', filter);
++  search._txnWired = true;
++  type._txnWired = true;
+ }
+ 
+ async function changeTxnStatus(txnId, newStatus, investorId, amount) {
+@@ -2657,6 +2982,134 @@ async function saveNewTxn(btn) {
+ /* ═══════════════════════════════════════════════
+    SUPPORT TICKETS
+    ═══════════════════════════════════════════════ */
++function _ensureSupportTriageCard() {
++  const view = document.getElementById('view-support');
++  if (!view || document.getElementById('supportTriageCard')) return;
++  const tableCard = view.querySelector('.table-card');
++  const card = document.createElement('div');
++  card.id = 'supportTriageCard';
++  card.className = 'panel mb-16';
++  card.innerHTML = '<div class="panel__body" style="padding:18px">Loading support triage…</div>';
++  if (tableCard) view.insertBefore(card, tableCard);
++  else view.appendChild(card);
++}
++
++function applySupportFilters(status = '', priority = '') {
++  const st = document.getElementById('ticketStatusFilter');
++  const pr = document.getElementById('ticketPriorityFilter');
++  if (st) st.value = status;
++  if (pr) pr.value = priority;
++  renderTicketsTable();
++  renderSupportTriageCard();
++}
++
++function openNextSupportTicket(mode = 'reply') {
++  let items = [...(STATE.tickets || [])];
++  if (mode === 'urgent') items = items.filter(t => ['high', 'urgent'].includes(t.priority) && ['open', 'in_progress'].includes(t.status));
++  else if (mode === 'bank') items = items.filter(t => t.category === 'bank_verification' && ['open', 'in_progress'].includes(t.status));
++  else if (mode === 'unassigned') items = items.filter(t => !t.assigned_to && ['open', 'in_progress'].includes(t.status));
++  else items = items.filter(t => t.status === 'open' && !t.admin_response);
++  items.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
++  const next = items[0];
++  if (!next) { Toast.info('No matching support tickets right now'); return; }
++  viewTicket(next.id);
++}
++
++function renderSupportTriageCard() {
++  _ensureSupportTriageCard();
++  const card = document.getElementById('supportTriageCard');
++  if (!card) return;
++  const tickets = STATE.tickets || [];
++  const unreplied = tickets.filter(t => t.status === 'open' && !t.admin_response);
++  const urgent = tickets.filter(t => ['high', 'urgent'].includes(t.priority) && ['open', 'in_progress'].includes(t.status));
++  const unassigned = tickets.filter(t => !t.assigned_to && ['open', 'in_progress'].includes(t.status));
++  const bank = tickets.filter(t => t.category === 'bank_verification' && ['open', 'in_progress'].includes(t.status));
++  const next = [...unreplied].sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))[0];
++
++  card.innerHTML = `
++    <div class="panel__header" style="padding-bottom:0">
++      <span class="panel__title"><i class="fa-solid fa-life-ring" style="color:var(--blue);margin-right:8px"></i>Support Triage</span>
++      <span id="supportTriageMeta" style="font-size:0.72rem;color:var(--text-muted)"></span>
++    </div>
++    <div class="panel__body" style="padding-top:14px">
++      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;align-items:stretch">
++        <div style="border:1px solid rgba(59,130,246,0.16);background:rgba(59,130,246,0.05);border-radius:14px;padding:14px 16px">
++          <div style="font-size:0.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#1d4ed8;margin-bottom:6px">Next best reply</div>
++          <div style="font-size:0.92rem;font-weight:800;color:var(--text);line-height:1.4">${_esc(next?.subject || 'No unanswered ticket')}</div>
++          <div style="font-size:0.76rem;color:var(--text-muted);margin-top:6px">${next ? `${_esc(next.investor_name || next.investor_id || 'Investor')} · ${_daysAgoLabel(next.created_at)}` : 'All investor-facing tickets already have a response.'}</div>
++          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
++            <button class="btn btn--primary btn--sm" onclick="openNextSupportTicket('reply')"><i class="fa-solid fa-reply"></i> Open next reply</button>
++            <button class="btn btn--secondary btn--sm" onclick="applySupportFilters('open','urgent')"><i class="fa-solid fa-bolt"></i> Urgent open</button>
++            <button class="btn btn--secondary btn--sm" onclick="openNextSupportTicket('bank')"><i class="fa-solid fa-building-columns"></i> Bank verifications</button>
++          </div>
++        </div>
++        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
++          ${[
++            ['Unanswered', unreplied.length, '#ef4444'],
++            ['Urgent / high', urgent.length, '#f59e0b'],
++            ['Unassigned', unassigned.length, '#8b5cf6'],
++            ['Bank verification', bank.length, '#3b82f6'],
++          ].map(([label, value, color]) => `
++            <button type="button" onclick="${label === 'Unassigned' ? "openNextSupportTicket('unassigned')" : "void(0)"}" style="text-align:left;border:1px solid rgba(0,0,0,0.08);background:#fff;border-radius:12px;padding:12px 14px;cursor:pointer">
++              <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px">${label}</div>
++              <div style="font-size:1.15rem;font-weight:800;color:${color}">${value}</div>
++            </button>`).join('')}
++        </div>
++      </div>
++    </div>`;
++  _setRefreshLabel('supportTriageMeta', 'support');
++}
++
++function _ticketResponseTemplates(tkt) {
++  const category = tkt?.category || '';
++  const templates = [
++    { key: 'ack', label: 'Acknowledge', text: 'Thanks for reaching out. We have received your request and our operations team is reviewing it now. We will update you again as soon as the next step is completed.' },
++    { key: 'resolved', label: 'Resolved', text: 'Thanks for your patience. This has now been resolved on our side. Please refresh your portal and let us know if you still need assistance.' },
++  ];
++  if (category === 'bank_verification') templates.unshift({ key: 'bank_fix', label: 'Request bank proof', text: 'We could not complete bank verification yet. Please reply with a recent stamped bank statement or bank confirmation letter that clearly shows the account holder name, account number and branch code.' });
++  if (category === 'payout_issue' || category === 'withdrawal') templates.unshift({ key: 'withdrawal_eta', label: 'Withdrawal update', text: 'Your withdrawal request is in progress with our finance team. Standard processing is 1–2 business days once bank verification is complete. We will notify you as soon as payment is released.' });
++  if (category === 'statement_request') templates.unshift({ key: 'statement', label: 'Statement guidance', text: 'You can download a statement directly from the Statements section in your portal. If you need a custom range or tax-year format, reply here and we will prepare it for you.' });
++  if (category === 'technical_issue') templates.unshift({ key: 'technical', label: 'Technical troubleshooting', text: 'Thanks for reporting this issue. Please log out, refresh your browser, then sign in again. If the problem continues, reply with a screenshot and the time it happened so we can investigate faster.' });
++  return templates.slice(0, 4);
++}
++
++function _renderTicketTemplateChips(tkt) {
++  const items = _ticketResponseTemplates(tkt);
++  if (!items.length) return '';
++  return `<div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 10px">${items.map(item => `<button type="button" class="btn btn--secondary btn--sm" onclick="applyTicketResponseTemplate('${item.key}')">${item.label}</button>`).join('')}</div>`;
++}
++
++function applyTicketResponseTemplate(key) {
++  const tkt = _activeTicketContext;
++  const ta = document.getElementById('ticketResponse');
++  const status = document.getElementById('ticketStatusUpdate');
++  if (!tkt || !ta) return;
++  const match = _ticketResponseTemplates(tkt).find(item => item.key === key);
++  if (!match) return;
++  ta.value = match.text;
++  if (status && status.value === 'open') status.value = 'in_progress';
++  ta.dispatchEvent(new Event('input'));
++  ta.focus();
++}
++
++function _bindTicketResponseUX(tkt) {
++  const ta = document.getElementById('ticketResponse');
++  const meta = document.getElementById('ticketResponseMeta');
++  const status = document.getElementById('ticketStatusUpdate');
++  if (!ta || !meta) return;
++  const update = () => {
++    const len = (ta.value || '').trim().length;
++    const statusText = status ? status.options[status.selectedIndex]?.text || '' : '';
++    meta.textContent = len
++      ? `${len} characters · Current status: ${statusText || '—'}`
++      : `Use a quick response above, then save with the right status for the investor.`;
++    meta.style.color = len > 1000 ? '#b45309' : 'var(--text-muted)';
++  };
++  ta.addEventListener('input', update);
++  status?.addEventListener('change', update);
++  update();
++}
++
+ async function loadSupport() {
+   try {
+     const [tktRes, invRes] = await Promise.all([
+@@ -2665,8 +3118,10 @@ async function loadSupport() {
+     ]);
+     STATE.tickets = tktRes.data || [];
+     if (!STATE.investors.length) STATE.investors = invRes.data || [];
++    _markRefreshed('support');
+     renderTicketStats();
+     renderTicketsTable();
++    renderSupportTriageCard();
+     setupTicketFilters();
+     document.getElementById('ticketBadge').textContent = STATE.tickets.filter(t => ['open', 'in_progress'].includes(t.status)).length;
+   } catch (e) { Toast.error('Failed to load support tickets'); }
+@@ -2678,6 +3133,7 @@ function renderTicketStats() {
+   document.getElementById('tkt-inprogress').textContent = d.filter(t => t.status === 'in_progress').length;
+   document.getElementById('tkt-resolved').textContent = d.filter(t => t.status === 'resolved').length;
+   document.getElementById('tkt-urgent').textContent = d.filter(t => ['high', 'urgent'].includes(t.priority)).length;
++  renderSupportTriageCard();
+ }
+ 
+ function renderTicketsTable() {
+@@ -2709,8 +3165,16 @@ function renderTicketsTable() {
+ }
+ 
+ function setupTicketFilters() {
+-  document.getElementById('ticketStatusFilter').addEventListener('change', renderTicketsTable);
+-  document.getElementById('ticketPriorityFilter').addEventListener('change', renderTicketsTable);
++  const st = document.getElementById('ticketStatusFilter');
++  const pr = document.getElementById('ticketPriorityFilter');
++  if (st && !st._ticketWired) {
++    st.addEventListener('change', () => { renderTicketsTable(); renderSupportTriageCard(); });
++    st._ticketWired = true;
++  }
++  if (pr && !pr._ticketWired) {
++    pr.addEventListener('change', () => { renderTicketsTable(); renderSupportTriageCard(); });
++    pr._ticketWired = true;
++  }
+ }
+ 
+ async function viewTicket(id) {
+@@ -2746,6 +3210,8 @@ async function viewTicket(id) {
+   const showActionBtns     = (isBankVerification || isFicaSubmission || hasProof) && tkt.status !== 'resolved' && tkt.status !== 'closed';
+ 
+   document.getElementById('ticketModalTitle').textContent = `Ticket #${tkt.id} — ${tkt.subject}`;
++  document.getElementById('ticketModal').dataset.ticketId = String(id);
++  _activeTicketContext = tkt;
+   document.getElementById('ticketModalBody').innerHTML = `
+     <div class="grid-2 mb-16" style="gap:12px">
+       <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value">${_esc(tktInvName)}${tktEmail ? ` <span style="color:var(--text-muted);font-size:0.78rem">&lt;${_esc(tktEmail)}&gt;</span>` : ''}</span></div>
+@@ -2776,7 +3242,9 @@ async function viewTicket(id) {
+     </div>
+     <div class="form-group">
+       <label class="form-label">Admin Response</label>
++      ${_renderTicketTemplateChips(tkt)}
+       <textarea class="form-textarea" id="ticketResponse" rows="4" placeholder="Write your response...">${tkt.admin_response || ''}</textarea>
++      <div id="ticketResponseMeta" style="font-size:0.74rem;color:var(--text-muted);margin-top:8px"></div>
+     </div>
+     <div class="form-row form-row--2">
+       <div class="form-group">
+@@ -2796,6 +3264,8 @@ async function viewTicket(id) {
+     </div>
+   `;
+ 
++  _bindTicketResponseUX(tkt);
++
+   if (showActionBtns && tkt.investor_id) {
+     const _doTicketAction = async (approve) => {
+       const confirmMsg = approve
+@@ -3880,78 +4350,137 @@ async function saveKycUpload() {
+    ═══════════════════════════════════════════════ */
+ function setupGlobalSearch() {
+   const input = document.getElementById('globalSearch');
+-  if (!input) return;
++  if (!input || input.dataset.bound === '1') return;
++  input.dataset.bound = '1';
+ 
+-  // Create dropdown
+   const dropdown = document.createElement('div');
+   dropdown.id = 'globalSearchDropdown';
+-  dropdown.style.cssText = 'display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid rgba(0,0,0,0.1);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.15);z-index:9999;max-height:400px;overflow-y:auto';
++  dropdown.style.cssText = 'display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid rgba(0,0,0,0.1);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.15);z-index:9999;max-height:420px;overflow-y:auto';
+   input.parentElement.style.position = 'relative';
+   input.parentElement.appendChild(dropdown);
+ 
+-  input.addEventListener('input', Utils.debounce(() => {
+-    const q = input.value.trim().toLowerCase();
+-    if (!q || q.length < 2) { dropdown.style.display = 'none'; return; }
++  let flatResults = [];
++  let activeIndex = -1;
+ 
+-    const results = [];
++  const close = () => {
++    dropdown.style.display = 'none';
++    activeIndex = -1;
++  };
++  const highlight = idx => {
++    const items = [...dropdown.querySelectorAll('.gs-item')];
++    items.forEach((el, itemIdx) => {
++      el.style.background = itemIdx === idx ? '#f7f8fa' : '';
++      el.setAttribute('aria-selected', itemIdx === idx ? 'true' : 'false');
++    });
++    activeIndex = idx;
++    const active = items[idx];
++    if (active) active.scrollIntoView({ block: 'nearest' });
++  };
++  const renderHint = msg => {
++    dropdown.innerHTML = `<div style="padding:16px 18px;color:#64748b;font-size:0.8rem;line-height:1.5">${msg}</div>`;
++    dropdown.style.display = 'block';
++  };
++  const runSearch = () => {
++    const q = input.value.trim().toLowerCase();
++    if (!q) { close(); return; }
++    if (q.length < 2) {
++      renderHint('Type at least 2 characters to search investors, pools and transactions. Use ↑ ↓ and Enter to move faster.');
++      flatResults = [];
++      return;
++    }
+ 
+-    // Search investors
+-    STATE.investors.filter(i => {
++    const groups = [];
++    const investors = STATE.investors.filter(i => {
+       const name = `${i.first_name||''} ${i.last_name||''}`.toLowerCase();
+       return name.includes(q) || (i.email||'').toLowerCase().includes(q)
+           || (i.id||'').toLowerCase().includes(q) || (i.phone||'').includes(q);
+-    }).slice(0, 5).forEach(i => results.push({
++    }).slice(0, 5).map(i => ({
+       icon: 'fa-user', color: '#D4AF37',
+       title: `${i.first_name} ${i.last_name}`,
+       sub: `${i.id} · ${i.email}`,
+-      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('investors', document.querySelector('[data-view=investors]')); setTimeout(() => { document.getElementById('investorSearch').value = `${i.first_name} ${i.last_name}`; document.getElementById('investorSearch').dispatchEvent(new Event('input')); }, 200); }
++      action: () => { input.value = ''; close(); navigate('investors', document.querySelector('[data-view=investors]')); setTimeout(() => { const el = document.getElementById('investorSearch'); if (el) { el.value = `${i.first_name} ${i.last_name}`; el.dispatchEvent(new Event('input')); } }, 200); }
+     }));
++    if (investors.length) groups.push({ label: 'Investors', items: investors });
+ 
+-    // Search pools
+-    STATE.pools.filter(p => (p.name||'').toLowerCase().includes(q) || (p.product_type||'').includes(q)).slice(0, 3).forEach(p => results.push({
++    const pools = STATE.pools.filter(p => (p.name||'').toLowerCase().includes(q) || (p.product_type||'').toLowerCase().includes(q)).slice(0, 4).map(p => ({
+       icon: 'fa-layer-group', color: '#3b82f6',
+       title: p.name,
+       sub: `Pool · ${p.status} · ${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)} raised`,
+-      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('pools', document.querySelector('[data-view=pools]')); setTimeout(() => viewPoolInvestors(p.id), 300); }
++      action: () => { input.value = ''; close(); navigate('pools', document.querySelector('[data-view=pools]')); setTimeout(() => viewPoolInvestors(p.id), 300); }
+     }));
++    if (pools.length) groups.push({ label: 'Pools', items: pools });
+ 
+-    // Search transactions
+-    STATE.transactions.filter(t => (t.reference||'').toLowerCase().includes(q) || (t.investor_id||'').toLowerCase().includes(q)).slice(0, 3).forEach(t => results.push({
++    const transactions = STATE.transactions.filter(t => (t.reference||'').toLowerCase().includes(q) || (t.investor_id||'').toLowerCase().includes(q)).slice(0, 4).map(t => ({
+       icon: 'fa-arrows-rotate', color: '#22c55e',
+       title: `${t.type} — ${Utils.rand(t.amount)}`,
+       sub: `Ref: ${t.reference||'—'} · ${Utils.date(t.transaction_date||t.created_at)}`,
+-      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('transactions', document.querySelector('[data-view=transactions]')); setTimeout(() => { document.getElementById('txnSearch').value = t.reference||''; document.getElementById('txnSearch').dispatchEvent(new Event('input')); }, 200); }
++      action: () => { input.value = ''; close(); navigate('transactions', document.querySelector('[data-view=transactions]')); setTimeout(() => { const el = document.getElementById('txnSearch'); if (el) { el.value = t.reference||''; el.dispatchEvent(new Event('input')); } }, 200); }
+     }));
++    if (transactions.length) groups.push({ label: 'Transactions', items: transactions });
+ 
+-    if (!results.length) {
+-      dropdown.innerHTML = '<div style="padding:20px;text-align:center;color:#888;font-size:0.82rem">No results for "' + q + '"</div>';
+-      dropdown.style.display = 'block';
++    flatResults = groups.flatMap(group => group.items);
++    if (!flatResults.length) {
++      renderHint(`No matches for <strong>${_esc(q)}</strong>. Try an investor email, pool name or transaction reference.`);
+       return;
+     }
+ 
+-    dropdown.innerHTML = results.map((r, idx) => `
+-      <div class="gs-item" data-idx="${idx}" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(0,0,0,0.05)">
+-        <div style="width:30px;height:30px;border-radius:8px;background:${r.color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+-          <i class="fa-solid ${r.icon}" style="color:${r.color};font-size:0.8rem"></i>
+-        </div>
+-        <div>
+-          <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${r.title}</div>
+-          <div style="font-size:0.72rem;color:#888">${r.sub}</div>
+-        </div>
++    let idx = 0;
++    dropdown.innerHTML = `
++      <div style="padding:10px 14px;border-bottom:1px solid rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fbfbfc;position:sticky;top:0;z-index:1">
++        <span style="font-size:0.74rem;font-weight:800;color:#334155;letter-spacing:0.02em">${flatResults.length} result${flatResults.length === 1 ? '' : 's'}</span>
++        <span style="font-size:0.7rem;color:#94a3b8">↑ ↓ move · Enter open · Esc close</span>
+       </div>
+-    `).join('');
++      ${groups.map(group => {
++        const html = group.items.map(item => {
++          const current = idx++;
++          return `
++            <div class="gs-item" data-idx="${current}" tabindex="0" role="option" aria-selected="false" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(0,0,0,0.05)">
++              <div style="width:30px;height:30px;border-radius:8px;background:${item.color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
++                <i class="fa-solid ${item.icon}" style="color:${item.color};font-size:0.8rem"></i>
++              </div>
++              <div style="min-width:0">
++                <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${item.title}</div>
++                <div style="font-size:0.72rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.sub}</div>
++              </div>
++            </div>`;
++        }).join('');
++        return `<div><div style="padding:8px 16px 6px;font-size:0.68rem;font-weight:800;letter-spacing:0.08em;color:#94a3b8;text-transform:uppercase;background:#fff">${group.label}</div>${html}</div>`;
++      }).join('')}`;
+ 
+     dropdown.querySelectorAll('.gs-item').forEach((el, idx) => {
+-      el.addEventListener('mouseenter', () => el.style.background = '#fafafa');
+-      el.addEventListener('mouseleave', () => el.style.background = '');
+-      el.addEventListener('click', () => results[idx].action());
++      el.addEventListener('mouseenter', () => highlight(idx));
++      el.addEventListener('mouseleave', () => { if (activeIndex === idx) highlight(idx); else el.style.background = ''; });
++      el.addEventListener('click', () => flatResults[idx].action());
++      el.addEventListener('keydown', e => { if (e.key === 'Enter') flatResults[idx].action(); });
+     });
+ 
+     dropdown.style.display = 'block';
+-  }, 200));
++    highlight(0);
++  };
++
++  input.addEventListener('focus', () => {
++    if (input.value.trim()) runSearch();
++    else renderHint('Type at least 2 characters to search investors, pools and transactions.');
++  });
++  input.addEventListener('input', Utils.debounce(runSearch, 120));
++  input.addEventListener('keydown', e => {
++    if (dropdown.style.display === 'none') return;
++    if (e.key === 'Escape') { close(); input.blur(); return; }
++    if (!flatResults.length) return;
++    if (e.key === 'ArrowDown') {
++      e.preventDefault();
++      highlight((activeIndex + 1) % flatResults.length);
++    } else if (e.key === 'ArrowUp') {
++      e.preventDefault();
++      highlight((activeIndex - 1 + flatResults.length) % flatResults.length);
++    } else if (e.key === 'Enter' && activeIndex >= 0) {
++      e.preventDefault();
++      flatResults[activeIndex].action();
++    }
++  });
+ 
+   document.addEventListener('click', e => {
+-    if (!input.parentElement.contains(e.target)) dropdown.style.display = 'none';
++    if (!input.parentElement.contains(e.target)) close();
+   });
+ }
+ 
+@@ -4126,27 +4655,33 @@ async function bulkApproveKyc() {
+ 
+ async function bulkRejectKyc() {
+   if (!_kycSelected.size) return;
+-  const reason = prompt(`Rejection reason for ${_kycSelected.size} document(s):`);
+-  if (reason === null) return;
+   const ids = [..._kycSelected];
+   const total = ids.length;
+   const approveBtn = document.querySelector('[onclick="bulkApproveKyc()"]');
+   const rejectBtn  = document.querySelector('[onclick="bulkRejectKyc()"]');
+-  if (approveBtn) approveBtn.disabled = true;
+-  if (rejectBtn)  rejectBtn.disabled  = true;
+-  try {
+-    for (let i = 0; i < ids.length; i++) {
+-      await API.kyc.update(ids[i], { status: 'rejected', rejection_reason: reason, reviewed_by: 'Admin', reviewed_date: new Date().toISOString() });
+-      if ((i + 1) % 5 === 0) Toast.info(`Processing ${i + 1}/${total}...`);
++  openActionReasonModal({
++    title: `Reject ${total} KYC document${total !== 1 ? 's' : ''}`,
++    intro: 'Use one clear reason that all selected investors can act on. If the reasons differ, reject them individually instead.',
++    placeholder: 'Example: The uploaded document is blurry and key details are unreadable. Please upload a clearer copy with all corners visible.',
++    confirmLabel: 'Reject selected',
++    onSubmit: async (reason) => {
++      if (approveBtn) approveBtn.disabled = true;
++      if (rejectBtn) rejectBtn.disabled  = true;
++      try {
++        for (let i = 0; i < ids.length; i++) {
++          await API.kyc.update(ids[i], { status: 'rejected', rejection_reason: reason, reviewed_by: 'Admin', reviewed_date: new Date().toISOString() });
++          if ((i + 1) % 5 === 0) Toast.info(`Processing ${i + 1}/${total}...`);
++        }
++        _kycSelected.clear();
++        Toast.success(`${ids.length} document(s) rejected`);
++        await loadKYC();
++      } catch (e) { Toast.error('Bulk reject failed'); }
++      finally {
++        if (approveBtn) approveBtn.disabled = false;
++        if (rejectBtn)  rejectBtn.disabled  = false;
++      }
+     }
+-    _kycSelected.clear();
+-    Toast.success(`${ids.length} document(s) rejected`);
+-    await loadKYC();
+-  } catch (e) { Toast.error('Bulk reject failed'); }
+-  finally {
+-    if (approveBtn) approveBtn.disabled = false;
+-    if (rejectBtn)  rejectBtn.disabled  = false;
+-  }
++  });
+ }
+ 
+ /* ═══════════════════════════════════════════════
