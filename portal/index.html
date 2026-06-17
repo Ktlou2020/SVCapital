@@ -230,7 +230,7 @@
             <div class="welcome-name" id="welcomeName">Loading...</div>
             <div class="welcome-chips">
               <span class="welcome-chip welcome-chip--green" id="wchipFica" style="display:none">
-                <i class="fa-solid fa-shield-halved"></i> FICA Verified
+                <i class="fa-solid fa-shield-halved"></i> FICA/KYC Verified
               </span>
               <span class="welcome-chip welcome-chip--teal" id="wchipId">
                 <i class="fa-solid fa-id-card"></i> <span id="wchipIdText">—</span>
@@ -332,7 +332,7 @@
               </div>
               <div style="overflow-x:auto">
                 <table class="data-table">
-                  <thead><tr><th>Pool</th><th>Product</th><th>Invested</th><th>Exp. Return</th><th>Days Left</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Pool</th><th>Product</th><th>Invested Amount</th><th>Start Date</th><th>Maturity Date</th><th>Status</th></tr></thead>
                   <tbody id="overviewInvestmentsBody">
                     <tr><td colspan="6" class="text-center text-muted" style="padding:24px">Loading...</td></tr>
                   </tbody>
@@ -455,7 +455,7 @@
             <button class="tab-btn" onclick="filterMyInvestments('paid_out', this)">Paid Out</button>
             <button class="tab-btn" onclick="filterMyInvestments('matured', this)">Matured</button>
           </div>
-          <select class="form-select" id="myInvProductFilter" style="min-width:160px;height:34px;font-size:0.8rem" onchange="renderMyInvestmentCards()">
+          <select class="form-select" id="myInvProductFilter" style="min-width:180px;height:34px;font-size:0.8rem" onchange="renderMyInvestmentCards()">
             <option value="">All Products</option>
             <option value="cattle">Cattle</option>
             <option value="solar_7yr">Solar (7yr)</option>
@@ -464,6 +464,9 @@
             <option value="short_term">Short Term</option>
             <option value="delivery_bike">Delivery Bikes</option>
           </select>
+          <button class="btn btn--secondary btn--sm" style="margin-left:auto;white-space:nowrap" onclick="navigate('statement', document.querySelector('[data-view=statement]'))">
+            <i class="fa-solid fa-file-invoice"></i> Get Investment Statement
+          </button>
         </div>
 
         <div id="myInvestmentsGrid" class="grid-3">
@@ -890,7 +893,7 @@
                   <div class="info-row"><span class="info-row__label">Investor ID</span><span class="info-row__value text-gold" id="profSummaryId">—</span></div>
                   <div class="info-row"><span class="info-row__label">Member Since</span><span class="info-row__value" id="profSummaryJoined">—</span></div>
                   <div class="info-row"><span class="info-row__label">Account Status</span><span class="info-row__value" id="profSummaryStatus">—</span></div>
-                  <div class="info-row"><span class="info-row__label">FICA Status</span><span class="info-row__value" id="profSummaryFica">—</span></div>
+                  <div class="info-row"><span class="info-row__label">FICA/KYC Status</span><span class="info-row__value" id="profSummaryFica">—</span></div>
                   <div class="info-row"><span class="info-row__label">Referral Code</span><span class="info-row__value text-gold" id="profSummaryReferral">—</span></div>
                 </div>
               </div>
@@ -1066,7 +1069,7 @@
           <div class="referral-hero__icon"><i class="fa-solid fa-gift"></i></div>
           <div>
             <h2 class="referral-hero__title">Earn R250 for every friend you refer</h2>
-            <p class="referral-hero__sub">Share your unique referral code. When your friend signs up, gets FICA-approved, and makes their first investment, you both get rewarded.</p>
+            <p class="referral-hero__sub">Share your unique referral code. When your friend signs up, gets FICA/KYC-approved, and makes their first investment, you both get rewarded.</p>
           </div>
         </div>
 
@@ -1093,7 +1096,7 @@
               <div class="panel__body">
                 <div style="display:flex;flex-direction:column;gap:16px">
                   <div class="ref-step"><div class="ref-step__num">1</div><div><strong>Share your code</strong><p>Send your referral link or code to a friend via WhatsApp, email, or social media.</p></div></div>
-                  <div class="ref-step"><div class="ref-step__num">2</div><div><strong>Friend signs up</strong><p>They register on the SV Capital app and complete FICA verification.</p></div></div>
+                  <div class="ref-step"><div class="ref-step__num">2</div><div><strong>Friend signs up</strong><p>They register on the SV Capital app and complete FICA/KYC verification.</p></div></div>
                   <div class="ref-step"><div class="ref-step__num">3</div><div><strong>First investment</strong><p>Once they make their first investment, both of you receive R250 as a referral bonus.</p></div></div>
                   <div class="ref-step"><div class="ref-step__num">4</div><div><strong>Earn unlimited</strong><p>There's no limit. The more you refer, the more you earn.</p></div></div>
                 </div>
@@ -1107,7 +1110,7 @@
               <div class="panel__body">
                 <div class="info-list">
                   <div class="info-row"><span class="info-row__label">Total Referred</span><span class="info-row__value text-gold" id="refStatTotal">—</span></div>
-                  <div class="info-row"><span class="info-row__label">FICA Approved</span><span class="info-row__value" id="refStatApproved">—</span></div>
+                  <div class="info-row"><span class="info-row__label">FICA/KYC Approved</span><span class="info-row__value" id="refStatApproved">—</span></div>
                   <div class="info-row"><span class="info-row__label">Invested</span><span class="info-row__value" id="refStatInvested">—</span></div>
                   <div class="info-row"><span class="info-row__label">Bonuses Earned</span><span class="info-row__value text-green" id="refStatBonuses">—</span></div>
                 </div>
@@ -1119,7 +1122,7 @@
               <div style="overflow-x:auto">
                 <table class="data-table" style="font-size:0.8rem">
                   <thead><tr>
-                    <th>Name</th><th>FICA</th><th>Invested</th><th>Joined</th><th>Bonus Earned</th>
+                    <th>Name</th><th>FICA/KYC</th><th>Invested</th><th>Joined</th><th>Bonus Earned</th>
                   </tr></thead>
                   <tbody id="referredInvestorsBody">
                     <tr><td colspan="4" class="text-center text-muted" style="padding:16px">Loading…</td></tr>
@@ -1132,10 +1135,10 @@
               <div class="panel__header"><span class="panel__title">Terms & Conditions</span></div>
               <div class="panel__body" style="font-size:0.75rem;color:#6b7280;line-height:1.7">
                 <ul style="list-style:disc;padding-left:16px;display:flex;flex-direction:column;gap:6px">
-                  <li>Referral bonus paid when referred investor completes FICA and makes first investment.</li>
+                  <li>Referral bonus paid when referred investor completes FICA/KYC and makes first investment.</li>
                   <li>Both referrer and referred investor receive R250 each.</li>
                   <li>Bonus is credited to your SV Capital wallet.</li>
-                  <li>Referrer must be an active, FICA-approved investor.</li>
+                  <li>Referrer must be an active, FICA/KYC-approved investor.</li>
                   <li>Self-referrals are not permitted.</li>
                   <li>SV Capital reserves the right to modify the programme at any time.</li>
                 </ul>
