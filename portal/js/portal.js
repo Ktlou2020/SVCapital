@@ -3196,14 +3196,14 @@ function renderMarketplace() {
         </div>
 
         <div class="market-pool-stats">
-          <div class="mps"><span class="mps__label"><i class="fa-solid fa-users" style="font-size:0.65rem"></i> Investors</span><span class="mps__value">${pool.investor_count}</span></div>
+          <div class="mps"><span class="mps__label"><i class="fa-solid fa-users" style="font-size:0.65rem"></i> Investors</span><span class="mps__value">${pool.live_investor_count ?? pool.investor_count ?? 0}</span></div>
           <div class="mps"><span class="mps__label"><i class="fa-solid fa-clock" style="font-size:0.65rem"></i> Closes in</span><span class="mps__value" style="${urgency?'color:var(--gold)':''}">${days !== null ? days + 'd' : '—'}</span></div>
-          <div class="mps"><span class="mps__label"><i class="fa-solid fa-building-columns" style="font-size:0.65rem"></i> Partner</span><span class="mps__value" style="font-size:0.72rem">${pool.partner_name}</span></div>
+          <div class="mps"><span class="mps__label"><i class="fa-solid fa-building-columns" style="font-size:0.65rem"></i> Partner</span><span class="mps__value" style="font-size:0.72rem">${pool.partner_name || '—'}</span></div>
         </div>
 
         <div>
           <div class="pool-card__progress-label">
-            <span>${Utils.rand(pool.raised_amount)} raised</span>
+            <span>${Utils.rand(pool.live_raised ?? pool.raised_amount ?? 0)} raised</span>
             <span>${pct}% funded</span>
           </div>
           <div class="progress-bar"><div class="progress-fill${pool.product_type.includes('solar') ? ' progress-fill--green' : pool.product_type === 'short_term' ? ' progress-fill--blue' : ''}" style="width:${pct}%"></div></div>
@@ -6839,7 +6839,10 @@ function openCalcModal() {
   if (amtEl) amtEl.value = '50000';
   if (sldEl) sldEl.value = '50000';
   const termEl = document.getElementById('calcTerm');
-  if (termEl) termEl.value = '12';
+  if (termEl) {
+    termEl.innerHTML = '<option value="6">6 months</option><option value="12" selected>12 months</option><option value="18">18 months</option><option value="24">24 months</option><option value="36">36 months</option>';
+    termEl.value = '12';
+  }
   const rateEl = document.getElementById('calcRate');
   if (rateEl) rateEl.value = '14';
   const ctaBar = document.getElementById('calcCTABar');
@@ -6865,6 +6868,11 @@ function calcLoadPool() {
   const opt = sel?.options[sel.selectedIndex];
   if (!opt?.value) {
     _calcPoolId = null;
+    const termEl2 = document.getElementById('calcTerm');
+    if (termEl2) {
+      termEl2.innerHTML = '<option value="6">6 months</option><option value="12" selected>12 months</option><option value="18">18 months</option><option value="24">24 months</option><option value="36">36 months</option>';
+      termEl2.value = '12';
+    }
     const ctaBar = document.getElementById('calcCTABar');
     if (ctaBar) ctaBar.style.display = 'none';
     return;
@@ -6873,12 +6881,10 @@ function calcLoadPool() {
   const rateEl = document.getElementById('calcRate');
   const termEl = document.getElementById('calcTerm');
   if (rateEl) rateEl.value = Math.round((parseFloat(opt.dataset.rate || 0.14) * 100) * 10) / 10;
-  // Set term select to closest available option
+  // Restrict term dropdown to this pool's fixed term only
   if (termEl) {
     const poolTerm = parseInt(opt.dataset.term || 12);
-    const opts = [...termEl.options];
-    let closest = opts.reduce((prev, cur) => Math.abs(parseInt(cur.value) - poolTerm) < Math.abs(parseInt(prev.value) - poolTerm) ? cur : prev);
-    if (closest) closest.selected = true;
+    termEl.innerHTML = `<option value="${poolTerm}" selected>${poolTerm} months</option>`;
   }
   const ctaBar = document.getElementById('calcCTABar');
   if (ctaBar) ctaBar.style.display = 'block';
