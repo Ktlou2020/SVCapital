@@ -546,6 +546,7 @@ async function loadDashboard() {
     try {
       const tktRes = await API.tickets.list({ limit: 50 });
       tickets = tktRes.data || [];
+      STATE.tickets = tickets;
       openTickets = tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
       const tktBadge = document.getElementById('ticketBadge');
       if (tktBadge) tktBadge.textContent = openTickets;
@@ -679,13 +680,21 @@ function renderPendingActions() {
   const actions = [];
 
   const pendingFica = STATE.investors.filter(i => i.status === 'pending_fica' || i.fica_status === 'submitted').length;
-  if (pendingFica) actions.push({ icon: 'fa-id-card', color: 'var(--orange)', text: `${pendingFica} FICA review(s) pending`, view: 'kyc' });
+  if (pendingFica) actions.push({ icon: 'fa-id-card', color: 'var(--orange)', text: `${pendingFica} FICA review(s) pending`, sub: 'Review identity documents before investors can fund or invest.', view: 'kyc', cta: 'Open KYC', priority: 1 });
+
+  const pendingWithdrawals = STATE.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
+  if (pendingWithdrawals) actions.push({ icon: 'fa-arrow-up-from-bracket', color: '#ef4444', text: `${pendingWithdrawals} withdrawal request(s) waiting`, sub: 'Approve or reject payouts to keep cash movement on time.', view: 'withdrawals', cta: 'Review withdrawals', priority: 2 });
+
+  const openSupport = (STATE.tickets || []).filter(t => t.status === 'open' || t.status === 'in_progress').length;
+  if (openSupport) actions.push({ icon: 'fa-headset', color: 'var(--blue)', text: `${openSupport} support ticket(s) need replies`, sub: 'Resolve investor questions before they become complaints or churn risk.', view: 'support', cta: 'Open support', priority: 3 });
 
   const noInstruction = STATE.investments.filter(i => i.status === 'matured' && i.maturity_instruction === 'pending').length;
-  if (noInstruction) actions.push({ icon: 'fa-hourglass-end', color: 'var(--red)', text: `${noInstruction} maturity instructions missing`, view: 'maturity' });
+  if (noInstruction) actions.push({ icon: 'fa-hourglass-end', color: 'var(--red)', text: `${noInstruction} maturity instruction(s) missing`, sub: 'Investors are waiting to reinvest or pay out matured capital.', view: 'maturity', cta: 'Review maturities', priority: 4 });
 
-  const openTickets = STATE.transactions.filter(t => t.status === 'pending').length;
-  if (openTickets) actions.push({ icon: 'fa-arrows-rotate', color: 'var(--blue)', text: `${openTickets} pending transaction(s)`, view: 'transactions' });
+  const pendingTransactions = STATE.transactions.filter(t => t.status === 'pending' && t.type !== 'withdrawal').length;
+  if (pendingTransactions) actions.push({ icon: 'fa-arrows-rotate', color: 'var(--green)', text: `${pendingTransactions} transaction(s) pending`, sub: 'Clear deposits, returns and reconciliations to keep reporting current.', view: 'transactions', cta: 'Open transactions', priority: 5 });
+
+  actions.sort((a, b) => a.priority - b.priority);
 
   if (!actions.length) {
     el.innerHTML = '<div class="empty-state" style="padding:16px"><i class="fa-solid fa-check-circle" style="color:var(--green)"></i><p>All clear! No pending actions.</p></div>';
@@ -693,12 +702,18 @@ function renderPendingActions() {
   }
 
   el.innerHTML = actions.map(a => `
-    <div class="flex-center gap-8" style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="navigate('${a.view}', document.querySelector('[data-view=${a.view}]'))">
-      <i class="fa-solid ${a.icon}" style="color:${a.color};width:16px;text-align:center"></i>
-      <span style="font-size:0.8rem;color:var(--text)">${a.text}</span>
-      <i class="fa-solid fa-arrow-right" style="margin-left:auto;color:var(--text-dim);font-size:0.7rem"></i>
-    </div>
-  `).join('');
+    <button type="button" style="width:100%;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:#fff;margin-bottom:10px;cursor:pointer;transition:transform .15s ease, box-shadow .15s ease" onclick="navigate('${a.view}', document.querySelector('[data-view=${a.view}]'))" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.08)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <div style="width:34px;height:34px;border-radius:10px;background:${a.color}18;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="fa-solid ${a.icon}" style="color:${a.color};font-size:0.8rem"></i>
+        </div>
+        <div style="min-width:0;flex:1">
+          <div style="font-size:0.8rem;font-weight:800;color:var(--text);line-height:1.35">${a.text}</div>
+          <div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px;line-height:1.45">${a.sub}</div>
+          <div style="margin-top:8px;font-size:0.72rem;font-weight:800;color:${a.color}">${a.cta} →</div>
+        </div>
+      </div>
+    </button>`).join('');
 }
 
 function renderActivityFeed() {
@@ -3880,78 +3895,137 @@ async function saveKycUpload() {
    ═══════════════════════════════════════════════ */
 function setupGlobalSearch() {
   const input = document.getElementById('globalSearch');
-  if (!input) return;
+  if (!input || input.dataset.bound === '1') return;
+  input.dataset.bound = '1';
 
-  // Create dropdown
   const dropdown = document.createElement('div');
   dropdown.id = 'globalSearchDropdown';
-  dropdown.style.cssText = 'display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid rgba(0,0,0,0.1);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.15);z-index:9999;max-height:400px;overflow-y:auto';
+  dropdown.style.cssText = 'display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid rgba(0,0,0,0.1);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.15);z-index:9999;max-height:420px;overflow-y:auto';
   input.parentElement.style.position = 'relative';
   input.parentElement.appendChild(dropdown);
 
-  input.addEventListener('input', Utils.debounce(() => {
+  let flatResults = [];
+  let activeIndex = -1;
+
+  const close = () => {
+    dropdown.style.display = 'none';
+    activeIndex = -1;
+  };
+  const highlight = idx => {
+    const items = [...dropdown.querySelectorAll('.gs-item')];
+    items.forEach((el, itemIdx) => {
+      el.style.background = itemIdx === idx ? '#f7f8fa' : '';
+      el.setAttribute('aria-selected', itemIdx === idx ? 'true' : 'false');
+    });
+    activeIndex = idx;
+    const active = items[idx];
+    if (active) active.scrollIntoView({ block: 'nearest' });
+  };
+  const renderHint = msg => {
+    dropdown.innerHTML = `<div style="padding:16px 18px;color:#64748b;font-size:0.8rem;line-height:1.5">${msg}</div>`;
+    dropdown.style.display = 'block';
+  };
+  const runSearch = () => {
     const q = input.value.trim().toLowerCase();
-    if (!q || q.length < 2) { dropdown.style.display = 'none'; return; }
-
-    const results = [];
-
-    // Search investors
-    STATE.investors.filter(i => {
-      const name = `${i.first_name||''} ${i.last_name||''}`.toLowerCase();
-      return name.includes(q) || (i.email||'').toLowerCase().includes(q)
-          || (i.id||'').toLowerCase().includes(q) || (i.phone||'').includes(q);
-    }).slice(0, 5).forEach(i => results.push({
-      icon: 'fa-user', color: '#D4AF37',
-      title: `${i.first_name} ${i.last_name}`,
-      sub: `${i.id} · ${i.email}`,
-      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('investors', document.querySelector('[data-view=investors]')); setTimeout(() => { document.getElementById('investorSearch').value = `${i.first_name} ${i.last_name}`; document.getElementById('investorSearch').dispatchEvent(new Event('input')); }, 200); }
-    }));
-
-    // Search pools
-    STATE.pools.filter(p => (p.name||'').toLowerCase().includes(q) || (p.product_type||'').includes(q)).slice(0, 3).forEach(p => results.push({
-      icon: 'fa-layer-group', color: '#3b82f6',
-      title: p.name,
-      sub: `Pool · ${p.status} · ${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)} raised`,
-      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('pools', document.querySelector('[data-view=pools]')); setTimeout(() => viewPoolInvestors(p.id), 300); }
-    }));
-
-    // Search transactions
-    STATE.transactions.filter(t => (t.reference||'').toLowerCase().includes(q) || (t.investor_id||'').toLowerCase().includes(q)).slice(0, 3).forEach(t => results.push({
-      icon: 'fa-arrows-rotate', color: '#22c55e',
-      title: `${t.type} — ${Utils.rand(t.amount)}`,
-      sub: `Ref: ${t.reference||'—'} · ${Utils.date(t.transaction_date||t.created_at)}`,
-      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('transactions', document.querySelector('[data-view=transactions]')); setTimeout(() => { document.getElementById('txnSearch').value = t.reference||''; document.getElementById('txnSearch').dispatchEvent(new Event('input')); }, 200); }
-    }));
-
-    if (!results.length) {
-      dropdown.innerHTML = '<div style="padding:20px;text-align:center;color:#888;font-size:0.82rem">No results for "' + q + '"</div>';
-      dropdown.style.display = 'block';
+    if (!q) { close(); return; }
+    if (q.length < 2) {
+      renderHint('Type at least 2 characters to search investors, pools and transactions. Use ↑ ↓ and Enter to move faster.');
+      flatResults = [];
       return;
     }
 
-    dropdown.innerHTML = results.map((r, idx) => `
-      <div class="gs-item" data-idx="${idx}" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(0,0,0,0.05)">
-        <div style="width:30px;height:30px;border-radius:8px;background:${r.color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <i class="fa-solid ${r.icon}" style="color:${r.color};font-size:0.8rem"></i>
-        </div>
-        <div>
-          <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${r.title}</div>
-          <div style="font-size:0.72rem;color:#888">${r.sub}</div>
-        </div>
+    const groups = [];
+    const investors = STATE.investors.filter(i => {
+      const name = `${i.first_name||''} ${i.last_name||''}`.toLowerCase();
+      return name.includes(q) || (i.email||'').toLowerCase().includes(q)
+          || (i.id||'').toLowerCase().includes(q) || (i.phone||'').includes(q);
+    }).slice(0, 5).map(i => ({
+      icon: 'fa-user', color: '#D4AF37',
+      title: `${i.first_name} ${i.last_name}`,
+      sub: `${i.id} · ${i.email}`,
+      action: () => { input.value = ''; close(); navigate('investors', document.querySelector('[data-view=investors]')); setTimeout(() => { const el = document.getElementById('investorSearch'); if (el) { el.value = `${i.first_name} ${i.last_name}`; el.dispatchEvent(new Event('input')); } }, 200); }
+    }));
+    if (investors.length) groups.push({ label: 'Investors', items: investors });
+
+    const pools = STATE.pools.filter(p => (p.name||'').toLowerCase().includes(q) || (p.product_type||'').toLowerCase().includes(q)).slice(0, 4).map(p => ({
+      icon: 'fa-layer-group', color: '#3b82f6',
+      title: p.name,
+      sub: `Pool · ${p.status} · ${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)} raised`,
+      action: () => { input.value = ''; close(); navigate('pools', document.querySelector('[data-view=pools]')); setTimeout(() => viewPoolInvestors(p.id), 300); }
+    }));
+    if (pools.length) groups.push({ label: 'Pools', items: pools });
+
+    const transactions = STATE.transactions.filter(t => (t.reference||'').toLowerCase().includes(q) || (t.investor_id||'').toLowerCase().includes(q)).slice(0, 4).map(t => ({
+      icon: 'fa-arrows-rotate', color: '#22c55e',
+      title: `${t.type} — ${Utils.rand(t.amount)}`,
+      sub: `Ref: ${t.reference||'—'} · ${Utils.date(t.transaction_date||t.created_at)}`,
+      action: () => { input.value = ''; close(); navigate('transactions', document.querySelector('[data-view=transactions]')); setTimeout(() => { const el = document.getElementById('txnSearch'); if (el) { el.value = t.reference||''; el.dispatchEvent(new Event('input')); } }, 200); }
+    }));
+    if (transactions.length) groups.push({ label: 'Transactions', items: transactions });
+
+    flatResults = groups.flatMap(group => group.items);
+    if (!flatResults.length) {
+      renderHint(`No matches for <strong>${_esc(q)}</strong>. Try an investor email, pool name or transaction reference.`);
+      return;
+    }
+
+    let idx = 0;
+    dropdown.innerHTML = `
+      <div style="padding:10px 14px;border-bottom:1px solid rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fbfbfc;position:sticky;top:0;z-index:1">
+        <span style="font-size:0.74rem;font-weight:800;color:#334155;letter-spacing:0.02em">${flatResults.length} result${flatResults.length === 1 ? '' : 's'}</span>
+        <span style="font-size:0.7rem;color:#94a3b8">↑ ↓ move · Enter open · Esc close</span>
       </div>
-    `).join('');
+      ${groups.map(group => {
+        const html = group.items.map(item => {
+          const current = idx++;
+          return `
+            <div class="gs-item" data-idx="${current}" tabindex="0" role="option" aria-selected="false" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(0,0,0,0.05)">
+              <div style="width:30px;height:30px;border-radius:8px;background:${item.color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <i class="fa-solid ${item.icon}" style="color:${item.color};font-size:0.8rem"></i>
+              </div>
+              <div style="min-width:0">
+                <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${item.title}</div>
+                <div style="font-size:0.72rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.sub}</div>
+              </div>
+            </div>`;
+        }).join('');
+        return `<div><div style="padding:8px 16px 6px;font-size:0.68rem;font-weight:800;letter-spacing:0.08em;color:#94a3b8;text-transform:uppercase;background:#fff">${group.label}</div>${html}</div>`;
+      }).join('')}`;
 
     dropdown.querySelectorAll('.gs-item').forEach((el, idx) => {
-      el.addEventListener('mouseenter', () => el.style.background = '#fafafa');
-      el.addEventListener('mouseleave', () => el.style.background = '');
-      el.addEventListener('click', () => results[idx].action());
+      el.addEventListener('mouseenter', () => highlight(idx));
+      el.addEventListener('mouseleave', () => { if (activeIndex === idx) highlight(idx); else el.style.background = ''; });
+      el.addEventListener('click', () => flatResults[idx].action());
+      el.addEventListener('keydown', e => { if (e.key === 'Enter') flatResults[idx].action(); });
     });
 
     dropdown.style.display = 'block';
-  }, 200));
+    highlight(0);
+  };
+
+  input.addEventListener('focus', () => {
+    if (input.value.trim()) runSearch();
+    else renderHint('Type at least 2 characters to search investors, pools and transactions.');
+  });
+  input.addEventListener('input', Utils.debounce(runSearch, 120));
+  input.addEventListener('keydown', e => {
+    if (dropdown.style.display === 'none') return;
+    if (e.key === 'Escape') { close(); input.blur(); return; }
+    if (!flatResults.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      highlight((activeIndex + 1) % flatResults.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      highlight((activeIndex - 1 + flatResults.length) % flatResults.length);
+    } else if (e.key === 'Enter' && activeIndex >= 0) {
+      e.preventDefault();
+      flatResults[activeIndex].action();
+    }
+  });
 
   document.addEventListener('click', e => {
-    if (!input.parentElement.contains(e.target)) dropdown.style.display = 'none';
+    if (!input.parentElement.contains(e.target)) close();
   });
 }
 

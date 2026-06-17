@@ -250,8 +250,7 @@ const MODAL_DATA = {
    ═══════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
   initNavbar();
-  initHeroChart();
-  initCalculator();
+  initDeferredVisuals();
   initFAQ();
   initScrollAnimations();
   initMobileNav();
@@ -283,24 +282,82 @@ function initNavbar() {
 function initMobileNav() {
   const toggle = document.getElementById('mobileToggle');
   const navLinks = document.getElementById('navLinks');
+  const overlay = document.getElementById('navOverlay');
 
   if (!toggle || !navLinks) return;
 
+  const closeMenu = () => {
+    navLinks.classList.remove('open');
+    document.body.classList.remove('no-scroll');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', 'Open menu');
+  };
+
+  const openMenu = () => {
+    navLinks.classList.add('open');
+    document.body.classList.add('no-scroll');
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.setAttribute('aria-label', 'Close menu');
+    const firstLink = navLinks.querySelector('a');
+    setTimeout(() => firstLink?.focus(), 30);
+  };
+
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('aria-controls', 'navLinks');
+
   toggle.addEventListener('click', () => {
-    navLinks.classList.toggle('open');
+    if (navLinks.classList.contains('open')) closeMenu();
+    else openMenu();
   });
 
-  // Close on link click
   navLinks.querySelectorAll('a').forEach(link => {
-    link.addEventListener('click', () => navLinks.classList.remove('open'));
+    link.addEventListener('click', closeMenu);
   });
 
-  // Close on outside click
-  document.addEventListener('click', (e) => {
-    if (!toggle.contains(e.target) && !navLinks.contains(e.target)) {
-      navLinks.classList.remove('open');
-    }
+  overlay?.addEventListener('click', closeMenu);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && navLinks.classList.contains('open')) closeMenu();
   });
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) closeMenu();
+  });
+}
+
+function initDeferredVisuals() {
+  const runHeroChart = () => {
+    if (document.getElementById('heroChart')) initHeroChart();
+  };
+
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(runHeroChart, { timeout: 1200 });
+  } else {
+    setTimeout(runHeroChart, 120);
+  }
+
+  const calcSection = document.getElementById('calculator');
+  let calculatorReady = false;
+  const runCalculator = () => {
+    if (calculatorReady) return;
+    calculatorReady = true;
+    initCalculator();
+  };
+
+  if (calcSection && 'IntersectionObserver' in window) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          runCalculator();
+          observer.disconnect();
+        }
+      });
+    }, { rootMargin: '160px 0px' });
+
+    observer.observe(calcSection);
+  } else {
+    runCalculator();
+  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -308,7 +365,7 @@ function initMobileNav() {
    ═══════════════════════════════════════════════ */
 function initHeroChart() {
   const canvas = document.getElementById('heroChart');
-  if (!canvas) return;
+  if (!canvas || typeof Chart === 'undefined') return;
 
   // Generate a nice upward-trending portfolio line
   const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -451,7 +508,7 @@ function updateCalculator() {
 
 function updateCalcChart(amount, totalReturns, product) {
   const canvas = document.getElementById('calcChart');
-  if (!canvas) return;
+  if (!canvas || typeof Chart === 'undefined') return;
 
   const years = Math.max(1, Math.round(product.termYears));
   const labels = [];
