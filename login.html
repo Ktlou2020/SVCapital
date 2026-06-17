@@ -709,7 +709,12 @@
       <!-- Footer -->
       <div class="login-footer">
         <a href="index.html">www.svcapital.co.za</a>
-        <div class="login-footer__copy">© 2025 SmartVest Financial Services (Pty) Ltd. All rights reserved.</div>
+        <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:6px">
+          <a href="terms.html" target="_blank" rel="noopener">Terms of Use</a>
+          <a href="popia.html" target="_blank" rel="noopener">Privacy Policy</a>
+          <a href="paia.html" target="_blank" rel="noopener">PAIA Manual</a>
+        </div>
+        <div class="login-footer__copy">© <span class="yr"></span> SmartVest Financial Services (Pty) Ltd. All rights reserved.</div>
       </div>
 
     </div>
@@ -717,6 +722,7 @@
 
 </div>
 
+<script>document.querySelectorAll('.yr').forEach(function(e){e.textContent=new Date().getFullYear();});</script>
 <script src="js/api.js?v=2"></script>
 <script>
   'use strict';

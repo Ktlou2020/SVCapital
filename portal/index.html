@@ -1533,7 +1533,7 @@
       </div><!-- end view-subaccounts -->
 
       <!-- ══ SURVEY MODAL ══ -->
-      <div class="modal-overlay" id="surveyModal" style="display:none" onclick="if(event.target===this)closeSurveyModal()">
+      <div class="modal-overlay" id="surveyModal" onclick="if(event.target===this)closeSurveyModal()">
         <div class="modal-box survey-modal-box" id="surveyModalBox">
           <button class="modal-close" aria-label="Close" onclick="closeSurveyModal()"><i class="fa-solid fa-xmark"></i></button>
           <div id="surveyModalContent"></div>
@@ -1541,7 +1541,7 @@
       </div>
 
       <!-- ══ LEVEL-UP CELEBRATION MODAL ══ -->
-      <div class="modal-overlay" id="levelUpModal" style="display:none">
+      <div class="modal-overlay" id="levelUpModal">
         <div class="modal-box levelup-modal-box" id="levelUpBox">
           <div class="levelup-confetti" id="levelupConfetti"></div>
           <div class="levelup-icon" id="levelupIcon"><i class="fa-solid fa-trophy"></i></div>

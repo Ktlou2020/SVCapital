@@ -4817,11 +4817,11 @@ function openSurveyModal(questId) {
       </button>
     </div>`;
 
-  document.getElementById('surveyModal').style.display = 'flex';
+  Modal.open('surveyModal');
 }
 
 function closeSurveyModal() {
-  document.getElementById('surveyModal').style.display = 'none';
+  Modal.close('surveyModal');
 }
 
 async function submitSurvey(questId) {
@@ -4892,12 +4892,12 @@ function _showLevelUpModal(result) {
     rewardEl.style.display = 'none';
   }
 
-  document.getElementById('levelUpModal').style.display = 'flex';
+  Modal.open('levelUpModal');
   _launchConfettiParticles();
 }
 
 function closeLevelUpModal() {
-  document.getElementById('levelUpModal').style.display = 'none';
+  Modal.close('levelUpModal');
 }
 
 function _launchConfettiParticles() {
