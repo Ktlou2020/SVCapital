@@ -1,0 +1,579 @@
+--- a/portal/js/portal.js
++++ b/portal/js/portal.js
+@@ -393,6 +393,306 @@
+     </div>`;
+ }
+ 
++
++function _isInvestorFicaApproved(inv = PORTAL.investor) {
++  const state = String(inv?.fica_status || inv?.kyc_status || inv?.status || '').toLowerCase();
++  return ['approved', 'verified', 'active'].includes(state);
++}
++
++function _getOpenMarketplacePools() {
++  return (PORTAL.pools || []).filter(p => p && (p.status === 'open' || p.status === 'waitlist'));
++}
++
++function _rankMarketPools(pools, walletBalance = parseFloat(PORTAL.investor?.wallet_balance || 0)) {
++  return [...(pools || [])].sort((a, b) => {
++    const aOpen = a.status === 'open' ? 1 : 0;
++    const bOpen = b.status === 'open' ? 1 : 0;
++    if (aOpen !== bOpen) return bOpen - aOpen;
++    const aMin = parseFloat(a.min_investment) || 0;
++    const bMin = parseFloat(b.min_investment) || 0;
++    const aAffordable = walletBalance >= aMin ? 1 : 0;
++    const bAffordable = walletBalance >= bMin ? 1 : 0;
++    if (aAffordable !== bAffordable) return bAffordable - aAffordable;
++    const aGap = Math.max(0, aMin - walletBalance);
++    const bGap = Math.max(0, bMin - walletBalance);
++    if (aGap !== bGap) return aGap - bGap;
++    const aDays = Utils.daysRemaining(a.end_date);
++    const bDays = Utils.daysRemaining(b.end_date);
++    const aUrgency = aDays === null ? 9999 : aDays;
++    const bUrgency = bDays === null ? 9999 : bDays;
++    if (aUrgency !== bUrgency) return aUrgency - bUrgency;
++    const aRate = parseFloat(a.annual_rate) || 0;
++    const bRate = parseFloat(b.annual_rate) || 0;
++    return bRate - aRate;
++  });
++}
++
++function _ensureWalletReadinessPanel() {
++  let panel = document.getElementById('walletReadinessPanel');
++  if (panel) return panel;
++  const activityPanel = document.getElementById('walletActivity')?.closest('.panel');
++  if (!activityPanel || !activityPanel.parentNode) return null;
++  panel = document.createElement('div');
++  panel.id = 'walletReadinessPanel';
++  panel.className = 'panel mb-16';
++  activityPanel.parentNode.insertBefore(panel, activityPanel);
++  return panel;
++}
++
++function renderWalletReadinessPanel() {
++  const panel = _ensureWalletReadinessPanel();
++  const inv = PORTAL.investor;
++  if (!panel || !inv) return;
++  const wallet = parseFloat(inv.wallet_balance) || 0;
++  const pools = _rankMarketPools(_getOpenMarketplacePools().filter(p => p.status === 'open'), wallet);
++  const affordable = pools.filter(p => wallet >= (parseFloat(p.min_investment) || 0));
++  const cheapest = [...pools].sort((a, b) => (parseFloat(a.min_investment) || 0) - (parseFloat(b.min_investment) || 0))[0] || null;
++  const pendingDeposit = (PORTAL.transactions || []).find(t => t.type === 'deposit' && t.status === 'pending');
++  const pendingWithdrawal = (PORTAL.transactions || []).find(t => t.type === 'withdrawal' && t.status === 'pending');
++  const ficaApproved = _isInvestorFicaApproved(inv);
++  const bankApproved = !!inv.bank_account_number && inv.bank_account_status === 'approved';
++
++  let headline = 'Your wallet is the fastest path to your next investment.';
++  let subcopy = 'Choose the next action that will get you to a completed investment quickest.';
++  let ctaLabel = 'Top up wallet';
++  let ctaAction = "openTopUpModal()";
++  let accent = '#FF9B0C';
++
++  if (!ficaApproved) {
++    headline = 'Complete FICA first to unlock investing.';
++    subcopy = 'Once verified, you can fund your wallet and invest without hitting a dead-end later.';
++    ctaLabel = 'Complete FICA';
++    ctaAction = "navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()";
++    accent = '#2F8C9B';
++  } else if (affordable.length) {
++    const best = affordable[0];
++    headline = `You can already invest in ${affordable.length} open pool${affordable.length === 1 ? '' : 's'}.`;
++    subcopy = best ? `${best.name} is the closest match for your current wallet balance.` : subcopy;
++    ctaLabel = 'Invest now';
++    ctaAction = "navigate('marketplace', document.querySelector('[data-view=marketplace]'))";
++    accent = '#22C55E';
++  } else if (cheapest) {
++    const gap = Math.max(0, (parseFloat(cheapest.min_investment) || 0) - wallet);
++    headline = `Top up ${Utils.rand(gap)} to reach the lowest open minimum.`;
++    subcopy = `${cheapest.name} is currently the most reachable pool for your next step.`;
++    ctaLabel = 'Top up now';
++    ctaAction = "openTopUpModal()";
++    accent = '#FF9B0C';
++  }
++
++  panel.innerHTML = `
++    <div class="panel__header" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
++      <span class="panel__title"><i class="fa-solid fa-bolt" style="color:${accent}"></i> Wallet Readiness</span>
++      <span style="margin-left:auto;font-size:0.72rem;font-weight:700;color:${accent};background:${accent}14;padding:4px 10px;border-radius:999px;border:1px solid ${accent}2f">${ficaApproved ? 'Investment ready checks' : 'Verification blocking progress'}</span>
++    </div>
++    <div class="panel__body" style="display:flex;flex-direction:column;gap:14px">
++      <div style="border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(255,255,255,0.98),rgba(255,155,12,0.05))">
++        <div style="font-size:0.92rem;font-weight:800;color:#1a1a1a;line-height:1.35">${headline}</div>
++        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:5px;line-height:1.55">${subcopy}</div>
++        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
++          <button class="btn btn--primary btn--sm" onclick="${ctaAction}"><i class="fa-solid fa-arrow-right"></i> ${ctaLabel}</button>
++          <button class="btn btn--secondary btn--sm" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i> Statement</button>
++        </div>
++      </div>
++      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px">
++        <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
++          <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Wallet balance</div>
++          <div style="font-size:1.12rem;font-weight:900;color:#1a1a1a;margin-top:4px">${Utils.rand(wallet)}</div>
++          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${affordable.length ? `${affordable.length} pool${affordable.length === 1 ? '' : 's'} you can join now` : cheapest ? `${Utils.rand(Math.max(0, (parseFloat(cheapest.min_investment) || 0) - wallet))} short of the next minimum` : 'No open pools to compare right now'}</div>
++        </div>
++        <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
++          <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Verification</div>
++          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#2F8C9B'};margin-top:6px">${ficaApproved ? 'FICA approved' : 'FICA still needed'}</div>
++          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.'}</div>
++        </div>
++        <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
++          <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Money in motion</div>
++          <div style="font-size:0.88rem;font-weight:800;color:#1a1a1a;margin-top:6px">${pendingDeposit ? 'Deposit pending review' : pendingWithdrawal ? 'Withdrawal pending payout' : 'No pending money movement'}</div>
++          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${pendingDeposit ? `${Utils.rand(Math.abs(parseFloat(pendingDeposit.amount) || 0))} will reflect once admin review completes.` : pendingWithdrawal ? `${Utils.rand(Math.abs(parseFloat(pendingWithdrawal.amount) || 0))} is already in the payout queue.` : 'Your next top-up or withdrawal request will appear here.'}</div>
++        </div>
++      </div>
++    </div>`;
++}
++
++function _ensureMarketConversionPanel() {
++  let panel = document.getElementById('marketConversionPanel');
++  if (panel) return panel;
++  const grid = document.getElementById('marketplaceGrid');
++  if (!grid || !grid.parentNode) return null;
++  panel = document.createElement('div');
++  panel.id = 'marketConversionPanel';
++  panel.className = 'panel mb-16';
++  grid.parentNode.insertBefore(panel, grid);
++  return panel;
++}
++
++function renderMarketConversionPanel(pools) {
++  const panel = _ensureMarketConversionPanel();
++  if (!panel) return;
++  const inv = PORTAL.investor || {};
++  const wallet = parseFloat(inv.wallet_balance) || 0;
++  const ranked = _rankMarketPools((pools || []).filter(Boolean), wallet);
++  const openPools = ranked.filter(p => p.status === 'open');
++  const affordable = openPools.filter(p => wallet >= (parseFloat(p.min_investment) || 0));
++  const cheapest = openPools.slice().sort((a, b) => (parseFloat(a.min_investment) || 0) - (parseFloat(b.min_investment) || 0))[0] || null;
++  const ficaApproved = _isInvestorFicaApproved(inv);
++  const featured = ranked.slice(0, 3);
++
++  let title = 'Use this view to move from browsing to a funded decision.';
++  let sub = 'We surface the next-best pools first so you can complete the journey with fewer dead-ends.';
++  let action = "navigate('wallet', document.querySelector('[data-view=wallet]'))";
++  let actionLabel = 'Review wallet';
++  let accent = '#2F8C9B';
++
++  if (!ficaApproved) {
++    title = 'Your first investment is blocked by pending FICA.';
++    sub = 'Complete verification before funding more or choosing an amount so your first investment can go through cleanly.';
++    action = "navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()";
++    actionLabel = 'Complete FICA';
++    accent = '#2F8C9B';
++  } else if (affordable.length) {
++    title = `You can invest right now in ${affordable.length} open pool${affordable.length === 1 ? '' : 's'}.`;
++    sub = 'Recommended pools below are ranked by affordability, urgency, and expected return so you can act quickly.';
++    action = "openInvestModal('" + affordable[0].id + "')";
++    actionLabel = 'Open best-fit pool';
++    accent = '#22c55e';
++  } else if (cheapest) {
++    const gap = Math.max(0, (parseFloat(cheapest.min_investment) || 0) - wallet);
++    title = `Top up ${Utils.rand(gap)} to unlock your next eligible pool.`;
++    sub = `${cheapest.name} has the lowest reachable minimum among current opportunities.`;
++    action = "openTopUpModal()";
++    actionLabel = 'Top up wallet';
++    accent = '#FF9B0C';
++  } else if (!openPools.length) {
++    title = 'There are no open pools in this filter right now.';
++    sub = 'Use the waitlist options below or switch category to keep your momentum.';
++    action = "filterMarket('all', document.querySelector('#view-marketplace .tab-bar .tab-btn'))";
++    actionLabel = 'Show all pools';
++    accent = '#A855F7';
++  }
++
++  panel.innerHTML = `
++    <div class="panel__body" style="display:flex;flex-direction:column;gap:14px">
++      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap">
++        <div style="max-width:680px">
++          <div style="font-size:0.98rem;font-weight:900;color:#1a1a1a;line-height:1.35">${title}</div>
++          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:5px;line-height:1.6">${sub}</div>
++        </div>
++        <button class="btn btn--primary btn--sm" onclick="${action}" style="white-space:nowrap"><i class="fa-solid fa-arrow-right"></i> ${actionLabel}</button>
++      </div>
++      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
++        ${featured.length ? featured.map((pool, idx) => {
++          const min = parseFloat(pool.min_investment) || 0;
++          const days = Utils.daysRemaining(pool.end_date);
++          const affordableNow = wallet >= min;
++          return `<div style="padding:12px 14px;border-radius:12px;border:1px solid ${idx === 0 ? accent + '44' : 'rgba(0,0,0,0.07)'};background:${idx === 0 ? accent + '0d' : '#fff'}">
++            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
++              <span style="font-size:0.68rem;font-weight:800;color:${idx === 0 ? accent : '#6b7280'};background:${idx === 0 ? accent + '14' : 'rgba(107,114,128,0.1)'};padding:3px 8px;border-radius:999px;border:1px solid ${idx === 0 ? accent + '33' : 'rgba(107,114,128,0.15)'}">${idx === 0 ? 'Best next step' : pool.status === 'waitlist' ? 'Waitlist' : 'Worth comparing'}</span>
++            </div>
++            <div style="font-size:0.83rem;font-weight:800;color:#1a1a1a;line-height:1.35">${_esc(pool.name || 'Pool')}</div>
++            <div style="display:flex;justify-content:space-between;gap:8px;margin-top:10px;font-size:0.73rem;color:var(--text-muted)"><span>${Utils.pct(pool.annual_rate)} p.a.</span><span>${pool.term_months || '—'} months</span></div>
++            <div style="display:flex;justify-content:space-between;gap:8px;margin-top:4px;font-size:0.73rem;color:var(--text-muted)"><span>Minimum</span><span style="font-weight:800;color:${affordableNow ? '#22c55e' : '#1a1a1a'}">${Utils.rand(min)}</span></div>
++            <div style="display:flex;justify-content:space-between;gap:8px;margin-top:4px;font-size:0.73rem;color:var(--text-muted)"><span>Closes in</span><span>${days === null ? '—' : days + 'd'}</span></div>
++          </div>`;
++        }).join('') : `<div style="grid-column:1/-1;font-size:0.78rem;color:var(--text-muted);padding:12px 0">No pools available in this view right now.</div>`}
++      </div>
++    </div>`;
++}
++
++let _statementAssistMeta = null;
++
++function _statementTaxYearRange(year) {
++  const y = parseInt(year, 10) || new Date().getFullYear();
++  const from = new Date(y - 1, 2, 1);
++  const to = new Date(y, 1, 28);
++  return {
++    from: from.toISOString().split('T')[0],
++    to: to.toISOString().split('T')[0]
++  };
++}
++
++function applyStatementPreset(kind) {
++  const fromEl = document.getElementById('stmtFrom');
++  const toEl = document.getElementById('stmtTo');
++  if (!fromEl || !toEl) return;
++  const today = new Date();
++  let from = new Date(today);
++  let to = new Date(today);
++  if (kind === '30d') {
++    from.setDate(today.getDate() - 30);
++  } else if (kind === '90d') {
++    from.setDate(today.getDate() - 90);
++  } else if (kind === 'tax') {
++    const range = _statementTaxYearRange(document.getElementById('taxYearSelect')?.value || today.getFullYear());
++    fromEl.value = range.from;
++    toEl.value = range.to;
++    renderStatementAssistCard({ preset: kind });
++    return;
++  } else {
++    from = new Date('2020-01-01T00:00:00');
++  }
++  fromEl.value = from.toISOString().split('T')[0];
++  toEl.value = to.toISOString().split('T')[0];
++  renderStatementAssistCard({ preset: kind });
++}
++
++function _ensureStatementAssistCard() {
++  let card = document.getElementById('statementAssistCard');
++  if (card) return card;
++  const quick = document.getElementById('stmtQuickStats');
++  const sidebar = quick?.parentElement?.parentElement?.parentElement;
++  if (!sidebar) return null;
++  card = document.createElement('div');
++  card.id = 'statementAssistCard';
++  card.style.cssText = 'background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden';
++  sidebar.insertBefore(card, sidebar.children[1] || null);
++  return card;
++}
++
++function bindStatementAssist() {
++  if (document.body.dataset.statementAssistBound === '1') return;
++  document.body.dataset.statementAssistBound = '1';
++  ['stmtFrom','stmtTo','stmtIncPortfolio','stmtIncInvestments','stmtIncTransactions','stmtIncPerformance','taxYearSelect'].forEach(id => {
++    const el = document.getElementById(id);
++    if (!el) return;
++    el.addEventListener('change', () => renderStatementAssistCard({ trigger: id }));
++    if (el.tagName === 'INPUT' && el.type === 'date') el.addEventListener('input', () => renderStatementAssistCard({ trigger: id }));
++  });
++}
++
++function renderStatementAssistCard(meta = {}) {
++  const card = _ensureStatementAssistCard();
++  if (!card) return;
++  if (meta && Object.keys(meta).length) _statementAssistMeta = { ...(_statementAssistMeta || {}), ...meta };
++  const fromVal = document.getElementById('stmtFrom')?.value || '2020-01-01';
++  const toVal = document.getElementById('stmtTo')?.value || new Date().toISOString().split('T')[0];
++  const sections = [
++    document.getElementById('stmtIncPortfolio')?.checked && 'Portfolio',
++    document.getElementById('stmtIncInvestments')?.checked && 'Investments',
++    document.getElementById('stmtIncTransactions')?.checked && 'Transactions',
++    document.getElementById('stmtIncPerformance')?.checked && 'Performance'
++  ].filter(Boolean);
++  const taxYear = document.getElementById('taxYearSelect')?.value || new Date().getFullYear();
++  card.innerHTML = `
++    <div style="padding:14px 18px;border-bottom:1px solid rgba(0,0,0,0.07);background:#F7F8FA">
++      <span style="font-size:0.82rem;font-weight:800;color:#1a1a1a"><i class="fa-solid fa-wand-magic-sparkles" style="color:#FF9B0C;margin-right:6px"></i>Faster statement workflow</span>
++    </div>
++    <div style="padding:18px;display:flex;flex-direction:column;gap:12px">
++      <div style="display:flex;gap:8px;flex-wrap:wrap">
++        <button class="btn btn--secondary btn--sm" onclick="applyStatementPreset('30d')">Last 30 days</button>
++        <button class="btn btn--secondary btn--sm" onclick="applyStatementPreset('90d')">Last 90 days</button>
++        <button class="btn btn--secondary btn--sm" onclick="applyStatementPreset('tax')">Tax year</button>
++        <button class="btn btn--secondary btn--sm" onclick="applyStatementPreset('all')">All activity</button>
++      </div>
++      <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.6">
++        <div><strong style="color:#1a1a1a">Current range:</strong> ${fmtDate(fromVal)} — ${fmtDate(toVal)}</div>
++        <div style="margin-top:4px"><strong style="color:#1a1a1a">Included sections:</strong> ${sections.length ? sections.join(', ') : 'Portfolio summary will be added automatically'}</div>
++        <div style="margin-top:4px"><strong style="color:#1a1a1a">Tax certificate:</strong> IT3(b) for year ending Feb ${taxYear}</div>
++      </div>
++      ${_statementAssistMeta?.generatedAt ? `<div style="padding:10px 12px;border-radius:10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.18);font-size:0.75rem;color:#166534;line-height:1.55"><strong>Last preview generated:</strong> ${_statementAssistMeta.generatedAt}<br>${_statementAssistMeta.summary || ''}</div>` : `<div style="padding:10px 12px;border-radius:10px;background:rgba(255,155,12,0.08);border:1px solid rgba(255,155,12,0.18);font-size:0.75rem;color:#9a5d00;line-height:1.55">Generate a preview once, then use Print / Save PDF to complete the task without re-entering your settings.</div>`}
++    </div>`;
++}
++
+ /* ─── Skeleton loading helpers ─── */
+ function _skeletonRows(count, cols) {
+   return Array(count).fill(0).map(() =>
+@@ -1608,18 +1908,22 @@
+   if (eftRef) eftRef.textContent = PORTAL.investor?.id || DEMO_INVESTOR_ID;
+ 
+   _loadAutoTopUpCard().catch(() => {});
++  renderWalletReadinessPanel();
+ 
+   const activity = document.getElementById('walletActivity');
+-  const walletTxns = PORTAL.transactions
++  const walletTxns = [...PORTAL.transactions]
+     .filter(t => ['deposit', 'return', 'payout', 'referral_bonus', 'withdrawal'].includes(t.type))
++    .sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0))
+     .slice(0, 8);
+ 
+   if (!walletTxns.length) {
+     activity.innerHTML = `<div class="empty-state">
+       <i class="fa-solid fa-wallet"></i>
+       <div class="empty-state__title">No wallet activity yet</div>
+-      <div class="empty-state__sub">Your deposits, returns, and payouts will appear here once you top up.<br>
+-        <a href="#" onclick="openTopUpModal()" style="color:var(--gold)">Top Up Now →</a>
++      <div class="empty-state__sub">Top up once and this feed will start showing deposits, returns, payouts, and withdrawals in one place.</div>
++      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px">
++        <button class="btn btn--primary btn--sm" onclick="openTopUpModal()"><i class="fa-solid fa-plus"></i> Top up wallet</button>
++        <button class="btn btn--secondary btn--sm" onclick="navigate('marketplace',document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-layer-group"></i> Browse pools</button>
+       </div>
+     </div>`;
+     return;
+@@ -2643,6 +2947,7 @@
+   // Update wallet strip
+   const strip = document.getElementById('mktWalletStrip');
+   const walletBal = parseFloat(PORTAL.investor?.wallet_balance) || 0;
++  const ranked = _rankMarketPools(filtered, walletBal);
+   if (strip) {
+     strip.style.display = 'flex';
+     const balEl = document.getElementById('mktWalletBal');
+@@ -2652,15 +2957,26 @@
+     }
+   }
+ 
+-  if (!filtered.length) {
+-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="fa-solid fa-layer-group"></i><p>No open pools in this category right now.</p></div>';
++  renderMarketConversionPanel(ranked);
++
++  if (!ranked.length) {
++    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
++      <i class="fa-solid fa-layer-group"></i>
++      <div class="empty-state__title">No pools match this filter right now</div>
++      <div class="empty-state__sub">Switch category or join a waitlist so you do not lose momentum.</div>
++      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px">
++        <button class="btn btn--secondary btn--sm" onclick="filterMarket('all', document.querySelector('#view-marketplace .tab-btn'))"><i class="fa-solid fa-rotate"></i> Show all pools</button>
++        <button class="btn btn--primary btn--sm" onclick="navigate('support', document.querySelector('[data-view=support]'))"><i class="fa-solid fa-headset"></i> Ask a question</button>
++      </div>
++    </div>`;
+     return;
+   }
+ 
+   const waitlist = PORTAL.waitlist || [];
+   const investorId = PORTAL.investor?.id;
++  const ficaApproved = _isInvestorFicaApproved(PORTAL.investor);
+ 
+-  grid.innerHTML = filtered.map(pool => {
++  grid.innerHTML = ranked.map((pool, idx) => {
+     const pi   = Utils.productInfo(pool.product_type);
+     const pct  = Utils.poolFillPct(pool);
+     const days = Utils.daysRemaining(pool.end_date);
+@@ -2710,6 +3026,15 @@
+             </button>
+           </div>`;
+       }
++    } else if (!ficaApproved) {
++      ctaHtml = `<div style="display:flex;flex-direction:column;gap:6px;margin-top:2px">
++                   <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.18);border-radius:8px;font-size:0.78rem;color:#2F8C9B">
++                     <i class="fa-solid fa-shield-halved"></i> Complete FICA before your first investment
++                   </div>
++                   <button class="btn btn--secondary btn--full" onclick="navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()">
++                     <i class="fa-solid fa-upload"></i> Complete FICA
++                   </button>
++                 </div>`;
+     } else if (canInvest) {
+       ctaHtml = `<button class="btn btn--primary btn--full" onclick='openInvestModal(${JSON.stringify(pool.id)})'>
+                    <i class="fa-solid fa-coins"></i> Invest Now
+@@ -2722,11 +3047,14 @@
+                  </div>`;
+     }
+ 
++    const highlighted = idx === 0 && pool.status === 'open';
++
+     return `
+-      <div class="market-pool-card">
++      <div class="market-pool-card" style="${highlighted ? 'border-color:rgba(255,155,12,0.38);box-shadow:0 12px 28px rgba(255,155,12,0.12)' : ''}">
+         <div class="flex-between">
+           <div class="market-pool-card__icon" style="background:${pi.color}18;color:${pi.color}"><i class="fa-solid ${pi.icon}"></i></div>
+-          <div style="display:flex;gap:6px;align-items:center">
++          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
++            ${highlighted ? '<span style="font-size:0.65rem;font-weight:800;color:#FF8215;background:rgba(255,155,12,0.12);padding:3px 8px;border-radius:999px;border:1px solid rgba(255,155,12,0.2)">Best next step</span>' : ''}
+             <span class="pool-risk-badge" style="background:${meta.riskColor}18;color:${meta.riskColor}">${meta.risk} risk</span>
+             ${isWaitlisted
+               ? '<span class="badge badge--red" style="font-size:0.65rem"><i class="fa-solid fa-lock"></i> Pool Full</span>'
+@@ -2822,6 +3150,12 @@
+ function openInvestModal(poolId) {
+   const pool = PORTAL.pools.find(p => p.id === poolId);
+   if (!pool) return;
++  if (!_isInvestorFicaApproved(PORTAL.investor)) {
++    Toast.info('Complete FICA verification before making your first investment.');
++    navigate('profile', document.querySelector('[data-view=profile]'));
++    openKycUploadModal();
++    return;
++  }
+ 
+   SVC.track('view_item', { items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type }] });
+   SVC.track('select_item', { items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type }] });
+@@ -2926,6 +3260,12 @@
+ }
+ 
+ async function confirmInvestment(pool) {
++  if (!_isInvestorFicaApproved(PORTAL.investor)) {
++    Toast.error('Your FICA verification must be approved before you can invest.');
++    navigate('profile', document.querySelector('[data-view=profile]'));
++    openKycUploadModal();
++    return;
++  }
+   const amount = parseFloat(document.getElementById('investAmount').value);
+   if (!amount || amount < pool.min_investment) { Toast.error(`Minimum investment is ${Utils.rand(pool.min_investment)}`); return; }
+ 
+@@ -3271,13 +3611,14 @@
+   // Set wide default date range: 2020-01-01 → today to catch all seeded data
+   const today = new Date();
+   const toDate   = today.toISOString().split('T')[0];
+-  const fromDate = '2020-01-01';   // wide range to capture all seeded records
++  const fromDate = '2020-01-01';
+   const fromEl = document.getElementById('stmtFrom');
+   const toEl   = document.getElementById('stmtTo');
+-  if (fromEl) fromEl.value = fromDate;
+-  if (toEl)   toEl.value   = toDate;
+-  // Update quick stats sidebar straight away
++  if (fromEl && !fromEl.value) fromEl.value = fromDate;
++  if (toEl && !toEl.value)     toEl.value   = toDate;
++  bindStatementAssist();
+   updateStmtQuickStats();
++  renderStatementAssistCard({ trigger: 'init' });
+ }
+ 
+ function updateStmtQuickStats() {
+@@ -3402,6 +3743,13 @@
+   });
+ 
+   doc.innerHTML = html;
++  const generatedSummary = `${transactions.length} transaction${transactions.length === 1 ? '' : 's'} in range · ${effectivePerformance ? 'performance included' : 'summary only'}`;
++  renderStatementAssistCard({
++    generatedAt: new Date().toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' }),
++    summary: generatedSummary,
++    txCount: transactions.length,
++    preset: 'custom'
++  });
+   document.getElementById('statementPreview').style.display = 'block';
+   document.getElementById('statementPreview').scrollIntoView({ behavior: 'smooth', block: 'start' });
+ }
+@@ -5839,6 +6187,7 @@
+   const inv      = PORTAL.investor;
+   const balance  = parseFloat(inv?.wallet_balance || 0);
+   const status   = inv?.bank_account_status;
++  const pendingWithdrawal = (PORTAL.transactions || []).find(t => t.type === 'withdrawal' && t.status === 'pending');
+   SVC.track('svc_withdrawal_modal_opened', { wallet_balance_bucket: _amtBucket(balance), has_bank_account: !!(inv?.bank_account_number) });
+ 
+   if (!inv?.bank_account_number) {
+@@ -5866,11 +6215,29 @@
+     return;
+   }
+ 
++  if (pendingWithdrawal) {
++    content.innerHTML = `
++      <div style="display:flex;flex-direction:column;gap:14px;padding:8px 0">
++        <div style="padding:14px 16px;border-radius:14px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.18)">
++          <div style="font-size:0.92rem;font-weight:800;color:#1a1a1a">A withdrawal is already in progress.</div>
++          <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;line-height:1.55">${Utils.rand(Math.abs(parseFloat(pendingWithdrawal.amount) || 0))} was requested on ${Utils.date(pendingWithdrawal.created_at || pendingWithdrawal.transaction_date)}. Most payouts land within 1–2 business days.</div>
++        </div>
++        <div style="display:flex;gap:8px;flex-wrap:wrap">
++          <button class="btn btn--secondary" onclick="Modal.close('withdrawalModal');navigate('support', document.querySelector('[data-view=support]'))"><i class="fa-solid fa-headset"></i> Contact support</button>
++          <button class="btn btn--primary" onclick="Modal.close('withdrawalModal')"><i class="fa-solid fa-check"></i> Got it</button>
++        </div>
++      </div>`;
++    footer.style.display = 'none';
++    Modal.open('withdrawalModal');
++    return;
++  }
++
+   if (balance < 50) {
+     content.innerHTML = `
+       <div style="text-align:center;padding:20px 0">
+         <i class="fa-solid fa-wallet" style="font-size:2.5rem;color:#9ca3af;margin-bottom:16px"></i>
+-        <p style="font-size:0.9rem;color:var(--text-muted)">Your available balance is <strong>${Utils.rand(balance)}</strong>. The minimum withdrawal is R50.</p>
++        <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:12px">Your available balance is <strong>${Utils.rand(balance)}</strong>. The minimum withdrawal is R50.</p>
++        <button class="btn btn--secondary" onclick="Modal.close('withdrawalModal');openTopUpModal()"><i class="fa-solid fa-plus"></i> Top up instead</button>
+       </div>`;
+     footer.style.display = 'none';
+     Modal.open('withdrawalModal');
+@@ -5878,18 +6245,34 @@
+   }
+ 
+   const masked = '••••••' + String(inv.bank_account_number).slice(-4);
++  const quickAmounts = [0.25, 0.5, 1].map(r => Math.floor((balance * r) / 10) * 10).filter(v => v >= 50);
+   content.innerHTML = `
+-    <div class="info-row mb-8"><span class="info-row__label">Available Balance</span><span class="info-row__value text-gold" style="font-size:1.1rem;font-weight:800">${Utils.rand(balance)}</span></div>
+-    <div class="info-row mb-16"><span class="info-row__label">Bank Account</span><span class="info-row__value">${inv.bank_name} ${masked}</span></div>
++    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">
++      <div style="padding:12px 14px;border-radius:12px;background:#F8FAFC;border:1px solid rgba(0,0,0,0.06)">
++        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Available now</div>
++        <div style="font-size:1.08rem;font-weight:900;color:#1a1a1a;margin-top:4px">${Utils.rand(balance)}</div>
++      </div>
++      <div style="padding:12px 14px;border-radius:12px;background:#F8FAFC;border:1px solid rgba(0,0,0,0.06)">
++        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Destination</div>
++        <div style="font-size:0.88rem;font-weight:800;color:#1a1a1a;margin-top:6px">${inv.bank_name} ${masked}</div>
++      </div>
++      <div style="padding:12px 14px;border-radius:12px;background:#F8FAFC;border:1px solid rgba(0,0,0,0.06)">
++        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Expected timing</div>
++        <div style="font-size:0.88rem;font-weight:800;color:#1a1a1a;margin-top:6px">1–2 business days</div>
++      </div>
++    </div>
+     <div class="form-group">
+       <label class="form-label">Withdrawal Amount (R) <span style="color:#ef4444">*</span></label>
++      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
++        ${quickAmounts.map(v => `<button type="button" class="btn btn--secondary btn--sm" onclick="document.getElementById('wdAmount').value='${v}';_withdrawCalc()">${v >= balance ? 'All available' : Utils.rand(v)}</button>`).join('')}
++      </div>
+       <input type="number" class="form-input" id="wdAmount" placeholder="e.g. ${balance.toFixed(0)}" min="50" max="${balance.toFixed(2)}" oninput="_withdrawCalc()" />
+-      <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Maximum: ${Utils.rand(balance)}</div>
++      <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Maximum: ${Utils.rand(balance)} · Minimum: R50</div>
+     </div>
+     <div id="wdCalcBox" style="display:none;margin-top:4px"></div>
+-    <div class="info-box" style="background:rgba(255,155,12,0.06);border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:12px 14px;font-size:0.8rem;color:var(--text-muted);margin-top:12px">
+-      <i class="fa-solid fa-circle-info" style="color:#ff9b0c"></i>
+-      Withdrawals are processed within 1–2 business days. Funds will be sent to your verified ${inv.bank_name} account.
++    <div class="info-box" style="background:rgba(255,155,12,0.06);border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:12px 14px;font-size:0.8rem;color:var(--text-muted);margin-top:12px;line-height:1.6">
++      <i class="fa-solid fa-shield-halved" style="color:#ff9b0c"></i>
++      We only send withdrawals to your verified bank account. Requests submitted now are queued for the next finance run and you can track follow-up in Support if needed.
+     </div>`;
+   footer.style.display = '';
+   Modal.open('withdrawalModal');
+@@ -5912,8 +6295,14 @@
+     box.innerHTML = `<div style="color:#ef4444;font-size:0.8rem"><i class="fa-solid fa-triangle-exclamation"></i> Minimum withdrawal is R50</div>`;
+     return;
+   }
++  const remaining = balance - amount;
+   box.style.display = '';
+-  box.innerHTML = `<div class="info-row" style="padding:8px 0"><span class="info-row__label">Remaining after withdrawal</span><span class="info-row__value text-gold">${Utils.rand(balance - amount)}</span></div>`;
++  box.innerHTML = `
++    <div style="padding:10px 12px;border-radius:10px;background:#F8FAFC;border:1px solid rgba(0,0,0,0.06)">
++      <div class="info-row" style="padding:0 0 6px"><span class="info-row__label">You will receive</span><span class="info-row__value" style="font-weight:800;color:#1a1a1a">${Utils.rand(amount)}</span></div>
++      <div class="info-row" style="padding:6px 0;border-top:1px solid rgba(0,0,0,0.06)"><span class="info-row__label">Remaining in wallet</span><span class="info-row__value text-gold">${Utils.rand(remaining)}</span></div>
++      <div style="font-size:0.74rem;color:var(--text-muted);margin-top:8px">Estimated payout window: 1–2 business days after finance review.</div>
++    </div>`;
+ }
+ 
+ async function confirmWithdrawal() {
+@@ -6716,7 +7105,7 @@
+ 
+   const investments = PORTAL.investments;
+   if (!investments.length) {
+-    body.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:24px">No investments found.</td></tr>';
++    body.innerHTML = `<tr><td colspan="8" style="padding:28px"><div class="empty-state" style="padding:0;border:none;background:transparent"><i class="fa-solid fa-file-certificate"></i><div class="empty-state__title">No investment certificates yet</div><div class="empty-state__sub">Your first completed investment will unlock downloadable certificates and term sheets here.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-layer-group"></i> Browse pools</button><button class="btn btn--secondary btn--sm" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))"><i class="fa-solid fa-wallet"></i> Fund wallet</button></div></div></td></tr>`;
+     return;
+   }
+ 
+@@ -6750,7 +7139,7 @@
+     .slice(0, 20);
+ 
+   if (!deposits.length) {
+-    body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No deposit transactions found.</td></tr>';
++    body.innerHTML = `<tr><td colspan="6" style="padding:28px"><div class="empty-state" style="padding:0;border:none;background:transparent"><i class="fa-solid fa-receipt"></i><div class="empty-state__title">No deposit receipts yet</div><div class="empty-state__sub">As soon as your first wallet top-up is completed, the receipt will appear here for download.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="openTopUpModal()"><i class="fa-solid fa-plus"></i> Top up wallet</button><button class="btn btn--secondary btn--sm" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i> Generate statement</button></div></div></td></tr>`;
+     return;
+   }
+ 
