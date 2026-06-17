@@ -327,7 +327,8 @@ function navigate(view, btnEl) {
     pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
     transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
     auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications', aml: 'AML Compliance Review',
-    migrate: 'Data Migration', compliance: 'Compliance Calendar', reconciliation: 'Financial Reconciliation'
+    migrate: 'Data Migration', compliance: 'Compliance Calendar', reconciliation: 'Financial Reconciliation',
+    terms: 'Terms of Use', privacy: 'Privacy Policy &amp; POPIA Notice'
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -351,6 +352,8 @@ function navigate(view, btnEl) {
     aml: loadAML,
     compliance: loadCompliance,
     reconciliation: loadReconciliation,
+    terms: loadTermsEditor,
+    privacy: loadPrivacyEditor,
   };
   if (loaders[view]) loaders[view]();
 }
@@ -3382,6 +3385,118 @@ function renderSignupFriction(data, panel) {
 /* ═══════════════════════════════════════════════
    SETTINGS
    ═══════════════════════════════════════════════ */
+/* ─── Terms of Use Editor ─── */
+async function loadTermsEditor() {
+  const ta = document.getElementById('termsEditor');
+  const lastEl = document.getElementById('termsLastUpdated');
+  if (!ta) return;
+  ta.value = 'Loading…';
+  try {
+    const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'legal/terms-content', { credentials: 'include' });
+    const data = await res.json();
+    ta.value = data.content || '';
+    if (lastEl) lastEl.textContent = data.content ? 'Custom content loaded' : 'Using default content (not yet saved)';
+  } catch (_) {
+    ta.value = '';
+    if (lastEl) lastEl.textContent = 'Failed to load — server error';
+  }
+}
+
+async function saveTermsContent() {
+  const ta = document.getElementById('termsEditor');
+  if (!ta || !ta.value.trim()) return Toast.error('Content cannot be empty');
+  try {
+    const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'legal/terms-content', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ content: ta.value.trim() })
+    });
+    if (!res.ok) throw new Error();
+    Toast.success('Terms of Use saved successfully');
+    const lastEl = document.getElementById('termsLastUpdated');
+    if (lastEl) lastEl.textContent = 'Saved ' + new Date().toLocaleString('en-ZA');
+  } catch (_) {
+    Toast.error('Failed to save terms — please try again');
+  }
+}
+
+/* ─── Privacy Policy / POPIA Editor ─── */
+async function loadPrivacyEditor() {
+  const ta = document.getElementById('privacyEditor');
+  const lastEl = document.getElementById('privacyLastUpdated');
+  if (!ta) return;
+  ta.value = 'Loading…';
+  try {
+    const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'legal/privacy-content', { credentials: 'include' });
+    const data = await res.json();
+    ta.value = data.content || '';
+    if (lastEl) {
+      if (data.updatedAt) {
+        lastEl.textContent = 'Last saved: ' + new Date(data.updatedAt).toLocaleString('en-ZA');
+      } else {
+        lastEl.textContent = 'Using default content (not yet saved)';
+      }
+    }
+  } catch (_) {
+    ta.value = '';
+    if (lastEl) lastEl.textContent = 'Failed to load — server error';
+  }
+}
+
+async function savePrivacyContent() {
+  const ta = document.getElementById('privacyEditor');
+  if (!ta || !ta.value.trim()) return Toast.error('Content cannot be empty');
+  try {
+    const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'legal/privacy-content', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ content: ta.value.trim() })
+    });
+    if (!res.ok) throw new Error();
+    Toast.success('Privacy Policy saved successfully');
+    const lastEl = document.getElementById('privacyLastUpdated');
+    if (lastEl) lastEl.textContent = 'Saved ' + new Date().toLocaleString('en-ZA');
+  } catch (_) {
+    Toast.error('Failed to save privacy policy — please try again');
+  }
+}
+
+async function resetPrivacyToDefault() {
+  if (!confirm('Reset to default Privacy Policy? This will clear any custom content saved in the database.')) return;
+  try {
+    await fetch((window.__SVC_API_BASE__ || '/api/') + 'legal/privacy-content', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ content: '' })
+    });
+    const ta = document.getElementById('privacyEditor');
+    if (ta) ta.value = '';
+    Toast.success('Privacy Policy reset to default');
+  } catch (_) {
+    Toast.error('Failed to reset privacy policy');
+  }
+}
+
+async function resetTermsToDefault() {
+  if (!confirm('Reset to default terms? This will clear any custom content saved in the database.')) return;
+  try {
+    await fetch((window.__SVC_API_BASE__ || '/api/') + 'legal/terms-content', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ content: '' })
+    });
+    const ta = document.getElementById('termsEditor');
+    if (ta) ta.value = '';
+    Toast.success('Terms reset to default');
+  } catch (_) {
+    Toast.error('Failed to reset terms');
+  }
+}
+
 async function loadSettings() {
   try {
     const res = await API.settings.list();

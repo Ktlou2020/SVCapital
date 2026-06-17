@@ -1365,7 +1365,7 @@
       <label class="checkbox-group">
         <input type="checkbox" id="termsCheck" />
         <div class="checkbox-label">
-          I agree to SV Capital's <a href="/terms.html" target="_blank">Terms of Service</a> and <a href="/popia.html" target="_blank">Privacy Policy</a>. I understand that my investments are subject to market risk.
+          I agree to SV Capital's <a href="/terms.html" target="_blank">Terms of Use</a> and <a href="/popia.html" target="_blank">Privacy Policy</a>. I understand that my investments are subject to market risk.
         </div>
       </label>
 
@@ -2182,7 +2182,7 @@ function validateStep(n) {
 
     if (!pw || pw.length < 8) return showError('Password must be at least 8 characters.');
     if (pw !== pw2)            return showError('Passwords do not match. Please try again.');
-    if (!terms) return showError('Please accept the Terms of Service to continue.');
+    if (!terms) return showError('Please accept the Terms of Use to continue.');
     if (!fica)  return showError('Please confirm your FICA consent to continue.');
     if (!popia) return showError('Please confirm your POPIA consent to continue.');
   }

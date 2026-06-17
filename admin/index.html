@@ -109,6 +109,12 @@
       <button class="nav-item" data-view="auditlog" onclick="navigate('auditlog', this)">
         <i class="fa-solid fa-scroll"></i> Audit Log
       </button>
+      <button class="nav-item" data-view="terms" onclick="navigate('terms', this)">
+        <i class="fa-solid fa-file-contract"></i> Terms of Use
+      </button>
+      <button class="nav-item" data-view="privacy" onclick="navigate('privacy', this)">
+        <i class="fa-solid fa-shield-halved"></i> Privacy Policy
+      </button>
       <button class="nav-item" data-view="settings" onclick="navigate('settings', this)">
         <i class="fa-solid fa-gear"></i> Settings
       </button>
@@ -970,6 +976,106 @@
           <div class="table-card__footer">
             <span id="auditFooter">—</span>
             <div class="pagination" id="auditPagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: TERMS OF USE
+      ══════════════════════════════════ -->
+      <div class="view" id="view-terms">
+        <div class="grid-layout grid-layout--sidebar">
+          <div>
+            <div class="panel">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-file-contract" style="color:var(--orange);margin-right:8px"></i>Terms of Use</span>
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn--secondary btn--sm" onclick="window.open('/terms.html','_blank')"><i class="fa-solid fa-eye"></i> Preview</button>
+                  <button class="btn btn--primary btn--sm" onclick="saveTermsContent()"><i class="fa-solid fa-save"></i> Save Changes</button>
+                </div>
+              </div>
+              <div class="panel__body">
+                <p style="font-size:0.82rem;color:#6b7280;margin-bottom:12px">Edit the Terms of Use HTML content below. Use standard HTML tags (&lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt;, etc.). Changes are reflected immediately on the public <a href="/terms.html" target="_blank" style="color:var(--orange)">Terms of Use</a> page.</p>
+                <textarea id="termsEditor" style="width:100%;min-height:600px;font-family:monospace;font-size:0.82rem;padding:14px;border:1.5px solid #e5e7eb;border-radius:8px;resize:vertical;background:#0f1117;color:#e2e8f0;line-height:1.6" placeholder="Loading terms content…"></textarea>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title">Formatting Guide</span></div>
+              <div class="panel__body" style="font-size:0.82rem;color:#6b7280;line-height:1.8">
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;h2&gt;</code> — Section heading<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;h3&gt;</code> — Sub-heading<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;p&gt;</code> — Paragraph<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;ul&gt;&lt;li&gt;</code> — Bullet list<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;ol&gt;&lt;li&gt;</code> — Numbered list<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;strong&gt;</code> — Bold text<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;a href=""&gt;</code> — Link
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel__header"><span class="panel__title">Last Updated</span></div>
+              <div class="panel__body">
+                <div id="termsLastUpdated" style="font-size:0.85rem;color:#6b7280">—</div>
+                <div style="margin-top:12px">
+                  <button class="btn btn--secondary btn--sm btn--full" onclick="resetTermsToDefault()"><i class="fa-solid fa-rotate-left"></i> Reset to Default</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: PRIVACY POLICY
+      ══════════════════════════════════ -->
+      <div class="view" id="view-privacy">
+        <div class="grid-layout grid-layout--sidebar">
+          <div>
+            <div class="panel">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-shield-halved" style="color:var(--orange);margin-right:8px"></i>Privacy Policy &amp; POPIA Notice</span>
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn--secondary btn--sm" onclick="window.open('/popia.html','_blank')"><i class="fa-solid fa-eye"></i> Preview</button>
+                  <button class="btn btn--primary btn--sm" onclick="savePrivacyContent()"><i class="fa-solid fa-save"></i> Save Changes</button>
+                </div>
+              </div>
+              <div class="panel__body">
+                <p style="font-size:0.82rem;color:#6b7280;margin-bottom:12px">Edit the Privacy Policy &amp; POPIA Notice HTML content below. Changes are reflected immediately on the public <a href="/popia.html" target="_blank" style="color:var(--orange)">Privacy Policy</a> page and the sign-up flow.</p>
+                <textarea id="privacyEditor" style="width:100%;min-height:600px;font-family:monospace;font-size:0.82rem;padding:14px;border:1.5px solid #e5e7eb;border-radius:8px;resize:vertical;background:#0f1117;color:#e2e8f0;line-height:1.6" placeholder="Loading privacy policy content…"></textarea>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title">Formatting Guide</span></div>
+              <div class="panel__body" style="font-size:0.82rem;color:#6b7280;line-height:1.8">
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;h2&gt;</code> — Section heading<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;p&gt;</code> — Paragraph<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;ul&gt;&lt;li&gt;</code> — Bullet list<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;strong&gt;</code> — Bold text<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;a href=""&gt;</code> — Link
+              </div>
+            </div>
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title">Linked From</span></div>
+              <div class="panel__body" style="font-size:0.82rem;color:#6b7280;line-height:2">
+                ✓ Sign-up consent checkbox<br>
+                ✓ Sign-up POPIA consent checkbox<br>
+                ✓ Homepage footer<br>
+                ✓ Terms of Use footer<br>
+                ✓ PAIA Manual footer
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel__header"><span class="panel__title">Last Updated</span></div>
+              <div class="panel__body">
+                <div id="privacyLastUpdated" style="font-size:0.85rem;color:#6b7280">—</div>
+                <div style="margin-top:12px">
+                  <button class="btn btn--secondary btn--sm btn--full" onclick="resetPrivacyToDefault()"><i class="fa-solid fa-rotate-left"></i> Reset to Default</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

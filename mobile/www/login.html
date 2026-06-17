@@ -754,12 +754,74 @@
     } catch (_) {}
   })();
 
+
+
+  function _ensureLoginAssistUI() {
+    const pwInput = document.getElementById('passwordInput');
+    if (pwInput && !document.getElementById('capsLockHint')) {
+      const hint = document.createElement('div');
+      hint.id = 'capsLockHint';
+      hint.style.cssText = 'display:none;margin-top:8px;font-size:0.74rem;font-weight:700;color:#ef4444';
+      hint.innerHTML = '<i class="fa-solid fa-arrow-up-a-z" style="margin-right:6px"></i>Caps Lock is on';
+      pwInput.closest('.form-group')?.appendChild(hint);
+    }
+    const totpInput = document.getElementById('totpInput');
+    if (totpInput && !document.getElementById('totpHint')) {
+      const hint = document.createElement('div');
+      hint.id = 'totpHint';
+      hint.style.cssText = 'margin-top:8px;font-size:0.74rem;color:#6b7280;text-align:center';
+      hint.textContent = 'Paste or type the 6-digit code — spaces are added automatically.';
+      totpInput.parentNode?.appendChild(hint);
+    }
+  }
+
+  function _toggleCapsLockHint(e) {
+    const hint = document.getElementById('capsLockHint');
+    if (!hint) return;
+    const on = !!(e && typeof e.getModifierState === 'function' && e.getModifierState('CapsLock'));
+    hint.style.display = on ? 'block' : 'none';
+  }
+
+  function initLoginAssists() {
+    _ensureLoginAssistUI();
+    const emailEl = document.getElementById('emailInput');
+    const pwEl = document.getElementById('passwordInput');
+    const forgotEl = document.getElementById('forgotEmailInput');
+    const totpEl = document.getElementById('totpInput');
+    const savedEmail = localStorage.getItem('svc_last_login_email');
+    if (emailEl && savedEmail && !emailEl.value) emailEl.value = savedEmail;
+    if (emailEl && !document.getElementById('twoFAStep')?.style.display) setTimeout(() => emailEl.focus(), 60);
+
+    [emailEl, pwEl, forgotEl].forEach(el => {
+      if (!el) return;
+      el.addEventListener('input', () => {
+        document.getElementById('formError')?.classList.remove('show');
+        document.getElementById('forgotError')?.classList.remove('show');
+      });
+    });
+
+    if (pwEl) {
+      ['keydown','keyup','focus','blur'].forEach(evt => pwEl.addEventListener(evt, _toggleCapsLockHint));
+      pwEl.addEventListener('blur', () => _toggleCapsLockHint(null));
+    }
+
+    if (totpEl) {
+      totpEl.addEventListener('input', () => {
+        const digits = totpEl.value.replace(/\D/g, '').slice(0, 6);
+        totpEl.value = digits.length > 3 ? `${digits.slice(0,3)} ${digits.slice(3)}` : digits;
+        if (digits.length === 6) setTimeout(() => verify2FA(), 120);
+      });
+    }
+  }
+
   /* ─── Forgot Password Flow ─── */
   function showForgotPassword(e) {
     if (e) e.preventDefault();
     document.getElementById('loginForm').style.display = 'none';
     document.querySelectorAll('.login-links').forEach(el => el.style.display = 'none');
     document.getElementById('forgotPanel').classList.add('show');
+    const loginEmail = document.getElementById('emailInput')?.value?.trim();
+    if (loginEmail && document.getElementById('forgotEmailInput')) document.getElementById('forgotEmailInput').value = loginEmail;
     document.getElementById('forgotError').classList.remove('show');
     document.getElementById('forgotSuccessPanel').classList.remove('show');
     document.getElementById('forgotFormState').style.display = 'block';
@@ -771,6 +833,7 @@
     document.querySelectorAll('.login-links').forEach(el => el.style.display = '');
     document.getElementById('forgotPanel').classList.remove('show');
     if (document.getElementById('forgotEmailInput')) document.getElementById('forgotEmailInput').value = '';
+    setTimeout(() => document.getElementById('emailInput')?.focus(), 60);
     document.getElementById('forgotError').classList.remove('show');
   }
 
@@ -862,6 +925,7 @@
       /* Store token */
       localStorage.setItem('svc_token', data.token);
       localStorage.setItem('svc_user',  JSON.stringify(data.user));
+      localStorage.setItem('svc_last_login_email', email);
 
       // Save for biometric re-login
       if (window.__SVC_NATIVE__) {
@@ -922,6 +986,8 @@
       if (!res.ok) throw new Error(data.error || 'Invalid code.');
       localStorage.setItem('svc_token', data.token);
       localStorage.setItem('svc_user',  JSON.stringify(data.user));
+      const savedLoginEmail = document.getElementById('emailInput')?.value?.trim().toLowerCase();
+      if (savedLoginEmail) localStorage.setItem('svc_last_login_email', savedLoginEmail);
       btn.textContent = 'Verified ✓';
       setTimeout(() => { window.location.href = data.redirect || 'portal/'; }, 350);
     } catch (err) {
@@ -938,6 +1004,7 @@
 </script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
+    initLoginAssists();
     var loginForm = document.getElementById('loginForm');
     if (loginForm) {
       loginForm.addEventListener('submit', function() {
