@@ -4,32 +4,34 @@
   <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Terms of Service — SV Capital</title>
+  <title>Terms of Use — SV Capital</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Inter',sans-serif;background:#f8f9fa;color:#1a1a2e;line-height:1.7;font-size:15px}
+    body{font-family:'Inter',sans-serif;background:#f8f9fa;color:#1a1a2e;line-height:1.75;font-size:15px}
     .header{background:#1a1a2e;padding:18px 0;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.2)}
-    .header-inner{max-width:860px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between}
+    .header-inner{max-width:900px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between}
     .logo{font-size:1.25rem;font-weight:800;color:#FF8215;letter-spacing:-0.5px;text-decoration:none}
     .back-link{font-size:0.82rem;color:#aaa;text-decoration:none;display:flex;align-items:center;gap:5px}
     .back-link:hover{color:#FF8215}
-    .container{max-width:860px;margin:0 auto;padding:48px 24px 64px}
+    .container{max-width:900px;margin:0 auto;padding:48px 24px 80px}
     .hero{background:linear-gradient(135deg,#1a1a2e,#2d2d5e);color:#fff;padding:40px 32px;border-radius:16px;margin-bottom:40px}
-    .hero h1{font-size:1.8rem;font-weight:800;margin-bottom:8px}
+    .hero h1{font-size:2rem;font-weight:800;margin-bottom:8px}
     .hero-meta{font-size:0.82rem;color:rgba(255,255,255,0.6);margin-top:10px}
     .badge{display:inline-block;background:rgba(255,130,21,0.2);color:#FF8215;border:1px solid rgba(255,130,21,0.4);border-radius:20px;padding:3px 12px;font-size:0.72rem;font-weight:700;margin-bottom:14px}
-    h2{font-size:1.15rem;font-weight:700;color:#1a1a2e;margin:32px 0 12px;border-left:4px solid #FF8215;padding-left:12px}
-    h3{font-size:0.95rem;font-weight:700;color:#1a1a2e;margin:20px 0 8px}
-    p{margin-bottom:12px;color:#374151}
-    ul,ol{margin:8px 0 16px 24px;color:#374151}
-    li{margin-bottom:6px}
     .disclaimer{background:#fff3cd;border:1.5px solid #ffc107;border-radius:10px;padding:16px 20px;margin:24px 0;font-size:0.88rem;color:#856404}
+    #termsContent h2{font-size:1.1rem;font-weight:700;color:#1a1a2e;margin:36px 0 10px;border-left:4px solid #FF8215;padding-left:12px}
+    #termsContent h3{font-size:0.95rem;font-weight:700;color:#1a1a2e;margin:20px 0 8px}
+    #termsContent p{margin-bottom:12px;color:#374151}
+    #termsContent ul,#termsContent ol{margin:8px 0 16px 24px;color:#374151}
+    #termsContent li{margin-bottom:6px}
+    #termsContent strong{color:#1a1a2e}
     footer{text-align:center;padding:24px;font-size:0.78rem;color:#9ca3af;border-top:1px solid #e5e7eb;margin-top:48px}
     a{color:#FF8215;text-decoration:none}
     a:hover{text-decoration:underline}
+    .loading{text-align:center;padding:40px;color:#9ca3af}
   </style>
 </head>
 <body>
@@ -43,95 +45,288 @@
   <div class="container">
     <div class="hero">
       <span class="badge">Legal Agreement</span>
-      <h1>Terms of Service</h1>
-      <div class="hero-meta">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSP #52449 &nbsp;·&nbsp; Last updated: June 2026</div>
+      <h1>Terms of Use</h1>
+      <div class="hero-meta">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSP #52449 &nbsp;·&nbsp; <span id="lastUpdated">Last updated: June 2026</span></div>
     </div>
 
     <div class="disclaimer">
-      <strong>Important:</strong> These Terms of Service constitute a legally binding agreement between you and SV Capital (Pty) Ltd. Please read them carefully before using our platform. By registering or using our services, you agree to be bound by these terms.
+      <strong>Important:</strong> These Terms of Use constitute a legally binding agreement between you and SV Capital (Pty) Ltd. Please read them carefully before using our platform. By registering or using our services, you agree to be bound by these terms.
     </div>
 
-    <h2>1. Parties and Agreement</h2>
-    <p>These Terms of Service ("Terms") govern the relationship between SV Capital (Pty) Ltd, a company registered in South Africa and licensed as a Financial Services Provider (FSP #52449) under the Financial Advisory and Intermediary Services Act ("FAIS"), and any person ("Investor", "you", "your") who accesses or uses the SV Capital investment platform.</p>
-
-    <h2>2. Eligibility</h2>
-    <p>To use our platform, you must:</p>
-    <ul>
-      <li>Be a natural person at least 18 years of age</li>
-      <li>Be a South African citizen or permanent resident with a valid South African ID number</li>
-      <li>Have completed our FICA/KYC verification process</li>
-      <li>Not be subject to any legal incapacity to enter into financial contracts</li>
-    </ul>
-
-    <h2>3. Investment Products</h2>
-    <p>SV Capital offers alternative investment products including, but not limited to, cattle-backed investments, solar energy projects, and short-term debt instruments. All investment products are:</p>
-    <ul>
-      <li>Subject to their own specific product terms and risk disclosures</li>
-      <li>Not guaranteed by the South African Government or any deposit insurance scheme</li>
-      <li>Alternative investments that do not fall under the Collective Investment Schemes Control Act</li>
-      <li>Subject to capital and income risk</li>
-    </ul>
-
-    <h2>4. Risk Disclosure</h2>
-    <div class="disclaimer">
-      <strong>Risk Warning:</strong> Investing involves risk, including the possible loss of principal. Past performance is not indicative of future results. Alternative investments are generally illiquid and suitable only for investors who can afford to hold their investment for the full term. You should seek independent financial advice if you are uncertain whether an investment is appropriate for you.
-    </div>
-
-    <h2>5. Fees and Charges</h2>
-    <p>The following fees apply to investments on the SV Capital platform:</p>
-    <ul>
-      <li><strong>Platform fee:</strong> 1% of each investment amount, deducted at the time of investment</li>
-      <li><strong>Management fees:</strong> Product-specific management fees as disclosed in each investment pool</li>
-      <li><strong>Withdrawal fees:</strong> No withdrawal fees apply to wallet withdrawals</li>
-      <li>All fees are inclusive of VAT at the applicable rate (currently 15%)</li>
-    </ul>
-
-    <h2>6. Investor Obligations</h2>
-    <p>As an investor, you agree to:</p>
-    <ul>
-      <li>Provide accurate and complete information during registration and throughout your use of the platform</li>
-      <li>Complete KYC/FICA verification and provide updated documents as required</li>
-      <li>Not use the platform for money laundering or any illegal purpose</li>
-      <li>Keep your login credentials secure and confidential</li>
-      <li>Notify us immediately of any unauthorised access to your account</li>
-      <li>Only invest funds that you can afford to hold for the full investment term</li>
-    </ul>
-
-    <h2>7. Wallet and Transactions</h2>
-    <ul>
-      <li>Your wallet balance earns no interest</li>
-      <li>Wallet deposits are processed via EFT or payment gateway (Paystack/Ozow)</li>
-      <li>Withdrawal requests are processed within 1–3 business days, subject to verification</li>
-      <li>SV Capital reserves the right to withhold withdrawals pending AML/FICA compliance checks</li>
-    </ul>
-
-    <h2>8. Platform Availability</h2>
-    <p>We aim to maintain the platform's availability 24/7, but do not guarantee uninterrupted access. Scheduled maintenance and unforeseeable outages may occur. SV Capital is not liable for losses arising from platform unavailability.</p>
-
-    <h2>9. Intellectual Property</h2>
-    <p>All content on the SV Capital platform, including but not limited to logos, text, graphics, software, and investment product designs, is the intellectual property of SV Capital (Pty) Ltd. You may not copy, reproduce, or distribute any content without our written consent.</p>
-
-    <h2>10. Limitation of Liability</h2>
-    <p>To the maximum extent permitted by law, SV Capital's liability for any claim arising from your use of the platform is limited to the amount of fees paid by you to SV Capital in the 12 months preceding the claim. We are not liable for indirect, consequential, or special damages.</p>
-
-    <h2>11. Governing Law</h2>
-    <p>These Terms are governed by the laws of the Republic of South Africa. Any disputes will be subject to the jurisdiction of the South African courts.</p>
-
-    <h2>12. Amendments</h2>
-    <p>SV Capital reserves the right to amend these Terms at any time. Material changes will be communicated via email or platform notification with at least 30 days' notice. Your continued use of the platform after the effective date constitutes acceptance of the amended Terms.</p>
-
-    <h2>13. Contact</h2>
-    <p>For questions about these Terms, contact us at:</p>
-    <p><strong>SV Capital (Pty) Ltd</strong><br>
-    Email: <a href="mailto:enquiry@svcapital.co.za">enquiry@svcapital.co.za</a><br>
-    FSP #52449 — FSCA Authorised Financial Services Provider</p>
+    <div id="termsContent"><p class="loading">Loading terms…</p></div>
   </div>
 
   <footer>
     &copy; 2026 SV Capital (Pty) Ltd. All rights reserved. &nbsp;·&nbsp; FSP #52449 &nbsp;·&nbsp;
-    <a href="/terms.html">Terms of Service</a> &nbsp;·&nbsp;
+    <a href="/terms.html">Terms of Use</a> &nbsp;·&nbsp;
     <a href="/popia.html">POPIA Notice</a> &nbsp;·&nbsp;
     <a href="/paia.html">PAIA Manual</a>
   </footer>
+
+  <script>
+    const DEFAULT_TERMS = `
+<h2>1. Definitions and interpretation</h2>
+<p><strong>1.1.</strong> In this Agreement, unless the context requires otherwise:</p>
+<p><strong>Aggregated Investment Amount</strong> means the amount of capital to be collected from a Client (or various Clients in aggregate) during the Collection Period before SV Capital will acquire the Product and/or deploy to any of SV Capital's investment products;</p>
+<p><strong>Agreement</strong> means this Investment Agency Agreement consisting of these terms and conditions as read together with the Application Form;</p>
+<p><strong>Application Form</strong> means the online application form as contained on the Website, setting out the contact details of the Client and the Investment Amount;</p>
+<p><strong>Benchmark Return</strong> means a minimum return to achieve on the investment calculated over the Investment Period;</p>
+<p><strong>Client</strong> means the Client as indicated on an Online Application Form;</p>
+<p><strong>Client Participation Ratio</strong> means the percentage that a Client's Investment Amount constitutes of a particular Aggregated Investment Amount;</p>
+<p><strong>Collection Period</strong> means the period, as indicated on the Website from time to time, during which SV Capital shall collect Investment Amounts for purposes of making up the Aggregated Investment Amount;</p>
+<p><strong>Investment Amount</strong> means the amount to be invested by a Client as set out in the Application Form;</p>
+<p><strong>Investment Application</strong> means the application by various Clients to invest individual Investment Amounts;</p>
+<p><strong>Investment Date</strong> has the meaning as defined in clause 4.1(2);</p>
+<p><strong>Investment Period</strong> means a period of 12 months from the Investment Date, or as otherwise agreed between SV Capital and the Client;</p>
+<p><strong>Product</strong> means the relevant livestock to be acquired with the Aggregated Investment Amount as requested in the Online Application Form;</p>
+<p><strong>Product Seller</strong> means the person or entity from whom SV Capital shall acquire Product with the Aggregated Investment Amount and who will be mandated to perform the farming services described in clause 9.1;</p>
+<p><strong>Mandated Services</strong> means those services to be performed by SV Capital as duly authorised agent of the Client for purposes of the Agreement, including, without limitation:</p>
+<ul>
+  <li>to acquire and dispose of the Product and to employ reasonable endeavours to obtain the best available market prices for these purposes and/or;</li>
+  <li>to investing in short term projects and to employ reasonable endeavours to ensure a rigorous due diligence is undertaken for these purposes;</li>
+  <li>to acquire Delivery Bike(s) on behalf of clients and to employ reasonable endeavours to ensure the correct use of the Delivery Bike(s) for these purposes;</li>
+  <li>to receive Investment Amounts from a Client as collecting agent of such Client;</li>
+  <li>to pay Investment Amounts on behalf of a Client as paying agent of such Client;</li>
+  <li>enter into negotiations with the Product Seller and pay amounts owing to the Product Seller for purposes of clause 9;</li>
+  <li>enter into agreements with entrepreneurs to invest in short term projects and ensure the repayment of such amounts owing to SV Capital for purposes; and</li>
+  <li>enter into agreements with Delivery Bike operator and ensure the correct use of the Delivery Bike in order to recoup amount owed to SV Capital for purposes; and</li>
+  <li>all other services and functions as contemplated in this Agreement.</li>
+</ul>
+<p><strong>Parties</strong> means SV Capital and the Client or either one of them as the context requires;</p>
+<p><strong>Short-term project</strong> means investment in qualifying partner entrepreneurs' vetted projects for the benefit of investors;</p>
+<p><strong>SV Capital</strong> means SV Capital Proprietary Limited (Registration number 2017/194453/07), a company incorporated in accordance with the laws of South Africa;</p>
+<p><strong>SV Capital Account</strong> means the SV Capital Trust account into which a Client will pay the Investment Amount, the details of which will be informed to Clients via email from time to time;</p>
+<p><strong>Delivery Bike Investment</strong> means clients investment in Delivery Bikes that are operated by vetted Delivery Bike operators for the benefit of the investor;</p>
+<p><strong>Website</strong> means the internet site at the following URL address <a href="https://www.svcapital.co.za">www.svcapital.co.za</a>; and</p>
+<p><strong>Website Terms of Use</strong> means the terms governing access to the Website as accessible by the Client on the Website.</p>
+<p><strong>Solar Investment</strong> means a Client's investment in a solar energy project, where the Aggregated Investment Amount is used to acquire, install, and manage solar systems for the benefit of the investor.</p>
+
+<h2>2. Introduction</h2>
+<p>The Parties wish to enter into this Agreement in terms of which SV Capital will be appointed and act as the duly authorised agent of the Client in performing the Mandated Services.</p>
+<p><strong>2.2.</strong> The Client agrees that the Mandated Services will be performed on the basis and subject to the conditions as set out in this Agreement.</p>
+
+<h2>3. Website</h2>
+<p><strong>3.1.</strong> Clients may access the Mandated Services through completing the required online Application Form on the Website.</p>
+<p><strong>3.2.</strong> SV Capital may in its absolute discretion accept or reject a Client's application. Should an application be accepted, these Terms of Use shall apply between the Parties.</p>
+<p><strong>3.3.</strong> Access to the Website will be subject to the Website Terms of Use.</p>
+
+<h2>4. Mandated Services for Cattle</h2>
+<p><strong>4.1.</strong> The cattle investment pool opens and closes every two (2) months as part of a fixed Collection Period. At the end of each Collection Period, SV Capital will perform the following as duly authorised agent of the Client:</p>
+<ol>
+  <li>SV Capital will receive the Investment Amount into the SV Capital Account as collecting agent of the Client. SV Capital will receive such amount for on-payment to the relevant Product Seller as consideration for the sale transaction described in 4.1(2) below and at no time will SV Capital become entitled to the Investment Amount for its own benefit;</li>
+  <li>SV Capital will, as agent of the relevant Clients having contributed the Aggregated Investment Amount, acquire the Product (at the prevailing market prices at the time of purchase) as soon as reasonably practicable following receipt of the funds described in clause (1) above (Investment Date). SV Capital will use its best endeavours to acquire the Product at the best available market related prices, but will not be obliged to acquire Product at any particular price;</li>
+  <li>Upon the acquisition of Product as described in paragraph 4.1(2) above, each Client having contributed to an Aggregated Investment Amount will become co-owners (in the Client Participation Ratio) of the relevant Product acquired. For the avoidance of doubt, it is confirmed that SV Capital is merely acting as facilitator and agent in respect of the acquisition and sale of Product and does not obtain any ownership interest in respect of the Product;</li>
+  <li>At the end of each Investment Period, SV Capital is authorised to sell the relevant Product as agent of the Client at prevailing market prices. Upon such sale the Client will be entitled to such share of the sale proceeds as is equal to its Client Participation Ratio;</li>
+  <li>A Client is not entitled to dispose of its interest in any Product acquired pursuant to clause 4.1(2) before the end of an Investment Period. The Client authorises SV Capital to enter into a reinvestment agreement (Reinvestment Agreement) with the Product Seller in terms of which the Product Seller will be permitted, as agent of the Client, to sell and reinvest the relevant Product (and Aggregate Investment Amount received pursuant to any such sale) quarterly during the Investment Period. Such reinvestment will entail the Product Seller selling the Product and reacquiring Product every five (5) months at prevailing market prices. The Reinvestment Agreement is designed to maximise investment returns for the Client during the annual Investment Period;</li>
+  <li>Any amounts received by SV Capital pursuant to any sale of Product on behalf of a Client at the end of the Investment Period will be received in the SV Capital Account as collecting agent of the Client and be on-paid to the Client's account as nominated in the Application Form (Client Account).</li>
+</ol>
+<p><strong>4.2. Cattle investment restrictions and limitations</strong></p>
+<p><strong>Early withdrawals:</strong> Clients acknowledge and accept that early withdrawal of invested funds is strictly prohibited. All funds will be locked in for the full duration of the applicable Investment Period. If a Client is uncertain about committing funds to an investment, they are advised to retain such funds in their designated wallet until a final investment decision is made.</p>
+<p><strong>Switching between pools:</strong> Once an investment has been made, switching between investment pools is not permitted. Clients are encouraged to carefully consider their investment choices in advance. Funds may be stored in the Client's wallet until such time as the Client is confident in selecting the appropriate investment product.</p>
+
+<h2>5. Mandated Services for Short Term Investment</h2>
+<p><strong>5.1.</strong> The short-term investment pool opens and closes every one (1) month as part of a fixed Collection Period. At the end of each Collection Period, SV Capital will perform the following as duly authorised agent of the Client:</p>
+<ol>
+  <li>SV Capital will receive the Investment Amount into the SV Capital Account as collecting agent of the Client. SV Capital will receive such amount for on-payment to the relevant Product Seller as consideration for the sale transaction described in 5.1(2) below and at no time will SV Capital become entitled to the Investment Amount for its own benefit;</li>
+  <li>SV Capital will, as agent of the relevant Clients having contributed the Aggregated Investment Amount, acquire the Product (at the prevailing market prices at the time of purchase) as soon as reasonably practicable following receipt of the funds described in clause (1) above (Investment Date). SV Capital will use its best endeavours to acquire the Product at the best available market related prices, but will not be obliged to acquire Product at any particular price;</li>
+  <li>Upon the acquisition of Product as described in paragraph 5.1(2) above, each Client having contributed to an Aggregated Investment Amount will become co-owners (in the Client Participation Ratio) of the relevant Product acquired. For the avoidance of doubt, it is confirmed that SV Capital is merely acting as facilitator and agent in respect of the acquisition and sale of Product and does not obtain any ownership interest in respect of the Product;</li>
+  <li>At the end of each Investment Period, SV Capital is authorised to sell the relevant Product as agent of the Client at prevailing market prices. Upon such sale the Client will be entitled to such share of the sale proceeds as is equal to its Client Participation Ratio;</li>
+  <li>A Client is not entitled to dispose of its interest in any Product acquired pursuant to clause 5.1(2) before the end of an Investment Period. The Client authorises SV Capital to enter into a reinvestment agreement (Reinvestment Agreement) with the Product Seller in terms of which the Product Seller will be permitted, as agent of the Client, to sell and reinvest the relevant Product (and Aggregate Investment Amount received pursuant to any such sale) quarterly during the Investment Period. Such reinvestment will entail the Product Seller selling the Product and reacquiring Product every five (5) months at prevailing market prices. The Reinvestment Agreement is designed to maximise investment returns for the Client during the annual Investment Period;</li>
+  <li>Any amounts received by SV Capital pursuant to any sale of Product on behalf of a Client at the end of the Investment Period will be received in the SV Capital Account as collecting agent of the Client and be on-paid to the Client's account as nominated in the Application Form (Client Account).</li>
+</ol>
+<p><strong>5.2. Short term investment restriction and limitations</strong></p>
+<p><strong>Early withdrawals:</strong> Clients acknowledge and accept that early withdrawal of invested funds is strictly prohibited. All funds will be locked in for the full duration of the applicable Investment Period.</p>
+<p><strong>Switching between pools:</strong> Once an investment has been made, switching between investment pools is not permitted.</p>
+
+<h2>6. Mandated Services for Delivery Bike Investment</h2>
+<p><strong>6.1.</strong> The delivery bike investment pool closes once the target amount is reached. A new pool will open thereafter. At the end of each Collection Period, SV Capital will perform the following as duly authorised agent of the Client:</p>
+<ol>
+  <li>SV Capital will receive the Investment Amount into the SV Capital Account as collecting agent of the Client. SV Capital will receive such amount for on-payment to the Delivery Bike operator as an investment into said Delivery Bike investment described in 6.1(2) below and at no time will SV Capital become entitled to the Investment Amount for its own benefit;</li>
+  <li>SV Capital will, as agent of the relevant Clients having contributed the Aggregated Investment Amount, invest in Delivery Bikes that is operated by Delivery Bike operator in already established routes through a rent-to-own model as soon as reasonably practicable following receipt of the funds described in clause 6.1(1) above (Investment Date). SV Capital will use its best endeavours to ensure a rigorous due diligence process is done to ensure the adequate investment and correct usage of the Delivery Bikes for the benefit of the investment;</li>
+  <li>Upon the investment in Delivery Bikes as described in paragraph 6.1(2) above, each Client having contributed to an Aggregated Investment Amount will become co-investor (in the Client Participation Ratio) in the relevant Delivery Bike Fleet. For the avoidance of doubt, it is confirmed that SV Capital is merely acting as facilitator and agent and does not obtain any ownership interest in respect of the investment;</li>
+  <li>At the end of each Investment Period, SV Capital is authorised to recoup the funds invested in the Delivery Bike investment through the rent-to-buy model employed as agent of the Client. The Client will be entitled to such share of the sale proceeds as is equal to its Client Participation Ratio;</li>
+  <li>A Client is not entitled to dispose of its interest in any investment made pursuant to clause 6.1(2) before the end of an Investment Period;</li>
+  <li>Any amounts received by SV Capital pursuant to the recoupment of funds on behalf of a Client at the end of the Investment Period will be received in the SV Capital Account as collecting agent of the Client and be on-paid to the Client's account as nominated in the Application Form (Client Account).</li>
+</ol>
+<p><strong>6.2. Delivery bike investment restrictions and limitations</strong></p>
+<p><strong>Early withdrawals:</strong> Clients acknowledge and accept that early withdrawal of invested funds is strictly prohibited. All funds will be locked in for the full duration of the applicable Investment Period.</p>
+<p><strong>Switching between pools:</strong> Once an investment has been made, switching between investment pools is not permitted.</p>
+
+<h2>7. Mandated Services for Solar Investment</h2>
+<p><strong>7.1.</strong> The solar investment pool closes once the target amount for the relevant project has been reached. A new pool will open thereafter. At the end of each Collection Period, SV Capital will perform the following as duly authorised agent of the Client:</p>
+<p><strong>Collection of Investment Amount:</strong> SV Capital will receive the Investment Amount into the SV Capital Account as collecting agent of the Client. These funds will be received for on-payment towards the acquisition and installation of solar systems as described in clause 7.1(2). At no point will SV Capital become entitled to the Investment Amount for its own benefit.</p>
+<p><strong>Acquisition and Installation of Solar Systems:</strong> SV Capital will, as agent of all Clients contributing to the Aggregated Investment Amount, acquire and install the solar systems at designated residential or commercial sites as soon as reasonably practicable after the Investment Date. SV Capital will use reasonable endeavours to ensure that qualified and vetted partners ("Solar Manager") install and maintain the systems, but will not be obliged to acquire equipment at any specific price.</p>
+<p><strong>Ownership and Project Structure:</strong> Upon deployment of funds, each Client becomes a co-investor (in accordance with the Client Participation Ratio) in the underlying solar asset or project. SV Capital acts solely as facilitator and agent and holds no ownership interest.</p>
+<p><strong>Revenue Collection and Distribution:</strong> During the Investment Period, revenues generated through Power Purchase Agreements (PPAs) and/or feed-in tariffs will be collected. As agent of the Client, SV Capital will distribute the Client's share of returns annually based on the Client Participation Ratio.</p>
+<p><strong>End of Investment Period and Exit:</strong> At the end of the chosen Investment Period (5, 6, or 7 years), SV Capital is authorised to settle all outstanding fees, return the Client's full capital, and return the final year's accrued returns. Early withdrawal is strictly prohibited, as solar systems must remain in operation for the duration of the term.</p>
+<p><strong>Payments to Client:</strong> Any amounts received by SV Capital at the end of the Investment Period will be paid into the Client's wallet or nominated account as indicated on the Application Form.</p>
+<p><strong>7.2. Solar Investment Restrictions and Limitations</strong></p>
+<p><strong>Early withdrawals:</strong> Clients acknowledge that early withdrawal of invested funds is strictly prohibited. Solar installations require long-term stability and contractual performance under PPAs.</p>
+<p><strong>Switching between pools:</strong> Once an investment has been made, switching between pools is not permitted.</p>
+
+<h2>8. Capacity and rights of ownership</h2>
+<p><strong>8.1.</strong> SV Capital is hereby authorised to perform all Mandated Services as duly authorised agent of the Client.</p>
+<p><strong>8.2.</strong> All Product acquired pursuant to the Mandated Services will become the property of the Client (on a joint ownership basis with all other Clients having contributed to a specific Aggregated Investment Amount in a percentage equal to the Client Participation Ratio).</p>
+<p><strong>8.3.</strong> All Delivery Bikes acquired pursuant to the Mandated Services will become the property of the Client (on a joint ownership basis with all other Clients having contributed to a specific Aggregated Investment Amount in a percentage equal to the Client Participation Ratio).</p>
+<p><strong>8.4.</strong> SV Capital is only authorised to perform the Mandated Services as agent and will not obtain any proprietary interest in the Product; Tuk-Tuk and or any projects invested in.</p>
+
+<h2>9. Fees</h2>
+<p><strong>9.1.</strong> SV Capital is entitled to be paid for the provision of the Mandated Services of Cattle as follows:</p>
+<ol>
+  <li>A upfront service fee of 3.8% (excl. VAT) of the Aggregated Investment Amount and must be paid at the end of each collection cycle (Raising cycle). SV Capital will also charge a daily standing admin fee of R2 per animal per day.</li>
+  <li>Any interest earned on the Investment Amount while maintained in an SV Capital Account pursuant to providing the Mandated Services.</li>
+  <li>At the end of the Investment Period, SV Capital will be entitled to retain 20% of the investment return in excess of the Threshold Return. The Threshold Return in this case is fixed to 13%.</li>
+  <li>The fees described under clause 9.1(1) must be paid upfront, at the end of each Raising cycle. For the avoidance of doubt, the payment of the fee described in this clause 9 will be deducted from the Investment Amount.</li>
+  <li>The Client acknowledges and agrees that any figures or amounts provided by SV Capital may be rounded down for calculation purposes. SV Capital shall not be liable for any discrepancies or issues arising from this rounding process.</li>
+</ol>
+<p><strong>9.2.</strong> SV Capital is entitled to be paid for the provision of the Mandated Services of Short-Term Investment as follows:</p>
+<ol>
+  <li>SV Capital will charge no monthly admin fee on investments in the Short-Term investment.</li>
+  <li>An upfront service fee of 3.8% (excl VAT) of the Aggregated Investment Amount and must be paid at the end of each collection cycle (Raising cycle).</li>
+  <li>Any interest earned on the Investment Amount while maintained in an SV Capital Account pursuant to providing the Mandated Services.</li>
+  <li>At the end of the Investment Period, the return on this investment is expected to be up to 8.02%. A return achieved above that; SV Capital will be entitled to retain.</li>
+</ol>
+<p><strong>9.3.</strong> SV Capital is entitled to be paid for the provision of the Mandated Services of Delivery Bike Investment as follows:</p>
+<ol>
+  <li>An upfront service fee of 4.8% (excl. VAT) of the Aggregated Investment Amount and must be paid at the end of each collection cycle (Raising cycle).</li>
+  <li>SV Capital will also charge a monthly management fee of R75 per bike per week when the weekly rentals are collected from the riders that are renting the Delivery Bike.</li>
+  <li>The Aggregated Investment Amount will be deployed to the Delivery Bike operator once the minimum capital requirement is sufficient to purchase 5 motorbikes.</li>
+  <li>Any interest earned on the Investment Amount while maintained in an SV Capital Account pursuant to providing the Mandated Services.</li>
+  <li>At the end of the Investment Period, the return on this investment is expected to be up to 20%.</li>
+</ol>
+<p><strong>9.4.</strong> SV Capital is entitled to be paid for the provision of Mandated Services in relation to Solar Investments as follows:</p>
+<ul>
+  <li><strong>Upfront Fees:</strong> Management Fee 3.5% (excl. VAT) + Platform Fee 1.0% (excl. VAT) = total 4.5% deducted upfront from the Investment Amount at the end of each Collection Period.</li>
+  <li><strong>Annual Management Fee:</strong> An annual fee of 3.25% of the Aggregated Investment Amount is charged for ongoing management, monitoring, maintenance coordination, and administration.</li>
+  <li><strong>Performance Fees:</strong> SV Capital may charge a performance fee of up to 10% of returns above the expected net return, depending on the final investment structure and project performance. Any performance fee is applied only at the end of the Investment Period.</li>
+  <li><strong>Interest Earned on Undeployed Funds:</strong> Any interest earned while Investment Amounts are held in the SV Capital Account before deployment may be retained by SV Capital.</li>
+</ul>
+
+<h2>10. Farming Services</h2>
+<p><strong>10.1.</strong> As part of the Mandated Services, SV Capital is authorised to appoint the Product Seller to perform the following services for and on behalf of the Client:</p>
+<ul>
+  <li>Farm rental in historically productive livestock areas within South Africa, vaccinations, veterinarian services, fee, security, fencing, herdsmen and management;</li>
+  <li>The maintenance of the Product in a good and healthy condition in a farm operated by the Product Seller;</li>
+  <li>The branding of the Product, recording its possession to SV Capital;</li>
+  <li>Conducting an ongoing authenticity audit of ownership of the Product in favour of the Client by a reputable firm of auditors; and</li>
+  <li>The provision of quarantine facilities when necessary, in the event that the Product fall ill.</li>
+</ul>
+<p><strong>10.2.</strong> The Client authorises SV Capital to pay the Product Seller market related fees for the services provided.</p>
+
+<h2>11. Short Term Projects</h2>
+<p><strong>11.1.</strong> As part of the Mandated Services, SV Capital is authorised to invest in adequate and appropriate projects with partner entrepreneurs and such to perform the following services for and on behalf of the Client:</p>
+<ul>
+  <li>Perform a rigorous due diligence project on potential projects to invest in;</li>
+  <li>Put risk mitigants in place to ensure the recoupment of funds from said projects;</li>
+  <li>Review such projects and obtain supporting documents and record its possession to SV Capital;</li>
+  <li>Conducting an ongoing authenticity audit of projects in favour of the Client by a reputable firm of auditors.</li>
+</ul>
+
+<h2>12. Delivery Bike Investment</h2>
+<p><strong>12.1.</strong> As part of the Mandated Services, SV Capital is authorised to invest in adequate fleet of Delivery Bikes with partner Delivery Bike operator and such to perform the following services for and on behalf of the Client:</p>
+<ul>
+  <li>Perform a rigorous due diligence on Delivery Bike operator partner to invest in;</li>
+  <li>Ensure the Delivery Bike is operated accordingly to recoup the Clients invested amount;</li>
+  <li>The maintenance of the Delivery Bike and repair thereof;</li>
+  <li>The ownership of the Delivery Bike will only be transferred once the Delivery Bike operator has made full repayment of the outstanding amount due to Clients over the 18-month investment period.</li>
+</ul>
+
+<h2>13. Disclaimer: Client Investment Calculator</h2>
+<p>The Client Investment Calculator is provided for informational purposes only and is intended to assist you in understanding the potential outcomes of your investments. Please note the following:</p>
+<ul>
+  <li><strong>Not Financial Advice:</strong> The results generated by this calculator do not constitute financial, legal, or tax advice. Always consult a qualified financial advisor or professional before making investment decisions.</li>
+  <li><strong>Assumptions and Projections:</strong> The calculator is based on certain assumptions, inputs, and historical data which may not accurately predict future performance. Past performance is not indicative of future results.</li>
+  <li><strong>No Guarantees:</strong> Investment values and returns are subject to market risks, economic conditions, and other external factors. Actual results may vary significantly from the projections shown.</li>
+  <li><strong>User Responsibility:</strong> The accuracy of the results depends on the data you input. It is your responsibility to ensure the information provided is correct and complete.</li>
+  <li><strong>Limitations:</strong> The calculator does not account for all possible variables, fees, taxes, or specific individual circumstances. It is designed to provide general estimates only.</li>
+  <li><strong>Third-Party Data:</strong> Where applicable, the calculator may use data from external sources. While we strive to provide accurate and reliable information, we cannot guarantee its accuracy or completeness.</li>
+</ul>
+
+<h2>14. Undertakings</h2>
+<p><strong>14.1.</strong> The Client undertakes to not dispose of the investment or use the investment as any form of Collateral without first obtaining the prior written approval of SV Capital.</p>
+<p><strong>14.2.</strong> The Client undertakes that any action in relation to the investment will only be affected through the agency of SV Capital as part of the Mandated Services.</p>
+
+<h2>15. Indemnity</h2>
+<p>The Client will indemnify SV Capital against any loss, cost, damages, expense or liability arising from, or in connection with, the performance by SV Capital of its obligations under this Agreement unless caused by the gross negligence of SV Capital.</p>
+<p>This clause means that the Client will have no claim against SV Capital for any losses caused by SV Capital unless SV Capital is grossly negligent. The Client is also responsible under this clause to pay for any third party's losses arising out of SV Capital's performance of its obligations under this Agreement on your behalf.</p>
+
+<h2>16. Reports</h2>
+<p><strong>16.1.</strong> SV Capital will further provide the Client with bi-annual reports during the Investment Period indicating the investment performance during such period and fees payable in respect of such period.</p>
+<p><strong>16.2.</strong> At the conclusion of the Investment Period, SV Capital will provide investors with a statement reflecting the Investment Amount, all investment returns, fees and the final investment return amount payable to the Client.</p>
+<p><strong>16.3. Maturity Instructions</strong></p>
+<p>At the conclusion of the Investment Period, the Client must submit a maturity instruction via the SV Capital platform. Email or verbal instructions will not be accepted, unless the client is elderly, ill, or otherwise unable to use the platform, in which case SV Capital may, at its discretion, accept alternative forms of instruction.</p>
+<p>The following maturity options are available to the Client:</p>
+<ul>
+  <li><strong>Reinvest:</strong> Automatically reinvest the capital plus returns into a new pool of the same investment product.</li>
+  <li><strong>Switch Products:</strong> Transfer the capital plus returns to a different investment product with an open pool, subject to minimum investment requirements.</li>
+  <li><strong>Payout Custom:</strong> Withdraw a custom amount into the Client's wallet, with the remaining balance reinvested into the same product.</li>
+  <li><strong>Payout Return:</strong> Withdraw only the investment return into the Client's wallet, leaving the capital reinvested.</li>
+  <li><strong>Payout All:</strong> Withdraw the full capital and return into the Client's wallet.</li>
+</ul>
+<p>Maturity instructions must be submitted before 5:00PM (SAST) on the last day of the Investment Period. If no instruction is received by this deadline, SV Capital reserves the right to automatically reinvest the Client's capital and returns into a new pool of the same investment product.</p>
+<p>SV Capital shall not be liable for any delays, missed opportunities, or loss of returns resulting from the Client's failure to submit a maturity instruction via the designated platform and within the prescribed time.</p>
+<p>For assistance with maturity instructions, Clients may contact the support team at <a href="mailto:admin@svcapital.co.za">admin@svcapital.co.za</a>.</p>
+
+<h2>17. Breach</h2>
+<p><strong>17.1.</strong> Should either Party (Defaulting Party) breach any of the provisions of this Agreement, then the other Party (Aggrieved Party) may give the Defaulting Party ten Business days' written notice or such longer period of time as the Aggrieved Party may specify in the notice, to remedy the breach. If the Defaulting Party fails to comply with the notice, the Aggrieved Party may:</p>
+<ul>
+  <li>Claim immediate payment and/or performance by the Defaulting Party of all of the Defaulting Party's obligations that are due for performance; or</li>
+  <li>Subject to clause 17.2, cancel this Agreement on written notice to the Defaulting Party where the breach constitutes a material breach, in either event without prejudice to the Aggrieved Party's right to claim damages or to exercise any other rights that the Aggrieved Party may have under this Agreement or in law.</li>
+</ul>
+<p><strong>17.2.</strong> Neither Party can cancel this Agreement subsequent to the Investment Date.</p>
+<p><strong>17.3.</strong> Should any cancellation occur prior to the end of an Investment Period, the provision of clause 4.1(5) shall apply.</p>
+
+<h2>18. General</h2>
+<p><strong>18.1.</strong> This Agreement is the whole agreement between the Parties in regard to its subject matter.</p>
+<p><strong>18.2.</strong> No amendment, addition to or variation or consensual cancellation or termination of this Agreement, including this clause, has effect unless in writing and signed by the Parties.</p>
+<p><strong>18.3.</strong> No indulgence by a Party to another Party, or failure strictly to enforce the terms of this Agreement, will be interpreted as a waiver or be capable of founding an estoppel.</p>
+<p><strong>18.4.</strong> The Parties undertake to do everything reasonable in their power necessary for or incidental to the effectiveness and performance of this Agreement.</p>
+<p><strong>18.5.</strong> Neither Party is entitled to cede or transfer any of its rights or delegate or subcontract any of its obligations under this Agreement without the prior written consent of the other Party.</p>
+<p><strong>18.6.</strong> Any illegal or unenforceable provision of this Agreement may be severed, and the remaining provisions of this Agreement shall continue in force.</p>
+
+<h2>19. Notices and addresses</h2>
+<p><strong>19.1.</strong> Any notice, consent, approval or other communication in connection with this Agreement (Notice) will be in writing in English.</p>
+<p><strong>19.2.</strong> Each Party chooses the physical address, as set out in the Application Form. Either Party may by Notice to the other Party change its address and/or the person, if any, for whose attention any Notice must be marked.</p>
+<p><strong>19.3. Effective on receipt:</strong> Any Notice takes effect when received by the recipient (or on any later date specified in the Notice). If delivery is not on a Business Day, or is after ordinary business hours (being 9am to 5pm Johannesburg time) on a Business Day, the Notice is deemed to be received on the Business Day after the date of delivery.</p>
+<p><strong>19.4.</strong> Each Party chooses its physical address as its address at which legal process and other documents in legal proceedings in connection with this Agreement may be served (domicilium citandi et executandi).</p>
+
+<h2>20. Applicable law</h2>
+<p>This Agreement is governed by the laws of South Africa.</p>
+
+<h2>21. Confidentiality</h2>
+<p><strong>21.1.</strong> Each Party shall treat as strictly confidential all information received or obtained as a result of entering into or performing its obligations under this Agreement which relates to: the provisions of this Agreement; the negotiations relating to this Agreement; the subject matter of this Agreement; and/or the other Party.</p>
+<p><strong>21.2.</strong> A Party may disclose Confidential Information if and to the extent: required by law, regulation or statute or order of court; required to vest the full benefit of this Agreement in either Party; disclosed to the professional advisers, auditors and bankers of each Party; the information has come into the public domain through no fault of that Party; and/or the Party to whom the information relates has given prior written approval to the disclosure.</p>
+
+<h2>22. Jurisdiction</h2>
+<p>The Parties unconditionally consent and submit to the non-exclusive jurisdiction of the High Court of South Africa, Gauteng Local Division, Johannesburg in regard to all matters arising from this Agreement.</p>
+
+<h2>23. Costs</h2>
+<p><strong>23.1.</strong> Each Party shall pay its own costs incurred by it for the preparation, signing and performance of this Agreement.</p>
+<p><strong>23.2.</strong> Any costs, including all legal costs on an attorney and own client basis and VAT, incurred by a Party arising out of or in connection with a breach by the other Party shall be borne by the Party in breach.</p>
+
+<h2>24. Binding effect</h2>
+<p>This Agreement will become binding between the Parties upon the Client executing (and SV Capital accepting) an Application Form.</p>
+
+<h2>25. Product Disclaimer</h2>
+<p>The information on the Service is provided with the understanding that the Company is not herein engaged in rendering legal, accounting, tax, or other professional advice and services. As such, it should not be used as a substitute for consultation with professional accounting, tax, legal or other competent advisers. The information contained on the Service is for general information purposes only. We are not licensed or registered as a securities broker or dealer, investment adviser or funding portal with the Financial Services Conduct Authority (FSCA) or any similar regulatory entity of any country.</p>
+<p>Nothing on this website constitutes an offer or solicitation to sell, buy or subscribe to any securities in any country or jurisdiction, and nothing in it is intended as investment advice. We strongly urge you to consider the fact that investing in start-ups, real estate, agriculture, transport projects or any other venture through asset-backed crowdfunding involves substantial risks and may result in the loss of your investment.</p>
+<p>In no event shall the Company or its suppliers be liable for any special, incidental, indirect, or consequential damages whatsoever arising out of or in connection with your access or use or inability to access or use the Service.</p>
+`;
+
+    (async () => {
+      const el = document.getElementById('termsContent');
+      try {
+        const res = await fetch('/api/legal/terms-content');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.content) {
+            el.innerHTML = data.content;
+            return;
+          }
+        }
+      } catch (_) {}
+      el.innerHTML = DEFAULT_TERMS;
+    })();
+  </script>
 </body>
 </html>
