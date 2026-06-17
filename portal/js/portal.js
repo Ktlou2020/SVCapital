@@ -3502,9 +3502,11 @@ async function openMaturityModal(investmentId) {
   const inv = PORTAL.investments.find(i => i.id === investmentId);
   if (!inv) return;
 
-  const isActive  = inv.status === 'active';
-  const total     = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
-  const existing  = inv.maturity_instruction || '';
+  const isActive      = inv.status === 'active';
+  const hasActualReturn = (parseFloat(inv.actual_return_amount) || 0) > 0;
+  const returnAmt     = parseFloat(inv.actual_return_amount) || 0;
+  const total         = inv.amount + returnAmt;
+  const existing      = inv.maturity_instruction || '';
 
   // Fetch open pools of matching product type for reinvest option
   let reinvestPools = [];
@@ -3521,8 +3523,11 @@ async function openMaturityModal(investmentId) {
     <div class="info-list mb-16">
       <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(inv.pool_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Capital</span><span class="info-row__value">${Utils.rand(inv.amount)}</span></div>
-      <div class="info-row"><span class="info-row__label">Returns</span><span class="info-row__value text-green">${Utils.rand(inv.actual_return_amount || inv.expected_return_amount)}</span></div>
-      <div class="info-row"><span class="info-row__label">Total Payout</span><span class="info-row__value text-gold fw-700">${Utils.rand(total)}</span></div>
+      ${hasActualReturn
+        ? `<div class="info-row"><span class="info-row__label">Returns</span><span class="info-row__value text-green">${Utils.rand(returnAmt)}</span></div>
+           <div class="info-row"><span class="info-row__label">Total Payout</span><span class="info-row__value text-gold fw-700">${Utils.rand(total)}</span></div>`
+        : `<div class="info-row"><span class="info-row__label">Returns</span><span class="info-row__value text-muted" style="font-size:0.82rem;font-style:italic">Credited at maturity</span></div>`
+      }
     </div>
 
     <div class="form-group">
@@ -8620,27 +8625,28 @@ function _renderAnalyticsAllocChart() {
   });
   const entries = Object.entries(byPool).sort((a, b) => b[1] - a[1]);
   const total   = entries.reduce((s, [, v]) => s + v, 0);
-  const COLORS  = ['#FF9B0C','#a855f7','#2F8C9B','#22c55e','#ef4444','#3b82f6','#f97316','#8b5cf6'];
+  const COLORS  = ['#FF8215', '#22c55e', '#FF9B0C', '#16a34a', '#f97316', '#a855f7', '#14b8a6', '#3b82f6'];
 
   if (PORTAL.charts.analyticsAlloc) { PORTAL.charts.analyticsAlloc.destroy(); }
   PORTAL.charts.analyticsAlloc = new Chart(ctx, {
     type: 'doughnut',
     data: {
       labels: entries.map(([n]) => n),
-      datasets: [{ data: entries.map(([,v]) => v), backgroundColor: COLORS, borderWidth: 2, borderColor: '#fff' }],
+      datasets: [{ data: entries.map(([,v]) => v), backgroundColor: COLORS, borderWidth: 3, borderColor: '#ffffff' }],
     },
     options: {
       responsive: true, maintainAspectRatio: true, cutout: '62%',
+      layout: { padding: 10 },
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.label + ': R' + c.raw.toLocaleString('en-ZA') } } },
     },
   });
 
   if (list) {
     list.innerHTML = entries.map(([name, val], i) => `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${COLORS[i % COLORS.length]};flex-shrink:0"></span>
-        <span style="font-size:0.78rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-body)">${_esc(name)}</span>
-        <span style="font-size:0.78rem;font-weight:700;color:var(--text-body)">${total > 0 ? ((val/total)*100).toFixed(1) : 0}%</span>
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${COLORS[i % COLORS.length]};flex-shrink:0"></span>
+        <span style="font-size:0.82rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#374151;font-weight:500">${_esc(name)}</span>
+        <span style="font-size:0.78rem;font-weight:700;color:#1a1a1a">${total > 0 ? ((val/total)*100).toFixed(1) : 0}%</span>
       </div>`).join('') || '<p style="font-size:0.78rem;color:var(--text-muted)">No investment data yet.</p>';
   }
 }
@@ -8655,7 +8661,9 @@ function _renderAnalyticsTimeline() {
   }
   const statusBadge = s => {
     const map = { active:'#22c55e', paid_out:'#3b82f6', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316' };
-    return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${s.replace('_',' ')}</span>`;
+    const label = (s || '').replace(/_/g, ' ');
+    const labelSentence = label.charAt(0).toUpperCase() + label.slice(1);
+    return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${labelSentence}</span>`;
   };
   const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';
   tbody.innerHTML = invs.slice(0, 30).map(i => {
