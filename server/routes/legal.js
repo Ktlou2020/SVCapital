@@ -3,7 +3,7 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../db/setup');
-const { requireAuth, requireAdmin } = require('./auth');
+const { requireAuth, requireRole } = require('../middleware/auth');
 
 const TERMS_KEY   = 'terms_of_use_content';
 const PRIVACY_KEY = 'privacy_policy_content';
@@ -16,7 +16,7 @@ function makeRoutes(key) {
         res.json({ content: row.rows[0]?.value || null, updatedAt: row.rows[0]?.updated_at || null });
       } catch (_) { res.status(500).json({ error: 'Failed to load content' }); }
     },
-    put: [requireAuth, requireAdmin, async (req, res) => {
+    put: [requireAuth, requireRole('admin'), async (req, res) => {
       const { content } = req.body;
       if (typeof content !== 'string') return res.status(400).json({ error: 'Content required' });
       try {
