@@ -3962,7 +3962,6 @@ function buildStatementHTML(opts) {
             ${stmtInfoRow('Matured/Paid Out', investments.filter(i=>['matured','paid_out'].includes(i.status)).length)}
             ${stmtInfoRow('Risk Profile', investor.risk_profile ? investor.risk_profile.charAt(0).toUpperCase() + investor.risk_profile.slice(1) : 'Moderate')}
             ${stmtInfoRow('Province', investor.province || '—')}
-            ${stmtInfoRow('Referral Code', investor.referral_code || '—')}
           </div>
         </div>
       </section>`;
@@ -4155,7 +4154,7 @@ function buildStatementHTML(opts) {
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em">Investor:</span>
           <span style="font-size:12px;font-weight:800;color:#1a1a1a">${fullName}</span>
-          <span style="background:rgba(255,155,12,0.1);color:#ff5229;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(255,155,12,0.2);margin-left:4px">${investorId}</span>
+          <span style="font-size:9px;color:#9ca3af;margin-left:8px;line-height:1.4">Smartvest Financial Services (Pty) Ltd<br>The Station, 63 Peter Place, Bryanston, Johannesburg, 2191</span>
         </div>
       </div>
 
@@ -6474,13 +6473,13 @@ function generateTaxCertificate() {
   });
   const totalInterest = interestTxns.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
 
-  const certNumber = `SVCIT-${taxYear}-${String(inv.id).replace(/\D/g,'').slice(-6) || Math.floor(Math.random()*900000+100000)}`;
+  const certNumber = `SVCIIC-${taxYear}-${String(inv.id).replace(/\D/g,'').slice(-6) || Math.floor(Math.random()*900000+100000)}`;
   const generatedAt = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
   const fromLabel = from.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
   const toLabel   = to.toLocaleDateString('en-ZA',   { day: 'numeric', month: 'long', year: 'numeric' });
 
   const html = `
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>SV Capital — Investment Income Certificate ${taxYear}</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -6511,24 +6510,25 @@ td:last-child{text-align:right;font-weight:600}
 .stamp{display:inline-block;border:2px solid #1a2235;color:#1a2235;padding:6px 14px;border-radius:4px;font-size:0.72rem;font-weight:700;letter-spacing:0.12em;margin-top:16px;text-transform:uppercase}
 </style></head><body>
 <div class="no-print">
-  <span>SV Capital — IT3(b) Tax Certificate ${taxYear}</span>
+  <span>SV Capital — Investment Income Certificate ${taxYear}</span>
   <button onclick="window.print()">⬇ Save as PDF / Print</button>
 </div>
 <div class="wrap">
   <div class="hdr">
     <div>
       <div class="logo">SV <span>Capital</span></div>
-      <div style="font-size:0.75rem;color:#6b7280;margin-top:4px">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSCA Regulated</div>
+      <div style="font-size:0.75rem;color:#6b7280;margin-top:4px">SmartVest Financial Services (Pty) Ltd &nbsp;·&nbsp; FSP #52449 &nbsp;·&nbsp; FSCA Regulated</div>
+      <div style="font-size:0.72rem;color:#9ca3af;margin-top:2px">The Station, 63 Peter Place, Bryanston, Johannesburg, 2191</div>
     </div>
     <div class="cert-badge">
-      IT3(b) INTEREST INCOME CERTIFICATE
+      INVESTMENT INCOME CERTIFICATE
       <small>Cert No: ${certNumber}</small>
       <small>Generated: ${generatedAt}</small>
     </div>
   </div>
 
-  <h1>IT3(b) Interest Income Certificate</h1>
-  <div class="subtitle">Tax Year: 1 March ${taxYear - 1} – 28 February ${taxYear} &nbsp;|&nbsp; For submission to SARS</div>
+  <h1>Investment Income Certificate</h1>
+  <div class="subtitle">Period: 1 March ${taxYear - 1} – 28 February ${taxYear}</div>
 
   <div class="interest-box">
     <div class="interest-lbl">Total Interest Received</div>
@@ -6562,15 +6562,13 @@ td:last-child{text-align:right;font-weight:600}
   ` : `<div style="text-align:center;padding:24px;background:#f8fafc;border-radius:10px;color:#6b7280;font-size:0.85rem;margin-bottom:24px">No interest income recorded for this tax year.</div>`}
 
   <div class="footer">
-    <strong>SV Capital (Pty) Ltd</strong> is a registered financial services provider regulated by the Financial Sector Conduct Authority (FSCA).<br>
-    This certificate is generated in accordance with Section 11(j) of the Income Tax Act No. 58 of 1962.<br>
-    Interest declared above must be included in your annual tax return (ITR12) under "Local interest income".<br>
-    The IT3(b) exemption threshold for individuals under 65 is <strong>R23,800</strong> per annum (2024 tax year).
+    This certificate is issued by <strong>SmartVest Financial Services (Pty) Ltd</strong>, an authorised financial services provider regulated by the Financial Sector Conduct Authority (FSCA), FSP Licence #52449, on behalf of SV Capital.<br>
+    This document is for informational purposes. Please consult a tax advisor for official SARS submissions.
     <br><br>
     <strong>Certificate No:</strong> ${certNumber} &nbsp;·&nbsp; <strong>Date Issued:</strong> ${generatedAt}<br>
     This certificate is computer generated and does not require a signature.
     <br>
-    <div class="stamp">SV Capital — IT3(b)</div>
+    <div class="stamp">SV Capital — Investment Income</div>
   </div>
 </div>
 </body></html>`;
