@@ -57,11 +57,12 @@
   </div>
 
   <footer>
-    &copy; 2026 SV Capital (Pty) Ltd. All rights reserved. &nbsp;·&nbsp; FSP #52449 &nbsp;·&nbsp;
+    &copy; <span class="yr"></span> SV Capital (Pty) Ltd. All rights reserved. &nbsp;·&nbsp; FSP #52449 &nbsp;·&nbsp;
     <a href="/terms.html">Terms of Use</a> &nbsp;·&nbsp;
-    <a href="/popia.html">POPIA Notice</a> &nbsp;·&nbsp;
+    <a href="/popia.html">Privacy Policy</a> &nbsp;·&nbsp;
     <a href="/paia.html">PAIA Manual</a>
   </footer>
+  <script>document.querySelectorAll('.yr').forEach(function(el){el.textContent=new Date().getFullYear();});</script>
 
   <script>
     const DEFAULT_TERMS = `

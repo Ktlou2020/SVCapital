@@ -2005,8 +2005,11 @@ async function loadWallet() {
     activity.innerHTML = `<div class="empty-state">
       <i class="fa-solid fa-wallet" style="font-size:3rem;color:var(--gold);opacity:0.7;margin-bottom:16px;display:block"></i>
       <div class="empty-state__title">No wallet activity yet</div>
-      <div class="empty-state__sub">Your deposits, returns, and payouts will appear here once you top up.</div>
-      <button onclick="openTopUpModal()" class="btn--primary" style="margin-top:16px;padding:10px 24px;border-radius:8px;font-size:0.85rem;font-weight:700;border:none;cursor:pointer;background:linear-gradient(135deg,#D4AF37,#b8932a);color:#000">Top Up Wallet →</button>
+      <div class="empty-state__sub">Top up once and this feed will start showing deposits, returns, payouts, and withdrawals in one place.</div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px">
+        <button class="btn btn--primary btn--sm" onclick="openTopUpModal()"><i class="fa-solid fa-plus"></i> Top up wallet</button>
+        <button class="btn btn--secondary btn--sm" onclick="navigate('marketplace',document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-layer-group"></i> Browse pools</button>
+      </div>
     </div>`;
     return;
   }
