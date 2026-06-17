@@ -241,7 +241,7 @@ router.post('/register', async (req, res) => {
 
     // Auto-create investor profile
     if (userRole === 'investor') {
-      const invId = 'INV-' + String(Date.now()).slice(-6);
+      const invId = 'SVC' + Date.now().toString(36).slice(-4).toUpperCase() + Math.random().toString(36).slice(2, 6).toUpperCase();
       const referralCode = 'SVC' + Math.random().toString(36).substring(2, 7).toUpperCase();
 
       await pool.query(`
