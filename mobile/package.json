@@ -4,28 +4,29 @@
   "description": "SV Capital Investor App — iOS & Android",
   "private": true,
   "scripts": {
-    "build":        "node scripts/build.js",
-    "sync":         "npm run build && npx cap sync",
+    "build": "node scripts/build.js",
+    "sync": "npm run build && npx cap sync",
     "open:android": "npm run sync && npx cap open android",
-    "open:ios":     "npm run sync && npx cap open ios",
-    "run:android":  "npm run sync && npx cap run android",
-    "run:ios":      "npm run sync && npx cap run ios",
-    "add:android":  "npx cap add android",
-    "add:ios":      "npx cap add ios"
+    "open:ios": "npm run sync && npx cap open ios",
+    "run:android": "npm run sync && npx cap run android",
+    "run:ios": "npm run sync && npx cap run ios",
+    "add:android": "npx cap add android",
+    "add:ios": "npx cap add ios"
   },
   "dependencies": {
     "@capacitor/core": "^6.0.0"
   },
   "devDependencies": {
-    "@capacitor/cli":                  "^6.0.0",
-    "@capacitor/android":              "^6.0.0",
-    "@capacitor/ios":                  "^6.0.0",
-    "@capacitor/push-notifications":   "^6.0.0",
-    "@capacitor/status-bar":           "^6.0.0",
-    "@capacitor/splash-screen":        "^6.0.0",
-    "@capacitor/app":                  "^6.0.0",
-    "@capacitor/network":              "^6.0.0",
-    "@capacitor/haptics":              "^6.0.0",
-    "@capacitor/local-notifications":  "^6.0.0"
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/app": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/haptics": "^6.0.0",
+    "@capacitor/ios": "^6.0.0",
+    "@capacitor/local-notifications": "^6.0.0",
+    "@capacitor/network": "^6.0.0",
+    "@capacitor/push-notifications": "^6.0.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0",
+    "sharp": "^0.35.1"
   }
 }
