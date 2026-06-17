@@ -107,6 +107,85 @@ const Confirm = {
   }
 };
 
+/* ── Pull-to-refresh ─────────────────────────────────────── */
+function _initPullToRefresh() {
+  if (!window.__SVC_NATIVE__) return; // native app only
+  let startY = 0, currentY = 0, isPulling = false;
+  const MIN_PULL = 72;
+
+  const el = document.createElement('div');
+  el.id = '_ptrIndicator';
+  el.style.cssText = 'position:fixed;top:0;left:50%;transform:translate(-50%,-56px);z-index:9999;width:40px;height:40px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(212,175,55,0.4);transition:transform 0.2s,opacity 0.2s;opacity:0;pointer-events:none';
+  el.innerHTML = '<i class="fa-solid fa-arrow-rotate-right" style="color:#000;font-size:1rem"></i>';
+  document.body.appendChild(el);
+
+  document.addEventListener('touchstart', e => {
+    if (window.scrollY === 0) { startY = e.touches[0].clientY; isPulling = true; }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    if (!isPulling || startY === 0) return;
+    currentY = e.touches[0].clientY;
+    const delta = Math.max(0, currentY - startY);
+    if (delta > 0) {
+      const progress = Math.min(delta / MIN_PULL, 1);
+      const travel = Math.min(delta * 0.45, 52);
+      el.style.opacity = progress;
+      el.style.transform = `translate(-50%, ${travel - 56}px) rotate(${progress * 270}deg)`;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', async () => {
+    if (!isPulling) return;
+    isPulling = false;
+    const delta = Math.max(0, currentY - startY);
+    startY = 0; currentY = 0;
+    if (delta >= MIN_PULL) {
+      el.style.transition = 'transform 0.3s,opacity 0.3s';
+      el.style.transform = 'translate(-50%, -4px) rotate(360deg)';
+      el.querySelector('i').classList.add('fa-spin');
+      try {
+        await loadPortalData();
+        if (typeof loadWallet === 'function') await loadWallet();
+        Toast.success('Refreshed');
+      } catch (_) {}
+      el.querySelector('i').classList.remove('fa-spin');
+    }
+    el.style.opacity = '0';
+    el.style.transform = 'translate(-50%,-56px)';
+    setTimeout(() => { el.style.transition = ''; }, 300);
+  }, { passive: true });
+}
+
+/* ── Full-screen success overlay ─────────────────────────── */
+function showSuccessOverlay({ title = 'Success!', subtitle = '', duration = 2200 } = {}) {
+  const existing = document.getElementById('_successOverlay');
+  if (existing) existing.remove();
+  const el = document.createElement('div');
+  el.id = '_successOverlay';
+  el.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(6,10,15,0.92);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;opacity:0;transition:opacity 0.3s;pointer-events:none';
+  el.innerHTML = `
+    <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#22c55e,#16a34a);display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(34,197,94,0.4);animation:_so-pop 0.4s cubic-bezier(0.34,1.56,0.64,1) both">
+      <i class="fa-solid fa-check" style="font-size:2rem;color:#fff"></i>
+    </div>
+    <div style="font-size:1.35rem;font-weight:800;color:#fff;text-align:center">${title}</div>
+    ${subtitle ? `<div style="font-size:0.88rem;color:rgba(255,255,255,0.6);text-align:center;max-width:280px">${subtitle}</div>` : ''}
+  `;
+  // Add keyframe if not present
+  if (!document.getElementById('_soStyle')) {
+    const s = document.createElement('style');
+    s.id = '_soStyle';
+    s.textContent = '@keyframes _so-pop{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}';
+    document.head.appendChild(s);
+  }
+  document.body.appendChild(el);
+  requestAnimationFrame(() => { el.style.opacity = '1'; });
+  setTimeout(() => {
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 300);
+  }, duration);
+}
+
 /* ─── Notifications ─── */
 function toggleNotifPanel() {
   const panel = document.getElementById('notifPanel');
@@ -473,6 +552,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   _checkAutoStartTour();
   load2FAStatus();
   _startPolling();
+  _initPullToRefresh();
 });
 
 async function loadPortalData() {
@@ -1052,7 +1132,12 @@ function renderMyInvestmentCards() {
   if (productFilter) items = items.filter(i => i.product_type === productFilter);
 
   if (!items.length) {
-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="fa-solid fa-chart-line"></i><p>No investments in this category. <br><a href="#" onclick="navigate(\'marketplace\',null)" style="color:var(--gold)">Explore pools →</a></p></div>';
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+  <i class="fa-solid fa-seedling" style="font-size:3rem;color:var(--gold);opacity:0.7;margin-bottom:16px;display:block"></i>
+  <div class="empty-state__title">No investments yet</div>
+  <div class="empty-state__sub">Start growing your wealth today.</div>
+  <button onclick="navigate('marketplace',null)" class="btn--primary" style="margin-top:16px;padding:10px 24px;border-radius:8px;font-size:0.85rem;font-weight:700;border:none;cursor:pointer;background:linear-gradient(135deg,#D4AF37,#b8932a);color:#000">Browse Investment Pools →</button>
+</div>`;
     return;
   }
 
@@ -1255,11 +1340,10 @@ async function loadWallet() {
 
   if (!walletTxns.length) {
     activity.innerHTML = `<div class="empty-state">
-      <i class="fa-solid fa-wallet"></i>
+      <i class="fa-solid fa-wallet" style="font-size:3rem;color:var(--gold);opacity:0.7;margin-bottom:16px;display:block"></i>
       <div class="empty-state__title">No wallet activity yet</div>
-      <div class="empty-state__sub">Your deposits, returns, and payouts will appear here once you top up.<br>
-        <a href="#" onclick="openTopUpModal()" style="color:var(--gold)">Top Up Now →</a>
-      </div>
+      <div class="empty-state__sub">Your deposits, returns, and payouts will appear here once you top up.</div>
+      <button onclick="openTopUpModal()" class="btn--primary" style="margin-top:16px;padding:10px 24px;border-radius:8px;font-size:0.85rem;font-weight:700;border:none;cursor:pointer;background:linear-gradient(135deg,#D4AF37,#b8932a);color:#000">Top Up Wallet →</button>
     </div>`;
     return;
   }
@@ -2031,6 +2115,7 @@ async function _showDepositSuccess(gateway, reference) {
     `<strong style="color:#22c55e">${fmtBase}</strong> successfully credited to your wallet` +
     (fee > 0 ? `<br><span style="font-size:0.75rem;color:#6b7280">R${fee.toFixed(2)} gateway fee charged by ${gateway === 'paystack' ? 'Paystack' : 'Ozow'}</span>` : '');
   _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
+  showSuccessOverlay({ title: 'Payment Received!', subtitle: `${fmtBase} added to your wallet` });
   await loadPortalData();
   loadWallet();
 }

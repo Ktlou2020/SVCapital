@@ -94,7 +94,14 @@
 
     P.PushNotifications.addListener('pushNotificationActionPerformed', action => {
       const data = action.notification?.data || {};
-      if (data.view && window.navigate) navigate(data.view);
+      // Support view, section, and tab deep links
+      const view = data.view || data.section || data.tab;
+      if (view && window.navigate) {
+        // Small delay to ensure portal is loaded
+        setTimeout(() => {
+          if (window.navigate) navigate(view);
+        }, 500);
+      }
     });
   }
 
@@ -124,8 +131,10 @@
   function initAppLifecycle() {
     if (!P.App) return;
     P.App.addListener('appStateChange', ({ isActive }) => {
-      if (isActive && window._refreshWalletUI) {
-        _refreshWalletUI().catch(() => {});
+      if (isActive) {
+        if (window._refreshWalletUI) _refreshWalletUI().catch(() => {});
+        // Also refresh main data silently
+        if (window.loadPortalData) loadPortalData().catch(() => {});
       }
     });
 

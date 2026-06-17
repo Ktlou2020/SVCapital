@@ -613,3 +613,72 @@
   /* Sign out button: icon only */
   .topbar__actions .btn--secondary[href*="login"] { padding: 6px 8px !important; }
 }
+
+/* ── Skeleton loading shimmer ─────────────────────────────── */
+@keyframes _skel-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--dark-3, #1e2636) 25%,
+    var(--dark-4, #252e40) 50%,
+    var(--dark-3, #1e2636) 75%);
+  background-size: 400px 100%;
+  animation: _skel-shimmer 1.4s ease infinite;
+  border-radius: 4px;
+  color: transparent !important;
+  pointer-events: none;
+}
+
+/* ── Mobile Bottom Navigation ─────────────────────────────── */
+.mbn {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 1100;
+  background: var(--dark-2, #111827);
+  border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+  padding: 6px 0;
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
+}
+.mbn-inner {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+.mbn-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted, #6b7280);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 4px 0 2px;
+  transition: color var(--transition, 0.25s);
+  -webkit-tap-highlight-color: transparent;
+}
+.mbn-item i {
+  font-size: 1.15rem;
+  transition: transform 0.15s;
+}
+.mbn-item.active {
+  color: var(--gold, #D4AF37);
+}
+.mbn-item.active i {
+  transform: translateY(-1px);
+}
+.mbn-item:active i {
+  transform: scale(0.88);
+}
+@media (max-width: 768px) {
+  .mbn { display: block; }
+  /* push content above the nav bar */
+  .portal-main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+}

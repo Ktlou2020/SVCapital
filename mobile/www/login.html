@@ -528,13 +528,6 @@
     });
   </script>
   <script src="/js/analytics.js"></script>
-
-  <!-- ── Capacitor native config injected by build.js ── -->
-  <script>
-    window.__SVC_NATIVE__ = true;
-    window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
-  </script>
-  <script src="/js/native.js"></script>
 </head>
 <body>
 <div class="login-layout">
@@ -644,6 +637,10 @@
 
         <button type="submit" class="btn-login" id="loginBtn">
           <span id="loginBtnText"><i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In</span>
+        </button>
+        <button type="button" class="btn-biometric" id="biometricBtn" style="display:none;width:100%;padding:12px;margin-top:8px;background:transparent;border:1.5px solid rgba(255,155,12,0.3);border-radius:10px;color:#FF9B0C;font-size:0.9rem;font-weight:600;cursor:pointer;align-items:center;justify-content:center;gap:8px" onclick="loginWithBiometric()">
+          <i class="fa-solid fa-fingerprint" style="font-size:1.1rem"></i>
+          Sign in with Face ID / Fingerprint
         </button>
 
         <div class="login-links">
@@ -866,6 +863,10 @@
       localStorage.setItem('svc_token', data.token);
       localStorage.setItem('svc_user',  JSON.stringify(data.user));
 
+      // Save for biometric re-login
+      if (window.__SVC_NATIVE__) {
+        localStorage.setItem('svc_bio_token', JSON.stringify({ token: data.token, user: data.user, redirect: data.redirect || '/portal/' }));
+      }
 
       btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
       setTimeout(() => { window.location.href = data.redirect || 'portal/'; }, 350);
@@ -875,6 +876,32 @@
       showError(err.message || 'Login failed. Please try again.');
     }
   }
+
+  async function loginWithBiometric() {
+    const saved = localStorage.getItem('svc_bio_token');
+    if (!saved) { showError('Please sign in with your password first to enable biometric login.'); return; }
+    try {
+      // Use Capacitor NativeBiometric if available
+      if (window.Capacitor && window.Capacitor.Plugins.NativeBiometric) {
+        await window.Capacitor.Plugins.NativeBiometric.verifyIdentity({ reason: 'Sign in to SV Capital', title: 'Biometric Login', subtitle: 'Use Face ID or fingerprint' });
+      }
+      // Token validated — proceed
+      const data = JSON.parse(saved);
+      localStorage.setItem('svc_token', data.token);
+      localStorage.setItem('svc_user', JSON.stringify(data.user));
+      window.location.href = data.redirect || '/portal/';
+    } catch (err) {
+      showError('Biometric authentication failed. Please sign in with your password.');
+    }
+  }
+
+  // Show biometric button if native and token saved
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('biometricBtn');
+    if (btn && window.__SVC_NATIVE__ && localStorage.getItem('svc_bio_token')) {
+      btn.style.display = 'flex';
+    }
+  });
 
   function show2FAStep() {
     document.getElementById('loginForm').style.display = 'none';
