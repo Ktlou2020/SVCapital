@@ -1113,6 +1113,44 @@ function closeSidebar() {
   if (backdrop) backdrop.classList.remove('sidebar-backdrop--visible');
 }
 
+/* ── Swipe gestures for mobile sidebar ───────────────────────
+   Swipe right from left edge (≤30px) → open sidebar
+   Swipe left anywhere while sidebar is open → close sidebar    */
+(function _initSwipeGestures() {
+  let startX = 0, startY = 0, startT = 0;
+  const SWIPE_THRESHOLD = 55;   // px horizontal
+  const ANGLE_LIMIT = 55;        // max vertical drift (deg)
+  const MAX_MS = 350;            // gesture must complete within this time
+
+  document.addEventListener('touchstart', (e) => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    startT = Date.now();
+  }, { passive: true });
+
+  document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = Math.abs(e.changedTouches[0].clientY - startY);
+    const dt = Date.now() - startT;
+    if (dt > MAX_MS || dy > Math.abs(dx) * 1.2) return; // too slow or too vertical
+
+    const sidebar = document.getElementById('sidebar');
+    const isOpen  = sidebar?.classList.contains('open');
+
+    // Swipe LEFT (dx < 0) while sidebar is open → close
+    if (dx < -SWIPE_THRESHOLD && isOpen) {
+      closeSidebar();
+      if (navigator.vibrate) navigator.vibrate(8);
+      return;
+    }
+    // Swipe RIGHT (dx > 0) from left edge → open
+    if (dx > SWIPE_THRESHOLD && !isOpen && startX < 32) {
+      toggleSidebar();
+      if (navigator.vibrate) navigator.vibrate(8);
+    }
+  }, { passive: true });
+})();
+
 function navigate(view, btnEl) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
