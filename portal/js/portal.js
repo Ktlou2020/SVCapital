@@ -1569,7 +1569,7 @@ function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
   const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date)).slice(0, 5);
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red' };
-  const _txnLabel = s => (s || '').replace(/_/g, ' ').toUpperCase();
+  const _txnLabel = s => { const r = (s || '').replace(/_/g, ' '); return r.charAt(0).toUpperCase() + r.slice(1); };
 
   if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No transactions yet</td></tr>'; return; }
 
@@ -1900,7 +1900,7 @@ function renderMyTxnTable() {
   const sorted = [...items].sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
 
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red' };
-  const _txnLabel = s => (s || '').replace(/_/g, ' ').toUpperCase();
+  const _txnLabel = s => { const r = (s || '').replace(/_/g, ' '); return r.charAt(0).toUpperCase() + r.slice(1); };
 
   if (!sorted.length) {
     body.innerHTML = `<tr><td colspan="6" style="padding:0;border:none">
@@ -8673,8 +8673,9 @@ function _renderAnalyticsTimeline() {
   }
   const statusBadge = s => {
     const map = { active:'#22c55e', paid_out:'#3b82f6', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316' };
-    const label = (s || '').replace(/_/g, ' ').toUpperCase();
-    return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap;letter-spacing:0.04em">${label}</span>`;
+    const label = (s || '').replace(/_/g, ' ');
+    const labelSentence = label.charAt(0).toUpperCase() + label.slice(1);
+    return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${labelSentence}</span>`;
   };
   const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';
   tbody.innerHTML = invs.slice(0, 30).map(i => {
