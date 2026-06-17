@@ -205,6 +205,14 @@
     }
     .form-header p { font-size: 0.88rem; color: var(--text-muted); }
     .form-header p a { color: var(--orange); font-weight: 600; text-decoration: none; }
+    .draft-status {
+      margin-top: 12px;
+      min-height: 20px;
+      font-size: 0.74rem;
+      color: var(--text-dim);
+      transition: color 0.2s ease, opacity 0.2s ease;
+    }
+    .draft-status--saved { color: var(--teal); }
 
     /* Progress Steps */
     .form-steps {
@@ -945,6 +953,7 @@
     <div class="form-header">
       <h2>Create your account</h2>
       <p>Already have an account? <a href="login.html">Sign in here</a></p>
+      <div class="draft-status" id="draftStatus" aria-live="polite"></div>
     </div>
 
     <!-- Step Indicator -->
@@ -1692,6 +1701,8 @@ let clientType   = 'sa'; // 'sa' | 'intl'
 
 const ficaFiles   = { id: null, address: null, selfie: null, bank: null, tax: null };
 const REQUIRED_DOCS = ['id', 'address', 'selfie'];
+const SIGNUP_DRAFT_KEY = 'svcapital_signup_draft_v2';
+let _draftStatusTimer = null;
 
 /* ── Signup Friction Tracker ── */
 const _FT = (function() {
@@ -1770,6 +1781,8 @@ window.addEventListener('DOMContentLoaded', () => {
   prefillReferral();
   initSocialProofCounters();
   initReturnEstimate();
+  bindDraftAutosave();
+  restoreDraft();
 
   // Citizenship toggle (both the in-step1 toggle and the waitlist panel toggle)
   document.getElementById('btnCitizenSA').addEventListener('click',    () => toggleCitizenship('sa'));
@@ -1936,54 +1949,46 @@ function toggleCitizenship(type) {
   clientType = type;
   const isSA = type === 'sa';
 
-  // Sync both toggle button pairs
   ['btnCitizenSA', 'btnCitizenSA2'].forEach(id =>
     document.getElementById(id)?.classList.toggle('active', isSA));
   ['btnCitizenIntl', 'btnCitizenIntl2'].forEach(id =>
     document.getElementById(id)?.classList.toggle('active', !isSA));
 
-  // International clients → show waitlist panel, hide regular form flow
   const waitlistPanel = document.getElementById('intlWaitlistPanel');
   const formSteps     = document.getElementById('formSteps');
   const step1         = document.getElementById('step1');
 
-  if (!isSA) {
-    if (waitlistPanel) waitlistPanel.style.display = 'block';
-    if (formSteps) formSteps.style.display = 'none';
-    if (step1) step1.style.display = 'none';
-    hideError();
-    return;
-  }
-
-  // SA client → hide waitlist, show step 1
   if (waitlistPanel) waitlistPanel.style.display = 'none';
   if (formSteps) formSteps.style.display = '';
   if (step1) step1.style.display = 'block';
 
-  document.getElementById('infoStripSA').style.display   = '';
-  document.getElementById('infoStripIntl').style.display = 'none';
-  document.getElementById('saIdGroup').style.display       = '';
-  document.getElementById('passportGroup').style.display   = 'none';
-  document.getElementById('saProvinceGroup').style.display = '';
-  document.getElementById('intlRegionGroup').style.display = 'none';
+  document.getElementById('infoStripSA').style.display     = isSA ? '' : 'none';
+  document.getElementById('infoStripIntl').style.display   = isSA ? 'none' : 'flex';
+  document.getElementById('saIdGroup').style.display       = isSA ? '' : 'none';
+  document.getElementById('passportGroup').style.display   = isSA ? 'none' : 'block';
+  document.getElementById('saProvinceGroup').style.display = isSA ? '' : 'none';
+  document.getElementById('intlRegionGroup').style.display = isSA ? 'none' : '';
 
-  // Reset phone
-  document.getElementById('phoneDialCode').value = '+27';
+  document.getElementById('phoneDialCode').value = isSA ? '+27' : '+44';
   const ph = document.getElementById('phone');
-  if (ph) ph.placeholder = '71 234 5678';
+  if (ph) ph.placeholder = isSA ? '71 234 5678' : '1234 5678';
   const hint = document.getElementById('phoneHint');
-  if (hint) hint.textContent = 'Enter your number without the leading 0 — e.g. 71 234 5678';
+  if (hint) hint.textContent = isSA
+    ? 'Enter your number without the leading 0 — e.g. 71 234 5678'
+    : 'Enter your local number without country code';
 
-  // Reset FICA consent text
   const ct = document.getElementById('ficaConsentText');
-  if (ct) ct.textContent = 'I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.';
+  if (ct) ct.textContent = isSA
+    ? 'I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.'
+    : 'I confirm that I am an international client, and I consent to passport-based identity verification and compliance screening required by SV Capital.';
 
-  // Reset ID validation state
   const idVal = document.getElementById('idValidation');
   if (idVal) { idVal.style.display = 'none'; idVal.innerHTML = ''; }
   const idHint = document.getElementById('idHint');
-  if (idHint) idHint.style.display = '';
+  if (idHint) idHint.style.display = isSA ? '' : 'none';
+
   hideError();
+  persistDraft();
 }
 
 /* ── International waitlist submit ── */
@@ -2106,6 +2111,7 @@ function goToStep(n, dir) {
   currentStep = n;
   _FT.stepEntered(n);
   updateStepIndicators(n);
+  persistDraft();
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -2201,6 +2207,97 @@ function showError(msg) {
   return false;
 }
 function hideError() { document.getElementById('formError').style.display = 'none'; }
+
+function showDraftStatus(message, saved = false) {
+  const el = document.getElementById('draftStatus');
+  if (!el) return;
+  el.textContent = message || '';
+  el.classList.toggle('draft-status--saved', !!saved);
+  clearTimeout(_draftStatusTimer);
+  if (message) {
+    _draftStatusTimer = setTimeout(() => {
+      el.textContent = '';
+      el.classList.remove('draft-status--saved');
+    }, 2200);
+  }
+}
+
+function draftValue(id) {
+  return document.getElementById(id)?.value || '';
+}
+
+function persistDraft() {
+  const payload = {
+    clientType,
+    selectedRisk,
+    fields: {
+      firstName: draftValue('firstName'),
+      lastName: draftValue('lastName'),
+      email: draftValue('email'),
+      phoneDialCode: draftValue('phoneDialCode'),
+      phone: draftValue('phone'),
+      idNumber: draftValue('idNumber'),
+      passportNumber: draftValue('passportNumber'),
+      passportExpiry: draftValue('passportExpiry'),
+      nationality: draftValue('nationality'),
+      countryResidence: draftValue('countryResidence'),
+      city: draftValue('city'),
+      province: draftValue('province'),
+      region: draftValue('region'),
+      referralCode: draftValue('referralCode'),
+      investExp: draftValue('investExp'),
+      hearAbout: draftValue('hearAbout'),
+      termsCheck: !!document.getElementById('termsCheck')?.checked,
+      ficaConsentCheck: !!document.getElementById('ficaConsentCheck')?.checked,
+      popiaCheck: !!document.getElementById('popiaCheck')?.checked,
+    }
+  };
+
+  try {
+    localStorage.setItem(SIGNUP_DRAFT_KEY, JSON.stringify(payload));
+    showDraftStatus('Draft saved locally', true);
+  } catch (_) {}
+}
+
+function restoreDraft() {
+  try {
+    const raw = localStorage.getItem(SIGNUP_DRAFT_KEY);
+    if (!raw) return;
+    const draft = JSON.parse(raw);
+    const fields = draft.fields || {};
+
+    if (draft.clientType === 'intl' || draft.clientType === 'sa') toggleCitizenship(draft.clientType);
+
+    Object.entries(fields).forEach(([id, value]) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (el.type === 'checkbox') el.checked = !!value;
+      else if (value != null) el.value = value;
+    });
+
+    if (draft.selectedRisk) selectRisk(draft.selectedRisk);
+    showDraftStatus('Restored your saved details', true);
+  } catch (_) {}
+}
+
+function clearDraft() {
+  try { localStorage.removeItem(SIGNUP_DRAFT_KEY); } catch (_) {}
+}
+
+function bindDraftAutosave() {
+  const ids = [
+    'firstName','lastName','email','phoneDialCode','phone','idNumber','passportNumber','passportExpiry',
+    'nationality','countryResidence','city','province','region','referralCode',
+    'investExp','hearAbout','termsCheck','ficaConsentCheck','popiaCheck'
+  ];
+
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const evt = el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(evt, persistDraft);
+  });
+}
 
 /* ── Risk Profile ── */
 function selectRisk(risk) {
@@ -2458,6 +2555,7 @@ async function _doSubmit(skippedFica) {
         ? 'Please upload your FICA documents in your portal to start investing.'
         : 'Your FICA documents have been submitted and will be reviewed within 1–2 business days.');
 
+    clearDraft();
     _FT.submitSuccess();
     launchConfetti();
     setTimeout(() => { window.location.href = '/portal/index.html'; }, 4000);

@@ -34,6 +34,365 @@ let PORTAL = {
   quests: null,       // { xp, level, currentLevel, nextLevel, completedIds, quests, levels, profile }
 };
 
+const PROFILE_DRAFT_KEY = 'svc_profile_draft_v2';
+const SUPPORT_DRAFT_KEY = 'svc_support_draft_v2';
+let _profileHydrating = false;
+let _supportHydrating = false;
+let _profileDirty = false;
+
+function _portalScopedKey(base) {
+  return `${base}:${PORTAL.investor?.id || DEMO_INVESTOR_ID || 'guest'}`;
+}
+function _localGet(key) {
+  try { return localStorage.getItem(key); } catch (_) { return null; }
+}
+function _localSet(key, value) {
+  try { localStorage.setItem(key, value); } catch (_) {}
+}
+function _localRemove(key) {
+  try { localStorage.removeItem(key); } catch (_) {}
+}
+function _setInlineMessage(id, msg, color = 'var(--text-muted)') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = color;
+}
+function _ensureTaskCompletionPanel() {
+  let wrap = document.getElementById('taskCompletionPanel');
+  if (wrap) return wrap;
+  const anchor = document.getElementById('onboardingWizard') || document.getElementById('welcomeBanner');
+  if (!anchor || !anchor.parentNode) return null;
+  wrap = document.createElement('div');
+  wrap.id = 'taskCompletionPanel';
+  wrap.style.cssText = 'display:none;margin-bottom:20px';
+  wrap.innerHTML = `
+    <div class="panel" style="border:1px solid rgba(47,140,155,0.18);background:linear-gradient(135deg,rgba(47,140,155,0.05),rgba(255,155,12,0.04))">
+      <div class="panel__header" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <div>
+          <span class="panel__title"><i class="fa-solid fa-list-check" style="color:#2F8C9B;margin-right:8px"></i>Action Centre</span>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px">See the next best action to unlock deposits, investing, withdrawals and statements.</div>
+        </div>
+        <div id="taskCompletionMeta" style="margin-left:auto;font-size:0.74rem;font-weight:700;color:#2F8C9B"></div>
+      </div>
+      <div class="panel__body" id="taskCompletionBody"></div>
+    </div>`;
+  anchor.insertAdjacentElement('afterend', wrap);
+  return wrap;
+}
+function _ensureProfileAssistUI() {
+  const header = document.querySelector('#view-profile .panel .panel__header');
+  const saveBtn = document.querySelector('button[onclick="saveProfile()"]');
+  if (header && !document.getElementById('profileSaveMeta')) {
+    const meta = document.createElement('div');
+    meta.id = 'profileSaveMeta';
+    meta.style.cssText = 'margin-left:auto;margin-right:10px;font-size:0.74rem;font-weight:700;color:var(--text-muted)';
+    meta.textContent = 'Changes auto-save to this device until you submit.';
+    if (saveBtn) header.insertBefore(meta, saveBtn);
+    else header.appendChild(meta);
+  }
+  const email = document.getElementById('profEmail');
+  if (email) {
+    email.readOnly = true;
+    email.setAttribute('aria-readonly', 'true');
+    email.style.background = 'rgba(0,0,0,0.035)';
+    email.style.cursor = 'not-allowed';
+    email.title = 'Email changes are protected. Please contact support to update your login email.';
+    if (!document.getElementById('profEmailHint')) {
+      const hint = document.createElement('div');
+      hint.id = 'profEmailHint';
+      hint.style.cssText = 'margin-top:6px;font-size:0.72rem;color:var(--text-muted);line-height:1.45';
+      hint.textContent = 'Email changes are protected for security. Contact support if you need to update your login address.';
+      email.closest('.form-group')?.appendChild(hint);
+    }
+  }
+}
+function _ensureSupportAssistUI() {
+  const subject = document.getElementById('tktSubject');
+  const message = document.getElementById('tktMessage');
+  if (!subject || !message) return;
+  const panelBody = subject.closest('.panel__body');
+  if (panelBody && !document.getElementById('supportDraftMeta')) {
+    const meta = document.createElement('div');
+    meta.id = 'supportDraftMeta';
+    meta.style.cssText = 'margin-bottom:12px;padding:10px 12px;border-radius:10px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.16);font-size:0.76rem;font-weight:700;color:#2F8C9B';
+    meta.textContent = 'Drafts auto-save on this device so you can come back later.';
+    panelBody.insertBefore(meta, panelBody.firstChild);
+  }
+  if (panelBody && !document.getElementById('supportTemplateRow')) {
+    const row = document.createElement('div');
+    row.id = 'supportTemplateRow';
+    row.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px';
+    row.innerHTML = `
+      <button type="button" class="btn btn--ghost btn--sm" onclick="applyTicketTemplate('withdrawal')"><i class="fa-solid fa-arrow-up-from-bracket"></i> Withdrawal delay</button>
+      <button type="button" class="btn btn--ghost btn--sm" onclick="applyTicketTemplate('fica')"><i class="fa-solid fa-id-card"></i> FICA status</button>
+      <button type="button" class="btn btn--ghost btn--sm" onclick="applyTicketTemplate('statement')"><i class="fa-solid fa-file-invoice"></i> Statement request</button>
+      <button type="button" class="btn btn--ghost btn--sm" onclick="applyTicketTemplate('technical')"><i class="fa-solid fa-wrench"></i> Technical issue</button>`;
+    const firstGroup = panelBody.querySelector('.form-group');
+    if (firstGroup) panelBody.insertBefore(row, firstGroup);
+  }
+  if (!document.getElementById('tktMessageMeta')) {
+    const meta = document.createElement('div');
+    meta.id = 'tktMessageMeta';
+    meta.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;font-size:0.72rem;color:var(--text-muted)';
+    meta.innerHTML = '<span>Include dates, amounts and references to speed up the response.</span><span id="tktMessageCount">0 / 1200</span>';
+    message.insertAdjacentElement('afterend', meta);
+  }
+}
+function initPortalFormUX() {
+  _ensureTaskCompletionPanel();
+  _ensureProfileAssistUI();
+  _ensureSupportAssistUI();
+  bindProfileDraft();
+  bindSupportDraft();
+}
+function _profileFields() {
+  return {
+    first_name: document.getElementById('profFirstName')?.value?.trim() || '',
+    last_name: document.getElementById('profLastName')?.value?.trim() || '',
+    phone: document.getElementById('profPhone')?.value?.trim() || '',
+    city: document.getElementById('profCity')?.value?.trim() || '',
+    province: document.getElementById('profProvince')?.value || '',
+    risk_profile: document.querySelector('input[name="riskProf"]:checked')?.value || '',
+  };
+}
+function _profileDraftHasValue(data) {
+  return !!Object.values(data || {}).find(Boolean);
+}
+function _applyProfileDraft(data) {
+  if (!data) return;
+  _profileHydrating = true;
+  const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+  set('profFirstName', data.first_name || '');
+  set('profLastName', data.last_name || '');
+  set('profPhone', data.phone || '');
+  set('profCity', data.city || '');
+  set('profProvince', data.province || '');
+  if (data.risk_profile) {
+    const radio = document.querySelector(`input[name="riskProf"][value="${data.risk_profile}"]`);
+    if (radio) radio.checked = true;
+  }
+  _profileHydrating = false;
+}
+function _persistProfileDraft() {
+  const data = _profileFields();
+  if (!_profileDraftHasValue(data)) {
+    _localRemove(_portalScopedKey(PROFILE_DRAFT_KEY));
+    _profileDirty = false;
+    _setInlineMessage('profileSaveMeta', 'Changes auto-save to this device until you submit.');
+    return;
+  }
+  _localSet(_portalScopedKey(PROFILE_DRAFT_KEY), JSON.stringify({ ...data, saved_at: Date.now() }));
+  _profileDirty = true;
+  _setInlineMessage('profileSaveMeta', 'Draft saved locally — click Save to update your account.', '#FF8215');
+}
+function restoreProfileDraft() {
+  const raw = _localGet(_portalScopedKey(PROFILE_DRAFT_KEY));
+  if (!raw) {
+    _profileDirty = false;
+    _setInlineMessage('profileSaveMeta', 'Changes auto-save to this device until you submit.');
+    return;
+  }
+  try {
+    const draft = JSON.parse(raw);
+    const live = _profileFields();
+    const same = ['first_name','last_name','phone','city','province','risk_profile'].every(key => String(draft[key] || '') === String(live[key] || ''));
+    if (!same) {
+      _applyProfileDraft(draft);
+      _profileDirty = true;
+      _setInlineMessage('profileSaveMeta', 'Draft restored — review your changes and click Save.', '#FF8215');
+    }
+  } catch (_) {}
+}
+function clearProfileDraft() {
+  _localRemove(_portalScopedKey(PROFILE_DRAFT_KEY));
+  _profileDirty = false;
+  _setInlineMessage('profileSaveMeta', 'Profile saved.');
+}
+function bindProfileDraft() {
+  if (document.body.dataset.profileDraftBound === '1') return;
+  document.body.dataset.profileDraftBound = '1';
+  ['profFirstName','profLastName','profPhone','profCity','profProvince'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => { if (!_profileHydrating) _persistProfileDraft(); });
+    el.addEventListener('change', () => { if (!_profileHydrating) _persistProfileDraft(); });
+  });
+  document.querySelectorAll('input[name="riskProf"]').forEach(el => {
+    el.addEventListener('change', () => { if (!_profileHydrating) _persistProfileDraft(); });
+  });
+}
+const SUPPORT_TEMPLATES = {
+  withdrawal: {
+    subject: 'Withdrawal delay',
+    category: 'general',
+    priority: 'high',
+    message: 'Hello SV Capital team, I requested a withdrawal and would like an update on the payout timeline. Reference: \nAmount: \nSubmitted on: \nAdditional context: '
+  },
+  fica: {
+    subject: 'FICA verification status',
+    category: 'fica_kyc',
+    priority: 'medium',
+    message: 'Hello SV Capital team, please share the current status of my FICA / KYC review. Documents uploaded on: \nAnything still outstanding: '
+  },
+  statement: {
+    subject: 'Statement or tax certificate request',
+    category: 'general',
+    priority: 'medium',
+    message: 'Hello SV Capital team, I need help with my statement / tax certificate. Period required: \nPurpose: \nAdditional details: '
+  },
+  technical: {
+    subject: 'Technical issue in the portal',
+    category: 'technical',
+    priority: 'medium',
+    message: 'Hello SV Capital team, I experienced a portal issue. What I was trying to do: \nWhat happened instead: \nDevice / browser: \nTime of issue: '
+  }
+};
+function _supportFields() {
+  return {
+    subject: document.getElementById('tktSubject')?.value?.trim() || '',
+    category: document.getElementById('tktCategory')?.value || 'investment_query',
+    priority: document.getElementById('tktPriority')?.value || 'medium',
+    message: document.getElementById('tktMessage')?.value || '',
+  };
+}
+function _supportDraftHasValue(data) {
+  return !!(data.subject || data.message);
+}
+function _updateSupportCounter() {
+  const msg = document.getElementById('tktMessage')?.value || '';
+  const count = document.getElementById('tktMessageCount');
+  if (!count) return;
+  count.textContent = `${msg.length} / 1200`;
+  count.style.color = msg.length > 1200 ? '#ef4444' : 'var(--text-muted)';
+}
+function _persistSupportDraft() {
+  const data = _supportFields();
+  _updateSupportCounter();
+  if (!_supportDraftHasValue(data)) {
+    _localRemove(_portalScopedKey(SUPPORT_DRAFT_KEY));
+    _setInlineMessage('supportDraftMeta', 'Drafts auto-save on this device so you can come back later.', '#2F8C9B');
+    return;
+  }
+  _localSet(_portalScopedKey(SUPPORT_DRAFT_KEY), JSON.stringify({ ...data, saved_at: Date.now() }));
+  _setInlineMessage('supportDraftMeta', 'Draft saved locally — you can safely leave and come back.', '#2F8C9B');
+}
+function restoreSupportDraft() {
+  _ensureSupportAssistUI();
+  _updateSupportCounter();
+  const raw = _localGet(_portalScopedKey(SUPPORT_DRAFT_KEY));
+  if (!raw) return;
+  try {
+    const draft = JSON.parse(raw);
+    const subject = document.getElementById('tktSubject');
+    const category = document.getElementById('tktCategory');
+    const priority = document.getElementById('tktPriority');
+    const message = document.getElementById('tktMessage');
+    if (!subject || !category || !priority || !message) return;
+    _supportHydrating = true;
+    subject.value = draft.subject || subject.value;
+    category.value = draft.category || category.value;
+    priority.value = draft.priority || priority.value;
+    message.value = draft.message || message.value;
+    _supportHydrating = false;
+    _updateSupportCounter();
+    _setInlineMessage('supportDraftMeta', 'Draft restored — review and submit when ready.', '#FF8215');
+  } catch (_) {}
+}
+function clearSupportDraft() {
+  _localRemove(_portalScopedKey(SUPPORT_DRAFT_KEY));
+  _setInlineMessage('supportDraftMeta', 'Ticket sent. Your draft has been cleared.', '#22c55e');
+  _updateSupportCounter();
+}
+function bindSupportDraft() {
+  if (document.body.dataset.supportDraftBound === '1') return;
+  document.body.dataset.supportDraftBound = '1';
+  ['tktSubject','tktMessage','tktCategory','tktPriority'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const evt = el.tagName === 'SELECT' ? 'change' : 'input';
+    el.addEventListener(evt, () => { if (!_supportHydrating) _persistSupportDraft(); });
+    if (evt !== 'change') el.addEventListener('change', () => { if (!_supportHydrating) _persistSupportDraft(); });
+  });
+  _updateSupportCounter();
+}
+function applyTicketTemplate(key) {
+  _ensureSupportAssistUI();
+  const tmpl = SUPPORT_TEMPLATES[key];
+  if (!tmpl) return;
+  const subject = document.getElementById('tktSubject');
+  const category = document.getElementById('tktCategory');
+  const priority = document.getElementById('tktPriority');
+  const message = document.getElementById('tktMessage');
+  if (!subject || !category || !priority || !message) return;
+  _supportHydrating = true;
+  subject.value = tmpl.subject;
+  category.value = tmpl.category;
+  priority.value = tmpl.priority;
+  message.value = tmpl.message;
+  _supportHydrating = false;
+  _persistSupportDraft();
+  message.focus();
+  message.setSelectionRange(message.value.length, message.value.length);
+}
+function renderTaskCompletionPanel() {
+  const wrap = _ensureTaskCompletionPanel();
+  const body = document.getElementById('taskCompletionBody');
+  const meta = document.getElementById('taskCompletionMeta');
+  if (!wrap || !body || !meta || !PORTAL.investor) return;
+  const inv = PORTAL.investor;
+  const hasInvestments = (PORTAL.investments || []).length > 0;
+  const hasWallet = (parseFloat(inv.wallet_balance) || 0) > 0;
+  const bankReady = !!(inv.bank_account_number || (inv.bank_account_status && inv.bank_account_status !== 'none' && inv.bank_account_status !== 'pending'));
+  const riskReady = !!inv.risk_profile;
+  const ficaReady = (inv.fica_status || inv.kyc_status || inv.status || '').toLowerCase() === 'approved';
+  const tasks = [
+    { label: 'Complete FICA verification', done: ficaReady, tone: '#FF8215', action: 'openKycUploadModal()', cta: 'Upload documents' },
+    { label: 'Add a withdrawal bank account', done: bankReady, tone: '#2F8C9B', action: 'openBankDetailsModal()', cta: 'Add bank account' },
+    { label: 'Fund your wallet', done: hasWallet, tone: '#22c55e', action: 'openTopUpModal()', cta: 'Top up wallet' },
+    { label: 'Confirm your risk profile', done: riskReady, tone: '#a855f7', action: 'navigate(\'profile\', document.querySelector(\'[data-view=profile]\'))', cta: 'Review profile' },
+    { label: 'Make your next investment', done: hasInvestments, tone: '#D4AF37', action: 'navigate(\'marketplace\', document.querySelector(\'[data-view=marketplace]\'))', cta: 'Browse pools' },
+  ];
+  const doneCount = tasks.filter(t => t.done).length;
+  const pending = tasks.filter(t => !t.done);
+  meta.textContent = `${doneCount}/${tasks.length} complete`;
+  wrap.style.display = 'block';
+  if (!pending.length) {
+    body.innerHTML = `
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:space-between">
+        <div>
+          <div style="font-size:0.9rem;font-weight:800;color:#1a1a1a;margin-bottom:4px">You're set up and ready to invest confidently.</div>
+          <div style="font-size:0.8rem;color:var(--text-muted)">Use Quick Actions to top up, browse new pools or generate your latest statement.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn--secondary btn--sm" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i> Statement</button>
+          <button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-plus"></i> Invest more</button>
+        </div>
+      </div>`;
+    return;
+  }
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:14px">
+      ${tasks.map(task => `
+        <div style="padding:12px 14px;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:${task.done ? 'rgba(34,197,94,0.06)' : 'rgba(255,255,255,0.82)'};display:flex;gap:10px;align-items:flex-start">
+          <div style="width:24px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;background:${task.done ? '#22c55e' : task.tone + '22'};color:${task.done ? '#fff' : task.tone};flex-shrink:0;margin-top:2px">
+            <i class="fa-solid ${task.done ? 'fa-check' : 'fa-circle'}" style="font-size:0.7rem"></i>
+          </div>
+          <div style="min-width:0;flex:1">
+            <div style="font-size:0.8rem;font-weight:700;color:#1a1a1a;line-height:1.35">${task.label}</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">${task.done ? 'Completed' : 'Still needed before the full flow feels seamless.'}</div>
+          </div>
+        </div>`).join('')}
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:4px;border-top:1px solid rgba(0,0,0,0.06)">
+      <div>
+        <div style="font-size:0.78rem;font-weight:800;color:#1a1a1a">Recommended next step</div>
+        <div style="font-size:0.76rem;color:var(--text-muted);margin-top:4px">${pending[0].label}</div>
+      </div>
+      <button class="btn btn--primary btn--sm" onclick="${pending[0].action}"><i class="fa-solid fa-bolt"></i> ${pending[0].cta}</button>
+    </div>`;
+}
+
 /* ─── Skeleton loading helpers ─── */
 function _skeletonRows(count, cols) {
   return Array(count).fill(0).map(() =>
@@ -460,6 +819,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && _p
 document.addEventListener('DOMContentLoaded', async () => {
   Toast.init();
   initDarkMode();
+  initPortalFormUX();
   // Set skeleton placeholders on overview stats while data loads
   const _skelSpan = '<span class="skeleton" style="display:inline-block;width:80px;height:20px;border-radius:4px"></span>';
   ['pov-total','pov-invested','pov-wallet','pov-returns'].forEach(id => {
@@ -709,6 +1069,7 @@ function renderOverview() {
   renderPortfolioTrendChart();
   renderAllocationChart();
   renderXPWidget();
+  renderTaskCompletionPanel();
 }
 
 /* ─── Onboarding Wizard ──────────────────────────────────────────── */
@@ -2818,6 +3179,7 @@ async function loadSupport() {
       t.investor_id === DEMO_INVESTOR_ID && !t.is_system && t.category !== 'aml_review'
     );
     renderMyTickets();
+    restoreSupportDraft();
   } catch (e) { Toast.error('Failed to load tickets'); }
 }
 
@@ -2856,33 +3218,40 @@ async function submitTicket(btn) {
   const subject = document.getElementById('tktSubject').value.trim();
   const message = document.getElementById('tktMessage').value.trim();
   if (!subject || !message) { Toast.error('Subject and message are required'); return; }
+  if (message.length > 1200) { Toast.error('Please keep your message under 1,200 characters'); return; }
 
   let attachmentInfo = '';
   if (_tktAttachFile && _tktAttachBase64) {
-    attachmentInfo = `\n\n📎 Attachment: ${_tktAttachFile.name} (${(_tktAttachFile.size/1024).toFixed(1)} KB)\nData: ${_tktAttachBase64}`;
+    attachmentInfo = `
+
+📎 Attachment: ${_tktAttachFile.name} (${(_tktAttachFile.size/1024).toFixed(1)} KB)
+Data: ${_tktAttachBase64}`;
   }
 
   await _withBtn(btn, async () => {
-  try {
-    await API.tickets.create({
-      id:             Utils.genId('TKT'),
-      investor_id:    DEMO_INVESTOR_ID,
-      investor_name:  `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim(),
-      investor_email: PORTAL.investor?.email || '',
-      subject,
-      category:       document.getElementById('tktCategory').value,
-      priority:       document.getElementById('tktPriority').value,
-      message:        message + attachmentInfo,
-      proof_attached: !!_tktAttachFile,
-      proof_filename: _tktAttachFile ? _tktAttachFile.name : '',
-      status:         'open',
-    });
-    Toast.success('Support ticket submitted. We\'ll respond within 1 business day.');
-    document.getElementById('tktSubject').value = '';
-    document.getElementById('tktMessage').value = '';
-    removeTicketAttachment();
-    await loadSupport();
-  } catch (e) { Toast.error('Failed to submit ticket'); }
+    try {
+      await API.tickets.create({
+        id:             Utils.genId('TKT'),
+        investor_id:    DEMO_INVESTOR_ID,
+        investor_name:  `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim(),
+        investor_email: PORTAL.investor?.email || '',
+        subject,
+        category:       document.getElementById('tktCategory').value,
+        priority:       document.getElementById('tktPriority').value,
+        message:        message + attachmentInfo,
+        proof_attached: !!_tktAttachFile,
+        proof_filename: _tktAttachFile ? _tktAttachFile.name : '',
+        status:         'open',
+      });
+      Toast.success('Support ticket submitted. We\'ll respond within 1 business day.');
+      document.getElementById('tktSubject').value = '';
+      document.getElementById('tktMessage').value = '';
+      document.getElementById('tktCategory').value = 'investment_query';
+      document.getElementById('tktPriority').value = 'medium';
+      removeTicketAttachment();
+      clearSupportDraft();
+      await loadSupport();
+    } catch (e) { Toast.error('Failed to submit ticket'); }
   });
 }
 
@@ -3435,23 +3804,38 @@ async function saveProfile() {
   const inv = PORTAL.investor;
   if (!inv) return;
 
+  const firstName = document.getElementById('profFirstName')?.value?.trim() || '';
+  const lastName  = document.getElementById('profLastName')?.value?.trim() || '';
+  const phone     = document.getElementById('profPhone')?.value?.trim() || '';
+  const city      = document.getElementById('profCity')?.value?.trim() || '';
+  const risk      = (document.querySelector('input[name="riskProf"]:checked')?.value) || inv.risk_profile;
+  const saveBtn   = document.querySelector('button[onclick="saveProfile()"]');
+
+  if (!firstName || !lastName) { Toast.error('First name and last name are required.'); return; }
+  if (phone && phone.replace(/\D/g, '').length < 8) { Toast.error('Please enter a valid phone number.'); return; }
+
   const updates = {
-    first_name: document.getElementById('profFirstName')?.value?.trim() || inv.first_name,
-    last_name:  document.getElementById('profLastName')?.value?.trim()  || inv.last_name,
-    phone:      document.getElementById('profPhone')?.value?.trim()     || inv.phone,
-    address:    document.getElementById('profCity')?.value?.trim()      || inv.address,
-    province:   document.getElementById('profProvince')?.value          || inv.province,
-    risk_profile: (document.querySelector('input[name="riskProf"]:checked')?.value) || inv.risk_profile,
+    first_name: firstName,
+    last_name:  lastName,
+    phone:      phone || inv.phone,
+    address:    city || inv.address,
+    province:   document.getElementById('profProvince')?.value || inv.province,
+    risk_profile: risk,
   };
 
-  try {
-    await API._fetch('PATCH', `tables/investors/${inv.id}`, updates);
-    Object.assign(PORTAL.investor, updates);
-    SVC.track('svc_profile_saved', {});
-    Toast.success('Profile updated successfully');
-  } catch (e) {
-    Toast.error('Failed to save profile — please try again.');
-  }
+  await _withBtn(saveBtn, async () => {
+    try {
+      await API._fetch('PATCH', `tables/investors/${inv.id}`, updates);
+      Object.assign(PORTAL.investor, updates);
+      clearProfileDraft();
+      renderTaskCompletionPanel();
+      SVC.track('svc_profile_saved', {});
+      Toast.success('Profile updated successfully');
+    } catch (e) {
+      _setInlineMessage('profileSaveMeta', 'Could not save your changes — your local draft is still available.', '#ef4444');
+      Toast.error('Failed to save profile — please try again.');
+    }
+  });
 }
 
 /* ─── Referral ─── */
@@ -6964,7 +7348,9 @@ function renderRiskProfile() {
   }
 
   _loadStatementArchive();
+  restoreProfileDraft();
 }
+
 
 /* ═══════════════════════════════════════════════
    FEATURE: STATEMENT ARCHIVE & TAX CERTIFICATES

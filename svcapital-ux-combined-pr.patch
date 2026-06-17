@@ -1,0 +1,1451 @@
+diff --git a/admin/js/admin.js b/admin/js/admin.js
+index f1c75f5..f8dc518 100644
+--- a/admin/js/admin.js
++++ b/admin/js/admin.js
+@@ -546,6 +546,7 @@ async function loadDashboard() {
+     try {
+       const tktRes = await API.tickets.list({ limit: 50 });
+       tickets = tktRes.data || [];
++      STATE.tickets = tickets;
+       openTickets = tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
+       const tktBadge = document.getElementById('ticketBadge');
+       if (tktBadge) tktBadge.textContent = openTickets;
+@@ -679,13 +680,21 @@ function renderPendingActions() {
+   const actions = [];
+ 
+   const pendingFica = STATE.investors.filter(i => i.status === 'pending_fica' || i.fica_status === 'submitted').length;
+-  if (pendingFica) actions.push({ icon: 'fa-id-card', color: 'var(--orange)', text: `${pendingFica} FICA review(s) pending`, view: 'kyc' });
++  if (pendingFica) actions.push({ icon: 'fa-id-card', color: 'var(--orange)', text: `${pendingFica} FICA review(s) pending`, sub: 'Review identity documents before investors can fund or invest.', view: 'kyc', cta: 'Open KYC', priority: 1 });
++
++  const pendingWithdrawals = STATE.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
++  if (pendingWithdrawals) actions.push({ icon: 'fa-arrow-up-from-bracket', color: '#ef4444', text: `${pendingWithdrawals} withdrawal request(s) waiting`, sub: 'Approve or reject payouts to keep cash movement on time.', view: 'withdrawals', cta: 'Review withdrawals', priority: 2 });
++
++  const openSupport = (STATE.tickets || []).filter(t => t.status === 'open' || t.status === 'in_progress').length;
++  if (openSupport) actions.push({ icon: 'fa-headset', color: 'var(--blue)', text: `${openSupport} support ticket(s) need replies`, sub: 'Resolve investor questions before they become complaints or churn risk.', view: 'support', cta: 'Open support', priority: 3 });
+ 
+   const noInstruction = STATE.investments.filter(i => i.status === 'matured' && i.maturity_instruction === 'pending').length;
+-  if (noInstruction) actions.push({ icon: 'fa-hourglass-end', color: 'var(--red)', text: `${noInstruction} maturity instructions missing`, view: 'maturity' });
++  if (noInstruction) actions.push({ icon: 'fa-hourglass-end', color: 'var(--red)', text: `${noInstruction} maturity instruction(s) missing`, sub: 'Investors are waiting to reinvest or pay out matured capital.', view: 'maturity', cta: 'Review maturities', priority: 4 });
+ 
+-  const openTickets = STATE.transactions.filter(t => t.status === 'pending').length;
+-  if (openTickets) actions.push({ icon: 'fa-arrows-rotate', color: 'var(--blue)', text: `${openTickets} pending transaction(s)`, view: 'transactions' });
++  const pendingTransactions = STATE.transactions.filter(t => t.status === 'pending' && t.type !== 'withdrawal').length;
++  if (pendingTransactions) actions.push({ icon: 'fa-arrows-rotate', color: 'var(--green)', text: `${pendingTransactions} transaction(s) pending`, sub: 'Clear deposits, returns and reconciliations to keep reporting current.', view: 'transactions', cta: 'Open transactions', priority: 5 });
++
++  actions.sort((a, b) => a.priority - b.priority);
+ 
+   if (!actions.length) {
+     el.innerHTML = '<div class="empty-state" style="padding:16px"><i class="fa-solid fa-check-circle" style="color:var(--green)"></i><p>All clear! No pending actions.</p></div>';
+@@ -693,12 +702,18 @@ function renderPendingActions() {
+   }
+ 
+   el.innerHTML = actions.map(a => `
+-    <div class="flex-center gap-8" style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="navigate('${a.view}', document.querySelector('[data-view=${a.view}]'))">
+-      <i class="fa-solid ${a.icon}" style="color:${a.color};width:16px;text-align:center"></i>
+-      <span style="font-size:0.8rem;color:var(--text)">${a.text}</span>
+-      <i class="fa-solid fa-arrow-right" style="margin-left:auto;color:var(--text-dim);font-size:0.7rem"></i>
+-    </div>
+-  `).join('');
++    <button type="button" style="width:100%;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:#fff;margin-bottom:10px;cursor:pointer;transition:transform .15s ease, box-shadow .15s ease" onclick="navigate('${a.view}', document.querySelector('[data-view=${a.view}]'))" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.08)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
++      <div style="display:flex;align-items:flex-start;gap:12px">
++        <div style="width:34px;height:34px;border-radius:10px;background:${a.color}18;display:flex;align-items:center;justify-content:center;flex-shrink:0">
++          <i class="fa-solid ${a.icon}" style="color:${a.color};font-size:0.8rem"></i>
++        </div>
++        <div style="min-width:0;flex:1">
++          <div style="font-size:0.8rem;font-weight:800;color:var(--text);line-height:1.35">${a.text}</div>
++          <div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px;line-height:1.45">${a.sub}</div>
++          <div style="margin-top:8px;font-size:0.72rem;font-weight:800;color:${a.color}">${a.cta} →</div>
++        </div>
++      </div>
++    </button>`).join('');
+ }
+ 
+ function renderActivityFeed() {
+@@ -3880,78 +3895,137 @@ async function saveKycUpload() {
+    ═══════════════════════════════════════════════ */
+ function setupGlobalSearch() {
+   const input = document.getElementById('globalSearch');
+-  if (!input) return;
++  if (!input || input.dataset.bound === '1') return;
++  input.dataset.bound = '1';
+ 
+-  // Create dropdown
+   const dropdown = document.createElement('div');
+   dropdown.id = 'globalSearchDropdown';
+-  dropdown.style.cssText = 'display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid rgba(0,0,0,0.1);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.15);z-index:9999;max-height:400px;overflow-y:auto';
++  dropdown.style.cssText = 'display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid rgba(0,0,0,0.1);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.15);z-index:9999;max-height:420px;overflow-y:auto';
+   input.parentElement.style.position = 'relative';
+   input.parentElement.appendChild(dropdown);
+ 
+-  input.addEventListener('input', Utils.debounce(() => {
+-    const q = input.value.trim().toLowerCase();
+-    if (!q || q.length < 2) { dropdown.style.display = 'none'; return; }
++  let flatResults = [];
++  let activeIndex = -1;
+ 
+-    const results = [];
++  const close = () => {
++    dropdown.style.display = 'none';
++    activeIndex = -1;
++  };
++  const highlight = idx => {
++    const items = [...dropdown.querySelectorAll('.gs-item')];
++    items.forEach((el, itemIdx) => {
++      el.style.background = itemIdx === idx ? '#f7f8fa' : '';
++      el.setAttribute('aria-selected', itemIdx === idx ? 'true' : 'false');
++    });
++    activeIndex = idx;
++    const active = items[idx];
++    if (active) active.scrollIntoView({ block: 'nearest' });
++  };
++  const renderHint = msg => {
++    dropdown.innerHTML = `<div style="padding:16px 18px;color:#64748b;font-size:0.8rem;line-height:1.5">${msg}</div>`;
++    dropdown.style.display = 'block';
++  };
++  const runSearch = () => {
++    const q = input.value.trim().toLowerCase();
++    if (!q) { close(); return; }
++    if (q.length < 2) {
++      renderHint('Type at least 2 characters to search investors, pools and transactions. Use ↑ ↓ and Enter to move faster.');
++      flatResults = [];
++      return;
++    }
+ 
+-    // Search investors
+-    STATE.investors.filter(i => {
++    const groups = [];
++    const investors = STATE.investors.filter(i => {
+       const name = `${i.first_name||''} ${i.last_name||''}`.toLowerCase();
+       return name.includes(q) || (i.email||'').toLowerCase().includes(q)
+           || (i.id||'').toLowerCase().includes(q) || (i.phone||'').includes(q);
+-    }).slice(0, 5).forEach(i => results.push({
++    }).slice(0, 5).map(i => ({
+       icon: 'fa-user', color: '#D4AF37',
+       title: `${i.first_name} ${i.last_name}`,
+       sub: `${i.id} · ${i.email}`,
+-      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('investors', document.querySelector('[data-view=investors]')); setTimeout(() => { document.getElementById('investorSearch').value = `${i.first_name} ${i.last_name}`; document.getElementById('investorSearch').dispatchEvent(new Event('input')); }, 200); }
++      action: () => { input.value = ''; close(); navigate('investors', document.querySelector('[data-view=investors]')); setTimeout(() => { const el = document.getElementById('investorSearch'); if (el) { el.value = `${i.first_name} ${i.last_name}`; el.dispatchEvent(new Event('input')); } }, 200); }
+     }));
++    if (investors.length) groups.push({ label: 'Investors', items: investors });
+ 
+-    // Search pools
+-    STATE.pools.filter(p => (p.name||'').toLowerCase().includes(q) || (p.product_type||'').includes(q)).slice(0, 3).forEach(p => results.push({
++    const pools = STATE.pools.filter(p => (p.name||'').toLowerCase().includes(q) || (p.product_type||'').toLowerCase().includes(q)).slice(0, 4).map(p => ({
+       icon: 'fa-layer-group', color: '#3b82f6',
+       title: p.name,
+       sub: `Pool · ${p.status} · ${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)} raised`,
+-      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('pools', document.querySelector('[data-view=pools]')); setTimeout(() => viewPoolInvestors(p.id), 300); }
++      action: () => { input.value = ''; close(); navigate('pools', document.querySelector('[data-view=pools]')); setTimeout(() => viewPoolInvestors(p.id), 300); }
+     }));
++    if (pools.length) groups.push({ label: 'Pools', items: pools });
+ 
+-    // Search transactions
+-    STATE.transactions.filter(t => (t.reference||'').toLowerCase().includes(q) || (t.investor_id||'').toLowerCase().includes(q)).slice(0, 3).forEach(t => results.push({
++    const transactions = STATE.transactions.filter(t => (t.reference||'').toLowerCase().includes(q) || (t.investor_id||'').toLowerCase().includes(q)).slice(0, 4).map(t => ({
+       icon: 'fa-arrows-rotate', color: '#22c55e',
+       title: `${t.type} — ${Utils.rand(t.amount)}`,
+       sub: `Ref: ${t.reference||'—'} · ${Utils.date(t.transaction_date||t.created_at)}`,
+-      action: () => { input.value = ''; dropdown.style.display = 'none'; navigate('transactions', document.querySelector('[data-view=transactions]')); setTimeout(() => { document.getElementById('txnSearch').value = t.reference||''; document.getElementById('txnSearch').dispatchEvent(new Event('input')); }, 200); }
++      action: () => { input.value = ''; close(); navigate('transactions', document.querySelector('[data-view=transactions]')); setTimeout(() => { const el = document.getElementById('txnSearch'); if (el) { el.value = t.reference||''; el.dispatchEvent(new Event('input')); } }, 200); }
+     }));
++    if (transactions.length) groups.push({ label: 'Transactions', items: transactions });
+ 
+-    if (!results.length) {
+-      dropdown.innerHTML = '<div style="padding:20px;text-align:center;color:#888;font-size:0.82rem">No results for "' + q + '"</div>';
+-      dropdown.style.display = 'block';
++    flatResults = groups.flatMap(group => group.items);
++    if (!flatResults.length) {
++      renderHint(`No matches for <strong>${_esc(q)}</strong>. Try an investor email, pool name or transaction reference.`);
+       return;
+     }
+ 
+-    dropdown.innerHTML = results.map((r, idx) => `
+-      <div class="gs-item" data-idx="${idx}" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(0,0,0,0.05)">
+-        <div style="width:30px;height:30px;border-radius:8px;background:${r.color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+-          <i class="fa-solid ${r.icon}" style="color:${r.color};font-size:0.8rem"></i>
+-        </div>
+-        <div>
+-          <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${r.title}</div>
+-          <div style="font-size:0.72rem;color:#888">${r.sub}</div>
+-        </div>
++    let idx = 0;
++    dropdown.innerHTML = `
++      <div style="padding:10px 14px;border-bottom:1px solid rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fbfbfc;position:sticky;top:0;z-index:1">
++        <span style="font-size:0.74rem;font-weight:800;color:#334155;letter-spacing:0.02em">${flatResults.length} result${flatResults.length === 1 ? '' : 's'}</span>
++        <span style="font-size:0.7rem;color:#94a3b8">↑ ↓ move · Enter open · Esc close</span>
+       </div>
+-    `).join('');
++      ${groups.map(group => {
++        const html = group.items.map(item => {
++          const current = idx++;
++          return `
++            <div class="gs-item" data-idx="${current}" tabindex="0" role="option" aria-selected="false" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(0,0,0,0.05)">
++              <div style="width:30px;height:30px;border-radius:8px;background:${item.color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
++                <i class="fa-solid ${item.icon}" style="color:${item.color};font-size:0.8rem"></i>
++              </div>
++              <div style="min-width:0">
++                <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${item.title}</div>
++                <div style="font-size:0.72rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.sub}</div>
++              </div>
++            </div>`;
++        }).join('');
++        return `<div><div style="padding:8px 16px 6px;font-size:0.68rem;font-weight:800;letter-spacing:0.08em;color:#94a3b8;text-transform:uppercase;background:#fff">${group.label}</div>${html}</div>`;
++      }).join('')}`;
+ 
+     dropdown.querySelectorAll('.gs-item').forEach((el, idx) => {
+-      el.addEventListener('mouseenter', () => el.style.background = '#fafafa');
+-      el.addEventListener('mouseleave', () => el.style.background = '');
+-      el.addEventListener('click', () => results[idx].action());
++      el.addEventListener('mouseenter', () => highlight(idx));
++      el.addEventListener('mouseleave', () => { if (activeIndex === idx) highlight(idx); else el.style.background = ''; });
++      el.addEventListener('click', () => flatResults[idx].action());
++      el.addEventListener('keydown', e => { if (e.key === 'Enter') flatResults[idx].action(); });
+     });
+ 
+     dropdown.style.display = 'block';
+-  }, 200));
++    highlight(0);
++  };
++
++  input.addEventListener('focus', () => {
++    if (input.value.trim()) runSearch();
++    else renderHint('Type at least 2 characters to search investors, pools and transactions.');
++  });
++  input.addEventListener('input', Utils.debounce(runSearch, 120));
++  input.addEventListener('keydown', e => {
++    if (dropdown.style.display === 'none') return;
++    if (e.key === 'Escape') { close(); input.blur(); return; }
++    if (!flatResults.length) return;
++    if (e.key === 'ArrowDown') {
++      e.preventDefault();
++      highlight((activeIndex + 1) % flatResults.length);
++    } else if (e.key === 'ArrowUp') {
++      e.preventDefault();
++      highlight((activeIndex - 1 + flatResults.length) % flatResults.length);
++    } else if (e.key === 'Enter' && activeIndex >= 0) {
++      e.preventDefault();
++      flatResults[activeIndex].action();
++    }
++  });
+ 
+   document.addEventListener('click', e => {
+-    if (!input.parentElement.contains(e.target)) dropdown.style.display = 'none';
++    if (!input.parentElement.contains(e.target)) close();
+   });
+ }
+ 
+diff --git a/css/style.css b/css/style.css
+index b683f2b..ee6d047 100644
+--- a/css/style.css
++++ b/css/style.css
+@@ -58,11 +58,24 @@ body {
+   -webkit-font-smoothing: antialiased;
+ }
+ 
++body.no-scroll {
++  overflow: hidden;
++}
++
+ img { max-width: 100%; display: block; }
+ a { color: inherit; text-decoration: none; transition: var(--transition); }
+ button { cursor: pointer; border: none; background: none; font-family: inherit; }
+ ul { list-style: none; }
+ 
++button:focus-visible,
++a:focus-visible,
++input:focus-visible,
++select:focus-visible,
++textarea:focus-visible {
++  outline: 3px solid rgba(212,175,55,0.35);
++  outline-offset: 3px;
++}
++
+ /* ─── Container ─── */
+ .container {
+   max-width: 1200px;
+@@ -196,6 +209,10 @@ section { position: relative; padding: 100px 0; }
+   padding: 12px 0;
+ }
+ 
++.nav-overlay {
++  display: none;
++}
++
+ .nav-container {
+   max-width: 1200px;
+   margin: 0 auto;
+@@ -2222,16 +2239,33 @@ section { position: relative; padding: 100px 0; }
+ @media (max-width: 768px) {
+   section { padding: 72px 0; }
+ 
++  .nav-overlay {
++    display: block;
++    position: fixed;
++    inset: 0;
++    background: rgba(8,11,16,0.58);
++    opacity: 0;
++    pointer-events: none;
++    transition: opacity 0.3s ease;
++    z-index: 998;
++  }
++
++  body.no-scroll .nav-overlay {
++    opacity: 1;
++    pointer-events: auto;
++  }
++
+   .nav-links {
+     position: fixed;
+     top: 0;
+     right: -100%;
+-    width: 280px;
++    width: min(86vw, 320px);
+     height: 100vh;
+     background: var(--dark-2);
+     border-left: 1px solid var(--border);
++    box-shadow: var(--shadow-lg);
+     flex-direction: column;
+-    padding: 80px 24px 32px;
++    padding: 88px 24px 32px;
+     transition: right 0.3s ease;
+     z-index: 999;
+     align-items: flex-start;
+diff --git a/index.html b/index.html
+index b2a636b..ff738a8 100644
+--- a/index.html
++++ b/index.html
+@@ -13,16 +13,17 @@
+   <!-- Google Fonts -->
+   <link rel="preconnect" href="https://fonts.googleapis.com" />
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
++  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+ 
+   <!-- Font Awesome -->
+   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+ 
+   <!-- Chart.js -->
+-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
++  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+ 
+   <!-- CountUp.js -->
+-  <script src="https://cdn.jsdelivr.net/npm/countup.js@2.8.0/dist/countUp.umd.js"></script>
++  <script defer src="https://cdn.jsdelivr.net/npm/countup.js@2.8.0/dist/countUp.umd.js"></script>
+ 
+   <link rel="stylesheet" href="css/style.css" />
+   <link rel="stylesheet" href="css/home-ci.css" />
+@@ -39,7 +40,7 @@
+       anonymize_ip: false
+     });
+   </script>
+-  <script src="/js/analytics.js"></script>
++  <script defer src="/js/analytics.js"></script>
+   <style>
+     /* Hero social proof */
+     .hero-social-proof { display:flex;align-items:center;gap:12px;margin-top:28px; }
+@@ -111,6 +112,7 @@
+       </ul>
+     </div>
+   </nav>
++  <button type="button" class="nav-overlay" id="navOverlay" aria-label="Close menu"></button>
+ 
+   <!-- ═══════════════════════════════════════════════
+        HERO
+diff --git a/js/main.js b/js/main.js
+index 869d718..3ce835b 100644
+--- a/js/main.js
++++ b/js/main.js
+@@ -250,8 +250,7 @@ const MODAL_DATA = {
+    ═══════════════════════════════════════════════ */
+ document.addEventListener('DOMContentLoaded', () => {
+   initNavbar();
+-  initHeroChart();
+-  initCalculator();
++  initDeferredVisuals();
+   initFAQ();
+   initScrollAnimations();
+   initMobileNav();
+@@ -283,32 +282,90 @@ function initNavbar() {
+ function initMobileNav() {
+   const toggle = document.getElementById('mobileToggle');
+   const navLinks = document.getElementById('navLinks');
++  const overlay = document.getElementById('navOverlay');
+ 
+   if (!toggle || !navLinks) return;
+ 
++  const closeMenu = () => {
++    navLinks.classList.remove('open');
++    document.body.classList.remove('no-scroll');
++    toggle.setAttribute('aria-expanded', 'false');
++    toggle.setAttribute('aria-label', 'Open menu');
++  };
++
++  const openMenu = () => {
++    navLinks.classList.add('open');
++    document.body.classList.add('no-scroll');
++    toggle.setAttribute('aria-expanded', 'true');
++    toggle.setAttribute('aria-label', 'Close menu');
++    const firstLink = navLinks.querySelector('a');
++    setTimeout(() => firstLink?.focus(), 30);
++  };
++
++  toggle.setAttribute('aria-expanded', 'false');
++  toggle.setAttribute('aria-controls', 'navLinks');
++
+   toggle.addEventListener('click', () => {
+-    navLinks.classList.toggle('open');
++    if (navLinks.classList.contains('open')) closeMenu();
++    else openMenu();
+   });
+ 
+-  // Close on link click
+   navLinks.querySelectorAll('a').forEach(link => {
+-    link.addEventListener('click', () => navLinks.classList.remove('open'));
++    link.addEventListener('click', closeMenu);
+   });
+ 
+-  // Close on outside click
+-  document.addEventListener('click', (e) => {
+-    if (!toggle.contains(e.target) && !navLinks.contains(e.target)) {
+-      navLinks.classList.remove('open');
+-    }
++  overlay?.addEventListener('click', closeMenu);
++
++  document.addEventListener('keydown', (e) => {
++    if (e.key === 'Escape' && navLinks.classList.contains('open')) closeMenu();
++  });
++
++  window.addEventListener('resize', () => {
++    if (window.innerWidth > 768) closeMenu();
+   });
+ }
+ 
++function initDeferredVisuals() {
++  const runHeroChart = () => {
++    if (document.getElementById('heroChart')) initHeroChart();
++  };
++
++  if ('requestIdleCallback' in window) {
++    window.requestIdleCallback(runHeroChart, { timeout: 1200 });
++  } else {
++    setTimeout(runHeroChart, 120);
++  }
++
++  const calcSection = document.getElementById('calculator');
++  let calculatorReady = false;
++  const runCalculator = () => {
++    if (calculatorReady) return;
++    calculatorReady = true;
++    initCalculator();
++  };
++
++  if (calcSection && 'IntersectionObserver' in window) {
++    const observer = new IntersectionObserver((entries) => {
++      entries.forEach((entry) => {
++        if (entry.isIntersecting) {
++          runCalculator();
++          observer.disconnect();
++        }
++      });
++    }, { rootMargin: '160px 0px' });
++
++    observer.observe(calcSection);
++  } else {
++    runCalculator();
++  }
++}
++
+ /* ═══════════════════════════════════════════════
+    HERO CHART
+    ═══════════════════════════════════════════════ */
+ function initHeroChart() {
+   const canvas = document.getElementById('heroChart');
+-  if (!canvas) return;
++  if (!canvas || typeof Chart === 'undefined') return;
+ 
+   // Generate a nice upward-trending portfolio line
+   const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+@@ -451,7 +508,7 @@ function updateCalculator() {
+ 
+ function updateCalcChart(amount, totalReturns, product) {
+   const canvas = document.getElementById('calcChart');
+-  if (!canvas) return;
++  if (!canvas || typeof Chart === 'undefined') return;
+ 
+   const years = Math.max(1, Math.round(product.termYears));
+   const labels = [];
+diff --git a/login.html b/login.html
+index a69834a..7e5b821 100644
+--- a/login.html
++++ b/login.html
+@@ -750,12 +750,74 @@
+     } catch (_) {}
+   })();
+ 
++
++
++  function _ensureLoginAssistUI() {
++    const pwInput = document.getElementById('passwordInput');
++    if (pwInput && !document.getElementById('capsLockHint')) {
++      const hint = document.createElement('div');
++      hint.id = 'capsLockHint';
++      hint.style.cssText = 'display:none;margin-top:8px;font-size:0.74rem;font-weight:700;color:#ef4444';
++      hint.innerHTML = '<i class="fa-solid fa-arrow-up-a-z" style="margin-right:6px"></i>Caps Lock is on';
++      pwInput.closest('.form-group')?.appendChild(hint);
++    }
++    const totpInput = document.getElementById('totpInput');
++    if (totpInput && !document.getElementById('totpHint')) {
++      const hint = document.createElement('div');
++      hint.id = 'totpHint';
++      hint.style.cssText = 'margin-top:8px;font-size:0.74rem;color:#6b7280;text-align:center';
++      hint.textContent = 'Paste or type the 6-digit code — spaces are added automatically.';
++      totpInput.parentNode?.appendChild(hint);
++    }
++  }
++
++  function _toggleCapsLockHint(e) {
++    const hint = document.getElementById('capsLockHint');
++    if (!hint) return;
++    const on = !!(e && typeof e.getModifierState === 'function' && e.getModifierState('CapsLock'));
++    hint.style.display = on ? 'block' : 'none';
++  }
++
++  function initLoginAssists() {
++    _ensureLoginAssistUI();
++    const emailEl = document.getElementById('emailInput');
++    const pwEl = document.getElementById('passwordInput');
++    const forgotEl = document.getElementById('forgotEmailInput');
++    const totpEl = document.getElementById('totpInput');
++    const savedEmail = localStorage.getItem('svc_last_login_email');
++    if (emailEl && savedEmail && !emailEl.value) emailEl.value = savedEmail;
++    if (emailEl && !document.getElementById('twoFAStep')?.style.display) setTimeout(() => emailEl.focus(), 60);
++
++    [emailEl, pwEl, forgotEl].forEach(el => {
++      if (!el) return;
++      el.addEventListener('input', () => {
++        document.getElementById('formError')?.classList.remove('show');
++        document.getElementById('forgotError')?.classList.remove('show');
++      });
++    });
++
++    if (pwEl) {
++      ['keydown','keyup','focus','blur'].forEach(evt => pwEl.addEventListener(evt, _toggleCapsLockHint));
++      pwEl.addEventListener('blur', () => _toggleCapsLockHint(null));
++    }
++
++    if (totpEl) {
++      totpEl.addEventListener('input', () => {
++        const digits = totpEl.value.replace(/\D/g, '').slice(0, 6);
++        totpEl.value = digits.length > 3 ? `${digits.slice(0,3)} ${digits.slice(3)}` : digits;
++        if (digits.length === 6) setTimeout(() => verify2FA(), 120);
++      });
++    }
++  }
++
+   /* ─── Forgot Password Flow ─── */
+   function showForgotPassword(e) {
+     if (e) e.preventDefault();
+     document.getElementById('loginForm').style.display = 'none';
+     document.querySelectorAll('.login-links').forEach(el => el.style.display = 'none');
+     document.getElementById('forgotPanel').classList.add('show');
++    const loginEmail = document.getElementById('emailInput')?.value?.trim();
++    if (loginEmail && document.getElementById('forgotEmailInput')) document.getElementById('forgotEmailInput').value = loginEmail;
+     document.getElementById('forgotError').classList.remove('show');
+     document.getElementById('forgotSuccessPanel').classList.remove('show');
+     document.getElementById('forgotFormState').style.display = 'block';
+@@ -767,6 +829,7 @@
+     document.querySelectorAll('.login-links').forEach(el => el.style.display = '');
+     document.getElementById('forgotPanel').classList.remove('show');
+     if (document.getElementById('forgotEmailInput')) document.getElementById('forgotEmailInput').value = '';
++    setTimeout(() => document.getElementById('emailInput')?.focus(), 60);
+     document.getElementById('forgotError').classList.remove('show');
+   }
+ 
+@@ -858,6 +921,7 @@
+       /* Store token */
+       localStorage.setItem('svc_token', data.token);
+       localStorage.setItem('svc_user',  JSON.stringify(data.user));
++      localStorage.setItem('svc_last_login_email', email);
+ 
+ 
+       btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
+@@ -888,6 +952,8 @@
+       if (!res.ok) throw new Error(data.error || 'Invalid code.');
+       localStorage.setItem('svc_token', data.token);
+       localStorage.setItem('svc_user',  JSON.stringify(data.user));
++      const savedLoginEmail = document.getElementById('emailInput')?.value?.trim().toLowerCase();
++      if (savedLoginEmail) localStorage.setItem('svc_last_login_email', savedLoginEmail);
+       btn.textContent = 'Verified ✓';
+       setTimeout(() => { window.location.href = data.redirect || 'portal/'; }, 350);
+     } catch (err) {
+@@ -904,6 +970,7 @@
+ </script>
+ <script>
+   document.addEventListener('DOMContentLoaded', function() {
++    initLoginAssists();
+     var loginForm = document.getElementById('loginForm');
+     if (loginForm) {
+       loginForm.addEventListener('submit', function() {
+diff --git a/portal/js/portal.js b/portal/js/portal.js
+index fae6042..a967f2a 100644
+--- a/portal/js/portal.js
++++ b/portal/js/portal.js
+@@ -34,6 +34,365 @@ let PORTAL = {
+   quests: null,       // { xp, level, currentLevel, nextLevel, completedIds, quests, levels, profile }
+ };
+ 
++const PROFILE_DRAFT_KEY = 'svc_profile_draft_v2';
++const SUPPORT_DRAFT_KEY = 'svc_support_draft_v2';
++let _profileHydrating = false;
++let _supportHydrating = false;
++let _profileDirty = false;
++
++function _portalScopedKey(base) {
++  return `${base}:${PORTAL.investor?.id || DEMO_INVESTOR_ID || 'guest'}`;
++}
++function _localGet(key) {
++  try { return localStorage.getItem(key); } catch (_) { return null; }
++}
++function _localSet(key, value) {
++  try { localStorage.setItem(key, value); } catch (_) {}
++}
++function _localRemove(key) {
++  try { localStorage.removeItem(key); } catch (_) {}
++}
++function _setInlineMessage(id, msg, color = 'var(--text-muted)') {
++  const el = document.getElementById(id);
++  if (!el) return;
++  el.textContent = msg;
++  el.style.color = color;
++}
++function _ensureTaskCompletionPanel() {
++  let wrap = document.getElementById('taskCompletionPanel');
++  if (wrap) return wrap;
++  const anchor = document.getElementById('onboardingWizard') || document.getElementById('welcomeBanner');
++  if (!anchor || !anchor.parentNode) return null;
++  wrap = document.createElement('div');
++  wrap.id = 'taskCompletionPanel';
++  wrap.style.cssText = 'display:none;margin-bottom:20px';
++  wrap.innerHTML = `
++    <div class="panel" style="border:1px solid rgba(47,140,155,0.18);background:linear-gradient(135deg,rgba(47,140,155,0.05),rgba(255,155,12,0.04))">
++      <div class="panel__header" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
++        <div>
++          <span class="panel__title"><i class="fa-solid fa-list-check" style="color:#2F8C9B;margin-right:8px"></i>Action Centre</span>
++          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px">See the next best action to unlock deposits, investing, withdrawals and statements.</div>
++        </div>
++        <div id="taskCompletionMeta" style="margin-left:auto;font-size:0.74rem;font-weight:700;color:#2F8C9B"></div>
++      </div>
++      <div class="panel__body" id="taskCompletionBody"></div>
++    </div>`;
++  anchor.insertAdjacentElement('afterend', wrap);
++  return wrap;
++}
++function _ensureProfileAssistUI() {
++  const header = document.querySelector('#view-profile .panel .panel__header');
++  const saveBtn = document.querySelector('button[onclick="saveProfile()"]');
++  if (header && !document.getElementById('profileSaveMeta')) {
++    const meta = document.createElement('div');
++    meta.id = 'profileSaveMeta';
++    meta.style.cssText = 'margin-left:auto;margin-right:10px;font-size:0.74rem;font-weight:700;color:var(--text-muted)';
++    meta.textContent = 'Changes auto-save to this device until you submit.';
++    if (saveBtn) header.insertBefore(meta, saveBtn);
++    else header.appendChild(meta);
++  }
++  const email = document.getElementById('profEmail');
++  if (email) {
++    email.readOnly = true;
++    email.setAttribute('aria-readonly', 'true');
++    email.style.background = 'rgba(0,0,0,0.035)';
++    email.style.cursor = 'not-allowed';
++    email.title = 'Email changes are protected. Please contact support to update your login email.';
++    if (!document.getElementById('profEmailHint')) {
++      const hint = document.createElement('div');
++      hint.id = 'profEmailHint';
++      hint.style.cssText = 'margin-top:6px;font-size:0.72rem;color:var(--text-muted);line-height:1.45';
++      hint.textContent = 'Email changes are protected for security. Contact support if you need to update your login address.';
++      email.closest('.form-group')?.appendChild(hint);
++    }
++  }
++}
++function _ensureSupportAssistUI() {
++  const subject = document.getElementById('tktSubject');
++  const message = document.getElementById('tktMessage');
++  if (!subject || !message) return;
++  const panelBody = subject.closest('.panel__body');
++  if (panelBody && !document.getElementById('supportDraftMeta')) {
++    const meta = document.createElement('div');
++    meta.id = 'supportDraftMeta';
++    meta.style.cssText = 'margin-bottom:12px;padding:10px 12px;border-radius:10px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.16);font-size:0.76rem;font-weight:700;color:#2F8C9B';
++    meta.textContent = 'Drafts auto-save on this device so you can come back later.';
++    panelBody.insertBefore(meta, panelBody.firstChild);
++  }
++  if (panelBody && !document.getElementById('supportTemplateRow')) {
++    const row = document.createElement('div');
++    row.id = 'supportTemplateRow';
++    row.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px';
++    row.innerHTML = `
++      <button type="button" class="btn btn--ghost btn--sm" onclick="applyTicketTemplate('withdrawal')"><i class="fa-solid fa-arrow-up-from-bracket"></i> Withdrawal delay</button>
++      <button type="button" class="btn btn--ghost btn--sm" onclick="applyTicketTemplate('fica')"><i class="fa-solid fa-id-card"></i> FICA status</button>
++      <button type="button" class="btn btn--ghost btn--sm" onclick="applyTicketTemplate('statement')"><i class="fa-solid fa-file-invoice"></i> Statement request</button>
++      <button type="button" class="btn btn--ghost btn--sm" onclick="applyTicketTemplate('technical')"><i class="fa-solid fa-wrench"></i> Technical issue</button>`;
++    const firstGroup = panelBody.querySelector('.form-group');
++    if (firstGroup) panelBody.insertBefore(row, firstGroup);
++  }
++  if (!document.getElementById('tktMessageMeta')) {
++    const meta = document.createElement('div');
++    meta.id = 'tktMessageMeta';
++    meta.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;font-size:0.72rem;color:var(--text-muted)';
++    meta.innerHTML = '<span>Include dates, amounts and references to speed up the response.</span><span id="tktMessageCount">0 / 1200</span>';
++    message.insertAdjacentElement('afterend', meta);
++  }
++}
++function initPortalFormUX() {
++  _ensureTaskCompletionPanel();
++  _ensureProfileAssistUI();
++  _ensureSupportAssistUI();
++  bindProfileDraft();
++  bindSupportDraft();
++}
++function _profileFields() {
++  return {
++    first_name: document.getElementById('profFirstName')?.value?.trim() || '',
++    last_name: document.getElementById('profLastName')?.value?.trim() || '',
++    phone: document.getElementById('profPhone')?.value?.trim() || '',
++    city: document.getElementById('profCity')?.value?.trim() || '',
++    province: document.getElementById('profProvince')?.value || '',
++    risk_profile: document.querySelector('input[name="riskProf"]:checked')?.value || '',
++  };
++}
++function _profileDraftHasValue(data) {
++  return !!Object.values(data || {}).find(Boolean);
++}
++function _applyProfileDraft(data) {
++  if (!data) return;
++  _profileHydrating = true;
++  const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
++  set('profFirstName', data.first_name || '');
++  set('profLastName', data.last_name || '');
++  set('profPhone', data.phone || '');
++  set('profCity', data.city || '');
++  set('profProvince', data.province || '');
++  if (data.risk_profile) {
++    const radio = document.querySelector(`input[name="riskProf"][value="${data.risk_profile}"]`);
++    if (radio) radio.checked = true;
++  }
++  _profileHydrating = false;
++}
++function _persistProfileDraft() {
++  const data = _profileFields();
++  if (!_profileDraftHasValue(data)) {
++    _localRemove(_portalScopedKey(PROFILE_DRAFT_KEY));
++    _profileDirty = false;
++    _setInlineMessage('profileSaveMeta', 'Changes auto-save to this device until you submit.');
++    return;
++  }
++  _localSet(_portalScopedKey(PROFILE_DRAFT_KEY), JSON.stringify({ ...data, saved_at: Date.now() }));
++  _profileDirty = true;
++  _setInlineMessage('profileSaveMeta', 'Draft saved locally — click Save to update your account.', '#FF8215');
++}
++function restoreProfileDraft() {
++  const raw = _localGet(_portalScopedKey(PROFILE_DRAFT_KEY));
++  if (!raw) {
++    _profileDirty = false;
++    _setInlineMessage('profileSaveMeta', 'Changes auto-save to this device until you submit.');
++    return;
++  }
++  try {
++    const draft = JSON.parse(raw);
++    const live = _profileFields();
++    const same = ['first_name','last_name','phone','city','province','risk_profile'].every(key => String(draft[key] || '') === String(live[key] || ''));
++    if (!same) {
++      _applyProfileDraft(draft);
++      _profileDirty = true;
++      _setInlineMessage('profileSaveMeta', 'Draft restored — review your changes and click Save.', '#FF8215');
++    }
++  } catch (_) {}
++}
++function clearProfileDraft() {
++  _localRemove(_portalScopedKey(PROFILE_DRAFT_KEY));
++  _profileDirty = false;
++  _setInlineMessage('profileSaveMeta', 'Profile saved.');
++}
++function bindProfileDraft() {
++  if (document.body.dataset.profileDraftBound === '1') return;
++  document.body.dataset.profileDraftBound = '1';
++  ['profFirstName','profLastName','profPhone','profCity','profProvince'].forEach(id => {
++    const el = document.getElementById(id);
++    if (!el) return;
++    el.addEventListener('input', () => { if (!_profileHydrating) _persistProfileDraft(); });
++    el.addEventListener('change', () => { if (!_profileHydrating) _persistProfileDraft(); });
++  });
++  document.querySelectorAll('input[name="riskProf"]').forEach(el => {
++    el.addEventListener('change', () => { if (!_profileHydrating) _persistProfileDraft(); });
++  });
++}
++const SUPPORT_TEMPLATES = {
++  withdrawal: {
++    subject: 'Withdrawal delay',
++    category: 'general',
++    priority: 'high',
++    message: 'Hello SV Capital team, I requested a withdrawal and would like an update on the payout timeline. Reference: \nAmount: \nSubmitted on: \nAdditional context: '
++  },
++  fica: {
++    subject: 'FICA verification status',
++    category: 'fica_kyc',
++    priority: 'medium',
++    message: 'Hello SV Capital team, please share the current status of my FICA / KYC review. Documents uploaded on: \nAnything still outstanding: '
++  },
++  statement: {
++    subject: 'Statement or tax certificate request',
++    category: 'general',
++    priority: 'medium',
++    message: 'Hello SV Capital team, I need help with my statement / tax certificate. Period required: \nPurpose: \nAdditional details: '
++  },
++  technical: {
++    subject: 'Technical issue in the portal',
++    category: 'technical',
++    priority: 'medium',
++    message: 'Hello SV Capital team, I experienced a portal issue. What I was trying to do: \nWhat happened instead: \nDevice / browser: \nTime of issue: '
++  }
++};
++function _supportFields() {
++  return {
++    subject: document.getElementById('tktSubject')?.value?.trim() || '',
++    category: document.getElementById('tktCategory')?.value || 'investment_query',
++    priority: document.getElementById('tktPriority')?.value || 'medium',
++    message: document.getElementById('tktMessage')?.value || '',
++  };
++}
++function _supportDraftHasValue(data) {
++  return !!(data.subject || data.message);
++}
++function _updateSupportCounter() {
++  const msg = document.getElementById('tktMessage')?.value || '';
++  const count = document.getElementById('tktMessageCount');
++  if (!count) return;
++  count.textContent = `${msg.length} / 1200`;
++  count.style.color = msg.length > 1200 ? '#ef4444' : 'var(--text-muted)';
++}
++function _persistSupportDraft() {
++  const data = _supportFields();
++  _updateSupportCounter();
++  if (!_supportDraftHasValue(data)) {
++    _localRemove(_portalScopedKey(SUPPORT_DRAFT_KEY));
++    _setInlineMessage('supportDraftMeta', 'Drafts auto-save on this device so you can come back later.', '#2F8C9B');
++    return;
++  }
++  _localSet(_portalScopedKey(SUPPORT_DRAFT_KEY), JSON.stringify({ ...data, saved_at: Date.now() }));
++  _setInlineMessage('supportDraftMeta', 'Draft saved locally — you can safely leave and come back.', '#2F8C9B');
++}
++function restoreSupportDraft() {
++  _ensureSupportAssistUI();
++  _updateSupportCounter();
++  const raw = _localGet(_portalScopedKey(SUPPORT_DRAFT_KEY));
++  if (!raw) return;
++  try {
++    const draft = JSON.parse(raw);
++    const subject = document.getElementById('tktSubject');
++    const category = document.getElementById('tktCategory');
++    const priority = document.getElementById('tktPriority');
++    const message = document.getElementById('tktMessage');
++    if (!subject || !category || !priority || !message) return;
++    _supportHydrating = true;
++    subject.value = draft.subject || subject.value;
++    category.value = draft.category || category.value;
++    priority.value = draft.priority || priority.value;
++    message.value = draft.message || message.value;
++    _supportHydrating = false;
++    _updateSupportCounter();
++    _setInlineMessage('supportDraftMeta', 'Draft restored — review and submit when ready.', '#FF8215');
++  } catch (_) {}
++}
++function clearSupportDraft() {
++  _localRemove(_portalScopedKey(SUPPORT_DRAFT_KEY));
++  _setInlineMessage('supportDraftMeta', 'Ticket sent. Your draft has been cleared.', '#22c55e');
++  _updateSupportCounter();
++}
++function bindSupportDraft() {
++  if (document.body.dataset.supportDraftBound === '1') return;
++  document.body.dataset.supportDraftBound = '1';
++  ['tktSubject','tktMessage','tktCategory','tktPriority'].forEach(id => {
++    const el = document.getElementById(id);
++    if (!el) return;
++    const evt = el.tagName === 'SELECT' ? 'change' : 'input';
++    el.addEventListener(evt, () => { if (!_supportHydrating) _persistSupportDraft(); });
++    if (evt !== 'change') el.addEventListener('change', () => { if (!_supportHydrating) _persistSupportDraft(); });
++  });
++  _updateSupportCounter();
++}
++function applyTicketTemplate(key) {
++  _ensureSupportAssistUI();
++  const tmpl = SUPPORT_TEMPLATES[key];
++  if (!tmpl) return;
++  const subject = document.getElementById('tktSubject');
++  const category = document.getElementById('tktCategory');
++  const priority = document.getElementById('tktPriority');
++  const message = document.getElementById('tktMessage');
++  if (!subject || !category || !priority || !message) return;
++  _supportHydrating = true;
++  subject.value = tmpl.subject;
++  category.value = tmpl.category;
++  priority.value = tmpl.priority;
++  message.value = tmpl.message;
++  _supportHydrating = false;
++  _persistSupportDraft();
++  message.focus();
++  message.setSelectionRange(message.value.length, message.value.length);
++}
++function renderTaskCompletionPanel() {
++  const wrap = _ensureTaskCompletionPanel();
++  const body = document.getElementById('taskCompletionBody');
++  const meta = document.getElementById('taskCompletionMeta');
++  if (!wrap || !body || !meta || !PORTAL.investor) return;
++  const inv = PORTAL.investor;
++  const hasInvestments = (PORTAL.investments || []).length > 0;
++  const hasWallet = (parseFloat(inv.wallet_balance) || 0) > 0;
++  const bankReady = !!(inv.bank_account_number || (inv.bank_account_status && inv.bank_account_status !== 'none' && inv.bank_account_status !== 'pending'));
++  const riskReady = !!inv.risk_profile;
++  const ficaReady = (inv.fica_status || inv.kyc_status || inv.status || '').toLowerCase() === 'approved';
++  const tasks = [
++    { label: 'Complete FICA verification', done: ficaReady, tone: '#FF8215', action: 'openKycUploadModal()', cta: 'Upload documents' },
++    { label: 'Add a withdrawal bank account', done: bankReady, tone: '#2F8C9B', action: 'openBankDetailsModal()', cta: 'Add bank account' },
++    { label: 'Fund your wallet', done: hasWallet, tone: '#22c55e', action: 'openTopUpModal()', cta: 'Top up wallet' },
++    { label: 'Confirm your risk profile', done: riskReady, tone: '#a855f7', action: 'navigate(\'profile\', document.querySelector(\'[data-view=profile]\'))', cta: 'Review profile' },
++    { label: 'Make your next investment', done: hasInvestments, tone: '#D4AF37', action: 'navigate(\'marketplace\', document.querySelector(\'[data-view=marketplace]\'))', cta: 'Browse pools' },
++  ];
++  const doneCount = tasks.filter(t => t.done).length;
++  const pending = tasks.filter(t => !t.done);
++  meta.textContent = `${doneCount}/${tasks.length} complete`;
++  wrap.style.display = 'block';
++  if (!pending.length) {
++    body.innerHTML = `
++      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:space-between">
++        <div>
++          <div style="font-size:0.9rem;font-weight:800;color:#1a1a1a;margin-bottom:4px">You're set up and ready to invest confidently.</div>
++          <div style="font-size:0.8rem;color:var(--text-muted)">Use Quick Actions to top up, browse new pools or generate your latest statement.</div>
++        </div>
++        <div style="display:flex;gap:8px;flex-wrap:wrap">
++          <button class="btn btn--secondary btn--sm" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i> Statement</button>
++          <button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-plus"></i> Invest more</button>
++        </div>
++      </div>`;
++    return;
++  }
++  body.innerHTML = `
++    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:14px">
++      ${tasks.map(task => `
++        <div style="padding:12px 14px;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:${task.done ? 'rgba(34,197,94,0.06)' : 'rgba(255,255,255,0.82)'};display:flex;gap:10px;align-items:flex-start">
++          <div style="width:24px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;background:${task.done ? '#22c55e' : task.tone + '22'};color:${task.done ? '#fff' : task.tone};flex-shrink:0;margin-top:2px">
++            <i class="fa-solid ${task.done ? 'fa-check' : 'fa-circle'}" style="font-size:0.7rem"></i>
++          </div>
++          <div style="min-width:0;flex:1">
++            <div style="font-size:0.8rem;font-weight:700;color:#1a1a1a;line-height:1.35">${task.label}</div>
++            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">${task.done ? 'Completed' : 'Still needed before the full flow feels seamless.'}</div>
++          </div>
++        </div>`).join('')}
++    </div>
++    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:4px;border-top:1px solid rgba(0,0,0,0.06)">
++      <div>
++        <div style="font-size:0.78rem;font-weight:800;color:#1a1a1a">Recommended next step</div>
++        <div style="font-size:0.76rem;color:var(--text-muted);margin-top:4px">${pending[0].label}</div>
++      </div>
++      <button class="btn btn--primary btn--sm" onclick="${pending[0].action}"><i class="fa-solid fa-bolt"></i> ${pending[0].cta}</button>
++    </div>`;
++}
++
+ /* ─── Skeleton loading helpers ─── */
+ function _skeletonRows(count, cols) {
+   return Array(count).fill(0).map(() =>
+@@ -460,6 +819,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && _p
+ document.addEventListener('DOMContentLoaded', async () => {
+   Toast.init();
+   initDarkMode();
++  initPortalFormUX();
+   // Set skeleton placeholders on overview stats while data loads
+   const _skelSpan = '<span class="skeleton" style="display:inline-block;width:80px;height:20px;border-radius:4px"></span>';
+   ['pov-total','pov-invested','pov-wallet','pov-returns'].forEach(id => {
+@@ -709,6 +1069,7 @@ function renderOverview() {
+   renderPortfolioTrendChart();
+   renderAllocationChart();
+   renderXPWidget();
++  renderTaskCompletionPanel();
+ }
+ 
+ /* ─── Onboarding Wizard ──────────────────────────────────────────── */
+@@ -2818,6 +3179,7 @@ async function loadSupport() {
+       t.investor_id === DEMO_INVESTOR_ID && !t.is_system && t.category !== 'aml_review'
+     );
+     renderMyTickets();
++    restoreSupportDraft();
+   } catch (e) { Toast.error('Failed to load tickets'); }
+ }
+ 
+@@ -2856,33 +3218,40 @@ async function submitTicket(btn) {
+   const subject = document.getElementById('tktSubject').value.trim();
+   const message = document.getElementById('tktMessage').value.trim();
+   if (!subject || !message) { Toast.error('Subject and message are required'); return; }
++  if (message.length > 1200) { Toast.error('Please keep your message under 1,200 characters'); return; }
+ 
+   let attachmentInfo = '';
+   if (_tktAttachFile && _tktAttachBase64) {
+-    attachmentInfo = `\n\n📎 Attachment: ${_tktAttachFile.name} (${(_tktAttachFile.size/1024).toFixed(1)} KB)\nData: ${_tktAttachBase64}`;
++    attachmentInfo = `
++
++📎 Attachment: ${_tktAttachFile.name} (${(_tktAttachFile.size/1024).toFixed(1)} KB)
++Data: ${_tktAttachBase64}`;
+   }
+ 
+   await _withBtn(btn, async () => {
+-  try {
+-    await API.tickets.create({
+-      id:             Utils.genId('TKT'),
+-      investor_id:    DEMO_INVESTOR_ID,
+-      investor_name:  `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim(),
+-      investor_email: PORTAL.investor?.email || '',
+-      subject,
+-      category:       document.getElementById('tktCategory').value,
+-      priority:       document.getElementById('tktPriority').value,
+-      message:        message + attachmentInfo,
+-      proof_attached: !!_tktAttachFile,
+-      proof_filename: _tktAttachFile ? _tktAttachFile.name : '',
+-      status:         'open',
+-    });
+-    Toast.success('Support ticket submitted. We\'ll respond within 1 business day.');
+-    document.getElementById('tktSubject').value = '';
+-    document.getElementById('tktMessage').value = '';
+-    removeTicketAttachment();
+-    await loadSupport();
+-  } catch (e) { Toast.error('Failed to submit ticket'); }
++    try {
++      await API.tickets.create({
++        id:             Utils.genId('TKT'),
++        investor_id:    DEMO_INVESTOR_ID,
++        investor_name:  `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim(),
++        investor_email: PORTAL.investor?.email || '',
++        subject,
++        category:       document.getElementById('tktCategory').value,
++        priority:       document.getElementById('tktPriority').value,
++        message:        message + attachmentInfo,
++        proof_attached: !!_tktAttachFile,
++        proof_filename: _tktAttachFile ? _tktAttachFile.name : '',
++        status:         'open',
++      });
++      Toast.success('Support ticket submitted. We\'ll respond within 1 business day.');
++      document.getElementById('tktSubject').value = '';
++      document.getElementById('tktMessage').value = '';
++      document.getElementById('tktCategory').value = 'investment_query';
++      document.getElementById('tktPriority').value = 'medium';
++      removeTicketAttachment();
++      clearSupportDraft();
++      await loadSupport();
++    } catch (e) { Toast.error('Failed to submit ticket'); }
+   });
+ }
+ 
+@@ -3435,23 +3804,38 @@ async function saveProfile() {
+   const inv = PORTAL.investor;
+   if (!inv) return;
+ 
++  const firstName = document.getElementById('profFirstName')?.value?.trim() || '';
++  const lastName  = document.getElementById('profLastName')?.value?.trim() || '';
++  const phone     = document.getElementById('profPhone')?.value?.trim() || '';
++  const city      = document.getElementById('profCity')?.value?.trim() || '';
++  const risk      = (document.querySelector('input[name="riskProf"]:checked')?.value) || inv.risk_profile;
++  const saveBtn   = document.querySelector('button[onclick="saveProfile()"]');
++
++  if (!firstName || !lastName) { Toast.error('First name and last name are required.'); return; }
++  if (phone && phone.replace(/\D/g, '').length < 8) { Toast.error('Please enter a valid phone number.'); return; }
++
+   const updates = {
+-    first_name: document.getElementById('profFirstName')?.value?.trim() || inv.first_name,
+-    last_name:  document.getElementById('profLastName')?.value?.trim()  || inv.last_name,
+-    phone:      document.getElementById('profPhone')?.value?.trim()     || inv.phone,
+-    address:    document.getElementById('profCity')?.value?.trim()      || inv.address,
+-    province:   document.getElementById('profProvince')?.value          || inv.province,
+-    risk_profile: (document.querySelector('input[name="riskProf"]:checked')?.value) || inv.risk_profile,
++    first_name: firstName,
++    last_name:  lastName,
++    phone:      phone || inv.phone,
++    address:    city || inv.address,
++    province:   document.getElementById('profProvince')?.value || inv.province,
++    risk_profile: risk,
+   };
+ 
+-  try {
+-    await API._fetch('PATCH', `tables/investors/${inv.id}`, updates);
+-    Object.assign(PORTAL.investor, updates);
+-    SVC.track('svc_profile_saved', {});
+-    Toast.success('Profile updated successfully');
+-  } catch (e) {
+-    Toast.error('Failed to save profile — please try again.');
+-  }
++  await _withBtn(saveBtn, async () => {
++    try {
++      await API._fetch('PATCH', `tables/investors/${inv.id}`, updates);
++      Object.assign(PORTAL.investor, updates);
++      clearProfileDraft();
++      renderTaskCompletionPanel();
++      SVC.track('svc_profile_saved', {});
++      Toast.success('Profile updated successfully');
++    } catch (e) {
++      _setInlineMessage('profileSaveMeta', 'Could not save your changes — your local draft is still available.', '#ef4444');
++      Toast.error('Failed to save profile — please try again.');
++    }
++  });
+ }
+ 
+ /* ─── Referral ─── */
+@@ -6964,8 +7348,10 @@ function renderRiskProfile() {
+   }
+ 
+   _loadStatementArchive();
++  restoreProfileDraft();
+ }
+ 
++
+ /* ═══════════════════════════════════════════════
+    FEATURE: STATEMENT ARCHIVE & TAX CERTIFICATES
+    ═══════════════════════════════════════════════ */
+diff --git a/portal/reset-password.html b/portal/reset-password.html
+index c83372a..ade8f64 100644
+--- a/portal/reset-password.html
++++ b/portal/reset-password.html
+@@ -435,6 +435,98 @@
+     document.getElementById('errorState').classList.add('show');
+   }
+ 
++
++
++  function _ensureResetAssistUI() {
++    if (!document.getElementById('resetPwStrength')) {
++      const strength = document.createElement('div');
++      strength.id = 'resetPwStrength';
++      strength.style.cssText = 'margin-top:10px';
++      strength.innerHTML = `
++        <div style="display:flex;gap:6px;margin-bottom:7px">
++          <span data-bar="1" style="flex:1;height:6px;border-radius:999px;background:#e5e7eb"></span>
++          <span data-bar="2" style="flex:1;height:6px;border-radius:999px;background:#e5e7eb"></span>
++          <span data-bar="3" style="flex:1;height:6px;border-radius:999px;background:#e5e7eb"></span>
++          <span data-bar="4" style="flex:1;height:6px;border-radius:999px;background:#e5e7eb"></span>
++        </div>
++        <div id="resetPwStrengthText" style="font-size:0.73rem;color:var(--text-muted)">Use 8+ characters with upper-case, a number and a symbol.</div>`;
++      document.getElementById('pwInput')?.closest('.form-group')?.appendChild(strength);
++    }
++    if (!document.getElementById('resetMatchHint')) {
++      const hint = document.createElement('div');
++      hint.id = 'resetMatchHint';
++      hint.style.cssText = 'margin-top:8px;font-size:0.73rem;color:var(--text-muted)';
++      hint.textContent = 'Re-enter the same password to confirm.';
++      document.getElementById('pwConfirm')?.closest('.form-group')?.appendChild(hint);
++    }
++    if (!document.getElementById('resetCapsHint')) {
++      const hint = document.createElement('div');
++      hint.id = 'resetCapsHint';
++      hint.style.cssText = 'display:none;margin-top:8px;font-size:0.73rem;font-weight:700;color:#ef4444';
++      hint.innerHTML = '<i class="fa-solid fa-arrow-up-a-z" style="margin-right:6px"></i>Caps Lock is on';
++      document.getElementById('pwInput')?.closest('.form-group')?.appendChild(hint);
++    }
++  }
++
++  function _resetScore(pw) {
++    let score = 0;
++    if (pw.length >= 8) score++;
++    if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
++    if (/\d/.test(pw)) score++;
++    if (/[^A-Za-z0-9]/.test(pw)) score++;
++    return score;
++  }
++
++  function updateResetPasswordAssist() {
++    _ensureResetAssistUI();
++    const pw = document.getElementById('pwInput')?.value || '';
++    const confirm = document.getElementById('pwConfirm')?.value || '';
++    const score = _resetScore(pw);
++    const colors = ['#e5e7eb', '#ef4444', '#f59e0b', '#2F8C9B', '#22c55e'];
++    const labels = ['Use 8+ characters with upper-case, a number and a symbol.', 'Weak password', 'Fair password', 'Good password', 'Strong password'];
++    document.querySelectorAll('#resetPwStrength [data-bar]').forEach((bar, idx) => {
++      bar.style.background = idx < score ? colors[score] : '#e5e7eb';
++    });
++    const label = document.getElementById('resetPwStrengthText');
++    if (label) {
++      label.textContent = labels[score];
++      label.style.color = score >= 3 ? '#22c55e' : score >= 2 ? '#f59e0b' : 'var(--text-muted)';
++    }
++    const match = document.getElementById('resetMatchHint');
++    if (match) {
++      if (!confirm) {
++        match.textContent = 'Re-enter the same password to confirm.';
++        match.style.color = 'var(--text-muted)';
++      } else if (pw === confirm) {
++        match.textContent = 'Passwords match.';
++        match.style.color = '#22c55e';
++      } else {
++        match.textContent = 'Passwords do not match yet.';
++        match.style.color = '#ef4444';
++      }
++    }
++  }
++
++  function toggleResetCapsHint(e) {
++    const hint = document.getElementById('resetCapsHint');
++    if (!hint) return;
++    const on = !!(e && typeof e.getModifierState === 'function' && e.getModifierState('CapsLock'));
++    hint.style.display = on ? 'block' : 'none';
++  }
++
++  function initResetPasswordAssist() {
++    _ensureResetAssistUI();
++    const pw = document.getElementById('pwInput');
++    const confirm = document.getElementById('pwConfirm');
++    [pw, confirm].forEach(el => {
++      if (!el) return;
++      el.addEventListener('input', () => { hideError(); updateResetPasswordAssist(); });
++      ['keydown','keyup','focus','blur'].forEach(evt => el.addEventListener(evt, toggleResetCapsHint));
++    });
++    updateResetPasswordAssist();
++    if (TOKEN) setTimeout(() => pw?.focus(), 80);
++  }
++
+   function togglePw(inputId, iconId) {
+     const inp  = document.getElementById(inputId);
+     const icon = document.getElementById(iconId);
+@@ -506,6 +598,8 @@
+     }
+   }
+ 
++  initResetPasswordAssist();
++
+   // Allow Enter key submission
+   document.addEventListener('keydown', e => {
+     if (e.key === 'Enter' && TOKEN && document.getElementById('formState').style.display !== 'none') {
+diff --git a/signup.html b/signup.html
+index 4595162..fee96ae 100644
+--- a/signup.html
++++ b/signup.html
+@@ -205,6 +205,14 @@
+     }
+     .form-header p { font-size: 0.88rem; color: var(--text-muted); }
+     .form-header p a { color: var(--orange); font-weight: 600; text-decoration: none; }
++    .draft-status {
++      margin-top: 12px;
++      min-height: 20px;
++      font-size: 0.74rem;
++      color: var(--text-dim);
++      transition: color 0.2s ease, opacity 0.2s ease;
++    }
++    .draft-status--saved { color: var(--teal); }
+ 
+     /* Progress Steps */
+     .form-steps {
+@@ -945,6 +953,7 @@
+     <div class="form-header">
+       <h2>Create your account</h2>
+       <p>Already have an account? <a href="login.html">Sign in here</a></p>
++      <div class="draft-status" id="draftStatus" aria-live="polite"></div>
+     </div>
+ 
+     <!-- Step Indicator -->
+@@ -1692,6 +1701,8 @@ let clientType   = 'sa'; // 'sa' | 'intl'
+ 
+ const ficaFiles   = { id: null, address: null, selfie: null, bank: null, tax: null };
+ const REQUIRED_DOCS = ['id', 'address', 'selfie'];
++const SIGNUP_DRAFT_KEY = 'svcapital_signup_draft_v2';
++let _draftStatusTimer = null;
+ 
+ /* ── Signup Friction Tracker ── */
+ const _FT = (function() {
+@@ -1770,6 +1781,8 @@ window.addEventListener('DOMContentLoaded', () => {
+   prefillReferral();
+   initSocialProofCounters();
+   initReturnEstimate();
++  bindDraftAutosave();
++  restoreDraft();
+ 
+   // Citizenship toggle (both the in-step1 toggle and the waitlist panel toggle)
+   document.getElementById('btnCitizenSA').addEventListener('click',    () => toggleCitizenship('sa'));
+@@ -1936,54 +1949,46 @@ function toggleCitizenship(type) {
+   clientType = type;
+   const isSA = type === 'sa';
+ 
+-  // Sync both toggle button pairs
+   ['btnCitizenSA', 'btnCitizenSA2'].forEach(id =>
+     document.getElementById(id)?.classList.toggle('active', isSA));
+   ['btnCitizenIntl', 'btnCitizenIntl2'].forEach(id =>
+     document.getElementById(id)?.classList.toggle('active', !isSA));
+ 
+-  // International clients → show waitlist panel, hide regular form flow
+   const waitlistPanel = document.getElementById('intlWaitlistPanel');
+   const formSteps     = document.getElementById('formSteps');
+   const step1         = document.getElementById('step1');
+ 
+-  if (!isSA) {
+-    if (waitlistPanel) waitlistPanel.style.display = 'block';
+-    if (formSteps) formSteps.style.display = 'none';
+-    if (step1) step1.style.display = 'none';
+-    hideError();
+-    return;
+-  }
+-
+-  // SA client → hide waitlist, show step 1
+   if (waitlistPanel) waitlistPanel.style.display = 'none';
+   if (formSteps) formSteps.style.display = '';
+   if (step1) step1.style.display = 'block';
+ 
+-  document.getElementById('infoStripSA').style.display   = '';
+-  document.getElementById('infoStripIntl').style.display = 'none';
+-  document.getElementById('saIdGroup').style.display       = '';
+-  document.getElementById('passportGroup').style.display   = 'none';
+-  document.getElementById('saProvinceGroup').style.display = '';
+-  document.getElementById('intlRegionGroup').style.display = 'none';
++  document.getElementById('infoStripSA').style.display     = isSA ? '' : 'none';
++  document.getElementById('infoStripIntl').style.display   = isSA ? 'none' : 'flex';
++  document.getElementById('saIdGroup').style.display       = isSA ? '' : 'none';
++  document.getElementById('passportGroup').style.display   = isSA ? 'none' : 'block';
++  document.getElementById('saProvinceGroup').style.display = isSA ? '' : 'none';
++  document.getElementById('intlRegionGroup').style.display = isSA ? 'none' : '';
+ 
+-  // Reset phone
+-  document.getElementById('phoneDialCode').value = '+27';
++  document.getElementById('phoneDialCode').value = isSA ? '+27' : '+44';
+   const ph = document.getElementById('phone');
+-  if (ph) ph.placeholder = '71 234 5678';
++  if (ph) ph.placeholder = isSA ? '71 234 5678' : '1234 5678';
+   const hint = document.getElementById('phoneHint');
+-  if (hint) hint.textContent = 'Enter your number without the leading 0 — e.g. 71 234 5678';
++  if (hint) hint.textContent = isSA
++    ? 'Enter your number without the leading 0 — e.g. 71 234 5678'
++    : 'Enter your local number without country code';
+ 
+-  // Reset FICA consent text
+   const ct = document.getElementById('ficaConsentText');
+-  if (ct) ct.textContent = 'I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.';
++  if (ct) ct.textContent = isSA
++    ? 'I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.'
++    : 'I confirm that I am an international client, and I consent to passport-based identity verification and compliance screening required by SV Capital.';
+ 
+-  // Reset ID validation state
+   const idVal = document.getElementById('idValidation');
+   if (idVal) { idVal.style.display = 'none'; idVal.innerHTML = ''; }
+   const idHint = document.getElementById('idHint');
+-  if (idHint) idHint.style.display = '';
++  if (idHint) idHint.style.display = isSA ? '' : 'none';
++
+   hideError();
++  persistDraft();
+ }
+ 
+ /* ── International waitlist submit ── */
+@@ -2106,6 +2111,7 @@ function goToStep(n, dir) {
+   currentStep = n;
+   _FT.stepEntered(n);
+   updateStepIndicators(n);
++  persistDraft();
+ 
+   window.scrollTo({ top: 0, behavior: 'smooth' });
+ 
+@@ -2202,6 +2208,97 @@ function showError(msg) {
+ }
+ function hideError() { document.getElementById('formError').style.display = 'none'; }
+ 
++function showDraftStatus(message, saved = false) {
++  const el = document.getElementById('draftStatus');
++  if (!el) return;
++  el.textContent = message || '';
++  el.classList.toggle('draft-status--saved', !!saved);
++  clearTimeout(_draftStatusTimer);
++  if (message) {
++    _draftStatusTimer = setTimeout(() => {
++      el.textContent = '';
++      el.classList.remove('draft-status--saved');
++    }, 2200);
++  }
++}
++
++function draftValue(id) {
++  return document.getElementById(id)?.value || '';
++}
++
++function persistDraft() {
++  const payload = {
++    clientType,
++    selectedRisk,
++    fields: {
++      firstName: draftValue('firstName'),
++      lastName: draftValue('lastName'),
++      email: draftValue('email'),
++      phoneDialCode: draftValue('phoneDialCode'),
++      phone: draftValue('phone'),
++      idNumber: draftValue('idNumber'),
++      passportNumber: draftValue('passportNumber'),
++      passportExpiry: draftValue('passportExpiry'),
++      nationality: draftValue('nationality'),
++      countryResidence: draftValue('countryResidence'),
++      city: draftValue('city'),
++      province: draftValue('province'),
++      region: draftValue('region'),
++      referralCode: draftValue('referralCode'),
++      investExp: draftValue('investExp'),
++      hearAbout: draftValue('hearAbout'),
++      termsCheck: !!document.getElementById('termsCheck')?.checked,
++      ficaConsentCheck: !!document.getElementById('ficaConsentCheck')?.checked,
++      popiaCheck: !!document.getElementById('popiaCheck')?.checked,
++    }
++  };
++
++  try {
++    localStorage.setItem(SIGNUP_DRAFT_KEY, JSON.stringify(payload));
++    showDraftStatus('Draft saved locally', true);
++  } catch (_) {}
++}
++
++function restoreDraft() {
++  try {
++    const raw = localStorage.getItem(SIGNUP_DRAFT_KEY);
++    if (!raw) return;
++    const draft = JSON.parse(raw);
++    const fields = draft.fields || {};
++
++    if (draft.clientType === 'intl' || draft.clientType === 'sa') toggleCitizenship(draft.clientType);
++
++    Object.entries(fields).forEach(([id, value]) => {
++      const el = document.getElementById(id);
++      if (!el) return;
++      if (el.type === 'checkbox') el.checked = !!value;
++      else if (value != null) el.value = value;
++    });
++
++    if (draft.selectedRisk) selectRisk(draft.selectedRisk);
++    showDraftStatus('Restored your saved details', true);
++  } catch (_) {}
++}
++
++function clearDraft() {
++  try { localStorage.removeItem(SIGNUP_DRAFT_KEY); } catch (_) {}
++}
++
++function bindDraftAutosave() {
++  const ids = [
++    'firstName','lastName','email','phoneDialCode','phone','idNumber','passportNumber','passportExpiry',
++    'nationality','countryResidence','city','province','region','referralCode',
++    'investExp','hearAbout','termsCheck','ficaConsentCheck','popiaCheck'
++  ];
++
++  ids.forEach((id) => {
++    const el = document.getElementById(id);
++    if (!el) return;
++    const evt = el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input';
++    el.addEventListener(evt, persistDraft);
++  });
++}
++
+ /* ── Risk Profile ── */
+ function selectRisk(risk) {
+   selectedRisk = risk;
+@@ -2458,6 +2555,7 @@ async function _doSubmit(skippedFica) {
+         ? 'Please upload your FICA documents in your portal to start investing.'
+         : 'Your FICA documents have been submitted and will be reviewed within 1–2 business days.');
+ 
++    clearDraft();
+     _FT.submitSuccess();
+     launchConfetti();
+     setTimeout(() => { window.location.href = '/portal/index.html'; }, 4000);
