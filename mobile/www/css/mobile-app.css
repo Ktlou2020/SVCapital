@@ -3,74 +3,46 @@
    Fixes horizontal overflow caused by desktop-width components.
    ─────────────────────────────────────────────────────────── */
 
-html, body {
-  overflow-x: hidden !important;
-  max-width: 100vw !important;
+/* Prevent the page from scrolling sideways */
+html {
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
-/* Prevent any element from breaking out of the viewport */
-* { box-sizing: border-box; }
-
-/* ── Invest guide strip: allow wrapping on small screens ── */
-.invest-guide-strip {
-  flex-wrap: wrap !important;
-}
-.igs-step {
-  min-width: 100px !important;
-  flex: 1 1 100px !important;
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
-/* ── Portfolio hero stats: allow horizontal scroll within card only ── */
-.ph-stats-row {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+/* Prevent any block from punching wider than the screen */
+img, video, iframe, table {
+  max-width: 100%;
 }
 
-/* ── Pill/badge rows: wrap instead of overflow ── */
+/* Tag/badge rows: wrap instead of overflow */
 .investor-tags,
 .ph-tags,
 .card-tags,
-.tag-row {
+.tag-row,
+.badge-row {
   flex-wrap: wrap !important;
-  overflow: hidden !important;
+  max-width: 100% !important;
 }
 
-/* ── Button rows: stack or wrap on small screens ── */
-.action-buttons,
-.btn-row,
-.cta-row {
-  flex-wrap: wrap !important;
-}
-.action-buttons > *,
-.btn-row > *,
-.cta-row > * {
-  flex: 1 1 auto !important;
-  min-width: 0 !important;
+/* Invest guide strip steps: allow them to shrink on small screens */
+.igs-step {
+  min-width: 90px !important;
 }
 
-/* ── Sidebar grids: force single column on mobile ── */
-@media (max-width: 600px) {
-  [class*="grid--sidebar"],
-  [class*="grid-layout--sidebar"] {
-    grid-template-columns: 1fr !important;
+/* Button rows in cards: wrap on very small screens */
+@media (max-width: 420px) {
+  .ph-actions,
+  .hero-actions {
+    flex-wrap: wrap !important;
   }
-
-  /* Tables: scroll within their container */
-  .table-card,
-  .data-table-wrap {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* Cards: ensure they don't exceed viewport */
-  .card, .panel, .section-card, .summary-card {
-    max-width: 100% !important;
-    overflow: hidden !important;
-  }
-
-  /* Text: prevent long strings from overflowing */
-  p, span, h1, h2, h3, h4, h5, h6, a, li, td, th {
-    word-break: break-word;
-    overflow-wrap: break-word;
+  .ph-actions > *,
+  .hero-actions > * {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
   }
 }
