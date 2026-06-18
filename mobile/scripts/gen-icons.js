@@ -90,7 +90,7 @@ async function run() {
       // flatten removes alpha channel — Apple rejects transparent App Store icons
       await sharp(ICON_SRC)
         .resize(size, size)
-        .flatten({ background: '#0f1623' })
+        .flatten({ background: '#ffffff' })
         .png()
         .toFile(path.join(IOS_ASSETS, name));
       console.log(`[icons] iOS ${name}: ${size}x${size}`);
