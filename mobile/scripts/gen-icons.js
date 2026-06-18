@@ -16,6 +16,7 @@ try { sharp = require('sharp'); } catch (_) {
 }
 
 const ICON_SRC   = path.join(__dirname, '../assets/icons/icon.svg');
+const ICON_FG_SRC = path.join(__dirname, '../assets/icons/icon-foreground.svg');
 const SPLASH_SRC = path.join(__dirname, '../assets/splash/splash.svg');
 
 /* ── Android icon sizes ─── */
@@ -70,7 +71,7 @@ async function run() {
       fs.mkdirSync(dest, { recursive: true });
       await sharp(ICON_SRC).resize(size, size).png().toFile(path.join(dest, 'ic_launcher.png'));
       await sharp(ICON_SRC).resize(size, size).png().toFile(path.join(dest, 'ic_launcher_round.png'));
-      await sharp(ICON_SRC).resize(size, size).png().toFile(path.join(dest, 'ic_launcher_foreground.png'));
+      await sharp(ICON_FG_SRC).resize(size, size).png().toFile(path.join(dest, 'ic_launcher_foreground.png'));
       console.log(`[icons] Android ${dir}: ${size}x${size}`);
     }
     // Notification icon (white, 24dp→96px)
