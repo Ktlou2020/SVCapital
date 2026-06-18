@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Complaints Policy — SV Capital</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{font-family:'Poppins',sans-serif;background:#f8f9fa;color:#1a1a2e;line-height:1.75;font-size:15px}
+    .header{background:#1a1a2e;padding:18px 0;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.2)}
+    .header-inner{max-width:960px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between}
+    .logo{font-size:1.25rem;font-weight:800;color:#FF8215;letter-spacing:-0.5px;text-decoration:none}
+    .back-link{font-size:0.82rem;color:#aaa;text-decoration:none;display:flex;align-items:center;gap:5px}
+    .back-link:hover{color:#FF8215}
+    .page-wrap{max-width:960px;margin:0 auto;padding:48px 24px 80px;display:grid;grid-template-columns:220px 1fr;gap:40px;align-items:start}
+    .toc{position:sticky;top:80px;background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;padding:20px 18px;font-size:0.78rem}
+    .toc-title{font-weight:700;font-size:0.8rem;color:#1a1a2e;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.06em}
+    .toc a{display:block;color:#6b7280;text-decoration:none;padding:4px 0;border-left:2px solid transparent;padding-left:10px;transition:all 0.15s;line-height:1.4}
+    .toc a:hover{color:#FF8215;border-left-color:#FF8215}
+    .hero{background:linear-gradient(135deg,#1a1a2e,#2d2d5e);color:#fff;padding:40px 32px;border-radius:16px;margin-bottom:32px}
+    .hero h1{font-size:1.9rem;font-weight:800;margin-bottom:8px}
+    .hero-meta{font-size:0.82rem;color:rgba(255,255,255,0.6);margin-top:10px}
+    .badge{display:inline-block;background:rgba(255,130,21,0.2);color:#FF8215;border:1px solid rgba(255,130,21,0.4);border-radius:20px;padding:3px 12px;font-size:0.72rem;font-weight:700;margin-bottom:14px}
+    .intro-box{background:#fff8f0;border:1.5px solid rgba(255,130,21,0.35);border-radius:12px;padding:16px 20px;margin-bottom:32px;font-size:0.9rem;color:#92400e;line-height:1.7}
+    h2{font-size:1.05rem;font-weight:700;color:#1a1a2e;margin:40px 0 12px;border-left:4px solid #FF8215;padding-left:12px;scroll-margin-top:90px}
+    h3{font-size:0.92rem;font-weight:700;color:#1a1a2e;margin:20px 0 8px}
+    p{margin-bottom:11px;color:#374151}
+    ul,ol{margin:8px 0 14px 22px;color:#374151}
+    li{margin-bottom:7px;line-height:1.65}
+    strong{color:#1a1a2e}
+    .definition-box{background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;padding:20px 22px;margin:16px 0}
+    .definition-box h3{margin-top:0;color:#FF8215;font-size:0.95rem}
+    .category-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:12px 0}
+    .category-tag{background:#f0f4ff;border:1.5px solid #c7d2fe;border-radius:8px;padding:8px 12px;font-size:0.8rem;color:#4338ca;font-weight:600}
+    .process-step{display:flex;gap:14px;margin:12px 0;align-items:flex-start}
+    .step-num{width:32px;height:32px;min-width:32px;background:#1a1a2e;color:#FF8215;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.85rem}
+    .step-body strong{display:block;font-size:0.88rem;margin-bottom:3px;color:#1a1a2e}
+    .step-body span{font-size:0.83rem;color:#374151;line-height:1.6}
+    .timeline-badge{display:inline-block;background:rgba(255,130,21,0.12);color:#FF8215;border:1px solid rgba(255,130,21,0.3);border-radius:20px;padding:2px 10px;font-size:0.75rem;font-weight:700;margin-left:6px}
+    .ombud-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;padding:18px 22px;margin:12px 0}
+    .ombud-card h3{margin-top:0;font-size:0.92rem}
+    .contact-box{background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;padding:20px 24px;margin-top:28px}
+    .contact-box h3{margin-top:0}
+    footer{text-align:center;padding:24px;font-size:0.78rem;color:#9ca3af;border-top:1px solid #e5e7eb;margin-top:48px}
+    a{color:#FF8215;text-decoration:none}
+    a:hover{text-decoration:underline}
+    @media(max-width:780px){
+      .page-wrap{grid-template-columns:1fr;gap:0}
+      .toc{display:none}
+      .hero{padding:28px 20px}
+      .hero h1{font-size:1.45rem}
+      h2{font-size:0.98rem}
+      .category-grid{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <a href="index.html" class="logo">SV Capital</a>
+      <a href="index.html" class="back-link">&#8592; Back to Home</a>
+    </div>
+  </header>
+
+  <div class="page-wrap">
+    <nav class="toc" aria-label="Table of contents">
+      <div class="toc-title">Contents</div>
+      <a href="#s1">Purpose</a>
+      <a href="#s2">What Is a Complaint</a>
+      <a href="#s3">Responsibilities</a>
+      <a href="#s4">Categorisation</a>
+      <a href="#s5">Escalation &amp; Review</a>
+      <a href="#s6">Decisions</a>
+      <a href="#s7">Record Keeping</a>
+      <a href="#s8">Communication</a>
+      <a href="#s9">Handling Process</a>
+      <a href="#s10">Ombud Engagement</a>
+      <a href="#s11">How to Complain</a>
+    </nav>
+
+    <main>
+      <div class="hero">
+        <span class="badge">FAIS General Code of Conduct</span>
+        <h1>Complaints Management Policy</h1>
+        <div class="hero-meta">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSP #52449 &nbsp;·&nbsp; Last updated: June 2026</div>
+      </div>
+
+      <div class="intro-box">
+        This policy is published in terms of the FAIS General Code of Conduct. SV Capital (Pty) Ltd, operating under Smartvest Financial Services (Pty) Ltd (FSP #52449), is committed to treating clients fairly (TCF) and to resolving complaints in a transparent, timely, and fair manner. This policy should be read in conjunction with our TCF Policy.
+      </div>
+
+      <!-- 1. Purpose -->
+      <h2 id="s1">Purpose of this Complaints Policy</h2>
+      <p>In terms of the FAIS General Code of Conduct, SV Capital must have a documented complaints management and resolution procedure that enables the consideration of complaints after suitable investigation and review of the information and circumstances, and delivers on our commitment and legal obligation to treat clients fairly.</p>
+
+      <!-- 2. What is a Complaint -->
+      <h2 id="s2">What Is a Complaint?</h2>
+      <div class="definition-box">
+        <h3>A complaint is an expression of dissatisfaction</h3>
+        <p>relating to a financial product sold or marketed or financial service of SV Capital which alleges that we have:</p>
+        <ul>
+          <li>treated the client unfairly; or</li>
+          <li>prejudiced the client through poor administration, deliberate or negligent acts; or</li>
+          <li>failed to comply with an agreement with the client; or</li>
+          <li>failed to comply with any applicable law, rule, or code of conduct which we are bound by or subscribe to.</li>
+        </ul>
+      </div>
+      <p>We consider the following laws and codes to be applicable: the FAIS Act, FAIS General Code of Conduct and Fit &amp; Proper Regulations, the Insurance Act and the Policyholder Protection Rules, as well as the FIA Code of Conduct.</p>
+      <p>A complaint may be lodged by someone representing the client, or even by someone we have marketed to, and includes an individual member of any scheme business we write.</p>
+      <p>All complaints must be handled in accordance with this policy. However, any complaint received and resolved to the client's satisfaction <strong>within five (5) business days</strong> will be captured as a "query" in our complaints management system and will not require formal reporting.</p>
+
+      <!-- 3. Responsibilities -->
+      <h2 id="s3">Responsibilities</h2>
+      <p>SV Capital has appointed the <strong>Client Services Team</strong> as the primary team to investigate and resolve any complaints.</p>
+      <p>The Client Services Team, through their position as client facing, has appropriate access to the necessary records and sufficient authority to investigate and make final decisions to resolve complaints. They have the necessary experience, knowledge, and skills in complaints handling, TCF, our products and services, and the legislative framework.</p>
+      <p>We do <strong>not</strong> remunerate the Client Services Team in relation to any outcome or number of complaints resolved.</p>
+      <p>We will ensure that no cases of conflict of interest arise in the handling of complaints. Should any person handling a complaint determine that they are in a conflicted position, an alternate person will take over the role. This change will be determined by <strong>Kagiso Tlouatla</strong>.</p>
+
+      <!-- 4. Categorisation -->
+      <h2 id="s4">Categorisation of Complaints</h2>
+      <p>Any complaints received will be recorded in our complaints management system and categorised as follows:</p>
+      <div class="category-grid">
+        <div class="category-tag">Query (resolved within 5 days)</div>
+        <div class="category-tag">Flawed product or service design</div>
+        <div class="category-tag">Information provided</div>
+        <div class="category-tag">Advice related</div>
+        <div class="category-tag">Product or service performance</div>
+        <div class="category-tag">Client service</div>
+        <div class="category-tag">Product accessibility / switches</div>
+        <div class="category-tag">Complaints handling</div>
+        <div class="category-tag">Claims (incl. non-payment)</div>
+        <div class="category-tag">Other</div>
+      </div>
+
+      <!-- 5. Escalation -->
+      <h2 id="s5">Escalation and Review</h2>
+      <p>Should a complaint not be resolved by the initial complaints handler, it will be escalated to <strong>Kagiso Tlouatla</strong>. Similarly, should a complainant wish to escalate a complaint beyond the initial complaints handler, it will also be escalated to Kagiso Tlouatla.</p>
+      <p>When reviewing any complaint, the complaints handler will ensure they take a balanced and fair approach to ensure the interests of all parties are addressed. Should they be unsure, they will liaise with their immediate manager who may then escalate the complaint to Kagiso Tlouatla should they see fit to do so.</p>
+
+      <!-- 6. Decisions -->
+      <h2 id="s6">Decisions</h2>
+      <p>Where SV Capital commits to any payment in regard to any complaint, we will make the payment within <strong>7 days</strong> or within the number of days as agreed with the complainant.</p>
+      <p>Where we reject a complaint, we will provide the complainant with clear and adequate reasons for the decision, as well as the options they have to take the issue further and the applicable time limits.</p>
+
+      <!-- 7. Records -->
+      <h2 id="s7">Records of Complaints</h2>
+      <p>SV Capital understands the importance of accurate and reliable information regarding complaints and will ensure that records are kept securely as part of our record keeping procedures and POPIA policy.</p>
+      <p>Our complaints management system records the following for all complaints:</p>
+      <ul>
+        <li>Name, applicable account/investment number, and contact details of the complainant and their representative</li>
+        <li>Copies of all relevant evidence, correspondence, and decisions</li>
+        <li>The category of the complaint</li>
+        <li>Status of the complaint</li>
+        <li>Date stamps of actions including all interactions with complainants</li>
+      </ul>
+      <p>Our complaints management system enables us to draw the following metrics:</p>
+      <ul>
+        <li>Number of complaints received / decided in favour of the client / rejected</li>
+        <li>Reasons for rejected complaints</li>
+        <li>Number of complaints escalated by complainants or referred to an Ombud</li>
+        <li>Results of complaints referred to an Ombud</li>
+        <li>Number and amount of compensation payments and goodwill payments made</li>
+        <li>Number of complaints outstanding</li>
+      </ul>
+      <p>This information will be reported to Kagiso Tlouatla at the beginning of the second week of every month. Kagiso Tlouatla and Ayanda Majola will review complaints information at least monthly and take any rectifying action they consider necessary. All complaints records enjoy the protections of our <a href="popia.html">POPIA Policy</a>.</p>
+
+      <!-- 8. Communication -->
+      <h2 id="s8">Communication with Complainants</h2>
+      <p>SV Capital is committed to a transparent and accessible complaints process. As such we will:</p>
+      <ul>
+        <li><strong>Never charge</strong> complainants to submit complaints</li>
+        <li>Ensure all communications are in <strong>plain language</strong></li>
+        <li>Provide each complainant with a <strong>single contact point</strong> for their complaint</li>
+      </ul>
+      <p>To ensure we handle complaints fairly, we will request the complainant to provide the following information in writing via email or our online complaints portal:</p>
+      <ul>
+        <li>The account number of the investment in question</li>
+        <li>The details of the individual who initially dealt with the client (if applicable)</li>
+        <li>An explanation of the client's complaint</li>
+        <li>An explanation of the client's expectation from us</li>
+        <li>Copies of any relevant documents at the client's disposal</li>
+      </ul>
+
+      <!-- 9. Process -->
+      <h2 id="s9">Complaints Handling Process</h2>
+      <p>Upon receipt of a complaint, we will follow the process below:</p>
+
+      <div class="process-step">
+        <div class="step-num">1</div>
+        <div class="step-body"><strong>Assignment</strong><span>The complaint is assigned to the Head of the Client Services Team.</span></div>
+      </div>
+      <div class="process-step">
+        <div class="step-num">2</div>
+        <div class="step-body"><strong>Acknowledgement <span class="timeline-badge">within 2 hours</span></strong><span>The Client Services Team emails acknowledgement of receipt on the same business day the complaint is received and confirms their contact details. Further correspondence will follow within 48 hours.</span></div>
+      </div>
+      <div class="process-step">
+        <div class="step-num">3</div>
+        <div class="step-body"><strong>Information Gathering <span class="timeline-badge">same business day</span></strong><span>The Client Services Team requests information from all relevant parties on the business day the complaint is received.</span></div>
+      </div>
+      <div class="process-step">
+        <div class="step-num">4</div>
+        <div class="step-body"><strong>Initial Assessment <span class="timeline-badge">within 48 hours</span></strong><span>The Client Services Team assesses and investigates all information provided and contacts the complainant to inform them of progress. If a resolution or rejection is proposed at this stage, the internal escalation process and relevant Ombud details will be provided.</span></div>
+      </div>
+      <div class="process-step">
+        <div class="step-num">5</div>
+        <div class="step-body"><strong>Further Investigation <span class="timeline-badge">within 2 weeks</span></strong><span>If a resolution cannot be proposed within 48 hours, the complainant is informed of the reason for the delay and advised that further feedback will follow within two (2) weeks. The internal escalation process is provided at this stage.</span></div>
+      </div>
+      <div class="process-step">
+        <div class="step-num">6</div>
+        <div class="step-body"><strong>Final Resolution <span class="timeline-badge">within 4 weeks</span></strong><span>If a resolution cannot be proposed within two weeks, the complainant is informed of the reason and advised that a final resolution will be provided within four (4) weeks.</span></div>
+      </div>
+      <div class="process-step">
+        <div class="step-num">7</div>
+        <div class="step-body"><strong>Outcome</strong><span>The Client Services Team proposes a resolution or rejection of the complaint. If rejected, the correspondence will include full details of the internal escalation process and relevant Ombud details.</span></div>
+      </div>
+
+      <p>Any extensions to these timeframes are at the discretion of Kagiso Tlouatla, who will liaise directly with the client in such cases.</p>
+
+      <!-- 10. Ombud -->
+      <h2 id="s10">Engagement with the Ombud</h2>
+      <p>SV Capital is aware of the vital role the various Ombuds and Adjudicators play in creating fair outcomes for policyholders, intermediaries, and providers in the financial services industry. Our engagement with their offices and representatives will always be honest, professional, and transparent.</p>
+      <p>To ensure our clients have access to the Ombuds, we include their details in our disclosure documents and on our website. We will also provide this information to complainants during the complaints process.</p>
+      <p>Should a complainant approach the Ombud directly without informing us of their complaint, we will entertain their complaint and follow the procedures described in this policy upon notification by the Ombud.</p>
+
+      <div class="ombud-card">
+        <h3>FAIS Ombud</h3>
+        <p>For complaints relating to financial advice and intermediary services:<br>
+        Website: <a href="https://www.faisombud.co.za" target="_blank" rel="noopener">www.faisombud.co.za</a></p>
+      </div>
+      <div class="ombud-card">
+        <h3>National Financial Ombud Scheme (NFO)</h3>
+        <p>For broader financial services complaints:<br>
+        Website: <a href="https://www.nfosa.co.za" target="_blank" rel="noopener">www.nfosa.co.za</a></p>
+      </div>
+      <div class="ombud-card">
+        <h3>Information Regulator of South Africa</h3>
+        <p>For privacy and POPIA-related complaints:<br>
+        Email: <a href="mailto:inforeg@justice.gov.za">inforeg@justice.gov.za</a> &nbsp;|&nbsp;
+        POPIA Complaints: <a href="mailto:POPIAComplaints@inforegulator.org.za">POPIAComplaints@inforegulator.org.za</a></p>
+      </div>
+
+      <!-- 11. How to Complain -->
+      <h2 id="s11">How to Submit a Complaint</h2>
+      <div class="contact-box">
+        <h3>Submit a Complaint</h3>
+        <p>You may submit a complaint to us by:</p>
+        <ul>
+          <li><strong>Email:</strong> <a href="mailto:enquiry@svcapital.co.za">enquiry@svcapital.co.za</a> — subject line: "Complaint — [Your Full Name / Account Number]"</li>
+          <li><strong>Via the platform:</strong> Log in to your investor portal and use the Support section to raise a complaint.</li>
+        </ul>
+        <p>Please include your account number, a description of your complaint, your expectation of resolution, and any supporting documents. You will receive an acknowledgement within 2 hours on the same business day.</p>
+        <p style="margin-top:12px;font-size:0.82rem;color:#6b7280">SV Capital (Pty) Ltd is operated by Smartvest Financial Services (Pty) Ltd (FSP #52449), licensed by the Financial Sector Conduct Authority in terms of the FAIS Act (section 8), effective 13 September 2022.</p>
+      </div>
+    </main>
+  </div>
+
+  <footer>
+    &copy; <span class="yr"></span> SV Capital (Pty) Ltd. All rights reserved. &nbsp;·&nbsp; FSP #52449 &nbsp;·&nbsp;
+    <a href="terms.html">Terms of Use</a> &nbsp;·&nbsp;
+    <a href="popia.html">Privacy Policy</a> &nbsp;·&nbsp;
+    <a href="paia.html">PAIA Manual</a> &nbsp;·&nbsp;
+    <a href="complaints.html">Complaints Policy</a>
+  </footer>
+  <script>document.querySelectorAll('.yr').forEach(function(el){el.textContent=new Date().getFullYear();});</script>
+</body>
+</html>
