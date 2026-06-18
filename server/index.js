@@ -254,6 +254,17 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
+/* ─── Legal Pages — served directly at both /page and /page.html ─── */
+// These must come BEFORE the .html redirect so they are never intercepted.
+['terms', 'popia', 'paia', 'complaints'].forEach(page => {
+  const file = path.join(__dirname, '..', `${page}.html`);
+  const handler = (_req, res) => res.sendFile(file, {
+    headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', Pragma: 'no-cache', Expires: '0' },
+  });
+  app.get(`/${page}`, handler);
+  app.get(`/${page}.html`, handler);
+});
+
 /* ─── Redirect legacy .html URLs to clean equivalents ─── */
 // /login.html → /login  |  /fund/index.html → /fund  |  /team/director.html → /team/director
 app.use((req, res, next) => {
