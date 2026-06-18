@@ -1,29 +1,70 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <!-- Background -->
-  <rect width="1024" height="1024" rx="230" fill="#0f1623"/>
+  <rect width="1024" height="1024" fill="white"/>
+  <defs>
+    <radialGradient id="gp1" cx="50%" cy="52%" r="62%">
+      <stop offset="0%" stop-color="#CC3D00"/>
+      <stop offset="55%" stop-color="#E86020" stop-opacity="0.88"/>
+      <stop offset="100%" stop-color="#F8B080" stop-opacity="0.22"/>
+    </radialGradient>
+    <radialGradient id="gp2" cx="50%" cy="52%" r="62%">
+      <stop offset="0%" stop-color="#E85800"/>
+      <stop offset="55%" stop-color="#F59040" stop-opacity="0.88"/>
+      <stop offset="100%" stop-color="#FFCF98" stop-opacity="0.22"/>
+    </radialGradient>
+    <radialGradient id="gp3" cx="50%" cy="52%" r="62%">
+      <stop offset="0%" stop-color="#E8B800"/>
+      <stop offset="55%" stop-color="#F5D048" stop-opacity="0.88"/>
+      <stop offset="100%" stop-color="#FFF0AA" stop-opacity="0.22"/>
+    </radialGradient>
+    <radialGradient id="gp4" cx="50%" cy="52%" r="62%">
+      <stop offset="0%" stop-color="#B848D8"/>
+      <stop offset="55%" stop-color="#D080F0" stop-opacity="0.88"/>
+      <stop offset="100%" stop-color="#EEC8FF" stop-opacity="0.22"/>
+    </radialGradient>
+    <radialGradient id="gp5" cx="50%" cy="52%" r="62%">
+      <stop offset="0%" stop-color="#E05890"/>
+      <stop offset="55%" stop-color="#F09CC0" stop-opacity="0.88"/>
+      <stop offset="100%" stop-color="#FFD8EE" stop-opacity="0.22"/>
+    </radialGradient>
+    <radialGradient id="gp6" cx="50%" cy="52%" r="62%">
+      <stop offset="0%" stop-color="#20A848"/>
+      <stop offset="55%" stop-color="#58C870" stop-opacity="0.88"/>
+      <stop offset="100%" stop-color="#B8EFCA" stop-opacity="0.22"/>
+    </radialGradient>
+    <radialGradient id="gp7" cx="50%" cy="52%" r="62%">
+      <stop offset="0%" stop-color="#20A0C0"/>
+      <stop offset="55%" stop-color="#50C0D8" stop-opacity="0.88"/>
+      <stop offset="100%" stop-color="#A8EEF8" stop-opacity="0.22"/>
+    </radialGradient>
+    <radialGradient id="gl1" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#28B070"/>
+      <stop offset="100%" stop-color="#40C8C0" stop-opacity="0.45"/>
+    </radialGradient>
+    <radialGradient id="gl2" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#F080B8"/>
+      <stop offset="100%" stop-color="#F8C8E0" stop-opacity="0.45"/>
+    </radialGradient>
+    <radialGradient id="gl3" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#3898D0"/>
+      <stop offset="100%" stop-color="#90D8F0" stop-opacity="0.45"/>
+    </radialGradient>
+  </defs>
 
-  <!-- Gold arc decoration -->
-  <circle cx="512" cy="512" r="380" fill="none" stroke="#D4AF37" stroke-width="18" stroke-dasharray="1800 400" stroke-dashoffset="0" opacity="0.25"/>
+  <!-- Petals rotating around flower base (512, 682) -->
+  <g style="mix-blend-mode: multiply">
+    <ellipse cx="512" cy="398" rx="118" ry="302" fill="url(#gp1)" transform="rotate(-65 512 682)"/>
+    <ellipse cx="512" cy="398" rx="118" ry="300" fill="url(#gp2)" transform="rotate(-44 512 682)"/>
+    <ellipse cx="512" cy="400" rx="112" ry="298" fill="url(#gp3)" transform="rotate(-23 512 682)"/>
+    <ellipse cx="512" cy="392" rx="108" ry="300" fill="url(#gp4)" transform="rotate(0 512 682)"/>
+    <ellipse cx="512" cy="400" rx="114" ry="300" fill="url(#gp5)" transform="rotate(23 512 682)"/>
+    <ellipse cx="512" cy="398" rx="118" ry="300" fill="url(#gp6)" transform="rotate(45 512 682)"/>
+    <ellipse cx="512" cy="398" rx="118" ry="300" fill="url(#gp7)" transform="rotate(65 512 682)"/>
+  </g>
 
-  <!-- SV monogram -->
-  <!-- S -->
-  <path d="M 290 340 Q 290 290 340 290 L 430 290 Q 480 290 480 340 Q 480 385 430 400 L 340 420 Q 290 435 290 480 Q 290 530 340 530 L 480 530"
-        fill="none" stroke="#D4AF37" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
-
-  <!-- V -->
-  <path d="M 540 290 L 650 530 L 760 290"
-        fill="none" stroke="#D4AF37" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
-
-  <!-- Tagline bar -->
-  <rect x="200" y="620" width="624" height="4" rx="2" fill="#D4AF37" opacity="0.4"/>
-
-  <!-- "CAPITAL" text -->
-  <text x="512" y="700" font-family="Georgia, serif" font-size="72" font-weight="700"
-        fill="#D4AF37" text-anchor="middle" letter-spacing="18">CAPITAL</text>
-
-  <!-- Small star accents -->
-  <polygon points="180,480 190,510 220,510 196,528 205,558 180,540 155,558 164,528 140,510 170,510"
-           fill="#D4AF37" opacity="0.35" transform="scale(0.55) translate(170 420)"/>
-  <polygon points="180,480 190,510 220,510 196,528 205,558 180,540 155,558 164,528 140,510 170,510"
-           fill="#D4AF37" opacity="0.35" transform="scale(0.55) translate(1120 420)"/>
+  <!-- Small decorative leaves at base -->
+  <g style="mix-blend-mode: multiply" opacity="0.92">
+    <ellipse cx="372" cy="832" rx="70" ry="25" fill="url(#gl1)" transform="rotate(-22 372 832)"/>
+    <ellipse cx="512" cy="865" rx="26" ry="50" fill="url(#gl2)"/>
+    <ellipse cx="651" cy="832" rx="70" ry="25" fill="url(#gl3)" transform="rotate(22 651 832)"/>
+  </g>
 </svg>

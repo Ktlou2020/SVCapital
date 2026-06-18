@@ -94,11 +94,7 @@
         <i class="fa-solid fa-calendar-days"></i> Payout Schedules
       </button>
 
-      <div class="nav-label">Intelligence</div>
-      <button class="nav-btn" data-view="intelligence" onclick="navigate('intelligence',this)">
-        <i class="fa-solid fa-brain"></i> Fund Intelligence
-        <span style="font-size:9px;background:rgba(168,85,247,.25);color:#c084fc;padding:1px 6px;border-radius:8px;margin-left:auto">AI</span>
-      </button>
+
       <button class="nav-btn" data-view="forecast" onclick="navigate('forecast',this)">
         <i class="fa-solid fa-chart-gantt"></i> Cash Flow Forecast
         <span style="font-size:9px;background:rgba(20,184,166,.2);color:#2dd4bf;padding:1px 6px;border-radius:8px;margin-left:auto">12M</span>
@@ -174,9 +170,7 @@
         <a href="shortterm.html" class="btn btn--secondary btn--sm" title="Short-Term Loans">
           <i class="fa-solid fa-hand-holding-dollar"></i> STL
         </a>
-        <button class="btn btn--sm" style="background:rgba(168,85,247,.18);color:#c084fc;border:1px solid rgba(168,85,247,.3)" onclick="navigate('intelligence',document.querySelector('[data-view=intelligence]'))">
-          <i class="fa-solid fa-brain"></i> Intelligence
-        </button>
+
         <button class="btn btn--sm btn--secondary" onclick="openCmdPalette()" title="Command Palette (Ctrl+K)" style="font-family:monospace;letter-spacing:-0.5px">
           <i class="fa-solid fa-magnifying-glass"></i> ⌘K
         </button>
@@ -1036,10 +1030,8 @@
         </div>
       </div>
 
-      <!-- ════════════════════════════════
-           FUND INTELLIGENCE
-      ════════════════════════════════ -->
-      <div class="view" id="view-intelligence">
+      <!-- FUND INTELLIGENCE hidden -->
+      <div class="view" id="view-intelligence" style="display:none">
 
         <!-- Hero banner -->
         <div style="background:linear-gradient(135deg,#1a0d2e,#160b25);border:1px solid rgba(168,85,247,.2);border-radius:16px;padding:24px 28px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap">
