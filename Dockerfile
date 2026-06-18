@@ -26,10 +26,14 @@ COPY ifa/       ./ifa/
 COPY fund/      ./fund/
 COPY team/      ./team/
 COPY _data/     ./_data/
-COPY index.html ./
-COPY login.html ./
-COPY signup.html ./
-COPY test.html  ./
+COPY index.html      ./
+COPY login.html      ./
+COPY signup.html     ./
+COPY test.html       ./
+COPY terms.html      ./
+COPY popia.html      ./
+COPY paia.html       ./
+COPY complaints.html ./
 COPY manifest.json ./
 
 # Copy server (with node_modules from build stage)
