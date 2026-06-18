@@ -615,7 +615,7 @@
       </div>
 
       <!-- Form -->
-      <form id="loginForm" onsubmit="handleLogin(event)">
+      <form id="loginForm" onsubmit="handleLogin(event)" novalidate>
         <div class="form-group">
           <label class="form-label" for="emailInput">Email Address</label>
           <div class="form-input-wrap">
@@ -657,7 +657,7 @@
           <div style="font-size:0.82rem;color:#6b7280;margin-top:6px">Enter the 6-digit code from your authenticator app</div>
         </div>
         <div style="margin-bottom:14px">
-          <input type="text" id="totpInput" inputmode="numeric" pattern="\d{6}" maxlength="6" placeholder="000 000" style="width:100%;text-align:center;font-size:1.6rem;font-weight:700;letter-spacing:0.25em;padding:14px;border:2px solid #e5e7eb;border-radius:10px;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='#FF9B0C'" onblur="this.style.borderColor='#e5e7eb'" onkeydown="if(event.key==='Enter')verify2FA()" />
+          <input type="text" id="totpInput" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000 000" style="width:100%;text-align:center;font-size:1.6rem;font-weight:700;letter-spacing:0.25em;padding:14px;border:2px solid #e5e7eb;border-radius:10px;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='#FF9B0C'" onblur="this.style.borderColor='#e5e7eb'" onkeydown="if(event.key==='Enter')verify2FA()" />
         </div>
         <div id="twoFAError" style="display:none;color:#ef4444;font-size:0.82rem;margin-bottom:10px;text-align:center"></div>
         <button type="button" id="verify2FABtn" onclick="verify2FA()" style="width:100%;padding:13px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.95rem;font-weight:700;cursor:pointer;margin-bottom:10px">Verify Code</button>
