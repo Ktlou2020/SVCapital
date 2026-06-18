@@ -10,18 +10,23 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
     body{font-family:'Poppins',sans-serif;background:#f8f9fa;color:#1a1a2e;line-height:1.7;font-size:15px}
     .header{background:#1a1a2e;padding:18px 0;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.2)}
-    .header-inner{max-width:860px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between}
+    .header-inner{max-width:960px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between}
     .logo{font-size:1.25rem;font-weight:800;color:#FF8215;letter-spacing:-0.5px;text-decoration:none}
     .back-link{font-size:0.82rem;color:#aaa;text-decoration:none;display:flex;align-items:center;gap:5px}
     .back-link:hover{color:#FF8215}
-    .container{max-width:860px;margin:0 auto;padding:48px 24px 64px}
-    .hero{background:linear-gradient(135deg,#1a1a2e,#2d2d5e);color:#fff;padding:40px 32px;border-radius:16px;margin-bottom:40px}
+    .page-wrap{max-width:960px;margin:0 auto;padding:48px 24px 80px;display:grid;grid-template-columns:220px 1fr;gap:40px;align-items:start}
+    .toc{position:sticky;top:80px;background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;padding:20px 18px;font-size:0.78rem}
+    .toc-title{font-weight:700;font-size:0.8rem;color:#1a1a2e;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.06em}
+    .toc a{display:block;color:#6b7280;text-decoration:none;padding:4px 0;border-left:2px solid transparent;padding-left:10px;transition:all 0.15s;line-height:1.4}
+    .toc a:hover{color:#FF8215;border-left-color:#FF8215}
+    .hero{background:linear-gradient(135deg,#1a1a2e,#2d2d5e);color:#fff;padding:40px 32px;border-radius:16px;margin-bottom:32px}
     .hero h1{font-size:1.8rem;font-weight:800;margin-bottom:8px}
     .hero-meta{font-size:0.82rem;color:rgba(255,255,255,0.6);margin-top:10px}
     .badge{display:inline-block;background:rgba(255,130,21,0.2);color:#FF8215;border:1px solid rgba(255,130,21,0.4);border-radius:20px;padding:3px 12px;font-size:0.72rem;font-weight:700;margin-bottom:14px}
-    h2{font-size:1.15rem;font-weight:700;color:#1a1a2e;margin:32px 0 12px;border-left:4px solid #FF8215;padding-left:12px}
+    h2{font-size:1.05rem;font-weight:700;color:#1a1a2e;margin:40px 0 12px;border-left:4px solid #FF8215;padding-left:12px;scroll-margin-top:90px}
     h3{font-size:0.95rem;font-weight:700;color:#1a1a2e;margin:20px 0 8px}
     p{margin-bottom:12px;color:#374151}
     ul,ol{margin:8px 0 16px 24px;color:#374151}
@@ -40,6 +45,13 @@
     footer{text-align:center;padding:24px;font-size:0.78rem;color:#9ca3af;border-top:1px solid #e5e7eb;margin-top:48px}
     a{color:#FF8215;text-decoration:none}
     a:hover{text-decoration:underline}
+    @media(max-width:780px){
+      .page-wrap{grid-template-columns:1fr;gap:0}
+      .toc{display:none}
+      .hero{padding:28px 20px}
+      .hero h1{font-size:1.45rem}
+      h2{font-size:0.98rem}
+    }
   </style>
 </head>
 <body>
@@ -50,189 +62,209 @@
     </div>
   </header>
 
-  <div class="container">
-    <div class="hero">
-      <span class="badge">Section 51 Manual</span>
-      <h1>Promotion of Access to Information Act<br>Manual</h1>
-      <div class="hero-meta">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSP #52449 &nbsp;·&nbsp; Last updated: June 2026</div>
-    </div>
+  <div class="page-wrap">
+    <nav class="toc" aria-label="Table of contents">
+      <div class="toc-title">Contents</div>
+      <a href="#s1">1. Introduction</a>
+      <a href="#s2">2. About SV Capital</a>
+      <a href="#s3">3. Information Officer</a>
+      <a href="#s4">4. Guide on PAIA</a>
+      <a href="#s5">5. Records Held</a>
+      <a href="#s6">6. How to Request</a>
+      <a href="#s7">7. Fees</a>
+      <a href="#s8">8. Grounds for Refusal</a>
+      <a href="#s9">9. Remedies</a>
+      <a href="#s10">10. Available Without Request</a>
+      <a href="#s11">11. Updating This Manual</a>
+    </nav>
 
-    <h2>1. Introduction</h2>
-    <p>This manual is published in terms of Section 51 of the Promotion of Access to Information Act, No. 2 of 2000 ("PAIA"). PAIA gives effect to the constitutional right of access to any information held by the State and any information held by another person that is required for the exercise or protection of any rights.</p>
-    <p>SV Capital (Pty) Ltd ("SV Capital") is committed to transparency and to fulfilling its obligations under PAIA. This manual describes the categories of records held by SV Capital and the process for requesting access to those records.</p>
+    <main>
+      <div class="hero">
+        <span class="badge">Section 51 Manual</span>
+        <h1>Promotion of Access to Information Act<br>Manual</h1>
+        <div class="hero-meta">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSP #52449 &nbsp;·&nbsp; Last updated: June 2026</div>
+      </div>
 
-    <h2>2. About SV Capital</h2>
-    <div class="info-box">
-      <h3>Company Details</h3>
+      <h2 id="s1">1. Introduction</h2>
+      <p>This manual is published in terms of Section 51 of the Promotion of Access to Information Act, No. 2 of 2000 ("PAIA"). PAIA gives effect to the constitutional right of access to any information held by the State and any information held by another person that is required for the exercise or protection of any rights.</p>
+      <p>SV Capital (Pty) Ltd ("SV Capital") is committed to transparency and to fulfilling its obligations under PAIA. This manual describes the categories of records held by SV Capital and the process for requesting access to those records.</p>
+
+      <h2 id="s2">2. About SV Capital</h2>
+      <div class="info-box">
+        <h3>Company Details</h3>
+        <ul>
+          <li><strong>Trading name:</strong> SV Capital (Pty) Ltd</li>
+          <li><strong>Registration number:</strong> 2017/194453/07 — Private company registered in South Africa</li>
+          <li><strong>Licenced FSP:</strong> Smartvest Financial Services (Pty) Ltd — FSP Licence No. 52449, issued by the Financial Sector Conduct Authority (FSCA), with effect from 13 September 2022, in terms of section 8 of the Financial Advisory and Intermediary Services Act, 2002 (Act No. 37 of 2002)</li>
+          <li><strong>Regulator:</strong> Financial Sector Conduct Authority (FSCA)</li>
+          <li><strong>Nature of business:</strong> Alternative investment products including cattle-backed investments, solar energy projects, delivery bike investments, and short-term debt instruments</li>
+        </ul>
+      </div>
+
+      <h2 id="s3">3. Information Officer</h2>
+      <p>The Information Officer is responsible for receiving and processing PAIA requests on behalf of SV Capital.</p>
+      <div class="info-box">
+        <h3>Information Officer Contact</h3>
+        <p><strong>SV Capital (Pty) Ltd</strong><br>
+        Email: <a href="mailto:enquiry@svcapital.co.za">enquiry@svcapital.co.za</a><br>
+        FSP #52449 — FSCA Authorised Financial Services Provider</p>
+      </div>
+
+      <h2 id="s4">4. Guide on How to Use PAIA</h2>
+      <p>The South African Human Rights Commission (SAHRC) has published a guide on how to use PAIA. This guide is available from the SAHRC at <a href="mailto:PAIA@sahrc.org.za">PAIA@sahrc.org.za</a> or at the SAHRC's offices. Any person who requires assistance with a request may also contact the Information Regulator of South Africa.</p>
+
+      <h2 id="s5">5. Categories of Records Held</h2>
+      <p>SV Capital holds the following categories of records:</p>
+
+      <h3>5.1 Corporate and Statutory Records</h3>
       <ul>
-        <li><strong>Full name:</strong> SV Capital (Pty) Ltd</li>
-        <li><strong>Registration:</strong> Private company registered in South Africa</li>
-        <li><strong>FSP License:</strong> #52449 — Authorised Financial Services Provider under FAIS</li>
-        <li><strong>Regulator:</strong> Financial Sector Conduct Authority (FSCA)</li>
-        <li><strong>Nature of business:</strong> Alternative investment products including cattle-backed investments, solar energy projects, and short-term debt instruments</li>
+        <li>Memorandum of Incorporation and company registration documents</li>
+        <li>Minutes of board and shareholder meetings</li>
+        <li>Annual financial statements and audited accounts</li>
+        <li>FSP licence and FSCA correspondence</li>
+        <li>Regulatory filings and compliance reports</li>
       </ul>
-    </div>
 
-    <h2>3. Information Officer</h2>
-    <p>The Information Officer is responsible for receiving and processing PAIA requests on behalf of SV Capital.</p>
-    <div class="info-box">
-      <h3>Information Officer Contact</h3>
-      <p><strong>SV Capital (Pty) Ltd</strong><br>
-      Email: <a href="mailto:enquiry@svcapital.co.za">enquiry@svcapital.co.za</a><br>
-      FSP #52449 — FSCA Authorised Financial Services Provider</p>
-    </div>
+      <h3>5.2 Investor Records</h3>
+      <ul>
+        <li>Investor account information and FICA/KYC documents</li>
+        <li>Investment agreements and product term sheets</li>
+        <li>Transaction records and account statements</li>
+        <li>Maturity and payout records</li>
+        <li>Correspondence and support communications</li>
+      </ul>
 
-    <h2>4. Guide on How to Use PAIA</h2>
-    <p>The South African Human Rights Commission (SAHRC) has published a guide on how to use PAIA. This guide is available from the SAHRC at <a href="mailto:PAIA@sahrc.org.za">PAIA@sahrc.org.za</a> or at the SAHRC's offices. Any person who requires assistance with a request may also contact the Information Regulator of South Africa.</p>
+      <h3>5.3 Investment Pool Records</h3>
+      <ul>
+        <li>Investment pool agreements and underlying asset documentation</li>
+        <li>Pool performance reports and valuations</li>
+        <li>Cattle purchase/sale records (for cattle-backed pools)</li>
+        <li>Solar project agreements and generation reports (for solar pools)</li>
+        <li>Delivery bike fleet agreements and repayment records</li>
+        <li>Short-term debt agreements and repayment records</li>
+      </ul>
 
-    <h2>5. Categories of Records Held</h2>
-    <p>SV Capital holds the following categories of records:</p>
+      <h3>5.4 Financial Records</h3>
+      <ul>
+        <li>General ledger and accounting records</li>
+        <li>Bank statements and payment records</li>
+        <li>Fee and commission records</li>
+        <li>VAT returns and SARS correspondence</li>
+        <li>Tax certificates issued to investors</li>
+      </ul>
 
-    <h3>5.1 Corporate and Statutory Records</h3>
-    <ul>
-      <li>Memorandum of Incorporation and company registration documents</li>
-      <li>Minutes of board and shareholder meetings</li>
-      <li>Annual financial statements and audited accounts</li>
-      <li>FSP license and FSCA correspondence</li>
-      <li>Regulatory filings and compliance reports</li>
-    </ul>
+      <h3>5.5 Human Resources Records</h3>
+      <ul>
+        <li>Employee contracts and personnel files</li>
+        <li>Payroll records</li>
+        <li>Training and competency records</li>
+        <li>Disciplinary and grievance records</li>
+      </ul>
 
-    <h3>5.2 Investor Records</h3>
-    <ul>
-      <li>Investor account information and FICA/KYC documents</li>
-      <li>Investment agreements and product term sheets</li>
-      <li>Transaction records and account statements</li>
-      <li>Maturity and payout records</li>
-      <li>Correspondence and support communications</li>
-    </ul>
+      <h3>5.6 Operational Records</h3>
+      <ul>
+        <li>IT system records and security logs</li>
+        <li>Marketing materials and communications</li>
+        <li>Service provider contracts</li>
+        <li>Insurance policies</li>
+      </ul>
 
-    <h3>5.3 Investment Pool Records</h3>
-    <ul>
-      <li>Investment pool agreements and underlying asset documentation</li>
-      <li>Pool performance reports and valuations</li>
-      <li>Cattle purchase/sale records (for cattle-backed pools)</li>
-      <li>Solar project agreements and generation reports (for solar pools)</li>
-      <li>Short-term debt agreements and repayment records</li>
-    </ul>
+      <h2 id="s6">6. How to Request Access to Records</h2>
+      <p>Any person wishing to access records held by SV Capital must submit a written request using the prescribed PAIA Form C, available from the South African Human Rights Commission or the Department of Justice.</p>
 
-    <h3>5.4 Financial Records</h3>
-    <ul>
-      <li>General ledger and accounting records</li>
-      <li>Bank statements and payment records</li>
-      <li>Fee and commission records</li>
-      <li>VAT returns and SARS correspondence</li>
-      <li>Tax certificates issued to investors</li>
-    </ul>
+      <div class="step-box">
+        <strong>Step 1 — Complete Form C</strong>
+        Download and complete the prescribed Form C from the SAHRC website (www.sahrc.org.za). Provide sufficient detail to identify the record(s) requested.
+      </div>
+      <div class="step-box">
+        <strong>Step 2 — Submit the Request</strong>
+        Submit the completed form via email to <a href="mailto:enquiry@svcapital.co.za">enquiry@svcapital.co.za</a> with the subject line "PAIA Request — [Your Name]".
+      </div>
+      <div class="step-box">
+        <strong>Step 3 — Pay the Request Fee</strong>
+        A request fee of R35 (as prescribed by regulation) is payable before the request is processed. SV Capital will provide banking details upon receipt of the request. Requesters who can demonstrate that they are unable to pay the fee may apply for exemption.
+      </div>
+      <div class="step-box">
+        <strong>Step 4 — Await Response</strong>
+        SV Capital will respond to your request within 30 days of receipt and payment of the request fee, as required by PAIA. We may seek an extension of up to 30 additional days in appropriate circumstances.
+      </div>
 
-    <h3>5.5 Human Resources Records</h3>
-    <ul>
-      <li>Employee contracts and personnel files</li>
-      <li>Payroll records</li>
-      <li>Training and competency records</li>
-      <li>Disciplinary and grievance records</li>
-    </ul>
+      <h2 id="s7">7. Fees</h2>
+      <p>The following fees apply to PAIA requests (as prescribed by the PAIA Regulations):</p>
+      <table class="fee-table">
+        <thead>
+          <tr><th>Item</th><th>Fee</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Request fee (payable before processing)</td><td>R35.00</td></tr>
+          <tr><td>Photocopy per A4 page</td><td>R1.10</td></tr>
+          <tr><td>Printed copy per A4 page</td><td>R0.75</td></tr>
+          <tr><td>CD/DVD</td><td>R70.00</td></tr>
+          <tr><td>USB flash drive (if required)</td><td>R150.00</td></tr>
+          <tr><td>Postage</td><td>Actual cost</td></tr>
+          <tr><td>Access fee (deposit): reproduction costs over 6 hours</td><td>One third of estimated reproduction cost</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:0.85rem;color:#6b7280">Note: Requesters who are unable to pay fees may apply for exemption by submitting a written motivation. Fees are subject to change in accordance with PAIA Regulations.</p>
 
-    <h3>5.6 Operational Records</h3>
-    <ul>
-      <li>IT system records and security logs</li>
-      <li>Marketing materials and communications</li>
-      <li>Service provider contracts</li>
-      <li>Insurance policies</li>
-    </ul>
+      <h2 id="s8">8. Grounds for Refusal</h2>
+      <p>SV Capital may refuse access to records on grounds provided in Chapter 4 of PAIA, including but not limited to:</p>
+      <ul>
+        <li>Protection of the privacy of a third party (personal information)</li>
+        <li>Commercial information of third parties (trade secrets, confidential business information)</li>
+        <li>Confidential correspondence with an attorney (legal privilege)</li>
+        <li>Records that could endanger the safety of an individual</li>
+        <li>Records that are publicly available</li>
+        <li>Records the disclosure of which would constitute a breach of a duty of confidence</li>
+      </ul>
 
-    <h2>6. How to Request Access to Records</h2>
-    <p>Any person wishing to access records held by SV Capital must submit a written request using the prescribed PAIA Form C, available from the South African Human Rights Commission or the Department of Justice.</p>
+      <h2 id="s9">9. Remedies if Access is Refused</h2>
+      <p>If SV Capital refuses access to a record, the requester may:</p>
+      <ul>
+        <li>Apply to the Information Regulator for a review of the decision within 30 days of receiving the refusal</li>
+        <li>Apply to a court for relief, upon exhausting the internal remedies</li>
+      </ul>
+      <p>The Information Regulator can be contacted at:</p>
+      <div class="info-box">
+        <h3>Information Regulator of South Africa</h3>
+        <p>Email: <a href="mailto:inforeg@justice.gov.za">inforeg@justice.gov.za</a><br>
+        PAIA Complaints: <a href="mailto:PAIAComplaints@inforegulator.org.za">PAIAComplaints@inforegulator.org.za</a><br>
+        POPIA Complaints: <a href="mailto:POPIAComplaints@inforegulator.org.za">POPIAComplaints@inforegulator.org.za</a></p>
+      </div>
 
-    <div class="step-box">
-      <strong>Step 1 — Complete Form C</strong>
-      Download and complete the prescribed Form C from the SAHRC website (www.sahrc.org.za). Provide sufficient detail to identify the record(s) requested.
-    </div>
-    <div class="step-box">
-      <strong>Step 2 — Submit the Request</strong>
-      Submit the completed form via email to <a href="mailto:enquiry@svcapital.co.za">enquiry@svcapital.co.za</a> with the subject line "PAIA Request — [Your Name]".
-    </div>
-    <div class="step-box">
-      <strong>Step 3 — Pay the Request Fee</strong>
-      A request fee of R35 (as prescribed by regulation) is payable before the request is processed. SV Capital will provide banking details upon receipt of the request. Requesters who can demonstrate that they are unable to pay the fee may apply for exemption.
-    </div>
-    <div class="step-box">
-      <strong>Step 4 — Await Response</strong>
-      SV Capital will respond to your request within 30 days of receipt and payment of the request fee, as required by PAIA. We may seek an extension of up to 30 additional days in appropriate circumstances.
-    </div>
+      <h2 id="s10">10. Records Available Without a Formal PAIA Request</h2>
+      <p>Certain categories of records are made available by SV Capital without requiring a formal PAIA request:</p>
+      <ul>
+        <li>This PAIA Manual (publicly available)</li>
+        <li><a href="popia.html">POPIA Privacy Notice</a></li>
+        <li><a href="terms.html">Terms of Use</a></li>
+        <li><a href="complaints.html">Complaints Policy</a></li>
+        <li>General product information and marketing materials</li>
+        <li>Investor's own account records (available via the investor portal)</li>
+        <li>Own investment agreements and statements (available on request via email)</li>
+      </ul>
 
-    <h2>7. Fees</h2>
-    <p>The following fees apply to PAIA requests (as prescribed by the PAIA Regulations):</p>
-    <table class="fee-table">
-      <thead>
-        <tr><th>Item</th><th>Fee</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>Request fee (payable before processing)</td><td>R35.00</td></tr>
-        <tr><td>Photocopy per A4 page</td><td>R1.10</td></tr>
-        <tr><td>Printed copy per A4 page</td><td>R0.75</td></tr>
-        <tr><td>CD/DVD</td><td>R70.00</td></tr>
-        <tr><td>USB flash drive (if required)</td><td>R150.00</td></tr>
-        <tr><td>Postage</td><td>Actual cost</td></tr>
-        <tr><td>Access fee (deposit): reproduction costs over 6 hours</td><td>One third of estimated reproduction cost</td></tr>
-      </tbody>
-    </table>
-    <p style="font-size:0.85rem;color:#6b7280">Note: Requesters who are unable to pay fees may apply for exemption by submitting a written motivation. Fees are subject to change in accordance with PAIA Regulations.</p>
+      <h2 id="s11">11. Updating This Manual</h2>
+      <p>This manual will be updated at least annually or when there is a material change in SV Capital's information holdings or PAIA procedures. The current version is available on the SV Capital website and will be provided free of charge to any person who requests it.</p>
 
-    <h2>8. Grounds for Refusal</h2>
-    <p>SV Capital may refuse access to records on grounds provided in Chapter 4 of PAIA, including but not limited to:</p>
-    <ul>
-      <li>Protection of the privacy of a third party (personal information)</li>
-      <li>Commercial information of third parties (trade secrets, confidential business information)</li>
-      <li>Confidential correspondence with an attorney (legal privilege)</li>
-      <li>Records that could endanger the safety of an individual</li>
-      <li>Records that are publicly available</li>
-      <li>Records the disclosure of which would constitute a breach of a duty of confidence</li>
-    </ul>
-
-    <h2>9. Remedies if Access is Refused</h2>
-    <p>If SV Capital refuses access to a record, the requester may:</p>
-    <ul>
-      <li>Apply to the Information Regulator for a review of the decision within 30 days of receiving the refusal</li>
-      <li>Apply to a court for relief, upon exhausting the internal remedies</li>
-    </ul>
-    <p>The Information Regulator can be contacted at:</p>
-    <div class="info-box">
-      <h3>Information Regulator of South Africa</h3>
-      <p>Email: <a href="mailto:inforeg@justice.gov.za">inforeg@justice.gov.za</a><br>
-      PAIA Complaints: <a href="mailto:PAIAComplaints@inforegulator.org.za">PAIAComplaints@inforegulator.org.za</a><br>
-      POPIAComplaints: <a href="mailto:POPIAComplaints@inforegulator.org.za">POPIAComplaints@inforegulator.org.za</a></p>
-    </div>
-
-    <h2>10. Records Available Without a Formal PAIA Request</h2>
-    <p>Certain categories of records are made available by SV Capital without requiring a formal PAIA request:</p>
-    <ul>
-      <li>This PAIA Manual (publicly available)</li>
-      <li><a href="popia.html">POPIA Privacy Notice</a></li>
-      <li><a href="terms.html">Terms of Use</a></li>
-      <li>General product information and marketing materials</li>
-      <li>Investor's own account records (available via the investor portal)</li>
-      <li>Own investment agreements and statements (available on request via email)</li>
-    </ul>
-
-    <h2>11. Updating This Manual</h2>
-    <p>This manual will be updated at least annually or when there is a material change in SV Capital's information holdings or PAIA procedures. The current version is available on the SV Capital website and will be provided free of charge to any person who requests it.</p>
-
-    <div class="contact-box">
-      <h3>Submit a PAIA Request</h3>
-      <p>To request access to records, contact the Information Officer:</p>
-      <p><strong>SV Capital (Pty) Ltd</strong><br>
-      Email: <a href="mailto:enquiry@svcapital.co.za">enquiry@svcapital.co.za</a><br>
-      Subject line: "PAIA Request — [Your Full Name]"<br>
-      FSP #52449 — FSCA Authorised Financial Services Provider</p>
-      <p style="margin-top:12px;font-size:0.82rem;color:#6b7280">Please attach the completed PAIA Form C and proof of identity. The R35 request fee must be paid before processing commences.</p>
-    </div>
+      <div class="contact-box">
+        <h3>Submit a PAIA Request</h3>
+        <p>To request access to records, contact the Information Officer:</p>
+        <p><strong>SV Capital (Pty) Ltd</strong><br>
+        Email: <a href="mailto:enquiry@svcapital.co.za">enquiry@svcapital.co.za</a><br>
+        Subject line: "PAIA Request — [Your Full Name]"<br>
+        FSP #52449 — Smartvest Financial Services (Pty) Ltd, FSCA Authorised Financial Services Provider</p>
+        <p style="margin-top:12px;font-size:0.82rem;color:#6b7280">Please attach the completed PAIA Form C and proof of identity. The R35 request fee must be paid before processing commences.</p>
+      </div>
+    </main>
   </div>
 
   <footer>
     &copy; <span class="yr"></span> SV Capital (Pty) Ltd. All rights reserved. &nbsp;·&nbsp; FSP #52449 &nbsp;·&nbsp;
     <a href="terms.html">Terms of Use</a> &nbsp;·&nbsp;
     <a href="popia.html">Privacy Policy</a> &nbsp;·&nbsp;
-    <a href="paia.html">PAIA Manual</a>
+    <a href="paia.html">PAIA Manual</a> &nbsp;·&nbsp;
+    <a href="complaints.html">Complaints Policy</a>
   </footer>
   <script>document.querySelectorAll('.yr').forEach(function(el){el.textContent=new Date().getFullYear();});</script>
 </body>
