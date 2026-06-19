@@ -57,7 +57,7 @@ const zarM = v => { const n=Number(v)||0; return n>=1e6?`R${(n/1e6).toFixed(1)}M
 const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—';
 
 /* ─── RBAC reference ─────────────────────────────────────────────── */
-const RBAC = {
+let RBAC = {
   'CEO':                 ['employee','team','fund','admin','ifa','portal','director'],
   'COO':                 ['employee','team','fund','admin','ifa','portal','director'],
   'Operations Manager':  ['employee','team','fund','admin'],
@@ -150,6 +150,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Live preview wiring for create form
   wirePreviewListeners();
+
+  // Load RBAC matrix from API (non-blocking fallback to defaults)
+  await loadRBACFromAPI();
 
   // Load data — wrapped so a fetch failure never leaves the spinner up
   try {
@@ -1364,6 +1367,53 @@ window.deletePayslip      = deletePayslip;
 window.printPayslip       = printPayslip;
 
 /* ═══ ACCESS MATRIX ═════════════════════════════════════════════════ */
+async function loadRBACFromAPI() {
+  try {
+    const base = window.__SVC_API_BASE__ || '/api/';
+    const r = await fetch(base + 'settings/rbac');
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data && data.matrix && typeof data.matrix === 'object' && !Array.isArray(data.matrix)) {
+      RBAC = data.matrix;
+    }
+  } catch (_) {}
+}
+
+function onRbacToggle(cb) {
+  const role = cb.dataset.role;
+  const app  = cb.dataset.app;
+  if (!RBAC[role]) RBAC[role] = [];
+  if (cb.checked) {
+    if (!RBAC[role].includes(app)) RBAC[role].push(app);
+  } else {
+    RBAC[role] = RBAC[role].filter(a => a !== app);
+  }
+}
+
+async function saveRBAC() {
+  const btn = document.getElementById('rbacSaveBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Saving…'; }
+  try {
+    const base = window.__SVC_API_BASE__ || '/api/';
+    const r = await fetch(base + 'settings/rbac', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ..._authHeader() },
+      body: JSON.stringify({ matrix: RBAC }),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      showToast('Access matrix saved successfully', 'success');
+    } else {
+      showToast(data.error || 'Failed to save matrix', 'error');
+    }
+  } catch (e) {
+    showToast('Network error — could not save matrix', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>Save Changes'; }
+  }
+}
+
 function renderAccessMatrix() {
   // Employee access list
   const q = (document.getElementById('accessSearch')?.value || '').toLowerCase();
@@ -1414,15 +1464,21 @@ function renderAccessMatrix() {
     </div>
   `;
 
-  // RBAC matrix
+  // RBAC matrix (editable)
   const allApps = Object.keys(APP_NAMES);
   document.getElementById('rbacMatrix').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div style="font-size:0.82rem;color:var(--muted)">Toggle checkboxes to change app access per role, then click Save.</div>
+      <button id="rbacSaveBtn" class="btn btn--primary btn--sm" onclick="saveRBAC()" style="min-width:130px">
+        <i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>Save Changes
+      </button>
+    </div>
     <div class="dir-table-wrap" style="overflow-x:auto">
       <table class="dir-table">
         <thead>
           <tr>
             <th>Role</th>
-            ${allApps.map(k=>`<th style="text-align:center"><i class="fa-solid ${APP_ICONS[k]}" style="color:${APP_COLORS[k]}"></i><br><span style="font-size:0.6rem">${APP_NAMES[k].replace(' ','<br>')}</span></th>`).join('')}
+            ${allApps.map(k=>`<th style="text-align:center;min-width:68px"><i class="fa-solid ${APP_ICONS[k]}" style="color:${APP_COLORS[k]}"></i><br><span style="font-size:0.6rem">${APP_NAMES[k].replace(' ','<br>')}</span></th>`).join('')}
           </tr>
         </thead>
         <tbody>
@@ -1431,16 +1487,23 @@ function renderAccessMatrix() {
               <td><span class="role-chip" style="font-size:0.76rem">${role}</span></td>
               ${allApps.map(k=>`
                 <td style="text-align:center">
-                  ${apps.includes(k)
-                    ? `<i class="fa-solid fa-circle-check" style="color:#10b981;font-size:0.95rem"></i>`
-                    : `<i class="fa-solid fa-circle-xmark" style="color:var(--border2);font-size:0.95rem"></i>`
-                  }
+                  <input type="checkbox"
+                    class="rbac-cb"
+                    data-role="${role.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}"
+                    data-app="${k}"
+                    ${apps.includes(k) ? 'checked' : ''}
+                    onchange="onRbacToggle(this)"
+                    style="width:17px;height:17px;cursor:pointer;accent-color:${APP_COLORS[k]}"
+                  >
                 </td>
               `).join('')}
             </tr>
           `).join('')}
           <tr style="background:rgba(245,158,11,0.04);border-top:2px solid rgba(245,158,11,0.2)">
-            <td><span class="chip chip--onboard">Executive level</span><div style="font-size:0.68rem;color:var(--muted);margin-top:3px">Overrides role</div></td>
+            <td>
+              <span class="chip chip--onboard">Executive level</span>
+              <div style="font-size:0.68rem;color:var(--muted);margin-top:3px">Overrides role</div>
+            </td>
             ${allApps.map(()=>`<td style="text-align:center"><i class="fa-solid fa-circle-check" style="color:var(--gold);font-size:0.95rem"></i></td>`).join('')}
           </tr>
         </tbody>
