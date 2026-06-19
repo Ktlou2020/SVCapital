@@ -601,9 +601,8 @@ function populateHero(session) {
   document.getElementById('topRole').textContent = session.role;
 
   const allowed = StaffAuth.getAllowedApps(session);
-  const total   = Object.keys(APP_META).length;
   document.getElementById('accessCount').innerHTML =
-    `You have access to <strong>${allowed.length}</strong> of ${total} available apps.`;
+    `You have access to <strong>${allowed.length}</strong> app${allowed.length !== 1 ? 's' : ''}.`;
 }
 
 /* ── Session bar ── */
@@ -646,27 +645,7 @@ function renderApps(session) {
     grid.appendChild(tile);
   });
 
-  // Locked apps section
-  if (locked.length > 0) {
-    document.getElementById('lockedSection').style.display = 'block';
-    document.getElementById('lockedCountBadge').textContent = locked.length + ' apps';
-    const lockedGrid = document.getElementById('lockedGrid');
-    lockedGrid.innerHTML = '';
-    locked.forEach(key => {
-      const meta = APP_META[key];
-      if (!meta) return;
-      const el = document.createElement('div');
-      el.className = 'locked-tile';
-      el.innerHTML = `
-        <div class="locked-tile-icon"><i class="${meta.icon}"></i></div>
-        <div>
-          <div class="locked-tile-label">${meta.label}</div>
-          <div class="locked-tile-tag"><i class="fa-solid fa-lock"></i> Role restricted</div>
-        </div>
-      `;
-      lockedGrid.appendChild(el);
-    });
-  }
+  // Locked apps are not shown — users should not see apps they can't access
 }
 
 function buildTile(meta, key, isLocked) {
