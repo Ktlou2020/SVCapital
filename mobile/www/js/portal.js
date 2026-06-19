@@ -1205,6 +1205,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = _skelSpan;
   });
+
+  // Immediately populate greeting from cached user so name never stays "Loading..."
+  try {
+    const cached = JSON.parse(localStorage.getItem('svc_user') || '{}');
+    const firstName = cached.firstName || cached.first_name || '';
+    const lastName  = cached.lastName  || cached.last_name  || '';
+    const nameEl = document.getElementById('welcomeName');
+    if (nameEl && firstName) nameEl.textContent = `${firstName} ${lastName}`.trim();
+    const greetEl = document.getElementById('topbarGreeting');
+    if (greetEl && firstName) greetEl.textContent = `${_timeGreeting()}, ${firstName} 👋`;
+    const greetEl2 = document.getElementById('welcomeGreeting');
+    if (greetEl2) greetEl2.textContent = _timeGreeting();
+    const avEl = document.getElementById('welcomeAvatar');
+    if (avEl && firstName) avEl.textContent = ((firstName[0] || '') + (lastName[0] || '')).toUpperCase() || '?';
+  } catch (_) {}
+
   await loadPortalData();
   // Generate notifications from real data
   loadNotifications();
@@ -1296,8 +1312,8 @@ async function loadPortalData() {
     const waitlistRes = await API._fetch('GET', 'tables/investment_waitlist', null, { investor_id: PORTAL.investor.id, limit: 50 }).catch(() => ({ data: [] }));
     PORTAL.waitlist = waitlistRes.data || [];
 
-    SVC.setUser(PORTAL.investor);
-    SVC.track('portal_loaded', { active_investments: PORTAL.investments.filter(i => i.status === 'active').length });
+    try { SVC.setUser(PORTAL.investor); } catch (_) {}
+    try { SVC.track('portal_loaded', { active_investments: PORTAL.investments.filter(i => i.status === 'active').length }); } catch (_) {}
 
     renderOverview();
     renderOnboardingWizard();
@@ -1311,8 +1327,12 @@ async function loadPortalData() {
     // Load gamification data (non-blocking — don't fail portal if quests fail)
     loadQuestData().catch(err => console.warn('[Quests] load error:', err.message));
   } catch (e) {
-    Toast.error('Failed to load portfolio data');
     console.error('loadPortalData error:', e);
+    // Still render with whatever data we have so the page isn't permanently stuck
+    try { renderOverview(); } catch (_) {}
+    if (e.message && !e.message.includes('Session expired')) {
+      Toast.error('Could not load all portfolio data — pull down to refresh');
+    }
   }
 }
 
