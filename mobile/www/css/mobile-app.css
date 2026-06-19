@@ -11,38 +11,79 @@ html, body {
 /* Prevent any element from breaking out of the viewport */
 * { box-sizing: border-box; }
 
+/* ── Core layout: never wider than the screen ── */
+.app-layout,
+.main-content,
+.page-content {
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+}
+
+/* ── Topbar: shrink to fit narrow screens ── */
+.topbar {
+  padding: 0 10px !important;
+  gap: 6px !important;
+}
+/* Left side: let title truncate rather than pushing right */
+.topbar__left {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+.topbar__title {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+/* Right side: hide low-priority buttons, keep notification + sign-out */
+#tourBtn,
+.topbar__actions > button[onclick*="openPortalCmd"] {
+  display: none !important;
+}
+.topbar__actions > a.btn { display: none !important; }
+.topbar__actions {
+  flex-shrink: 0 !important;
+  gap: 4px !important;
+}
+
 /* ── Welcome Banner: two-row layout on all native screens ──
    Row 1: avatar + info (name + chips)
    Row 2: action buttons full-width
    ── */
 .welcome-banner {
   flex-wrap: wrap !important;
-  gap: 10px 14px !important;
-  padding: 16px !important;
-  overflow: visible !important;
+  gap: 10px 12px !important;
+  padding: 14px !important;
+  overflow: hidden !important;
 }
 .welcome-avatar {
   flex-shrink: 0 !important;
+  width: 46px !important;
+  height: 46px !important;
+  font-size: 1rem !important;
+  border-radius: 13px !important;
 }
 .welcome-info {
   flex: 1 1 0 !important;
   min-width: 0 !important;
-  overflow: hidden !important;
+  overflow: visible !important;
 }
-/* Chips scroll horizontally rather than overflowing the banner */
+/* Chips: horizontally scrollable, single row, no clipping */
 .welcome-chips {
   flex-wrap: nowrap !important;
   overflow-x: auto !important;
   -webkit-overflow-scrolling: touch !important;
   scrollbar-width: none !important;
   padding-bottom: 2px !important;
+  max-width: 100% !important;
 }
 .welcome-chips::-webkit-scrollbar { display: none !important; }
-/* Actions always sit on their own full-width row */
+/* Actions: always on own full-width row */
 .welcome-actions {
   flex: 0 0 100% !important;
   width: 100% !important;
   display: flex !important;
+  gap: 8px !important;
 }
 .welcome-actions .btn {
   flex: 1 !important;
