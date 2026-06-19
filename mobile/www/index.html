@@ -1260,7 +1260,7 @@
         </div>
 
         <!-- Two-column layout: options + sidebar -->
-        <div style="display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start">
+        <div class="stmt-grid" style="display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start">
 
           <!-- ── Left: Options panel ── -->
           <div style="background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden">
@@ -1277,7 +1277,7 @@
               <!-- Date range -->
               <div>
                 <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;margin-bottom:10px">Statement Period</div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                <div class="form-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
                   <div>
                     <label style="display:block;font-size:0.78rem;font-weight:600;color:#6b7280;margin-bottom:5px">From</label>
                     <input type="date" id="stmtFrom" style="width:100%;padding:9px 12px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;color:#1a1a1a;background:#fff;outline:none;font-family:inherit" onfocus="this.style.borderColor='#ff9b0c'" onblur="this.style.borderColor='rgba(0,0,0,0.12)'" />
@@ -1292,7 +1292,7 @@
               <!-- Include sections -->
               <div>
                 <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;margin-bottom:10px">Include Sections</div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div class="form-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
                   <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid rgba(0,0,0,0.08);border-radius:8px;background:#F7F8FA;transition:border-color 0.2s" onmouseover="this.style.borderColor='#ff9b0c'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(0,0,0,0.08)'">
                     <input type="checkbox" id="stmtIncPortfolio" checked style="accent-color:#ff9b0c;width:15px;height:15px;flex-shrink:0">
                     <span style="font-size:0.82rem;font-weight:600;color:#303030">Portfolio Summary</span>
@@ -1638,7 +1638,7 @@
       </div>
 
       <!-- Quick amount chips -->
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:24px">
+      <div id="pmAmountChips" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:24px">
         <button onclick="setAmount(500)"  class="pm-chip">R500</button>
         <button onclick="setAmount(1000)" class="pm-chip">R1,000</button>
         <button onclick="setAmount(2500)" class="pm-chip">R2,500</button>
