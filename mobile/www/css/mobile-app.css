@@ -1,16 +1,28 @@
 /* ══════════════════════════════════════════════════════════════
-   MOBILE APP OVERRIDES — Capacitor native wrapper only
-   Loaded last so every rule here wins with !important where needed.
-   Goal: tighten all spacing / type to feel natively mobile.
+   SV Capital — Mobile App Overrides (Capacitor native only)
+   Loaded last — wins over all prior stylesheets with !important.
    ══════════════════════════════════════════════════════════════ */
 
-/* ── 0. Hard viewport lock ────────────────────────────────── */
+/* ── 0. Viewport lock & base rendering ──────────────────────── */
 html, body {
   overflow-x: hidden !important;
   max-width: 100vw !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  -webkit-text-size-adjust: 100% !important;
 }
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+/* Allow text selection where it makes sense */
+input, textarea, [contenteditable] {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
 
+/* ── 1. Hard clip on structural containers ───────────────────── */
 .app-layout,
 .main-content,
 .page-content {
@@ -18,11 +30,14 @@ html, body {
   overflow-x: hidden !important;
 }
 
-/* ── 1. Topbar ────────────────────────────────────────────── */
+/* ── 2. Topbar ───────────────────────────────────────────────── */
 .topbar {
   height: 52px !important;
-  padding: 0 10px !important;
+  padding: 0 12px !important;
   gap: 6px !important;
+  /* Subtle backdrop blur for depth */
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
 }
 .topbar__left {
   flex: 1 1 0 !important;
@@ -31,7 +46,8 @@ html, body {
   gap: 10px !important;
 }
 .topbar__title {
-  font-size: 0.88rem !important;
+  font-size: 0.9rem !important;
+  font-weight: 700 !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
@@ -40,77 +56,89 @@ html, body {
 .topbar-btn {
   width: 32px !important;
   height: 32px !important;
-  font-size: 0.85rem !important;
+  font-size: 0.82rem !important;
+  border-radius: 9px !important;
 }
-/* Keep: dark-mode toggle, notifications. Hide: tour, cmd-palette, website link */
+/* Hide low-value actions in native context */
 #tourBtn,
-.topbar__actions > button[onclick*="openPortalCmd"] {
-  display: none !important;
-}
+.topbar__actions > button[onclick*="openPortalCmd"] { display: none !important; }
 .topbar__actions > a.btn { display: none !important; }
-.topbar__actions { flex-shrink: 0 !important; gap: 4px !important; }
-/* Sign-out: icon only — text node hidden via font-size:0 trick */
+.topbar__actions {
+  flex-shrink: 0 !important;
+  gap: 4px !important;
+}
+/* Sign-out: collapse to icon only (font-size:0 hides text node) */
 .topbar__actions .btn--secondary {
-  padding: 5px 7px !important;
+  padding: 5px 8px !important;
   font-size: 0 !important;
   gap: 0 !important;
   min-height: 32px !important;
+  border-radius: 9px !important;
 }
-.topbar__actions .btn--secondary i {
-  font-size: 0.85rem !important;
-}
+.topbar__actions .btn--secondary i { font-size: 0.85rem !important; }
 
-/* ── 2. Page content spacing ──────────────────────────────── */
+/* ── 3. Page content ─────────────────────────────────────────── */
 .page-content { padding: 10px 12px !important; }
-/* Extra bottom room for the fixed bottom nav */
-.main-content { padding-bottom: 72px !important; }
+/* Room for the fixed bottom nav + home indicator */
+.main-content {
+  padding-bottom: calc(60px + env(safe-area-inset-bottom, 16px)) !important;
+}
 
-/* ── 3. Welcome Banner ────────────────────────────────────── */
+/* ── 4. Welcome Banner ───────────────────────────────────────── */
 .welcome-banner {
   flex-wrap: wrap !important;
   gap: 8px 10px !important;
-  padding: 12px !important;
-  margin-bottom: 12px !important;
+  padding: 14px !important;
+  margin-bottom: 10px !important;
   overflow: hidden !important;
-  border-radius: 14px !important;
+  border-radius: 16px !important;
 }
+/* Row 1: avatar + info */
 .welcome-avatar {
-  width: 42px !important;
-  height: 42px !important;
-  font-size: 0.95rem !important;
-  border-radius: 12px !important;
+  width: 44px !important;
+  height: 44px !important;
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+  border-radius: 13px !important;
   flex-shrink: 0 !important;
-}
-.welcome-greeting {
-  font-size: 0.62rem !important;
-  letter-spacing: 0.06em !important;
-}
-.welcome-name {
-  font-size: 0.95rem !important;
-  margin-top: 1px !important;
+  box-shadow: 0 4px 12px rgba(255,155,12,0.30) !important;
 }
 .welcome-info {
   flex: 1 1 0 !important;
   min-width: 0 !important;
   overflow: visible !important;
 }
-/* Chips: one scrollable row, no visible scrollbar */
+.welcome-greeting {
+  font-size: 0.6rem !important;
+  letter-spacing: 0.07em !important;
+  margin-bottom: 1px !important;
+}
+.welcome-name {
+  font-size: 1rem !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+/* Chips: single horizontally-scrollable row */
 .welcome-chips {
   flex-wrap: nowrap !important;
   overflow-x: auto !important;
   -webkit-overflow-scrolling: touch !important;
   scrollbar-width: none !important;
   gap: 5px !important;
-  margin-top: 5px !important;
+  margin-top: 6px !important;
   max-width: 100% !important;
+  padding-bottom: 2px !important;
 }
 .welcome-chips::-webkit-scrollbar { display: none !important; }
 .welcome-chip {
-  font-size: 0.6rem !important;
-  padding: 2px 7px !important;
+  font-size: 0.59rem !important;
+  padding: 2px 8px !important;
   flex-shrink: 0 !important;
 }
-/* Action buttons: own full-width row */
+/* Row 2: action buttons (full width) */
 .welcome-actions {
   flex: 0 0 100% !important;
   width: 100% !important;
@@ -120,116 +148,228 @@ html, body {
 .welcome-actions .btn {
   flex: 1 !important;
   min-width: 0 !important;
-  padding: 7px 10px !important;
+  padding: 8px 10px !important;
   font-size: 0.78rem !important;
+  border-radius: 10px !important;
 }
 
-/* ── 4. XP Progress Bar ───────────────────────────────────── */
+/* ── 5. XP Progress Bar ──────────────────────────────────────── */
 .xp-progress-bar-wrap {
-  padding: 8px 12px !important;
-  gap: 8px !important;
-  margin-bottom: 12px !important;
-  border-radius: 10px !important;
+  padding: 9px 14px !important;
+  gap: 10px !important;
+  margin-bottom: 10px !important;
+  border-radius: 12px !important;
 }
 .xp-level-pill {
   font-size: 0.65rem !important;
-  padding: 3px 9px !important;
+  padding: 3px 10px !important;
 }
 .xp-progress-track { height: 6px !important; }
-.xp-progress-right,
-.xp-progress-next { font-size: 0.65rem !important; }
+.xp-progress-right { font-size: 0.68rem !important; }
+.xp-progress-next  { font-size: 0.62rem !important; }
 
-/* ── 5. Stat Cards (portfolio summary) ────────────────────── */
+/* ── 6. Stat cards ───────────────────────────────────────────── */
 .stats-row {
   grid-template-columns: repeat(2, 1fr) !important;
   gap: 10px !important;
-  margin-bottom: 12px !important;
+  margin-bottom: 10px !important;
 }
 .stat-card {
-  padding: 12px !important;
-  gap: 6px !important;
-  border-radius: 12px !important;
+  padding: 14px 12px !important;
+  gap: 8px !important;
+  border-radius: 14px !important;
 }
 .stat-card__icon {
-  width: 34px !important;
-  height: 34px !important;
+  width: 36px !important;
+  height: 36px !important;
   font-size: 0.9rem !important;
-  border-radius: 9px !important;
+  border-radius: 10px !important;
 }
 .stat-card__value {
-  font-size: 1.25rem !important;
+  font-size: 1.35rem !important;
   letter-spacing: -0.02em !important;
   line-height: 1.1 !important;
 }
-.stat-card__label {
-  font-size: 0.62rem !important;
-}
-.stat-card__change { font-size: 0.65rem !important; }
+.stat-card__label  { font-size: 0.62rem !important; }
+.stat-card__change { font-size: 0.62rem !important; }
 
-/* ── 6. Portfolio Hero ────────────────────────────────────── */
+/* ── 7. Portfolio hero ───────────────────────────────────────── */
 .portfolio-hero {
-  padding: 16px !important;
-  border-radius: 14px !important;
-  margin-bottom: 12px !important;
+  padding: 18px 16px !important;
+  border-radius: 16px !important;
+  margin-bottom: 10px !important;
 }
-.portfolio-hero__value {
-  font-size: 1.7rem !important;
-}
-.portfolio-hero__label { font-size: 0.65rem !important; }
+.portfolio-hero__value  { font-size: 1.75rem !important; }
+.portfolio-hero__label  { font-size: 0.65rem !important; }
+/* Stats row inside hero: horizontal scroll on narrow screens */
 .portfolio-hero__stats {
-  gap: 12px !important;
   overflow-x: auto !important;
   -webkit-overflow-scrolling: touch !important;
   scrollbar-width: none !important;
   flex-wrap: nowrap !important;
+  gap: 14px !important;
   padding-bottom: 2px !important;
 }
 .portfolio-hero__stats::-webkit-scrollbar { display: none !important; }
 .ph-stat__value { font-size: 0.88rem !important; }
-.ph-stat__label { font-size: 0.6rem !important; }
+.ph-stat__label { font-size: 0.59rem !important; }
 
-/* ── 7. Panels ────────────────────────────────────────────── */
+/* ── 8. Panels ───────────────────────────────────────────────── */
 .panel {
-  margin-bottom: 12px !important;
+  margin-bottom: 10px !important;
   border-radius: 14px !important;
 }
 .panel__header {
-  padding: 11px 14px !important;
+  padding: 12px 14px !important;
 }
-.panel__title { font-size: 0.82rem !important; }
-.panel__body { padding: 12px 14px !important; }
+.panel__title  { font-size: 0.82rem !important; }
+.panel__body   { padding: 12px 14px !important; }
 
-/* ── 8. Cards (general) ───────────────────────────────────── */
-.card {
+/* ── 9. General cards ────────────────────────────────────────── */
+.card, .section-card, .summary-card {
   padding: 12px !important;
   border-radius: 12px !important;
   margin-bottom: 10px !important;
-}
-.section-card, .summary-card {
-  padding: 12px !important;
-  border-radius: 12px !important;
+  max-width: 100% !important;
 }
 
-/* ── 9. Table / data rows ─────────────────────────────────── */
+/* ── 10. Bottom navigation (`.mbn` / `.mbn-inner`) ──────────── */
+/* The HTML uses <nav class="mbn"> — these rules replace the
+   `.mobile-bottom-nav` rules which target the wrong class.       */
+.mbn {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 1200 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  /* Frosted-glass native feel */
+  background: rgba(255,255,255,0.88) !important;
+  backdrop-filter: blur(20px) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.8) !important;
+  border-top: 1px solid rgba(0,0,0,0.07) !important;
+  box-shadow: 0 -1px 0 rgba(0,0,0,0.04), 0 -8px 24px rgba(0,0,0,0.05) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+}
+.mbn-inner {
+  display: flex !important;
+  width: 100% !important;
+}
+.mbn-item {
+  position: relative !important;
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  padding: 10px 4px 8px !important;
+  background: none !important;
+  border: none !important;
+  cursor: pointer !important;
+  color: #9ca3af !important;
+  font-size: 0.56rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  transition: color 0.12s !important;
+  -webkit-tap-highlight-color: transparent !important;
+  touch-action: manipulation !important;
+  outline: none !important;
+}
+/* Active indicator: orange top-bar pill */
+.mbn-item::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 50% !important;
+  transform: translateX(-50%) scaleX(0) !important;
+  width: 28px !important;
+  height: 3px !important;
+  background: #ff9b0c !important;
+  border-radius: 0 0 4px 4px !important;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+.mbn-item.active::before {
+  transform: translateX(-50%) scaleX(1) !important;
+}
+.mbn-item i {
+  font-size: 1.1rem !important;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              color 0.12s !important;
+}
+.mbn-item.active {
+  color: #ff9b0c !important;
+}
+.mbn-item.active i {
+  transform: scale(1.12) translateY(-1px) !important;
+}
+.mbn-item:active { opacity: 0.65 !important; }
+
+/* Dark mode bottom nav */
+body.dark-mode .mbn {
+  background: rgba(22,27,34,0.9) !important;
+  border-top-color: rgba(255,255,255,0.07) !important;
+}
+body.dark-mode .mbn-item { color: #6b7280 !important; }
+body.dark-mode .mbn-item.active { color: #ff9b0c !important; }
+
+/* ── 11. Touch interaction states ────────────────────────────── */
+/* Button press: scale-down for tactile feel */
+.btn:active:not(:disabled) {
+  transform: scale(0.96) !important;
+  transition: transform 0.08s ease !important;
+}
+/* Nav items */
+.nav-item:active  { opacity: 0.6 !important; }
+.topbar-btn:active { opacity: 0.55 !important; }
+
+/* ── 12. Momentum scrolling & scrollbar cleanup ──────────────── */
+.page-content,
+.panel__body,
+.view,
+.sidebar__nav,
+.table-card,
+.data-table-wrap {
+  -webkit-overflow-scrolling: touch;
+}
+/* Hide all scrollbars in native — gesture-driven scroll only */
+::-webkit-scrollbar { display: none !important; }
+* { scrollbar-width: none !important; }
+
+/* ── 13. View transition — snappier on mobile ────────────────── */
+.view.active {
+  animation: mobileViewIn 0.22s cubic-bezier(0.25, 1, 0.4, 1) !important;
+}
+@keyframes mobileViewIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── 14. Tables ──────────────────────────────────────────────── */
 .table-card,
 .data-table-wrap {
   overflow-x: auto !important;
   -webkit-overflow-scrolling: touch !important;
   border-radius: 12px !important;
-  margin-bottom: 12px !important;
+  margin-bottom: 10px !important;
 }
 .data-table th,
-.data-table td { font-size: 0.72rem !important; padding: 8px 10px !important; }
+.data-table td {
+  font-size: 0.71rem !important;
+  padding: 8px 10px !important;
+}
 
-/* ── 10. Base buttons ─────────────────────────────────────── */
-.btn { font-size: 0.78rem !important; }
-.btn--sm {
+/* ── 15. Buttons (global scale-down) ─────────────────────────── */
+.btn       { font-size: 0.78rem !important; }
+.btn--sm   {
   padding: 5px 10px !important;
-  font-size: 0.72rem !important;
+  font-size: 0.73rem !important;
   min-height: 32px !important;
 }
 
-/* ── 11. Invest guide strip ───────────────────────────────── */
+/* ── 16. Invest guide strip ──────────────────────────────────── */
 .invest-guide-strip {
   flex-wrap: wrap !important;
   gap: 8px !important;
@@ -242,34 +382,16 @@ html, body {
   font-size: 0.72rem !important;
 }
 
-/* ── 12. Section headings ─────────────────────────────────── */
-.section-title,
-.panel__title,
-h2, h3 {
-  font-size: 0.88rem !important;
-}
-
-/* ── 13. Tag/pill rows ────────────────────────────────────── */
-.investor-tags,
-.ph-tags,
-.card-tags,
-.tag-row {
+/* ── 17. Tag / pill rows ─────────────────────────────────────── */
+.investor-tags, .ph-tags, .card-tags, .tag-row {
   flex-wrap: wrap !important;
   gap: 4px !important;
+  overflow: visible !important;
 }
 
-/* ── 14. Grid overrides ───────────────────────────────────── */
-@media (max-width: 600px) {
-  [class*="grid--sidebar"],
-  [class*="grid-layout--sidebar"] {
-    grid-template-columns: 1fr !important;
-  }
-  .grid-2, .grid-3 {
-    grid-template-columns: 1fr !important;
-  }
-  /* Text: prevent long strings from overflowing */
-  p, span, li, td, th {
-    word-break: break-word;
-    overflow-wrap: break-word;
-  }
+/* ── 18. Grids ───────────────────────────────────────────────── */
+[class*="grid--sidebar"],
+[class*="grid-layout--sidebar"],
+.grid-2, .grid-3 {
+  grid-template-columns: 1fr !important;
 }
