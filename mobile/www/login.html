@@ -625,7 +625,7 @@
           <label class="form-label" for="emailInput">Email Address</label>
           <div class="form-input-wrap">
             <i class="fa-solid fa-envelope form-input-icon"></i>
-            <input type="email" id="emailInput" class="form-input" placeholder="your@email.co.za" required autocomplete="email" />
+            <input type="text" inputmode="email" id="emailInput" class="form-input" placeholder="your@email.co.za" required autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false" />
           </div>
         </div>
 
@@ -701,7 +701,7 @@
             <label class="form-label" for="forgotEmailInput">Email Address</label>
             <div class="form-input-wrap">
               <i class="fa-solid fa-envelope form-input-icon"></i>
-              <input type="email" id="forgotEmailInput" class="form-input" placeholder="your@email.co.za" autocomplete="email"
+              <input type="text" inputmode="email" id="forgotEmailInput" class="form-input" placeholder="your@email.co.za" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false"
                      onkeydown="if(event.key==='Enter')submitForgotPassword()" />
             </div>
           </div>
