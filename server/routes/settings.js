@@ -2,7 +2,7 @@
 
 const express = require('express');
 const router  = express.Router();
-const db      = require('../db/setup');
+const db      = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
 const RBAC_KEY = 'rbac_matrix';
