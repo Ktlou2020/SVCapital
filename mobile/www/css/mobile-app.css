@@ -11,6 +11,44 @@ html, body {
 /* Prevent any element from breaking out of the viewport */
 * { box-sizing: border-box; }
 
+/* ── Welcome Banner: two-row layout on all native screens ──
+   Row 1: avatar + info (name + chips)
+   Row 2: action buttons full-width
+   ── */
+.welcome-banner {
+  flex-wrap: wrap !important;
+  gap: 10px 14px !important;
+  padding: 16px !important;
+  overflow: visible !important;
+}
+.welcome-avatar {
+  flex-shrink: 0 !important;
+}
+.welcome-info {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+/* Chips scroll horizontally rather than overflowing the banner */
+.welcome-chips {
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: none !important;
+  padding-bottom: 2px !important;
+}
+.welcome-chips::-webkit-scrollbar { display: none !important; }
+/* Actions always sit on their own full-width row */
+.welcome-actions {
+  flex: 0 0 100% !important;
+  width: 100% !important;
+  display: flex !important;
+}
+.welcome-actions .btn {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
 /* ── Invest guide strip: allow wrapping on small screens ── */
 .invest-guide-strip {
   flex-wrap: wrap !important;
