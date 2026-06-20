@@ -60,6 +60,11 @@ body.dark-mode { background-color: #0d1117 !important; }
   -webkit-animation: none !important;
   opacity: 1 !important;
   transform: none !important;
+  /* Force the active view into its own GPU compositing layer so it paints
+     independently of any position:fixed overlay (e.g. the tour overlay).
+     Without this, older Android WebViews sometimes skip repainting content
+     that is "behind" a fixed transparent overlay, producing a blank screen. */
+  will-change: opacity;
 }
 /* Redefine viewFadeIn as a no-op so Android WebView never renders the from{opacity:0} frame */
 @-webkit-keyframes viewFadeIn {
