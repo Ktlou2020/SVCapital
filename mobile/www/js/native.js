@@ -181,9 +181,9 @@
   function _hideCover() {
     const cover = document.getElementById('_nativeCover');
     if (!cover) return;
-    cover.style.transition = 'opacity 0.25s';
+    cover.style.pointerEvents = 'none';
     cover.style.opacity = '0';
-    setTimeout(() => { if (cover.parentNode) cover.parentNode.removeChild(cover); }, 280);
+    setTimeout(() => { try { cover.remove(); } catch (_) {} }, 50);
   }
 
   /* Expose globally so portal.js DOMContentLoaded can call it after data loads */
