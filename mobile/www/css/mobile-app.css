@@ -370,15 +370,22 @@ input, textarea, [contenteditable] {
 
 /* ─────────────────────────────────────────────────────────────
    16. Form inputs
+   iOS auto-zooms when any input has font-size < 16px — set 16px
+   on all native elements to prevent zoom without affecting layout.
    ───────────────────────────────────────────────────────────── */
+input, textarea, select {
+  font-size: 16px !important;
+}
 .form-input,
 .form-select,
 .form-textarea {
-  font-size: 0.82rem !important; padding: 9px 11px !important; border-radius: 8px !important;
+  font-size: 16px !important; padding: 9px 11px !important; border-radius: 8px !important;
   width: 100% !important; max-width: 100% !important;
 }
 .form-group label, .form-label { font-size: 0.75rem !important; }
 select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !important; }
+/* Hide auto-save meta text — overlaps "Personal Information" heading on mobile */
+#profileSaveMeta { display: none !important; }
 
 /* ─────────────────────────────────────────────────────────────
    17. Modals — bottom sheet pattern
@@ -514,3 +521,63 @@ h3 { font-size: 0.9rem !important; }
 .panel__body, .modal__body, #paymentModalBox, .sidebar__nav {
   -webkit-overflow-scrolling: touch;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   22. Dark mode — ensure text is visible on all screens
+   ───────────────────────────────────────────────────────────── */
+body.dark-mode {
+  color: #e2e8f0 !important;
+}
+body.dark-mode h1, body.dark-mode h2, body.dark-mode h3,
+body.dark-mode h4, body.dark-mode h5, body.dark-mode h6 {
+  color: #e2e8f0 !important;
+}
+body.dark-mode p,
+body.dark-mode span:not(.badge):not(.tag),
+body.dark-mode li,
+body.dark-mode td, body.dark-mode th { color: #e2e8f0 !important; }
+body.dark-mode .text-muted,
+body.dark-mode .info-list__label,
+body.dark-mode .form-group label,
+body.dark-mode small { color: #6b7280 !important; }
+/* Info lists (profile / security page) */
+body.dark-mode .info-list__item { border-color: rgba(255,255,255,0.06) !important; }
+body.dark-mode .info-list__value { color: #e2e8f0 !important; }
+/* Security / login rows */
+body.dark-mode .login-history-item,
+body.dark-mode .security-row,
+body.dark-mode .setting-row {
+  background: #161b27 !important;
+  border-color: rgba(255,255,255,0.07) !important;
+  color: #e2e8f0 !important;
+}
+body.dark-mode .login-history-item .text-muted { color: #6b7280 !important; }
+/* Toggles / sliders */
+body.dark-mode .toggle-label { color: #e2e8f0 !important; }
+body.dark-mode .toggle-desc  { color: #9ca3af !important; }
+/* Buttons */
+body.dark-mode .btn--secondary,
+body.dark-mode .btn--outline {
+  background: rgba(255,255,255,0.07) !important;
+  border-color: rgba(255,255,255,0.12) !important;
+  color: #d1d5db !important;
+}
+/* Form inputs in dark mode */
+body.dark-mode input,
+body.dark-mode textarea,
+body.dark-mode select {
+  background: #1c2128 !important;
+  border-color: rgba(255,255,255,0.1) !important;
+  color: #e2e8f0 !important;
+}
+body.dark-mode input::placeholder,
+body.dark-mode textarea::placeholder { color: #4b5563 !important; }
+/* Sections / cards not already covered */
+body.dark-mode .section-card,
+body.dark-mode .summary-card,
+body.dark-mode .info-card {
+  background: #161b27 !important;
+  border-color: rgba(255,255,255,0.07) !important;
+}
+/* Toast / modal drag handle in dark */
+body.dark-mode .modal__header::before { background: rgba(255,255,255,0.2) !important; }

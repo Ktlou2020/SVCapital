@@ -8354,6 +8354,15 @@ async function togglePushNotifications(checked) {
   const statusText = document.getElementById('pushNotifStatusText');
 
   if (checked) {
+    // Native Capacitor app — push is managed by native.js on startup
+    if (window.__SVC_NATIVE__) {
+      localStorage.setItem(PUSH_PREF_KEY, 'true');
+      if (slider) slider.style.background = '#ff9b0c';
+      if (statusText) statusText.textContent = 'Enabled — you will receive investment alerts';
+      Toast.success('Push notifications enabled!');
+      return;
+    }
+
     // Check browser support
     if (!('Notification' in window)) {
       Toast.info('Push notifications are not supported in this browser. Install the SV Capital app (PWA) for notifications.');
