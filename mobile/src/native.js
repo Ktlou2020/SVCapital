@@ -47,7 +47,7 @@
       el = document.createElement('div');
       el.id = '_nativeOfflineBanner';
       el.style.cssText = [
-        'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:99999',
+        'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:9999',
         'background:#ef4444', 'color:#fff', 'font-size:13px', 'font-weight:600',
         'text-align:center', 'padding:8px', 'letter-spacing:0.02em',
       ].join(';');
@@ -189,32 +189,31 @@
   /* Expose globally so portal.js DOMContentLoaded can call it after data loads */
   window.__SVC_HIDE_COVER = _hideCover;
 
-  /* Safety fallback: always remove the cover after 6 s regardless */
-  setTimeout(_hideCover, 6000);
+  /* Safety fallback: always remove the cover after 10 s regardless.
+     Railway cold-starts can take 5-8 s; 10 s gives the retry logic time to work. */
+  setTimeout(_hideCover, 10000);
 
   /* ── Init ───────────────────────────────────────── */
   async function init() {
-    try {
-      await initStatusBar();
-      await initNetwork();
-      initHaptics();
-      initDarkModeSync();
-      initNavScrollToTop();
-      initBackButton();
-      initAppLifecycle();
-      await initPush();
+    // Each plugin is wrapped independently — one failure must not block others.
+    await initStatusBar().catch(e => console.warn('[native] StatusBar init failed:', e));
+    await initNetwork().catch(e => console.warn('[native] Network init failed:', e));
+    try { initHaptics();        } catch (e) { console.warn('[native] Haptics init failed:', e); }
+    try { initDarkModeSync();   } catch (e) { console.warn('[native] DarkModeSync init failed:', e); }
+    try { initNavScrollToTop(); } catch (e) { console.warn('[native] NavScrollToTop init failed:', e); }
+    try { initBackButton();     } catch (e) { console.warn('[native] BackButton init failed:', e); }
+    try { initAppLifecycle();   } catch (e) { console.warn('[native] AppLifecycle init failed:', e); }
+    await initPush().catch(e => console.warn('[native] Push init failed:', e));
 
+    try {
       if (document.readyState !== 'loading') {
         await hideSplash();
       } else {
         document.addEventListener('DOMContentLoaded', hideSplash);
       }
+    } catch (e) { console.warn('[native] hideSplash failed:', e); }
 
-      console.log('[native] SV Capital native bridge initialised');
-    } catch (err) {
-      console.error('[native] Init error:', err);
-      hideSplash().catch(() => {});
-    }
+    console.log('[native] SV Capital native bridge initialised');
   }
 
   init();
