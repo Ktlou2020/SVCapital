@@ -1223,6 +1223,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (_) {}
 
   await loadPortalData();
+  // Reveal content — remove the native loading cover now that data is ready
+  if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
   // Generate notifications from real data
   loadNotifications();
   checkFirstDepositPrompt();

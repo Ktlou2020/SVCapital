@@ -514,20 +514,11 @@ body.dark-mode .mbn-item.active { color: #ff9b0c !important; }
    gets stuck at the 'from' keyframe (opacity:0), leaving the
    view permanently invisible. Instant switch is more reliable.
    ───────────────────────────────────────────────────────────── */
-
-/* Re-declare viewFadeIn as a no-op: even if animation somehow fires, no opacity/transform change */
-@keyframes viewFadeIn {
-  from { opacity: 1; transform: none; }
-  to   { opacity: 1; transform: none; }
-}
-
 .view.active {
   display: block !important;
   animation: none !important;
   -webkit-animation: none !important;
   opacity: 1 !important;
-  visibility: visible !important;
-  transform: none !important;
 }
 
 /* ─────────────────────────────────────────────────────────────

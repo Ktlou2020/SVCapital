@@ -177,6 +177,21 @@
     });
   }
 
+  /* ── Loading cover (white overlay that masks initial skeleton flash) ── */
+  function _hideCover() {
+    const cover = document.getElementById('_nativeCover');
+    if (!cover) return;
+    cover.style.transition = 'opacity 0.25s';
+    cover.style.opacity = '0';
+    setTimeout(() => { if (cover.parentNode) cover.parentNode.removeChild(cover); }, 280);
+  }
+
+  /* Expose globally so portal.js DOMContentLoaded can call it after data loads */
+  window.__SVC_HIDE_COVER = _hideCover;
+
+  /* Safety fallback: always remove the cover after 6 s regardless */
+  setTimeout(_hideCover, 6000);
+
   /* ── Init ───────────────────────────────────────── */
   async function init() {
     try {
