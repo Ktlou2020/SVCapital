@@ -91,6 +91,13 @@ input, textarea, [contenteditable] {
 ::-webkit-scrollbar { display: none !important; }
 * { scrollbar-width: none !important; }
 
+/* Kill modal-overlay opacity flash + transition on native WebView.
+   The opacity:0 default + CSS transition creates a GPU compositing layer
+   that can cause a blank frame. Use display:none instead. */
+.modal-overlay {
+  transition: none !important;
+}
+
 /* ─────────────────────────────────────────────────────────────
    2. Topbar — shrink to fit, collapse low-priority actions
    ───────────────────────────────────────────────────────────── */

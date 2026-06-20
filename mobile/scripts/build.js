@@ -138,6 +138,16 @@ for (const htmlFile of htmlFilesToPatch) {
     console.log('[build] Injected loading cover into index.html');
   }
 
+  // Patch tourSpotlight to start hidden so the 9999px box-shadow doesn't
+  // create a full-screen dark overlay before _positionTour() runs
+  if (htmlFile === 'index.html') {
+    html = html.replace(
+      '<div id="tourSpotlight"></div>',
+      '<div id="tourSpotlight" style="display:none"></div>'
+    );
+    // Idempotent: if already patched, the replace is a no-op
+  }
+
   fs.writeFileSync(htmlPath, html, 'utf8');
 }
 

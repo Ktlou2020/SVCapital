@@ -5621,12 +5621,14 @@ function checkFirstDepositPrompt() {
 
   // Show with a short delay so overview loads first
   setTimeout(() => {
-    document.getElementById('depositPromptModal').style.display = 'flex';
+    const m = document.getElementById('depositPromptModal');
+    if (m) { m.style.display = 'flex'; m.classList.add('open'); }
   }, 2500);
 }
 
 function dismissDepositPrompt(never) {
-  document.getElementById('depositPromptModal').style.display = 'none';
+  const m = document.getElementById('depositPromptModal');
+  if (m) { m.style.display = 'none'; m.classList.remove('open'); }
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
   if (never) {
     localStorage.setItem(`svc_deposit_never_${investorId}`, '1');
