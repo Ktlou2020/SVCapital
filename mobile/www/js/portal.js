@@ -1114,10 +1114,13 @@ function closeSidebar() {
 }
 
 function navigate(view, btnEl) {
-  // Add active to target FIRST so there's always at least one visible view —
-  // removes the white-frame moment where all views are simultaneously display:none
   const el = document.getElementById(`view-${view}`);
-  if (el) el.classList.add('active');
+  // Guard: unknown view → bail out entirely rather than stripping .active from
+  // every view and leaving a fully blank screen.
+  if (!el) { console.warn('[navigate] unknown view:', view); return; }
+  // Add .active FIRST so there is always at least one visible view — removes
+  // the white-frame moment where all views are simultaneously display:none.
+  el.classList.add('active');
   document.querySelectorAll('.view').forEach(v => { if (v !== el) v.classList.remove('active'); });
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (btnEl) btnEl.classList.add('active');
