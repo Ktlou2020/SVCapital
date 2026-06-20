@@ -50,6 +50,24 @@ body.dark-mode { background-color: #0d1117 !important; }
   box-sizing: border-box !important;
   animation: none !important;
   -webkit-animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+.view.active {
+  display: block !important;
+  animation: none !important;
+  -webkit-animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+/* Redefine viewFadeIn as a no-op so Android WebView never renders the from{opacity:0} frame */
+@-webkit-keyframes viewFadeIn {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes viewFadeIn {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 1; transform: none; }
 }
 
 /* ─────────────────────────────────────────────────────────────

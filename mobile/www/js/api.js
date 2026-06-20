@@ -104,7 +104,7 @@ const Auth = {
    * Calling Auth.clear() logs out from both auth systems.
    */
   clear() {
-    ['svc_token', 'svc_user'].forEach(k => {
+    ['svc_token', 'svc_user', 'svc_portal_cache'].forEach(k => {
       localStorage.removeItem(k);
       sessionStorage.removeItem(k);
     });
