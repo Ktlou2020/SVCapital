@@ -395,7 +395,9 @@ input, textarea, [contenteditable] {
    iOS auto-zooms when any input has font-size < 16px — set 16px
    on all native elements to prevent zoom without affecting layout.
    ───────────────────────────────────────────────────────────── */
-input, textarea, select {
+input, textarea, select,
+/* Catch inline-styled inputs that portal.js renders dynamically */
+input[style], textarea[style], select[style] {
   font-size: 16px !important;
 }
 .form-input,
@@ -435,7 +437,7 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
 .modal__header { padding: 14px 16px !important; flex-shrink: 0 !important; }
 .modal__title  { font-size: 0.95rem !important; }
 .modal__body   { flex: 1 !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; padding: 14px 16px !important; }
-.modal__footer { padding: 12px 16px !important; flex-shrink: 0 !important; }
+.modal__footer { padding: 12px 16px max(12px, env(safe-area-inset-bottom, 0px)) !important; flex-shrink: 0 !important; }
 
 /* ─────────────────────────────────────────────────────────────
    18. Payment modal — centred card on both iOS and Android

@@ -29,8 +29,8 @@
       "launchAutoHide": true
     },
     "StatusBar": {
-      "style": "Dark",
-      "backgroundColor": "#0f1623",
+      "style": "Light",
+      "backgroundColor": "#ffffff",
       "overlaysWebView": false
     },
     "PushNotifications": {

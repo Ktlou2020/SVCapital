@@ -1199,6 +1199,9 @@ function _startPolling() {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && _pollTimer) {} });
 
+// Expose stop function so Auth.logout() can kill the interval before redirecting
+window._stopPolling = function () { if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; } };
+
 document.addEventListener('DOMContentLoaded', async () => {
   Toast.init();
   initDarkMode();
@@ -1347,8 +1350,9 @@ async function loadPortalData(_attempt = 0) {
       return loadPortalData(_attempt + 1);
     }
 
-    // All attempts exhausted — show whatever partial data we have
+    // All attempts exhausted — show whatever partial data we have and hide cover
     try { renderOverview(); } catch (_) {}
+    if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
     Toast.error('Could not connect to server — pull down to refresh');
   }
 }
@@ -7922,7 +7926,7 @@ async function _loadStatementArchive() {
     el.innerHTML = taxSection + `<div style="display:flex;flex-direction:column;gap:6px">${data.statements.map(s => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface2,#f8f9fa);border-radius:8px">
         <div style="font-size:0.84rem;font-weight:600">${months[s.period_month-1]} ${s.period_year} Statement</div>
-        <a href="/api/statements/${s.id}/pdf" target="_blank" class="btn btn--ghost btn--sm" style="font-size:0.75rem"><i class="fa-solid fa-download"></i> PDF</a>
+        <a href="${(window.__SVC_API_BASE__ || '/api/')}statements/${s.id}/pdf" target="_blank" class="btn btn--ghost btn--sm" style="font-size:0.75rem"><i class="fa-solid fa-download"></i> PDF</a>
       </div>`).join('')}</div>`;
   } catch (_) {
     if (el) el.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:12px 0">Unable to load statements</div>';

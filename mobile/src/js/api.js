@@ -7,6 +7,9 @@
 
 /* ─── Session-expired overlay (native app only) ─── */
 function _showSessionExpiredOverlay() {
+  // Hide loading cover immediately — must happen before anything else so
+  // the white cover isn't blocking the overlay.
+  if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
   if (document.getElementById('_svcSessionExpired')) return;
   const el = document.createElement('div');
   el.id = '_svcSessionExpired';
@@ -16,11 +19,12 @@ function _showSessionExpiredOverlay() {
       <div style="font-size:2.5rem;margin-bottom:16px">🔒</div>
       <div style="color:#fff;font-weight:800;font-size:1.1rem;margin-bottom:8px">Session Expired</div>
       <div style="color:#9ca3af;font-size:0.85rem;line-height:1.6;margin-bottom:24px">Your session has expired. Please log in again to continue.</div>
-      <button onclick="Auth.logout('/login.html')" style="background:#ff9b0c;color:#000;border:none;border-radius:12px;padding:14px 32px;font-weight:800;font-size:0.95rem;cursor:pointer;width:100%">Log In Again</button>
+      <button id="_svcSessionExpiredBtn" style="background:#ff9b0c;color:#000;border:none;border-radius:12px;padding:14px 32px;font-weight:800;font-size:0.95rem;cursor:pointer;width:100%">Log In Again</button>
     </div>`;
   document.body.appendChild(el);
-  // Also remove the loading cover if still showing
-  if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
+  document.getElementById('_svcSessionExpiredBtn').addEventListener('click', function () {
+    try { Auth.logout('/login.html'); } catch (_) { window.location.href = '/login.html'; }
+  });
 }
 
 /* ─── API Base URL ─── */
@@ -193,6 +197,8 @@ const Auth = {
    */
   async logout(redirectTo = '/login.html') {
     if (typeof window !== 'undefined' && window.SVC) SVC.track('svc_logout', {});
+    // Stop background polling so no further API calls fire after logout
+    if (typeof window !== 'undefined' && window._stopPolling) window._stopPolling();
     try {
       await fetch(`${_API_BASE}auth/logout`, { method: 'POST', credentials: 'include' });
     } catch (_) {}
