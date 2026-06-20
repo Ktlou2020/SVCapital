@@ -430,15 +430,22 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
 .modal__footer { padding: 12px 16px !important; flex-shrink: 0 !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   18. Payment modal
+   18. Payment modal — centred card on both iOS and Android
    ───────────────────────────────────────────────────────────── */
-#topUpModal.modal-overlay { align-items: flex-end !important; padding: 0 !important; }
+#topUpModal.modal-overlay {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px !important;
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
+}
 #paymentModalBox {
-  width: 100% !important; max-width: 100% !important;
-  max-height: 95vh !important;
-  border-radius: 20px 20px 0 0 !important;
+  /* Let the natural inline max-width:520px work; just constrain to viewport */
+  width: min(92vw, 500px) !important;
+  max-width: 500px !important;
+  max-height: min(88vh, 680px) !important;
+  border-radius: 16px !important;
   overflow-y: auto !important; -webkit-overflow-scrolling: touch !important;
-  margin: 0 !important;
+  margin: 0 auto !important;
 }
 #pmAmountChips {
   grid-template-columns: repeat(4, 1fr) !important; gap: 6px !important;
