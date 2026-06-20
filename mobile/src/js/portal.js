@@ -1121,12 +1121,27 @@ function navigate(view, btnEl) {
   // Add .active FIRST so there is always at least one visible view — removes
   // the white-frame moment where all views are simultaneously display:none.
   el.classList.add('active');
+  // On Android WebView, force inline styles so the CSS animation never wins
+  // over a blank opacity:0 frame — the GPU compositing layer created by any
+  // position:fixed overlay (e.g. tour) can prevent CSS-driven repaints.
+  if (window.__SVC_NATIVE__) {
+    el.style.setProperty('display',             'block', 'important');
+    el.style.setProperty('opacity',             '1',     'important');
+    el.style.setProperty('visibility',          'visible','important');
+    el.style.setProperty('animation',           'none',  'important');
+    el.style.setProperty('-webkit-animation',   'none',  'important');
+    el.style.setProperty('transform',           'none',  'important');
+  }
   document.querySelectorAll('.view').forEach(v => {
     if (v !== el) {
       v.classList.remove('active');
       // Clear any inline styles set by the startup watchdog so CSS display:none applies
       v.style.removeProperty('display');
+      v.style.removeProperty('opacity');
       v.style.removeProperty('visibility');
+      v.style.removeProperty('animation');
+      v.style.removeProperty('-webkit-animation');
+      v.style.removeProperty('transform');
     }
   });
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -1282,21 +1297,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   _startPolling();
   _initPullToRefresh();
 
-  // Watchdog: 100 ms after cover is gone, ensure the active view is visible.
-  // Does NOT set display inline — navigate() must be able to set display:none
-  // on deactivated views and an inline display:block !important would override it.
-  // CSS .view.active { display:block !important } handles the display; the watchdog
-  // only forces opacity/visibility/animation in case of WebView compositing issues.
+  // Watchdog: runs at 100ms, 600ms, and 1500ms to ensure the active view is visible.
+  // Android WebView compositing (esp. with position:fixed overlays) can silently
+  // leave the active view at opacity:0. Running the watchdog at three intervals
+  // catches races between data-load, cover-hide, and browser paint cycles.
   if (window.__SVC_NATIVE__) {
-    setTimeout(() => {
+    const _forceViewVisible = () => {
       const active = document.querySelector('.view.active');
       if (active) {
-        active.style.setProperty('opacity',    '1',       'important');
-        active.style.setProperty('visibility', 'visible', 'important');
-        active.style.setProperty('transform',  'none',    'important');
-        active.style.setProperty('animation',  'none',    'important');
+        active.style.setProperty('display',           'block',   'important');
+        active.style.setProperty('opacity',           '1',       'important');
+        active.style.setProperty('visibility',        'visible', 'important');
+        active.style.setProperty('transform',         'none',    'important');
+        active.style.setProperty('animation',         'none',    'important');
+        active.style.setProperty('-webkit-animation', 'none',    'important');
       }
-    }, 100);
+    };
+    setTimeout(_forceViewVisible, 100);
+    setTimeout(_forceViewVisible, 600);
+    setTimeout(_forceViewVisible, 1500);
   }
 });
 
@@ -5410,12 +5429,17 @@ let _tourStep = 0;
 let _tourActive = false;
 
 function _checkAutoStartTour() {
-  // Use a universal key (not investor-ID-specific) so the tour is dismissed
-  // once across all sessions regardless of which investor ID was active.
-  if (!localStorage.getItem('svc_tour_done')) {
-    // Wait for next paint after overview renders, then start
-    requestAnimationFrame(() => setTimeout(startTour, 400));
-  }
+  if (localStorage.getItem('svc_tour_done')) return;
+  // Guard: only start the tour once investor data has actually loaded into
+  // the view. PORTAL.investor starts as null; loadPortalData() always sets at
+  // least {id} but first_name/email only appear when the API responds. If data
+  // never loads we skip the tour to avoid showing it over blank content.
+  const inv = PORTAL.investor;
+  if (!inv || (!inv.first_name && !inv.last_name && !inv.email)) return;
+  // On native Android give the WebView extra time to composite the painted
+  // content before the overlay appears — prevents blank-screen behind tour.
+  const delay = window.__SVC_NATIVE__ ? 1200 : 400;
+  requestAnimationFrame(() => setTimeout(startTour, delay));
 }
 
 function startTour() {
