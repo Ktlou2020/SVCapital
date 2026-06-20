@@ -1121,7 +1121,14 @@ function navigate(view, btnEl) {
   // Add .active FIRST so there is always at least one visible view — removes
   // the white-frame moment where all views are simultaneously display:none.
   el.classList.add('active');
-  document.querySelectorAll('.view').forEach(v => { if (v !== el) v.classList.remove('active'); });
+  document.querySelectorAll('.view').forEach(v => {
+    if (v !== el) {
+      v.classList.remove('active');
+      // Clear any inline styles set by the startup watchdog so CSS display:none applies
+      v.style.removeProperty('display');
+      v.style.removeProperty('visibility');
+    }
+  });
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (btnEl) btnEl.classList.add('active');
 
@@ -1275,18 +1282,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   _startPolling();
   _initPullToRefresh();
 
-  // Watchdog: 100 ms after cover is gone, force-inject inline styles on the active view.
-  // Guards against any Android WebView compositing bug that leaves the view blank
-  // despite correct CSS being applied.
+  // Watchdog: 100 ms after cover is gone, ensure the active view is visible.
+  // Does NOT set display inline — navigate() must be able to set display:none
+  // on deactivated views and an inline display:block !important would override it.
+  // CSS .view.active { display:block !important } handles the display; the watchdog
+  // only forces opacity/visibility/animation in case of WebView compositing issues.
   if (window.__SVC_NATIVE__) {
     setTimeout(() => {
       const active = document.querySelector('.view.active');
       if (active) {
-        active.style.setProperty('display',     'block',    'important');
-        active.style.setProperty('opacity',     '1',        'important');
-        active.style.setProperty('visibility',  'visible',  'important');
-        active.style.setProperty('transform',   'none',     'important');
-        active.style.setProperty('animation',   'none',     'important');
+        active.style.setProperty('opacity',    '1',       'important');
+        active.style.setProperty('visibility', 'visible', 'important');
+        active.style.setProperty('transform',  'none',    'important');
+        active.style.setProperty('animation',  'none',    'important');
       }
     }, 100);
   }
