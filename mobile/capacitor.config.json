@@ -16,8 +16,7 @@
     "allowMixedContent": false,
     "captureInput": true,
     "webContentsDebuggingEnabled": false,
-    "backgroundColor": "#ffffff",
-    "windowBackground": "#ffffff"
+    "backgroundColor": "#ffffff"
   },
   "ios": {
     "contentInset": "automatic",
