@@ -5410,9 +5410,9 @@ let _tourStep = 0;
 let _tourActive = false;
 
 function _checkAutoStartTour() {
-  const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
-  const key = `svc_tour_done_${investorId}`;
-  if (!localStorage.getItem(key)) {
+  // Use a universal key (not investor-ID-specific) so the tour is dismissed
+  // once across all sessions regardless of which investor ID was active.
+  if (!localStorage.getItem('svc_tour_done')) {
     // Wait for next paint after overview renders, then start
     requestAnimationFrame(() => setTimeout(startTour, 400));
   }
@@ -5452,8 +5452,7 @@ function _endTour(completed) {
   _tourActive = false;
   document.getElementById('tourOverlay').style.display = 'none';
 
-  const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
-  localStorage.setItem(`svc_tour_done_${investorId}`, '1');
+  localStorage.setItem('svc_tour_done', '1');
 
   if (completed) {
     // Award tour XP
