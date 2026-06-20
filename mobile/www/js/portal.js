@@ -3106,12 +3106,25 @@ function closePaymentModal() {
    MARKETPLACE
    ═══════════════════════════════════════════════ */
 async function loadMarketplace() {
-  if (!PORTAL.pools.length) {
-    const res = await API.pools.list({ limit: 100 });
-    PORTAL.pools = res.data || [];
+  try {
+    if (!PORTAL.pools.length) {
+      const res = await API.pools.list({ limit: 100 });
+      PORTAL.pools = res.data || [];
+    }
+  } catch (err) {
+    console.warn('[marketplace] failed to fetch pools:', err);
+    // Render with whatever is cached — show empty state rather than "Loading..."
   }
-  renderMarketplace();
-  SVC.track('view_item_list', { item_list_id: 'marketplace', item_list_name: 'Investment Pools', items: PORTAL.pools.slice(0, 10).map(p => ({ item_id: p.id, item_name: p.name, item_category: p.product_type })) });
+  try {
+    renderMarketplace();
+  } catch (err) {
+    console.error('[marketplace] renderMarketplace failed:', err);
+    const grid = document.getElementById('marketplaceGrid');
+    if (grid) grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fa-solid fa-triangle-exclamation"></i><div class="empty-state__title">Could not load pools</div><div class="empty-state__sub">Pull down to refresh or check your connection.</div></div>`;
+  }
+  try {
+    SVC.track('view_item_list', { item_list_id: 'marketplace', item_list_name: 'Investment Pools', items: PORTAL.pools.slice(0, 10).map(p => ({ item_id: p.id, item_name: p.name, item_category: p.product_type })) });
+  } catch (_) {}
 }
 
 function filterMarket(type, btn) {
@@ -3139,7 +3152,7 @@ function renderMarketplace() {
   const filtered = PORTAL.marketFilter === 'all'
     ? visiblePools
     : visiblePools.filter(p => {
-        if (PORTAL.marketFilter === 'solar') return p.product_type.includes('solar');
+        if (PORTAL.marketFilter === 'solar') return (p.product_type || '').includes('solar');
         return p.product_type === PORTAL.marketFilter;
       });
 
@@ -3295,7 +3308,7 @@ function renderMarketplace() {
             <span>${Utils.rand(pool.raised_amount)} raised</span>
             <span>${pct}% funded</span>
           </div>
-          <div class="progress-bar"><div class="progress-fill${pool.product_type.includes('solar') ? ' progress-fill--green' : pool.product_type === 'short_term' ? ' progress-fill--blue' : ''}" style="width:${pct}%"></div></div>
+          <div class="progress-bar"><div class="progress-fill${(pool.product_type || '').includes('solar') ? ' progress-fill--green' : pool.product_type === 'short_term' ? ' progress-fill--blue' : ''}" style="width:${pct}%"></div></div>
           ${capacityBarHtml}
         </div>
 

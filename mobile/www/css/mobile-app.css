@@ -405,6 +405,9 @@ input, textarea, [contenteditable] {
 .igs-step  { padding: 10px !important; font-size: 0.7rem !important; border-radius: 10px !important; }
 .igs-num   { font-size: 0.65rem !important; width: 18px !important; height: 18px !important; }
 .igs-text span { font-size: 0.62rem !important; }
+/* Dark mode: fix hardcoded #1a1a1a text inside the strip */
+body.dark-mode .igs-text b { color: #e2e8f0 !important; }
+body.dark-mode .igs-step--active .igs-text b { color: #2F8C9B !important; }
 
 /* ─────────────────────────────────────────────────────────────
    15. Buttons
