@@ -1,18 +1,44 @@
 /* ══════════════════════════════════════════════════════════════
    SV Capital — Mobile App Overrides (Capacitor native only)
-   Loaded last. All rules use !important to win inline styles.
+   Loaded last. All rules use !important to beat inline styles.
    ══════════════════════════════════════════════════════════════ */
 
 /* ─────────────────────────────────────────────────────────────
-   0. Viewport lock & base rendering
+   0. Width-containment chain
+   Every ancestor from html → content must declare a known width
+   so children never lay out wider than the viewport.
    ───────────────────────────────────────────────────────────── */
 html, body {
-  overflow-x: hidden !important;
+  width: 100% !important;
   max-width: 100vw !important;
+  overflow-x: hidden !important;
   -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
   -webkit-text-size-adjust: 100% !important;
 }
+.app-layout,
+.main-content {
+  width: 100% !important;
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+.page-content {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+  padding: 10px 12px !important;
+}
+.view {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   1. Global reset — all elements constrained, no tap flash
+   ───────────────────────────────────────────────────────────── */
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
@@ -22,32 +48,19 @@ input, textarea, [contenteditable] {
   -webkit-user-select: text !important;
   user-select: text !important;
 }
-/* All scrollbars hidden — gesture-driven only */
 ::-webkit-scrollbar { display: none !important; }
 * { scrollbar-width: none !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   1. Structural containers — never wider than screen
-   ───────────────────────────────────────────────────────────── */
-.app-layout,
-.main-content,
-.page-content {
-  max-width: 100vw !important;
-  overflow-x: hidden !important;
-}
-.main-content {
-  /* Room for fixed bottom nav + home indicator */
-  padding-bottom: calc(62px + env(safe-area-inset-bottom, 16px)) !important;
-}
-.page-content { padding: 10px 12px !important; }
-
-/* ─────────────────────────────────────────────────────────────
-   2. Topbar
+   2. Topbar — shrink to fit, collapse low-priority actions
    ───────────────────────────────────────────────────────────── */
 .topbar {
   height: 52px !important;
   padding: 0 12px !important;
   gap: 6px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
 }
 .topbar__left {
   flex: 1 1 0 !important;
@@ -66,87 +79,185 @@ input, textarea, [contenteditable] {
   width: 32px !important;
   height: 32px !important;
   font-size: 0.82rem !important;
-  border-radius: 9px !important;
+  flex-shrink: 0 !important;
 }
 #tourBtn,
 .topbar__actions > button[onclick*="openPortalCmd"] { display: none !important; }
 .topbar__actions > a.btn { display: none !important; }
 .topbar__actions { flex-shrink: 0 !important; gap: 4px !important; }
-/* Sign-out → icon only */
+/* Sign-out: icon only */
 .topbar__actions .btn--secondary {
   padding: 5px 8px !important;
   font-size: 0 !important;
   gap: 0 !important;
   min-height: 32px !important;
-  border-radius: 9px !important;
 }
 .topbar__actions .btn--secondary i { font-size: 0.85rem !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   3. Grid system — collapse all multi-column grids to 1 column
+   3. Multi-column grids → single-column block layout
+   Switching display:grid → display:block so children naturally
+   stack at 100% width without any grid implicit-column issues.
    ───────────────────────────────────────────────────────────── */
+.grid-layout,
 .grid-layout--sidebar,
 .grid-2,
 .grid-3 {
-  grid-template-columns: 1fr !important;
-  gap: 12px !important;
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
 }
-.stats-row {
-  grid-template-columns: repeat(2, 1fr) !important;
-  gap: 10px !important;
-  margin-bottom: 10px !important;
+.grid-layout > *,
+.grid-layout--sidebar > *,
+.grid-2 > *,
+.grid-3 > * {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-bottom: 12px !important;
 }
+
+/* Statement inline grid (1fr 340px) */
+.stmt-grid {
+  display: block !important;
+  width: 100% !important;
+}
+.stmt-grid > * {
+  width: 100% !important;
+  margin-bottom: 14px !important;
+}
+
+/* Form rows: single column */
 .form-row--2,
 .form-row--3 {
   grid-template-columns: 1fr !important;
   gap: 10px !important;
 }
-/* Statement-specific inline-grid collapse */
-.stmt-grid {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 14px !important;
-}
-/* Date-range & checkbox grids inside statement */
+
+/* Statement date/checkbox grids: keep 2-col (labels are short) */
 .form-grid-2 {
-  grid-template-columns: 1fr 1fr !important; /* Keep 2-col — these are short labels */
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
   gap: 10px !important;
 }
 
+/* Stats row: keep grid but 2-column */
+.stats-row {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 10px !important;
+  margin-bottom: 10px !important;
+}
+
 /* ─────────────────────────────────────────────────────────────
-   4. Welcome banner
+   4. All card/panel containers — constrained, never wider
+   ───────────────────────────────────────────────────────────── */
+.portfolio-hero,
+.welcome-banner,
+.xp-progress-bar-wrap,
+.table-card,
+.panel,
+.card,
+.section-card,
+.summary-card,
+.section-banner,
+.invest-guide-strip {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow-x: hidden !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   5. Tables — inner scroll, not card-level scroll
+   portal.css sets .table-card { overflow-x: auto } which makes
+   the card expand to fit its content. We override: the card
+   clips (hidden), the inner wrapper scrolls (auto).
+   ───────────────────────────────────────────────────────────── */
+.table-card > div,
+.panel__body,
+.panel__body > * {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  max-width: 100% !important;
+}
+.data-table {
+  font-size: 0.71rem !important;
+  width: max-content !important;  /* Grow as wide as content needs */
+  min-width: 100% !important;      /* At least full-width when few cols */
+  max-width: none !important;
+}
+.data-table th,
+.data-table td {
+  padding: 7px 10px !important;
+  white-space: nowrap !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   6. Portfolio hero — single-column grid, value scaled down
+   ───────────────────────────────────────────────────────────── */
+.portfolio-hero {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  padding: 18px 16px !important;
+  border-radius: 16px !important;
+  margin-bottom: 10px !important;
+  gap: 12px !important;
+}
+.portfolio-hero__right { display: none !important; }
+.portfolio-hero__left,
+.portfolio-hero__stats { grid-column: 1 !important; }
+.portfolio-hero__value { font-size: 1.75rem !important; }
+.portfolio-hero__label { font-size: 0.65rem !important; }
+.portfolio-hero__stats {
+  display: flex !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  flex-wrap: nowrap !important;
+  gap: 16px !important;
+  padding-bottom: 2px !important;
+}
+.ph-stat { flex-shrink: 0 !important; }
+.ph-stat__value { font-size: 0.9rem !important; }
+.ph-stat__label { font-size: 0.6rem !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   7. Welcome banner — two-row layout
    ───────────────────────────────────────────────────────────── */
 .welcome-banner {
+  display: flex !important;
   flex-wrap: wrap !important;
   gap: 8px 10px !important;
   padding: 14px !important;
   margin-bottom: 10px !important;
-  overflow: hidden !important;
   border-radius: 16px !important;
+  align-items: center !important;
 }
 .welcome-avatar {
   width: 44px !important; height: 44px !important;
   font-size: 1rem !important; font-weight: 800 !important;
-  border-radius: 13px !important;
-  flex-shrink: 0 !important;
-  box-shadow: 0 4px 12px rgba(255,155,12,0.28) !important;
+  border-radius: 13px !important; flex-shrink: 0 !important;
 }
-.welcome-info { flex: 1 1 0 !important; min-width: 0 !important; overflow: visible !important; }
-.welcome-greeting { font-size: 0.6rem !important; letter-spacing: 0.07em !important; }
+.welcome-info {
+  flex: 1 1 0 !important; min-width: 0 !important;
+  overflow: hidden !important;
+}
+.welcome-greeting { font-size: 0.6rem !important; }
 .welcome-name {
-  font-size: 1rem !important; font-weight: 900 !important; line-height: 1.2 !important;
+  font-size: 1rem !important; font-weight: 900 !important;
   white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
 }
 .welcome-chips {
+  display: flex !important;
   flex-wrap: nowrap !important;
   overflow-x: auto !important; -webkit-overflow-scrolling: touch !important;
-  scrollbar-width: none !important;
-  gap: 5px !important; margin-top: 6px !important; max-width: 100% !important;
+  gap: 5px !important; margin-top: 6px !important;
+  width: 100% !important;
 }
-.welcome-chips::-webkit-scrollbar { display: none !important; }
 .welcome-chip { font-size: 0.59rem !important; padding: 2px 8px !important; flex-shrink: 0 !important; }
 .welcome-actions {
-  flex: 0 0 100% !important; width: 100% !important; display: flex !important; gap: 8px !important;
+  flex: 0 0 100% !important; width: 100% !important;
+  display: flex !important; gap: 8px !important;
 }
 .welcome-actions .btn {
   flex: 1 !important; min-width: 0 !important;
@@ -154,209 +265,134 @@ input, textarea, [contenteditable] {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   5. XP Progress bar
+   8. XP bar
    ───────────────────────────────────────────────────────────── */
 .xp-progress-bar-wrap {
+  display: flex !important;
   padding: 9px 14px !important; gap: 10px !important;
   margin-bottom: 10px !important; border-radius: 12px !important;
 }
-.xp-level-pill { font-size: 0.65rem !important; padding: 3px 10px !important; }
-.xp-progress-track  { height: 6px !important; }
-.xp-progress-right  { font-size: 0.68rem !important; }
-.xp-progress-next   { font-size: 0.62rem !important; }
+.xp-level-pill { font-size: 0.65rem !important; padding: 3px 10px !important; white-space: nowrap !important; }
+.xp-progress-track { flex: 1 !important; min-width: 0 !important; height: 6px !important; }
+.xp-progress-right  { font-size: 0.68rem !important; white-space: nowrap !important; }
+.xp-progress-next   { font-size: 0.62rem !important; white-space: nowrap !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   6. Stat cards
+   9. Stat cards
    ───────────────────────────────────────────────────────────── */
 .stat-card {
-  padding: 14px 12px !important; gap: 8px !important; border-radius: 14px !important;
+  padding: 14px 12px !important; gap: 8px !important;
+  border-radius: 14px !important; width: 100% !important;
 }
-.stat-card__icon { width: 36px !important; height: 36px !important; font-size: 0.9rem !important; border-radius: 10px !important; }
+.stat-card__icon  { width: 34px !important; height: 34px !important; font-size: 0.85rem !important; border-radius: 10px !important; }
 .stat-card__value { font-size: 1.3rem !important; letter-spacing: -0.02em !important; line-height: 1.1 !important; }
 .stat-card__label  { font-size: 0.6rem !important; }
 .stat-card__change { font-size: 0.6rem !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   7. Portfolio hero
-   ───────────────────────────────────────────────────────────── */
-.portfolio-hero {
-  padding: 18px 16px !important; border-radius: 16px !important; margin-bottom: 10px !important;
-}
-/* Hide the trend chart on mobile — redundant with the numbers */
-.portfolio-hero__right { display: none !important; }
-.portfolio-hero__left  { width: 100% !important; }
-.portfolio-hero__value { font-size: 1.75rem !important; }
-.portfolio-hero__label { font-size: 0.65rem !important; }
-.portfolio-hero__stats {
-  overflow-x: auto !important; -webkit-overflow-scrolling: touch !important;
-  flex-wrap: nowrap !important; gap: 16px !important; padding-bottom: 2px !important;
-}
-.ph-stat__value { font-size: 0.9rem !important; }
-.ph-stat__label { font-size: 0.6rem !important; }
-
-/* ─────────────────────────────────────────────────────────────
-   8. Panels
+   10. Panels / table cards — spacing
    ───────────────────────────────────────────────────────────── */
 .panel { margin-bottom: 10px !important; border-radius: 14px !important; }
 .panel__header { padding: 11px 14px !important; }
-.panel__title  { font-size: 0.82rem !important; }
+.panel__title  { font-size: 0.82rem !important; flex: 1 !important; min-width: 0 !important; }
 .panel__body   { padding: 12px 14px !important; }
-.table-card    { margin-bottom: 10px !important; border-radius: 14px !important; }
-.table-card__header { padding: 11px 14px !important; }
-.table-card__title  { font-size: 0.82rem !important; }
-.card, .section-card, .summary-card {
-  padding: 12px !important; border-radius: 12px !important; margin-bottom: 10px !important; max-width: 100% !important;
-}
+.table-card { margin-bottom: 10px !important; border-radius: 14px !important; }
+.table-card__header { padding: 11px 14px !important; gap: 8px !important; }
+.table-card__title  { font-size: 0.82rem !important; min-width: 0 !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+.panel__header .btn,
+.table-card__header .btn { flex-shrink: 0 !important; white-space: nowrap !important; }
 .mb-20 { margin-bottom: 10px !important; }
 .mt-16 { margin-top: 10px !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   9. Tables — all scrollable, font and padding trimmed
-   ───────────────────────────────────────────────────────────── */
-[style*="overflow-x:auto"],
-.data-table-wrap,
-.table-card > div { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
-.data-table { font-size: 0.71rem !important; min-width: 420px; }
-.data-table th,
-.data-table td { padding: 7px 10px !important; white-space: nowrap !important; }
-
-/* ─────────────────────────────────────────────────────────────
-   10. Charts — ensure responsive containers
+   11. Charts — responsive within their containers
    ───────────────────────────────────────────────────────────── */
 .chart-wrap {
-  width: 100% !important; max-width: 100% !important; overflow: hidden !important;
+  width: 100% !important; max-width: 100% !important;
+  overflow: hidden !important;
 }
-/* Reduce height of analytics chart on mobile */
-#analyticsMonthlyChart { max-height: 180px !important; }
-/* Allocation chart in overview sidebar (now full-width) */
-#allocationChart { max-height: 180px !important; }
-/* Analytics allocation donut */
-#analyticsAllocChart { max-height: 180px !important; }
+/* Cap chart heights on mobile */
+.chart-wrap[style*="height:240px"] { height: 190px !important; }
+.chart-wrap[style*="height:180px"] { height: 150px !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   11. Tab bars — horizontal scroll when tabs overflow
+   12. Tab bars — horizontal scroll
    ───────────────────────────────────────────────────────────── */
 .tab-bar {
+  display: flex !important;
   overflow-x: auto !important; -webkit-overflow-scrolling: touch !important;
   white-space: nowrap !important;
   width: 100% !important; max-width: 100% !important;
+  flex-wrap: nowrap !important;
 }
-.tab-btn { flex-shrink: 0 !important; padding: 6px 14px !important; font-size: 0.75rem !important; }
+.tab-btn {
+  flex-shrink: 0 !important;
+  padding: 6px 14px !important; font-size: 0.75rem !important;
+}
 
 /* ─────────────────────────────────────────────────────────────
-   12. Section banners (marketplace header row)
+   13. Section banner (marketplace header)
    ───────────────────────────────────────────────────────────── */
 .section-banner {
-  flex-direction: column !important;
-  align-items: flex-start !important;
-  gap: 10px !important;
-  padding: 14px !important;
-  border-radius: 12px !important;
-  margin-bottom: 10px !important;
+  flex-direction: column !important; align-items: flex-start !important;
+  gap: 10px !important; padding: 14px !important;
+  border-radius: 12px !important; margin-bottom: 10px !important;
+  width: 100% !important;
 }
 .section-banner__title { font-size: 1rem !important; }
 .section-banner__sub   { font-size: 0.75rem !important; line-height: 1.4 !important; }
+.section-banner > div { width: 100% !important; flex-wrap: wrap !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   13. Invest guide strip
+   14. Invest guide strip — 2x2 grid
    ───────────────────────────────────────────────────────────── */
 .invest-guide-strip {
   display: grid !important;
   grid-template-columns: 1fr 1fr !important;
-  gap: 8px !important;
-  padding: 10px !important;
-  margin-bottom: 10px !important;
+  gap: 8px !important; padding: 10px !important; margin-bottom: 10px !important;
 }
-/* Hide the arrow dividers between steps */
 .igs-arrow { display: none !important; }
-.igs-step {
-  padding: 10px !important;
-  font-size: 0.7rem !important;
-  border-radius: 10px !important;
-  min-width: 0 !important;
-}
-.igs-num { font-size: 0.65rem !important; width: 18px !important; height: 18px !important; }
+.igs-step  { padding: 10px !important; font-size: 0.7rem !important; border-radius: 10px !important; }
+.igs-num   { font-size: 0.65rem !important; width: 18px !important; height: 18px !important; }
 .igs-text span { font-size: 0.62rem !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   14. Marketplace pool cards (grid-3)
+   15. Buttons
    ───────────────────────────────────────────────────────────── */
-#marketplaceGrid.grid-3,
-#myInvestmentsGrid.grid-3 {
-  grid-template-columns: 1fr !important;
+.btn     { font-size: 0.78rem !important; }
+.btn--sm { padding: 5px 10px !important; font-size: 0.73rem !important; min-height: 32px !important; }
+.btn:active:not(:disabled) {
+  transform: scale(0.96) !important;
+  transition: transform 0.08s ease !important;
 }
 
 /* ─────────────────────────────────────────────────────────────
-   15. Wallet view
+   16. Form inputs
    ───────────────────────────────────────────────────────────── */
-.wallet-card { border-radius: 14px !important; padding: 18px !important; }
-.wallet-balance { font-size: 1.6rem !important; }
-
-/* ─────────────────────────────────────────────────────────────
-   16. Profile — form inputs
-   ───────────────────────────────────────────────────────────── */
-.form-group label,
-.form-label { font-size: 0.75rem !important; }
 .form-input,
 .form-select,
 .form-textarea {
-  font-size: 0.82rem !important;
-  padding: 9px 11px !important;
-  border-radius: 8px !important;
+  font-size: 0.82rem !important; padding: 9px 11px !important; border-radius: 8px !important;
+  width: 100% !important; max-width: 100% !important;
 }
+.form-group label, .form-label { font-size: 0.75rem !important; }
+select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   17. Statement view — specific overrides
-   ───────────────────────────────────────────────────────────── */
-#view-statement h2[style] { font-size: 1.1rem !important; }
-
-/* ─────────────────────────────────────────────────────────────
-   18. Quests view
-   ───────────────────────────────────────────────────────────── */
-.xp-hero {
-  flex-wrap: wrap !important; gap: 12px !important; padding: 16px !important;
-}
-.xp-hero__level { flex: 0 0 100% !important; text-align: center !important; }
-.level-track {
-  overflow-x: auto !important; -webkit-overflow-scrolling: touch !important;
-  gap: 0 !important;
-}
-.rewards-stat { min-width: 80px !important; flex: 1 !important; }
-.rewards-stat__value { font-size: 1.1rem !important; }
-.rewards-stat__label { font-size: 0.6rem !important; }
-
-/* ─────────────────────────────────────────────────────────────
-   19. Referral view
-   ───────────────────────────────────────────────────────────── */
-.referral-code-box {
-  font-size: 1.2rem !important; letter-spacing: 0.12em !important; padding: 14px !important;
-}
-.share-btns { flex-wrap: wrap !important; gap: 8px !important; }
-.share-btn   { flex: 1 1 auto !important; min-width: 80px !important; font-size: 0.72rem !important; }
-
-/* ─────────────────────────────────────────────────────────────
-   20. Modals — proper mobile sizing & scrolling
+   17. Modals — bottom sheet pattern
    ───────────────────────────────────────────────────────────── */
 .modal-overlay {
-  align-items: flex-end !important;    /* sheet slides up from bottom */
+  align-items: flex-end !important;
   padding: 0 !important;
 }
 .modal {
-  width: 100% !important;
-  max-width: 100% !important;
+  width: 100% !important; max-width: 100% !important;
   max-height: 92vh !important;
   border-radius: 20px 20px 0 0 !important;
-  overflow: hidden !important;
-  display: flex !important;
-  flex-direction: column !important;
   margin: 0 !important;
+  overflow: hidden !important;
+  display: flex !important; flex-direction: column !important;
 }
-.modal__header {
-  padding: 14px 16px !important;
-  flex-shrink: 0 !important;
-  position: relative !important;
-}
-/* Drag handle pill on modal sheets */
 .modal__header::before {
   content: '' !important;
   display: block !important;
@@ -365,120 +401,79 @@ input, textarea, [contenteditable] {
   border-radius: 2px !important;
   margin: 0 auto 12px !important;
 }
-.modal__body {
-  flex: 1 !important;
-  overflow-y: auto !important;
-  -webkit-overflow-scrolling: touch !important;
-  padding: 14px 16px !important;
-}
-.modal__footer {
-  padding: 12px 16px !important;
-  flex-shrink: 0 !important;
-}
-.modal__title { font-size: 0.95rem !important; }
+.modal__header { padding: 14px 16px !important; flex-shrink: 0 !important; }
+.modal__title  { font-size: 0.95rem !important; }
+.modal__body   { flex: 1 !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; padding: 14px 16px !important; }
+.modal__footer { padding: 12px 16px !important; flex-shrink: 0 !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   21. Payment modal (dark-themed top-up sheet)
+   18. Payment modal
    ───────────────────────────────────────────────────────────── */
+#topUpModal.modal-overlay { align-items: flex-end !important; padding: 0 !important; }
 #paymentModalBox {
-  width: 100% !important;
-  max-width: 100% !important;
+  width: 100% !important; max-width: 100% !important;
   max-height: 95vh !important;
   border-radius: 20px 20px 0 0 !important;
-  overflow-y: auto !important;
-  -webkit-overflow-scrolling: touch !important;
+  overflow-y: auto !important; -webkit-overflow-scrolling: touch !important;
   margin: 0 !important;
 }
-#topUpModal.modal-overlay { align-items: flex-end !important; padding: 0 !important; }
-/* Amount chips: 4-column works fine (R500, R1k etc are short) */
 #pmAmountChips {
-  grid-template-columns: repeat(4, 1fr) !important;
-  gap: 6px !important;
+  grid-template-columns: repeat(4, 1fr) !important; gap: 6px !important;
 }
-.pm-chip { font-size: 0.72rem !important; padding: 7px 4px !important; border-radius: 8px !important; }
+.pm-chip {
+  font-size: 0.72rem !important; padding: 7px 4px !important; border-radius: 8px !important;
+}
 
 /* ─────────────────────────────────────────────────────────────
-   22. Bottom navigation (`.mbn` — the actual HTML class)
+   19. Bottom navigation — frosted glass, spring active indicator
    ───────────────────────────────────────────────────────────── */
 .mbn {
   position: fixed !important;
   bottom: 0 !important; left: 0 !important; right: 0 !important;
   z-index: 1200 !important;
-  display: flex !important;
-  flex-direction: column !important;
+  display: flex !important; flex-direction: column !important;
+  width: 100% !important; max-width: 100vw !important;
   background: rgba(255,255,255,0.88) !important;
   backdrop-filter: blur(20px) saturate(1.8) !important;
   -webkit-backdrop-filter: blur(20px) saturate(1.8) !important;
   border-top: 1px solid rgba(0,0,0,0.07) !important;
-  box-shadow: 0 -1px 0 rgba(0,0,0,0.04), 0 -8px 24px rgba(0,0,0,0.05) !important;
+  box-shadow: 0 -1px 0 rgba(0,0,0,0.04) !important;
   padding-bottom: env(safe-area-inset-bottom, 0px) !important;
 }
 .mbn-inner { display: flex !important; width: 100% !important; }
 .mbn-item {
   position: relative !important;
-  flex: 1 !important;
-  display: flex !important; flex-direction: column !important;
+  flex: 1 !important; display: flex !important; flex-direction: column !important;
   align-items: center !important; justify-content: center !important;
-  gap: 3px !important;
-  padding: 10px 4px 8px !important;
+  gap: 3px !important; padding: 10px 4px 8px !important;
   background: none !important; border: none !important;
-  cursor: pointer !important;
-  color: #9ca3af !important;
-  font-size: 0.56rem !important; font-weight: 700 !important;
+  color: #9ca3af !important; font-size: 0.56rem !important; font-weight: 700 !important;
   text-transform: uppercase !important; letter-spacing: 0.04em !important;
-  transition: color 0.12s !important;
-  outline: none !important;
+  transition: color 0.12s !important; outline: none !important;
 }
-/* Active indicator: orange top-bar pill with spring-in animation */
 .mbn-item::before {
-  content: '' !important;
-  position: absolute !important;
+  content: '' !important; position: absolute !important;
   top: 0 !important; left: 50% !important;
   transform: translateX(-50%) scaleX(0) !important;
   width: 28px !important; height: 3px !important;
-  background: #ff9b0c !important;
-  border-radius: 0 0 4px 4px !important;
+  background: #ff9b0c !important; border-radius: 0 0 4px 4px !important;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 .mbn-item.active::before { transform: translateX(-50%) scaleX(1) !important; }
-.mbn-item i {
-  font-size: 1.1rem !important;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.12s !important;
-}
-.mbn-item.active       { color: #ff9b0c !important; }
-.mbn-item.active i     { transform: scale(1.12) translateY(-1px) !important; }
-.mbn-item:active       { opacity: 0.6 !important; }
-body.dark-mode .mbn    { background: rgba(22,27,34,0.92) !important; border-top-color: rgba(255,255,255,0.07) !important; }
+.mbn-item i { font-size: 1.1rem !important; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), color 0.12s !important; }
+.mbn-item.active { color: #ff9b0c !important; }
+.mbn-item.active i { transform: scale(1.12) translateY(-1px) !important; }
+.mbn-item:active { opacity: 0.6 !important; }
+body.dark-mode .mbn { background: rgba(22,27,34,0.92) !important; border-top-color: rgba(255,255,255,0.07) !important; }
 body.dark-mode .mbn-item        { color: #6b7280 !important; }
 body.dark-mode .mbn-item.active { color: #ff9b0c !important; }
-
-/* ─────────────────────────────────────────────────────────────
-   23. Touch states — tactile press feedback
-   ───────────────────────────────────────────────────────────── */
-.btn:active:not(:disabled) {
-  transform: scale(0.96) !important;
-  transition: transform 0.08s ease !important;
-  opacity: 0.9 !important;
-}
-.nav-item:active  { opacity: 0.6 !important; }
-.topbar-btn:active { opacity: 0.55 !important; }
-
-/* ─────────────────────────────────────────────────────────────
-   24. Momentum scrolling everywhere
-   ───────────────────────────────────────────────────────────── */
-.page-content,
-.panel__body,
-.view,
-.sidebar__nav,
-.table-card,
-.data-table-wrap,
-.modal__body,
-#paymentModalBox {
-  -webkit-overflow-scrolling: touch;
+/* Room for bottom nav + home indicator */
+.main-content {
+  padding-bottom: calc(62px + env(safe-area-inset-bottom, 16px)) !important;
 }
 
 /* ─────────────────────────────────────────────────────────────
-   25. View transitions — snappy native feel
+   20. View transitions — snappy native feel
    ───────────────────────────────────────────────────────────── */
 .view.active {
   animation: mobileViewIn 0.22s cubic-bezier(0.25, 1, 0.4, 1) !important;
@@ -489,36 +484,31 @@ body.dark-mode .mbn-item.active { color: #ff9b0c !important; }
 }
 
 /* ─────────────────────────────────────────────────────────────
-   26. Typography tighten-up
+   21. Misc components
    ───────────────────────────────────────────────────────────── */
-.btn        { font-size: 0.78rem !important; }
-.btn--sm    { padding: 5px 10px !important; font-size: 0.73rem !important; min-height: 32px !important; }
-h2          { font-size: 1rem !important; }
-h3          { font-size: 0.9rem !important; }
-.text-muted { font-size: 0.78rem; }
-
-/* ─────────────────────────────────────────────────────────────
-   27. Misc components
-   ───────────────────────────────────────────────────────────── */
-/* Onboarding wizard */
-#onboardingWizard .panel__body { font-size: 0.8rem !important; }
-/* Quick actions grid in overview */
-.quick-actions { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
-.quick-action  { padding: 12px 10px !important; font-size: 0.72rem !important; border-radius: 10px !important; }
+/* Typography */
+h2 { font-size: 1rem !important; }
+h3 { font-size: 0.9rem !important; }
+/* Quests */
+.xp-hero       { flex-wrap: wrap !important; gap: 12px !important; padding: 16px !important; }
+.level-track   { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
+.rewards-stat  { min-width: 80px !important; flex: 1 !important; }
+.rewards-stat__value { font-size: 1.1rem !important; }
+.rewards-stat__label { font-size: 0.6rem !important; }
+/* Referral */
+.share-btns { flex-wrap: wrap !important; gap: 8px !important; }
+.share-btn  { flex: 1 1 auto !important; min-width: 80px !important; font-size: 0.72rem !important; }
 /* Info lists */
-.info-list__item { padding: 9px 0 !important; font-size: 0.8rem !important; }
+.info-list__item  { padding: 9px 0 !important; font-size: 0.8rem !important; }
 .info-list__label { font-size: 0.7rem !important; }
-/* Badges / pills */
+/* Badges */
 .badge { font-size: 0.62rem !important; padding: 2px 7px !important; }
-/* Section labels */
-.section-label { font-size: 0.65rem !important; letter-spacing: 0.06em !important; }
-/* FICA / KYC status cards */
-.fica-status-card { padding: 12px !important; border-radius: 12px !important; font-size: 0.8rem !important; }
-/* Performance panel */
-.perf-panel .perf-row { font-size: 0.75rem !important; padding: 7px 0 !important; }
-/* Dropdown menus */
-.dropdown { min-width: 160px !important; }
-/* Select inputs */
-.form-select[style*="min-width:160px"] { min-width: 120px !important; }
 /* Tag rows */
 .investor-tags, .ph-tags, .card-tags, .tag-row { flex-wrap: wrap !important; gap: 4px !important; }
+/* Quick actions */
+.quick-actions { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+.quick-action  { padding: 12px 10px !important; font-size: 0.72rem !important; }
+/* Momentum scrolling */
+.panel__body, .modal__body, #paymentModalBox, .sidebar__nav {
+  -webkit-overflow-scrolling: touch;
+}
