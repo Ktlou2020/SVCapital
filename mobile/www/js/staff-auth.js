@@ -49,7 +49,10 @@
   /* ─── RBAC Matrix ────────────────────────────────────────────
    * Maps every role to the list of app-keys it may access.
    * App keys map to physical paths in APPS_REGISTRY (below).
+   * Overridden at runtime by loadRbac() from /api/settings/rbac.
    */
+  let _rbacCache = null;
+
   const ROLE_PERMISSIONS = {
     'CEO':                  ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting'],
     'Operations Manager':   ['employee', 'team', 'fund', 'admin', 'accounting'],
@@ -224,11 +227,25 @@
    * RBAC helpers
    * ───────────────────────────────────────────────────────────── */
 
+  async function loadRbac() {
+    try {
+      const base = window.__SVC_API_BASE__ || '/api/';
+      const r = await fetch(base + 'settings/rbac');
+      if (!r.ok) return null;
+      const data = await r.json();
+      if (data && data.matrix && typeof data.matrix === 'object' && !Array.isArray(data.matrix)) {
+        _rbacCache = data.matrix;
+      }
+    } catch (_) {}
+    return _rbacCache;
+  }
+
   function getAllowedApps(session) {
     if (!session) return [];
     // Executive level gets everything regardless of role title
     if (session.level === 'executive') return EXECUTIVE_APPS.slice();
-    const perms = ROLE_PERMISSIONS[session.role] || ['employee'];
+    const matrix = _rbacCache || ROLE_PERMISSIONS;
+    const perms = matrix[session.role] || ['employee'];
     return perms.slice();
   }
 
@@ -481,6 +498,7 @@
     setSession,
     clearSession,
     refreshSession,
+    loadRbac,
     getAllowedApps,
     canAccess,
     currentAppKey,
