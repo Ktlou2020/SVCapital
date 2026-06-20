@@ -5,6 +5,24 @@
 
 'use strict';
 
+/* ─── Session-expired overlay (native app only) ─── */
+function _showSessionExpiredOverlay() {
+  if (document.getElementById('_svcSessionExpired')) return;
+  const el = document.createElement('div');
+  el.id = '_svcSessionExpired';
+  el.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;padding:32px;box-sizing:border-box';
+  el.innerHTML = `
+    <div style="background:#1a2235;border-radius:20px;padding:32px 24px;text-align:center;max-width:320px;width:100%">
+      <div style="font-size:2.5rem;margin-bottom:16px">🔒</div>
+      <div style="color:#fff;font-weight:800;font-size:1.1rem;margin-bottom:8px">Session Expired</div>
+      <div style="color:#9ca3af;font-size:0.85rem;line-height:1.6;margin-bottom:24px">Your session has expired. Please log in again to continue.</div>
+      <button onclick="Auth.logout('/login.html')" style="background:#ff9b0c;color:#000;border:none;border-radius:12px;padding:14px 32px;font-weight:800;font-size:0.95rem;cursor:pointer;width:100%">Log In Again</button>
+    </div>`;
+  document.body.appendChild(el);
+  // Also remove the loading cover if still showing
+  if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
+}
+
 /* ─── API Base URL ─── */
 // In Capacitor native context, window.__SVC_API_BASE__ is injected by mobile/scripts/build.js
 // Otherwise fall back to the relative /api/ path (web / PWA)
@@ -221,7 +239,15 @@ const API = {
     };
     if (body && method !== 'GET') opts.body = JSON.stringify(body);
 
-    const r = await fetch(url, opts);
+    // 12-second timeout — prevents hangs when Railway server is cold-starting
+    const controller = new AbortController();
+    const tId = setTimeout(() => controller.abort(), 12000);
+    let r;
+    try {
+      r = await fetch(url, { ...opts, signal: controller.signal });
+    } finally {
+      clearTimeout(tId);
+    }
 
     // Handle 401 — try silent token refresh before giving up
     if (r.status === 401) {
@@ -237,7 +263,13 @@ const API = {
         }
       } catch (_) {}
       Auth.clear();
-      if (!window.location.pathname.includes('login')) window.location.href = '/login.html';
+      if (window.__SVC_NATIVE__) {
+        // Native app: show a dismissible overlay so the user sees a clear message
+        // instead of a jarring white screen during a mid-load redirect.
+        _showSessionExpiredOverlay();
+      } else if (!window.location.pathname.includes('login')) {
+        window.location.href = '/login.html';
+      }
       throw new Error('Session expired — please log in again.');
     }
 
