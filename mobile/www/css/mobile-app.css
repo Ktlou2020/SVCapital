@@ -30,20 +30,23 @@ body.dark-mode { background-color: #0d1117 !important; }
 .main-content {
   width: 100% !important;
   max-width: 100vw !important;
-  overflow-x: hidden !important;
   box-sizing: border-box !important;
+}
+/* Overflow containment only at the outermost layout level — applying
+   overflow-x:hidden to multiple nested containers creates overlapping
+   clipping contexts that cause Android WebView to drop content on scroll */
+.app-layout {
+  overflow-x: hidden !important;
 }
 .page-content {
   width: 100% !important;
   max-width: 100% !important;
-  overflow-x: hidden !important;
   box-sizing: border-box !important;
   padding: 10px 12px !important;
 }
 .view {
   width: 100% !important;
   max-width: 100% !important;
-  overflow-x: hidden !important;
   box-sizing: border-box !important;
 }
 
@@ -501,14 +504,17 @@ body.dark-mode .mbn-item.active { color: #ff9b0c !important; }
 }
 
 /* ─────────────────────────────────────────────────────────────
-   20. View transitions — snappy native feel
+   20. View transitions
+   Keep it opacity-only — transform in keyframes creates/destroys
+   a GPU compositing layer on Android WebView, causing content to
+   flash then disappear after the animation completes.
    ───────────────────────────────────────────────────────────── */
 .view.active {
-  animation: mobileViewIn 0.22s cubic-bezier(0.25, 1, 0.4, 1) !important;
+  animation: mobileViewIn 0.18s ease-out !important;
 }
 @keyframes mobileViewIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* ─────────────────────────────────────────────────────────────
