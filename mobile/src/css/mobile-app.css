@@ -50,8 +50,9 @@ body.dark-mode { background-color: #0d1117 !important; }
   box-sizing: border-box !important;
   animation: none !important;
   -webkit-animation: none !important;
-  opacity: 1 !important;
   transform: none !important;
+  /* No opacity override here — non-active views need display:none to work.
+     opacity:1 is only on .view.active below. */
 }
 .view.active {
   display: block !important;
