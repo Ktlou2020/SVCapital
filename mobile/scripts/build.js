@@ -127,7 +127,10 @@ for (const htmlFile of htmlFilesToPatch) {
   if (!fs.existsSync(htmlPath)) continue;
   let html = fs.readFileSync(htmlPath, 'utf8');
 
-  if (!html.includes('__SVC_NATIVE__')) {
+  // Guard: check for the unique BUILD-injected comment, not the variable name
+  // (login.html references window.__SVC_NATIVE__ in its own JS, which would
+  // fool the old string-match and skip injection — leaving __SVC_API_BASE__ unset)
+  if (!html.includes('Capacitor native config injected by build.js')) {
     html = html.replace('</head>', nativeHeadScript + '\n</head>');
     console.log(`[build] Injected native config into ${htmlFile}`);
   }
