@@ -1274,6 +1274,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   load2FAStatus();
   _startPolling();
   _initPullToRefresh();
+
+  // Watchdog: 100 ms after cover is gone, force-inject inline styles on the active view.
+  // Guards against any Android WebView compositing bug that leaves the view blank
+  // despite correct CSS being applied.
+  if (window.__SVC_NATIVE__) {
+    setTimeout(() => {
+      const active = document.querySelector('.view.active');
+      if (active) {
+        active.style.setProperty('display',     'block',    'important');
+        active.style.setProperty('opacity',     '1',        'important');
+        active.style.setProperty('visibility',  'visible',  'important');
+        active.style.setProperty('transform',   'none',     'important');
+        active.style.setProperty('animation',   'none',     'important');
+      }
+    }, 100);
+  }
 });
 
 async function loadPortalData(_attempt = 0) {
