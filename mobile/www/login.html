@@ -6,10 +6,10 @@
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
   <link rel="apple-touch-icon" sizes="192x192" href="assets/logo-192.png" />
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>SV Capital — Sign In</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -35,7 +35,7 @@
       --radius:         12px;
       --radius-lg:      18px;
       --radius-xl:      24px;
-      --font:           'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font:           'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
       --serif:          'DM Serif Display', Georgia, serif;
       --ease:           0.25s cubic-bezier(0.4,0,0.2,1);
     }
@@ -528,11 +528,6 @@
     });
   </script>
   <script src="/js/analytics.js"></script>
-  <!-- ── Capacitor native config ── -->
-  <script>
-    window.__SVC_NATIVE__ = true;
-    window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
-  </script>
 </head>
 <body>
 <div class="login-layout">
@@ -625,7 +620,7 @@
           <label class="form-label" for="emailInput">Email Address</label>
           <div class="form-input-wrap">
             <i class="fa-solid fa-envelope form-input-icon"></i>
-            <input type="text" inputmode="email" id="emailInput" class="form-input" placeholder="your@email.co.za" required autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false" />
+            <input type="email" id="emailInput" class="form-input" placeholder="your@email.co.za" required autocomplete="email" />
           </div>
         </div>
 
@@ -701,7 +696,7 @@
             <label class="form-label" for="forgotEmailInput">Email Address</label>
             <div class="form-input-wrap">
               <i class="fa-solid fa-envelope form-input-icon"></i>
-              <input type="text" inputmode="email" id="forgotEmailInput" class="form-input" placeholder="your@email.co.za" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false"
+              <input type="email" id="forgotEmailInput" class="form-input" placeholder="your@email.co.za" autocomplete="email"
                      onkeydown="if(event.key==='Enter')submitForgotPassword()" />
             </div>
           </div>
@@ -714,7 +709,13 @@
       <!-- Footer -->
       <div class="login-footer">
         <a href="index.html">www.svcapital.co.za</a>
-        <div class="login-footer__copy">© 2025 SmartVest Financial Services (Pty) Ltd. All rights reserved.</div>
+        <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:6px">
+          <a href="terms.html" target="_blank" rel="noopener">Terms of Use</a>
+          <a href="popia.html" target="_blank" rel="noopener">Privacy Policy</a>
+          <a href="paia.html" target="_blank" rel="noopener">PAIA Manual</a>
+          <a href="complaints.html" target="_blank" rel="noopener">Complaints</a>
+        </div>
+        <div class="login-footer__copy">© <span class="yr"></span> SmartVest Financial Services (Pty) Ltd. All rights reserved.</div>
       </div>
 
     </div>
@@ -722,6 +723,7 @@
 
 </div>
 
+<script>document.querySelectorAll('.yr').forEach(function(e){e.textContent=new Date().getFullYear();});</script>
 <script src="js/api.js?v=2"></script>
 <script>
   'use strict';

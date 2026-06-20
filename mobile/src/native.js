@@ -11,10 +11,17 @@
   /* ── Status bar ─────────────────────────────────── */
   async function initStatusBar() {
     if (!P.StatusBar) return;
-    await P.StatusBar.setStyle({ style: 'DARK' });
-    // setBackgroundColor is Android-only — ignore on iOS
-    await P.StatusBar.setBackgroundColor({ color: '#0f1623' }).catch(() => {});
+    const isDark = document.body.classList.contains('dark-mode');
+    await P.StatusBar.setStyle({ style: isDark ? 'DARK' : 'LIGHT' });
+    await P.StatusBar.setBackgroundColor({ color: isDark ? '#0f1623' : '#ffffff' }).catch(() => {});
     await P.StatusBar.setOverlaysWebView({ overlay: false });
+  }
+
+  function syncStatusBar() {
+    if (!P.StatusBar) return;
+    const isDark = document.body.classList.contains('dark-mode');
+    P.StatusBar.setStyle({ style: isDark ? 'DARK' : 'LIGHT' }).catch(() => {});
+    P.StatusBar.setBackgroundColor({ color: isDark ? '#0f1623' : '#ffffff' }).catch(() => {});
   }
 
   /* ── Splash screen ──────────────────────────────── */
@@ -109,8 +116,16 @@
   function initHaptics() {
     if (!P.Haptics) return;
     document.addEventListener('click', e => {
-      const btn = e.target.closest('.btn--primary, .btn--gold');
-      if (btn) P.Haptics.impact({ style: 'LIGHT' }).catch(() => {});
+      // Primary / gold buttons: light impact
+      if (e.target.closest('.btn--primary, .btn--gold')) {
+        P.Haptics.impact({ style: 'LIGHT' }).catch(() => {});
+      }
+      // Bottom nav taps: selection feedback (iOS) or light impact
+      if (e.target.closest('.mbn-item')) {
+        P.Haptics.selectionStart().catch(() =>
+          P.Haptics.impact({ style: 'LIGHT' }).catch(() => {})
+        );
+      }
     });
   }
 
@@ -145,12 +160,46 @@
     });
   }
 
+  /* ── Dark-mode status bar sync ──────────────────── */
+  function initDarkModeSync() {
+    // Observe body class changes triggered by toggleDarkMode()
+    const observer = new MutationObserver(() => syncStatusBar());
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  /* ── Scroll-to-top when tapping already-active tab ── */
+  function initNavScrollToTop() {
+    document.addEventListener('click', e => {
+      const item = e.target.closest('.mbn-item');
+      if (!item || !item.classList.contains('active')) return;
+      const content = document.querySelector('.page-content');
+      if (content) content.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  /* ── Loading cover (white overlay that masks initial skeleton flash) ── */
+  function _hideCover() {
+    const cover = document.getElementById('_nativeCover');
+    if (!cover) return;
+    cover.style.pointerEvents = 'none';
+    cover.style.opacity = '0';
+    setTimeout(() => { try { cover.remove(); } catch (_) {} }, 50);
+  }
+
+  /* Expose globally so portal.js DOMContentLoaded can call it after data loads */
+  window.__SVC_HIDE_COVER = _hideCover;
+
+  /* Safety fallback: always remove the cover after 6 s regardless */
+  setTimeout(_hideCover, 6000);
+
   /* ── Init ───────────────────────────────────────── */
   async function init() {
     try {
       await initStatusBar();
       await initNetwork();
       initHaptics();
+      initDarkModeSync();
+      initNavScrollToTop();
       initBackButton();
       initAppLifecycle();
       await initPush();

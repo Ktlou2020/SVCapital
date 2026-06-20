@@ -1,0 +1,639 @@
+/* ══════════════════════════════════════════════════════════════
+   SV Capital — Mobile App Overrides (Capacitor native only)
+   Loaded last. All rules use !important to beat inline styles.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────
+   0. Width-containment chain
+   On Android WebView, overflow-x:hidden on <html> causes body to
+   collapse to 0 height (blank screen). Only apply it from body
+   downward, never on html itself.
+   ───────────────────────────────────────────────────────────── */
+html {
+  width: 100% !important;
+  height: 100% !important;
+  -webkit-font-smoothing: antialiased !important;
+  -webkit-text-size-adjust: 100% !important;
+}
+body {
+  width: 100% !important;
+  min-height: 100% !important;
+  min-height: 100vh !important;
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  background-color: #ffffff !important;
+  -webkit-font-smoothing: antialiased !important;
+  -webkit-text-size-adjust: 100% !important;
+}
+body.dark-mode { background-color: #0d1117 !important; }
+.app-layout,
+.main-content {
+  width: 100% !important;
+  max-width: 100vw !important;
+  box-sizing: border-box !important;
+}
+/* Overflow containment only at the outermost layout level — applying
+   overflow-x:hidden to multiple nested containers creates overlapping
+   clipping contexts that cause Android WebView to drop content on scroll */
+.app-layout {
+  overflow-x: hidden !important;
+}
+.page-content {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 10px 12px !important;
+}
+.view {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  animation: none !important;
+  -webkit-animation: none !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   1. Global reset — no tap flash, performance hints
+   ───────────────────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+/* Disable expensive blur/filter effects that cause frame drops on Android WebView */
+* {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+/* Re-enable only where explicitly needed (none currently — solid colours used instead) */
+input, textarea, [contenteditable] {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+::-webkit-scrollbar { display: none !important; }
+* { scrollbar-width: none !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   2. Topbar — shrink to fit, collapse low-priority actions
+   ───────────────────────────────────────────────────────────── */
+.topbar {
+  height: 52px !important;
+  padding: 0 12px !important;
+  gap: 6px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+.topbar__left {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  gap: 10px !important;
+}
+.topbar__title {
+  font-size: 0.9rem !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.topbar__breadcrumb { font-size: 0.68rem !important; }
+.topbar-btn {
+  width: 32px !important;
+  height: 32px !important;
+  font-size: 0.82rem !important;
+  flex-shrink: 0 !important;
+}
+#tourBtn,
+.topbar__actions > button[onclick*="openPortalCmd"] { display: none !important; }
+.topbar__actions > a.btn { display: none !important; }
+/* Floating sidebar toggle — replaced by bottom nav on mobile */
+.mobile-toggle { display: none !important; }
+.topbar__actions { flex-shrink: 0 !important; gap: 4px !important; }
+/* Sign-out: icon only */
+.topbar__actions .btn--secondary {
+  padding: 5px 8px !important;
+  font-size: 0 !important;
+  gap: 0 !important;
+  min-height: 32px !important;
+}
+.topbar__actions .btn--secondary i { font-size: 0.85rem !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   3. Multi-column grids → single-column block layout
+   Switching display:grid → display:block so children naturally
+   stack at 100% width without any grid implicit-column issues.
+   ───────────────────────────────────────────────────────────── */
+.grid-layout,
+.grid-layout--sidebar,
+.grid-2,
+.grid-3 {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+.grid-layout > *,
+.grid-layout--sidebar > *,
+.grid-2 > *,
+.grid-3 > * {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-bottom: 12px !important;
+}
+
+/* Statement inline grid (1fr 340px) */
+.stmt-grid {
+  display: block !important;
+  width: 100% !important;
+}
+.stmt-grid > * {
+  width: 100% !important;
+  margin-bottom: 14px !important;
+}
+
+/* Form rows: single column */
+.form-row--2,
+.form-row--3 {
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+}
+
+/* Statement date/checkbox grids: keep 2-col (labels are short) */
+.form-grid-2 {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 10px !important;
+}
+
+/* Stats row: keep grid but 2-column */
+.stats-row {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 10px !important;
+  margin-bottom: 10px !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   4. All card/panel containers — constrained, never wider
+   ───────────────────────────────────────────────────────────── */
+.portfolio-hero,
+.welcome-banner,
+.xp-progress-bar-wrap,
+.table-card,
+.panel,
+.card,
+.section-card,
+.summary-card,
+.section-banner,
+.invest-guide-strip {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow-x: hidden !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   5. Tables — inner scroll, not card-level scroll
+   portal.css sets .table-card { overflow-x: auto } which makes
+   the card expand to fit its content. We override: the card
+   clips (hidden), the inner wrapper scrolls (auto).
+   ───────────────────────────────────────────────────────────── */
+.table-card > div,
+.panel__body,
+.panel__body > * {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  max-width: 100% !important;
+}
+.data-table {
+  font-size: 0.71rem !important;
+  width: max-content !important;  /* Grow as wide as content needs */
+  min-width: 100% !important;      /* At least full-width when few cols */
+  max-width: none !important;
+}
+.data-table th,
+.data-table td {
+  padding: 7px 10px !important;
+  white-space: nowrap !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   6. Portfolio hero — single-column grid, value scaled down
+   ───────────────────────────────────────────────────────────── */
+.portfolio-hero {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  padding: 18px 16px !important;
+  border-radius: 16px !important;
+  margin-bottom: 10px !important;
+  gap: 12px !important;
+}
+.portfolio-hero__right { display: none !important; }
+.portfolio-hero__left,
+.portfolio-hero__stats { grid-column: 1 !important; }
+.portfolio-hero__value { font-size: 1.75rem !important; }
+.portfolio-hero__label { font-size: 0.65rem !important; }
+.portfolio-hero__stats {
+  display: flex !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  flex-wrap: nowrap !important;
+  gap: 16px !important;
+  padding-bottom: 2px !important;
+}
+.ph-stat { flex-shrink: 0 !important; }
+.ph-stat__value { font-size: 0.9rem !important; }
+.ph-stat__label { font-size: 0.6rem !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   7. Welcome banner — two-row layout
+   ───────────────────────────────────────────────────────────── */
+.welcome-banner {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px 10px !important;
+  padding: 14px !important;
+  margin-bottom: 10px !important;
+  border-radius: 16px !important;
+  align-items: center !important;
+}
+.welcome-avatar {
+  width: 44px !important; height: 44px !important;
+  font-size: 1rem !important; font-weight: 800 !important;
+  border-radius: 13px !important; flex-shrink: 0 !important;
+}
+.welcome-info {
+  flex: 1 1 0 !important; min-width: 0 !important;
+  overflow: hidden !important;
+}
+.welcome-greeting { font-size: 0.6rem !important; }
+.welcome-name {
+  font-size: 1rem !important; font-weight: 900 !important;
+  white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
+}
+.welcome-chips {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important; -webkit-overflow-scrolling: touch !important;
+  gap: 5px !important; margin-top: 6px !important;
+  width: 100% !important;
+}
+.welcome-chip { font-size: 0.59rem !important; padding: 2px 8px !important; flex-shrink: 0 !important; }
+.welcome-actions {
+  flex: 0 0 100% !important; width: 100% !important;
+  display: flex !important; gap: 8px !important;
+}
+.welcome-actions .btn {
+  flex: 1 !important; min-width: 0 !important;
+  padding: 8px 10px !important; font-size: 0.78rem !important; border-radius: 10px !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   8. XP bar
+   ───────────────────────────────────────────────────────────── */
+.xp-progress-bar-wrap {
+  display: flex !important;
+  padding: 9px 14px !important; gap: 10px !important;
+  margin-bottom: 10px !important; border-radius: 12px !important;
+}
+.xp-level-pill { font-size: 0.65rem !important; padding: 3px 10px !important; white-space: nowrap !important; }
+.xp-progress-track { flex: 1 !important; min-width: 0 !important; height: 6px !important; }
+.xp-progress-right  { font-size: 0.68rem !important; white-space: nowrap !important; }
+.xp-progress-next   { font-size: 0.62rem !important; white-space: nowrap !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   9. Stat cards
+   ───────────────────────────────────────────────────────────── */
+.stat-card {
+  padding: 14px 12px !important; gap: 8px !important;
+  border-radius: 14px !important; width: 100% !important;
+}
+.stat-card__icon  { width: 34px !important; height: 34px !important; font-size: 0.85rem !important; border-radius: 10px !important; }
+.stat-card__value { font-size: 1.3rem !important; letter-spacing: -0.02em !important; line-height: 1.1 !important; }
+.stat-card__label  { font-size: 0.6rem !important; }
+.stat-card__change { font-size: 0.6rem !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   10. Panels / table cards — spacing
+   ───────────────────────────────────────────────────────────── */
+.panel { margin-bottom: 10px !important; border-radius: 14px !important; }
+.panel__header { padding: 11px 14px !important; }
+.panel__title  { font-size: 0.82rem !important; flex: 1 !important; min-width: 0 !important; }
+.panel__body   { padding: 12px 14px !important; }
+.table-card { margin-bottom: 10px !important; border-radius: 14px !important; }
+.table-card__header { padding: 11px 14px !important; gap: 8px !important; }
+.table-card__title  { font-size: 0.82rem !important; min-width: 0 !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+.panel__header .btn,
+.table-card__header .btn { flex-shrink: 0 !important; white-space: nowrap !important; }
+.mb-20 { margin-bottom: 10px !important; }
+.mt-16 { margin-top: 10px !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   11. Charts — responsive within their containers
+   ───────────────────────────────────────────────────────────── */
+.chart-wrap {
+  width: 100% !important; max-width: 100% !important;
+  overflow: hidden !important;
+}
+/* Cap chart heights on mobile */
+.chart-wrap[style*="height:240px"] { height: 190px !important; }
+.chart-wrap[style*="height:180px"] { height: 150px !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   12. Tab bars — horizontal scroll
+   ───────────────────────────────────────────────────────────── */
+.tab-bar {
+  display: flex !important;
+  overflow-x: auto !important; -webkit-overflow-scrolling: touch !important;
+  white-space: nowrap !important;
+  width: 100% !important; max-width: 100% !important;
+  flex-wrap: nowrap !important;
+}
+.tab-btn {
+  flex-shrink: 0 !important;
+  padding: 6px 14px !important; font-size: 0.75rem !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   13. Section banner (marketplace header)
+   ───────────────────────────────────────────────────────────── */
+.section-banner {
+  flex-direction: column !important; align-items: flex-start !important;
+  gap: 10px !important; padding: 14px !important;
+  border-radius: 12px !important; margin-bottom: 10px !important;
+  width: 100% !important;
+}
+.section-banner__title { font-size: 1rem !important; }
+.section-banner__sub   { font-size: 0.75rem !important; line-height: 1.4 !important; }
+.section-banner > div { width: 100% !important; flex-wrap: wrap !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   14. Invest guide strip — 2x2 grid
+   ───────────────────────────────────────────────────────────── */
+.invest-guide-strip {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 8px !important; padding: 10px !important; margin-bottom: 10px !important;
+}
+.igs-arrow { display: none !important; }
+.igs-step  { padding: 10px !important; font-size: 0.7rem !important; border-radius: 10px !important; }
+.igs-num   { font-size: 0.65rem !important; width: 18px !important; height: 18px !important; }
+.igs-text span { font-size: 0.62rem !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   15. Buttons
+   ───────────────────────────────────────────────────────────── */
+.btn     { font-size: 0.78rem !important; }
+.btn--sm { padding: 5px 10px !important; font-size: 0.73rem !important; min-height: 32px !important; }
+.btn:active:not(:disabled) {
+  transform: scale(0.96) !important;
+  transition: transform 0.08s ease !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   16. Form inputs
+   iOS auto-zooms when any input has font-size < 16px — set 16px
+   on all native elements to prevent zoom without affecting layout.
+   ───────────────────────────────────────────────────────────── */
+input, textarea, select {
+  font-size: 16px !important;
+}
+.form-input,
+.form-select,
+.form-textarea {
+  font-size: 16px !important; padding: 9px 11px !important; border-radius: 8px !important;
+  width: 100% !important; max-width: 100% !important;
+}
+.form-group label, .form-label { font-size: 0.75rem !important; }
+select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !important; }
+/* Hide auto-save meta text — overlaps "Personal Information" heading on mobile */
+#profileSaveMeta { display: none !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   17. Modals — bottom sheet pattern
+   ───────────────────────────────────────────────────────────── */
+.modal-overlay {
+  align-items: flex-end !important;
+  padding: 0 !important;
+}
+.modal {
+  width: 100% !important; max-width: 100% !important;
+  max-height: 92vh !important;
+  border-radius: 20px 20px 0 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  display: flex !important; flex-direction: column !important;
+}
+.modal__header::before {
+  content: '' !important;
+  display: block !important;
+  width: 36px !important; height: 4px !important;
+  background: rgba(0,0,0,0.14) !important;
+  border-radius: 2px !important;
+  margin: 0 auto 12px !important;
+}
+.modal__header { padding: 14px 16px !important; flex-shrink: 0 !important; }
+.modal__title  { font-size: 0.95rem !important; }
+.modal__body   { flex: 1 !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; padding: 14px 16px !important; }
+.modal__footer { padding: 12px 16px !important; flex-shrink: 0 !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   18. Payment modal — centred card on both iOS and Android
+   ───────────────────────────────────────────────────────────── */
+#topUpModal.modal-overlay {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px !important;
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
+}
+#paymentModalBox {
+  /* Let the natural inline max-width:520px work; just constrain to viewport */
+  width: min(92vw, 500px) !important;
+  max-width: 500px !important;
+  max-height: min(88vh, 680px) !important;
+  border-radius: 16px !important;
+  overflow-y: auto !important; -webkit-overflow-scrolling: touch !important;
+  margin: 0 auto !important;
+}
+#pmAmountChips {
+  grid-template-columns: repeat(4, 1fr) !important; gap: 6px !important;
+}
+.pm-chip {
+  font-size: 0.72rem !important; padding: 7px 4px !important; border-radius: 8px !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   19. Bottom navigation
+   ───────────────────────────────────────────────────────────── */
+.mbn {
+  position: fixed !important;
+  bottom: 0 !important; left: 0 !important; right: 0 !important;
+  z-index: 1200 !important;
+  display: flex !important; flex-direction: column !important;
+  width: 100% !important; max-width: 100vw !important;
+  /* Solid colour — backdrop-filter:blur() is extremely GPU-expensive on
+     Android WebView causing severe frame drops. Solid is faster. */
+  background: #ffffff !important;
+  border-top: 1px solid rgba(0,0,0,0.08) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+}
+.mbn-inner { display: flex !important; width: 100% !important; }
+.mbn-item {
+  position: relative !important;
+  flex: 1 !important; display: flex !important; flex-direction: column !important;
+  align-items: center !important; justify-content: center !important;
+  gap: 3px !important; padding: 10px 4px 8px !important;
+  background: none !important; border: none !important;
+  color: #9ca3af !important; font-size: 0.56rem !important; font-weight: 700 !important;
+  text-transform: uppercase !important; letter-spacing: 0.04em !important;
+  transition: color 0.12s !important; outline: none !important;
+}
+.mbn-item::before {
+  content: '' !important; position: absolute !important;
+  top: 0 !important; left: 50% !important;
+  transform: translateX(-50%) scaleX(0) !important;
+  width: 28px !important; height: 3px !important;
+  background: #ff9b0c !important; border-radius: 0 0 4px 4px !important;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+.mbn-item.active::before { transform: translateX(-50%) scaleX(1) !important; }
+.mbn-item i { font-size: 1.1rem !important; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), color 0.12s !important; }
+.mbn-item.active { color: #ff9b0c !important; }
+.mbn-item.active i { transform: scale(1.12) translateY(-1px) !important; }
+.mbn-item:active { opacity: 0.6 !important; }
+body.dark-mode .mbn { background: rgba(22,27,34,0.92) !important; border-top-color: rgba(255,255,255,0.07) !important; }
+body.dark-mode .mbn-item        { color: #6b7280 !important; }
+body.dark-mode .mbn-item.active { color: #ff9b0c !important; }
+/* Room for bottom nav + home indicator */
+.main-content {
+  padding-bottom: calc(62px + env(safe-area-inset-bottom, 16px)) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   20. View transitions
+   No animation — Android WebView has a bug where applying
+   display:block and a CSS animation in the same style recalc
+   gets stuck at the 'from' keyframe (opacity:0), leaving the
+   view permanently invisible. Instant switch is more reliable.
+   ───────────────────────────────────────────────────────────── */
+.view.active {
+  display: block !important;
+  animation: none !important;
+  -webkit-animation: none !important;
+  opacity: 1 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   21. Misc components
+   ───────────────────────────────────────────────────────────── */
+/* Typography */
+h2 { font-size: 1rem !important; }
+h3 { font-size: 0.9rem !important; }
+/* Quests */
+.xp-hero       { flex-wrap: wrap !important; gap: 12px !important; padding: 16px !important; }
+.level-track   { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
+.rewards-stat  { min-width: 80px !important; flex: 1 !important; }
+.rewards-stat__value { font-size: 1.1rem !important; }
+.rewards-stat__label { font-size: 0.6rem !important; }
+/* Referral */
+.share-btns { flex-wrap: wrap !important; gap: 8px !important; }
+.share-btn  { flex: 1 1 auto !important; min-width: 80px !important; font-size: 0.72rem !important; }
+/* Info lists */
+.info-list__item  { padding: 9px 0 !important; font-size: 0.8rem !important; }
+.info-list__label { font-size: 0.7rem !important; }
+/* Badges */
+.badge { font-size: 0.62rem !important; padding: 2px 7px !important; }
+/* Tag rows */
+.investor-tags, .ph-tags, .card-tags, .tag-row { flex-wrap: wrap !important; gap: 4px !important; }
+/* Quick actions */
+.quick-actions { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+.quick-action  { padding: 12px 10px !important; font-size: 0.72rem !important; }
+/* Momentum scrolling */
+.panel__body, .modal__body, #paymentModalBox, .sidebar__nav {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   22. Dark mode — ensure text is visible on all screens
+   ───────────────────────────────────────────────────────────── */
+
+/* Override CSS custom properties so every element using var(--text),
+   var(--text-muted), var(--text-dim) etc. flips automatically */
+body.dark-mode {
+  --text:        #e2e8f0 !important;
+  --text-muted:  #9ca3af !important;
+  --text-dim:    #6b7280 !important;
+  --surface:     #1a2235 !important;
+  --bg:          #0d1117 !important;
+  --border:      rgba(255,255,255,0.07) !important;
+  --card-bg:     #1a2235 !important;
+  --dark-3:      #1f2937 !important;
+  color: #e2e8f0 !important;
+}
+
+/* Hardcoded #1a1a1a / #1a1200 colours that ignore the variables */
+body.dark-mode .panel__title,
+body.dark-mode .rewards-stat__val,
+body.dark-mode .notif-item.unread .notif-title,
+body.dark-mode .ref-step strong { color: #e2e8f0 !important; }
+
+/* General text elements */
+body.dark-mode h1, body.dark-mode h2, body.dark-mode h3,
+body.dark-mode h4, body.dark-mode h5, body.dark-mode h6 { color: #e2e8f0 !important; }
+body.dark-mode p,
+body.dark-mode li { color: #c9d1d9 !important; }
+body.dark-mode small,
+body.dark-mode .text-muted { color: #6b7280 !important; }
+
+/* Info lists (profile / security page) */
+body.dark-mode .info-list__item { border-color: rgba(255,255,255,0.06) !important; }
+body.dark-mode .info-list__label { color: #6b7280 !important; }
+body.dark-mode .info-list__value { color: #e2e8f0 !important; }
+
+/* Security / login rows */
+body.dark-mode .login-history-item,
+body.dark-mode .security-row,
+body.dark-mode .setting-row {
+  background: #161b27 !important;
+  border-color: rgba(255,255,255,0.07) !important;
+  color: #e2e8f0 !important;
+}
+body.dark-mode .login-history-item .text-muted { color: #6b7280 !important; }
+
+/* Toggles */
+body.dark-mode .toggle-label { color: #e2e8f0 !important; }
+body.dark-mode .toggle-desc  { color: #9ca3af !important; }
+
+/* Buttons */
+body.dark-mode .btn--secondary,
+body.dark-mode .btn--outline {
+  background: rgba(255,255,255,0.07) !important;
+  border-color: rgba(255,255,255,0.12) !important;
+  color: #d1d5db !important;
+}
+
+/* Form inputs */
+body.dark-mode input,
+body.dark-mode textarea,
+body.dark-mode select {
+  background: #1c2128 !important;
+  border-color: rgba(255,255,255,0.1) !important;
+  color: #e2e8f0 !important;
+}
+body.dark-mode input::placeholder,
+body.dark-mode textarea::placeholder { color: #4b5563 !important; }
+
+/* Cards not already covered */
+body.dark-mode .section-card,
+body.dark-mode .summary-card,
+body.dark-mode .info-card {
+  background: #161b27 !important;
+  border-color: rgba(255,255,255,0.07) !important;
+}
+
+/* Table cells */
+body.dark-mode td,
+body.dark-mode th { color: #e2e8f0 !important; }
+
+/* Modal drag handle */
+body.dark-mode .modal__header::before { background: rgba(255,255,255,0.2) !important; }

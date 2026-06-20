@@ -5,10 +5,10 @@
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
   <link rel="apple-touch-icon" sizes="192x192" href="assets/logo-192.png" />
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>SV Capital — Create Account</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -32,7 +32,7 @@
       --shadow-lg:     0 20px 60px rgba(0,0,0,0.14);
       --radius:        12px;
       --radius-lg:     18px;
-      --font:          'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font:          'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
       --serif:         'DM Serif Display', Georgia, serif;
     }
 
@@ -859,6 +859,7 @@
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
   </script>
   <script src="/js/native.js"></script>
+  <link rel="stylesheet" href="/css/mobile-app.css">
 </head>
 <body>
 
@@ -949,8 +950,8 @@
 
     <div class="left-footer">
       <span>© 2025 SmartVest Financial Services (Pty) Ltd</span>
-      <a href="/popia.html" target="_blank">Privacy Policy</a>
-      <a href="/terms.html" target="_blank">Terms of Use</a>
+      <a href="popia.html" target="_blank">Privacy Policy</a>
+      <a href="terms.html" target="_blank">Terms of Use</a>
     </div>
   </div>
 
@@ -1372,7 +1373,7 @@
       <label class="checkbox-group">
         <input type="checkbox" id="termsCheck" />
         <div class="checkbox-label">
-          I agree to SV Capital's <a href="/terms.html" target="_blank">Terms of Use</a> and <a href="/popia.html" target="_blank">Privacy Policy</a>. I understand that my investments are subject to market risk.
+          I agree to SV Capital's <a href="terms.html" target="_blank">Terms of Use</a> and <a href="popia.html" target="_blank">Privacy Policy</a>. I understand that my investments are subject to market risk.
         </div>
       </label>
 
@@ -1386,7 +1387,7 @@
       <label class="checkbox-group">
         <input type="checkbox" id="popiaCheck" />
         <div class="checkbox-label">
-          I consent to my personal information being processed as described in SV Capital's <a href="/popia.html" target="_blank">POPIA Privacy Notice</a>.
+          I consent to my personal information being processed as described in SV Capital's <a href="popia.html" target="_blank">POPIA Privacy Notice</a>.
         </div>
       </label>
 

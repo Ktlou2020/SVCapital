@@ -6,7 +6,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
   <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>SV Capital — Investor Portal</title>
   <meta name="theme-color" content="#FF9B0C" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -62,7 +62,6 @@
   <link rel="stylesheet" href="/css/mobile-app.css">
 </head>
 <body>
-
 <!-- Native-app loading cover: masks skeleton content while portal data loads.
      Removed by portal.js after loadPortalData() resolves (including retries). -->
 <div id="_nativeCover" style="display:none;position:fixed;inset:0;z-index:99998;background:#ffffff;flex-direction:column;align-items:center;justify-content:center;gap:16px">
@@ -152,12 +151,12 @@
       </button>
 
       <div class="nav-section-label">Grow</div>
+      <button class="nav-item" data-view="learn" onclick="navigate('learn', this)">
+        <i class="fa-solid fa-graduation-cap"></i> Learning Hub
+      </button>
       <button class="nav-item" data-view="quests" onclick="navigate('quests', this)" id="navQuests">
         <i class="fa-solid fa-trophy"></i> Earn Rewards
         <span class="xp-nav-badge" id="xpNavBadge" style="display:none"></span>
-      </button>
-      <button class="nav-item" data-view="learn" onclick="navigate('learn', this)">
-        <i class="fa-solid fa-graduation-cap"></i> Learning Hub
       </button>
 
       <div class="nav-section-label">Account</div>
@@ -167,7 +166,8 @@
       <button class="nav-item" data-view="support" onclick="navigate('support', this)">
         <i class="fa-solid fa-headset"></i> Support
       </button>
-      <button class="nav-item" data-view="referral" onclick="navigate('referral', this)">
+      <!-- Referral nav hidden — feature not yet live -->
+      <button class="nav-item" data-view="referral" onclick="navigate('referral', this)" style="display:none">
         <i class="fa-solid fa-share-nodes"></i> Refer & Earn
       </button>
       <button class="nav-item" data-view="documents" onclick="navigate('documents', this)">
@@ -185,6 +185,15 @@
           <span class="user-name">Thabo Khumalo</span>
           <span class="user-role">INV-002 · Active</span>
         </div>
+      </div>
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.07);display:flex;flex-wrap:wrap;gap:4px 10px">
+        <a href="../terms.html" target="_blank" rel="noopener" style="font-size:0.68rem;color:rgba(255,255,255,0.35);text-decoration:none;transition:color 0.2s" onmouseover="this.style.color='#FF8215'" onmouseout="this.style.color='rgba(255,255,255,0.35)'">Terms of Use</a>
+        <span style="font-size:0.68rem;color:rgba(255,255,255,0.2)">·</span>
+        <a href="../popia.html" target="_blank" rel="noopener" style="font-size:0.68rem;color:rgba(255,255,255,0.35);text-decoration:none;transition:color 0.2s" onmouseover="this.style.color='#FF8215'" onmouseout="this.style.color='rgba(255,255,255,0.35)'">Privacy Policy</a>
+        <span style="font-size:0.68rem;color:rgba(255,255,255,0.2)">·</span>
+        <a href="../paia.html" target="_blank" rel="noopener" style="font-size:0.68rem;color:rgba(255,255,255,0.35);text-decoration:none;transition:color 0.2s" onmouseover="this.style.color='#FF8215'" onmouseout="this.style.color='rgba(255,255,255,0.35)'">PAIA Manual</a>
+        <span style="font-size:0.68rem;color:rgba(255,255,255,0.2)">·</span>
+        <a href="../complaints.html" target="_blank" rel="noopener" style="font-size:0.68rem;color:rgba(255,255,255,0.35);text-decoration:none;transition:color 0.2s" onmouseover="this.style.color='#FF8215'" onmouseout="this.style.color='rgba(255,255,255,0.35)'">Complaints</a>
       </div>
     </div>
   </aside>
@@ -258,7 +267,7 @@
             <div class="welcome-name" id="welcomeName">Loading...</div>
             <div class="welcome-chips">
               <span class="welcome-chip welcome-chip--green" id="wchipFica" style="display:none">
-                <i class="fa-solid fa-shield-halved"></i> FICA Verified
+                <i class="fa-solid fa-shield-halved"></i> FICA/KYC Verified
               </span>
               <span class="welcome-chip welcome-chip--teal" id="wchipId">
                 <i class="fa-solid fa-id-card"></i> <span id="wchipIdText">—</span>
@@ -360,7 +369,7 @@
               </div>
               <div style="overflow-x:auto">
                 <table class="data-table">
-                  <thead><tr><th>Pool</th><th>Product</th><th>Invested</th><th>Exp. Return</th><th>Days Left</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Pool</th><th>Product</th><th>Invested Amount</th><th>Start Date</th><th>Maturity Date</th><th>Status</th></tr></thead>
                   <tbody id="overviewInvestmentsBody">
                     <tr><td colspan="6" class="text-center text-muted" style="padding:24px">Loading...</td></tr>
                   </tbody>
@@ -483,15 +492,12 @@
             <button class="tab-btn" onclick="filterMyInvestments('paid_out', this)">Paid Out</button>
             <button class="tab-btn" onclick="filterMyInvestments('matured', this)">Matured</button>
           </div>
-          <select class="form-select" id="myInvProductFilter" style="min-width:160px;height:34px;font-size:0.8rem" onchange="renderMyInvestmentCards()">
+          <select class="form-select" id="myInvProductFilter" style="min-width:180px;height:34px;font-size:0.8rem" onchange="renderMyInvestmentCards()">
             <option value="">All Products</option>
-            <option value="cattle">Cattle</option>
-            <option value="solar_7yr">Solar (7yr)</option>
-            <option value="solar_6yr">Solar (6yr)</option>
-            <option value="solar_5yr">Solar (5yr)</option>
-            <option value="short_term">Short Term</option>
-            <option value="delivery_bike">Delivery Bikes</option>
           </select>
+          <button class="btn btn--secondary btn--sm" style="margin-left:auto;white-space:nowrap" onclick="navigate('statement', document.querySelector('[data-view=statement]'))">
+            <i class="fa-solid fa-file-invoice"></i> Get Investment Statement
+          </button>
         </div>
 
         <div id="myInvestmentsGrid" class="grid-3">
@@ -530,21 +536,11 @@
 
         <div class="grid-layout grid-layout--sidebar">
           <div>
-            <!-- Monthly returns chart -->
-            <div class="panel mb-20">
-              <div class="panel__header">
-                <span class="panel__title"><i class="fa-solid fa-chart-bar" style="color:#FF9B0C;margin-right:6px"></i>Monthly Returns</span>
-                <button class="btn btn--secondary btn--sm" onclick="exportAnalyticsCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
-              </div>
-              <div class="panel__body">
-                <div class="chart-wrap" style="height:240px"><canvas id="analyticsMonthlyChart"></canvas></div>
-              </div>
-            </div>
-
             <!-- Investment timeline -->
             <div class="panel">
               <div class="panel__header">
                 <span class="panel__title"><i class="fa-solid fa-timeline" style="color:#a855f7;margin-right:6px"></i>Investment Timeline</span>
+                <button class="btn btn--secondary btn--sm" onclick="exportAnalyticsCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
               </div>
               <div class="panel__body" style="overflow-x:auto">
                 <table class="data-table">
@@ -562,7 +558,9 @@
             <div class="panel mb-16">
               <div class="panel__header"><span class="panel__title">Allocation by Pool</span></div>
               <div class="panel__body">
-                <div class="chart-wrap chart-wrap--md"><canvas id="analyticsAllocChart"></canvas></div>
+                <div style="display:flex;justify-content:center;padding:8px 0">
+                  <div style="width:200px;height:200px;position:relative"><canvas id="analyticsAllocChart"></canvas></div>
+                </div>
                 <div id="analyticsAllocList" style="margin-top:12px"></div>
               </div>
             </div>
@@ -603,9 +601,14 @@
            VIEW: TRANSACTIONS
       ══════════════════════════════════ -->
       <div class="view" id="view-transactions">
-        <div class="tab-bar mb-16" id="txnTabBar">
-          <button class="tab-btn active" id="txnTab1" onclick="_switchTxnTab('all',this)"><i class="fa-solid fa-list"></i> All Transactions</button>
-          <button class="tab-btn" id="txnTab2" onclick="_switchTxnTab('returns',this)"><i class="fa-solid fa-chart-line"></i> Return History</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+          <div class="tab-bar" style="margin-bottom:0" id="txnTabBar">
+            <button class="tab-btn active" id="txnTab1" onclick="_switchTxnTab('all',this)"><i class="fa-solid fa-list"></i> All Transactions</button>
+            <button class="tab-btn" id="txnTab2" onclick="_switchTxnTab('returns',this)"><i class="fa-solid fa-chart-line"></i> Return History</button>
+          </div>
+          <button class="btn btn--secondary btn--sm" style="white-space:nowrap" onclick="navigate('statement', document.querySelector('[data-view=statement]'))">
+            <i class="fa-solid fa-file-invoice"></i> Get Transactions Statement
+          </button>
         </div>
         <div id="txnAllTab">
         <div class="table-card">
@@ -614,11 +617,12 @@
             <div class="table-card__controls">
               <select class="tbl-filter" id="myTxnTypeFilter">
                 <option value="">All Types</option>
-                <option value="deposit">Deposit</option>
                 <option value="investment">Investment</option>
-                <option value="return">Return</option>
+                <option value="deposit">Deposit</option>
                 <option value="payout">Payout</option>
-                <option value="referral_bonus">Referral Bonus</option>
+                <option value="withdrawal">Withdrawal</option>
+                <option value="reinvestment">Re-investment</option>
+                <option value="gift">Gift</option>
               </select>
             </div>
           </div>
@@ -761,7 +765,7 @@
               <button class="tab-btn" onclick="filterMarket('solar', this)">Solar</button>
               <button class="tab-btn" onclick="filterMarket('short_term', this)">Short-Term</button>
             </div>
-            <button class="btn btn--secondary btn--sm" onclick="openCalcModal()" style="white-space:nowrap">
+            <button class="btn btn--sm" onclick="openCalcModal()" style="white-space:nowrap;background:linear-gradient(135deg,#FF8215,#FF9B0C);color:#fff;border:none;font-weight:700">
               <i class="fa-solid fa-calculator"></i> Calculate Returns
             </button>
           </div>
@@ -798,7 +802,7 @@
         <div class="mkt-wallet-strip mb-16" id="mktWalletStrip" style="display:none">
           <i class="fa-solid fa-wallet"></i>
           <span>Wallet available: <strong id="mktWalletBal">—</strong></span>
-          <button class="btn btn--ghost btn--sm" onclick="navigate('wallet',document.querySelector('[data-view=wallet]'))">
+          <button class="btn btn--sm" onclick="navigate('wallet',document.querySelector('[data-view=wallet]'))" style="background:#FF8215;color:#fff;border:none;font-weight:700">
             <i class="fa-solid fa-plus"></i> Top Up
           </button>
         </div>
@@ -918,7 +922,7 @@
                   <div class="info-row"><span class="info-row__label">Investor ID</span><span class="info-row__value text-gold" id="profSummaryId">—</span></div>
                   <div class="info-row"><span class="info-row__label">Member Since</span><span class="info-row__value" id="profSummaryJoined">—</span></div>
                   <div class="info-row"><span class="info-row__label">Account Status</span><span class="info-row__value" id="profSummaryStatus">—</span></div>
-                  <div class="info-row"><span class="info-row__label">FICA Status</span><span class="info-row__value" id="profSummaryFica">—</span></div>
+                  <div class="info-row"><span class="info-row__label">FICA/KYC Status</span><span class="info-row__value" id="profSummaryFica">—</span></div>
                   <div class="info-row"><span class="info-row__label">Referral Code</span><span class="info-row__value text-gold" id="profSummaryReferral">—</span></div>
                 </div>
               </div>
@@ -1094,7 +1098,7 @@
           <div class="referral-hero__icon"><i class="fa-solid fa-gift"></i></div>
           <div>
             <h2 class="referral-hero__title">Earn R250 for every friend you refer</h2>
-            <p class="referral-hero__sub">Share your unique referral code. When your friend signs up, gets FICA-approved, and makes their first investment, you both get rewarded.</p>
+            <p class="referral-hero__sub">Share your unique referral code. When your friend signs up, gets FICA/KYC-approved, and makes their first investment, you both get rewarded.</p>
           </div>
         </div>
 
@@ -1121,7 +1125,7 @@
               <div class="panel__body">
                 <div style="display:flex;flex-direction:column;gap:16px">
                   <div class="ref-step"><div class="ref-step__num">1</div><div><strong>Share your code</strong><p>Send your referral link or code to a friend via WhatsApp, email, or social media.</p></div></div>
-                  <div class="ref-step"><div class="ref-step__num">2</div><div><strong>Friend signs up</strong><p>They register on the SV Capital app and complete FICA verification.</p></div></div>
+                  <div class="ref-step"><div class="ref-step__num">2</div><div><strong>Friend signs up</strong><p>They register on the SV Capital app and complete FICA/KYC verification.</p></div></div>
                   <div class="ref-step"><div class="ref-step__num">3</div><div><strong>First investment</strong><p>Once they make their first investment, both of you receive R250 as a referral bonus.</p></div></div>
                   <div class="ref-step"><div class="ref-step__num">4</div><div><strong>Earn unlimited</strong><p>There's no limit. The more you refer, the more you earn.</p></div></div>
                 </div>
@@ -1135,7 +1139,7 @@
               <div class="panel__body">
                 <div class="info-list">
                   <div class="info-row"><span class="info-row__label">Total Referred</span><span class="info-row__value text-gold" id="refStatTotal">—</span></div>
-                  <div class="info-row"><span class="info-row__label">FICA Approved</span><span class="info-row__value" id="refStatApproved">—</span></div>
+                  <div class="info-row"><span class="info-row__label">FICA/KYC Approved</span><span class="info-row__value" id="refStatApproved">—</span></div>
                   <div class="info-row"><span class="info-row__label">Invested</span><span class="info-row__value" id="refStatInvested">—</span></div>
                   <div class="info-row"><span class="info-row__label">Bonuses Earned</span><span class="info-row__value text-green" id="refStatBonuses">—</span></div>
                 </div>
@@ -1147,7 +1151,7 @@
               <div style="overflow-x:auto">
                 <table class="data-table" style="font-size:0.8rem">
                   <thead><tr>
-                    <th>Name</th><th>FICA</th><th>Invested</th><th>Joined</th><th>Bonus Earned</th>
+                    <th>Name</th><th>FICA/KYC</th><th>Invested</th><th>Joined</th><th>Bonus Earned</th>
                   </tr></thead>
                   <tbody id="referredInvestorsBody">
                     <tr><td colspan="4" class="text-center text-muted" style="padding:16px">Loading…</td></tr>
@@ -1160,10 +1164,10 @@
               <div class="panel__header"><span class="panel__title">Terms & Conditions</span></div>
               <div class="panel__body" style="font-size:0.75rem;color:#6b7280;line-height:1.7">
                 <ul style="list-style:disc;padding-left:16px;display:flex;flex-direction:column;gap:6px">
-                  <li>Referral bonus paid when referred investor completes FICA and makes first investment.</li>
+                  <li>Referral bonus paid when referred investor completes FICA/KYC and makes first investment.</li>
                   <li>Both referrer and referred investor receive R250 each.</li>
                   <li>Bonus is credited to your SV Capital wallet.</li>
-                  <li>Referrer must be an active, FICA-approved investor.</li>
+                  <li>Referrer must be an active, FICA/KYC-approved investor.</li>
                   <li>Self-referrals are not permitted.</li>
                   <li>SV Capital reserves the right to modify the programme at any time.</li>
                 </ul>
@@ -1254,7 +1258,7 @@
         </div>
 
         <!-- Two-column layout: options + sidebar -->
-        <div class="stmt-grid" style="display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start">
+        <div style="display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start">
 
           <!-- ── Left: Options panel ── -->
           <div style="background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden">
@@ -1271,7 +1275,7 @@
               <!-- Date range -->
               <div>
                 <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;margin-bottom:10px">Statement Period</div>
-                <div class="form-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
                   <div>
                     <label style="display:block;font-size:0.78rem;font-weight:600;color:#6b7280;margin-bottom:5px">From</label>
                     <input type="date" id="stmtFrom" style="width:100%;padding:9px 12px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;color:#1a1a1a;background:#fff;outline:none;font-family:inherit" onfocus="this.style.borderColor='#ff9b0c'" onblur="this.style.borderColor='rgba(0,0,0,0.12)'" />
@@ -1286,7 +1290,7 @@
               <!-- Include sections -->
               <div>
                 <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;margin-bottom:10px">Include Sections</div>
-                <div class="form-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
                   <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid rgba(0,0,0,0.08);border-radius:8px;background:#F7F8FA;transition:border-color 0.2s" onmouseover="this.style.borderColor='#ff9b0c'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(0,0,0,0.08)'">
                     <input type="checkbox" id="stmtIncPortfolio" checked style="accent-color:#ff9b0c;width:15px;height:15px;flex-shrink:0">
                     <span style="font-size:0.82rem;font-weight:600;color:#303030">Portfolio Summary</span>
@@ -1370,11 +1374,11 @@
 
             <div class="panel mt-16">
               <div class="panel__header">
-                <span class="panel__title"><i class="fa-solid fa-file-invoice" style="color:#22c55e"></i> SARS Tax Certificate (IT3b)</span>
+                <span class="panel__title"><i class="fa-solid fa-file-invoice" style="color:#22c55e"></i> Investment Income Certificate</span>
               </div>
               <div class="panel__body">
                 <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">
-                  Download your annual interest income certificate for your SARS tax return. Covers the South African tax year (1 March – 28 February).
+                  Download your annual investment income certificate. Covers the South African tax year (1 March – 28 February).
                 </div>
                 <div class="form-group">
                   <label class="form-label">Tax Year (ending February)</label>
@@ -1386,7 +1390,7 @@
                 </div>
                 <div style="display:flex;gap:10px">
                   <button class="btn btn--success" style="flex:1" onclick="generateTaxCertificate()">
-                    <i class="fa-solid fa-file-arrow-down"></i> Preview / Print IT3b
+                    <i class="fa-solid fa-file-arrow-down"></i> Preview / Print Certificate
                   </button>
                   <button class="btn btn--secondary" style="flex:1" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(_lastTaxCertHTML),200)">
                     <i class="fa-solid fa-file-pdf"></i> Download PDF
@@ -1558,7 +1562,7 @@
       </div><!-- end view-subaccounts -->
 
       <!-- ══ SURVEY MODAL ══ -->
-      <div class="modal-overlay" id="surveyModal" style="display:none" onclick="if(event.target===this)closeSurveyModal()">
+      <div class="modal-overlay" id="surveyModal" onclick="if(event.target===this)closeSurveyModal()">
         <div class="modal-box survey-modal-box" id="surveyModalBox">
           <button class="modal-close" aria-label="Close" onclick="closeSurveyModal()"><i class="fa-solid fa-xmark"></i></button>
           <div id="surveyModalContent"></div>
@@ -1566,7 +1570,7 @@
       </div>
 
       <!-- ══ LEVEL-UP CELEBRATION MODAL ══ -->
-      <div class="modal-overlay" id="levelUpModal" style="display:none">
+      <div class="modal-overlay" id="levelUpModal">
         <div class="modal-box levelup-modal-box" id="levelUpBox">
           <div class="levelup-confetti" id="levelupConfetti"></div>
           <div class="levelup-icon" id="levelupIcon"><i class="fa-solid fa-trophy"></i></div>
@@ -1632,7 +1636,7 @@
       </div>
 
       <!-- Quick amount chips -->
-      <div id="pmAmountChips" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:24px">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:24px">
         <button onclick="setAmount(500)"  class="pm-chip">R500</button>
         <button onclick="setAmount(1000)" class="pm-chip">R1,000</button>
         <button onclick="setAmount(2500)" class="pm-chip">R2,500</button>
