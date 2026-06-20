@@ -63,31 +63,6 @@
 </head>
 <body>
 
-<!-- ── Animated intro overlay (plays on every app launch) ── -->
-<div id="appIntro" style="position:fixed;inset:0;background:#fff;z-index:99999;display:flex;align-items:center;justify-content:center;transition:opacity 0.7s ease">
-  <video id="introVideo" autoplay muted playsinline webkit-playsinline
-         style="max-width:82%;max-height:82vh;object-fit:contain">
-    <source src="logo-animation.mp4" type="video/mp4">
-  </video>
-</div>
-<script>
-(function(){
-  var vid = document.getElementById('introVideo');
-  var overlay = document.getElementById('appIntro');
-  function dismiss(){
-    overlay.style.opacity = '0';
-    setTimeout(function(){ if(overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 750);
-  }
-  if(vid){
-    vid.addEventListener('ended', dismiss);
-    // Fallback: dismiss after 4 s if video fails to play or is too long
-    setTimeout(dismiss, 4000);
-    vid.play().catch(dismiss);
-  } else {
-    dismiss();
-  }
-})();
-</script>
 
 <!-- PWA Install Banner -->
 <div id="pwaInstallBanner" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#1a2332;border:1px solid rgba(255,155,12,0.4);border-radius:14px;padding:14px 20px;align-items:center;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,0.4);max-width:420px;width:calc(100% - 40px)">
