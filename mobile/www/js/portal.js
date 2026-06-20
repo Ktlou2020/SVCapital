@@ -1234,7 +1234,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   _initPullToRefresh();
 });
 
-async function loadPortalData() {
+async function loadPortalData(_attempt = 0) {
+  const MAX_ATTEMPTS = 3;
   try {
     const [invRes, invstRes, txnRes, poolRes] = await Promise.all([
       API.investors.list({ limit: 100 }),
@@ -1330,12 +1331,22 @@ async function loadPortalData() {
     // Load gamification data (non-blocking — don't fail portal if quests fail)
     loadQuestData().catch(err => console.warn('[Quests] load error:', err.message));
   } catch (e) {
-    console.error('loadPortalData error:', e);
-    // Still render with whatever data we have so the page isn't permanently stuck
-    try { renderOverview(); } catch (_) {}
-    if (e.message && !e.message.includes('Session expired')) {
-      Toast.error('Could not load all portfolio data — pull down to refresh');
+    console.error(`loadPortalData error (attempt ${_attempt + 1}):`, e);
+
+    // Auth errors: do not retry — the session-expired overlay is already showing
+    if (e.message && e.message.includes('Session expired')) return;
+
+    // Network / timeout errors: retry with backoff (handles Railway cold-start)
+    if (_attempt < MAX_ATTEMPTS - 1) {
+      const delay = (_attempt + 1) * 3000; // 3 s, 6 s
+      console.log(`[portal] Retrying data load in ${delay}ms…`);
+      await new Promise(r => setTimeout(r, delay));
+      return loadPortalData(_attempt + 1);
     }
+
+    // All attempts exhausted — show whatever partial data we have
+    try { renderOverview(); } catch (_) {}
+    Toast.error('Could not connect to server — pull down to refresh');
   }
 }
 
