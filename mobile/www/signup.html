@@ -860,6 +860,14 @@
   </script>
   <script src="/js/native.js"></script>
   <link rel="stylesheet" href="/css/mobile-app.css">
+  <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
+  <script>
+  (function(){
+    var s=document.createElement('style');
+    s.textContent='@keyframes viewFadeIn{from{opacity:1;transform:none}to{opacity:1;transform:none}}@-webkit-keyframes viewFadeIn{from{opacity:1;transform:none}to{opacity:1;transform:none}}.view{animation:none!important;-webkit-animation:none!important;opacity:1!important;transform:none!important}.view.active{animation:none!important;-webkit-animation:none!important;opacity:1!important;transform:none!important}';
+    document.head.appendChild(s);
+  })();
+  </script>
 </head>
 <body>
 

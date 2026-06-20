@@ -1228,10 +1228,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (avEl && firstName) avEl.textContent = ((firstName[0] || '') + (lastName[0] || '')).toUpperCase() || '?';
   } catch (_) {}
 
-  await loadPortalData();
-  // Reveal content — remove the native loading cover now that data is ready
-  if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
-  // Generate notifications from real data
+  // Try to render from cache immediately — hides cover instantly on repeat launches
+  let _cacheRendered = false;
+  const _CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+  try {
+    const raw = localStorage.getItem('svc_portal_cache');
+    if (raw) {
+      const c = JSON.parse(raw);
+      if (c && c.cachedAt && (Date.now() - c.cachedAt) < _CACHE_TTL) {
+        PORTAL.investor     = c.investor     || null;
+        PORTAL.investments  = c.investments  || [];
+        PORTAL.transactions = c.transactions || [];
+        PORTAL.pools        = c.pools        || [];
+        PORTAL.waitlist     = c.waitlist     || [];
+        try { renderOverview(); } catch (_) {}
+        if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
+        _cacheRendered = true;
+      }
+    }
+  } catch (_) {}
+
+  if (_cacheRendered) {
+    // Silently refresh data in the background — don't block UI
+    loadPortalData().catch(() => {});
+  } else {
+    // First load or expired cache — show progressive status text during cold-start waits
+    const _coverText = document.getElementById('_nativeCoverText');
+    const _t1 = _coverText ? setTimeout(() => {
+      if (_coverText.textContent.includes('Loading')) _coverText.textContent = 'Server waking up, please wait…';
+    }, 4000) : null;
+    const _t2 = _coverText ? setTimeout(() => {
+      if (_coverText.textContent.includes('waking')) _coverText.textContent = 'Almost there…';
+    }, 9000) : null;
+
+    await loadPortalData();
+    if (_t1) clearTimeout(_t1);
+    if (_t2) clearTimeout(_t2);
+    // Reveal content — remove the native loading cover now that data is ready
+    if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
+  }
+
   loadNotifications();
   checkFirstDepositPrompt();
   _checkAutoStartTour();
@@ -1324,6 +1360,18 @@ async function loadPortalData(_attempt = 0) {
 
     try { SVC.setUser(PORTAL.investor); } catch (_) {}
     try { SVC.track('portal_loaded', { active_investments: PORTAL.investments.filter(i => i.status === 'active').length }); } catch (_) {}
+
+    // Cache fresh data so the next launch renders instantly from localStorage
+    try {
+      localStorage.setItem('svc_portal_cache', JSON.stringify({
+        investor: PORTAL.investor,
+        investments: PORTAL.investments,
+        transactions: PORTAL.transactions,
+        pools: PORTAL.pools,
+        waitlist: PORTAL.waitlist,
+        cachedAt: Date.now(),
+      }));
+    } catch (_) {}
 
     renderOverview();
     renderOnboardingWizard();
