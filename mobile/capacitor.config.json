@@ -15,7 +15,8 @@
   "android": {
     "allowMixedContent": false,
     "captureInput": true,
-    "webContentsDebuggingEnabled": false
+    "webContentsDebuggingEnabled": false,
+    "backgroundColor": "#ffffff"
   },
   "ios": {
     "contentInset": "automatic",
