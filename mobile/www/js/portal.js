@@ -5403,17 +5403,23 @@ function _renderTourStep(idx) {
     nextBtn.className = 'tour-next-btn';
   }
 
-  // Scroll target into view first, then position after layout settles
+  // Scroll target into view, then wait for layout to settle before positioning.
+  // On mobile one rAF is not enough — the scroll hasn't completed yet, so
+  // getBoundingClientRect() returns stale positions and the tooltip jumps.
   if (step.target && step.type !== 'center') {
     const el = document.querySelector(step.target);
-    if (el) el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+    if (el) el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
   }
-  requestAnimationFrame(() => _positionTour(step));
+  // Native mobile needs extra time for scroll to settle
+  const scrollDelay = window.__SVC_NATIVE__ ? 350 : 80;
+  setTimeout(() => _positionTour(step), scrollDelay);
 }
 
 function _positionTour(step) {
   const spotlight = document.getElementById('tourSpotlight');
   const tooltip   = document.getElementById('tourTooltip');
+
+  const isMobile = window.innerWidth < 600 || window.__SVC_NATIVE__;
 
   const _centerTooltip = () => {
     spotlight.style.cssText = 'display:none';
@@ -5423,10 +5429,32 @@ function _positionTour(step) {
       z-index:10002; max-width:440px; width:calc(100vw - 32px);`;
   };
 
+  // On mobile always pin tooltip at bottom — avoids all jumping/positioning issues
+  const _mobileTooltip = (r) => {
+    const pad = 8;
+    if (r) {
+      spotlight.style.cssText = `
+        display:block; position:fixed;
+        left:${r.left - pad}px; top:${r.top - pad}px;
+        width:${r.width + pad * 2}px; height:${r.height + pad * 2}px;
+        border-radius:12px;
+        box-shadow: 0 0 0 9999px rgba(0,0,0,0.72);
+        z-index:10001; pointer-events:none;`;
+    } else {
+      spotlight.style.cssText = 'display:none';
+    }
+    const ttW = Math.min(360, window.innerWidth - 32);
+    tooltip.style.cssText = `
+      display:flex; position:fixed;
+      bottom:90px; left:50%; transform:translateX(-50%);
+      width:${ttW}px; max-width:${ttW}px;
+      z-index:10002;`;
+  };
+
   if (step.type === 'center' || !step.target) { _centerTooltip(); return; }
 
   const el = document.querySelector(step.target);
-  if (!el) { _centerTooltip(); return; }
+  if (!el) { isMobile ? _mobileTooltip(null) : _centerTooltip(); return; }
 
   const r  = el.getBoundingClientRect();
   const vw = window.innerWidth;
@@ -5434,11 +5462,14 @@ function _positionTour(step) {
 
   // If element is invisible (hidden sidebar on mobile, display:none, zero size), centre tooltip
   const isVisible = r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw;
-  if (!isVisible) { _centerTooltip(); return; }
+  if (!isVisible) { isMobile ? _mobileTooltip(null) : _centerTooltip(); return; }
+
+  // Mobile: pin tooltip at bottom, spotlight on the element — no jumping
+  if (isMobile) { _mobileTooltip(r); return; }
 
   const pad = 8;
 
-  // Spotlight
+  // Desktop spotlight with smooth transition
   spotlight.style.cssText = `
     display:block; position:fixed;
     left:${r.left - pad}px; top:${r.top - pad}px;
@@ -5446,7 +5477,7 @@ function _positionTour(step) {
     border-radius:12px;
     box-shadow: 0 0 0 9999px rgba(0,0,0,0.72);
     z-index:10001; pointer-events:none;
-    transition: all 0.35s cubic-bezier(0.22,1,0.36,1);`;
+    transition: left 0.3s ease, top 0.3s ease, width 0.3s ease, height 0.3s ease;`;
 
   // Tooltip positioning
   const ttW    = Math.min(340, vw - 32);
