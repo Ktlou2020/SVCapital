@@ -63,6 +63,17 @@
 </head>
 <body>
 
+<!-- Native-app loading cover: prevents skeleton flash while portal data loads.
+     Removed by native.js / portal.js after loadPortalData() resolves. -->
+<div id="_nativeCover" style="display:none;position:fixed;inset:0;z-index:99998;background:#ffffff;pointer-events:none"></div>
+<script>(function(){
+  if(!window.__SVC_NATIVE__)return;
+  var c=document.getElementById('_nativeCover');
+  if(!c)return;
+  c.style.display='block';
+  // Match dark mode if user preference already stored
+  try{if(localStorage.getItem('svc_dark_mode')==='dark')c.style.background='#0d1117';}catch(_){}
+})();</script>
 
 <!-- PWA Install Banner -->
 <div id="pwaInstallBanner" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#1a2332;border:1px solid rgba(255,155,12,0.4);border-radius:14px;padding:14px 20px;align-items:center;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,0.4);max-width:420px;width:calc(100% - 40px)">
