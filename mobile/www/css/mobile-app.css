@@ -525,24 +525,40 @@ h3 { font-size: 0.9rem !important; }
 /* ─────────────────────────────────────────────────────────────
    22. Dark mode — ensure text is visible on all screens
    ───────────────────────────────────────────────────────────── */
+
+/* Override CSS custom properties so every element using var(--text),
+   var(--text-muted), var(--text-dim) etc. flips automatically */
 body.dark-mode {
+  --text:        #e2e8f0 !important;
+  --text-muted:  #9ca3af !important;
+  --text-dim:    #6b7280 !important;
+  --surface:     #1a2235 !important;
+  --bg:          #0d1117 !important;
+  --border:      rgba(255,255,255,0.07) !important;
+  --card-bg:     #1a2235 !important;
+  --dark-3:      #1f2937 !important;
   color: #e2e8f0 !important;
 }
+
+/* Hardcoded #1a1a1a / #1a1200 colours that ignore the variables */
+body.dark-mode .panel__title,
+body.dark-mode .rewards-stat__val,
+body.dark-mode .notif-item.unread .notif-title,
+body.dark-mode .ref-step strong { color: #e2e8f0 !important; }
+
+/* General text elements */
 body.dark-mode h1, body.dark-mode h2, body.dark-mode h3,
-body.dark-mode h4, body.dark-mode h5, body.dark-mode h6 {
-  color: #e2e8f0 !important;
-}
+body.dark-mode h4, body.dark-mode h5, body.dark-mode h6 { color: #e2e8f0 !important; }
 body.dark-mode p,
-body.dark-mode span:not(.badge):not(.tag),
-body.dark-mode li,
-body.dark-mode td, body.dark-mode th { color: #e2e8f0 !important; }
-body.dark-mode .text-muted,
-body.dark-mode .info-list__label,
-body.dark-mode .form-group label,
-body.dark-mode small { color: #6b7280 !important; }
+body.dark-mode li { color: #c9d1d9 !important; }
+body.dark-mode small,
+body.dark-mode .text-muted { color: #6b7280 !important; }
+
 /* Info lists (profile / security page) */
 body.dark-mode .info-list__item { border-color: rgba(255,255,255,0.06) !important; }
+body.dark-mode .info-list__label { color: #6b7280 !important; }
 body.dark-mode .info-list__value { color: #e2e8f0 !important; }
+
 /* Security / login rows */
 body.dark-mode .login-history-item,
 body.dark-mode .security-row,
@@ -552,9 +568,11 @@ body.dark-mode .setting-row {
   color: #e2e8f0 !important;
 }
 body.dark-mode .login-history-item .text-muted { color: #6b7280 !important; }
-/* Toggles / sliders */
+
+/* Toggles */
 body.dark-mode .toggle-label { color: #e2e8f0 !important; }
 body.dark-mode .toggle-desc  { color: #9ca3af !important; }
+
 /* Buttons */
 body.dark-mode .btn--secondary,
 body.dark-mode .btn--outline {
@@ -562,7 +580,8 @@ body.dark-mode .btn--outline {
   border-color: rgba(255,255,255,0.12) !important;
   color: #d1d5db !important;
 }
-/* Form inputs in dark mode */
+
+/* Form inputs */
 body.dark-mode input,
 body.dark-mode textarea,
 body.dark-mode select {
@@ -572,12 +591,18 @@ body.dark-mode select {
 }
 body.dark-mode input::placeholder,
 body.dark-mode textarea::placeholder { color: #4b5563 !important; }
-/* Sections / cards not already covered */
+
+/* Cards not already covered */
 body.dark-mode .section-card,
 body.dark-mode .summary-card,
 body.dark-mode .info-card {
   background: #161b27 !important;
   border-color: rgba(255,255,255,0.07) !important;
 }
-/* Toast / modal drag handle in dark */
+
+/* Table cells */
+body.dark-mode td,
+body.dark-mode th { color: #e2e8f0 !important; }
+
+/* Modal drag handle */
 body.dark-mode .modal__header::before { background: rgba(255,255,255,0.2) !important; }
