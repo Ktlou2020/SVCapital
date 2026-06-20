@@ -1114,11 +1114,12 @@ function closeSidebar() {
 }
 
 function navigate(view, btnEl) {
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-
+  // Add active to target FIRST so there's always at least one visible view —
+  // removes the white-frame moment where all views are simultaneously display:none
   const el = document.getElementById(`view-${view}`);
   if (el) el.classList.add('active');
+  document.querySelectorAll('.view').forEach(v => { if (v !== el) v.classList.remove('active'); });
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (btnEl) btnEl.classList.add('active');
 
   // Auto-close sidebar on mobile when navigating

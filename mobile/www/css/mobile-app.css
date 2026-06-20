@@ -509,16 +509,25 @@ body.dark-mode .mbn-item.active { color: #ff9b0c !important; }
 
 /* ─────────────────────────────────────────────────────────────
    20. View transitions
-   Keep it opacity-only — transform in keyframes creates/destroys
-   a GPU compositing layer on Android WebView, causing content to
-   flash then disappear after the animation completes.
+   No animation — Android WebView has a bug where applying
+   display:block and a CSS animation in the same style recalc
+   gets stuck at the 'from' keyframe (opacity:0), leaving the
+   view permanently invisible. Instant switch is more reliable.
    ───────────────────────────────────────────────────────────── */
-.view.active {
-  animation: mobileViewIn 0.18s ease-out !important;
+
+/* Re-declare viewFadeIn as a no-op: even if animation somehow fires, no opacity/transform change */
+@keyframes viewFadeIn {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 1; transform: none; }
 }
-@keyframes mobileViewIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+
+.view.active {
+  display: block !important;
+  animation: none !important;
+  -webkit-animation: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
 }
 
 /* ─────────────────────────────────────────────────────────────
