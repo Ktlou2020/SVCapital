@@ -60,11 +60,6 @@ body.dark-mode { background-color: #0d1117 !important; }
   -webkit-animation: none !important;
   opacity: 1 !important;
   transform: none !important;
-  /* Force the active view into its own GPU compositing layer so it paints
-     independently of any position:fixed overlay (e.g. the tour overlay).
-     Without this, older Android WebViews sometimes skip repainting content
-     that is "behind" a fixed transparent overlay, producing a blank screen. */
-  will-change: opacity;
 }
 /* Redefine viewFadeIn as a no-op so Android WebView never renders the from{opacity:0} frame */
 @-webkit-keyframes viewFadeIn {
@@ -673,3 +668,36 @@ body.dark-mode th { color: #e2e8f0 !important; }
 
 /* Modal drag handle */
 body.dark-mode .modal__header::before { background: rgba(255,255,255,0.2) !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   22. Tour overlay — promote to its own GPU compositing layer
+   The tour overlay is position:fixed with a high z-index. On older
+   Android WebViews a transparent fixed overlay can prevent content
+   BELOW it from being repainted (compositing bug). Promoting only
+   the OVERLAY (not the views) to its own layer isolates this layer
+   without creating stacking-context issues in child elements.
+   ───────────────────────────────────────────────────────────── */
+#tourOverlay {
+  will-change: opacity !important;
+  -webkit-transform: translateZ(0) !important;
+  transform: translateZ(0) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   23. Welcome banner — stronger visual presence on mobile
+   The banner bg (#fff) vs page bg (#F7F8FA) is barely distinguishable.
+   Add a visible left accent border so the card is always apparent.
+   ───────────────────────────────────────────────────────────── */
+.welcome-banner {
+  border-left: 3px solid #FF9B0C !important;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.08) !important;
+  /* Remove overflow:hidden — it can prevent GPU layer from repainting
+     child elements (avatar, text) when positioned:relative parent is
+     composited by an ancestor will-change on Android WebView */
+  overflow: visible !important;
+}
+.welcome-avatar {
+  /* Ensure avatar is always painted regardless of parent compositing */
+  position: relative !important;
+  z-index: 1 !important;
+}
