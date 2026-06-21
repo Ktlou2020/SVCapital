@@ -6,6 +6,14 @@
 (function () {
   if (!window.__SVC_NATIVE__) return;
 
+  /* ── Prevent Android WebView scroll-position restoration ──────────
+     Android WebView saves and restores the page scroll position across
+     WebView navigations. On the native app this makes the page start
+     scrolled down (top content invisible = blank white area). Setting
+     scrollRestoration to 'manual' hands full control back to portal.js
+     which calls window.scrollTo(0,0) after every navigate(). */
+  if (history.scrollRestoration) history.scrollRestoration = 'manual';
+
   /* ── Kill any service worker (native app must never use one) ──────
      A previously-registered service worker (from /portal/sw.js) caches
      JS/CSS with a cache-first strategy. In the native app this serves
@@ -34,8 +42,27 @@
     if (!P.StatusBar) return;
     const isDark = document.body.classList.contains('dark-mode');
     await P.StatusBar.setStyle({ style: isDark ? 'DARK' : 'LIGHT' });
-    await P.StatusBar.setBackgroundColor({ color: isDark ? '#0f1623' : '#ffffff' }).catch(() => {});
-    await P.StatusBar.setOverlaysWebView({ overlay: false });
+    // overlay:true = WebView extends behind status bar (edge-to-edge).
+    // Android 15 enforces edge-to-edge regardless of overlay:false, so using
+    // true makes our intent explicit. The topbar CSS uses env(safe-area-inset-top)
+    // for padding; we probe below in case Capacitor doesn't propagate the inset.
+    await P.StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
+    // Probe: measure if env(safe-area-inset-top) is reporting the real inset.
+    // On some Capacitor/Android builds it returns 0 even when the WebView is behind
+    // the status bar. In that case we fall back to a hardcoded 28px via CSS var.
+    requestAnimationFrame(() => {
+      const probe = document.createElement('div');
+      probe.style.cssText = 'position:fixed;top:env(safe-area-inset-top,0px);left:0;width:0;height:0;pointer-events:none;visibility:hidden;z-index:-9999';
+      document.documentElement.appendChild(probe);
+      const envInset = probe.getBoundingClientRect().top;
+      probe.remove();
+      // If env() returned a real inset, clear the fallback variable.
+      // If env() returned 0 (broken), set 28px fallback (typical Android status bar).
+      document.documentElement.style.setProperty(
+        '--native-sb-h',
+        envInset > 1 ? '0px' : '28px'
+      );
+    });
   }
 
   function syncStatusBar() {
