@@ -1113,6 +1113,22 @@ function closeSidebar() {
   if (backdrop) backdrop.classList.remove('sidebar-backdrop--visible');
 }
 
+// Force the GPU compositor to repaint .page-content and all its div children.
+// Canvas elements (Chart.js) always create their own GPU compositor layer; on
+// Android WebView this prevents sibling HTML div content from repainting until
+// the next scroll event. A double-rAF opacity microchange triggers an immediate
+// repaint of the promoted .page-content layer.
+function _forceNativeRepaint() {
+  if (!window.__SVC_NATIVE__) return;
+  const pc = document.querySelector('.page-content');
+  if (!pc) return;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    pc.style.opacity = '0.9999';
+    pc.offsetHeight;
+    pc.style.opacity = '';
+  }));
+}
+
 function navigate(view, btnEl) {
   const el = document.getElementById(`view-${view}`);
   // Guard: unknown view → bail out entirely rather than stripping .active from
@@ -1155,6 +1171,8 @@ function navigate(view, btnEl) {
   if (_pc) _pc.scrollTop = 0;
   document.documentElement.scrollTop = 0;
   document.body.scrollTop = 0;
+  // Force GPU repaint after view switch so newly-active content paints immediately.
+  _forceNativeRepaint();
 
   // Auto-close sidebar on mobile when navigating
   if (window.innerWidth <= 768) closeSidebar();
@@ -1780,7 +1798,6 @@ function renderPortfolioTrendChart() {
   const yMax = Math.ceil(Math.max(...data) * 1.08 / 1000) * 1000;
 
   if (PORTAL.charts.trend) { PORTAL.charts.trend.destroy(); PORTAL.charts.trend = null; }
-
   PORTAL.charts.trend = new Chart(canvas, {
     type: 'line',
     data: {
@@ -1846,6 +1863,7 @@ function renderPortfolioTrendChart() {
       },
     },
   });
+  _forceNativeRepaint();
 }
 
 function renderAllocationChart() {
@@ -1883,6 +1901,9 @@ function renderAllocationChart() {
       }
     }
   });
+  // Force repaint — new canvas GPU compositor layer can prevent HTML divs from
+  // painting on Android WebView; flush the compositor after each chart creation.
+  _forceNativeRepaint();
 
   // Render breakdown list beneath chart
   const list = document.getElementById('allocationList');
