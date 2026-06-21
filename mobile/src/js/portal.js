@@ -5328,11 +5328,19 @@ function shareReferral(method) {
    DARK MODE
    ═══════════════════════════════════════════════════════════════ */
 function initDarkMode() {
+  // Dark mode is disabled on the native app — always force light mode and
+  // clear any previously-saved dark preference.
+  if (window.__SVC_NATIVE__) {
+    _applyDark(false);
+    return;
+  }
   const saved = localStorage.getItem('svc_dark_mode');
   if (saved === 'dark') _applyDark(true);
 }
 
 function toggleDarkMode() {
+  // No-op on native — dark mode is disabled there.
+  if (window.__SVC_NATIVE__) return;
   const isDark = document.body.classList.contains('dark-mode');
   _applyDark(!isDark);
   SVC.track('svc_dark_mode_toggle', { dark_mode: !isDark });

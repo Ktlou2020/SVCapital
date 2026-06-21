@@ -192,6 +192,9 @@ input, textarea, [contenteditable] {
 #tourBtn,
 .topbar__actions > button[onclick*="openPortalCmd"] { display: none !important; }
 .topbar__actions > a.btn { display: none !important; }
+/* Dark mode is disabled on the native app — hide the toggle entirely */
+#darkModeBtn,
+.dark-mode-toggle { display: none !important; }
 /* Floating sidebar toggle — replaced by bottom nav on mobile */
 .mobile-toggle { display: none !important; }
 .topbar__actions { flex-shrink: 0 !important; gap: 4px !important; }
