@@ -8,6 +8,12 @@
    On Android WebView, overflow-x:hidden on <html> causes body to
    collapse to 0 height (blank screen). Only apply it from body
    downward, never on html itself.
+   DO NOT apply overflow-x:hidden to .app-layout — the CSS spec
+   computes overflow-y as 'auto' whenever overflow-x is non-visible
+   and overflow-y is 'visible'. This makes .app-layout a scroll
+   container at min-height:100vh, which clips content beyond the
+   viewport height into an invisible scroll box (the blank area bug).
+   body already has overflow-x:hidden from admin.css; that is enough.
    ───────────────────────────────────────────────────────────── */
 html {
   width: 100% !important;
@@ -32,12 +38,7 @@ body.dark-mode { background-color: #0d1117 !important; }
   max-width: 100vw !important;
   box-sizing: border-box !important;
 }
-/* Overflow containment only at the outermost layout level — applying
-   overflow-x:hidden to multiple nested containers creates overlapping
-   clipping contexts that cause Android WebView to drop content on scroll */
-.app-layout {
-  overflow-x: hidden !important;
-}
+/* NOTE: No overflow-x:hidden on .app-layout — see comment above. */
 .page-content {
   width: 100% !important;
   max-width: 100% !important;
