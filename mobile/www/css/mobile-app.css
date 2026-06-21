@@ -19,17 +19,39 @@
    would cause Android WebView GPU compositing to clip content at
    viewport boundaries.
    ───────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   0. SINGLE DOCUMENT SCROLLER — zero GPU promotion (Android WebView fix)
+   ─────────────────────────────────────────────────────────────
+   ROOT CAUSE (confirmed via cascade audit): the layout had TWO nested
+   scroll containers — body (implicit: admin.css overflow-x:hidden forces
+   overflow-y:auto) AND .page-content (explicit overflow-y:auto), and
+   .page-content was GPU-promoted via transform:translateZ(0). A GPU-promoted
+   scroll layer nested inside another scroller makes Android WebView re-tile
+   the promoted layer on scroll; off-screen tiles repaint GREY → "content
+   loads then disappears on scroll, grey screen".
+
+   FIX: exactly ONE scroller = the document (html/body via the viewport).
+   No element below body is a scroll container, and NOTHING is GPU-promoted.
+   Content flows in normal block layout and grows the document naturally.
+   ───────────────────────────────────────────────────────────── */
 html {
   width: 100% !important;
-  height: 100% !important;
+  /* height:auto (NOT 100%) — let the document be the single natural scroller. */
+  height: auto !important;
   -webkit-font-smoothing: antialiased !important;
   -webkit-text-size-adjust: 100% !important;
 }
 body {
   width: 100% !important;
   min-height: 100vh !important;
-  max-width: 100vw !important;
+  height: auto !important;
   background-color: #ffffff !important;
+  /* overflow-x:clip prevents horizontal scroll WITHOUT the CSS-spec side effect
+     that 'hidden' has of forcing overflow-y to auto (which made body an implicit
+     scroll container). With clip + height:auto, body is NOT a scroll container —
+     the viewport/document is the one and only scroller. */
+  overflow-x: clip !important;
+  overflow-y: visible !important;
   -webkit-font-smoothing: antialiased !important;
   -webkit-text-size-adjust: 100% !important;
 }
@@ -39,21 +61,28 @@ body.dark-mode { background-color: #0d1117 !important; }
   width: 100% !important;
   max-width: 100vw !important;
   box-sizing: border-box !important;
+  /* Pure block flow — no height constraint, no overflow, no transform.
+     These were flex containers with min-height:100vh on desktop; on mobile
+     they must NOT trap content or create scroll/GPU layers. */
+  height: auto !important;
+  overflow: visible !important;
+  transform: none !important;
+  -webkit-transform: none !important;
 }
 .page-content {
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
   padding: 10px 12px !important;
-  overflow-y: auto !important;
-  -webkit-overflow-scrolling: touch !important;
-  /* Promote .page-content to its own GPU compositor layer.
-     Canvas elements (charts) ALWAYS get their own GPU layer; on Android WebView
-     this causes sibling HTML div content to stop painting (content appears blank).
-     Promoting the scroll container forces ALL div content inside it into one GPU
-     layer that always paints, regardless of canvas sub-layers. */
-  -webkit-transform: translateZ(0) !important;
-  transform: translateZ(0) !important;
+  /* NOT a scroll container and NOT GPU-promoted. The document is the single
+     scroller. The previous overflow-y:auto + translateZ(0) here was the grey-
+     tile bug. Pure block flow: content grows the document; the viewport scrolls. */
+  overflow: visible !important;
+  height: auto !important;
+  min-height: 0 !important;
+  flex: none !important;
+  transform: none !important;
+  -webkit-transform: none !important;
 }
 .view {
   width: 100% !important;
@@ -62,9 +91,11 @@ body.dark-mode { background-color: #0d1117 !important; }
   height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
+  overflow: visible !important;
   animation: none !important;
   -webkit-animation: none !important;
   transform: none !important;
+  -webkit-transform: none !important;
   /* No opacity override here — non-active views need display:none to work.
      opacity:1 is only on .view.active below. */
 }

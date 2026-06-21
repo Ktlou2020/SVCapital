@@ -211,13 +211,13 @@
     // body scroll position from previous sessions, pushing all content below viewport.
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
-    // Force a repaint after the splash hides. Canvas elements (charts) create GPU
-    // compositor layers that can prevent sibling HTML div content from painting on
-    // Android WebView. A double-rAF opacity flush forces the compositor to repaint
-    // ALL layers including the newly-promoted .page-content layer.
+    // Force a full document repaint after the splash hides. A transient body-level
+    // opacity microchange (reverted next frame) forces Android WebView to paint the
+    // whole frame without promoting any element to a persistent GPU layer.
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      const pc = document.querySelector('.page-content');
-      if (pc) { pc.style.opacity = '0.9999'; pc.offsetHeight; pc.style.opacity = ''; }
+      document.body.style.opacity = '0.9999';
+      document.body.offsetHeight;
+      document.body.style.opacity = '';
     }));
     // Hide the native splash screen — this is the primary loading cover.
     hideSplash().catch(() => {});

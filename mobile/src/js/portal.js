@@ -1113,19 +1113,18 @@ function closeSidebar() {
   if (backdrop) backdrop.classList.remove('sidebar-backdrop--visible');
 }
 
-// Force the GPU compositor to repaint .page-content and all its div children.
-// Canvas elements (Chart.js) always create their own GPU compositor layer; on
-// Android WebView this prevents sibling HTML div content from repainting until
-// the next scroll event. A double-rAF opacity microchange triggers an immediate
-// repaint of the promoted .page-content layer.
+// Force the document to repaint after new canvas (Chart.js) layers are created.
+// Canvas elements always get their own GPU compositor layer; on Android WebView a
+// newly-created canvas layer can leave the rest of the frame stale until the next
+// paint. A transient document-level opacity microchange forces an immediate full
+// repaint and is reverted on the next frame so NO compositing layer persists on
+// .page-content (which must stay layer-free — see mobile-app.css Section 0).
 function _forceNativeRepaint() {
   if (!window.__SVC_NATIVE__) return;
-  const pc = document.querySelector('.page-content');
-  if (!pc) return;
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    pc.style.opacity = '0.9999';
-    pc.offsetHeight;
-    pc.style.opacity = '';
+    document.body.style.opacity = '0.9999';
+    document.body.offsetHeight;
+    document.body.style.opacity = '';
   }));
 }
 
