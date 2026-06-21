@@ -83,25 +83,20 @@ for (const subdir of ['css', 'js']) {
 
 // Layer 4: Patch HTML files — inject native config, mobile-app.css link,
 // and the loading cover element that hides initial skeleton content.
+// In native mode the Capacitor SplashScreen (a true native overlay) covers the
+// WebView while data loads. We must NOT show a position:fixed WebView div —
+// removing such a div after load causes Android WebView GPU compositing bugs
+// that leave the page content blank. The _nativeCover div stays display:none
+// in native; it is only used as a web-fallback (non-native builds).
 const LOADING_COVER = `
-<!-- Native-app loading cover: masks skeleton content while portal data loads.
-     Removed by portal.js after loadPortalData() resolves (including retries). -->
-<div id="_nativeCover" style="display:none;position:fixed;inset:0;z-index:99998;background:#ffffff;flex-direction:column;align-items:center;justify-content:center;gap:16px">
-  <img src="../assets/logo.png" alt="SV Capital" width="80" height="80" style="border-radius:18px;box-shadow:0 4px 24px rgba(0,0,0,0.12)">
-  <p id="_nativeCoverText" style="color:#9ca3af;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin:0;font-weight:500">Loading your portfolio…</p>
-</div>
+<!-- Native loading: handled by Capacitor SplashScreen (native overlay).
+     _nativeCover stays hidden in native mode to avoid Android compositing bugs.
+     portal.js calls window.__SVC_HIDE_COVER() after data loads, which hides
+     the native splash via SplashScreen.hide(). -->
+<div id="_nativeCover" style="display:none"></div>
 <script>(function(){
-  if(!window.__SVC_NATIVE__)return;
-  var c=document.getElementById('_nativeCover');
-  if(!c)return;
-  c.style.display='flex';
-  try{
-    if(localStorage.getItem('svc_dark_mode')==='dark'){
-      c.style.background='#0d1117';
-      var t=document.getElementById('_nativeCoverText');
-      if(t)t.style.color='#6b7280';
-    }
-  }catch(_){}
+  // Non-native web only: show a minimal loading indicator
+  if(window.__SVC_NATIVE__)return;
 })();</script>`;
 
 const nativeHeadScript = `
