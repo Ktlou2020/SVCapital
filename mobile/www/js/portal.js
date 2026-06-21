@@ -1149,8 +1149,12 @@ function navigate(view, btnEl) {
 
   // Scroll back to top on every view change — Android WebView can restore a
   // stale scroll position from a previous session, making the top content appear blank.
+  // Body is the scroll container (admin.css: overflow-x:hidden → implicit overflow-y:auto)
+  // so we must reset BOTH page-content AND body/documentElement.
   const _pc = document.querySelector('.page-content');
   if (_pc) _pc.scrollTop = 0;
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
 
   // Auto-close sidebar on mobile when navigating
   if (window.innerWidth <= 768) closeSidebar();

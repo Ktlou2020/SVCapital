@@ -224,7 +224,11 @@ input, textarea, [contenteditable] {
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
-  overflow-x: hidden !important;
+  /* overflow:hidden (both axes) prevents horizontal overflow without creating an
+     implicit overflow-y:auto scroll container. The CSS spec says if overflow-x is
+     hidden but overflow-y is visible, overflow-y becomes auto — creating a scroll
+     container. Clip both axes to avoid that implicit scroll container. */
+  overflow: hidden !important;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -551,13 +555,20 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
 .mbn-inner { display: flex !important; width: 100% !important; }
 .mbn-item {
   position: relative !important;
-  flex: 1 !important; display: flex !important; flex-direction: column !important;
+  flex: 1 !important; min-width: 0 !important; display: flex !important; flex-direction: column !important;
   align-items: center !important; justify-content: center !important;
   gap: 3px !important; padding: 10px 4px 8px !important;
   background: none !important; border: none !important;
   color: #9ca3af !important; font-size: 0.56rem !important; font-weight: 700 !important;
   text-transform: uppercase !important; letter-spacing: 0.04em !important;
   transition: color 0.12s !important; outline: none !important;
+  overflow: hidden !important;
+}
+.mbn-item span {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 100% !important;
 }
 .mbn-item::before {
   content: '' !important; position: absolute !important;
@@ -710,21 +721,51 @@ body.dark-mode th { color: #e2e8f0 !important; }
 body.dark-mode .modal__header::before { background: rgba(255,255,255,0.2) !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   22. Tour overlay — promote to its own GPU compositing layer
-   The tour overlay is position:fixed with a high z-index. On older
-   Android WebViews a transparent fixed overlay can prevent content
-   BELOW it from being repainted (compositing bug). Promoting only
-   the OVERLAY (not the views) to its own layer isolates this layer
-   without creating stacking-context issues in child elements.
+   22. Tour overlay — hidden on native (tour is disabled for Android)
+   Tour auto-start is skipped in portal.js when window.__SVC_NATIVE__
+   is set. No GPU layer promotion needed since the overlay never shows.
    ───────────────────────────────────────────────────────────── */
 #tourOverlay {
-  will-change: opacity !important;
-  -webkit-transform: translateZ(0) !important;
-  transform: translateZ(0) !important;
+  /* No will-change or transform — would create GPU compositor layer for a
+     permanently-hidden element, wasting GPU memory on Android. */
 }
 
 /* ─────────────────────────────────────────────────────────────
-   23. Welcome banner — stronger visual presence on mobile
+   23. Market pool cards — GPU compositor fix + layout restore
+   portal-premium.css applies -webkit-text-fill-color:transparent to
+   .market-pool-card__rate (gradient text). On Android WebView this creates
+   a separate GPU compositor layer for EACH pool card. When many compositor
+   layers exist, some tiles fail to repaint → cards appear blank until scroll.
+   Also, portal.css sets transform:translateY(-2px) on :hover — this creates
+   a GPU layer on touch-tap on Android WebView.
+   Additionally, mobile-app.css Section 3 forces .grid-3 > * { display:block }
+   which overrides market-pool-card's display:flex layout — restore it here.
+   ───────────────────────────────────────────────────────────── */
+.market-pool-card {
+  display: flex !important;          /* Restore flex layout (overridden by .grid-3 > *) */
+  flex-direction: column !important;
+  gap: 14px !important;
+  overflow: hidden !important;
+}
+.market-pool-card__rate {
+  /* Remove gradient-text GPU compositor layer — use solid gold instead */
+  -webkit-text-fill-color: #FF9B0C !important;
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  color: #FF9B0C !important;
+}
+/* No GPU layer from transform on tap — touch devices don't hover */
+.market-pool-card:hover,
+.market-pool-card:active {
+  transform: none !important;
+}
+.market-pool-card__title { color: #111827 !important; }
+.market-pool-card__blurb { color: #6b7280 !important; }
+.mps__value { color: #111827 !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   25. Welcome banner — stronger visual presence on mobile
    The banner bg (#fff) vs page bg (#F7F8FA) is barely distinguishable.
    Add a visible left accent border so the card is always apparent.
    ───────────────────────────────────────────────────────────── */

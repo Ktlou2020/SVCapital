@@ -207,6 +207,10 @@
   // is ready. Using a native overlay avoids the Android WebView GPU compositing
   // bug where removing a position:fixed WebView element leaves content blank.
   function _hideCover() {
+    // Reset body scroll before revealing content — Android WebView restores
+    // body scroll position from previous sessions, pushing all content below viewport.
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
     // Hide the native splash screen — this is the primary loading cover.
     hideSplash().catch(() => {});
     // Also clear any legacy _nativeCover div (no-op when div is already hidden).
