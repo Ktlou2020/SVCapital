@@ -1147,6 +1147,11 @@ function navigate(view, btnEl) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (btnEl) btnEl.classList.add('active');
 
+  // Scroll back to top on every view change — Android WebView can restore a
+  // stale scroll position from a previous session, making the top content appear blank.
+  const _pc = document.querySelector('.page-content');
+  if (_pc) _pc.scrollTop = 0;
+
   // Auto-close sidebar on mobile when navigating
   if (window.innerWidth <= 768) closeSidebar();
 
@@ -1313,9 +1318,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         active.style.setProperty('-webkit-animation', 'none',    'important');
       }
     };
+    // Run at multiple intervals: before tour (100ms, 600ms, 1500ms),
+    // after tour starts (3000ms, 5000ms) in case the overlay causes a blank.
     setTimeout(_forceViewVisible, 100);
     setTimeout(_forceViewVisible, 600);
     setTimeout(_forceViewVisible, 1500);
+    setTimeout(_forceViewVisible, 3000);
+    setTimeout(_forceViewVisible, 5000);
   }
 });
 
@@ -5430,23 +5439,25 @@ let _tourActive = false;
 
 function _checkAutoStartTour() {
   if (localStorage.getItem('svc_tour_done')) return;
-  // Guard: only start the tour once investor data has actually loaded into
-  // the view. PORTAL.investor starts as null; loadPortalData() always sets at
-  // least {id} but first_name/email only appear when the API responds. If data
-  // never loads we skip the tour to avoid showing it over blank content.
   const inv = PORTAL.investor;
   if (!inv || (!inv.first_name && !inv.last_name && !inv.email)) return;
-  // On native Android give the WebView extra time to composite the painted
-  // content before the overlay appears — prevents blank-screen behind tour.
-  const delay = window.__SVC_NATIVE__ ? 1200 : 400;
+  // Mark as done BEFORE starting so that a force-close or back-button exit
+  // during the tour does not restart it on the next launch.
+  localStorage.setItem('svc_tour_done', '1');
+  const delay = window.__SVC_NATIVE__ ? 2000 : 400;
   requestAnimationFrame(() => setTimeout(startTour, delay));
 }
 
 function startTour() {
   _tourActive = true;
   _tourStep = 0;
+  // Always scroll back to the top of the page before showing the tour so the
+  // welcome banner (not the onboarding wizard) is at the top of the viewport.
+  // On Android, WebView can restore a previous scroll position on relaunch,
+  // making the top content appear to be a blank gray area.
+  const pc = document.querySelector('.page-content');
+  if (pc) pc.scrollTop = 0;
   document.getElementById('tourOverlay').style.display = 'block';
-  // Hide the pulsing badge on tour button
   const pulse = document.querySelector('.tour-btn-pulse');
   if (pulse) pulse.style.display = 'none';
   _renderTourStep(_tourStep);

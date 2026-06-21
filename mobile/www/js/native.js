@@ -151,6 +151,12 @@
   function initBackButton() {
     if (!P.App) return;
     P.App.addListener('backButton', ({ canGoBack }) => {
+      // Dismiss tour overlay — Android back is the natural dismiss gesture.
+      const tour = document.getElementById('tourOverlay');
+      if (tour && tour.style.display === 'block') {
+        if (window.skipTour) window.skipTour();
+        return;
+      }
       const modal = document.querySelector('.modal--open, .modal[style*="flex"]');
       if (modal) {
         if (window.Modal) Modal.closeAll();
@@ -200,7 +206,10 @@
     const cover = document.getElementById('_nativeCover');
     if (!cover) return;
     cover.style.pointerEvents = 'none';
-    cover.style.opacity = '0';
+    // display:none removes the element from the compositor immediately.
+    // opacity:0 keeps a "ghost" compositing layer that can prevent Android
+    // WebView from repainting the content below the cover.
+    cover.style.display = 'none';
     setTimeout(() => { try { cover.remove(); } catch (_) {} }, 50);
   }
 
