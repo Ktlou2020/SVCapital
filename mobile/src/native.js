@@ -65,6 +65,13 @@
   /* ── Push Notifications ─────────────────────────── */
   async function initPush() {
     if (!P.PushNotifications) return;
+    // Guard: only register push from the main portal page (index.html).
+    // native.js is also loaded on login.html / signup.html so the API base
+    // URL is available there, but calling register() on those pages and then
+    // resolving the Android permission dialog before the portal WebView is
+    // fully initialised causes a native crash. #view-overview only exists
+    // in index.html, so this check is a reliable portal-page guard.
+    if (!document.getElementById('view-overview')) return;
     let perm = await P.PushNotifications.checkPermissions();
     if (perm.receive === 'prompt') {
       perm = await P.PushNotifications.requestPermissions();
