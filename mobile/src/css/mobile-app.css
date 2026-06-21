@@ -4,72 +4,49 @@
    ══════════════════════════════════════════════════════════════ */
 
 /* ─────────────────────────────────────────────────────────────
-   0. Width-containment chain + Android WebView layout fixes
+   0. Android WebView scroll container fix
    ─────────────────────────────────────────────────────────────
-   MOBILE APP LAYOUT MODEL (standard pattern for Capacitor/Ionic):
+   PROBLEM: After removing flex height constraints, body became the
+   scroll container (overflow-x:hidden → implicit overflow-y:auto).
+   Android WebView restores body scroll position from previous sessions,
+   pushing all content below the viewport (blank top area).
+   portal.js calls _pc.scrollTop = 0 to reset, but needs .page-content
+   to be the EXPLICIT scroll container for the reset to work.
 
-     html, body → 100vh, no scroll (content fits exactly in viewport)
-     .app-layout → 100% width, height auto
-     .main-content → 100vh height, flex column
-       .topbar → fixed 52px, always visible (above scroll container)
-       .page-content → flex:1, overflow-y:auto (THE scroll container)
-         .view.active → height:auto, grows with content
-     .mbn → position:fixed, bottom:0
-
-   WHY THIS WORKS:
-   • .page-content is the EXPLICIT scroll container. portal.js already
-     calls _pc.scrollTop = 0 to reset scroll — this only works if
-     .page-content IS the scroll container with overflow-y:auto.
-   • Keeping body from being the scroll container prevents Android WebView
-     from restoring a stale body scroll position from a previous session,
-     which pushed content below the viewport (blank top area bug).
-   • .main-content uses height:100vh (not min-height) so .page-content
-     gets a definite flex height to fill. With overflow-y:auto, content
-     inside scrolls rather than being clipped.
-   • No overflow-x:hidden on .app-layout or .main-content — the CSS spec
-     would compute overflow-y:auto, turning them into unintended scroll
-     containers that clip content at viewport height.
+   SOLUTION: Keep admin.css layout (min-height: 100vh), but ensure
+   .page-content is the only scroll container and content can overflow
+   it for scrolling (not clipping). Don't add height constraints that
+   would cause Android WebView GPU compositing to clip content at
+   viewport boundaries.
    ───────────────────────────────────────────────────────────── */
-html, body {
+html {
   width: 100% !important;
   height: 100% !important;
+  -webkit-font-smoothing: antialiased !important;
+  -webkit-text-size-adjust: 100% !important;
+}
+body {
+  width: 100% !important;
+  min-height: 100vh !important;
   max-width: 100vw !important;
-  /* Prevent html/body from being scroll containers */
-  overflow: hidden !important;
   background-color: #ffffff !important;
   -webkit-font-smoothing: antialiased !important;
   -webkit-text-size-adjust: 100% !important;
 }
 body.dark-mode { background-color: #0d1117 !important; }
-.app-layout {
-  width: 100% !important;
-  max-width: 100vw !important;
-  box-sizing: border-box !important;
-  /* No height constraint — .main-content handles the 100vh */
-}
+.app-layout,
 .main-content {
   width: 100% !important;
   max-width: 100vw !important;
   box-sizing: border-box !important;
-  /* Exact 100vh so .page-content (flex:1) fills the remaining space */
-  height: 100vh !important;
-  min-height: 0 !important;
-  display: flex !important;
-  flex-direction: column !important;
 }
-/* NOTE: No overflow-x:hidden on .app-layout or .main-content.
-   The CSS spec computes overflow-y:auto whenever overflow-x is
-   non-visible and overflow-y is visible, creating an unintended
-   scroll container clipped at the viewport height. */
 .page-content {
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
   padding: 10px 12px !important;
-  /* THE scroll container — fills remaining height after topbar */
-  flex: 1 !important;
-  min-height: 0 !important;
-  overflow-x: hidden !important;
+  /* THE scroll container — explicit overflow-y:auto so Android WebView
+     scroll position can be reset by portal.js with _pc.scrollTop = 0 */
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch !important;
 }
