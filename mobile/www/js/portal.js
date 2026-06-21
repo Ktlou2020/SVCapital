@@ -1113,21 +1113,6 @@ function closeSidebar() {
   if (backdrop) backdrop.classList.remove('sidebar-backdrop--visible');
 }
 
-// Force the document to repaint after new canvas (Chart.js) layers are created.
-// Canvas elements always get their own GPU compositor layer; on Android WebView a
-// newly-created canvas layer can leave the rest of the frame stale until the next
-// paint. A transient document-level opacity microchange forces an immediate full
-// repaint and is reverted on the next frame so NO compositing layer persists on
-// .page-content (which must stay layer-free — see mobile-app.css Section 0).
-function _forceNativeRepaint() {
-  if (!window.__SVC_NATIVE__) return;
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    document.body.style.opacity = '0.9999';
-    document.body.offsetHeight;
-    document.body.style.opacity = '';
-  }));
-}
-
 function navigate(view, btnEl) {
   const el = document.getElementById(`view-${view}`);
   // Guard: unknown view → bail out entirely rather than stripping .active from
@@ -1162,16 +1147,10 @@ function navigate(view, btnEl) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (btnEl) btnEl.classList.add('active');
 
-  // Scroll back to top on every view change — Android WebView can restore a
-  // stale scroll position from a previous session, making the top content appear blank.
-  // Body is the scroll container (admin.css: overflow-x:hidden → implicit overflow-y:auto)
-  // so we must reset BOTH page-content AND body/documentElement.
-  const _pc = document.querySelector('.page-content');
-  if (_pc) _pc.scrollTop = 0;
-  document.documentElement.scrollTop = 0;
-  document.body.scrollTop = 0;
-  // Force GPU repaint after view switch so newly-active content paints immediately.
-  _forceNativeRepaint();
+  // Reset viewport scroll to top on every view change.
+  // window.scrollTo is the correct API regardless of which element is the
+  // scroll container (body.scrollTop is a no-op when body is not the scroller).
+  window.scrollTo(0, 0);
 
   // Auto-close sidebar on mobile when navigating
   if (window.innerWidth <= 768) closeSidebar();
@@ -1862,7 +1841,6 @@ function renderPortfolioTrendChart() {
       },
     },
   });
-  _forceNativeRepaint();
 }
 
 function renderAllocationChart() {
@@ -1900,9 +1878,6 @@ function renderAllocationChart() {
       }
     }
   });
-  // Force repaint — new canvas GPU compositor layer can prevent HTML divs from
-  // painting on Android WebView; flush the compositor after each chart creation.
-  _forceNativeRepaint();
 
   // Render breakdown list beneath chart
   const list = document.getElementById('allocationList');
