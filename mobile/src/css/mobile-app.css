@@ -75,6 +75,9 @@ body.dark-mode { background-color: #0d1117 !important; }
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
   animation: none !important;
   -webkit-animation: none !important;
   transform: none !important;
