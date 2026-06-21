@@ -211,6 +211,14 @@
     // body scroll position from previous sessions, pushing all content below viewport.
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
+    // Force a repaint after the splash hides. Canvas elements (charts) create GPU
+    // compositor layers that can prevent sibling HTML div content from painting on
+    // Android WebView. A double-rAF opacity flush forces the compositor to repaint
+    // ALL layers including the newly-promoted .page-content layer.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const pc = document.querySelector('.page-content');
+      if (pc) { pc.style.opacity = '0.9999'; pc.offsetHeight; pc.style.opacity = ''; }
+    }));
     // Hide the native splash screen — this is the primary loading cover.
     hideSplash().catch(() => {});
     // Also clear any legacy _nativeCover div (no-op when div is already hidden).
