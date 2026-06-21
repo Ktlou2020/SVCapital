@@ -956,7 +956,11 @@
       }
 
       btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
-      setTimeout(() => { window.location.href = data.redirect || 'portal/'; }, 350);
+      // On native Android, bypass the /portal/ → / redirect chain and go straight
+      // to index.html. The extra navigation triggers a second native.js load which
+      // re-fires initPush() before Firebase is ready, crashing the app.
+      const dest = window.__SVC_NATIVE__ ? '/index.html' : (data.redirect || 'portal/');
+      setTimeout(() => { window.location.href = dest; }, 350);
     } catch (err) {
       btn.disabled = false; btn.classList.remove('loading');
       btnText.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In';
@@ -976,7 +980,7 @@
       const data = JSON.parse(saved);
       localStorage.setItem('svc_token', data.token);
       localStorage.setItem('svc_user', JSON.stringify(data.user));
-      window.location.href = data.redirect || '/portal/';
+      window.location.href = window.__SVC_NATIVE__ ? '/index.html' : (data.redirect || '/portal/');
     } catch (err) {
       showError('Biometric authentication failed. Please sign in with your password.');
     }
@@ -1012,7 +1016,8 @@
       const savedLoginEmail = document.getElementById('emailInput')?.value?.trim().toLowerCase();
       if (savedLoginEmail) localStorage.setItem('svc_last_login_email', savedLoginEmail);
       btn.textContent = 'Verified ✓';
-      setTimeout(() => { window.location.href = data.redirect || 'portal/'; }, 350);
+      const dest2fa = window.__SVC_NATIVE__ ? '/index.html' : (data.redirect || 'portal/');
+      setTimeout(() => { window.location.href = dest2fa; }, 350);
     } catch (err) {
       btn.disabled = false; btn.textContent = 'Verify Code';
       if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }

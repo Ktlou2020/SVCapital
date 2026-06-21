@@ -72,51 +72,62 @@
     // fully initialised causes a native crash. #view-overview only exists
     // in index.html, so this check is a reliable portal-page guard.
     if (!document.getElementById('view-overview')) return;
-    let perm = await P.PushNotifications.checkPermissions();
-    if (perm.receive === 'prompt') {
-      perm = await P.PushNotifications.requestPermissions();
+
+    // De-duplicate: native.js is re-executed on every WebView navigation
+    // (login → portal redirect → index.html). Only register once per process.
+    if (window.__SVC_PUSH_REGISTERED__) return;
+    window.__SVC_PUSH_REGISTERED__ = true;
+
+    try {
+      let perm = await P.PushNotifications.checkPermissions();
+      if (perm.receive === 'prompt') {
+        perm = await P.PushNotifications.requestPermissions();
+      }
+      if (perm.receive !== 'granted') return;
+
+      await P.PushNotifications.register();
+
+      P.PushNotifications.addListener('registration', async token => {
+        try {
+          const apiBase = window.__SVC_API_BASE__ || '/api/';
+          const authToken = localStorage.getItem('svc_token');
+          if (!authToken) return;
+          await fetch(`${apiBase}investors/push-token`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authToken}`,
+            },
+            body: JSON.stringify({ token: token.value, platform: window.Capacitor.getPlatform() }),
+          });
+        } catch (_) {}
+      });
+
+      P.PushNotifications.addListener('registrationError', err => {
+        console.warn('[push] Registration error:', err.error);
+        // Reset flag so registration can be retried next session
+        window.__SVC_PUSH_REGISTERED__ = false;
+      });
+
+      P.PushNotifications.addListener('pushNotificationReceived', notification => {
+        if (window.Toast) {
+          window.Toast.info(notification.title || notification.body || 'New notification');
+        }
+      });
+
+      P.PushNotifications.addListener('pushNotificationActionPerformed', action => {
+        const data = action.notification?.data || {};
+        const view = data.view || data.section || data.tab;
+        if (view && window.navigate) {
+          setTimeout(() => { if (window.navigate) navigate(view); }, 500);
+        }
+      });
+    } catch (e) {
+      // Firebase / FCM not configured or not available on this device/emulator.
+      // Reset so it can be retried after google-services.json is added.
+      window.__SVC_PUSH_REGISTERED__ = false;
+      console.warn('[push] Push notifications unavailable (is google-services.json present?):', e.message || e);
     }
-    if (perm.receive !== 'granted') return;
-
-    await P.PushNotifications.register();
-
-    P.PushNotifications.addListener('registration', async token => {
-      try {
-        const apiBase = window.__SVC_API_BASE__ || '/api/';
-        const authToken = localStorage.getItem('svc_token');
-        if (!authToken) return;
-        await fetch(`${apiBase}investors/push-token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`,
-          },
-          body: JSON.stringify({ token: token.value, platform: window.Capacitor.getPlatform() }),
-        });
-      } catch (_) {}
-    });
-
-    P.PushNotifications.addListener('registrationError', err => {
-      console.warn('[push] Registration error:', err.error);
-    });
-
-    P.PushNotifications.addListener('pushNotificationReceived', notification => {
-      if (window.Toast) {
-        window.Toast.info(notification.title || notification.body || 'New notification');
-      }
-    });
-
-    P.PushNotifications.addListener('pushNotificationActionPerformed', action => {
-      const data = action.notification?.data || {};
-      // Support view, section, and tab deep links
-      const view = data.view || data.section || data.tab;
-      if (view && window.navigate) {
-        // Small delay to ensure portal is loaded
-        setTimeout(() => {
-          if (window.navigate) navigate(view);
-        }, 500);
-      }
-    });
   }
 
   /* ── Haptic feedback ────────────────────────────── */
