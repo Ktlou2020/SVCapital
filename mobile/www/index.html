@@ -2714,7 +2714,10 @@
 <script src="js/portal.js?v=2"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {
+  // Web only. In the native app the assets are already local; a service worker
+  // there serves stale cached JS/CSS (cache-first) and races network vs cache,
+  // causing content to flash then disappear. native.js unregisters it instead.
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/portal/sw.js', { scope: '/portal/' })
       .then(r => { window._swReg = r; console.log('[SW] Registered'); })

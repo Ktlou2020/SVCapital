@@ -4,7 +4,28 @@
  * Loaded only when window.__SVC_NATIVE__ === true.
  */
 (function () {
-  if (!window.__SVC_NATIVE__ || !window.Capacitor) return;
+  if (!window.__SVC_NATIVE__) return;
+
+  /* ── Kill any service worker (native app must never use one) ──────
+     A previously-registered service worker (from /portal/sw.js) caches
+     JS/CSS with a cache-first strategy. In the native app this serves
+     STALE assets — code/style updates never take effect — and the
+     cache-vs-network race makes content flash then disappear. Unregister
+     every SW and delete all caches so the app always runs the freshly
+     bundled assets. Runs before the Capacitor guard so it executes even
+     if a plugin is unavailable. */
+  try {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations()
+        .then(regs => regs.forEach(r => r.unregister()))
+        .catch(() => {});
+    }
+    if (window.caches && caches.keys) {
+      caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
+    }
+  } catch (_) {}
+
+  if (!window.Capacitor) return;
 
   const P = window.Capacitor.Plugins;
 
