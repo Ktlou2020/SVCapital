@@ -5438,14 +5438,17 @@ let _tourStep = 0;
 let _tourActive = false;
 
 function _checkAutoStartTour() {
+  // Tour disabled on native Android — on-device UX is different enough that
+  // the desktop-oriented tour is confusing. Users can still tap the tour
+  // button manually if the topbar button is visible.
+  if (window.__SVC_NATIVE__) return;
   if (localStorage.getItem('svc_tour_done')) return;
   const inv = PORTAL.investor;
   if (!inv || (!inv.first_name && !inv.last_name && !inv.email)) return;
-  // Mark as done BEFORE starting so that a force-close or back-button exit
-  // during the tour does not restart it on the next launch.
+  // Mark as done BEFORE starting so that closing the browser tab during the
+  // tour doesn't restart it on the next visit.
   localStorage.setItem('svc_tour_done', '1');
-  const delay = window.__SVC_NATIVE__ ? 2000 : 400;
-  requestAnimationFrame(() => setTimeout(startTour, delay));
+  requestAnimationFrame(() => setTimeout(startTour, 400));
 }
 
 function startTour() {

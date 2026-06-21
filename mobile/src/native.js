@@ -201,24 +201,26 @@
     });
   }
 
-  /* ── Loading cover (white overlay that masks initial skeleton flash) ── */
+  /* ── Loading cover ──────────────────────────────── */
+  // In native mode the Capacitor SplashScreen (a true native overlay, not a
+  // WebView div) covers the app while data loads. We hide it here after data
+  // is ready. Using a native overlay avoids the Android WebView GPU compositing
+  // bug where removing a position:fixed WebView element leaves content blank.
   function _hideCover() {
+    // Hide the native splash screen — this is the primary loading cover.
+    hideSplash().catch(() => {});
+    // Also clear any legacy _nativeCover div (no-op when div is already hidden).
     const cover = document.getElementById('_nativeCover');
-    if (!cover) return;
-    cover.style.pointerEvents = 'none';
-    // display:none removes the element from the compositor immediately.
-    // opacity:0 keeps a "ghost" compositing layer that can prevent Android
-    // WebView from repainting the content below the cover.
-    cover.style.display = 'none';
-    setTimeout(() => { try { cover.remove(); } catch (_) {} }, 50);
+    if (cover) { cover.style.display = 'none'; setTimeout(() => { try { cover.remove(); } catch (_) {} }, 50); }
   }
 
-  /* Expose globally so portal.js DOMContentLoaded can call it after data loads */
+  /* Expose globally so portal.js calls this after loadPortalData() resolves */
   window.__SVC_HIDE_COVER = _hideCover;
 
-  /* Safety fallback: always remove the cover after 10 s regardless.
-     Railway cold-starts can take 5-8 s; 10 s gives the retry logic time to work. */
-  setTimeout(_hideCover, 10000);
+  /* Safety fallback: if portal.js never calls __SVC_HIDE_COVER (e.g. auth
+     redirect, load failure), hide the splash after 12 s so the app isn't
+     stuck on a splash screen forever. Railway cold-starts can take 5-8 s. */
+  setTimeout(_hideCover, 12000);
 
   /* ── Init ───────────────────────────────────────── */
   async function init() {
@@ -232,13 +234,11 @@
     try { initAppLifecycle();   } catch (e) { console.warn('[native] AppLifecycle init failed:', e); }
     await initPush().catch(e => console.warn('[native] Push init failed:', e));
 
-    try {
-      if (document.readyState !== 'loading') {
-        await hideSplash();
-      } else {
-        document.addEventListener('DOMContentLoaded', hideSplash);
-      }
-    } catch (e) { console.warn('[native] hideSplash failed:', e); }
+    // NOTE: hideSplash() is intentionally NOT called here.
+    // The native SplashScreen stays visible until portal.js calls
+    // window.__SVC_HIDE_COVER() after loadPortalData() resolves.
+    // This ensures the WebView has fully rendered before the splash fades,
+    // preventing the blank-screen compositing bug on Android.
 
     console.log('[native] SV Capital native bridge initialised');
   }
