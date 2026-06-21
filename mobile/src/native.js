@@ -207,18 +207,12 @@
   // is ready. Using a native overlay avoids the Android WebView GPU compositing
   // bug where removing a position:fixed WebView element leaves content blank.
   function _hideCover() {
-    // Reset body scroll before revealing content — Android WebView restores
-    // body scroll position from previous sessions, pushing all content below viewport.
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-    // Force a full document repaint after the splash hides. A transient body-level
-    // opacity microchange (reverted next frame) forces Android WebView to paint the
-    // whole frame without promoting any element to a persistent GPU layer.
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      document.body.style.opacity = '0.9999';
-      document.body.offsetHeight;
-      document.body.style.opacity = '';
-    }));
+    // Reset viewport scroll to top before revealing content.
+    // window.scrollTo is the correct API — body.scrollTop is a no-op when body
+    // is not the scroll container. Double-call: once now, once after next frame
+    // in case Android WebView restores scroll position asynchronously.
+    window.scrollTo(0, 0);
+    requestAnimationFrame(() => { window.scrollTo(0, 0); });
     // Hide the native splash screen — this is the primary loading cover.
     hideSplash().catch(() => {});
     // Also clear any legacy _nativeCover div (no-op when div is already hidden).
