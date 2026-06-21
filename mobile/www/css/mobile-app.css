@@ -40,13 +40,21 @@ body.dark-mode { background-color: #0d1117 !important; }
   max-width: 100vw !important;
   box-sizing: border-box !important;
 }
+/* On mobile, .main-content needs a determined height so that flex: 1 on
+   .page-content receives a definite height and can be a scroll container.
+   100dvh = 100% of dynamic viewport height (accounts for URL bar on mobile). */
+.main-content {
+  height: 100dvh !important;
+  overflow: hidden !important;
+}
 .page-content {
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
   padding: 10px 12px !important;
-  /* THE scroll container — explicit overflow-y:auto so Android WebView
-     scroll position can be reset by portal.js with _pc.scrollTop = 0 */
+  /* THE scroll container — flex: 1 + determined parent height means this gets
+     a definite height. overflow-y: auto makes it scroll. */
+  flex: 1 !important;
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch !important;
 }
@@ -545,9 +553,10 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
   bottom: 0 !important; left: 0 !important; right: 0 !important;
   z-index: 1200 !important;
   display: flex !important; flex-direction: column !important;
-  width: 100% !important; max-width: 100vw !important;
-  /* Solid colour — backdrop-filter:blur() is extremely GPU-expensive on
-     Android WebView causing severe frame drops. Solid is faster. */
+  width: 100% !important;
+  /* Remove max-width: 100vw — on Android WebView, 100vw can be wider than viewport
+     (includes scrollbar width), causing horizontal overflow that clips items.
+     left: 0; right: 0 already make it full-width. */
   background: #ffffff !important;
   border-top: 1px solid rgba(0,0,0,0.08) !important;
   padding-bottom: env(safe-area-inset-bottom, 0px) !important;
