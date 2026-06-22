@@ -1193,6 +1193,7 @@ function navigate(view, btnEl) {
 
   // Sync mobile bottom nav active state
   document.querySelectorAll('.mbn-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+
 }
 
 function _mbnSetActive(btn) {
@@ -1276,8 +1277,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (_) {}
 
   if (_cacheRendered) {
-    // Silently refresh data in the background — don't block UI
-    loadPortalData().catch(() => {});
+    // Silently refresh data in the background — don't block UI or re-render charts
+    loadPortalData(0, { skipCharts: true }).catch(() => {});
   } else {
     // First load or expired cache — show progressive status text during cold-start waits
     const _coverText = document.getElementById('_nativeCoverText');
@@ -1328,7 +1329,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-async function loadPortalData(_attempt = 0) {
+async function loadPortalData(_attempt = 0, _opts = {}) {
   const MAX_ATTEMPTS = 3;
   try {
     const [invRes, invstRes, txnRes, poolRes] = await Promise.all([
@@ -1425,7 +1426,7 @@ async function loadPortalData(_attempt = 0) {
       }));
     } catch (_) {}
 
-    renderOverview();
+    renderOverview(_opts.skipCharts);
     renderOnboardingWizard();
     updateStmtQuickStats();
     _renderBankDetailsPanel();
@@ -1460,7 +1461,7 @@ async function loadPortalData(_attempt = 0) {
 /* ═══════════════════════════════════════════════
    OVERVIEW
    ═══════════════════════════════════════════════ */
-function renderOverview() {
+function renderOverview(skipCharts) {
   const inv = PORTAL.investor;
   if (!inv) return;
 
@@ -1587,8 +1588,10 @@ function renderOverview() {
 
   renderOverviewInvestments();
   renderOverviewTxns();
-  renderPortfolioTrendChart();
-  renderAllocationChart();
+  if (!skipCharts) {
+    renderPortfolioTrendChart();
+    renderAllocationChart();
+  }
   renderXPWidget();
   renderTaskCompletionPanel();
 }
@@ -1729,6 +1732,10 @@ function renderOverviewTxns() {
 function renderPortfolioTrendChart() {
   const canvas = document.getElementById('portfolioTrendChart');
   if (!canvas) return;
+  // Skip if canvas is inside a hidden parent (mobile hides portfolio-hero__right).
+  // Rendering Chart.js onto a zero-size hidden canvas creates orphan GPU
+  // compositor layers on Android WebView that cause content to go blank.
+  if (canvas.offsetParent === null) return;
 
   // ── Build last-12-months buckets ────────────────────────────
   const now = new Date();
@@ -1805,7 +1812,7 @@ function renderPortfolioTrendChart() {
     options: {
       responsive:          true,
       maintainAspectRatio: false,
-      animation:           { duration: 600, easing: 'easeInOutQuart' },
+      animation:           window.__SVC_NATIVE__ ? false : { duration: 600, easing: 'easeInOutQuart' },
       layout: { padding: { top: 10, right: 12, bottom: 4, left: 4 } },
       plugins: {
         legend: { display: false },
@@ -1846,6 +1853,9 @@ function renderPortfolioTrendChart() {
 function renderAllocationChart() {
   const ctx = document.getElementById('allocationChart');
   if (!ctx) return;
+  // Skip if canvas is inside a hidden parent — rendering onto a zero-size hidden canvas
+  // creates orphan GPU compositor layers on Android WebView that cause content to blank.
+  if (ctx.offsetParent === null) return;
 
   const colors = ['#D4AF37', '#22c55e', '#3b82f6', '#f97316', '#a855f7', '#ec4899', '#14b8a6'];
 
@@ -1872,6 +1882,7 @@ function renderAllocationChart() {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      animation: window.__SVC_NATIVE__ ? false : undefined,
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: c => ` ${c.label}: ${Utils.rand(c.parsed)}` } }
@@ -8798,6 +8809,7 @@ function _renderMonthlyReturnsChart() {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      animation: window.__SVC_NATIVE__ ? false : undefined,
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => 'R ' + c.raw.toLocaleString('en-ZA') } } },
       scales: {
         x: { grid: { display: false }, ticks: { font: { size: 11 } } },
@@ -8831,6 +8843,7 @@ function _renderAnalyticsAllocChart() {
     },
     options: {
       responsive: true, maintainAspectRatio: true, cutout: '62%',
+      animation: window.__SVC_NATIVE__ ? false : undefined,
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.label + ': R' + c.raw.toLocaleString('en-ZA') } } },
     },
   });
