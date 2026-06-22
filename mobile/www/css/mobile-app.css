@@ -630,7 +630,21 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
 .modal__footer { padding: 12px 16px max(12px, env(safe-area-inset-bottom, 0px)) !important; flex-shrink: 0 !important; }
 
 /* ─────────────────────────────────────────────────────────────
-   18. Payment modal — centred card on both iOS and Android
+   18a. Withdrawal modal — centred so the message is always visible
+   ───────────────────────────────────────────────────────────── */
+#withdrawalModal.modal-overlay {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px !important;
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
+}
+#withdrawalModal .modal {
+  border-radius: 16px !important;
+  max-height: min(75vh, 540px) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   18b. Payment modal — centred card on both iOS and Android
    ───────────────────────────────────────────────────────────── */
 #topUpModal.modal-overlay {
   align-items: center !important;

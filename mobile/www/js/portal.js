@@ -5799,10 +5799,10 @@ const _SA_TIPS = {
 /* ── Load & render ──────────────────────────────────────────── */
 async function loadSubAccounts() {
   try {
-    const res = await API._fetch('GET', 'tables/sub_accounts', null, { limit: 200 });
-    const all = res.data || (Array.isArray(res) ? res : []);
     const myId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
-    PORTAL.subAccounts = all.filter(a => a.parent_investor_id === myId);
+    const res = await API._fetch('GET', 'tables/sub_accounts', null, { parent_investor_id: myId, limit: 200 });
+    const all = res.data || (Array.isArray(res) ? res : []);
+    PORTAL.subAccounts = all.filter(a => a.parent_investor_id === myId || a.investor_id === myId);
   } catch (e) {
     console.warn('loadSubAccounts:', e);
     PORTAL.subAccounts = [];
@@ -8948,7 +8948,7 @@ const PORTAL_CMD_ITEMS = [
   { label: 'Learning Hub',             icon: 'fa-graduation-cap',  group: 'Navigate', action: () => navigate('learn',         document.querySelector('[data-view=learn]')) },
   { label: 'My Profile',               icon: 'fa-user-circle',     group: 'Navigate', action: () => navigate('profile',       document.querySelector('[data-view=profile]')) },
   { label: 'Support',                  icon: 'fa-headset',         group: 'Navigate', action: () => navigate('support',       document.querySelector('[data-view=support]')) },
-  { label: 'Refer & Earn',             icon: 'fa-share-nodes',     group: 'Navigate', action: () => navigate('referral',      document.querySelector('[data-view=referral]')) },
+  // Refer & Earn hidden — referral programme not yet live
   { label: 'Documents',                icon: 'fa-folder-open',     group: 'Navigate', action: () => navigate('documents',     document.querySelector('[data-view=documents]')) },
   { label: 'Account Statement',        icon: 'fa-file-invoice',    group: 'Navigate', action: () => navigate('statement',     document.querySelector('[data-view=statement]')) },
   { label: 'Top Up Wallet',            icon: 'fa-plus',            group: 'Actions',  action: () => openTopUpModal() },
