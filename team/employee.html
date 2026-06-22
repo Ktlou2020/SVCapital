@@ -16,7 +16,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <link rel="stylesheet" href="css/employee.css" />
   <!-- Staff Auth guard -->
-  <script src="../js/staff-auth.js?v=4"></script>
+  <script src="../js/staff-auth.js?v=5"></script>
   <script>document.addEventListener('DOMContentLoaded',()=>{ StaffAuth.guard('employee'); StaffAuth.injectWidget(); });</script>
   <!-- Google Analytics 4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
@@ -41,14 +41,14 @@
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 </div>
 
-<!-- Employee Switcher -->
+<!-- Dashboard toolbar (command palette + navigation). The employee switcher
+     dropdown was removed: "My Dashboard" always shows the signed-in user's own
+     data. Managers drill into a specific employee via the Team Dashboard. -->
 <div class="emp-switcher">
-  <i class="fa-solid fa-user-circle" style="color:var(--muted);font-size:0.85rem"></i>
-  <select id="empSelect"></select>
   <button class="btn btn--ghost btn--sm" onclick="openEmpCmd()" title="Command palette (Ctrl+K)" style="opacity:0.65;font-size:0.72rem;font-weight:700;letter-spacing:0.05em;display:flex;align-items:center;gap:5px">
     <i class="fa-solid fa-magnifying-glass" style="font-size:0.8rem"></i><span>⌘K</span>
   </button>
-  <a href="index.html" class="btn btn--ghost btn--sm" title="Team Dashboard">
+  <a id="teamDashLink" href="index.html" class="btn btn--ghost btn--sm" title="Team Dashboard" style="display:none">
     <i class="fa-solid fa-people-group"></i>
   </a>
   <a href="hub.html" class="btn btn--ghost btn--sm" title="App Hub" style="margin-left:2px">

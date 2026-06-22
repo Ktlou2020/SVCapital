@@ -454,7 +454,7 @@
 
 <div id="toast"><i class="fa-solid fa-circle-check" style="color:var(--teal)"></i> <span id="toastMsg"></span></div>
 
-<script src="../js/staff-auth.js?v=4"></script>
+<script src="../js/staff-auth.js?v=5"></script>
 <script>
 
 /* ── RBAC config (mirrors staff-auth.js APPS_REGISTRY) ── */
@@ -550,7 +550,7 @@ const APP_META = {
 };
 
 /* ── Init ── */
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   const session = StaffAuth.getSession();
   if (!session) {
     // JWT bypass — users logged in via /login.html (director/admin role)
@@ -569,6 +569,12 @@ window.addEventListener('DOMContentLoaded', () => {
     window.location.replace('login.html');
     return;
   }
+
+  // Load the director-configured RBAC matrix from the server BEFORE rendering
+  // tiles. Without this, getAllowedApps() falls back to the hardcoded defaults
+  // and ignores any permission changes made in the Director Panel — meaning
+  // users would see apps they were not granted access to.
+  await StaffAuth.loadRbac();
 
   populateHero(session);
   populateSession(session);

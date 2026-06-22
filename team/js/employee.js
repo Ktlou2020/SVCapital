@@ -207,10 +207,13 @@ function renderTopbar() {
 }
 
 function buildEmpSwitcher() {
-  const sel = document.getElementById('empSelect');
-  if (!sel) return;
-  sel.innerHTML = _employees.map(e=>`<option value="${e.id}" ${e.id===_emp.id?'selected':''}>${e.first_name} ${e.last_name} — ${e.role||''}</option>`).join('');
-  sel.onchange = () => { location.href = 'employee.html?id='+sel.value; };
+  // The employee switcher dropdown was removed — "My Dashboard" only ever shows
+  // the signed-in user's own profile. Only reveal the Team Dashboard shortcut to
+  // users who actually have team-management access.
+  const session = (typeof StaffAuth !== 'undefined') ? StaffAuth.getSession() : null;
+  const canViewTeam = session && StaffAuth.canAccess(session, 'team');
+  const teamLink = document.getElementById('teamDashLink');
+  if (teamLink) teamLink.style.display = canViewTeam ? '' : 'none';
 }
 
 /* ═══ NAVIGATION ════════════════════════════════════════════════════ */
@@ -863,7 +866,7 @@ function renderDashboard() {
   const kpi  = _kpiScores.find(k=>k.period_month===thisMonth)||_kpiScores[0]||{};
   const done = _progress.filter(p=>p.status==='completed').length;
   const eva  = calcMyEVA();
-  const recentFeed = _activityFeed.filter(f=>f.employee_id===_emp.id||isTrue(f.is_public)).slice(0,5);
+  const recentFeed = _activityFeed.filter(f=>f.employee_id===_emp.id).slice(0,5);
   const myOkr = _okrs.find(o=>o.employee_id===_emp.id && o.period_month===thisMonth);
   const openOoo = _oneOnOnes.find(o=>o.employee_id===_emp.id && o.status==='scheduled');
   const activePulse = _pulseSurveys.find(s=>s.status==='active');
@@ -1793,11 +1796,11 @@ async function completePath(pathId) {
 
 /* ═══ VIEW: ACTIVITY FEED ═══════════════════════════════════════════ */
 function renderActivityFeed() {
-  const feed = _activityFeed.filter(f=>f.employee_id===_emp.id||isTrue(f.is_public))
+  const feed = _activityFeed.filter(f=>f.employee_id===_emp.id)
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   const el = document.getElementById('view-feed');
   el.innerHTML = `
-    <div class="view-header"><div><h1>Activity Feed</h1><div class="view-sub">Your achievements &amp; team highlights</div></div></div>
+    <div class="view-header"><div><h1>Activity Feed</h1><div class="view-sub">Your achievements &amp; activity</div></div></div>
     <div class="chart-container" style="padding:16px 20px">
       ${feed.length ? feed.map(f=>`
         <div class="feed-item">
