@@ -256,6 +256,26 @@
   // WebView div) covers the app while data loads. We hide it here after data
   // is ready. Using a native overlay avoids the Android WebView GPU compositing
   // bug where removing a position:fixed WebView element leaves content blank.
+
+  // Force Android WebView to re-composite the MAIN (non-fixed) content layer.
+  // ROOT CAUSE of the persistent white-content bug: the splash is configured
+  // immersive/fullscreen, so while it is up Android does not draw the occluded
+  // WebView surface. When the splash is removed, the compositor repaints the
+  // fixed-position layers (topbar, bottom nav, drawer) — each on its own
+  // compositing surface — but can leave the main scrolling content layer at the
+  // window clear colour (solid white). Setting display:block on an already-block
+  // view (what the old watchdog did) is a no-op and never invalidates that layer.
+  // Toggling the scroller's display off→on forces a real relayout + repaint, so
+  // the content layer is rebuilt and actually painted to screen.
+  function _forceContentRepaint() {
+    const pc = document.querySelector('.page-content');
+    if (!pc) return;
+    pc.style.display = 'none';
+    // Read a layout property to force a synchronous reflow between the two writes.
+    void pc.offsetHeight;
+    pc.style.display = '';   // restore CSS default (<main> → block)
+  }
+
   function _hideCover() {
     // Reset viewport scroll to top before revealing content.
     // window.scrollTo is the correct API — body.scrollTop is a no-op when body
@@ -265,6 +285,12 @@
     requestAnimationFrame(() => { window.scrollTo(0, 0); });
     // Hide the native splash screen — this is the primary loading cover.
     hideSplash().catch(() => {});
+    // Re-composite the content layer once the splash surface is removed. The
+    // splash fades over ~300ms (fadeOutDuration), so repaint on the next frame
+    // and again after the fade completes to defeat the blank-white content bug.
+    requestAnimationFrame(_forceContentRepaint);
+    setTimeout(_forceContentRepaint, 350);
+    setTimeout(_forceContentRepaint, 650);
     // Also clear any legacy _nativeCover div (no-op when div is already hidden).
     const cover = document.getElementById('_nativeCover');
     if (cover) { cover.style.display = 'none'; setTimeout(() => { try { cover.remove(); } catch (_) {} }, 50); }
