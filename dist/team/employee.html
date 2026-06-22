@@ -10,7 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="css/employee.css" />
   <!-- Staff Auth guard -->
-  <script src="../js/staff-auth.js?v=3"></script>
+  <script src="../js/staff-auth.js?v=5"></script>
   <script>document.addEventListener('DOMContentLoaded',()=>{ StaffAuth.guard('employee'); StaffAuth.injectWidget(); });</script>
 </head>
 <body>
@@ -22,11 +22,11 @@
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 </div>
 
-<!-- Employee Switcher -->
+<!-- Dashboard toolbar. The employee switcher dropdown was removed: "My Dashboard"
+     always shows the signed-in user's own data. Managers drill into a specific
+     employee via the Team Dashboard. -->
 <div class="emp-switcher">
-  <i class="fa-solid fa-user-circle" style="color:var(--muted);font-size:0.85rem"></i>
-  <select id="empSelect"></select>
-  <a href="index.html" class="btn btn--ghost btn--sm" title="Team Dashboard">
+  <a id="teamDashLink" href="index.html" class="btn btn--ghost btn--sm" title="Team Dashboard" style="display:none">
     <i class="fa-solid fa-people-group"></i>
   </a>
   <a href="hub.html" class="btn btn--ghost btn--sm" title="App Hub" style="margin-left:2px">

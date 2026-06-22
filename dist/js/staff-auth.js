@@ -49,12 +49,15 @@
   /* ─── RBAC Matrix ────────────────────────────────────────────
    * Maps every role to the list of app-keys it may access.
    * App keys map to physical paths in APPS_REGISTRY (below).
+   * Overridden at runtime by loadRbac() from /api/settings/rbac.
    */
+  let _rbacCache = null;
+
   const ROLE_PERMISSIONS = {
-    'CEO':                  ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director'],
-    'Operations Manager':   ['employee', 'team', 'fund', 'admin'],
-    'Finance Manager':      ['employee', 'team', 'fund', 'admin'],
-    'Tech Lead':            ['employee', 'team', 'fund', 'admin'],
+    'CEO':                  ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting'],
+    'Operations Manager':   ['employee', 'team', 'fund', 'admin', 'accounting'],
+    'Finance Manager':      ['employee', 'team', 'fund', 'admin', 'accounting'],
+    'Tech Lead':            ['employee', 'team', 'fund', 'admin', 'accounting'],
     'Investment Analyst':   ['employee', 'team', 'fund'],
     'Compliance Officer':   ['employee', 'admin'],
     'Client Relations':     ['employee', 'portal'],
@@ -64,12 +67,19 @@
   };
 
   /* Level-based elevation (overrides role if level is executive) */
-  const EXECUTIVE_APPS = ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director'];
+  const EXECUTIVE_APPS = ['employee', 'team', 'fund', 'admin', 'ifa', 'portal', 'director', 'accounting'];
 
-  /* Director-level check — CEO or executive level gets Director panel */
+  /* Director-level check — executive level, CEO/COO/CTO/CFO titles,
+     or a JWT role of 'director' or 'admin' all grant Director panel access */
   function isDirector(session) {
     if (!session) return false;
-    return session.role === 'CEO' || session.level === 'executive';
+    if (session.level === 'executive') return true;
+    // JWT-role check (synthetic sessions built from JWT payload)
+    if (session.role === 'director' || session.role === 'admin') return true;
+    // Role-title check — covers common C-suite variations
+    const r = (session.role || '').toLowerCase();
+    return r.includes('ceo') || r.includes('coo') || r.includes('cto') ||
+           r.includes('cfo') || r.includes('director') || r.includes('chief');
   }
 
   /* ─── App Registry ───────────────────────────────────────────
@@ -217,11 +227,25 @@
    * RBAC helpers
    * ───────────────────────────────────────────────────────────── */
 
+  async function loadRbac() {
+    try {
+      const base = window.__SVC_API_BASE__ || '/api/';
+      const r = await fetch(base + 'settings/rbac');
+      if (!r.ok) return null;
+      const data = await r.json();
+      if (data && data.matrix && typeof data.matrix === 'object' && !Array.isArray(data.matrix)) {
+        _rbacCache = data.matrix;
+      }
+    } catch (_) {}
+    return _rbacCache;
+  }
+
   function getAllowedApps(session) {
     if (!session) return [];
     // Executive level gets everything regardless of role title
     if (session.level === 'executive') return EXECUTIVE_APPS.slice();
-    const perms = ROLE_PERMISSIONS[session.role] || ['employee'];
+    const matrix = _rbacCache || ROLE_PERMISSIONS;
+    const perms = matrix[session.role] || ['employee'];
     return perms.slice();
   }
 
@@ -238,6 +262,7 @@
     if (path.includes('/admin/'))         return 'admin';
     if (path.includes('/ifa/'))           return 'ifa';
     if (path.includes('/portal/'))        return 'portal';
+    if (path.includes('/team/accounting')) return 'accounting';
     return null;
   }
 
@@ -273,10 +298,22 @@
     }
 
     const appKey = requiredAppKey || currentAppKey();
-    if (appKey && !canAccess(session, appKey)) {
-      // Authenticated but not authorised for this app
-      window.location.replace(HUB_URL() + '?denied=' + encodeURIComponent(appKey));
-      return false;
+    if (appKey) {
+      // Synchronous check against whatever matrix is cached — prevents protected
+      // content from flashing before the async RBAC load completes.
+      if (!canAccess(session, appKey)) {
+        window.location.replace(HUB_URL() + '?denied=' + encodeURIComponent(appKey));
+        return false;
+      }
+      // Authoritative re-check: load the director-configured RBAC matrix and
+      // re-evaluate. guard() runs synchronously (callers don't await it), so the
+      // initial check above uses the hardcoded fallback. This async pass enforces
+      // permission changes made in the Director Panel even on direct navigation.
+      loadRbac().then(() => {
+        if (!canAccess(session, appKey)) {
+          window.location.replace(HUB_URL() + '?denied=' + encodeURIComponent(appKey));
+        }
+      });
     }
 
     return true;
@@ -296,7 +333,7 @@
     });
 
     // Tell the server to clear the httpOnly cookie
-    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+    fetch((window.__SVC_API_BASE__ || '/api/') + 'auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
 
     window.location.replace(LOGIN_URL());
   }
@@ -473,6 +510,7 @@
     setSession,
     clearSession,
     refreshSession,
+    loadRbac,
     getAllowedApps,
     canAccess,
     currentAppKey,

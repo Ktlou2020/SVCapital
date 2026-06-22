@@ -298,10 +298,22 @@
     }
 
     const appKey = requiredAppKey || currentAppKey();
-    if (appKey && !canAccess(session, appKey)) {
-      // Authenticated but not authorised for this app
-      window.location.replace(HUB_URL() + '?denied=' + encodeURIComponent(appKey));
-      return false;
+    if (appKey) {
+      // Synchronous check against whatever matrix is cached — prevents protected
+      // content from flashing before the async RBAC load completes.
+      if (!canAccess(session, appKey)) {
+        window.location.replace(HUB_URL() + '?denied=' + encodeURIComponent(appKey));
+        return false;
+      }
+      // Authoritative re-check: load the director-configured RBAC matrix and
+      // re-evaluate. guard() runs synchronously (callers don't await it), so the
+      // initial check above uses the hardcoded fallback. This async pass enforces
+      // permission changes made in the Director Panel even on direct navigation.
+      loadRbac().then(() => {
+        if (!canAccess(session, appKey)) {
+          window.location.replace(HUB_URL() + '?denied=' + encodeURIComponent(appKey));
+        }
+      });
     }
 
     return true;
