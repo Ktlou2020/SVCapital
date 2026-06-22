@@ -3762,7 +3762,10 @@ async function submitMaturityInstruction(inv) {
     PORTAL.investments = [];
     await loadPortalData();
     loadMaturity();
-  } catch (e) { Toast.error('Failed to save instruction'); }
+  } catch (e) {
+    console.error('[maturity]', e);
+    Toast.error(e.message || 'Failed to save instruction');
+  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -4344,46 +4347,48 @@ function stmtInfoRow(label, val) {
 
 function getProductInfo(type) {
   const map = {
-    cattle:        { label:'Cattle Investment',        color:'#d97706', bg:'#fef3c7' },
-    solar_7yr:     { label:'Solar Investment (7yr)',   color:'#ea580c', bg:'#ffedd5' },
-    solar_6yr:     { label:'Solar Investment (6yr)',   color:'#ea580c', bg:'#fff7ed' },
-    solar_5yr:     { label:'Solar Investment (5yr)',   color:'#c2410c', bg:'#fff7ed' },
-    solar:         { label:'Solar Investment',         color:'#ea580c', bg:'#ffedd5' },
-    short_term:    { label:'Short Term Investment',    color:'#2563eb', bg:'#dbeafe' },
-    delivery_bike: { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
+    cattle:            { label:'Cattle Investment',        color:'#d97706', bg:'#fef3c7' },
+    solar_7yr:         { label:'Solar Investment (7yr)',   color:'#ea580c', bg:'#ffedd5' },
+    solar_6yr:         { label:'Solar Investment (6yr)',   color:'#ea580c', bg:'#fff7ed' },
+    solar_5yr:         { label:'Solar Investment (5yr)',   color:'#c2410c', bg:'#fff7ed' },
+    solar:             { label:'Solar Investment',         color:'#ea580c', bg:'#ffedd5' },
+    short_term:        { label:'Short Term Investment',    color:'#2563eb', bg:'#dbeafe' },
+    delivery_bike:     { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
+    delivery_bikes:    { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
+    smme:              { label:'SMME Funding',             color:'#059669', bg:'#d1fae5' },
+    smme_funding:      { label:'SMME Funding',             color:'#059669', bg:'#d1fae5' },
+    property:          { label:'Property Investment',      color:'#0891b2', bg:'#cffafe' },
+    fixed_term:        { label:'Fixed Term Investment',    color:'#7c3aed', bg:'#ede9fe' },
   };
-  return map[type] || { label: type || 'Investment', color:'#6b7280', bg:'#f3f4f6' };
+  const hit = map[type?.toLowerCase?.()];
+  if (hit) return hit;
+  const label = type ? type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Investment';
+  return { label, color:'#6b7280', bg:'#f3f4f6' };
 }
 
 function printStatement() {
-  // Use statementDocument container (which holds the rendered HTML)
-  const doc = document.getElementById('statementDocument');
-  if (!doc || !doc.innerHTML.trim()) {
+  const stmtDoc = document.getElementById('statementDocument');
+  if (!stmtDoc || !stmtDoc.innerHTML.trim()) {
     Toast.error('Please generate a statement first, then print.');
     return;
   }
-  const printWin = window.open('', '_blank', 'width=960,height=800');
-  if (!printWin) {
-    Toast.error('Pop-up blocked. Please allow pop-ups for this site.');
-    return;
-  }
-  printWin.document.write(`<!DOCTYPE html>
+  const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>SV Capital — Account Statement</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#1a1a1a}
+    body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#1a1a1a}
     @page{size:A4;margin:0}
     @media print{.no-print{display:none!important}.print-body{padding-top:0!important}}
     .no-print{position:fixed;top:0;left:0;right:0;background:#1a1a1a;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;z-index:999;box-shadow:0 2px 12px rgba(0,0,0,0.3)}
-    .no-print span{color:#fff;font-size:13px;font-weight:600;font-family:'Inter',sans-serif}
-    .no-print button{background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;padding:8px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif}
+    .no-print span{color:#fff;font-size:13px;font-weight:600}
+    .no-print button{background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;padding:8px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
     .no-print button:hover{opacity:0.9}
-    .print-body{padding-top:50px}
+    .print-body{padding-top:52px}
   </style>
 </head>
 <body>
@@ -4391,10 +4396,22 @@ function printStatement() {
     <span>SV Capital — Account Statement</span>
     <button onclick="window.print()">⬇&nbsp; Save as PDF / Print</button>
   </div>
-  <div class="print-body">${doc.innerHTML}</div>
+  <div class="print-body">${stmtDoc.innerHTML}</div>
 </body>
-</html>`);
-  printWin.document.close();
+</html>`;
+  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (!win) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SVC-Statement-${new Date().toISOString().slice(0,10)}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    Toast.success('Statement downloaded — open in a browser to save as PDF.');
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
 }
 
 /* ── Sub-account deposit ─────────────────────── */
@@ -7191,6 +7208,13 @@ function _kycFileSelected(file) {
   if (nameEl)   nameEl.textContent = file.name;
   const zone = document.getElementById('kycDropZone');
   if (zone) { zone.style.borderColor = '#22c55e'; zone.style.background = 'rgba(34,197,94,0.04)'; }
+  setTimeout(() => {
+    if (document.activeElement && document.activeElement !== document.body) {
+      document.activeElement.blur();
+    }
+    const modalBody = document.querySelector('#kycUploadModal .modal__body');
+    if (modalBody) modalBody.scrollTop = modalBody.scrollHeight;
+  }, 150);
 }
 
 function _kycHandleDrop(event) {
