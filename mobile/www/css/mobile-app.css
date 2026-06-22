@@ -891,3 +891,18 @@ body.dark-mode .modal__header::before { background: rgba(255,255,255,0.2) !impor
   position: relative !important;
   z-index: 1 !important;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   26. Font consistency — enforce Poppins over DM Serif Display
+   portal-premium.css applies DM Serif Display !important to financial
+   value elements. Override here (loaded last) to restore Poppins.
+   ───────────────────────────────────────────────────────────── */
+.portfolio-hero__value,
+.ph-stat__value,
+.stat-card__value,
+.market-pool-card__rate,
+.wallet-card__value,
+.mic-stat__value,
+.my-inv-card__name {
+  font-family: 'Poppins', sans-serif !important;
+}
