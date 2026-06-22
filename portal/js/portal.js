@@ -347,7 +347,7 @@ function renderTaskCompletionPanel() {
   const riskReady = !!inv.risk_profile;
   const ficaReady = (inv.fica_status || inv.kyc_status || inv.status || '').toLowerCase() === 'approved';
   const tasks = [
-    { label: 'Complete FICA/KYC verification', done: ficaReady, tone: '#FF8215', action: 'openKycUploadModal()', cta: 'Upload documents' },
+    { label: 'Complete FICA verification', done: ficaReady, tone: '#FF8215', action: 'openKycUploadModal()', cta: 'Upload documents' },
     { label: 'Add a withdrawal bank account', done: bankReady, tone: '#2F8C9B', action: 'openBankDetailsModal()', cta: 'Add bank account' },
     { label: 'Fund your wallet', done: hasWallet, tone: '#22c55e', action: 'openTopUpModal()', cta: 'Top up wallet' },
     { label: 'Confirm your risk profile', done: riskReady, tone: '#a855f7', action: 'navigate(\'profile\', document.querySelector(\'[data-view=profile]\'))', cta: 'Review profile' },
@@ -502,7 +502,7 @@ function renderWalletReadinessPanel() {
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Verification</div>
-          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#2F8C9B'};margin-top:6px">${ficaApproved ? 'FICA/KYC approved' : 'FICA/KYC still needed'}</div>
+          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#2F8C9B'};margin-top:6px">${ficaApproved ? 'FICA/KYC approved' : 'FICA/KYC needed'}</div>
           <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.'}</div>
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
@@ -1113,51 +1113,44 @@ function closeSidebar() {
   if (backdrop) backdrop.classList.remove('sidebar-backdrop--visible');
 }
 
-/* ── Swipe gestures for mobile sidebar ───────────────────────
-   Swipe right from left edge (≤30px) → open sidebar
-   Swipe left anywhere while sidebar is open → close sidebar    */
-(function _initSwipeGestures() {
-  let startX = 0, startY = 0, startT = 0;
-  const SWIPE_THRESHOLD = 55;   // px horizontal
-  const ANGLE_LIMIT = 55;        // max vertical drift (deg)
-  const MAX_MS = 350;            // gesture must complete within this time
-
-  document.addEventListener('touchstart', (e) => {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-    startT = Date.now();
-  }, { passive: true });
-
-  document.addEventListener('touchend', (e) => {
-    const dx = e.changedTouches[0].clientX - startX;
-    const dy = Math.abs(e.changedTouches[0].clientY - startY);
-    const dt = Date.now() - startT;
-    if (dt > MAX_MS || dy > Math.abs(dx) * 1.2) return; // too slow or too vertical
-
-    const sidebar = document.getElementById('sidebar');
-    const isOpen  = sidebar?.classList.contains('open');
-
-    // Swipe LEFT (dx < 0) while sidebar is open → close
-    if (dx < -SWIPE_THRESHOLD && isOpen) {
-      closeSidebar();
-      if (navigator.vibrate) navigator.vibrate(8);
-      return;
-    }
-    // Swipe RIGHT (dx > 0) from left edge → open
-    if (dx > SWIPE_THRESHOLD && !isOpen && startX < 32) {
-      toggleSidebar();
-      if (navigator.vibrate) navigator.vibrate(8);
-    }
-  }, { passive: true });
-})();
-
 function navigate(view, btnEl) {
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-
   const el = document.getElementById(`view-${view}`);
-  if (el) el.classList.add('active');
+  // Guard: unknown view → bail out entirely rather than stripping .active from
+  // every view and leaving a fully blank screen.
+  if (!el) { console.warn('[navigate] unknown view:', view); return; }
+  // Add .active FIRST so there is always at least one visible view — removes
+  // the white-frame moment where all views are simultaneously display:none.
+  el.classList.add('active');
+  // On Android WebView, force inline styles so the CSS animation never wins
+  // over a blank opacity:0 frame — the GPU compositing layer created by any
+  // position:fixed overlay (e.g. tour) can prevent CSS-driven repaints.
+  if (window.__SVC_NATIVE__) {
+    el.style.setProperty('display',             'block', 'important');
+    el.style.setProperty('opacity',             '1',     'important');
+    el.style.setProperty('visibility',          'visible','important');
+    el.style.setProperty('animation',           'none',  'important');
+    el.style.setProperty('-webkit-animation',   'none',  'important');
+    el.style.setProperty('transform',           'none',  'important');
+  }
+  document.querySelectorAll('.view').forEach(v => {
+    if (v !== el) {
+      v.classList.remove('active');
+      // Clear any inline styles set by the startup watchdog so CSS display:none applies
+      v.style.removeProperty('display');
+      v.style.removeProperty('opacity');
+      v.style.removeProperty('visibility');
+      v.style.removeProperty('animation');
+      v.style.removeProperty('-webkit-animation');
+      v.style.removeProperty('transform');
+    }
+  });
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (btnEl) btnEl.classList.add('active');
+
+  // Reset viewport scroll to top on every view change.
+  // window.scrollTo is the correct API regardless of which element is the
+  // scroll container (body.scrollTop is a no-op when body is not the scroller).
+  window.scrollTo(0, 0);
 
   // Auto-close sidebar on mobile when navigating
   if (window.innerWidth <= 768) closeSidebar();
@@ -1169,7 +1162,7 @@ function navigate(view, btnEl) {
     maturity: 'Maturity Instructions', profile: 'My Profile',
     support: 'Support', referral: 'Refer & Earn', statement: 'Account Statement',
     quests: 'Earn Rewards', learn: 'Learning Hub', subaccounts: 'My Accounts',
-    documents: 'Document Vault',
+    documents: 'Document Vault', policies: 'Platform Policies',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
 
@@ -1187,6 +1180,7 @@ function navigate(view, btnEl) {
     subaccounts: loadSubAccounts,
     referral: loadReferralDashboard,
     documents: loadDocuments,
+    policies: renderPoliciesView,
     profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderKycStatusPanel(); },
   };
   if (loaders[view]) loaders[view]();
@@ -1200,6 +1194,7 @@ function navigate(view, btnEl) {
 
   // Sync mobile bottom nav active state
   document.querySelectorAll('.mbn-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+
 }
 
 function _mbnSetActive(btn) {
@@ -1233,6 +1228,9 @@ function _startPolling() {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && _pollTimer) {} });
 
+// Expose stop function so Auth.logout() can kill the interval before redirecting
+window._stopPolling = function () { if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; } };
+
 document.addEventListener('DOMContentLoaded', async () => {
   Toast.init();
   initDarkMode();
@@ -1243,17 +1241,109 @@ document.addEventListener('DOMContentLoaded', async () => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = _skelSpan;
   });
-  await loadPortalData();
-  // Generate notifications from real data
+
+  // Immediately populate greeting from cached user so name never stays "Loading..."
+  try {
+    const cached = JSON.parse(localStorage.getItem('svc_user') || '{}');
+    const firstName = cached.firstName || cached.first_name || '';
+    const lastName  = cached.lastName  || cached.last_name  || '';
+    const nameEl = document.getElementById('welcomeName');
+    if (nameEl && firstName) nameEl.textContent = `${firstName} ${lastName}`.trim();
+    const greetEl = document.getElementById('topbarGreeting');
+    if (greetEl && firstName) greetEl.textContent = `${_timeGreeting()}, ${firstName} 👋`;
+    const greetEl2 = document.getElementById('welcomeGreeting');
+    if (greetEl2) greetEl2.textContent = _timeGreeting();
+    const avEl = document.getElementById('welcomeAvatar');
+    if (avEl && firstName) avEl.textContent = ((firstName[0] || '') + (lastName[0] || '')).toUpperCase() || '?';
+  } catch (_) {}
+
+  // Try to render from cache immediately — hides cover instantly on repeat launches
+  let _cacheRendered = false;
+  const _CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+  try {
+    const raw = localStorage.getItem('svc_portal_cache');
+    if (raw) {
+      const c = JSON.parse(raw);
+      if (c && c.cachedAt && (Date.now() - c.cachedAt) < _CACHE_TTL) {
+        PORTAL.investor     = c.investor     || null;
+        PORTAL.investments  = c.investments  || [];
+        PORTAL.transactions = c.transactions || [];
+        PORTAL.pools        = c.pools        || [];
+        PORTAL.waitlist     = c.waitlist     || [];
+        try { renderOverview(); } catch (_) {}
+        if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
+        _cacheRendered = true;
+      }
+    }
+  } catch (_) {}
+
+  if (_cacheRendered) {
+    // Silently refresh data in the background — don't block UI or re-render charts
+    loadPortalData(0, { skipCharts: true }).catch(() => {});
+  } else {
+    // First load or expired cache — show progressive status text during cold-start waits
+    const _coverText = document.getElementById('_nativeCoverText');
+    const _t1 = _coverText ? setTimeout(() => {
+      if (_coverText.textContent.includes('Loading')) _coverText.textContent = 'Server waking up, please wait…';
+    }, 4000) : null;
+    const _t2 = _coverText ? setTimeout(() => {
+      if (_coverText.textContent.includes('waking')) _coverText.textContent = 'Almost there…';
+    }, 9000) : null;
+
+    await loadPortalData();
+    if (_t1) clearTimeout(_t1);
+    if (_t2) clearTimeout(_t2);
+    // Reveal content — remove the native loading cover now that data is ready
+    if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
+  }
+
   loadNotifications();
   checkFirstDepositPrompt();
   _checkAutoStartTour();
   load2FAStatus();
   _startPolling();
   _initPullToRefresh();
+
+  // Watchdog: runs at 100ms, 600ms, and 1500ms to ensure the active view is visible.
+  // Android WebView compositing (esp. with position:fixed overlays) can silently
+  // leave the active view at opacity:0. Running the watchdog at three intervals
+  // catches races between data-load, cover-hide, and browser paint cycles.
+  if (window.__SVC_NATIVE__) {
+    const _forceViewVisible = () => {
+      const active = document.querySelector('.view.active');
+      if (active) {
+        active.style.setProperty('display',           'block',   'important');
+        active.style.setProperty('opacity',           '1',       'important');
+        active.style.setProperty('visibility',        'visible', 'important');
+        active.style.setProperty('transform',         'none',    'important');
+        active.style.setProperty('animation',         'none',    'important');
+        active.style.setProperty('-webkit-animation', 'none',    'important');
+      }
+      // Re-composite the main content layer. On Android WebView the scrolling
+      // content layer can be left at the clear colour (solid white) after the
+      // native splash is removed, even though fixed layers (topbar/nav/drawer)
+      // paint. Re-asserting display:block on an already-block element does NOT
+      // invalidate that layer — only a real off→on display toggle forces the
+      // relayout + repaint that rebuilds and paints it.
+      const pc = document.querySelector('.page-content');
+      if (pc) {
+        pc.style.display = 'none';
+        void pc.offsetHeight;   // synchronous reflow between writes
+        pc.style.display = '';
+      }
+    };
+    // Run at multiple intervals: before tour (100ms, 600ms, 1500ms),
+    // after tour starts (3000ms, 5000ms) in case the overlay causes a blank.
+    setTimeout(_forceViewVisible, 100);
+    setTimeout(_forceViewVisible, 600);
+    setTimeout(_forceViewVisible, 1500);
+    setTimeout(_forceViewVisible, 3000);
+    setTimeout(_forceViewVisible, 5000);
+  }
 });
 
-async function loadPortalData() {
+async function loadPortalData(_attempt = 0, _opts = {}) {
+  const MAX_ATTEMPTS = 3;
   try {
     const [invRes, invstRes, txnRes, poolRes] = await Promise.all([
       API.investors.list({ limit: 100 }),
@@ -1334,10 +1424,22 @@ async function loadPortalData() {
     const waitlistRes = await API._fetch('GET', 'tables/investment_waitlist', null, { investor_id: PORTAL.investor.id, limit: 50 }).catch(() => ({ data: [] }));
     PORTAL.waitlist = waitlistRes.data || [];
 
-    SVC.setUser(PORTAL.investor);
-    SVC.track('portal_loaded', { active_investments: PORTAL.investments.filter(i => i.status === 'active').length });
+    try { SVC.setUser(PORTAL.investor); } catch (_) {}
+    try { SVC.track('portal_loaded', { active_investments: PORTAL.investments.filter(i => i.status === 'active').length }); } catch (_) {}
 
-    renderOverview();
+    // Cache fresh data so the next launch renders instantly from localStorage
+    try {
+      localStorage.setItem('svc_portal_cache', JSON.stringify({
+        investor: PORTAL.investor,
+        investments: PORTAL.investments,
+        transactions: PORTAL.transactions,
+        pools: PORTAL.pools,
+        waitlist: PORTAL.waitlist,
+        cachedAt: Date.now(),
+      }));
+    } catch (_) {}
+
+    renderOverview(_opts.skipCharts);
     renderOnboardingWizard();
     updateStmtQuickStats();
     _renderBankDetailsPanel();
@@ -1349,15 +1451,30 @@ async function loadPortalData() {
     // Load gamification data (non-blocking — don't fail portal if quests fail)
     loadQuestData().catch(err => console.warn('[Quests] load error:', err.message));
   } catch (e) {
-    Toast.error('Failed to load portfolio data');
-    console.error('loadPortalData error:', e);
+    console.error(`loadPortalData error (attempt ${_attempt + 1}):`, e);
+
+    // Auth errors: do not retry — the session-expired overlay is already showing
+    if (e.message && e.message.includes('Session expired')) return;
+
+    // Network / timeout errors: retry with backoff (handles Railway cold-start)
+    if (_attempt < MAX_ATTEMPTS - 1) {
+      const delay = (_attempt + 1) * 3000; // 3 s, 6 s
+      console.log(`[portal] Retrying data load in ${delay}ms…`);
+      await new Promise(r => setTimeout(r, delay));
+      return loadPortalData(_attempt + 1);
+    }
+
+    // All attempts exhausted — show whatever partial data we have and hide cover
+    try { renderOverview(); } catch (_) {}
+    if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
+    Toast.error('Could not connect to server — pull down to refresh');
   }
 }
 
 /* ═══════════════════════════════════════════════
    OVERVIEW
    ═══════════════════════════════════════════════ */
-function renderOverview() {
+function renderOverview(skipCharts) {
   const inv = PORTAL.investor;
   if (!inv) return;
 
@@ -1460,7 +1577,7 @@ function renderOverview() {
     ficaBanner.innerHTML = `
       <div class="fica-alert-banner__icon"><i class="fa-solid fa-id-card"></i></div>
       <div class="fica-alert-banner__body">
-        <div class="fica-alert-banner__title">FICA Verification Pending</div>
+        <div class="fica-alert-banner__title">FICA/KYC Verification Pending</div>
         <div class="fica-alert-banner__sub">Your identity documents are under review (1–2 business days). You can invest once approved.</div>
       </div>
       <div class="fica-alert-banner__action">
@@ -1484,8 +1601,10 @@ function renderOverview() {
 
   renderOverviewInvestments();
   renderOverviewTxns();
-  renderPortfolioTrendChart();
-  renderAllocationChart();
+  if (!skipCharts) {
+    renderPortfolioTrendChart();
+    renderAllocationChart();
+  }
   renderXPWidget();
   renderTaskCompletionPanel();
 }
@@ -1584,6 +1703,7 @@ function renderOverviewInvestments() {
 
   body.innerHTML = active.map(inv => {
     const pi = Utils.productInfo(inv.product_type);
+    const days = Utils.daysRemaining(inv.maturity_date);
     const pool = PORTAL.pools.find(p => p.id === inv.pool_id);
     const progress = pool ? Utils.poolFillPct(pool) : 100;
 
@@ -1596,8 +1716,8 @@ function renderOverviewInvestments() {
       </td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700">${Utils.rand(inv.amount)}</td>
-      <td class="td-muted">${Utils.date(inv.investment_date)}</td>
-      <td class="td-muted">${Utils.date(inv.maturity_date)}</td>
+      <td class="td-green">${Utils.rand(inv.expected_return_amount)}</td>
+      <td class="${days <= 30 ? 'td-gold' : 'td-muted'} fw-700">${days !== null ? days + ' days' : '—'}</td>
       <td>${Utils.statusBadge(inv.status)}</td>
     </tr>`;
   }).join('');
@@ -1607,7 +1727,6 @@ function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
   const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date)).slice(0, 5);
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red' };
-  const _txnLabel = s => { const r = (s || '').replace(/_/g, ' '); return r.charAt(0).toUpperCase() + r.slice(1); };
 
   if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No transactions yet</td></tr>'; return; }
 
@@ -1615,7 +1734,7 @@ function renderOverviewTxns() {
   body.innerHTML = recent.map(t => {
     const pos = _txnIsPositive(t);
     return `<tr>
-      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${_txnLabel(t.type)}</span></td>
+      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${(t.type?.replace(/_/g, ' ') || '').replace(/^\w/, c => c.toUpperCase())}</span></td>
       <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
       <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
       <td class="td-muted">${Utils.date(t.transaction_date)}</td>
@@ -1626,6 +1745,10 @@ function renderOverviewTxns() {
 function renderPortfolioTrendChart() {
   const canvas = document.getElementById('portfolioTrendChart');
   if (!canvas) return;
+  // Skip if canvas is inside a hidden parent (mobile hides portfolio-hero__right).
+  // Rendering Chart.js onto a zero-size hidden canvas creates orphan GPU
+  // compositor layers on Android WebView that cause content to go blank.
+  if (canvas.offsetParent === null) return;
 
   // ── Build last-12-months buckets ────────────────────────────
   const now = new Date();
@@ -1673,7 +1796,6 @@ function renderPortfolioTrendChart() {
   const yMax = Math.ceil(Math.max(...data) * 1.08 / 1000) * 1000;
 
   if (PORTAL.charts.trend) { PORTAL.charts.trend.destroy(); PORTAL.charts.trend = null; }
-
   PORTAL.charts.trend = new Chart(canvas, {
     type: 'line',
     data: {
@@ -1703,7 +1825,7 @@ function renderPortfolioTrendChart() {
     options: {
       responsive:          true,
       maintainAspectRatio: false,
-      animation:           { duration: 600, easing: 'easeInOutQuart' },
+      animation:           window.__SVC_NATIVE__ ? false : { duration: 600, easing: 'easeInOutQuart' },
       layout: { padding: { top: 10, right: 12, bottom: 4, left: 4 } },
       plugins: {
         legend: { display: false },
@@ -1744,8 +1866,11 @@ function renderPortfolioTrendChart() {
 function renderAllocationChart() {
   const ctx = document.getElementById('allocationChart');
   if (!ctx) return;
+  // Skip if canvas is inside a hidden parent — rendering onto a zero-size hidden canvas
+  // creates orphan GPU compositor layers on Android WebView that cause content to blank.
+  if (ctx.offsetParent === null) return;
 
-  const colors = ['#FF8215', '#22c55e', '#FF9B0C', '#16a34a', '#f97316', '#a855f7', '#14b8a6'];
+  const colors = ['#D4AF37', '#22c55e', '#3b82f6', '#f97316', '#a855f7', '#ec4899', '#14b8a6'];
 
   const activeInvests = PORTAL.investments.filter(i => i.status === 'active');
   const allocation = {};
@@ -1766,10 +1891,11 @@ function renderAllocationChart() {
     type: 'doughnut',
     data: {
       labels,
-      datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderColor: '#ffffff', borderWidth: 3, hoverOffset: 4 }]
+      datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderColor: '#ffffff', borderWidth: 2, hoverOffset: 4 }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      animation: window.__SVC_NATIVE__ ? false : undefined,
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: c => ` ${c.label}: ${Utils.rand(c.parsed)}` } }
@@ -1788,11 +1914,11 @@ function renderAllocationChart() {
     const amt = values[idx];
     const pct = total > 0 ? ((amt / total) * 100).toFixed(1) : '0';
     const color = colors[idx] || '#8ea3b8';
-    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
       <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
-      <span style="flex:1;font-size:0.82rem;color:#374151;font-weight:500">${label}</span>
-      <span style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${Utils.rand(amt)}</span>
-      <span style="font-size:0.75rem;color:#6b7280;min-width:38px;text-align:right">${pct}%</span>
+      <span style="flex:1;font-size:0.8rem;color:var(--text-primary,#1a1a1a)">${label}</span>
+      <span style="font-size:0.8rem;font-weight:600;color:var(--text-primary,#1a1a1a)">${Utils.rand(amt)}</span>
+      <span style="font-size:0.72rem;color:var(--text-muted,#6b7280);min-width:38px;text-align:right">${pct}%</span>
     </div>`;
   }).join('');
 }
@@ -1814,18 +1940,6 @@ function renderMyInvestmentStats() {
   document.getElementById('mi-expected').textContent = Utils.rand(d.reduce((s, i) => s + (parseFloat(i.expected_return_amount) || 0), 0));
   document.getElementById('mi-earned').textContent   = Utils.rand(d.reduce((s, i) => s + (parseFloat(i.actual_return_amount) || 0), 0));
   document.getElementById('mi-count').textContent    = d.length;
-
-  // Dynamically populate product filter from investor's actual product types
-  const sel = document.getElementById('myInvProductFilter');
-  if (sel) {
-    const types = [...new Set(d.map(i => i.product_type).filter(Boolean))];
-    const current = sel.value;
-    sel.innerHTML = '<option value="">All Products</option>' +
-      types.map(t => {
-        const info = Utils.productInfo(t);
-        return `<option value="${t}"${current === t ? ' selected' : ''}>${info.label}</option>`;
-      }).join('');
-  }
 }
 
 function filterMyInvestments(filter, btn) {
@@ -1882,31 +1996,15 @@ function renderMyInvestmentCards() {
         ` : ''}
 
         <div class="my-inv-card__stats">
-          <div class="mic-stat"><span class="mic-stat__label">Invested</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(inv.amount)}</span></div>
-          ${isPaidOut ? `<div class="mic-stat"><span class="mic-stat__label">Actual Return</span><span class="mic-stat__value mic-stat__value--green">${Utils.rand(inv.actual_return_amount)}</span></div>` : ''}
-          <div class="mic-stat"><span class="mic-stat__label">Rate p.a.</span><span class="mic-stat__value">${Utils.pct(inv.expected_return_rate)}</span></div>
-        </div>
-
-        <div class="flex-between" style="font-size:0.72rem;color:var(--text-dim)">
-          <span>Invested: ${Utils.date(inv.investment_date)}</span>
-          <span>Matures: ${Utils.date(inv.maturity_date)}</span>
+          <div class="mic-stat"><span class="mic-stat__label">Amount Invested</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(inv.amount)}</span></div>
+          <div class="mic-stat"><span class="mic-stat__label">Launch Date</span><span class="mic-stat__value">${Utils.date(inv.investment_date || inv.start_date)}</span></div>
+          <div class="mic-stat"><span class="mic-stat__label">Maturity Date</span><span class="mic-stat__value">${Utils.date(inv.maturity_date)}</span></div>
         </div>
 
         ${inv.status === 'active' ? `
-          <div style="margin-top:10px;padding:10px 12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;display:flex;flex-direction:column;gap:6px">
-            <div style="display:flex;justify-content:space-between;font-size:0.78rem">
-              <span style="color:#6b7280">Amount invested</span>
-              <span style="font-weight:700;color:#1a1a1a">${Utils.rand(inv.amount)}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:0.78rem">
-              <span style="color:#6b7280">Launch date</span>
-              <span style="font-weight:600;color:#374151">${Utils.date(inv.investment_date)}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:0.78rem">
-              <span style="color:#6b7280">Maturity date</span>
-              <span style="font-weight:600;color:#374151">${Utils.date(inv.maturity_date)}</span>
-            </div>
-          </div>
+          <button class="btn btn--secondary btn--full btn--sm" onclick='openMaturityModal(${JSON.stringify(inv.id)})' style="margin-top:6px;font-size:0.76rem">
+            <i class="fa-solid fa-hourglass-half"></i> Set Maturity Instruction
+          </button>
         ` : ''}
         ${isPaidOut ? `
           <div style="font-size:0.75rem;color:var(--text-muted);text-align:center">
@@ -1938,7 +2036,6 @@ function renderMyTxnTable() {
   const sorted = [...items].sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
 
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red' };
-  const _txnLabel = s => { const r = (s || '').replace(/_/g, ' '); return r.charAt(0).toUpperCase() + r.slice(1); };
 
   if (!sorted.length) {
     body.innerHTML = `<tr><td colspan="6" style="padding:0;border:none">
@@ -1957,7 +2054,7 @@ function renderMyTxnTable() {
   body.innerHTML = sorted.map(t => {
     const pos = _isPosTxn(t);
     return `<tr>
-      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${_txnLabel(t.type)}</span></td>
+      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${(t.type?.replace(/_/g, ' ') || '').replace(/^\w/, c => c.toUpperCase())}</span></td>
       <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
       <td>${Utils.statusBadge(t.status)}</td>
       <td class="td-muted" style="font-size:0.72rem">${t.reference || '—'}</td>
@@ -3055,12 +3152,25 @@ function closePaymentModal() {
    MARKETPLACE
    ═══════════════════════════════════════════════ */
 async function loadMarketplace() {
-  if (!PORTAL.pools.length) {
-    const res = await API.pools.list({ limit: 100 });
-    PORTAL.pools = res.data || [];
+  try {
+    if (!PORTAL.pools.length) {
+      const res = await API.pools.list({ limit: 100 });
+      PORTAL.pools = res.data || [];
+    }
+  } catch (err) {
+    console.warn('[marketplace] failed to fetch pools:', err);
+    // Render with whatever is cached — show empty state rather than "Loading..."
   }
-  renderMarketplace();
-  SVC.track('view_item_list', { item_list_id: 'marketplace', item_list_name: 'Investment Pools', items: PORTAL.pools.slice(0, 10).map(p => ({ item_id: p.id, item_name: p.name, item_category: p.product_type })) });
+  try {
+    renderMarketplace();
+  } catch (err) {
+    console.error('[marketplace] renderMarketplace failed:', err);
+    const grid = document.getElementById('marketplaceGrid');
+    if (grid) grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fa-solid fa-triangle-exclamation"></i><div class="empty-state__title">Could not load pools</div><div class="empty-state__sub">Pull down to refresh or check your connection.</div></div>`;
+  }
+  try {
+    SVC.track('view_item_list', { item_list_id: 'marketplace', item_list_name: 'Investment Pools', items: PORTAL.pools.slice(0, 10).map(p => ({ item_id: p.id, item_name: p.name, item_category: p.product_type })) });
+  } catch (_) {}
 }
 
 function filterMarket(type, btn) {
@@ -3088,7 +3198,7 @@ function renderMarketplace() {
   const filtered = PORTAL.marketFilter === 'all'
     ? visiblePools
     : visiblePools.filter(p => {
-        if (PORTAL.marketFilter === 'solar') return p.product_type.includes('solar');
+        if (PORTAL.marketFilter === 'solar') return (p.product_type || '').includes('solar');
         return p.product_type === PORTAL.marketFilter;
       });
 
@@ -3177,10 +3287,10 @@ function renderMarketplace() {
     } else if (!ficaApproved) {
       ctaHtml = `<div style="display:flex;flex-direction:column;gap:6px;margin-top:2px">
                    <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.18);border-radius:8px;font-size:0.78rem;color:#2F8C9B">
-                     <i class="fa-solid fa-shield-halved"></i> Complete FICA/KYC before your first investment
+                     <i class="fa-solid fa-shield-halved"></i> Complete FICA before your first investment
                    </div>
                    <button class="btn btn--secondary btn--full" onclick="navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()">
-                     <i class="fa-solid fa-upload"></i> Complete FICA/KYC
+                     <i class="fa-solid fa-upload"></i> Complete FICA
                    </button>
                  </div>`;
     } else if (canInvest) {
@@ -3234,17 +3344,17 @@ function renderMarketplace() {
         </div>
 
         <div class="market-pool-stats">
-          <div class="mps"><span class="mps__label"><i class="fa-solid fa-users" style="font-size:0.65rem"></i> Investors</span><span class="mps__value">${pool.live_investor_count ?? pool.investor_count ?? 0}</span></div>
+          <div class="mps"><span class="mps__label"><i class="fa-solid fa-users" style="font-size:0.65rem"></i> Investors</span><span class="mps__value">${pool.investor_count}</span></div>
           <div class="mps"><span class="mps__label"><i class="fa-solid fa-clock" style="font-size:0.65rem"></i> Closes in</span><span class="mps__value" style="${urgency?'color:var(--gold)':''}">${days !== null ? days + 'd' : '—'}</span></div>
-          <div class="mps"><span class="mps__label"><i class="fa-solid fa-building-columns" style="font-size:0.65rem"></i> Partner</span><span class="mps__value" style="font-size:0.72rem">${pool.partner_name || '—'}</span></div>
+          <div class="mps"><span class="mps__label"><i class="fa-solid fa-building-columns" style="font-size:0.65rem"></i> Partner</span><span class="mps__value" style="font-size:0.72rem">${pool.partner_name}</span></div>
         </div>
 
         <div>
           <div class="pool-card__progress-label">
-            <span>${Utils.rand(pool.live_raised ?? pool.raised_amount ?? 0)} raised</span>
+            <span>${Utils.rand(pool.raised_amount)} raised</span>
             <span>${pct}% funded</span>
           </div>
-          <div class="progress-bar"><div class="progress-fill${pool.product_type.includes('solar') ? ' progress-fill--green' : pool.product_type === 'short_term' ? ' progress-fill--blue' : ''}" style="width:${pct}%"></div></div>
+          <div class="progress-bar"><div class="progress-fill${(pool.product_type || '').includes('solar') ? ' progress-fill--green' : pool.product_type === 'short_term' ? ' progress-fill--blue' : ''}" style="width:${pct}%"></div></div>
           ${capacityBarHtml}
         </div>
 
@@ -3299,7 +3409,7 @@ function openInvestModal(poolId) {
   const pool = PORTAL.pools.find(p => p.id === poolId);
   if (!pool) return;
   if (!_isInvestorFicaApproved(PORTAL.investor)) {
-    Toast.info('Complete FICA/KYC verification before making your first investment.');
+    Toast.info('Complete FICA verification before making your first investment.');
     navigate('profile', document.querySelector('[data-view=profile]'));
     openKycUploadModal();
     return;
@@ -3409,7 +3519,7 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest) {
 
 async function confirmInvestment(pool) {
   if (!_isInvestorFicaApproved(PORTAL.investor)) {
-    Toast.error('Your FICA/KYC verification must be approved before you can invest.');
+    Toast.error('Your FICA verification must be approved before you can invest.');
     navigate('profile', document.querySelector('[data-view=profile]'));
     openKycUploadModal();
     return;
@@ -3552,11 +3662,9 @@ async function openMaturityModal(investmentId) {
   const inv = PORTAL.investments.find(i => i.id === investmentId);
   if (!inv) return;
 
-  const isActive      = inv.status === 'active';
-  const hasActualReturn = (parseFloat(inv.actual_return_amount) || 0) > 0;
-  const returnAmt     = parseFloat(inv.actual_return_amount) || 0;
-  const total         = inv.amount + returnAmt;
-  const existing      = inv.maturity_instruction || '';
+  const isActive  = inv.status === 'active';
+  const total     = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
+  const existing  = inv.maturity_instruction || '';
 
   // Fetch open pools of matching product type for reinvest option
   let reinvestPools = [];
@@ -3573,11 +3681,8 @@ async function openMaturityModal(investmentId) {
     <div class="info-list mb-16">
       <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(inv.pool_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Capital</span><span class="info-row__value">${Utils.rand(inv.amount)}</span></div>
-      ${hasActualReturn
-        ? `<div class="info-row"><span class="info-row__label">Returns</span><span class="info-row__value text-green">${Utils.rand(returnAmt)}</span></div>
-           <div class="info-row"><span class="info-row__label">Total Payout</span><span class="info-row__value text-gold fw-700">${Utils.rand(total)}</span></div>`
-        : `<div class="info-row"><span class="info-row__label">Returns</span><span class="info-row__value text-muted" style="font-size:0.82rem;font-style:italic">Credited at maturity</span></div>`
-      }
+      <div class="info-row"><span class="info-row__label">Returns</span><span class="info-row__value text-green">${Utils.rand(inv.actual_return_amount || inv.expected_return_amount)}</span></div>
+      <div class="info-row"><span class="info-row__label">Total Payout</span><span class="info-row__value text-gold fw-700">${Utils.rand(total)}</span></div>
     </div>
 
     <div class="form-group">
@@ -4003,6 +4108,7 @@ function buildStatementHTML(opts) {
             ${stmtInfoRow('Matured/Paid Out', investments.filter(i=>['matured','paid_out'].includes(i.status)).length)}
             ${stmtInfoRow('Risk Profile', investor.risk_profile ? investor.risk_profile.charAt(0).toUpperCase() + investor.risk_profile.slice(1) : 'Moderate')}
             ${stmtInfoRow('Province', investor.province || '—')}
+            ${stmtInfoRow('Referral Code', investor.referral_code || '—')}
           </div>
         </div>
       </section>`;
@@ -4064,16 +4170,17 @@ function buildStatementHTML(opts) {
   if (incInvestments && investments.length > 0) {
     const invRows = investments.map(inv => {
       const info = getProductInfo(inv.product_type);
-      const returnRate = ((Number(inv.expected_return_rate)||0)*100).toFixed(2);
+      const rate = ((Number(inv.expected_return_rate)||0)*100).toFixed(2);
       const maturity = inv.maturity_date ? fmtDate(inv.maturity_date) : '—';
       const statusColor = inv.status === 'active' ? '#2F8C9B' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
       return `<tr style="border-bottom:1px solid #f0f0f0">
         <td style="padding:8px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${inv.id}</td>
+        <td style="padding:8px 10px;font-size:11px;font-weight:600;color:#1a1a1a">${_esc(inv.pool_name) || '—'}</td>
         <td style="padding:8px 10px">
           <span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em">${info.label}</span>
         </td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right;font-weight:700">${fmtNum(inv.amount)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#ff9b0c;text-align:right;font-weight:700">${returnRate}%</td>
+        <td style="padding:8px 10px;font-size:11px;color:#ff9b0c;text-align:right;font-weight:700">${rate}%</td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${fmtDate(inv.investment_date)}</td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${maturity}</td>
         <td style="padding:8px 10px">
@@ -4093,12 +4200,13 @@ function buildStatementHTML(opts) {
           <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:700px">
             <thead>
               <tr style="background:#F7F8FA">
-                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Ref.</th>
+                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">ID</th>
+                <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Pool</th>
                 <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Product</th>
                 <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Amount</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Return</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Start Date</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Maturity Date</th>
+                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Rate</th>
+                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Invested</th>
+                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Maturity</th>
                 <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Status</th>
               </tr>
             </thead>
@@ -4166,7 +4274,7 @@ function buildStatementHTML(opts) {
 
   // ─── FULL DOCUMENT ───
   return `
-    <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%">
+    <div id="stmtPrintArea" style="font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%">
 
       <!-- Header Band -->
       <div style="background:linear-gradient(135deg,#1a3a4a 0%,#0d2535 100%);padding:32px 40px;display:flex;align-items:center;justify-content:space-between">
@@ -4193,7 +4301,7 @@ function buildStatementHTML(opts) {
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em">Investor:</span>
           <span style="font-size:12px;font-weight:800;color:#1a1a1a">${fullName}</span>
-          <span style="font-size:9px;color:#9ca3af;margin-left:8px;line-height:1.4">Smartvest Financial Services (Pty) Ltd<br>The Station, 63 Peter Place, Bryanston, Johannesburg, 2191</span>
+          <span style="background:rgba(255,155,12,0.1);color:#ff5229;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(255,155,12,0.2);margin-left:4px">${investorId}</span>
         </div>
       </div>
 
@@ -4260,63 +4368,28 @@ function getProductInfo(type) {
 }
 
 function printStatement() {
-  const doc = document.getElementById('statementDocument');
-  if (!doc || !doc.innerHTML.trim()) {
+  const stmtDoc = document.getElementById('statementDocument');
+  if (!stmtDoc || !stmtDoc.innerHTML.trim()) {
     Toast.error('Please generate a statement first, then print.');
     return;
   }
-  const _stmtHTML = `<!DOCTYPE html>
+  const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>SV Capital — Account Statement</title>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-    html,body{height:auto;width:100%}
     body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#1a1a1a}
-
-    /* Screen toolbar — sticky so it doesn't overlay content */
-    .no-print{position:sticky;top:0;background:#1a1a1a;padding:10px 24px;display:flex;justify-content:space-between;align-items:center;z-index:999;box-shadow:0 2px 12px rgba(0,0,0,0.3)}
-    .no-print span{color:#fff;font-size:13px;font-weight:600;font-family:'Poppins',sans-serif}
-    .no-print button{background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;padding:8px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif}
+    @page{size:A4;margin:0}
+    @media print{.no-print{display:none!important}.print-body{padding-top:0!important}}
+    .no-print{position:fixed;top:0;left:0;right:0;background:#1a1a1a;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;z-index:999;box-shadow:0 2px 12px rgba(0,0,0,0.3)}
+    .no-print span{color:#fff;font-size:13px;font-weight:600}
+    .no-print button{background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;padding:8px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
     .no-print button:hover{opacity:0.9}
-
-    /* A4 page with proper margins — prevents edge clipping */
-    @page{size:A4 portrait;margin:14mm 12mm}
-
-    @media print{
-      /* Hide toolbar */
-      .no-print{display:none!important}
-
-      /* Remove overflow wrappers so tables aren't clipped */
-      [style*="overflow-x"]{overflow:visible!important;width:100%!important}
-
-      /* Tables scale to fit printable width */
-      table{width:100%!important;min-width:0!important}
-      td,th{word-break:break-word;overflow-wrap:break-word}
-
-      /* Repeat headers on continuation pages */
-      thead{display:table-header-group}
-      tfoot{display:table-footer-group}
-
-      /* Avoid splitting a row across pages */
-      tr{page-break-inside:avoid}
-
-      /* Keep section headings with the first row of content */
-      section{page-break-inside:auto}
-      section > div:first-child{page-break-after:avoid;page-break-inside:avoid}
-
-      /* KPI boxes: keep together */
-      .kpi-grid{page-break-inside:avoid}
-
-      /* Preserve background colours in PDF */
-      *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-
-      /* Body padding already 0 when no toolbar */
-      body{padding:0}
-    }
+    .print-body{padding-top:52px}
   </style>
 </head>
 <body>
@@ -4324,13 +4397,15 @@ function printStatement() {
     <span>SV Capital — Account Statement</span>
     <button onclick="window.print()">⬇&nbsp; Save as PDF / Print</button>
   </div>
-  <div>${doc.innerHTML}</div>
+  <div class="print-body">${stmtDoc.innerHTML}</div>
 </body>
 </html>`;
-  const blob = new Blob([_stmtHTML], { type: 'text/html;charset=utf-8' });
+  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
   const url  = URL.createObjectURL(blob);
-  const win  = window.open(url, '_blank');
+  // Open as new tab (no width/height = new tab, not popup → avoids popup blocker)
+  const win = window.open(url, '_blank');
   if (!win) {
+    // Blocked or native app — download the file directly
     const a = document.createElement('a');
     a.href = url;
     a.download = `SVC-Statement-${new Date().toISOString().slice(0,10)}.html`;
@@ -4873,11 +4948,11 @@ function openSurveyModal(questId) {
       </button>
     </div>`;
 
-  Modal.open('surveyModal');
+  document.getElementById('surveyModal').style.display = 'flex';
 }
 
 function closeSurveyModal() {
-  Modal.close('surveyModal');
+  document.getElementById('surveyModal').style.display = 'none';
 }
 
 async function submitSurvey(questId) {
@@ -4948,12 +5023,12 @@ function _showLevelUpModal(result) {
     rewardEl.style.display = 'none';
   }
 
-  Modal.open('levelUpModal');
+  document.getElementById('levelUpModal').style.display = 'flex';
   _launchConfettiParticles();
 }
 
 function closeLevelUpModal() {
-  Modal.close('levelUpModal');
+  document.getElementById('levelUpModal').style.display = 'none';
 }
 
 function _launchConfettiParticles() {
@@ -4997,6 +5072,11 @@ const LEARN_MODULES = [
 Each investment has a clearly defined term (typically 6–36 months) and a fixed annual rate of return, so you know exactly what to expect. Your capital is tracked in real time on this portal, and returns are credited directly to your wallet on maturity.
 
 The platform charges no entry fees and no monthly platform fees. Our revenue comes from structuring fees on the underlying transactions, so your quoted return is your net return.`,
+    quiz: [
+      { q: 'What types of assets does SV Capital invest in?', options: ['Shares and unit trusts', 'Tangible South African alternative assets', 'Foreign currency and crypto', 'Government bonds only'], correct: 1 },
+      { q: 'How does SV Capital generate its revenue?', options: ['Monthly platform fees charged to investors', 'Annual management fees', 'Structuring fees on underlying transactions', 'Entry fees on every deposit'], correct: 2 },
+      { q: 'What is a typical SV Capital investment term?', options: ['1–7 days', '6–36 months', '5–10 years', 'Indefinite — no fixed term'], correct: 1 },
+    ],
   },
   {
     id: 'learn_how_returns', track: 'explorer', order: 2,
@@ -5013,6 +5093,11 @@ The platform charges no entry fees and no monthly platform fees. Our revenue com
 Shorter-term products like cattle cycles (150–180 days) work the same way, but on a pro-rated basis. A 14% annual rate for 150 days pays roughly R575 on a R10,000 investment.
 
 The "effective return" you see on your dashboard is the annualised figure, allowing you to compare products fairly regardless of their term length.`,
+    quiz: [
+      { q: 'R10,000 invested at 14% p.a. for 12 months — what is the total payout?', options: ['R10,140', 'R10,700', 'R11,400', 'R12,400'], correct: 2 },
+      { q: 'What does the "effective return %" on your dashboard allow you to do?', options: ['Calculate your tax', 'Compare products fairly regardless of term length', 'Predict future returns', 'Convert returns to foreign currency'], correct: 1 },
+      { q: 'At 14% p.a. for 150 days, the approximate return on R10,000 is:', options: ['R1,400', 'R200', 'R575', 'R2,100'], correct: 2 },
+    ],
   },
   {
     id: 'learn_solar', track: 'explorer', order: 3,
@@ -5029,6 +5114,11 @@ The "effective return" you see on your dashboard is the annualised figure, allow
 SV Capital aggregates these returns and passes them to investors net of all structuring costs. Solar assets are long-duration, making them ideal for capital you do not need access to for 2–3 years. Loadshedding in South Africa has significantly increased demand for behind-the-meter solar, providing strong deal flow for this product.
 
 Each solar project undergoes technical assessment, legal review, and business viability checks before being made available to investors.`,
+    quiz: [
+      { q: 'What do SV Capital solar projects primarily fund?', options: ['Residential rooftop panels', 'Government solar farms', 'Commercial-scale PV system installations for businesses', 'Solar panel exports'], correct: 2 },
+      { q: 'Typical SV Capital solar investment returns range from:', options: ['5–8% p.a.', '14–18% p.a.', '25–30% p.a.', '1–3% p.a.'], correct: 1 },
+      { q: 'What has significantly increased demand for solar in South Africa?', options: ['Rising petrol prices', 'Tax incentives alone', 'Loadshedding', 'Lower electricity tariffs'], correct: 2 },
+    ],
   },
   {
     id: 'learn_cattle', track: 'explorer', order: 4,
@@ -5045,6 +5135,11 @@ Each solar project undergoes technical assessment, legal review, and business vi
 Returns are driven by weight gain and market price at sale. SV Capital hedges execution risk through diversified lots and vetted farming partners. Each batch is tracked and reported on in real time via the admin platform.
 
 Short-term business loans are secured against verifiable collateral (trading assets, debtor books, or property bonds) and carry slightly lower rates than cattle due to their fixed repayment structure. Both products offer higher liquidity than solar, with capital recycling every 5–6 months.`,
+    quiz: [
+      { q: 'How long is a typical SV Capital cattle investment cycle?', options: ['30–60 days', '1–2 years', '150–180 days', '3–5 years'], correct: 2 },
+      { q: 'Short-term business loans at SV Capital are secured against:', options: ['No collateral — they are unsecured', 'Verifiable collateral such as trading assets, debtor books, or property bonds', 'Government guarantees', 'Foreign exchange reserves'], correct: 1 },
+      { q: 'Which unique risk applies to cattle but NOT to solar investments?', options: ['Interest rate risk', 'Currency risk', 'Biological and market variable risk', 'Regulatory risk'], correct: 2 },
+    ],
   },
   {
     id: 'learn_diversification', track: 'explorer', order: 5,
@@ -5061,6 +5156,11 @@ Short-term business loans are secured against verifiable collateral (trading ass
 Equally important is timeline diversification. If all your investments mature at the same time, you face reinvestment risk. Staggering your investments across different start dates means you always have capital returning, which can be reinvested into new opportunities.
 
 Our data shows that investors with 3+ active product types consistently achieve smoother returns and higher portfolio satisfaction than those concentrated in a single product.`,
+    quiz: [
+      { q: 'What is the primary benefit of portfolio diversification?', options: ['Guarantee higher returns', 'Reduce exposure to any single risk', 'Eliminate all risk entirely', 'Reduce the tax you pay'], correct: 1 },
+      { q: 'What is "timeline diversification"?', options: ['Investing in different countries at different times', 'Staggering investments across different start dates', 'Only investing in short-term products', 'Changing products every month'], correct: 1 },
+      { q: 'According to SV Capital data, investors with 3+ active product types achieve:', options: ['Lower returns overall', 'Higher tax liability', 'Smoother returns and higher portfolio satisfaction', 'Faster access to withdrawals'], correct: 2 },
+    ],
   },
 
   // ── Builder Track (growing investor) ───────────────────
@@ -5079,6 +5179,11 @@ Our data shows that investors with 3+ active product types consistently achieve 
 Understanding your own risk tolerance is critical. If you might need access to your capital within 12 months, short-term products are more appropriate than 36-month solar commitments. If you can commit capital for longer and tolerate some variability, the blended portfolio approach tends to deliver the best long-term outcomes.
 
 The risk profile survey in the Earn Rewards section helps us calibrate your portfolio recommendations to your personal risk appetite.`,
+    quiz: [
+      { q: 'Which SV Capital product carries the lowest operational risk?', options: ['Cattle farming', 'Short-term loans', 'Solar projects', 'Delivery bikes'], correct: 2 },
+      { q: 'If you might need access to your capital within 12 months, which are most appropriate?', options: ['36-month solar investments', 'Short-term products', 'Estate planning products', 'Any product regardless of term'], correct: 1 },
+      { q: 'Complete the sentence: "Higher potential returns always come with…"', options: ['Lower risk', 'More regulatory protection', 'Higher risk', 'Better liquidity'], correct: 2 },
+    ],
   },
   {
     id: 'learn_compounding', track: 'builder', order: 2,
@@ -5095,6 +5200,11 @@ The risk profile survey in the Earn Rewards section helps us calibrate your port
 At 14% p.a., R10,000 grows to R11,400 after year 1. Reinvested, it becomes R12,996 after year 2 — not R12,800. The difference compounds every year. After 5 years, R10,000 compounding at 14% p.a. becomes approximately R19,254 — nearly double.
 
 The key to unlocking compounding is acting quickly at maturity. Capital sitting idle in your wallet earns nothing. Set your maturity instructions to reinvest, and let time do the work.`,
+    quiz: [
+      { q: 'What does "compounding" mean in investing?', options: ['Adding new capital every month', 'Earning returns on your returns, not just your original capital', 'Splitting investments into smaller portions', 'Switching between product types'], correct: 1 },
+      { q: 'R10,000 compounding at 14% p.a. over 5 years grows to approximately:', options: ['R17,000', 'R19,254', 'R21,000', 'R15,500'], correct: 1 },
+      { q: 'What is the single most impactful action for compounding growth?', options: ['Withdrawing all returns each year', 'Waiting 6 months before reinvesting', 'Reinvesting at maturity as quickly as possible', 'Only investing in one product'], correct: 2 },
+    ],
   },
   {
     id: 'learn_tax', track: 'builder', order: 3,
@@ -5111,6 +5221,11 @@ The key to unlocking compounding is acting quickly at maturity. Capital sitting 
 SARS requires you to disclose all South African and foreign income on your annual return (ITR12). Your SV Capital account statement (available under "My Statement") provides a breakdown of all returns earned in each tax year, which you or your accountant can use for tax submissions.
 
 Note that SV Capital does not deduct tax at source — you are responsible for declaring and paying tax on returns earned. If your total investment income exceeds R23,800 per year (the annual interest exemption for individuals under 65), the excess is taxable. We strongly recommend consulting a registered tax practitioner.`,
+    quiz: [
+      { q: 'How are SV Capital investment returns generally taxed in South Africa?', options: ['Capital gains tax only', 'Ordinary income tax at your marginal rate', 'Exempt from all tax', 'Flat 10% withholding tax'], correct: 1 },
+      { q: 'Which SARS annual tax return form must you use to declare investment returns?', options: ['IT3(b)', 'IT14', 'ITR12', 'VAT201'], correct: 2 },
+      { q: 'What is the annual interest exemption for South African individuals under 65?', options: ['R10,000', 'R23,800', 'R50,000', 'R100,000'], correct: 1 },
+    ],
   },
 
   // ── Strategist Track (advanced) ────────────────────────
@@ -5129,6 +5244,11 @@ Note that SV Capital does not deduct tax at source — you are responsible for d
 Equally, minimise idle time. Capital sitting in your wallet between investments earns 0%. Even a 2-week idle period on R50,000 costs you approximately R380 in lost returns at 14% p.a. The fastest investors reinvest within 48 hours of maturity.
 
 The optimal blend for most SV Capital investors in 2025 is approximately 40% solar (stable base), 40% cattle/loans (higher rate, shorter term), and 20% in reserve for opportunistic reinvestment when high-rate pools open.`,
+    quiz: [
+      { q: 'What is a "laddering strategy" in investing?', options: ['Investing in ladder-manufacturing companies', 'Starting multiple investments with staggered maturity dates', 'Increasing investment amounts each cycle', 'Only investing in the highest-rate products'], correct: 1 },
+      { q: 'Approximately how much does a 2-week idle period cost on R50,000 at 14% p.a.?', options: ['R50', 'R1,000', 'R380', 'R1,900'], correct: 2 },
+      { q: 'The recommended optimal portfolio blend for SV Capital investors in 2025 is:', options: ['100% solar for maximum stability', '50% cattle, 50% solar', '40% solar, 40% cattle/loans, 20% reserve', 'Equal split across all available products'], correct: 2 },
+    ],
   },
   {
     id: 'learn_estate', track: 'strategist', order: 2,
@@ -5145,6 +5265,11 @@ The optimal blend for most SV Capital investors in 2025 is approximately 40% sol
 The most important first step is ensuring your beneficiary details are on file with SV Capital (add them via the "Complete Your Profile" quest), and that your will references your investment accounts. Without clear documentation, your family may wait months or years to access funds.
 
 For larger portfolios (R500,000+), consider consulting an estate planner about structuring investments via a trust or company to minimise estate duty and executor's fees. Estate duty in South Africa is charged at 20% on dutiable estates above R3.5 million.`,
+    quiz: [
+      { q: 'What is the estate duty rate in South Africa on dutiable estates above R3.5 million?', options: ['10%', '20%', '30%', '15%'], correct: 1 },
+      { q: 'What is the most important first step to protect your investment wealth for your family?', options: ['Sell all investments before you die', 'Move funds to cash at retirement', 'Ensure beneficiary details are on file and your will references investment accounts', 'Convert all investments to foreign currency'], correct: 2 },
+      { q: 'In South Africa, all assets when a person dies must go through:', options: ['The South African Reserve Bank', 'SARS', 'The Master of the High Court', 'The Department of Trade and Industry'], correct: 2 },
+    ],
   },
 ];
 
@@ -5217,9 +5342,14 @@ function renderLearnView() {
           </div>
           <div class="learn-content-text">${mod.content.split('\n\n').map(p => `<p>${p.trim()}</p>`).join('')}</div>
           <div class="learn-module-footer">
-            <button class="btn btn--primary" onclick="markModuleComplete('${mod.id}')">
-              <i class="fa-solid fa-check"></i> Mark Complete — Earn ${mod.xp} XP
+            <button class="btn btn--primary" id="lquiz-btn-${mod.id}" onclick="_showModuleQuiz('${mod.id}')">
+              <i class="fa-solid fa-circle-question"></i> Take Quiz — Earn ${mod.xp} XP
             </button>
+          </div>
+          <div class="learn-quiz-section" id="lquiz-${mod.id}" style="display:none">
+            <div class="learn-quiz-title"><i class="fa-solid fa-circle-question"></i> Knowledge Check — answer all questions correctly to earn XP</div>
+            <div id="lquiz-questions-${mod.id}"></div>
+            <div id="lquiz-footer-${mod.id}"></div>
           </div>
         </div>
       </div>`;
@@ -5242,6 +5372,111 @@ function _toggleModule(modId) {
   const isOpen = body.style.display !== 'none';
   body.style.display = isOpen ? 'none' : 'block';
   if (chev) chev.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
+function _showModuleQuiz(modId) {
+  const mod = LEARN_MODULES.find(m => m.id === modId);
+  if (!mod?.quiz?.length) { markModuleComplete(modId); return; }
+
+  const btn = document.getElementById(`lquiz-btn-${modId}`);
+  if (btn) btn.style.display = 'none';
+
+  const section = document.getElementById(`lquiz-${modId}`);
+  if (section) section.style.display = 'block';
+
+  if (!window._quizState) window._quizState = {};
+  window._quizState[modId] = { answers: {}, submitted: false };
+  _renderQuizQuestions(modId);
+}
+
+function _renderQuizQuestions(modId) {
+  const mod = LEARN_MODULES.find(m => m.id === modId);
+  if (!mod?.quiz) return;
+
+  const questionsEl = document.getElementById(`lquiz-questions-${modId}`);
+  if (questionsEl) {
+    questionsEl.innerHTML = mod.quiz.map((q, qi) => `
+      <div class="learn-quiz-q">
+        <div class="learn-quiz-q__text">${qi + 1}. ${q.q}</div>
+        <div class="learn-quiz-opts">
+          ${q.options.map((opt, oi) => `
+            <button class="learn-quiz-opt" id="lquiz-opt-${modId}-${qi}-${oi}"
+                    onclick="_selectQuizOpt('${modId}',${qi},${oi})">
+              <span class="learn-quiz-opt__letter">${'ABCD'[oi]}</span>
+              <span class="learn-quiz-opt__text">${opt}</span>
+            </button>`).join('')}
+        </div>
+      </div>`).join('');
+  }
+
+  const footerEl = document.getElementById(`lquiz-footer-${modId}`);
+  if (footerEl) {
+    footerEl.innerHTML = `
+      <button class="btn btn--primary learn-quiz-submit-btn" onclick="_submitModuleQuiz('${modId}')">
+        <i class="fa-solid fa-paper-plane"></i> Submit Answers — Earn ${mod.xp} XP
+      </button>`;
+  }
+}
+
+function _selectQuizOpt(modId, qi, oi) {
+  const state = window._quizState?.[modId];
+  if (!state || state.submitted) return;
+  state.answers[qi] = oi;
+
+  const mod = LEARN_MODULES.find(m => m.id === modId);
+  const numOpts = mod?.quiz?.[qi]?.options?.length || 4;
+  for (let o = 0; o < numOpts; o++) {
+    const el = document.getElementById(`lquiz-opt-${modId}-${qi}-${o}`);
+    if (el) el.classList.toggle('learn-quiz-opt--selected', o === oi);
+  }
+}
+
+async function _submitModuleQuiz(modId) {
+  const state = window._quizState?.[modId];
+  const mod = LEARN_MODULES.find(m => m.id === modId);
+  if (!state || !mod?.quiz) return;
+
+  for (let qi = 0; qi < mod.quiz.length; qi++) {
+    if (state.answers[qi] === undefined) {
+      Toast.error('Please answer all questions before submitting.');
+      return;
+    }
+  }
+
+  state.submitted = true;
+  let allCorrect = true;
+
+  mod.quiz.forEach((q, qi) => {
+    const selected = state.answers[qi];
+    const correct = q.correct;
+    if (selected !== correct) allCorrect = false;
+    q.options.forEach((_, oi) => {
+      const el = document.getElementById(`lquiz-opt-${modId}-${qi}-${oi}`);
+      if (!el) return;
+      el.classList.remove('learn-quiz-opt--selected');
+      if (oi === correct) el.classList.add('learn-quiz-opt--correct');
+      else if (oi === selected) el.classList.add('learn-quiz-opt--wrong');
+      el.disabled = true;
+    });
+  });
+
+  const footerEl = document.getElementById(`lquiz-footer-${modId}`);
+  if (allCorrect) {
+    if (footerEl) footerEl.innerHTML = `<div class="learn-quiz-success"><i class="fa-solid fa-circle-check"></i> All correct! Awarding ${mod.xp} XP…</div>`;
+    await markModuleComplete(modId);
+  } else {
+    if (footerEl) footerEl.innerHTML = `
+      <div class="learn-quiz-fail"><i class="fa-solid fa-circle-xmark"></i> Some answers were incorrect. Review the highlighted answers above, then try again.</div>
+      <button class="btn btn--secondary" style="margin-top:10px" onclick="_retryModuleQuiz('${modId}')">
+        <i class="fa-solid fa-rotate-right"></i> Try Again
+      </button>`;
+  }
+}
+
+function _retryModuleQuiz(modId) {
+  if (!window._quizState?.[modId]) return;
+  window._quizState[modId] = { answers: {}, submitted: false };
+  _renderQuizQuestions(modId);
 }
 
 async function markModuleComplete(modId) {
@@ -5280,6 +5515,156 @@ async function markModuleComplete(modId) {
   }
 }
 
+/* ═════════════════════════════════════════════════════════
+   PLATFORM POLICIES
+   ═════════════════════════════════════════════════════════ */
+
+const POLICY_SECTIONS = [
+  {
+    id: 'pol_terms',
+    icon: 'fa-file-contract',
+    color: '#2F8C9B',
+    title: 'Terms of Service',
+    apiKey: 'terms',
+    staticContent: `<p>By accessing and using the SV Capital investor portal and mobile application, you agree to be bound by these Terms of Service.</p>
+<h4>1. Platform Use</h4>
+<p>The SV Capital platform is available exclusively to registered investors who have completed FICA/KYC verification. You may not share your login credentials with any third party.</p>
+<h4>2. Investment Risk</h4>
+<p>All investments carry risk. SV Capital investments are not guaranteed by the South African government, the Financial Sector Conduct Authority (FSCA), or any deposit insurance scheme. Past performance is not indicative of future results.</p>
+<h4>3. Eligibility</h4>
+<p>Investors must be natural persons or registered legal entities domiciled in South Africa. You must be 18 years or older to invest on your own behalf.</p>
+<h4>4. Fees</h4>
+<p>SV Capital charges no entry fees, exit fees, or monthly platform fees to investors. Revenue is derived from structuring fees charged at the project level, already factored into the quoted return rate.</p>
+<h4>5. Termination</h4>
+<p>SV Capital reserves the right to suspend or terminate any account found to be in breach of these terms, subject to repayment of outstanding capital and accrued returns.</p>`,
+  },
+  {
+    id: 'pol_privacy',
+    icon: 'fa-shield-halved',
+    color: '#22c55e',
+    title: 'Privacy Policy',
+    apiKey: 'privacy',
+    staticContent: `<p>SV Capital is committed to protecting your personal information in accordance with the Protection of Personal Information Act 4 of 2013 (POPIA).</p>
+<h4>1. Information We Collect</h4>
+<p>We collect your name, identity number, contact details, banking information, and investment activity for the purpose of providing investment services and complying with FICA obligations.</p>
+<h4>2. How We Use Your Information</h4>
+<p>Your personal information is used to manage your investment account, process transactions, comply with legal obligations, and communicate with you about your investments.</p>
+<h4>3. Information Sharing</h4>
+<p>We do not sell your personal information. We may share it with FICA-regulated third parties (e.g., identity verification providers) and regulatory bodies as required by law.</p>
+<h4>4. Data Security</h4>
+<p>We use industry-standard encryption and access controls to protect your data. All communication between the app and our servers is encrypted using TLS.</p>
+<h4>5. Your Rights</h4>
+<p>Under POPIA, you have the right to access, correct, or request deletion of your personal information. Contact our Information Officer at privacy@svcapital.co.za.</p>`,
+  },
+  {
+    id: 'pol_popia',
+    icon: 'fa-lock',
+    color: '#7c3aed',
+    title: 'POPIA Notice',
+    staticContent: `<p>This notice is issued in compliance with Section 18 of the Protection of Personal Information Act 4 of 2013 (POPIA).</p>
+<h4>Responsible Party</h4>
+<p>SV Capital (Pty) Ltd, registered in the Republic of South Africa.</p>
+<h4>Information Officer</h4>
+<p>Our designated Information Officer can be reached at: <strong>privacy@svcapital.co.za</strong></p>
+<h4>Purpose of Processing</h4>
+<p>Your personal information is processed for: investor account management, FICA/KYC compliance, transaction processing, regulatory reporting, and investor communications.</p>
+<h4>Lawful Basis</h4>
+<p>Processing is carried out on the basis of contractual necessity, legal obligation (FICA, POPIA), and legitimate interests.</p>
+<h4>Retention Period</h4>
+<p>Investment records and FICA documentation are retained for a minimum of 5 years after account closure, as required by the Financial Intelligence Centre Act.</p>
+<h4>Complaints</h4>
+<p>If you believe your POPIA rights have been violated, you may lodge a complaint with the Information Regulator of South Africa at: <strong>inforeg.org.za</strong></p>`,
+  },
+  {
+    id: 'pol_risk',
+    icon: 'fa-triangle-exclamation',
+    color: '#d97706',
+    title: 'Risk Disclaimer',
+    staticContent: `<p><strong>Important: Please read this disclaimer carefully before investing.</strong></p>
+<h4>General Risk Warning</h4>
+<p>All investments involve risk. The value of your investment can go down as well as up, and you may receive less than you invested. SV Capital investments are not deposits and are not covered by any government guarantee or deposit protection scheme.</p>
+<h4>Alternative Investment Risk</h4>
+<p>The products offered on this platform are alternative investments with specific risk characteristics including, but not limited to:</p>
+<ul>
+<li><strong>Liquidity Risk:</strong> Investments have fixed terms and cannot be redeemed early without penalty.</li>
+<li><strong>Operational Risk:</strong> The performance of underlying assets (cattle, solar installations, loans) may be affected by factors outside SV Capital's control.</li>
+<li><strong>Market Risk:</strong> Commodity prices (e.g., beef) may fluctuate, affecting returns on cattle products.</li>
+<li><strong>Credit Risk:</strong> Business loan borrowers may default, although loans are secured against collateral.</li>
+</ul>
+<h4>Suitability</h4>
+<p>These investments may not be suitable for all investors. Before investing, consider your investment objectives, financial situation, and risk tolerance. Consult a registered financial adviser if you are unsure.</p>
+<h4>No Advice</h4>
+<p>Nothing on this platform constitutes financial advice. SV Capital provides information only. Investment decisions are made solely by the investor.</p>`,
+  },
+  {
+    id: 'pol_paia',
+    icon: 'fa-folder-open',
+    color: '#0891b2',
+    title: 'PAIA Manual',
+    staticContent: `<p>This manual is published in terms of Section 51 of the Promotion of Access to Information Act 2 of 2000 (PAIA).</p>
+<h4>Company Details</h4>
+<p><strong>Company:</strong> SV Capital (Pty) Ltd<br>
+<strong>Registration No:</strong> Available on request<br>
+<strong>Physical Address:</strong> South Africa<br>
+<strong>Email:</strong> info@svcapital.co.za</p>
+<h4>Information Officer</h4>
+<p>Requests for access to records held by SV Capital must be directed to our Information Officer at: <strong>privacy@svcapital.co.za</strong></p>
+<h4>Records Available Without Request</h4>
+<p>The following records are automatically available to investors via the portal: account statements, transaction history, investment certificates, and FICA/KYC submission status.</p>
+<h4>How to Request Records</h4>
+<p>Submit a written request to our Information Officer including: your full name and identity number, a description of the record requested, and the reason for the request. We will respond within 30 days as required by PAIA.</p>
+<h4>Fees</h4>
+<p>A request fee of R35 applies per PAIA request (waived for personal information requests). Reproduction fees may apply for large records.</p>`,
+  },
+  {
+    id: 'pol_complaints',
+    icon: 'fa-comment-exclamation',
+    color: '#ef4444',
+    title: 'Complaints Procedure',
+    staticContent: `<p>SV Capital is committed to resolving investor complaints promptly and fairly.</p>
+<h4>Step 1: Log a Support Ticket</h4>
+<p>Contact us through the Support section of this portal. Describe your complaint clearly and include any relevant reference numbers or dates. We aim to respond within 2 business days.</p>
+<h4>Step 2: Escalation</h4>
+<p>If your complaint is not resolved within 10 business days, you may escalate it to our Compliance Officer at: <strong>compliance@svcapital.co.za</strong></p>
+<h4>Step 3: External Resolution</h4>
+<p>If SV Capital is unable to resolve your complaint to your satisfaction, you may refer the matter to:</p>
+<ul>
+<li><strong>FSCA:</strong> Financial Sector Conduct Authority — fsca.co.za</li>
+<li><strong>FAIS Ombud:</strong> For complaints related to financial advice — faisombud.co.za</li>
+<li><strong>Information Regulator:</strong> For POPIA/PAIA complaints — inforeg.org.za</li>
+</ul>
+<h4>What We Will Do</h4>
+<p>We will acknowledge all complaints within 24 hours, investigate thoroughly, and provide a written response within 10 business days. Where a complaint is upheld, we will take corrective action promptly.</p>`,
+  },
+];
+
+let _policyOpenId = null;
+
+function renderPoliciesView() {
+  const container = document.getElementById('policiesContent');
+  if (!container) return;
+
+  container.innerHTML = POLICY_SECTIONS.map(sec => `
+    <div class="policy-accordion ${_policyOpenId === sec.id ? 'policy-accordion--open' : ''}" id="pacc-${sec.id}">
+      <button class="policy-accordion__header" onclick="_togglePolicy('${sec.id}')">
+        <div class="policy-accordion__icon" style="background:${sec.color}22;color:${sec.color}">
+          <i class="fa-solid ${sec.icon}"></i>
+        </div>
+        <span class="policy-accordion__title">${sec.title}</span>
+        <i class="fa-solid fa-chevron-down policy-accordion__chev" id="pachev-${sec.id}"
+           style="${_policyOpenId === sec.id ? 'transform:rotate(180deg)' : ''}"></i>
+      </button>
+      <div class="policy-accordion__body" id="pabody-${sec.id}" style="display:${_policyOpenId === sec.id ? 'block' : 'none'}">
+        <div class="policy-accordion__content">${sec.staticContent}</div>
+      </div>
+    </div>`).join('');
+}
+
+function _togglePolicy(secId) {
+  _policyOpenId = _policyOpenId === secId ? null : secId;
+  renderPoliciesView();
+}
+
 function shareReferral(method) {
   const code = PORTAL.investor?.referral_code || '';
   const link = `${window.location.origin}/register?ref=${code}`;
@@ -5297,11 +5682,19 @@ function shareReferral(method) {
    DARK MODE
    ═══════════════════════════════════════════════════════════════ */
 function initDarkMode() {
+  // Dark mode is disabled on the native app — always force light mode and
+  // clear any previously-saved dark preference.
+  if (window.__SVC_NATIVE__) {
+    _applyDark(false);
+    return;
+  }
   const saved = localStorage.getItem('svc_dark_mode');
   if (saved === 'dark') _applyDark(true);
 }
 
 function toggleDarkMode() {
+  // No-op on native — dark mode is disabled there.
+  if (window.__SVC_NATIVE__) return;
   const isDark = document.body.classList.contains('dark-mode');
   _applyDark(!isDark);
   SVC.track('svc_dark_mode_toggle', { dark_mode: !isDark });
@@ -5326,7 +5719,7 @@ const TOUR_STEPS = [
     type: 'center',
     icon: 'fa-hand-wave',
     title: 'Welcome to your Investor Portal!',
-    body: 'Let us give you a quick tour of everything available to you. It takes about 2 minutes and you\'ll earn <strong>100 Experience Points</strong> when you\'re done.',
+    body: 'Let us give you a quick tour of everything available to you. It takes about 2 minutes and you\'ll earn <strong>100 XP</strong> when you\'re done.',
   },
   {
     id: 'portfolio_hero',
@@ -5358,7 +5751,7 @@ const TOUR_STEPS = [
     position: 'right',
     icon: 'fa-store',
     title: 'Browse Investment Pools',
-    body: 'Explore open pools across solar, cattle, and delivery bikes. Each shows its rate, term, and how much is still available.',
+    body: 'Explore open pools across solar, cattle, loans, and delivery bikes. Each shows its rate, term, and how much is still available.',
   },
   {
     id: 'nav_maturity',
@@ -5406,19 +5799,29 @@ let _tourStep = 0;
 let _tourActive = false;
 
 function _checkAutoStartTour() {
-  const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
-  const key = `svc_tour_done_${investorId}`;
-  if (!localStorage.getItem(key)) {
-    // Wait for next paint after overview renders, then start
-    requestAnimationFrame(() => setTimeout(startTour, 400));
-  }
+  // Tour disabled on native Android — on-device UX is different enough that
+  // the desktop-oriented tour is confusing. Users can still tap the tour
+  // button manually if the topbar button is visible.
+  if (window.__SVC_NATIVE__) return;
+  if (localStorage.getItem('svc_tour_done')) return;
+  const inv = PORTAL.investor;
+  if (!inv || (!inv.first_name && !inv.last_name && !inv.email)) return;
+  // Mark as done BEFORE starting so that closing the browser tab during the
+  // tour doesn't restart it on the next visit.
+  localStorage.setItem('svc_tour_done', '1');
+  requestAnimationFrame(() => setTimeout(startTour, 400));
 }
 
 function startTour() {
   _tourActive = true;
   _tourStep = 0;
+  // Always scroll back to the top of the page before showing the tour so the
+  // welcome banner (not the onboarding wizard) is at the top of the viewport.
+  // On Android, WebView can restore a previous scroll position on relaunch,
+  // making the top content appear to be a blank gray area.
+  const pc = document.querySelector('.page-content');
+  if (pc) pc.scrollTop = 0;
   document.getElementById('tourOverlay').style.display = 'block';
-  // Hide the pulsing badge on tour button
   const pulse = document.querySelector('.tour-btn-pulse');
   if (pulse) pulse.style.display = 'none';
   _renderTourStep(_tourStep);
@@ -5448,8 +5851,7 @@ function _endTour(completed) {
   _tourActive = false;
   document.getElementById('tourOverlay').style.display = 'none';
 
-  const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
-  localStorage.setItem(`svc_tour_done_${investorId}`, '1');
+  localStorage.setItem('svc_tour_done', '1');
 
   if (completed) {
     // Award tour XP
@@ -5505,17 +5907,23 @@ function _renderTourStep(idx) {
     nextBtn.className = 'tour-next-btn';
   }
 
-  // Scroll target into view first, then position after layout settles
+  // Scroll target into view, then wait for layout to settle before positioning.
+  // On mobile one rAF is not enough — the scroll hasn't completed yet, so
+  // getBoundingClientRect() returns stale positions and the tooltip jumps.
   if (step.target && step.type !== 'center') {
     const el = document.querySelector(step.target);
-    if (el) el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+    if (el) el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
   }
-  requestAnimationFrame(() => _positionTour(step));
+  // Native mobile needs extra time for scroll to settle
+  const scrollDelay = window.__SVC_NATIVE__ ? 350 : 80;
+  setTimeout(() => _positionTour(step), scrollDelay);
 }
 
 function _positionTour(step) {
   const spotlight = document.getElementById('tourSpotlight');
   const tooltip   = document.getElementById('tourTooltip');
+
+  const isMobile = window.innerWidth < 600 || window.__SVC_NATIVE__;
 
   const _centerTooltip = () => {
     spotlight.style.cssText = 'display:none';
@@ -5525,10 +5933,32 @@ function _positionTour(step) {
       z-index:10002; max-width:440px; width:calc(100vw - 32px);`;
   };
 
+  // On mobile always pin tooltip at bottom — avoids all jumping/positioning issues
+  const _mobileTooltip = (r) => {
+    const pad = 8;
+    if (r) {
+      spotlight.style.cssText = `
+        display:block; position:fixed;
+        left:${r.left - pad}px; top:${r.top - pad}px;
+        width:${r.width + pad * 2}px; height:${r.height + pad * 2}px;
+        border-radius:12px;
+        box-shadow: 0 0 0 9999px rgba(0,0,0,0.72);
+        z-index:10001; pointer-events:none;`;
+    } else {
+      spotlight.style.cssText = 'display:none';
+    }
+    const ttW = Math.min(360, window.innerWidth - 32);
+    tooltip.style.cssText = `
+      display:flex; position:fixed;
+      bottom:90px; left:50%; transform:translateX(-50%);
+      width:${ttW}px; max-width:${ttW}px;
+      z-index:10002;`;
+  };
+
   if (step.type === 'center' || !step.target) { _centerTooltip(); return; }
 
   const el = document.querySelector(step.target);
-  if (!el) { _centerTooltip(); return; }
+  if (!el) { isMobile ? _mobileTooltip(null) : _centerTooltip(); return; }
 
   const r  = el.getBoundingClientRect();
   const vw = window.innerWidth;
@@ -5536,11 +5966,14 @@ function _positionTour(step) {
 
   // If element is invisible (hidden sidebar on mobile, display:none, zero size), centre tooltip
   const isVisible = r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw;
-  if (!isVisible) { _centerTooltip(); return; }
+  if (!isVisible) { isMobile ? _mobileTooltip(null) : _centerTooltip(); return; }
+
+  // Mobile: pin tooltip at bottom, spotlight on the element — no jumping
+  if (isMobile) { _mobileTooltip(r); return; }
 
   const pad = 8;
 
-  // Spotlight
+  // Desktop spotlight with smooth transition
   spotlight.style.cssText = `
     display:block; position:fixed;
     left:${r.left - pad}px; top:${r.top - pad}px;
@@ -5548,7 +5981,7 @@ function _positionTour(step) {
     border-radius:12px;
     box-shadow: 0 0 0 9999px rgba(0,0,0,0.72);
     z-index:10001; pointer-events:none;
-    transition: all 0.35s cubic-bezier(0.22,1,0.36,1);`;
+    transition: left 0.3s ease, top 0.3s ease, width 0.3s ease, height 0.3s ease;`;
 
   // Tooltip positioning
   const ttW    = Math.min(340, vw - 32);
@@ -5607,12 +6040,14 @@ function checkFirstDepositPrompt() {
 
   // Show with a short delay so overview loads first
   setTimeout(() => {
-    document.getElementById('depositPromptModal').style.display = 'flex';
+    const m = document.getElementById('depositPromptModal');
+    if (m) { m.style.display = 'flex'; m.classList.add('open'); }
   }, 2500);
 }
 
 function dismissDepositPrompt(never) {
-  document.getElementById('depositPromptModal').style.display = 'none';
+  const m = document.getElementById('depositPromptModal');
+  if (m) { m.style.display = 'none'; m.classList.remove('open'); }
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
   if (never) {
     localStorage.setItem(`svc_deposit_never_${investorId}`, '1');
@@ -5636,13 +6071,13 @@ function goFundWallet() {
 const SA_TYPE_META = {
   business: {
     icon: 'fa-building',       label: 'Business',
-    color: '#FF8215',          bg: 'linear-gradient(135deg,#1a1a2e 0%,#FF8215 100%)',
+    color: '#2f8c9b',          bg: 'linear-gradient(135deg,#1a3d42 0%,#2f8c9b 100%)',
     tagline: 'Invest through your registered company',
     ficaDocs: ['Company Registration Certificate (COR14.3 / COR15.1A)', 'Company Tax Clearance Certificate', 'CIPC CoR39 or similar', 'Authorised signatory ID (copy)'],
   },
   trust:    {
     icon: 'fa-scale-balanced',  label: 'Trust',
-    color: '#FF9B0C',           bg: 'linear-gradient(135deg,#1a1a2e 0%,#FF9B0C 100%)',
+    color: '#7c5cfc',           bg: 'linear-gradient(135deg,#2d1d6e 0%,#7c5cfc 100%)',
     tagline: 'Invest through a family or business trust',
     ficaDocs: ['Trust Deed (certified copy)', 'Letters of Authority (Master of Court)', 'Trustee(s) ID documents', 'Trust tax clearance certificate'],
   },
@@ -5700,10 +6135,10 @@ const _SA_TIPS = {
 /* ── Load & render ──────────────────────────────────────────── */
 async function loadSubAccounts() {
   try {
-    const res = await API._fetch('GET', 'tables/sub_accounts', null, { limit: 200 });
-    const all = res.data || (Array.isArray(res) ? res : []);
     const myId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
-    PORTAL.subAccounts = all.filter(a => String(a.parent_investor_id) === String(myId));
+    const res = await API._fetch('GET', 'tables/sub_accounts', null, { parent_investor_id: myId, limit: 200 });
+    const all = res.data || (Array.isArray(res) ? res : []);
+    PORTAL.subAccounts = all.filter(a => a.parent_investor_id === myId || a.investor_id === myId);
   } catch (e) {
     console.warn('loadSubAccounts:', e);
     PORTAL.subAccounts = [];
@@ -6259,7 +6694,7 @@ async function submitSaFica() {
       file_name:      _saFicaFile.name,
       notes:          `FICA document for sub-account: ${sa?.name || _saFicaSaId}. File: ${_saFicaFile.name} (${((_saFicaFile.size)/1024).toFixed(1)} KB)`,
     });
-    Toast.success('FICA/KYC document submitted! The admin team will review it within 1–2 business days.');
+    Toast.success('FICA document submitted! The admin team will review it within 1-2 business days.');
     Modal.close('saFicaModal');
   } catch (e) {
     Toast.error('Upload failed. Please try again.');
@@ -6567,17 +7002,17 @@ function generateTaxCertificate() {
   });
   const totalInterest = interestTxns.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
 
-  const certNumber = `SVCIIC-${taxYear}-${String(inv.id).replace(/\D/g,'').slice(-6) || Math.floor(Math.random()*900000+100000)}`;
+  const certNumber = `SVCIT-${taxYear}-${String(inv.id).replace(/\D/g,'').slice(-6) || Math.floor(Math.random()*900000+100000)}`;
   const generatedAt = new Date().toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
   const fromLabel = from.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
   const toLabel   = to.toLocaleDateString('en-ZA',   { day: 'numeric', month: 'long', year: 'numeric' });
 
   const html = `
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>SV Capital — Investment Income Certificate ${taxYear}</title>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Poppins',sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:'Inter',sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 @page{size:A4;margin:20mm}
 @media print{.no-print{display:none!important}}
 .no-print{position:fixed;top:0;left:0;right:0;background:#1a2235;padding:10px 24px;display:flex;justify-content:space-between;align-items:center;z-index:99}
@@ -6604,25 +7039,24 @@ td:last-child{text-align:right;font-weight:600}
 .stamp{display:inline-block;border:2px solid #1a2235;color:#1a2235;padding:6px 14px;border-radius:4px;font-size:0.72rem;font-weight:700;letter-spacing:0.12em;margin-top:16px;text-transform:uppercase}
 </style></head><body>
 <div class="no-print">
-  <span>SV Capital — Investment Income Certificate ${taxYear}</span>
+  <span>SV Capital — IT3(b) Tax Certificate ${taxYear}</span>
   <button onclick="window.print()">⬇ Save as PDF / Print</button>
 </div>
 <div class="wrap">
   <div class="hdr">
     <div>
       <div class="logo">SV <span>Capital</span></div>
-      <div style="font-size:0.75rem;color:#6b7280;margin-top:4px">SmartVest Financial Services (Pty) Ltd &nbsp;·&nbsp; FSP #52449 &nbsp;·&nbsp; FSCA Regulated</div>
-      <div style="font-size:0.72rem;color:#9ca3af;margin-top:2px">The Station, 63 Peter Place, Bryanston, Johannesburg, 2191</div>
+      <div style="font-size:0.75rem;color:#6b7280;margin-top:4px">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSCA Regulated</div>
     </div>
     <div class="cert-badge">
-      INVESTMENT INCOME CERTIFICATE
+      IT3(b) INTEREST INCOME CERTIFICATE
       <small>Cert No: ${certNumber}</small>
       <small>Generated: ${generatedAt}</small>
     </div>
   </div>
 
-  <h1>Investment Income Certificate</h1>
-  <div class="subtitle">Period: 1 March ${taxYear - 1} – 28 February ${taxYear}</div>
+  <h1>IT3(b) Interest Income Certificate</h1>
+  <div class="subtitle">Tax Year: 1 March ${taxYear - 1} – 28 February ${taxYear} &nbsp;|&nbsp; For submission to SARS</div>
 
   <div class="interest-box">
     <div class="interest-lbl">Total Interest Received</div>
@@ -6656,13 +7090,15 @@ td:last-child{text-align:right;font-weight:600}
   ` : `<div style="text-align:center;padding:24px;background:#f8fafc;border-radius:10px;color:#6b7280;font-size:0.85rem;margin-bottom:24px">No interest income recorded for this tax year.</div>`}
 
   <div class="footer">
-    This certificate is issued by <strong>SmartVest Financial Services (Pty) Ltd</strong>, an authorised financial services provider regulated by the Financial Sector Conduct Authority (FSCA), FSP Licence #52449, on behalf of SV Capital.<br>
-    This document is for informational purposes. Please consult a tax advisor for official SARS submissions.
+    <strong>SV Capital (Pty) Ltd</strong> is a registered financial services provider regulated by the Financial Sector Conduct Authority (FSCA).<br>
+    This certificate is generated in accordance with Section 11(j) of the Income Tax Act No. 58 of 1962.<br>
+    Interest declared above must be included in your annual tax return (ITR12) under "Local interest income".<br>
+    The IT3(b) exemption threshold for individuals under 65 is <strong>R23,800</strong> per annum (2024 tax year).
     <br><br>
     <strong>Certificate No:</strong> ${certNumber} &nbsp;·&nbsp; <strong>Date Issued:</strong> ${generatedAt}<br>
     This certificate is computer generated and does not require a signature.
     <br>
-    <div class="stamp">SV Capital — Investment Income</div>
+    <div class="stamp">SV Capital — IT3(b)</div>
   </div>
 </div>
 </body></html>`;
@@ -6816,11 +7252,11 @@ function renderOnboardingChecklist() {
   const steps = [
     {
       id: 'fica',
-      label: 'Complete your FICA/KYC verification',
+      label: 'Complete your FICA verification',
       desc: 'Submit your ID document and proof of address.',
       done: inv.fica_status === 'approved',
       action: "navigate('profile', document.querySelector('[data-view=profile]'))",
-      actionLabel: 'Go to FICA/KYC',
+      actionLabel: 'Go to KYC',
     },
     {
       id: 'wallet',
@@ -6931,10 +7367,7 @@ function openCalcModal() {
   if (amtEl) amtEl.value = '50000';
   if (sldEl) sldEl.value = '50000';
   const termEl = document.getElementById('calcTerm');
-  if (termEl) {
-    termEl.innerHTML = '<option value="6">6 months</option><option value="12" selected>12 months</option><option value="18">18 months</option><option value="24">24 months</option><option value="36">36 months</option>';
-    termEl.value = '12';
-  }
+  if (termEl) termEl.value = '12';
   const rateEl = document.getElementById('calcRate');
   if (rateEl) rateEl.value = '14';
   const ctaBar = document.getElementById('calcCTABar');
@@ -6960,11 +7393,6 @@ function calcLoadPool() {
   const opt = sel?.options[sel.selectedIndex];
   if (!opt?.value) {
     _calcPoolId = null;
-    const termEl2 = document.getElementById('calcTerm');
-    if (termEl2) {
-      termEl2.innerHTML = '<option value="6">6 months</option><option value="12" selected>12 months</option><option value="18">18 months</option><option value="24">24 months</option><option value="36">36 months</option>';
-      termEl2.value = '12';
-    }
     const ctaBar = document.getElementById('calcCTABar');
     if (ctaBar) ctaBar.style.display = 'none';
     return;
@@ -6973,10 +7401,12 @@ function calcLoadPool() {
   const rateEl = document.getElementById('calcRate');
   const termEl = document.getElementById('calcTerm');
   if (rateEl) rateEl.value = Math.round((parseFloat(opt.dataset.rate || 0.14) * 100) * 10) / 10;
-  // Restrict term dropdown to this pool's fixed term only
+  // Set term select to closest available option
   if (termEl) {
     const poolTerm = parseInt(opt.dataset.term || 12);
-    termEl.innerHTML = `<option value="${poolTerm}" selected>${poolTerm} months</option>`;
+    const opts = [...termEl.options];
+    let closest = opts.reduce((prev, cur) => Math.abs(parseInt(cur.value) - poolTerm) < Math.abs(parseInt(prev.value) - poolTerm) ? cur : prev);
+    if (closest) closest.selected = true;
   }
   const ctaBar = document.getElementById('calcCTABar');
   if (ctaBar) ctaBar.style.display = 'block';
@@ -7091,6 +7521,8 @@ function _kycFileSelected(file) {
   if (nameEl)   nameEl.textContent = file.name;
   const zone = document.getElementById('kycDropZone');
   if (zone) { zone.style.borderColor = '#22c55e'; zone.style.background = 'rgba(34,197,94,0.04)'; }
+  // After iOS file picker closes, blur any focused element (prevents zoom) and
+  // scroll modal body to keep Submit button in view.
   setTimeout(() => {
     if (document.activeElement && document.activeElement !== document.body) {
       document.activeElement.blur();
@@ -7988,7 +8420,7 @@ async function _loadStatementArchive() {
     el.innerHTML = taxSection + `<div style="display:flex;flex-direction:column;gap:6px">${data.statements.map(s => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface2,#f8f9fa);border-radius:8px">
         <div style="font-size:0.84rem;font-weight:600">${months[s.period_month-1]} ${s.period_year} Statement</div>
-        <a href="/api/statements/${s.id}/pdf" target="_blank" class="btn btn--ghost btn--sm" style="font-size:0.75rem"><i class="fa-solid fa-download"></i> PDF</a>
+        <a href="${(window.__SVC_API_BASE__ || '/api/')}statements/${s.id}/pdf" target="_blank" class="btn btn--ghost btn--sm" style="font-size:0.75rem"><i class="fa-solid fa-download"></i> PDF</a>
       </div>`).join('')}</div>`;
   } catch (_) {
     if (el) el.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:12px 0">Unable to load statements</div>';
@@ -8468,6 +8900,15 @@ async function togglePushNotifications(checked) {
   const statusText = document.getElementById('pushNotifStatusText');
 
   if (checked) {
+    // Native Capacitor app — push is managed by native.js on startup
+    if (window.__SVC_NATIVE__) {
+      localStorage.setItem(PUSH_PREF_KEY, 'true');
+      if (slider) slider.style.background = '#ff9b0c';
+      if (statusText) statusText.textContent = 'Enabled — you will receive investment alerts';
+      Toast.success('Push notifications enabled!');
+      return;
+    }
+
     // Check browser support
     if (!('Notification' in window)) {
       Toast.info('Push notifications are not supported in this browser. Install the SV Capital app (PWA) for notifications.');
@@ -8720,6 +9161,7 @@ function _renderMonthlyReturnsChart() {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      animation: window.__SVC_NATIVE__ ? false : undefined,
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => 'R ' + c.raw.toLocaleString('en-ZA') } } },
       scales: {
         x: { grid: { display: false }, ticks: { font: { size: 11 } } },
@@ -8742,28 +9184,28 @@ function _renderAnalyticsAllocChart() {
   });
   const entries = Object.entries(byPool).sort((a, b) => b[1] - a[1]);
   const total   = entries.reduce((s, [, v]) => s + v, 0);
-  const COLORS  = ['#FF8215', '#22c55e', '#FF9B0C', '#16a34a', '#f97316', '#a855f7', '#14b8a6', '#3b82f6'];
+  const COLORS  = ['#FF9B0C','#a855f7','#2F8C9B','#22c55e','#ef4444','#3b82f6','#f97316','#8b5cf6'];
 
   if (PORTAL.charts.analyticsAlloc) { PORTAL.charts.analyticsAlloc.destroy(); }
   PORTAL.charts.analyticsAlloc = new Chart(ctx, {
     type: 'doughnut',
     data: {
       labels: entries.map(([n]) => n),
-      datasets: [{ data: entries.map(([,v]) => v), backgroundColor: COLORS, borderWidth: 3, borderColor: '#ffffff' }],
+      datasets: [{ data: entries.map(([,v]) => v), backgroundColor: COLORS, borderWidth: 2, borderColor: '#fff' }],
     },
     options: {
-      responsive: true, maintainAspectRatio: true, cutout: '62%',
-      layout: { padding: 10 },
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
+      animation: window.__SVC_NATIVE__ ? false : undefined,
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.label + ': R' + c.raw.toLocaleString('en-ZA') } } },
     },
   });
 
   if (list) {
     list.innerHTML = entries.map(([name, val], i) => `
-      <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
-        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${COLORS[i % COLORS.length]};flex-shrink:0"></span>
-        <span style="font-size:0.82rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#374151;font-weight:500">${_esc(name)}</span>
-        <span style="font-size:0.78rem;font-weight:700;color:#1a1a1a">${total > 0 ? ((val/total)*100).toFixed(1) : 0}%</span>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${COLORS[i % COLORS.length]};flex-shrink:0"></span>
+        <span style="font-size:0.78rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-body)">${_esc(name)}</span>
+        <span style="font-size:0.78rem;font-weight:700;color:var(--text-body)">${total > 0 ? ((val/total)*100).toFixed(1) : 0}%</span>
       </div>`).join('') || '<p style="font-size:0.78rem;color:var(--text-muted)">No investment data yet.</p>';
   }
 }
@@ -8778,9 +9220,7 @@ function _renderAnalyticsTimeline() {
   }
   const statusBadge = s => {
     const map = { active:'#22c55e', paid_out:'#3b82f6', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316' };
-    const label = (s || '').replace(/_/g, ' ');
-    const labelSentence = label.charAt(0).toUpperCase() + label.slice(1);
-    return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${labelSentence}</span>`;
+    return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${String(s||'').replace('_',' ').toUpperCase()}</span>`;
   };
   const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';
   tbody.innerHTML = invs.slice(0, 30).map(i => {
@@ -8853,7 +9293,7 @@ const PORTAL_CMD_ITEMS = [
   { label: 'Learning Hub',             icon: 'fa-graduation-cap',  group: 'Navigate', action: () => navigate('learn',         document.querySelector('[data-view=learn]')) },
   { label: 'My Profile',               icon: 'fa-user-circle',     group: 'Navigate', action: () => navigate('profile',       document.querySelector('[data-view=profile]')) },
   { label: 'Support',                  icon: 'fa-headset',         group: 'Navigate', action: () => navigate('support',       document.querySelector('[data-view=support]')) },
-  { label: 'Refer & Earn',             icon: 'fa-share-nodes',     group: 'Navigate', action: () => navigate('referral',      document.querySelector('[data-view=referral]')) },
+  // Refer & Earn hidden — referral programme not yet live
   { label: 'Documents',                icon: 'fa-folder-open',     group: 'Navigate', action: () => navigate('documents',     document.querySelector('[data-view=documents]')) },
   { label: 'Account Statement',        icon: 'fa-file-invoice',    group: 'Navigate', action: () => navigate('statement',     document.querySelector('[data-view=statement]')) },
   { label: 'Top Up Wallet',            icon: 'fa-plus',            group: 'Actions',  action: () => openTopUpModal() },

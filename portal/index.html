@@ -139,6 +139,9 @@
       <button class="nav-item" data-view="support" onclick="navigate('support', this)">
         <i class="fa-solid fa-headset"></i> Support
       </button>
+      <button class="nav-item" data-view="policies" onclick="navigate('policies', this)">
+        <i class="fa-solid fa-file-shield"></i> Platform Policies
+      </button>
       <!-- Referral nav hidden — feature not yet live -->
       <button class="nav-item" data-view="referral" onclick="navigate('referral', this)" style="display:none">
         <i class="fa-solid fa-share-nodes"></i> Refer & Earn
@@ -1533,6 +1536,22 @@
         <!-- Account cards grid -->
         <div id="subacctsGrid" class="sa-cards-grid" style="display:none"></div>
       </div><!-- end view-subaccounts -->
+
+      <!-- ══════════════════════════════════
+           VIEW: PLATFORM POLICIES
+      ══════════════════════════════════ -->
+      <div class="view" id="view-policies">
+        <div class="policies-header">
+          <div class="policies-header__icon"><i class="fa-solid fa-file-shield"></i></div>
+          <div>
+            <div class="policies-header__title">Platform Policies</div>
+            <div class="policies-header__sub">Legal documents, rights, and compliance information</div>
+          </div>
+        </div>
+        <div id="policiesContent">
+          <!-- rendered by renderPoliciesView() -->
+        </div>
+      </div><!-- end view-policies -->
 
       <!-- ══ SURVEY MODAL ══ -->
       <div class="modal-overlay" id="surveyModal" onclick="if(event.target===this)closeSurveyModal()">
