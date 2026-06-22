@@ -6,7 +6,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
   <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>SV Capital — Investor Portal</title>
   <meta name="theme-color" content="#FF9B0C" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -556,8 +556,8 @@
             <div class="panel mb-16">
               <div class="panel__header"><span class="panel__title">Allocation by Pool</span></div>
               <div class="panel__body">
-                <div style="display:flex;justify-content:center;padding:8px 0">
-                  <div style="width:200px;height:200px;position:relative"><canvas id="analyticsAllocChart"></canvas></div>
+                <div style="display:flex;justify-content:center;align-items:center;width:100%;padding:8px 0">
+                  <div style="width:200px;height:200px;max-width:100%;position:relative;margin:0 auto"><canvas id="analyticsAllocChart"></canvas></div>
                 </div>
                 <div id="analyticsAllocList" style="margin-top:12px"></div>
               </div>
@@ -709,8 +709,8 @@
               </div>
             </div>
 
-            <!-- Ozow gateway card -->
-            <div class="panel mb-16" style="cursor:pointer;border-color:rgba(0,0,0,0.08);transition:border-color 0.2s" onmouseover="this.style.borderColor='rgba(108,63,197,0.5)'" onmouseout="this.style.borderColor='rgba(0,0,0,0.08)'" onclick="openTopUpModal('ozow')">
+            <!-- Ozow gateway card — hidden (Ozow not currently active) -->
+            <div class="panel mb-16" style="display:none" onclick="openTopUpModal('ozow')">
               <div class="panel__body" style="padding:16px">
                 <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
                   <div style="width:42px;height:42px;border-radius:9px;background:linear-gradient(135deg,#6C3FC5,#9B59F5);display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -774,7 +774,7 @@
           <div class="igs-step">
             <div class="igs-num">1</div>
             <i class="fa-solid fa-wallet igs-icon"></i>
-            <div class="igs-text"><b>Fund Wallet</b><span>Top up via Ozow or EFT</span></div>
+            <div class="igs-text"><b>Fund Wallet</b><span>Top up via EFT or Paystack</span></div>
           </div>
           <i class="fa-solid fa-chevron-right igs-arrow"></i>
           <div class="igs-step igs-step--active">
@@ -800,7 +800,7 @@
         <div class="mkt-wallet-strip mb-16" id="mktWalletStrip" style="display:none">
           <i class="fa-solid fa-wallet"></i>
           <span>Wallet available: <strong id="mktWalletBal">—</strong></span>
-          <button class="btn btn--sm" onclick="navigate('wallet',document.querySelector('[data-view=wallet]'))" style="background:#FF8215;color:#fff;border:none;font-weight:700">
+          <button class="btn btn--sm" onclick="navigate('wallet',document.querySelector('[data-view=wallet]'))" style="background:linear-gradient(135deg,#FF8215,#FF9B0C);color:#fff;border:none;font-weight:700">
             <i class="fa-solid fa-plus"></i> Top Up
           </button>
         </div>
@@ -1692,8 +1692,8 @@
         </div>
       </div>
 
-      <!-- Ozow option -->
-      <div class="pm-gateway-card" id="gwOzow" onclick="selectGateway('ozow')" style="margin-bottom:12px;background:#252933;border-color:rgba(255,255,255,0.1)">
+      <!-- Ozow option — hidden (Ozow not currently active) -->
+      <div class="pm-gateway-card" id="gwOzow" onclick="selectGateway('ozow')" style="display:none;margin-bottom:12px;background:#252933;border-color:rgba(255,255,255,0.1)">
         <div style="display:flex;align-items:center;gap:14px">
           <div style="width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,#6C3FC5,#9B59F5);display:flex;align-items:center;justify-content:center;flex-shrink:0">
             <span style="color:#fff;font-size:1.1rem;font-weight:900;letter-spacing:-1px">Oz</span>
