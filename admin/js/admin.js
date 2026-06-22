@@ -93,6 +93,21 @@ function _setRefreshLabel(elId, view) {
   if (el) el.textContent = `Updated ${_refreshedText(view)}`;
 }
 
+/* ─── Get current admin's full name (for audit/review fields) ─── */
+function _getAdminName() {
+  try {
+    const s = JSON.parse(localStorage.getItem('staffSession') || 'null');
+    if (s && s.empId && s.expiresAt > Date.now()) {
+      return `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Admin';
+    }
+  } catch (_) {}
+  if (typeof Auth !== 'undefined') {
+    const u = Auth.getUser();
+    if (u) return `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'Admin';
+  }
+  return 'Admin';
+}
+
 /* ─── Empty-state row helper ─── */
 function _emptyRow(icon, title, sub, colspan = 6) {
   return `<tr><td colspan="${colspan}" style="padding:0;border:none">
@@ -902,17 +917,29 @@ function renderActivityFeed() {
   _setRefreshLabel('activityRefreshed', 'activity');
 }
 
-function renderAumChart() {
+function switchAumTab(range, btn) {
+  // Update active tab styling
+  const tabBtns = document.querySelectorAll('.aum-tabs .tab-btn');
+  tabBtns.forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  // Re-render chart with selected range
+  renderAumChart(range);
+}
+
+function renderAumChart(range) {
   const ctx = document.getElementById('aumChart');
   if (!ctx) return;
 
-  // Build last 6 calendar months
+  // Determine how many months back to show
+  const monthCount = range === 'all' ? 36 : range === '1y' ? 12 : 6;
+
+  // Build calendar months going back monthCount periods
   const now = new Date();
   const monthStarts = [], monthLabels = [];
-  for (let i = 5; i >= 0; i--) {
+  for (let i = monthCount - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     monthStarts.push(d);
-    monthLabels.push(d.toLocaleString('en-ZA', { month: 'short' }));
+    monthLabels.push(d.toLocaleString('en-ZA', { month: 'short', year: monthCount > 12 ? '2-digit' : undefined }));
   }
 
   // Cumulative AUM: sum of investments active at end of each month
@@ -1338,7 +1365,7 @@ async function viewInvestor(id) {
   `;
   Modal.open('investorDetailModal');
   // Set textarea value after innerHTML to avoid XSS via template literals
-  const ta = document.getElementById('investorNotesTA');
+  const ta = document.getElementById('invNewNoteTA');
   if (ta) ta.value = inv.notes || '';
   // Load persistent notes
   loadInvestorNotes(inv.id);
@@ -1373,15 +1400,20 @@ async function depositToInvestor(investorId, investorName, currentBalance) {
 async function approveInvestorFica(investorId, btn) {
   if (!await Confirm.ask('Approve FICA?', { body: 'This investor will be marked as KYC-verified and their account activated.', confirmLabel: 'Approve FICA' })) return;
   await _withBtn(btn, async () => {
-    await API.investors.update(investorId, { fica_status: 'approved', status: 'active' });
-    Toast.success('FICA approved — investor is now active');
-    Modal.close('investorDetailModal');
-    await loadInvestors();
+    try {
+      await API.investors.update(investorId, { fica_status: 'approved', kyc_status: 'approved', status: 'active' });
+      Toast.success('FICA approved — investor is now active');
+      Modal.close('investorDetailModal');
+      await loadInvestors();
+    } catch (e) {
+      Toast.error('Failed to approve FICA: ' + (e.message || 'unknown error'));
+      console.error('[approveInvestorFica]', e);
+    }
   });
 }
 
 async function saveInvestorNotes(investorId) {
-  const ta = document.getElementById('investorNotesTA');
+  const ta = document.getElementById('invNewNoteTA');
   if (!ta) return;
   try {
     await API._fetch('PATCH', `tables/investors/${investorId}`, { notes: ta.value.trim() });
@@ -1394,10 +1426,15 @@ async function saveInvestorNotes(investorId) {
 async function approveBankAccount(investorId, btn) {
   if (!await Confirm.ask('Approve bank account?', { body: 'This will enable withdrawals for this investor and send a confirmation.', confirmLabel: 'Approve' })) return;
   await _withBtn(btn, async () => {
-    await API._fetch('PATCH', `tables/investors/${investorId}`, { bank_account_status: 'approved', bank_account_notes: null });
-    Toast.success('Bank account approved — investor can now request withdrawals');
-    Modal.close('investorDetailModal');
-    await loadInvestors();
+    try {
+      await API._fetch('PATCH', `tables/investors/${investorId}`, { bank_account_status: 'approved', bank_account_notes: null });
+      Toast.success('Bank account approved — investor can now request withdrawals');
+      Modal.close('investorDetailModal');
+      await loadInvestors();
+    } catch (e) {
+      Toast.error('Failed to approve bank account: ' + (e.message || 'unknown error'));
+      console.error('[approveBankAccount]', e);
+    }
   });
 }
 
@@ -1490,22 +1527,24 @@ function renderWithdrawalsTable() {
 
 async function approveWithdrawal(txnId, btn) {
   if (!txnId) { Toast.error('Invalid withdrawal ID'); return; }
-  if (!await Confirm.ask('Approve this withdrawal?', { body: 'The investor will be notified and the funds released to their bank account.', confirmLabel: 'Approve' })) return;
+  if (!await Confirm.ask('Approve this withdrawal?', { body: 'The investor\'s funds will be marked as released to their bank account.', confirmLabel: 'Approve' })) return;
   await _withBtn(btn, async () => {
     try {
-      const res = await fetch(`/api/withdrawals/${txnId}/approve`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { Authorization: 'Bearer ' + (localStorage.getItem('svc_token') || ''), 'Content-Type': 'application/json' }
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Server error ${res.status}`);
+      await API._fetch('PATCH', `tables/transactions/${txnId}`, { status: 'completed' });
+      // Deduct from investor wallet if still showing balance
+      const txn = STATE.withdrawals.find(w => w.id === txnId);
+      if (txn && txn.investor_id) {
+        const inv = STATE.investors.find(i => i.id === txn.investor_id);
+        if (inv && inv.wallet_balance > 0) {
+          const deduct = Math.abs(parseFloat(txn.amount) || 0);
+          const newBal = Math.max(0, Math.round(((inv.wallet_balance || 0) - deduct) * 100) / 100);
+          await API._fetch('PATCH', `tables/investors/${txn.investor_id}`, { wallet_balance: newBal });
+        }
       }
-      Toast.success('Withdrawal approved — investor notified by email and SMS');
+      Toast.success('Withdrawal approved — funds released to investor bank account');
       await loadWithdrawals();
     } catch (e) {
-      Toast.error('Could not approve withdrawal: ' + (e.message || 'unknown error'));
+      Toast.error('Failed to approve withdrawal: ' + (e.message || 'unknown error'));
       console.error('[approveWithdrawal]', e);
     }
   });
@@ -1535,20 +1574,14 @@ async function _submitRejection() {
   if (!txnId) return;
   await _withBtn(btn, async () => {
     try {
-      const res = await fetch(`/api/withdrawals/${txnId}/reject`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { Authorization: 'Bearer ' + (localStorage.getItem('svc_token') || ''), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: reason || 'Withdrawal rejected by admin.' })
+      await API._fetch('PATCH', `tables/transactions/${txnId}`, {
+        status: 'rejected',
+        description: reason || 'Withdrawal rejected by admin.',
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Server error ${res.status}`);
-      }
-      Toast.success('Withdrawal rejected — investor notified and funds returned to wallet');
+      Toast.success('Withdrawal rejected — funds remain in investor wallet');
       await loadWithdrawals();
     } catch (e) {
-      Toast.error('Could not reject withdrawal: ' + (e.message || 'unknown error'));
+      Toast.error('Failed to reject withdrawal: ' + (e.message || 'unknown error'));
       console.error('[rejectWithdrawal]', e);
     }
   });
@@ -1561,10 +1594,15 @@ async function rejectWithdrawal(txnId) { return rejectWithdrawalPrompt(txnId); }
 async function confirmDeleteInvestor(id, btn) {
   if (!await Confirm.ask('Delete investor?', { body: 'This cannot be undone. All investor data will be permanently removed.', confirmLabel: 'Delete', danger: true })) return;
   await _withBtn(btn, async () => {
-    await API.investors.delete(id);
-    Toast.success('Investor deleted');
-    Modal.closeAll();
-    await loadInvestors();
+    try {
+      await API.investors.delete(id);
+      Toast.success('Investor deleted');
+      Modal.closeAll();
+      await loadInvestors();
+    } catch (e) {
+      Toast.error('Failed to delete investor: ' + (e.message || 'unknown error'));
+      console.error('[confirmDeleteInvestor]', e);
+    }
   });
 }
 
@@ -1629,23 +1667,28 @@ async function saveNewInvestor(btn) {
   const accountNo = window._pendingInvestorAccountNo || `INV-${Date.now()}`;
 
   await _withBtn(btn, async () => {
-    await API.investors.create({
-      id: accountNo,
-      first_name: fn, last_name: ln, email: em,
-      phone: document.getElementById('newInvPhone').value.trim(),
-      id_number: document.getElementById('newInvIdNum').value.trim(),
-      risk_profile: document.getElementById('newInvRisk').value,
-      city: document.getElementById('newInvCity').value.trim(),
-      province: document.getElementById('newInvProvince').value,
-      notes: document.getElementById('newInvNotes').value.trim(),
-      status: 'pending', fica_status: 'pending',
-      wallet_balance: 0, total_invested: 0, total_returns: 0,
-      date_joined: new Date().toISOString(),
-    });
-    window._pendingInvestorAccountNo = null;
-    Toast.success(`Investor created — Account: ${accountNo}`);
-    Modal.close('addInvestorModal');
-    await loadInvestors();
+    try {
+      await API.investors.create({
+        id: accountNo,
+        first_name: fn, last_name: ln, email: em,
+        phone: document.getElementById('newInvPhone').value.trim(),
+        id_number: document.getElementById('newInvIdNum').value.trim(),
+        risk_profile: document.getElementById('newInvRisk').value,
+        city: document.getElementById('newInvCity').value.trim(),
+        province: document.getElementById('newInvProvince').value,
+        notes: document.getElementById('newInvNotes').value.trim(),
+        status: 'pending', fica_status: 'pending',
+        wallet_balance: 0, total_invested: 0, total_returns: 0,
+        date_joined: new Date().toISOString(),
+      });
+      window._pendingInvestorAccountNo = null;
+      Toast.success(`Investor created — Account: ${accountNo}`);
+      Modal.close('addInvestorModal');
+      await loadInvestors();
+    } catch (e) {
+      Toast.error('Failed to create investor: ' + (e.message || 'unknown error'));
+      console.error('[saveNewInvestor]', e);
+    }
   });
 }
 
@@ -1665,7 +1708,8 @@ async function loadKYC() {
     renderKYCStats();
     renderKYCTable();
 
-    document.getElementById('kycStatusFilter').addEventListener('change', renderKYCTable);
+    const kycFilterEl = document.getElementById('kycStatusFilter');
+    if (kycFilterEl && !kycFilterEl._wired) { kycFilterEl._wired = true; kycFilterEl.addEventListener('change', renderKYCTable); }
   } catch (e) { Toast.error('Failed to load KYC data'); }
 }
 
@@ -1782,20 +1826,38 @@ function viewFicaDocument(kycId) {
 }
 
 async function approveKyc(id, btn) {
+  if (!await Confirm.ask('Approve KYC document?', { body: 'This will mark the document as verified.', confirmLabel: 'Approve' })) return;
+  const reviewedBy = _getAdminName();
   await _withBtn(btn, async () => {
-    await API.kyc.update(id, { status: 'approved', reviewed_by: 'Ayanda Majola', reviewed_date: new Date().toISOString() });
-    Toast.success('Document approved');
-    await loadKYC();
+    try {
+      await API.kyc.update(id, { status: 'approved', reviewed_by: reviewedBy, reviewed_date: new Date().toISOString() });
+      // Also update the investor's kyc_status so filters/badges reflect the change
+      const doc = STATE.kyc.find(k => k.id === id);
+      if (doc?.investor_id) {
+        await API._fetch('PATCH', `tables/investors/${doc.investor_id}`, { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
+      }
+      Toast.success('Document approved — investor is now KYC-verified');
+      await loadKYC();
+    } catch (e) {
+      Toast.error('Failed to approve document: ' + (e.message || 'unknown error'));
+      console.error('[approveKyc]', e);
+    }
   });
 }
 
 async function rejectKyc(id, btn) {
   const reason = prompt('Rejection reason:');
   if (reason === null) return;
+  const reviewedBy = _getAdminName();
   await _withBtn(btn, async () => {
-    await API.kyc.update(id, { status: 'rejected', rejection_reason: reason, reviewed_by: 'Ayanda Majola', reviewed_date: new Date().toISOString() });
-    Toast.success('Document rejected');
-    await loadKYC();
+    try {
+      await API.kyc.update(id, { status: 'rejected', rejection_reason: reason, reviewed_by: reviewedBy, reviewed_date: new Date().toISOString() });
+      Toast.success('Document rejected');
+      await loadKYC();
+    } catch (e) {
+      Toast.error('Failed to reject document: ' + (e.message || 'unknown error'));
+      console.error('[rejectKyc]', e);
+    }
   });
 }
 
@@ -2150,26 +2212,31 @@ async function saveNewPool(btn) {
   const maxCapVal = document.getElementById('newPoolMaxCapacity').value;
   const max_capacity = maxCapVal ? (parseFloat(maxCapVal) || null) : null;
   await _withBtn(btn, async () => {
-    await API.pools.create({
-      id: `POOL-${type.toUpperCase().slice(0,3)}-${Date.now()}`,
-      name, product_type: type,
-      target_amount: target || 0, raised_amount: 0,
-      min_investment: parseFloat(document.getElementById('newPoolMin').value) || 500,
-      term_months: parseInt(document.getElementById('newPoolTerm').value) || 12,
-      annual_rate: parseFloat(document.getElementById('newPoolRate').value) || 0.13,
-      partner_name: document.getElementById('newPoolPartner').value.trim(),
-      start_date: document.getElementById('newPoolOpenDate').value ? new Date(document.getElementById('newPoolOpenDate').value).toISOString() : new Date().toISOString(),
-      end_date: document.getElementById('newPoolCloseDate').value ? new Date(document.getElementById('newPoolCloseDate').value).toISOString() : '',
-      status: 'open', investor_count: 0,
-      max_capacity,
-      management_fee_pct:       parseFloat(document.getElementById('newPoolMgtFeePct')?.value) || 0,
-      management_fee_frequency: document.getElementById('newPoolMgtFeeFreq')?.value || 'once',
-      operational_fee_pct:      parseFloat(document.getElementById('newPoolOpFeePct')?.value) || 0,
-      operational_fee_frequency: document.getElementById('newPoolOpFeeFreq')?.value || 'annual',
-    });
-    Toast.success('Pool created');
-    Modal.close('addPoolModal');
-    await loadPools();
+    try {
+      await API.pools.create({
+        id: `POOL-${type.toUpperCase().slice(0,3)}-${Date.now()}`,
+        name, product_type: type,
+        target_amount: target || 0, raised_amount: 0,
+        min_investment: parseFloat(document.getElementById('newPoolMin').value) || 500,
+        term_months: parseInt(document.getElementById('newPoolTerm').value) || 12,
+        annual_rate: parseFloat(document.getElementById('newPoolRate').value) || 0.13,
+        partner_name: document.getElementById('newPoolPartner').value.trim(),
+        start_date: document.getElementById('newPoolOpenDate').value ? new Date(document.getElementById('newPoolOpenDate').value).toISOString() : new Date().toISOString(),
+        end_date: document.getElementById('newPoolCloseDate').value ? new Date(document.getElementById('newPoolCloseDate').value).toISOString() : '',
+        status: 'open', investor_count: 0,
+        max_capacity,
+        management_fee_pct:       parseFloat(document.getElementById('newPoolMgtFeePct')?.value) || 0,
+        management_fee_frequency: document.getElementById('newPoolMgtFeeFreq')?.value || 'once',
+        operational_fee_pct:      parseFloat(document.getElementById('newPoolOpFeePct')?.value) || 0,
+        operational_fee_frequency: document.getElementById('newPoolOpFeeFreq')?.value || 'annual',
+      });
+      Toast.success('Pool created');
+      Modal.close('addPoolModal');
+      await loadPools();
+    } catch (e) {
+      Toast.error('Failed to create pool: ' + (e.message || 'unknown error'));
+      console.error('[saveNewPool]', e);
+    }
   });
 }
 
@@ -2274,10 +2341,15 @@ async function saveEditPool(btn) {
   if (!updates.name) { Toast.error('Pool name is required'); return; }
 
   await _withBtn(btn, async () => {
-    await API.pools.update(id, updates);
-    Toast.success('Pool updated successfully');
-    Modal.close('editPoolModal');
-    await loadPools();
+    try {
+      await API.pools.update(id, updates);
+      Toast.success('Pool updated successfully');
+      Modal.close('editPoolModal');
+      await loadPools();
+    } catch (e) {
+      Toast.error('Failed to update pool: ' + (e.message || 'unknown error'));
+      console.error('[saveEditPool]', e);
+    }
   });
 }
 
@@ -2568,14 +2640,17 @@ function renderMaturityTable() {
 }
 
 async function processMaturity(id) {
+  if (!await Confirm.ask('Process maturity instruction?', { body: 'This will mark the instruction as processing and begin the payout or reinvestment flow.', confirmLabel: 'Process' })) return;
   try {
-    await API.maturityInstructions.list();
     const m = STATE.maturity.find(x => x.id === id);
-    if (!m) return;
-    await API.patch('maturity_instructions', id, { status: 'processing' });
-    Toast.success('Marked as processing');
+    if (!m) { Toast.error('Instruction not found — refresh and try again'); return; }
+    await API.maturityInstructions.update(id, { status: 'processing' });
+    Toast.success('Maturity instruction marked as processing');
     await loadMaturity();
-  } catch (e) { Toast.error('Failed to process instruction'); }
+  } catch (e) {
+    Toast.error('Failed to process instruction: ' + (e.message || 'unknown error'));
+    console.error('[processMaturity]', e);
+  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -2758,26 +2833,31 @@ async function saveNewTxn(btn) {
   const investor = STATE.investors.find(i => i.id === investorId);
 
   await _withBtn(btn, async () => {
-    await API.transactions.create({
-      id:          Utils.genId('TXN'),
-      investor_id: investorId,
-      type,
-      amount:      type === 'investment' || type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
-      status,
-      reference:   document.getElementById('txnRef').value.trim(),
-      description: document.getElementById('txnDesc').value.trim(),
-    });
+    try {
+      await API.transactions.create({
+        id:          Utils.genId('TXN'),
+        investor_id: investorId,
+        type,
+        amount:      type === 'investment' || type === 'withdrawal' ? -Math.abs(amount) : Math.abs(amount),
+        status,
+        reference:   document.getElementById('txnRef').value.trim(),
+        description: document.getElementById('txnDesc').value.trim(),
+      });
 
-    // Credit wallet immediately for completed deposits
-    if (status === 'completed' && type === 'deposit' && investor) {
-      const newBal = Math.round(((investor.wallet_balance || 0) + Math.abs(amount)) * 100) / 100;
-      await API.investors.update(investorId, { wallet_balance: newBal });
-      Toast.success(`Transaction recorded — R${amount.toLocaleString('en-ZA', {minimumFractionDigits:2})} added to ${investor.first_name} ${investor.last_name}'s wallet`);
-    } else {
-      Toast.success('Transaction recorded');
+      // Credit wallet immediately for completed deposits
+      if (status === 'completed' && type === 'deposit' && investor) {
+        const newBal = Math.round(((investor.wallet_balance || 0) + Math.abs(amount)) * 100) / 100;
+        await API.investors.update(investorId, { wallet_balance: newBal });
+        Toast.success(`Transaction recorded — R${amount.toLocaleString('en-ZA', {minimumFractionDigits:2})} added to ${investor.first_name} ${investor.last_name}'s wallet`);
+      } else {
+        Toast.success('Transaction recorded');
+      }
+      Modal.close('addTxnModal');
+      await loadTransactions();
+    } catch (e) {
+      Toast.error('Failed to record transaction: ' + (e.message || 'unknown error'));
+      console.error('[saveNewTxn]', e);
     }
-    Modal.close('addTxnModal');
-    await loadTransactions();
   });
 }
 
@@ -2836,8 +2916,11 @@ function renderTicketsTable() {
 }
 
 function setupTicketFilters() {
-  document.getElementById('ticketStatusFilter').addEventListener('change', renderTicketsTable);
-  document.getElementById('ticketPriorityFilter').addEventListener('change', renderTicketsTable);
+  const sf = document.getElementById('ticketStatusFilter');
+  const pf = document.getElementById('ticketPriorityFilter');
+  if (sf && sf._wired) return;
+  if (sf) { sf._wired = true; sf.addEventListener('change', renderTicketsTable); }
+  if (pf && !pf._wired) { pf._wired = true; pf.addEventListener('change', renderTicketsTable); }
 }
 
 async function viewTicket(id) {
@@ -2975,33 +3058,51 @@ async function viewTicket(id) {
    ANALYTICS
    ═══════════════════════════════════════════════ */
 async function loadAnalytics() {
-  if (!STATE.investors.length) {
-    const [invRes, invstRes, txnRes] = await Promise.all([
-      API.investors.list({ limit: 100 }),
-      API.investments.list({ limit: 200 }),
-      API.transactions.list({ limit: 500 })
-    ]);
-    STATE.investors = invRes.data || [];
-    STATE.investments = invstRes.data || [];
-    STATE.transactions = txnRes.data || [];
+  try {
+    if (!STATE.investors.length || !STATE.investments.length) {
+      const [invRes, invstRes, txnRes] = await Promise.all([
+        API.investors.list({ limit: 5000 }),
+        API.investments.list({ limit: 5000 }),
+        API.transactions.list({ limit: 5000 })
+      ]);
+      STATE.investors = invRes.data || [];
+      STATE.investments = invstRes.data || [];
+      STATE.transactions = txnRes.data || [];
+    }
+
+    const now = Date.now();
+    const thirtyDays = 30 * 86400000;
+    const newInvestors = STATE.investors.filter(i => now - new Date(i.date_joined) < thirtyDays).length;
+    const referred = STATE.investors.filter(i => i.referred_by).length;
+    document.getElementById('an-monthlynew').textContent = newInvestors;
+    document.getElementById('an-referrals').textContent = referred;
+
+    // Live analytics stat cards
+    const cattlePools = STATE.pools.filter(p => (p.product_type || '').toLowerCase().includes('cattle') && p.annual_rate > 0);
+    const avgCattleRate = cattlePools.length
+      ? (cattlePools.reduce((s, p) => s + (parseFloat(p.annual_rate) || 0), 0) / cattlePools.length * 100).toFixed(2) + '%'
+      : '—';
+    const lowestMin = STATE.pools.filter(p => p.status === 'open' && p.min_investment > 0)
+      .reduce((min, p) => Math.min(min, parseFloat(p.min_investment) || Infinity), Infinity);
+
+    const cattleEl = document.querySelector('#view-analytics .stat-card__value');
+    if (cattleEl && cattleEl.textContent === '14.83%') cattleEl.textContent = avgCattleRate;
+    const minEl = document.querySelectorAll('#view-analytics .stat-card__value')[1];
+    if (minEl && minEl.textContent === 'R500') minEl.textContent = lowestMin < Infinity ? Utils.rand(lowestMin, 0) : 'R500';
+
+    renderProductVolChart();
+    renderProvinceChart();
+    renderRiskChart();
+    renderTxnFlowChart();
+    renderConversionFunnel();
+    _renderAnalyticsCharts();
+    loadSignupFriction();
+    renderMaturityForecastChart();
+    renderCohortChart();
+  } catch (e) {
+    Toast.error('Failed to load analytics data');
+    console.error('[loadAnalytics]', e);
   }
-
-  const now = Date.now();
-  const thirtyDays = 30 * 86400000;
-  const newInvestors = STATE.investors.filter(i => now - new Date(i.date_joined) < thirtyDays).length;
-  const referred = STATE.investors.filter(i => i.referred_by).length;
-  document.getElementById('an-monthlynew').textContent = newInvestors;
-  document.getElementById('an-referrals').textContent = referred;
-
-  renderProductVolChart();
-  renderProvinceChart();
-  renderRiskChart();
-  renderTxnFlowChart();
-  renderConversionFunnel();
-  _renderAnalyticsCharts();
-  loadSignupFriction();
-  renderMaturityForecastChart();
-  renderCohortChart();
 }
 
 function renderMaturityForecastChart() {
@@ -3119,9 +3220,28 @@ function renderRiskChart() {
 function renderTxnFlowChart() {
   const ctx = document.getElementById('txnFlowChart');
   if (!ctx) return;
-  const months = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'];
-  const deposits = [45000, 62000, 38000, 55000, 71000, 48000];
-  const payouts = [12000, 18000, 15000, 22000, 28000, 19000];
+
+  // Build last 6 calendar months from real transaction data
+  const now = new Date();
+  const monthStarts = [], months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    monthStarts.push(d);
+    months.push(d.toLocaleString('en-ZA', { month: 'short' }));
+  }
+  const _inMonth = (dateStr, start) => {
+    const d = new Date(dateStr || 0);
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59);
+    return d >= start && d <= end;
+  };
+  const deposits = monthStarts.map(m =>
+    STATE.transactions.filter(t => t.type === 'deposit' && t.status === 'completed' && _inMonth(t.created_at || t.transaction_date, m))
+      .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
+  );
+  const payouts = monthStarts.map(m =>
+    STATE.transactions.filter(t => (t.type === 'return' || t.type === 'payout') && t.status === 'completed' && _inMonth(t.created_at || t.transaction_date, m))
+      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0)
+  );
 
   if (STATE.charts.txnFlow) STATE.charts.txnFlow.destroy();
   STATE.charts.txnFlow = new Chart(ctx, {
@@ -3573,7 +3693,10 @@ async function savePrivacyContent() {
 }
 
 async function resetPrivacyToDefault() {
-  if (!confirm('Reset to default Privacy Policy? This will clear any custom content saved in the database.')) return;
+  if (!await Confirm.ask('Reset Privacy Policy to default?', {
+    body: 'This will clear any custom content saved in the database.',
+    confirmLabel: 'Reset', danger: true
+  })) return;
   try {
     await fetch((window.__SVC_API_BASE__ || '/api/') + 'legal/privacy-content', {
       method: 'PUT',
@@ -3590,7 +3713,10 @@ async function resetPrivacyToDefault() {
 }
 
 async function resetTermsToDefault() {
-  if (!confirm('Reset to default terms? This will clear any custom content saved in the database.')) return;
+  if (!await Confirm.ask('Reset Terms & Conditions to default?', {
+    body: 'This will clear any custom content saved in the database.',
+    confirmLabel: 'Reset', danger: true
+  })) return;
   try {
     await fetch((window.__SVC_API_BASE__ || '/api/') + 'legal/terms-content', {
       method: 'PUT',
@@ -3704,7 +3830,7 @@ function renderIFATable(filterStatus = '', searchQ = '') {
 
   tbody.innerHTML = data.map(ifa => {
     const clientCount = (ifa.assigned_clients || []).length;
-    const statusColor = ifa.status === 'active' ? 'badge--success' : ifa.status === 'suspended' ? 'badge--danger' : 'badge--secondary';
+    const statusColor = ifa.status === 'active' ? 'badge--green' : ifa.status === 'suspended' ? 'badge--red' : 'badge--gray';
     const initials = ((ifa.first_name || '')[0] || '') + ((ifa.last_name || '')[0] || '');
     return `<tr>
       <td>
@@ -3903,10 +4029,15 @@ async function saveNewIFA(btn) {
   };
 
   await _withBtn(btn, async () => {
-    await API.ifas.create(payload);
-    Toast.success(`IFA ${fn} ${ln} created successfully`);
-    Modal.close('addIFAModal');
-    await loadIFAs();
+    try {
+      await API.ifas.create(payload);
+      Toast.success(`IFA ${fn} ${ln} created successfully`);
+      Modal.close('addIFAModal');
+      await loadIFAs();
+    } catch (e) {
+      Toast.error('Failed to create IFA: ' + (e.message || 'unknown error'));
+      console.error('[saveNewIFA]', e);
+    }
   });
 }
 
@@ -4408,12 +4539,19 @@ async function bulkApproveKyc() {
   if (approveBtn) approveBtn.disabled = true;
   if (rejectBtn)  rejectBtn.disabled  = true;
   try {
+    const reviewedBy = _getAdminName();
+    const reviewedDate = new Date().toISOString();
     for (let i = 0; i < ids.length; i++) {
-      await API.kyc.update(ids[i], { status: 'approved', reviewed_by: 'Admin', reviewed_date: new Date().toISOString() });
+      await API.kyc.update(ids[i], { status: 'approved', reviewed_by: reviewedBy, reviewed_date: reviewedDate });
+      // Sync investor record so status/badges reflect approval
+      const doc = STATE.kyc.find(k => k.id === ids[i]);
+      if (doc?.investor_id) {
+        await API._fetch('PATCH', `tables/investors/${doc.investor_id}`, { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
+      }
       if ((i + 1) % 5 === 0) Toast.info(`Processing ${i + 1}/${total}...`);
     }
     _kycSelected.clear();
-    Toast.success(`${ids.length} document(s) approved`);
+    Toast.success(`${ids.length} document(s) approved — investor records updated`);
     await loadKYC();
   } catch (e) { Toast.error('Bulk approve failed'); }
   finally {
@@ -4434,7 +4572,7 @@ async function bulkRejectKyc() {
   if (rejectBtn)  rejectBtn.disabled  = true;
   try {
     for (let i = 0; i < ids.length; i++) {
-      await API.kyc.update(ids[i], { status: 'rejected', rejection_reason: reason, reviewed_by: 'Admin', reviewed_date: new Date().toISOString() });
+      await API.kyc.update(ids[i], { status: 'rejected', rejection_reason: reason, reviewed_by: _getAdminName(), reviewed_date: new Date().toISOString() });
       if ((i + 1) % 5 === 0) Toast.info(`Processing ${i + 1}/${total}...`);
     }
     _kycSelected.clear();
@@ -5392,29 +5530,26 @@ async function saveManualAdj(btn) {
   }
 
   await _withBtn(btn, async () => {
-    // 1. Record transaction
-    await API.transactions.create({
-      id:               Utils.genId ? Utils.genId('TXN') : `TXN-${Date.now()}`,
-      investor_id:      investorId,
-      type:             'adjustment',
-      amount:           signedAmount,
-      status:           'completed',
-      reference:        reference,
-      description:      description,
-      transaction_date: new Date().toISOString()
-    });
-
-    // 2. Update wallet balance
-    await API.investors.update(investorId, { wallet_balance: newBalance });
-
-    // Update in STATE
-    investor.wallet_balance = newBalance;
-
-    Toast.success(`Adjustment applied: ${adjType === 'credit' ? '+' : '−'}${Utils.rand(rawAmount)} for ${investor.first_name} ${investor.last_name}`);
-    Modal.close('manualAdjModal');
-
-    // Reload investors if on investors view
-    if (STATE.currentView === 'investors') await loadInvestors();
+    try {
+      await API.transactions.create({
+        id:               Utils.genId ? Utils.genId('TXN') : `TXN-${Date.now()}`,
+        investor_id:      investorId,
+        type:             'adjustment',
+        amount:           signedAmount,
+        status:           'completed',
+        reference:        reference,
+        description:      description,
+        transaction_date: new Date().toISOString()
+      });
+      await API.investors.update(investorId, { wallet_balance: newBalance });
+      investor.wallet_balance = newBalance;
+      Toast.success(`Adjustment applied: ${adjType === 'credit' ? '+' : '−'}${Utils.rand(rawAmount)} for ${investor.first_name} ${investor.last_name}`);
+      Modal.close('manualAdjModal');
+      if (STATE.currentView === 'investors') await loadInvestors();
+    } catch (e) {
+      Toast.error('Failed to apply adjustment: ' + (e.message || 'unknown error'));
+      console.error('[saveManualAdj]', e);
+    }
   });
 }
 
@@ -5643,11 +5778,15 @@ async function markComplianceDone(id) {
    FINANCIAL RECONCILIATION
    ═══════════════════════════════════════════════ */
 async function loadReconciliation() {
-  // Ensure base data is loaded
-  if (!STATE.investors.length) STATE.investors = await API.investors.list();
-  if (!STATE.transactions.length) STATE.transactions = await API.transactions.list();
-  if (!STATE.investments.length) STATE.investments = await API.investments.list();
-  renderReconcTable();
+  try {
+    if (!STATE.investors.length)   STATE.investors   = (await API.investors.list({ limit: 5000 })).data || [];
+    if (!STATE.transactions.length) STATE.transactions = (await API.transactions.list({ limit: 5000 })).data || [];
+    if (!STATE.investments.length) STATE.investments  = (await API.investments.list({ limit: 5000 })).data || [];
+    renderReconcTable();
+  } catch (e) {
+    Toast.error('Failed to load reconciliation data');
+    console.error('[loadReconciliation]', e);
+  }
 }
 
 function _reconcRows() {
