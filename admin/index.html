@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="../css/admin.css" />
   <link rel="stylesheet" href="../css/ci-theme.css" />
   <link rel="stylesheet" href="../css/admin-premium.css" />
+  <link rel="stylesheet" href="../css/admin-v2.css" />
   <!-- sv-intelligence hidden -->
   <!-- Staff Auth guard -->
   <script src="../js/staff-auth.js?v=3"></script>
@@ -34,8 +35,9 @@
   <script src="../js/analytics.js"></script>
 </head>
 <body>
-
+<div id="adminLoadingBar"></div>
 <div class="app-layout">
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 
   <!-- ═══ SIDEBAR ═══ -->
   <aside class="sidebar" id="sidebar">
@@ -52,7 +54,7 @@
     <nav class="sidebar__nav">
       <div class="nav-section-label">Overview</div>
       <button class="nav-item active" data-view="dashboard" onclick="navigate('dashboard', this)">
-        <i class="fa-solid fa-grid-2"></i> Dashboard
+        <i class="fa-solid fa-border-all"></i> Dashboard
       </button>
 
       <div class="nav-section-label">Investors</div>
@@ -142,6 +144,9 @@
   <div class="main-content">
     <header class="topbar">
       <div class="topbar__left">
+        <button class="sidebar-mobile-toggle" id="sidebarToggleBtn" onclick="toggleSidebar()" title="Toggle sidebar">
+          <i class="fa-solid fa-bars"></i>
+        </button>
         <div>
           <div class="topbar__title" id="topbarTitle">Dashboard</div>
           <div class="topbar__breadcrumb">SV Capital Admin Console</div>
@@ -234,7 +239,7 @@
           <div class="stat-card stat-card--gold">
             <div class="stat-card__header">
               <div class="stat-card__icon"><i class="fa-solid fa-users"></i></div>
-              <div class="stat-card__trend up"><i class="fa-solid fa-arrow-trend-up"></i> +12%</div>
+              <div class="stat-card__trend up" id="ds-trend-investors"><i class="fa-solid fa-arrow-trend-up"></i> —</div>
             </div>
             <div class="stat-card__value" id="ds-investors">—</div>
             <div class="stat-card__label">Total Investors</div>
@@ -242,7 +247,7 @@
           <div class="stat-card stat-card--green">
             <div class="stat-card__header">
               <div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div>
-              <div class="stat-card__trend up"><i class="fa-solid fa-arrow-trend-up"></i> +8%</div>
+              <div class="stat-card__trend up" id="ds-trend-invested"><i class="fa-solid fa-arrow-trend-up"></i> —</div>
             </div>
             <div class="stat-card__value" id="ds-invested">—</div>
             <div class="stat-card__label">Total Invested (AUM)</div>
@@ -250,7 +255,7 @@
           <div class="stat-card stat-card--blue">
             <div class="stat-card__header">
               <div class="stat-card__icon"><i class="fa-solid fa-money-bill-transfer"></i></div>
-              <div class="stat-card__trend up"><i class="fa-solid fa-arrow-trend-up"></i> +15%</div>
+              <div class="stat-card__trend up" id="ds-trend-returns"><i class="fa-solid fa-arrow-trend-up"></i> —</div>
             </div>
             <div class="stat-card__value" id="ds-returns">—</div>
             <div class="stat-card__label">Total Returns Paid</div>

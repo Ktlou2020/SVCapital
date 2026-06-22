@@ -1162,7 +1162,7 @@ function navigate(view, btnEl) {
     maturity: 'Maturity Instructions', profile: 'My Profile',
     support: 'Support', referral: 'Refer & Earn', statement: 'Account Statement',
     quests: 'Earn Rewards', learn: 'Learning Hub', subaccounts: 'My Accounts',
-    documents: 'Document Vault',
+    documents: 'Document Vault', policies: 'Platform Policies',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
 
@@ -1180,6 +1180,7 @@ function navigate(view, btnEl) {
     subaccounts: loadSubAccounts,
     referral: loadReferralDashboard,
     documents: loadDocuments,
+    policies: renderPoliciesView,
     profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderKycStatusPanel(); },
   };
   if (loaders[view]) loaders[view]();
@@ -4401,8 +4402,10 @@ function printStatement() {
 </html>`;
   const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
   const url  = URL.createObjectURL(blob);
+  // Open as new tab (no width/height = new tab, not popup → avoids popup blocker)
   const win = window.open(url, '_blank');
   if (!win) {
+    // Blocked or native app — download the file directly
     const a = document.createElement('a');
     a.href = url;
     a.download = `SVC-Statement-${new Date().toISOString().slice(0,10)}.html`;
@@ -5069,6 +5072,11 @@ const LEARN_MODULES = [
 Each investment has a clearly defined term (typically 6–36 months) and a fixed annual rate of return, so you know exactly what to expect. Your capital is tracked in real time on this portal, and returns are credited directly to your wallet on maturity.
 
 The platform charges no entry fees and no monthly platform fees. Our revenue comes from structuring fees on the underlying transactions, so your quoted return is your net return.`,
+    quiz: [
+      { q: 'What types of assets does SV Capital invest in?', options: ['Shares and unit trusts', 'Tangible South African alternative assets', 'Foreign currency and crypto', 'Government bonds only'], correct: 1 },
+      { q: 'How does SV Capital generate its revenue?', options: ['Monthly platform fees charged to investors', 'Annual management fees', 'Structuring fees on underlying transactions', 'Entry fees on every deposit'], correct: 2 },
+      { q: 'What is a typical SV Capital investment term?', options: ['1–7 days', '6–36 months', '5–10 years', 'Indefinite — no fixed term'], correct: 1 },
+    ],
   },
   {
     id: 'learn_how_returns', track: 'explorer', order: 2,
@@ -5085,6 +5093,11 @@ The platform charges no entry fees and no monthly platform fees. Our revenue com
 Shorter-term products like cattle cycles (150–180 days) work the same way, but on a pro-rated basis. A 14% annual rate for 150 days pays roughly R575 on a R10,000 investment.
 
 The "effective return" you see on your dashboard is the annualised figure, allowing you to compare products fairly regardless of their term length.`,
+    quiz: [
+      { q: 'R10,000 invested at 14% p.a. for 12 months — what is the total payout?', options: ['R10,140', 'R10,700', 'R11,400', 'R12,400'], correct: 2 },
+      { q: 'What does the "effective return %" on your dashboard allow you to do?', options: ['Calculate your tax', 'Compare products fairly regardless of term length', 'Predict future returns', 'Convert returns to foreign currency'], correct: 1 },
+      { q: 'At 14% p.a. for 150 days, the approximate return on R10,000 is:', options: ['R1,400', 'R200', 'R575', 'R2,100'], correct: 2 },
+    ],
   },
   {
     id: 'learn_solar', track: 'explorer', order: 3,
@@ -5101,6 +5114,11 @@ The "effective return" you see on your dashboard is the annualised figure, allow
 SV Capital aggregates these returns and passes them to investors net of all structuring costs. Solar assets are long-duration, making them ideal for capital you do not need access to for 2–3 years. Loadshedding in South Africa has significantly increased demand for behind-the-meter solar, providing strong deal flow for this product.
 
 Each solar project undergoes technical assessment, legal review, and business viability checks before being made available to investors.`,
+    quiz: [
+      { q: 'What do SV Capital solar projects primarily fund?', options: ['Residential rooftop panels', 'Government solar farms', 'Commercial-scale PV system installations for businesses', 'Solar panel exports'], correct: 2 },
+      { q: 'Typical SV Capital solar investment returns range from:', options: ['5–8% p.a.', '14–18% p.a.', '25–30% p.a.', '1–3% p.a.'], correct: 1 },
+      { q: 'What has significantly increased demand for solar in South Africa?', options: ['Rising petrol prices', 'Tax incentives alone', 'Loadshedding', 'Lower electricity tariffs'], correct: 2 },
+    ],
   },
   {
     id: 'learn_cattle', track: 'explorer', order: 4,
@@ -5117,6 +5135,11 @@ Each solar project undergoes technical assessment, legal review, and business vi
 Returns are driven by weight gain and market price at sale. SV Capital hedges execution risk through diversified lots and vetted farming partners. Each batch is tracked and reported on in real time via the admin platform.
 
 Short-term business loans are secured against verifiable collateral (trading assets, debtor books, or property bonds) and carry slightly lower rates than cattle due to their fixed repayment structure. Both products offer higher liquidity than solar, with capital recycling every 5–6 months.`,
+    quiz: [
+      { q: 'How long is a typical SV Capital cattle investment cycle?', options: ['30–60 days', '1–2 years', '150–180 days', '3–5 years'], correct: 2 },
+      { q: 'Short-term business loans at SV Capital are secured against:', options: ['No collateral — they are unsecured', 'Verifiable collateral such as trading assets, debtor books, or property bonds', 'Government guarantees', 'Foreign exchange reserves'], correct: 1 },
+      { q: 'Which unique risk applies to cattle but NOT to solar investments?', options: ['Interest rate risk', 'Currency risk', 'Biological and market variable risk', 'Regulatory risk'], correct: 2 },
+    ],
   },
   {
     id: 'learn_diversification', track: 'explorer', order: 5,
@@ -5133,6 +5156,11 @@ Short-term business loans are secured against verifiable collateral (trading ass
 Equally important is timeline diversification. If all your investments mature at the same time, you face reinvestment risk. Staggering your investments across different start dates means you always have capital returning, which can be reinvested into new opportunities.
 
 Our data shows that investors with 3+ active product types consistently achieve smoother returns and higher portfolio satisfaction than those concentrated in a single product.`,
+    quiz: [
+      { q: 'What is the primary benefit of portfolio diversification?', options: ['Guarantee higher returns', 'Reduce exposure to any single risk', 'Eliminate all risk entirely', 'Reduce the tax you pay'], correct: 1 },
+      { q: 'What is "timeline diversification"?', options: ['Investing in different countries at different times', 'Staggering investments across different start dates', 'Only investing in short-term products', 'Changing products every month'], correct: 1 },
+      { q: 'According to SV Capital data, investors with 3+ active product types achieve:', options: ['Lower returns overall', 'Higher tax liability', 'Smoother returns and higher portfolio satisfaction', 'Faster access to withdrawals'], correct: 2 },
+    ],
   },
 
   // ── Builder Track (growing investor) ───────────────────
@@ -5151,6 +5179,11 @@ Our data shows that investors with 3+ active product types consistently achieve 
 Understanding your own risk tolerance is critical. If you might need access to your capital within 12 months, short-term products are more appropriate than 36-month solar commitments. If you can commit capital for longer and tolerate some variability, the blended portfolio approach tends to deliver the best long-term outcomes.
 
 The risk profile survey in the Earn Rewards section helps us calibrate your portfolio recommendations to your personal risk appetite.`,
+    quiz: [
+      { q: 'Which SV Capital product carries the lowest operational risk?', options: ['Cattle farming', 'Short-term loans', 'Solar projects', 'Delivery bikes'], correct: 2 },
+      { q: 'If you might need access to your capital within 12 months, which are most appropriate?', options: ['36-month solar investments', 'Short-term products', 'Estate planning products', 'Any product regardless of term'], correct: 1 },
+      { q: 'Complete the sentence: "Higher potential returns always come with…"', options: ['Lower risk', 'More regulatory protection', 'Higher risk', 'Better liquidity'], correct: 2 },
+    ],
   },
   {
     id: 'learn_compounding', track: 'builder', order: 2,
@@ -5167,6 +5200,11 @@ The risk profile survey in the Earn Rewards section helps us calibrate your port
 At 14% p.a., R10,000 grows to R11,400 after year 1. Reinvested, it becomes R12,996 after year 2 — not R12,800. The difference compounds every year. After 5 years, R10,000 compounding at 14% p.a. becomes approximately R19,254 — nearly double.
 
 The key to unlocking compounding is acting quickly at maturity. Capital sitting idle in your wallet earns nothing. Set your maturity instructions to reinvest, and let time do the work.`,
+    quiz: [
+      { q: 'What does "compounding" mean in investing?', options: ['Adding new capital every month', 'Earning returns on your returns, not just your original capital', 'Splitting investments into smaller portions', 'Switching between product types'], correct: 1 },
+      { q: 'R10,000 compounding at 14% p.a. over 5 years grows to approximately:', options: ['R17,000', 'R19,254', 'R21,000', 'R15,500'], correct: 1 },
+      { q: 'What is the single most impactful action for compounding growth?', options: ['Withdrawing all returns each year', 'Waiting 6 months before reinvesting', 'Reinvesting at maturity as quickly as possible', 'Only investing in one product'], correct: 2 },
+    ],
   },
   {
     id: 'learn_tax', track: 'builder', order: 3,
@@ -5183,6 +5221,11 @@ The key to unlocking compounding is acting quickly at maturity. Capital sitting 
 SARS requires you to disclose all South African and foreign income on your annual return (ITR12). Your SV Capital account statement (available under "My Statement") provides a breakdown of all returns earned in each tax year, which you or your accountant can use for tax submissions.
 
 Note that SV Capital does not deduct tax at source — you are responsible for declaring and paying tax on returns earned. If your total investment income exceeds R23,800 per year (the annual interest exemption for individuals under 65), the excess is taxable. We strongly recommend consulting a registered tax practitioner.`,
+    quiz: [
+      { q: 'How are SV Capital investment returns generally taxed in South Africa?', options: ['Capital gains tax only', 'Ordinary income tax at your marginal rate', 'Exempt from all tax', 'Flat 10% withholding tax'], correct: 1 },
+      { q: 'Which SARS annual tax return form must you use to declare investment returns?', options: ['IT3(b)', 'IT14', 'ITR12', 'VAT201'], correct: 2 },
+      { q: 'What is the annual interest exemption for South African individuals under 65?', options: ['R10,000', 'R23,800', 'R50,000', 'R100,000'], correct: 1 },
+    ],
   },
 
   // ── Strategist Track (advanced) ────────────────────────
@@ -5201,6 +5244,11 @@ Note that SV Capital does not deduct tax at source — you are responsible for d
 Equally, minimise idle time. Capital sitting in your wallet between investments earns 0%. Even a 2-week idle period on R50,000 costs you approximately R380 in lost returns at 14% p.a. The fastest investors reinvest within 48 hours of maturity.
 
 The optimal blend for most SV Capital investors in 2025 is approximately 40% solar (stable base), 40% cattle/loans (higher rate, shorter term), and 20% in reserve for opportunistic reinvestment when high-rate pools open.`,
+    quiz: [
+      { q: 'What is a "laddering strategy" in investing?', options: ['Investing in ladder-manufacturing companies', 'Starting multiple investments with staggered maturity dates', 'Increasing investment amounts each cycle', 'Only investing in the highest-rate products'], correct: 1 },
+      { q: 'Approximately how much does a 2-week idle period cost on R50,000 at 14% p.a.?', options: ['R50', 'R1,000', 'R380', 'R1,900'], correct: 2 },
+      { q: 'The recommended optimal portfolio blend for SV Capital investors in 2025 is:', options: ['100% solar for maximum stability', '50% cattle, 50% solar', '40% solar, 40% cattle/loans, 20% reserve', 'Equal split across all available products'], correct: 2 },
+    ],
   },
   {
     id: 'learn_estate', track: 'strategist', order: 2,
@@ -5217,6 +5265,11 @@ The optimal blend for most SV Capital investors in 2025 is approximately 40% sol
 The most important first step is ensuring your beneficiary details are on file with SV Capital (add them via the "Complete Your Profile" quest), and that your will references your investment accounts. Without clear documentation, your family may wait months or years to access funds.
 
 For larger portfolios (R500,000+), consider consulting an estate planner about structuring investments via a trust or company to minimise estate duty and executor's fees. Estate duty in South Africa is charged at 20% on dutiable estates above R3.5 million.`,
+    quiz: [
+      { q: 'What is the estate duty rate in South Africa on dutiable estates above R3.5 million?', options: ['10%', '20%', '30%', '15%'], correct: 1 },
+      { q: 'What is the most important first step to protect your investment wealth for your family?', options: ['Sell all investments before you die', 'Move funds to cash at retirement', 'Ensure beneficiary details are on file and your will references investment accounts', 'Convert all investments to foreign currency'], correct: 2 },
+      { q: 'In South Africa, all assets when a person dies must go through:', options: ['The South African Reserve Bank', 'SARS', 'The Master of the High Court', 'The Department of Trade and Industry'], correct: 2 },
+    ],
   },
 ];
 
@@ -5289,9 +5342,14 @@ function renderLearnView() {
           </div>
           <div class="learn-content-text">${mod.content.split('\n\n').map(p => `<p>${p.trim()}</p>`).join('')}</div>
           <div class="learn-module-footer">
-            <button class="btn btn--primary" onclick="markModuleComplete('${mod.id}')">
-              <i class="fa-solid fa-check"></i> Mark Complete — Earn ${mod.xp} XP
+            <button class="btn btn--primary" id="lquiz-btn-${mod.id}" onclick="_showModuleQuiz('${mod.id}')">
+              <i class="fa-solid fa-circle-question"></i> Take Quiz — Earn ${mod.xp} XP
             </button>
+          </div>
+          <div class="learn-quiz-section" id="lquiz-${mod.id}" style="display:none">
+            <div class="learn-quiz-title"><i class="fa-solid fa-circle-question"></i> Knowledge Check — answer all questions correctly to earn XP</div>
+            <div id="lquiz-questions-${mod.id}"></div>
+            <div id="lquiz-footer-${mod.id}"></div>
           </div>
         </div>
       </div>`;
@@ -5314,6 +5372,111 @@ function _toggleModule(modId) {
   const isOpen = body.style.display !== 'none';
   body.style.display = isOpen ? 'none' : 'block';
   if (chev) chev.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
+function _showModuleQuiz(modId) {
+  const mod = LEARN_MODULES.find(m => m.id === modId);
+  if (!mod?.quiz?.length) { markModuleComplete(modId); return; }
+
+  const btn = document.getElementById(`lquiz-btn-${modId}`);
+  if (btn) btn.style.display = 'none';
+
+  const section = document.getElementById(`lquiz-${modId}`);
+  if (section) section.style.display = 'block';
+
+  if (!window._quizState) window._quizState = {};
+  window._quizState[modId] = { answers: {}, submitted: false };
+  _renderQuizQuestions(modId);
+}
+
+function _renderQuizQuestions(modId) {
+  const mod = LEARN_MODULES.find(m => m.id === modId);
+  if (!mod?.quiz) return;
+
+  const questionsEl = document.getElementById(`lquiz-questions-${modId}`);
+  if (questionsEl) {
+    questionsEl.innerHTML = mod.quiz.map((q, qi) => `
+      <div class="learn-quiz-q">
+        <div class="learn-quiz-q__text">${qi + 1}. ${q.q}</div>
+        <div class="learn-quiz-opts">
+          ${q.options.map((opt, oi) => `
+            <button class="learn-quiz-opt" id="lquiz-opt-${modId}-${qi}-${oi}"
+                    onclick="_selectQuizOpt('${modId}',${qi},${oi})">
+              <span class="learn-quiz-opt__letter">${'ABCD'[oi]}</span>
+              <span class="learn-quiz-opt__text">${opt}</span>
+            </button>`).join('')}
+        </div>
+      </div>`).join('');
+  }
+
+  const footerEl = document.getElementById(`lquiz-footer-${modId}`);
+  if (footerEl) {
+    footerEl.innerHTML = `
+      <button class="btn btn--primary learn-quiz-submit-btn" onclick="_submitModuleQuiz('${modId}')">
+        <i class="fa-solid fa-paper-plane"></i> Submit Answers — Earn ${mod.xp} XP
+      </button>`;
+  }
+}
+
+function _selectQuizOpt(modId, qi, oi) {
+  const state = window._quizState?.[modId];
+  if (!state || state.submitted) return;
+  state.answers[qi] = oi;
+
+  const mod = LEARN_MODULES.find(m => m.id === modId);
+  const numOpts = mod?.quiz?.[qi]?.options?.length || 4;
+  for (let o = 0; o < numOpts; o++) {
+    const el = document.getElementById(`lquiz-opt-${modId}-${qi}-${o}`);
+    if (el) el.classList.toggle('learn-quiz-opt--selected', o === oi);
+  }
+}
+
+async function _submitModuleQuiz(modId) {
+  const state = window._quizState?.[modId];
+  const mod = LEARN_MODULES.find(m => m.id === modId);
+  if (!state || !mod?.quiz) return;
+
+  for (let qi = 0; qi < mod.quiz.length; qi++) {
+    if (state.answers[qi] === undefined) {
+      Toast.error('Please answer all questions before submitting.');
+      return;
+    }
+  }
+
+  state.submitted = true;
+  let allCorrect = true;
+
+  mod.quiz.forEach((q, qi) => {
+    const selected = state.answers[qi];
+    const correct = q.correct;
+    if (selected !== correct) allCorrect = false;
+    q.options.forEach((_, oi) => {
+      const el = document.getElementById(`lquiz-opt-${modId}-${qi}-${oi}`);
+      if (!el) return;
+      el.classList.remove('learn-quiz-opt--selected');
+      if (oi === correct) el.classList.add('learn-quiz-opt--correct');
+      else if (oi === selected) el.classList.add('learn-quiz-opt--wrong');
+      el.disabled = true;
+    });
+  });
+
+  const footerEl = document.getElementById(`lquiz-footer-${modId}`);
+  if (allCorrect) {
+    if (footerEl) footerEl.innerHTML = `<div class="learn-quiz-success"><i class="fa-solid fa-circle-check"></i> All correct! Awarding ${mod.xp} XP…</div>`;
+    await markModuleComplete(modId);
+  } else {
+    if (footerEl) footerEl.innerHTML = `
+      <div class="learn-quiz-fail"><i class="fa-solid fa-circle-xmark"></i> Some answers were incorrect. Review the highlighted answers above, then try again.</div>
+      <button class="btn btn--secondary" style="margin-top:10px" onclick="_retryModuleQuiz('${modId}')">
+        <i class="fa-solid fa-rotate-right"></i> Try Again
+      </button>`;
+  }
+}
+
+function _retryModuleQuiz(modId) {
+  if (!window._quizState?.[modId]) return;
+  window._quizState[modId] = { answers: {}, submitted: false };
+  _renderQuizQuestions(modId);
 }
 
 async function markModuleComplete(modId) {
@@ -5350,6 +5513,156 @@ async function markModuleComplete(modId) {
     Toast.error('Could not save completion. Try again.');
     if (btn) { btn.disabled = false; btn.innerHTML = `<i class="fa-solid fa-check"></i> Mark Complete — Earn ${LEARN_MODULES.find(m=>m.id===modId)?.xp||50} XP`; }
   }
+}
+
+/* ═════════════════════════════════════════════════════════
+   PLATFORM POLICIES
+   ═════════════════════════════════════════════════════════ */
+
+const POLICY_SECTIONS = [
+  {
+    id: 'pol_terms',
+    icon: 'fa-file-contract',
+    color: '#2F8C9B',
+    title: 'Terms of Service',
+    apiKey: 'terms',
+    staticContent: `<p>By accessing and using the SV Capital investor portal and mobile application, you agree to be bound by these Terms of Service.</p>
+<h4>1. Platform Use</h4>
+<p>The SV Capital platform is available exclusively to registered investors who have completed FICA/KYC verification. You may not share your login credentials with any third party.</p>
+<h4>2. Investment Risk</h4>
+<p>All investments carry risk. SV Capital investments are not guaranteed by the South African government, the Financial Sector Conduct Authority (FSCA), or any deposit insurance scheme. Past performance is not indicative of future results.</p>
+<h4>3. Eligibility</h4>
+<p>Investors must be natural persons or registered legal entities domiciled in South Africa. You must be 18 years or older to invest on your own behalf.</p>
+<h4>4. Fees</h4>
+<p>SV Capital charges no entry fees, exit fees, or monthly platform fees to investors. Revenue is derived from structuring fees charged at the project level, already factored into the quoted return rate.</p>
+<h4>5. Termination</h4>
+<p>SV Capital reserves the right to suspend or terminate any account found to be in breach of these terms, subject to repayment of outstanding capital and accrued returns.</p>`,
+  },
+  {
+    id: 'pol_privacy',
+    icon: 'fa-shield-halved',
+    color: '#22c55e',
+    title: 'Privacy Policy',
+    apiKey: 'privacy',
+    staticContent: `<p>SV Capital is committed to protecting your personal information in accordance with the Protection of Personal Information Act 4 of 2013 (POPIA).</p>
+<h4>1. Information We Collect</h4>
+<p>We collect your name, identity number, contact details, banking information, and investment activity for the purpose of providing investment services and complying with FICA obligations.</p>
+<h4>2. How We Use Your Information</h4>
+<p>Your personal information is used to manage your investment account, process transactions, comply with legal obligations, and communicate with you about your investments.</p>
+<h4>3. Information Sharing</h4>
+<p>We do not sell your personal information. We may share it with FICA-regulated third parties (e.g., identity verification providers) and regulatory bodies as required by law.</p>
+<h4>4. Data Security</h4>
+<p>We use industry-standard encryption and access controls to protect your data. All communication between the app and our servers is encrypted using TLS.</p>
+<h4>5. Your Rights</h4>
+<p>Under POPIA, you have the right to access, correct, or request deletion of your personal information. Contact our Information Officer at privacy@svcapital.co.za.</p>`,
+  },
+  {
+    id: 'pol_popia',
+    icon: 'fa-lock',
+    color: '#7c3aed',
+    title: 'POPIA Notice',
+    staticContent: `<p>This notice is issued in compliance with Section 18 of the Protection of Personal Information Act 4 of 2013 (POPIA).</p>
+<h4>Responsible Party</h4>
+<p>SV Capital (Pty) Ltd, registered in the Republic of South Africa.</p>
+<h4>Information Officer</h4>
+<p>Our designated Information Officer can be reached at: <strong>privacy@svcapital.co.za</strong></p>
+<h4>Purpose of Processing</h4>
+<p>Your personal information is processed for: investor account management, FICA/KYC compliance, transaction processing, regulatory reporting, and investor communications.</p>
+<h4>Lawful Basis</h4>
+<p>Processing is carried out on the basis of contractual necessity, legal obligation (FICA, POPIA), and legitimate interests.</p>
+<h4>Retention Period</h4>
+<p>Investment records and FICA documentation are retained for a minimum of 5 years after account closure, as required by the Financial Intelligence Centre Act.</p>
+<h4>Complaints</h4>
+<p>If you believe your POPIA rights have been violated, you may lodge a complaint with the Information Regulator of South Africa at: <strong>inforeg.org.za</strong></p>`,
+  },
+  {
+    id: 'pol_risk',
+    icon: 'fa-triangle-exclamation',
+    color: '#d97706',
+    title: 'Risk Disclaimer',
+    staticContent: `<p><strong>Important: Please read this disclaimer carefully before investing.</strong></p>
+<h4>General Risk Warning</h4>
+<p>All investments involve risk. The value of your investment can go down as well as up, and you may receive less than you invested. SV Capital investments are not deposits and are not covered by any government guarantee or deposit protection scheme.</p>
+<h4>Alternative Investment Risk</h4>
+<p>The products offered on this platform are alternative investments with specific risk characteristics including, but not limited to:</p>
+<ul>
+<li><strong>Liquidity Risk:</strong> Investments have fixed terms and cannot be redeemed early without penalty.</li>
+<li><strong>Operational Risk:</strong> The performance of underlying assets (cattle, solar installations, loans) may be affected by factors outside SV Capital's control.</li>
+<li><strong>Market Risk:</strong> Commodity prices (e.g., beef) may fluctuate, affecting returns on cattle products.</li>
+<li><strong>Credit Risk:</strong> Business loan borrowers may default, although loans are secured against collateral.</li>
+</ul>
+<h4>Suitability</h4>
+<p>These investments may not be suitable for all investors. Before investing, consider your investment objectives, financial situation, and risk tolerance. Consult a registered financial adviser if you are unsure.</p>
+<h4>No Advice</h4>
+<p>Nothing on this platform constitutes financial advice. SV Capital provides information only. Investment decisions are made solely by the investor.</p>`,
+  },
+  {
+    id: 'pol_paia',
+    icon: 'fa-folder-open',
+    color: '#0891b2',
+    title: 'PAIA Manual',
+    staticContent: `<p>This manual is published in terms of Section 51 of the Promotion of Access to Information Act 2 of 2000 (PAIA).</p>
+<h4>Company Details</h4>
+<p><strong>Company:</strong> SV Capital (Pty) Ltd<br>
+<strong>Registration No:</strong> Available on request<br>
+<strong>Physical Address:</strong> South Africa<br>
+<strong>Email:</strong> info@svcapital.co.za</p>
+<h4>Information Officer</h4>
+<p>Requests for access to records held by SV Capital must be directed to our Information Officer at: <strong>privacy@svcapital.co.za</strong></p>
+<h4>Records Available Without Request</h4>
+<p>The following records are automatically available to investors via the portal: account statements, transaction history, investment certificates, and FICA/KYC submission status.</p>
+<h4>How to Request Records</h4>
+<p>Submit a written request to our Information Officer including: your full name and identity number, a description of the record requested, and the reason for the request. We will respond within 30 days as required by PAIA.</p>
+<h4>Fees</h4>
+<p>A request fee of R35 applies per PAIA request (waived for personal information requests). Reproduction fees may apply for large records.</p>`,
+  },
+  {
+    id: 'pol_complaints',
+    icon: 'fa-comment-exclamation',
+    color: '#ef4444',
+    title: 'Complaints Procedure',
+    staticContent: `<p>SV Capital is committed to resolving investor complaints promptly and fairly.</p>
+<h4>Step 1: Log a Support Ticket</h4>
+<p>Contact us through the Support section of this portal. Describe your complaint clearly and include any relevant reference numbers or dates. We aim to respond within 2 business days.</p>
+<h4>Step 2: Escalation</h4>
+<p>If your complaint is not resolved within 10 business days, you may escalate it to our Compliance Officer at: <strong>compliance@svcapital.co.za</strong></p>
+<h4>Step 3: External Resolution</h4>
+<p>If SV Capital is unable to resolve your complaint to your satisfaction, you may refer the matter to:</p>
+<ul>
+<li><strong>FSCA:</strong> Financial Sector Conduct Authority — fsca.co.za</li>
+<li><strong>FAIS Ombud:</strong> For complaints related to financial advice — faisombud.co.za</li>
+<li><strong>Information Regulator:</strong> For POPIA/PAIA complaints — inforeg.org.za</li>
+</ul>
+<h4>What We Will Do</h4>
+<p>We will acknowledge all complaints within 24 hours, investigate thoroughly, and provide a written response within 10 business days. Where a complaint is upheld, we will take corrective action promptly.</p>`,
+  },
+];
+
+let _policyOpenId = null;
+
+function renderPoliciesView() {
+  const container = document.getElementById('policiesContent');
+  if (!container) return;
+
+  container.innerHTML = POLICY_SECTIONS.map(sec => `
+    <div class="policy-accordion ${_policyOpenId === sec.id ? 'policy-accordion--open' : ''}" id="pacc-${sec.id}">
+      <button class="policy-accordion__header" onclick="_togglePolicy('${sec.id}')">
+        <div class="policy-accordion__icon" style="background:${sec.color}22;color:${sec.color}">
+          <i class="fa-solid ${sec.icon}"></i>
+        </div>
+        <span class="policy-accordion__title">${sec.title}</span>
+        <i class="fa-solid fa-chevron-down policy-accordion__chev" id="pachev-${sec.id}"
+           style="${_policyOpenId === sec.id ? 'transform:rotate(180deg)' : ''}"></i>
+      </button>
+      <div class="policy-accordion__body" id="pabody-${sec.id}" style="display:${_policyOpenId === sec.id ? 'block' : 'none'}">
+        <div class="policy-accordion__content">${sec.staticContent}</div>
+      </div>
+    </div>`).join('');
+}
+
+function _togglePolicy(secId) {
+  _policyOpenId = _policyOpenId === secId ? null : secId;
+  renderPoliciesView();
 }
 
 function shareReferral(method) {
@@ -7208,6 +7521,8 @@ function _kycFileSelected(file) {
   if (nameEl)   nameEl.textContent = file.name;
   const zone = document.getElementById('kycDropZone');
   if (zone) { zone.style.borderColor = '#22c55e'; zone.style.background = 'rgba(34,197,94,0.04)'; }
+  // After iOS file picker closes, blur any focused element (prevents zoom) and
+  // scroll modal body to keep Submit button in view.
   setTimeout(() => {
     if (document.activeElement && document.activeElement !== document.body) {
       document.activeElement.blur();

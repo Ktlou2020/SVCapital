@@ -220,7 +220,7 @@ function loadAdminNotifications(investors, transactions, tickets) {
     notifs.push({
       icon: 'fa-user-clock', iconBg: 'rgba(239,68,68,0.1)', iconColor: '#ef4444',
       title: `${pendingKyc.length} KYC ${pendingKyc.length === 1 ? 'application' : 'applications'} pending`,
-      sub: `${pendingKyc.slice(0,2).map(i => i.first_name).join(', ')}${pendingKyc.length > 2 ? ` +${pendingKyc.length - 2} more` : ''} awaiting FICA review.`,
+      sub: `${pendingKyc.slice(0,2).map(i => _esc(i.first_name)).join(', ')}${pendingKyc.length > 2 ? ` +${pendingKyc.length - 2} more` : ''} awaiting FICA review.`,
       action: "navigate('kyc',document.querySelector('[data-view=kyc]'));toggleAdminNotif()",
       unread: true,
     });
@@ -232,7 +232,7 @@ function loadAdminNotifications(investors, transactions, tickets) {
     notifs.push({
       icon: 'fa-building-columns', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#6366f1',
       title: `${pendingBank.length} bank account${pendingBank.length === 1 ? '' : 's'} to verify`,
-      sub: `${pendingBank.slice(0,2).map(i => `${i.first_name} ${i.last_name}`).join(', ')}${pendingBank.length > 2 ? ` +${pendingBank.length - 2} more` : ''}.`,
+      sub: `${pendingBank.slice(0,2).map(i => `${_esc(i.first_name)} ${_esc(i.last_name)}`).join(', ')}${pendingBank.length > 2 ? ` +${pendingBank.length - 2} more` : ''}.`,
       action: "navigate('investors',document.querySelector('[data-view=investors]'));toggleAdminNotif()",
       unread: true,
     });
@@ -257,7 +257,7 @@ function loadAdminNotifications(investors, transactions, tickets) {
     notifs.push({
       icon: 'fa-file-invoice', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
       title: `${bankTkts.length} bank verification ticket${bankTkts.length === 1 ? '' : 's'}`,
-      sub: `${bankTkts.slice(0,2).map(t => t.investor_name || 'Investor').join(', ')} submitted bank details.`,
+      sub: `${bankTkts.slice(0,2).map(t => _esc(t.investor_name || 'Investor')).join(', ')} submitted bank details.`,
       action: "navigate('support',document.querySelector('[data-view=support]'));toggleAdminNotif()",
       unread: true,
     });
@@ -271,8 +271,8 @@ function loadAdminNotifications(investors, transactions, tickets) {
       icon: 'fa-headset', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#2F8C9B',
       title: `${openTkts.length} open ticket${openTkts.length === 1 ? '' : 's'} awaiting reply`,
       sub: urgent.length
-        ? `${urgent.length} high-priority — "${urgent[0].subject}"`
-        : `"${openTkts[0].subject}"`,
+        ? `${urgent.length} high-priority — &ldquo;${_esc(urgent[0].subject)}&rdquo;`
+        : `&ldquo;${_esc(openTkts[0].subject)}&rdquo;`,
       action: "navigate('support',document.querySelector('[data-view=support]'));toggleAdminNotif()",
       unread: true,
     });
@@ -356,6 +356,46 @@ function navigate(view, btnEl) {
     privacy: loadPrivacyEditor,
   };
   if (loaders[view]) loaders[view]();
+  // Close mobile sidebar after navigation
+  closeSidebar();
+}
+
+/* ─── Mobile Sidebar ─── */
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (!sidebar) return;
+  const open = sidebar.classList.toggle('open');
+  if (backdrop) backdrop.classList.toggle('visible', open);
+}
+
+function closeSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (sidebar) sidebar.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('visible');
+}
+
+/* ─── Page loading bar ─── */
+function _showLoadingBar() {
+  const bar = document.getElementById('adminLoadingBar');
+  if (!bar) return;
+  clearTimeout(bar._t1); clearTimeout(bar._t2);
+  bar.style.opacity = '1';
+  bar.style.width = '30%';
+  bar._t1 = setTimeout(() => { bar.style.width = '65%'; }, 600);
+  bar._t2 = setTimeout(() => { bar.style.width = '85%'; }, 1400);
+}
+
+function _hideLoadingBar() {
+  const bar = document.getElementById('adminLoadingBar');
+  if (!bar) return;
+  clearTimeout(bar._t1); clearTimeout(bar._t2);
+  bar.style.width = '100%';
+  setTimeout(() => {
+    bar.style.opacity = '0';
+    setTimeout(() => { bar.style.width = '0'; bar.style.opacity = '1'; }, 420);
+  }, 280);
 }
 
 /* ═══════════════════════════════════════════════
@@ -516,6 +556,7 @@ document.addEventListener('DOMContentLoaded', async () => {
    DASHBOARD
    ═══════════════════════════════════════════════ */
 async function loadDashboard() {
+  _showLoadingBar();
   try {
     const [invRes, poolRes, invstRes, txnRes] = await Promise.all([
       API.investors.list({ limit: 5000 }),
@@ -538,6 +579,53 @@ async function loadDashboard() {
     document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
     document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
     document.getElementById('ds-pools').textContent = activePools;
+
+    // Real month-over-month trend calculations
+    (() => {
+      const now = new Date();
+      const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+      const _trendPct = (curr, prev) => {
+        if (!prev && !curr) return null;
+        if (!prev) return curr > 0 ? '+100' : '0';
+        return (((curr - prev) / Math.abs(prev)) * 100).toFixed(0);
+      };
+      const _setTrend = (elId, pct) => {
+        const el = document.getElementById(elId);
+        if (!el || pct === null) return;
+        const num = parseFloat(pct);
+        const isUp = num >= 0;
+        el.className = `stat-card__trend ${isUp ? 'up' : 'down'}`;
+        el.innerHTML = `<i class="fa-solid fa-arrow-trend-${isUp ? 'up' : 'down'}"></i> ${isUp ? '+' : ''}${pct}%`;
+      };
+
+      // Investors: new signups this month vs last month
+      const invThis = STATE.investors.filter(i => new Date(i.created_at || 0) >= thisMonthStart).length;
+      const invLast = STATE.investors.filter(i => {
+        const d = new Date(i.created_at || 0);
+        return d >= lastMonthStart && d <= lastMonthEnd;
+      }).length;
+      _setTrend('ds-trend-investors', _trendPct(invThis, invLast));
+
+      // AUM: new investments this month vs last month
+      const aumThis = STATE.investments.filter(i => new Date(i.created_at || 0) >= thisMonthStart).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+      const aumLast = STATE.investments.filter(i => {
+        const d = new Date(i.created_at || 0);
+        return d >= lastMonthStart && d <= lastMonthEnd;
+      }).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+      _setTrend('ds-trend-invested', _trendPct(aumThis, aumLast));
+
+      // Returns: returns paid this month vs last month
+      const retThis = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed' && new Date(t.created_at || t.transaction_date || 0) >= thisMonthStart).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      const retLast = STATE.transactions.filter(t => {
+        if (t.type !== 'return' || t.status !== 'completed') return false;
+        const d = new Date(t.created_at || t.transaction_date || 0);
+        return d >= lastMonthStart && d <= lastMonthEnd;
+      }).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+      _setTrend('ds-trend-returns', _trendPct(retThis, retLast));
+    })();
 
     // Badge counts
     const pendingKyc = STATE.investors.filter(i => ['pending_fica', 'fica_submitted'].includes(i.status)).length;
@@ -612,7 +700,9 @@ async function loadDashboard() {
       }, 30000);
     }
 
+    _hideLoadingBar();
   } catch (e) {
+    _hideLoadingBar();
     Toast.error('Failed to load dashboard data');
     console.error(e);
   }
@@ -816,42 +906,61 @@ function renderAumChart() {
   const ctx = document.getElementById('aumChart');
   if (!ctx) return;
 
-  const months = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'];
-  const aum = [145000000, 158000000, 172000000, 185000000, 196000000, 200000000];
-  const payouts = [8000000, 9500000, 11000000, 12500000, 14000000, 15000000];
+  // Build last 6 calendar months
+  const now = new Date();
+  const monthStarts = [], monthLabels = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    monthStarts.push(d);
+    monthLabels.push(d.toLocaleString('en-ZA', { month: 'short' }));
+  }
+
+  // Cumulative AUM: sum of investments active at end of each month
+  const aumData = monthStarts.map(m => {
+    const end = new Date(m.getFullYear(), m.getMonth() + 1, 0, 23, 59, 59);
+    return STATE.investments.filter(inv => {
+      const created = new Date(inv.created_at || inv.start_date || 0);
+      return created <= end && inv.status === 'active';
+    }).reduce((s, inv) => s + (parseFloat(inv.amount) || 0), 0);
+  });
+
+  // Returns paid per month
+  const returnsData = monthStarts.map(m => {
+    const start = new Date(m.getFullYear(), m.getMonth(), 1);
+    const end   = new Date(m.getFullYear(), m.getMonth() + 1, 0, 23, 59, 59);
+    return STATE.transactions.filter(t => {
+      if (t.type !== 'return' || t.status !== 'completed') return false;
+      const d = new Date(t.created_at || t.transaction_date || 0);
+      return d >= start && d <= end;
+    }).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+  });
 
   if (STATE.charts.aum) STATE.charts.aum.destroy();
   STATE.charts.aum = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: months,
+      labels: monthLabels,
       datasets: [
         {
           label: 'AUM (R)',
-          data: aum,
+          data: aumData,
           borderColor: '#D4AF37',
-          backgroundColor: ctx => {
-            const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 280);
+          backgroundColor: c => {
+            const g = c.chart.ctx.createLinearGradient(0, 0, 0, 280);
             g.addColorStop(0, 'rgba(212,175,55,0.18)');
             g.addColorStop(1, 'rgba(212,175,55,0)');
             return g;
           },
-          fill: true,
-          tension: 0.4,
-          borderWidth: 2.5,
-          pointRadius: 4,
-          pointBackgroundColor: '#D4AF37',
+          fill: true, tension: 0.4, borderWidth: 2.5,
+          pointRadius: 4, pointBackgroundColor: '#D4AF37',
         },
         {
           label: 'Returns Paid (R)',
-          data: payouts,
+          data: returnsData,
           borderColor: '#22c55e',
           backgroundColor: 'rgba(34,197,94,0.08)',
-          fill: true,
-          tension: 0.4,
-          borderWidth: 2,
-          pointRadius: 3,
-          pointBackgroundColor: '#22c55e',
+          fill: true, tension: 0.4, borderWidth: 2,
+          pointRadius: 3, pointBackgroundColor: '#22c55e',
         }
       ]
     },
@@ -862,12 +971,12 @@ function renderAumChart() {
         tooltip: {
           backgroundColor: 'rgba(13,17,23,0.95)', titleColor: '#e8edf2', bodyColor: '#7a92a8',
           borderColor: 'rgba(212,175,55,0.3)', borderWidth: 1,
-          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${Utils.rand(ctx.parsed.y)}` }
+          callbacks: { label: c => ` ${c.dataset.label}: ${Utils.rand(c.parsed.y)}` }
         }
       },
       scales: {
         x: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', font: { size: 11 } } },
-        y: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', font: { size: 11 }, callback: v => 'R' + (v / 1000000).toFixed(0) + 'M' } }
+        y: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', font: { size: 11 }, callback: v => 'R' + (v / 1000000).toFixed(1) + 'M' } }
       }
     }
   });
@@ -5706,7 +5815,7 @@ function exportKYCReportPDF() {
    ═══════════════════════════════════════════════ */
 const ADMIN_CMD_ITEMS = [
   // Views
-  { label:'Dashboard',               icon:'fa-grid-2',                   view:'dashboard' },
+  { label:'Dashboard',               icon:'fa-border-all',               view:'dashboard' },
   { label:'Investor Management',     icon:'fa-users',                    view:'investors' },
   { label:'IFA Management',          icon:'fa-handshake',                view:'ifa' },
   { label:'KYC / FICA',              icon:'fa-id-card',                  view:'kyc' },
