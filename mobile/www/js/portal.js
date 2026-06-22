@@ -459,9 +459,9 @@ function renderWalletReadinessPanel() {
   let accent = '#FF9B0C';
 
   if (!ficaApproved) {
-    headline = 'Complete FICA first to unlock investing.';
+    headline = 'Complete FICA/KYC first to unlock investing.';
     subcopy = 'Once verified, you can fund your wallet and invest without hitting a dead-end later.';
-    ctaLabel = 'Complete FICA';
+    ctaLabel = 'Complete FICA/KYC';
     ctaAction = "navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()";
     accent = '#2F8C9B';
   } else if (affordable.length) {
@@ -502,7 +502,7 @@ function renderWalletReadinessPanel() {
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Verification</div>
-          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#2F8C9B'};margin-top:6px">${ficaApproved ? 'FICA approved' : 'FICA still needed'}</div>
+          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#2F8C9B'};margin-top:6px">${ficaApproved ? 'FICA/KYC approved' : 'FICA/KYC needed'}</div>
           <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.'}</div>
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
@@ -545,10 +545,10 @@ function renderMarketConversionPanel(pools) {
   let accent = '#2F8C9B';
 
   if (!ficaApproved) {
-    title = 'Your first investment is blocked by pending FICA.';
+    title = 'Your first investment is blocked by pending FICA/KYC.';
     sub = 'Complete verification before funding more or choosing an amount so your first investment can go through cleanly.';
     action = "navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()";
-    actionLabel = 'Complete FICA';
+    actionLabel = 'Complete FICA/KYC';
     accent = '#2F8C9B';
   } else if (affordable.length) {
     title = `You can invest right now in ${affordable.length} open pool${affordable.length === 1 ? '' : 's'}.`;
@@ -959,7 +959,7 @@ function loadNotifications() {
     if (inv.fica_status === 'rejected' || inv.kyc_status === 'rejected') {
       notifs.push({
         icon: 'fa-triangle-exclamation', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
-        title: 'FICA verification unsuccessful',
+        title: 'FICA/KYC verification unsuccessful',
         sub: 'Your documents could not be verified. Please re-upload and resubmit.',
         time: 'Action required',
         action: "navigate('fica',document.querySelector('[data-view=fica]'))",
@@ -968,7 +968,7 @@ function loadNotifications() {
     } else if (inv.fica_status === 'pending' || inv.kyc_status === 'pending' || inv.status === 'fica_submitted') {
       notifs.push({
         icon: 'fa-clock', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
-        title: 'FICA verification in progress',
+        title: 'FICA/KYC verification in progress',
         sub: 'Your documents are under review — typically 1–2 business days.',
         time: 'Pending',
         action: null,
@@ -978,7 +978,7 @@ function loadNotifications() {
       notifs.push({
         icon: 'fa-shield-halved', iconBg: 'rgba(168,85,247,0.1)', iconColor: '#a855f7',
         title: 'Identity verified',
-        sub: 'Your FICA verification is complete. You can invest in all available pools.',
+        sub: 'Your FICA/KYC verification is complete. You can invest in all available pools.',
         time: inv.fica_verified_at ? Utils.timeAgo(inv.fica_verified_at) : 'Approved',
         action: null,
         unread: false,
@@ -1576,7 +1576,7 @@ function renderOverview(skipCharts) {
     ficaBanner.innerHTML = `
       <div class="fica-alert-banner__icon"><i class="fa-solid fa-id-card"></i></div>
       <div class="fica-alert-banner__body">
-        <div class="fica-alert-banner__title">FICA Verification Pending</div>
+        <div class="fica-alert-banner__title">FICA/KYC Verification Pending</div>
         <div class="fica-alert-banner__sub">Your identity documents are under review (1–2 business days). You can invest once approved.</div>
       </div>
       <div class="fica-alert-banner__action">
@@ -1733,7 +1733,7 @@ function renderOverviewTxns() {
   body.innerHTML = recent.map(t => {
     const pos = _txnIsPositive(t);
     return `<tr>
-      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ')}</span></td>
+      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${(t.type?.replace(/_/g, ' ') || '').replace(/^\w/, c => c.toUpperCase())}</span></td>
       <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
       <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
       <td class="td-muted">${Utils.date(t.transaction_date)}</td>
@@ -1890,7 +1890,7 @@ function renderAllocationChart() {
     type: 'doughnut',
     data: {
       labels,
-      datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderColor: 'var(--dark-2)', borderWidth: 3, hoverOffset: 4 }]
+      datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderColor: '#ffffff', borderWidth: 2, hoverOffset: 4 }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -1913,11 +1913,11 @@ function renderAllocationChart() {
     const amt = values[idx];
     const pct = total > 0 ? ((amt / total) * 100).toFixed(1) : '0';
     const color = colors[idx] || '#8ea3b8';
-    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
       <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
-      <span style="flex:1;font-size:0.8rem;color:#c9d6e3">${label}</span>
-      <span style="font-size:0.8rem;font-weight:600;color:#f0f4f8">${Utils.rand(amt)}</span>
-      <span style="font-size:0.72rem;color:#9ca3af;min-width:38px;text-align:right">${pct}%</span>
+      <span style="flex:1;font-size:0.8rem;color:var(--text-primary,#1a1a1a)">${label}</span>
+      <span style="font-size:0.8rem;font-weight:600;color:var(--text-primary,#1a1a1a)">${Utils.rand(amt)}</span>
+      <span style="font-size:0.72rem;color:var(--text-muted,#6b7280);min-width:38px;text-align:right">${pct}%</span>
     </div>`;
   }).join('');
 }
@@ -1995,14 +1995,9 @@ function renderMyInvestmentCards() {
         ` : ''}
 
         <div class="my-inv-card__stats">
-          <div class="mic-stat"><span class="mic-stat__label">Invested</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(inv.amount)}</span></div>
-          <div class="mic-stat"><span class="mic-stat__label">${isPaidOut ? 'Actual Return' : 'Exp. Return'}</span><span class="mic-stat__value mic-stat__value--green">${isPaidOut ? Utils.rand(inv.actual_return_amount) : Utils.rand(inv.expected_return_amount)}</span></div>
-          <div class="mic-stat"><span class="mic-stat__label">Rate p.a.</span><span class="mic-stat__value">${Utils.pct(inv.expected_return_rate)}</span></div>
-        </div>
-
-        <div class="flex-between" style="font-size:0.72rem;color:var(--text-dim)">
-          <span>Invested: ${Utils.date(inv.investment_date)}</span>
-          <span>Matures: ${Utils.date(inv.maturity_date)}</span>
+          <div class="mic-stat"><span class="mic-stat__label">Amount Invested</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(inv.amount)}</span></div>
+          <div class="mic-stat"><span class="mic-stat__label">Launch Date</span><span class="mic-stat__value">${Utils.date(inv.investment_date || inv.start_date)}</span></div>
+          <div class="mic-stat"><span class="mic-stat__label">Maturity Date</span><span class="mic-stat__value">${Utils.date(inv.maturity_date)}</span></div>
         </div>
 
         ${inv.status === 'active' ? `
@@ -2058,7 +2053,7 @@ function renderMyTxnTable() {
   body.innerHTML = sorted.map(t => {
     const pos = _isPosTxn(t);
     return `<tr>
-      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ')}</span></td>
+      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${(t.type?.replace(/_/g, ' ') || '').replace(/^\w/, c => c.toUpperCase())}</span></td>
       <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
       <td>${Utils.statusBadge(t.status)}</td>
       <td class="td-muted" style="font-size:0.72rem">${t.reference || '—'}</td>
