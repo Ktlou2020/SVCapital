@@ -595,6 +595,12 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
 .modal-overlay {
   align-items: flex-end !important;
   padding: 0 !important;
+  /* The bottom nav (.mbn) is position:fixed z-index:1200. The base
+     modal-overlay z-index (500, admin.css) is BELOW it, so the nav
+     renders on top of open modals — clipping submit buttons (Top Up)
+     and bottom-sheet content (Withdraw). Raise above the nav so the
+     whole modal, including its footer/action button, is reachable. */
+  z-index: 2000 !important;
 }
 .modal {
   width: 100% !important; max-width: 100% !important;
@@ -603,6 +609,12 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
   margin: 0 !important;
   overflow: hidden !important;
   display: flex !important; flex-direction: column !important;
+}
+/* Bottom-sheet body: clear the home-indicator / safe area so the last
+   line of content (e.g. the Withdraw pending message) isn't flush with
+   the screen edge. Lifts the visible content up slightly. */
+.modal__body {
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 20px)) !important;
 }
 .modal__header::before {
   content: '' !important;

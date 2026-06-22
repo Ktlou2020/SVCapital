@@ -8849,7 +8849,7 @@ function _renderAnalyticsAllocChart() {
       datasets: [{ data: entries.map(([,v]) => v), backgroundColor: COLORS, borderWidth: 2, borderColor: '#fff' }],
     },
     options: {
-      responsive: true, maintainAspectRatio: true, cutout: '62%',
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
       animation: window.__SVC_NATIVE__ ? false : undefined,
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.label + ': R' + c.raw.toLocaleString('en-ZA') } } },
     },
@@ -8875,7 +8875,7 @@ function _renderAnalyticsTimeline() {
   }
   const statusBadge = s => {
     const map = { active:'#22c55e', paid_out:'#3b82f6', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316' };
-    return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${s.replace('_',' ')}</span>`;
+    return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${String(s||'').replace('_',' ').toUpperCase()}</span>`;
   };
   const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';
   tbody.innerHTML = invs.slice(0, 30).map(i => {
