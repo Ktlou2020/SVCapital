@@ -48,12 +48,12 @@ const Confirm = {
       okBtn.className = `btn ${danger ? 'btn--danger' : 'btn--primary'}`;
 
       const overlay = document.getElementById('confirmModal');
-      overlay.style.display = 'flex';
-      overlay.classList.add('active');
+      overlay.classList.add('open');
+      document.body.style.overflow = 'hidden';
 
       const cleanup = (result) => {
-        overlay.style.display = 'none';
-        overlay.classList.remove('active');
+        overlay.classList.remove('open');
+        document.body.style.overflow = '';
         okBtn.replaceWith(okBtn.cloneNode(true));
         cancelBtn.replaceWith(cancelBtn.cloneNode(true));
         resolve(result);
@@ -1560,8 +1560,8 @@ function rejectWithdrawalPrompt(txnId, btn) {
   _rejectBtn = btn;
   document.getElementById('rejectReasonInput').value = '';
   const overlay = document.getElementById('rejectModal');
-  overlay.style.display = 'flex';
-  overlay.classList.add('active');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
   setTimeout(() => document.getElementById('rejectReasonInput')?.focus(), 100);
 }
 
@@ -1569,8 +1569,8 @@ async function _submitRejection() {
   const reason = (document.getElementById('rejectReasonInput')?.value || '').trim();
   const txnId = _rejectingTxnId;
   const btn   = _rejectBtn;
-  document.getElementById('rejectModal').style.display = 'none';
-  document.getElementById('rejectModal').classList.remove('active');
+  document.getElementById('rejectModal').classList.remove('open');
+  document.body.style.overflow = '';
   if (!txnId) return;
   await _withBtn(btn, async () => {
     try {
@@ -3099,6 +3099,7 @@ async function loadAnalytics() {
     loadSignupFriction();
     renderMaturityForecastChart();
     renderCohortChart();
+    renderMobileActivity();
   } catch (e) {
     Toast.error('Failed to load analytics data');
     console.error('[loadAnalytics]', e);
@@ -3153,6 +3154,129 @@ function renderCohortChart() {
       scales: { x: { ticks: { color: '#3d5268' }, grid: { display: false } }, y: { ticks: { color: '#3d5268', stepSize: 1 }, grid: { color: 'rgba(0,0,0,0.05)' } } }
     }
   });
+}
+
+async function renderMobileActivity() {
+  const panel = document.getElementById('mobileActivityPanel');
+  if (!panel) return;
+
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading mobile activity…</div>';
+
+  // Query audit_events filtered by platform
+  const now = new Date();
+  const thirtyDays = new Date(now - 30 * 86400000).toISOString();
+
+  let iosEvents = [], androidEvents = [], webEvents = [];
+  try {
+    const [iosRes, androidRes, webRes] = await Promise.all([
+      API._fetch('GET', 'tables/audit_events', null, { platform: 'ios',     limit: 1000, date_from: thirtyDays }),
+      API._fetch('GET', 'tables/audit_events', null, { platform: 'android', limit: 1000, date_from: thirtyDays }),
+      API._fetch('GET', 'tables/audit_events', null, { platform: 'web',     limit: 1000, date_from: thirtyDays }),
+    ]);
+    iosEvents     = iosRes.data     || [];
+    androidEvents = androidRes.data || [];
+    webEvents     = webRes.data     || [];
+  } catch (_) {
+    // platform column may not exist — fall back to full audit events and classify by description
+    try {
+      const res = await API._fetch('GET', 'tables/audit_events', null, { limit: 2000, date_from: thirtyDays });
+      const all = res.data || [];
+      iosEvents     = all.filter(e => (e.platform || e.device_type || e.user_agent || '').toLowerCase().includes('ios'));
+      androidEvents = all.filter(e => (e.platform || e.device_type || e.user_agent || '').toLowerCase().includes('android'));
+      webEvents     = all.filter(e => !iosEvents.includes(e) && !androidEvents.includes(e));
+    } catch (_2) {}
+  }
+
+  const iosLogins  = iosEvents.filter(e => (e.event_type || '').includes('login')).length;
+  const droidLogins= androidEvents.filter(e => (e.event_type || '').includes('login')).length;
+  const webLogins  = webEvents.filter(e => (e.event_type || '').includes('login')).length;
+  const totalLogins= iosLogins + droidLogins + webLogins;
+
+  // Build recent mobile events list (iOS + Android combined)
+  const recentMobile = [...iosEvents, ...androidEvents]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 10);
+
+  const pct = (n) => totalLogins ? Math.round(n / totalLogins * 100) : 0;
+
+  panel.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px">
+      <div style="background:rgba(0,150,255,0.08);border:1px solid rgba(0,150,255,0.2);border-radius:10px;padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <i class="fa-brands fa-apple" style="font-size:1.2rem;color:#0096ff"></i>
+          <span style="font-size:0.72rem;font-weight:700;color:#0096ff;text-transform:uppercase;letter-spacing:0.05em">iOS</span>
+        </div>
+        <div style="font-size:1.6rem;font-weight:800;color:var(--text)">${iosEvents.length.toLocaleString()}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">events (30d)</div>
+        <div style="margin-top:8px;height:4px;background:rgba(0,0,0,0.1);border-radius:2px">
+          <div style="height:100%;width:${pct(iosLogins)}%;background:#0096ff;border-radius:2px"></div>
+        </div>
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:4px">${iosLogins} logins · ${pct(iosLogins)}% of total</div>
+      </div>
+      <div style="background:rgba(61,220,132,0.08);border:1px solid rgba(61,220,132,0.2);border-radius:10px;padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <i class="fa-brands fa-android" style="font-size:1.2rem;color:#3ddc84"></i>
+          <span style="font-size:0.72rem;font-weight:700;color:#3ddc84;text-transform:uppercase;letter-spacing:0.05em">Android</span>
+        </div>
+        <div style="font-size:1.6rem;font-weight:800;color:var(--text)">${androidEvents.length.toLocaleString()}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">events (30d)</div>
+        <div style="margin-top:8px;height:4px;background:rgba(0,0,0,0.1);border-radius:2px">
+          <div style="height:100%;width:${pct(droidLogins)}%;background:#3ddc84;border-radius:2px"></div>
+        </div>
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:4px">${droidLogins} logins · ${pct(droidLogins)}% of total</div>
+      </div>
+      <div style="background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.15);border-radius:10px;padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <i class="fa-solid fa-globe" style="font-size:1.1rem;color:var(--gold)"></i>
+          <span style="font-size:0.72rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em">Web</span>
+        </div>
+        <div style="font-size:1.6rem;font-weight:800;color:var(--text)">${webEvents.length.toLocaleString()}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">events (30d)</div>
+        <div style="margin-top:8px;height:4px;background:rgba(0,0,0,0.1);border-radius:2px">
+          <div style="height:100%;width:${pct(webLogins)}%;background:var(--gold);border-radius:2px"></div>
+        </div>
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:4px">${webLogins} logins · ${pct(webLogins)}% of total</div>
+      </div>
+      <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:10px;padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <i class="fa-solid fa-mobile-screen" style="font-size:1.1rem;color:#a855f7"></i>
+          <span style="font-size:0.72rem;font-weight:700;color:#a855f7;text-transform:uppercase;letter-spacing:0.05em">App Total</span>
+        </div>
+        <div style="font-size:1.6rem;font-weight:800;color:var(--text)">${(iosEvents.length + androidEvents.length).toLocaleString()}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">iOS + Android (30d)</div>
+        <div style="margin-top:8px;height:4px;background:rgba(0,0,0,0.1);border-radius:2px">
+          <div style="height:100%;width:${totalLogins ? Math.round((iosLogins + droidLogins) / totalLogins * 100) : 0}%;background:#a855f7;border-radius:2px"></div>
+        </div>
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:4px">${iosLogins + droidLogins} app logins · ${totalLogins ? Math.round((iosLogins + droidLogins) / totalLogins * 100) : 0}% share</div>
+      </div>
+    </div>
+
+    ${recentMobile.length ? `
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Recent Mobile Activity</div>
+      <div style="display:flex;flex-direction:column;gap:0">
+        ${recentMobile.map(e => {
+          const isPlatformIos = (e.platform || e.device_type || e.user_agent || '').toLowerCase().includes('ios');
+          const icon  = isPlatformIos ? 'fa-apple' : 'fa-android';
+          const color = isPlatformIos ? '#0096ff' : '#3ddc84';
+          const plat  = isPlatformIos ? 'iOS' : 'Android';
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+            <div style="width:28px;height:28px;border-radius:50%;background:rgba(${isPlatformIos?'0,150,255':'61,220,132'},0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <i class="fa-brands ${icon}" style="font-size:0.82rem;color:${color}"></i>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.78rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.user_email || e.actor || '—'}</div>
+              <div style="font-size:0.7rem;color:var(--text-muted)">${e.event_type || e.action || '—'} · ${plat}</div>
+            </div>
+            <div style="font-size:0.68rem;color:var(--text-dim);flex-shrink:0">${Utils.date(e.created_at)}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : `<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:0.82rem">
+      <i class="fa-solid fa-mobile-screen" style="font-size:1.5rem;margin-bottom:8px;display:block;opacity:0.3"></i>
+      No mobile app events in the last 30 days. Platform activity will appear here once investors use the iOS or Android app.
+    </div>`}
+  `;
 }
 
 function renderProductVolChart() {
@@ -5115,30 +5239,43 @@ async function loadInvestorNotes(investorId) {
   const countEl = document.getElementById('invNotesCount');
   if (!listEl) return;
 
-  try {
-    const res = await API._fetch('GET', 'tables/investor_notes', null, { investor_id: investorId, limit: 50 });
-    const notes = (res.data || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
+  const renderNotes = (notes) => {
     if (countEl) countEl.textContent = `${notes.length} note${notes.length !== 1 ? 's' : ''}`;
-
     if (!notes.length) {
       listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem">No notes yet — add the first note below.</div>';
       return;
     }
-
     listEl.innerHTML = notes.map(n => {
-      const authorShort = n.admin_email ? n.admin_email.replace(/@.*$/, '') : 'Admin';
+      const authorShort = (n.admin_email || n.author || 'Admin').replace(/@.*$/, '');
       return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
           <span style="font-size:0.75rem;font-weight:700;color:var(--orange)">${authorShort}</span>
-          <span style="font-size:0.7rem;color:var(--text-dim)">${Utils.date(n.created_at)}</span>
+          <span style="font-size:0.7rem;color:var(--text-dim)">${Utils.date(n.created_at || n.date)}</span>
         </div>
-        <div style="font-size:0.82rem;color:var(--text);white-space:pre-wrap">${n.note || '—'}</div>
+        <div style="font-size:0.82rem;color:var(--text);white-space:pre-wrap">${n.note || n.text || '—'}</div>
       </div>`;
     }).join('');
-  } catch (e) {
-    if (listEl) listEl.innerHTML = '<div style="padding:16px;color:var(--text-dim);font-size:0.8rem">Could not load notes.</div>';
-    if (countEl) countEl.textContent = '—';
+  };
+
+  try {
+    const res = await API._fetch('GET', 'tables/investor_notes', null, { investor_id: investorId, limit: 50 });
+    const notes = (res.data || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    renderNotes(notes);
+  } catch (_) {
+    // investor_notes table not available — read from investor.notes field
+    const inv = STATE.investors.find(i => i.id === investorId);
+    const raw = inv?.notes || '';
+    if (!raw || raw.startsWith('{')) {
+      // Either empty or contains bank JSON — show empty state
+      renderNotes([]);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) { renderNotes(parsed); return; }
+    } catch (_2) {}
+    // Plain text stored in notes field — show as single entry
+    renderNotes([{ note: raw, admin_email: 'system', created_at: inv?.created_at }]);
   }
 }
 
@@ -5147,9 +5284,10 @@ async function addInvestorNote(investorId) {
   if (!ta) return;
   const noteText = ta.value.trim();
   if (!noteText) { Toast.error('Please enter a note'); return; }
+  const adminEmail = _getAdminName();
 
-  const adminEmail = STATE.adminEmail || 'admin@svcapital.co.za';
-
+  const saveBtn = document.querySelector(`button[onclick*="addInvestorNote"]`);
+  if (saveBtn) saveBtn.disabled = true;
   try {
     await API._fetch('POST', 'tables/investor_notes', {
       id:          `NOTE-${Date.now()}`,
@@ -5161,7 +5299,29 @@ async function addInvestorNote(investorId) {
     ta.value = '';
     Toast.success('Note added');
     await loadInvestorNotes(investorId);
-  } catch (e) { Toast.error('Failed to save note'); }
+  } catch (_) {
+    // Fallback: store as JSON array in investor.notes field
+    try {
+      const inv = STATE.investors.find(i => i.id === investorId);
+      const raw = inv?.notes || '';
+      let existing = [];
+      // Only try to parse if it's NOT bank JSON (bank JSON starts with '{')
+      if (raw && !raw.startsWith('{')) {
+        try { const p = JSON.parse(raw); if (Array.isArray(p)) existing = p; } catch (_2) {}
+      }
+      existing.unshift({ note: noteText, admin_email: adminEmail, created_at: new Date().toISOString() });
+      const newVal = JSON.stringify(existing);
+      await API._fetch('PATCH', `tables/investors/${investorId}`, { notes: newVal });
+      if (inv) inv.notes = newVal;
+      ta.value = '';
+      Toast.success('Note saved');
+      await loadInvestorNotes(investorId);
+    } catch (e2) {
+      Toast.error('Failed to save note: ' + (e2.message || 'unknown error'));
+    }
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
 }
 
 /* ═══════════════════════════════════════════════
