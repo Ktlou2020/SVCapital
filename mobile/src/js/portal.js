@@ -1194,16 +1194,6 @@ function navigate(view, btnEl) {
   // Sync mobile bottom nav active state
   document.querySelectorAll('.mbn-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
 
-  // Force Android WebView to re-composite the page after switching views.
-  // Without this, the new view's content can be invisible for one or two frames.
-  if (window.__SVC_NATIVE__) {
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      const body = document.body;
-      body.style.opacity = '0.9999';
-      void body.offsetHeight;
-      body.style.opacity = '';
-    }));
-  }
 }
 
 function _mbnSetActive(btn) {
@@ -1863,6 +1853,9 @@ function renderPortfolioTrendChart() {
 function renderAllocationChart() {
   const ctx = document.getElementById('allocationChart');
   if (!ctx) return;
+  // Skip if canvas is inside a hidden parent — rendering onto a zero-size hidden canvas
+  // creates orphan GPU compositor layers on Android WebView that cause content to blank.
+  if (ctx.offsetParent === null) return;
 
   const colors = ['#D4AF37', '#22c55e', '#3b82f6', '#f97316', '#a855f7', '#ec4899', '#14b8a6'];
 
