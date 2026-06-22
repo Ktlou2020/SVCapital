@@ -85,10 +85,14 @@ app.use(cors({
 /* ─── Body & Cookie parsers ─── */
 // Raw body capture for Paystack webhook HMAC verification (must come before express.json)
 app.use('/api/payments/paystack/webhook', (req, res, next) => {
-  let raw = '';
-  req.setEncoding('utf8');
-  req.on('data', chunk => { raw += chunk; });
-  req.on('end', () => { req.rawBody = raw; req.body = JSON.parse(raw || '{}'); next(); });
+  const chunks = [];
+  req.on('data', chunk => chunks.push(chunk));
+  req.on('end', () => {
+    const raw = Buffer.concat(chunks).toString('utf8');
+    req.rawBody = raw;
+    try { req.body = JSON.parse(raw || '{}'); } catch (_) { req.body = {}; }
+    next();
+  });
 });
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
