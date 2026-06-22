@@ -61,13 +61,14 @@ body.dark-mode { background-color: #0d1117 !important; }
   width: 100% !important;
   max-width: 100vw !important;
   box-sizing: border-box !important;
-  /* Pure block flow — no height constraint, no overflow, no transform.
-     These were flex containers with min-height:100vh on desktop; on mobile
-     they must NOT trap content or create scroll/GPU layers. */
   height: auto !important;
+  min-height: 0 !important;
   overflow: visible !important;
   transform: none !important;
   -webkit-transform: none !important;
+  /* portal-premium.css sets background:#F2F3F6 on .main-content; override to
+     white so that empty space never shows as grey on Android WebView. */
+  background: #ffffff !important;
 }
 .page-content {
   width: 100% !important;
@@ -158,17 +159,24 @@ input, textarea, [contenteditable] {
   top: 0 !important;
   left: 0 !important;
   right: 0 !important;
-  z-index: 200 !important;        /* below bottom-nav (1200) but above content */
-  height: 52px !important;
-  padding: 0 12px !important;
+  z-index: 200 !important;
+  /* Height grows to include the Android status bar inset so content is
+     never hidden behind the system status bar or notch cutout.
+     env(safe-area-inset-top) is 0 when StatusBar.overlaysWebView is false
+     (our config), so this is a no-op on most devices and a safety net on
+     devices where the inset is non-zero. */
+  height: calc(52px + env(safe-area-inset-top, 0px)) !important;
+  padding-top: env(safe-area-inset-top, 0px) !important;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
   gap: 6px !important;
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
 }
-/* Push content below the fixed topbar */
+/* Push content below the fixed topbar (topbar height + 10px gap) */
 .page-content {
-  padding-top: 62px !important;   /* 52px topbar + 10px gap */
+  padding-top: calc(52px + env(safe-area-inset-top, 0px) + 10px) !important;
 }
 .topbar__left {
   flex: 1 1 0 !important;
