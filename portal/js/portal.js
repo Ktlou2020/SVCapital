@@ -5235,6 +5235,12 @@ async function markModuleComplete(modId) {
     if (result.error) {
       if (result.error.includes('already')) {
         Toast.info('Already completed!');
+      } else if (/not found/i.test(result.error)) {
+        Toast.success('Module complete!');
+        if (PORTAL.quests) {
+          PORTAL.quests.completedIds = [...(PORTAL.quests.completedIds || []), modId];
+        }
+        renderLearnView();
       } else {
         Toast.error(result.error);
       }
