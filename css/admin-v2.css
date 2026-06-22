@@ -781,7 +781,78 @@
   .page-content { padding: 14px !important; }
 }
 
-/* ─── 32. Print ───────────────────────────────────────────────────── */
+/* ─── 32. Table Layout Improvements ──────────────────────────────── */
+
+/* Consistent cell padding and vertical alignment */
+.data-table th,
+.data-table td {
+  padding: 10px 12px !important;
+  vertical-align: middle !important;
+  line-height: 1.4 !important;
+}
+
+/* Tighter header labels */
+.data-table th {
+  font-size: 0.65rem !important;
+  letter-spacing: 0.08em !important;
+  white-space: nowrap !important;
+}
+
+/* Row hover highlight using gold tint */
+.data-table tbody tr:hover td {
+  background: rgba(212,175,55,0.04) !important;
+}
+
+/* Better text clipping in cells */
+.data-table td .td-strong {
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+  color: var(--text) !important;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-table td .td-muted {
+  font-size: 0.72rem !important;
+  color: var(--text-muted) !important;
+}
+
+/* Action button cells: no wrapping, keep buttons on one line */
+.data-table td:last-child {
+  white-space: nowrap;
+}
+
+/* Table scrolls horizontally on narrow viewports */
+.table-card > div[style*="overflow-x"],
+.table-card > div:has(.data-table) {
+  overflow-x: auto !important;
+}
+
+/* Stripe every other row for readability */
+.data-table tbody tr:nth-child(even) td {
+  background: rgba(255,255,255,0.012);
+}
+
+/* Sticky thead */
+.data-table thead th {
+  position: sticky !important;
+  top: 0;
+  z-index: 2;
+  background: var(--dark-3) !important;
+  backdrop-filter: blur(8px);
+}
+
+/* Better btn sizing in tables */
+.data-table .btn--xs,
+.data-table .btn--sm {
+  padding: 3px 8px !important;
+  font-size: 0.72rem !important;
+  gap: 4px !important;
+}
+
+/* ─── 33. Print ───────────────────────────────────────────────────── */
 @media print {
   .sidebar, .topbar, .table-card__controls,
   .modal-overlay, #adminLoadingBar { display: none !important; }

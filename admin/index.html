@@ -13,7 +13,6 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="../css/admin.css" />
-  <link rel="stylesheet" href="../css/ci-theme.css" />
   <link rel="stylesheet" href="../css/admin-premium.css" />
   <link rel="stylesheet" href="../css/admin-v2.css" />
   <!-- sv-intelligence hidden -->
@@ -939,6 +938,17 @@
           </div>
           <div class="panel__body">
             <div class="chart-wrap chart-wrap--md"><canvas id="cohortChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Mobile App Activity -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-mobile-screen-button" style="color:var(--orange);margin-right:8px"></i>Mobile App Activity (iOS &amp; Android)</span>
+            <button class="btn btn--secondary btn--sm" onclick="renderMobileActivity()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          </div>
+          <div class="panel__body" id="mobileActivityPanel">
+            <div class="text-center text-muted" style="padding:20px">Loading…</div>
           </div>
         </div>
 
