@@ -104,7 +104,24 @@ let _pulseAnswers = {};
 /* ═══ INIT ═══════════════════════════════════════════════════════════ */
 async function init() {
   showLoader(true);
-  const urlEmpId = new URLSearchParams(location.search).get('id');
+
+  // Identify the logged-in employee from the session
+  const session = StaffAuth.getSession();
+  if (!session || !session.empId) {
+    document.getElementById('globalLoader').innerHTML =
+      '<p style="color:#ff5b5b;text-align:center;margin-top:40px">Session expired. <a href="login.html" style="color:#7c5cfc">Sign in again</a>.</p>';
+    return;
+  }
+  const myEmpId = session.empId;
+
+  // ?id= param: only managers/team-access users may view another employee's dashboard.
+  // Regular staff are always shown their own profile regardless of URL params.
+  const canViewOthers = StaffAuth.canAccess(session, 'team');
+  const rawUrlId = new URLSearchParams(location.search).get('id');
+  const urlEmpId = (canViewOthers && rawUrlId) ? rawUrlId : null;
+
+  // Target employee: URL param (managers only) or self
+  const targetEmpId = urlEmpId || myEmpId;
   const [
     emps, courses, progList, kpis, achs, periods, leaves, checkins,
     okrs, feedback, surveys, pulseResp, oneOnOnes, paths, feed, notes
@@ -138,8 +155,12 @@ async function init() {
   _learningPaths= paths;
   _activityFeed = feed;
 
-  _emp = emps.find(e=>e.id===urlEmpId) || emps[0];
-  if (!_emp) { document.getElementById('globalLoader').innerHTML='<p style="color:#ff5b5b">No employees found.</p>'; return; }
+  _emp = emps.find(e => e.id === targetEmpId) || emps.find(e => e.id === myEmpId);
+  if (!_emp) {
+    document.getElementById('globalLoader').innerHTML =
+      '<p style="color:#ff5b5b;text-align:center;margin-top:40px">Employee profile not found. Please <a href="login.html" style="color:#7c5cfc">sign in</a> again.</p>';
+    return;
+  }
 
   _progress     = progList.filter(p=>p.employee_id===_emp.id);
   _kpiScores    = kpis.filter(k=>k.employee_id===_emp.id);
