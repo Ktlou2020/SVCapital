@@ -219,8 +219,9 @@
     if (!P.App) return;
     P.App.addListener('appStateChange', ({ isActive }) => {
       if (isActive) {
-        if (window._refreshWalletUI) _refreshWalletUI().catch(() => {});
-        // Also refresh main data silently
+        // Silently refresh data when the app comes back from background.
+        // _refreshWalletUI is synchronous (no .catch needed); call it only after
+        // loadPortalData has fresh data — so only loadPortalData is called here.
         if (window.loadPortalData) loadPortalData().catch(() => {});
       }
     });
