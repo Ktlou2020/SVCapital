@@ -93,6 +93,21 @@ function _setRefreshLabel(elId, view) {
   if (el) el.textContent = `Updated ${_refreshedText(view)}`;
 }
 
+/* ─── Get current admin's full name (for audit/review fields) ─── */
+function _getAdminName() {
+  try {
+    const s = JSON.parse(localStorage.getItem('staffSession') || 'null');
+    if (s && s.empId && s.expiresAt > Date.now()) {
+      return `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Admin';
+    }
+  } catch (_) {}
+  if (typeof Auth !== 'undefined') {
+    const u = Auth.getUser();
+    if (u) return `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'Admin';
+  }
+  return 'Admin';
+}
+
 /* ─── Empty-state row helper ─── */
 function _emptyRow(icon, title, sub, colspan = 6) {
   return `<tr><td colspan="${colspan}" style="padding:0;border:none">
@@ -1373,10 +1388,15 @@ async function depositToInvestor(investorId, investorName, currentBalance) {
 async function approveInvestorFica(investorId, btn) {
   if (!await Confirm.ask('Approve FICA?', { body: 'This investor will be marked as KYC-verified and their account activated.', confirmLabel: 'Approve FICA' })) return;
   await _withBtn(btn, async () => {
-    await API.investors.update(investorId, { fica_status: 'approved', status: 'active' });
-    Toast.success('FICA approved — investor is now active');
-    Modal.close('investorDetailModal');
-    await loadInvestors();
+    try {
+      await API.investors.update(investorId, { fica_status: 'approved', kyc_status: 'approved', status: 'active' });
+      Toast.success('FICA approved — investor is now active');
+      Modal.close('investorDetailModal');
+      await loadInvestors();
+    } catch (e) {
+      Toast.error('Failed to approve FICA: ' + (e.message || 'unknown error'));
+      console.error('[approveInvestorFica]', e);
+    }
   });
 }
 
@@ -1394,10 +1414,15 @@ async function saveInvestorNotes(investorId) {
 async function approveBankAccount(investorId, btn) {
   if (!await Confirm.ask('Approve bank account?', { body: 'This will enable withdrawals for this investor and send a confirmation.', confirmLabel: 'Approve' })) return;
   await _withBtn(btn, async () => {
-    await API._fetch('PATCH', `tables/investors/${investorId}`, { bank_account_status: 'approved', bank_account_notes: null });
-    Toast.success('Bank account approved — investor can now request withdrawals');
-    Modal.close('investorDetailModal');
-    await loadInvestors();
+    try {
+      await API._fetch('PATCH', `tables/investors/${investorId}`, { bank_account_status: 'approved', bank_account_notes: null });
+      Toast.success('Bank account approved — investor can now request withdrawals');
+      Modal.close('investorDetailModal');
+      await loadInvestors();
+    } catch (e) {
+      Toast.error('Failed to approve bank account: ' + (e.message || 'unknown error'));
+      console.error('[approveBankAccount]', e);
+    }
   });
 }
 
@@ -1490,22 +1515,24 @@ function renderWithdrawalsTable() {
 
 async function approveWithdrawal(txnId, btn) {
   if (!txnId) { Toast.error('Invalid withdrawal ID'); return; }
-  if (!await Confirm.ask('Approve this withdrawal?', { body: 'The investor will be notified and the funds released to their bank account.', confirmLabel: 'Approve' })) return;
+  if (!await Confirm.ask('Approve this withdrawal?', { body: 'The investor\'s funds will be marked as released to their bank account.', confirmLabel: 'Approve' })) return;
   await _withBtn(btn, async () => {
     try {
-      const res = await fetch(`/api/withdrawals/${txnId}/approve`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { Authorization: 'Bearer ' + (localStorage.getItem('svc_token') || ''), 'Content-Type': 'application/json' }
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Server error ${res.status}`);
+      await API._fetch('PATCH', `tables/transactions/${txnId}`, { status: 'completed' });
+      // Deduct from investor wallet if still showing balance
+      const txn = STATE.withdrawals.find(w => w.id === txnId);
+      if (txn && txn.investor_id) {
+        const inv = STATE.investors.find(i => i.id === txn.investor_id);
+        if (inv && inv.wallet_balance > 0) {
+          const deduct = Math.abs(parseFloat(txn.amount) || 0);
+          const newBal = Math.max(0, Math.round(((inv.wallet_balance || 0) - deduct) * 100) / 100);
+          await API._fetch('PATCH', `tables/investors/${txn.investor_id}`, { wallet_balance: newBal });
+        }
       }
-      Toast.success('Withdrawal approved — investor notified by email and SMS');
+      Toast.success('Withdrawal approved — funds released to investor bank account');
       await loadWithdrawals();
     } catch (e) {
-      Toast.error('Could not approve withdrawal: ' + (e.message || 'unknown error'));
+      Toast.error('Failed to approve withdrawal: ' + (e.message || 'unknown error'));
       console.error('[approveWithdrawal]', e);
     }
   });
@@ -1535,20 +1562,14 @@ async function _submitRejection() {
   if (!txnId) return;
   await _withBtn(btn, async () => {
     try {
-      const res = await fetch(`/api/withdrawals/${txnId}/reject`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { Authorization: 'Bearer ' + (localStorage.getItem('svc_token') || ''), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: reason || 'Withdrawal rejected by admin.' })
+      await API._fetch('PATCH', `tables/transactions/${txnId}`, {
+        status: 'rejected',
+        description: reason || 'Withdrawal rejected by admin.',
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Server error ${res.status}`);
-      }
-      Toast.success('Withdrawal rejected — investor notified and funds returned to wallet');
+      Toast.success('Withdrawal rejected — funds remain in investor wallet');
       await loadWithdrawals();
     } catch (e) {
-      Toast.error('Could not reject withdrawal: ' + (e.message || 'unknown error'));
+      Toast.error('Failed to reject withdrawal: ' + (e.message || 'unknown error'));
       console.error('[rejectWithdrawal]', e);
     }
   });
@@ -1561,10 +1582,15 @@ async function rejectWithdrawal(txnId) { return rejectWithdrawalPrompt(txnId); }
 async function confirmDeleteInvestor(id, btn) {
   if (!await Confirm.ask('Delete investor?', { body: 'This cannot be undone. All investor data will be permanently removed.', confirmLabel: 'Delete', danger: true })) return;
   await _withBtn(btn, async () => {
-    await API.investors.delete(id);
-    Toast.success('Investor deleted');
-    Modal.closeAll();
-    await loadInvestors();
+    try {
+      await API.investors.delete(id);
+      Toast.success('Investor deleted');
+      Modal.closeAll();
+      await loadInvestors();
+    } catch (e) {
+      Toast.error('Failed to delete investor: ' + (e.message || 'unknown error'));
+      console.error('[confirmDeleteInvestor]', e);
+    }
   });
 }
 
@@ -1782,20 +1808,38 @@ function viewFicaDocument(kycId) {
 }
 
 async function approveKyc(id, btn) {
+  if (!await Confirm.ask('Approve KYC document?', { body: 'This will mark the document as verified.', confirmLabel: 'Approve' })) return;
+  const reviewedBy = _getAdminName();
   await _withBtn(btn, async () => {
-    await API.kyc.update(id, { status: 'approved', reviewed_by: 'Ayanda Majola', reviewed_date: new Date().toISOString() });
-    Toast.success('Document approved');
-    await loadKYC();
+    try {
+      await API.kyc.update(id, { status: 'approved', reviewed_by: reviewedBy, reviewed_date: new Date().toISOString() });
+      // Also update the investor's kyc_status so filters/badges reflect the change
+      const doc = STATE.kyc.find(k => k.id === id);
+      if (doc?.investor_id) {
+        await API._fetch('PATCH', `tables/investors/${doc.investor_id}`, { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
+      }
+      Toast.success('Document approved — investor is now KYC-verified');
+      await loadKYC();
+    } catch (e) {
+      Toast.error('Failed to approve document: ' + (e.message || 'unknown error'));
+      console.error('[approveKyc]', e);
+    }
   });
 }
 
 async function rejectKyc(id, btn) {
   const reason = prompt('Rejection reason:');
   if (reason === null) return;
+  const reviewedBy = _getAdminName();
   await _withBtn(btn, async () => {
-    await API.kyc.update(id, { status: 'rejected', rejection_reason: reason, reviewed_by: 'Ayanda Majola', reviewed_date: new Date().toISOString() });
-    Toast.success('Document rejected');
-    await loadKYC();
+    try {
+      await API.kyc.update(id, { status: 'rejected', rejection_reason: reason, reviewed_by: reviewedBy, reviewed_date: new Date().toISOString() });
+      Toast.success('Document rejected');
+      await loadKYC();
+    } catch (e) {
+      Toast.error('Failed to reject document: ' + (e.message || 'unknown error'));
+      console.error('[rejectKyc]', e);
+    }
   });
 }
 
@@ -4409,7 +4453,7 @@ async function bulkApproveKyc() {
   if (rejectBtn)  rejectBtn.disabled  = true;
   try {
     for (let i = 0; i < ids.length; i++) {
-      await API.kyc.update(ids[i], { status: 'approved', reviewed_by: 'Admin', reviewed_date: new Date().toISOString() });
+      await API.kyc.update(ids[i], { status: 'approved', reviewed_by: _getAdminName(), reviewed_date: new Date().toISOString() });
       if ((i + 1) % 5 === 0) Toast.info(`Processing ${i + 1}/${total}...`);
     }
     _kycSelected.clear();
@@ -4434,7 +4478,7 @@ async function bulkRejectKyc() {
   if (rejectBtn)  rejectBtn.disabled  = true;
   try {
     for (let i = 0; i < ids.length; i++) {
-      await API.kyc.update(ids[i], { status: 'rejected', rejection_reason: reason, reviewed_by: 'Admin', reviewed_date: new Date().toISOString() });
+      await API.kyc.update(ids[i], { status: 'rejected', rejection_reason: reason, reviewed_by: _getAdminName(), reviewed_date: new Date().toISOString() });
       if ((i + 1) % 5 === 0) Toast.info(`Processing ${i + 1}/${total}...`);
     }
     _kycSelected.clear();
