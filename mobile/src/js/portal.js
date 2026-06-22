@@ -1318,6 +1318,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         active.style.setProperty('animation',         'none',    'important');
         active.style.setProperty('-webkit-animation', 'none',    'important');
       }
+      // Re-composite the main content layer. On Android WebView the scrolling
+      // content layer can be left at the clear colour (solid white) after the
+      // native splash is removed, even though fixed layers (topbar/nav/drawer)
+      // paint. Re-asserting display:block on an already-block element does NOT
+      // invalidate that layer — only a real off→on display toggle forces the
+      // relayout + repaint that rebuilds and paints it.
+      const pc = document.querySelector('.page-content');
+      if (pc) {
+        pc.style.display = 'none';
+        void pc.offsetHeight;   // synchronous reflow between writes
+        pc.style.display = '';
+      }
     };
     // Run at multiple intervals: before tour (100ms, 600ms, 1500ms),
     // after tour starts (3000ms, 5000ms) in case the overlay causes a blank.

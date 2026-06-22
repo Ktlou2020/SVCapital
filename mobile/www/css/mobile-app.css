@@ -148,6 +148,29 @@ input, textarea, [contenteditable] {
    that can cause a blank frame. Use display:none instead. */
 .modal-overlay {
   transition: none !important;
+  /* Drop backdrop-filter: a position:fixed; inset:0 backdrop-filter element is
+     a full-viewport compositing surface. Closed modals stay in the DOM (opacity:0),
+     so leaving the blur on creates stacked full-screen GPU layers over the
+     content — a known Android WebView blank-content trigger. The blur adds no
+     value on a fast touch UI. */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Sidebar drawer backdrop — never keep a permanent full-screen layer over the
+   content. portal.css sets the backdrop to display:block + backdrop-filter:blur
+   on mobile even when the drawer is CLOSED (only opacity goes to 0). That leaves
+   a full-viewport backdrop-filter compositing surface sitting at z-index:199 —
+   directly between the page content (z-auto) and the topbar (z-200) / bottom nav
+   (z-1200) / drawer — exactly the band that can blank the body to solid white
+   while the fixed shells keep painting. Only render the backdrop while the drawer
+   is actually open, and drop the blur entirely. */
+.sidebar-backdrop {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.sidebar-backdrop:not(.sidebar-backdrop--visible) {
+  display: none !important;
 }
 
 /* ─────────────────────────────────────────────────────────────
