@@ -124,10 +124,13 @@ const ADMIN_ONLY_TABLES = new Set([
   'audit_events', 'fee_ledger', 'fund_notifications',
   'cattle_costs', 'cattle_cycles', 'cattle_animals',
   'return_schedules', 'investor_allocations',
-  'employees', 'employee_courses',
   'fica_checks',
   'compliance_calendar',
 ]);
+// NOTE: `employees` is intentionally NOT admin-only — it is row-isolated via
+// EMPLOYEE_OWNED_COLS so each staff member can read only their own record.
+// `employee_courses` is a shared course catalog readable by all staff (writes
+// remain admin-only via ADMIN_WRITE_TABLES).
 
 /* ─── Tables that require admin/director role for WRITE (stricter than read) ─── */
 const ADMIN_WRITE_TABLES = new Set([
@@ -163,6 +166,7 @@ const INVESTOR_COLS = {
 /* Non-admin staff (with empId in JWT) are auto-filtered to their own rows. */
 /* Admin/director roles see all rows. */
 const EMPLOYEE_OWNED_COLS = {
+  employees:           'id',          // staff may read/modify only their own record
   kpi_scores:          'employee_id',
   achievements:        'employee_id',
   leave_requests:      'employee_id',
@@ -223,8 +227,12 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
       if (ADMIN_ONLY_TABLES.has(table)) {
         return res.status(403).json({ error: 'Forbidden.' });
       }
-      // Employee-owned tables: enforce row-level isolation by empId
-      if (req.user.empId) {
+      // Employee-owned tables require a staff identity (empId) and are isolated
+      // to that employee's own rows. Non-staff (e.g. investors) get nothing.
+      if (EMPLOYEE_OWNED_COLS[table] || table === 'peer_feedback') {
+        if (!req.user.empId) {
+          return res.status(403).json({ error: 'Forbidden.' });
+        }
         if (EMPLOYEE_OWNED_COLS[table]) {
           params.push(req.user.empId);
           conditions.push(`${EMPLOYEE_OWNED_COLS[table]} = $${params.length}`);
@@ -730,6 +738,8 @@ router.put('/:table/:id', requireAuth, validateTable, async (req, res) => {
 
     if (['users'].includes(table))
       return res.status(403).json({ error: `Use /api/users for table: ${table}` });
+    if (ADMIN_WRITE_TABLES.has(table) && !['admin','director','fund_manager'].includes(req.user.role))
+      return res.status(403).json({ error: 'Forbidden.' });
 
     // Investor data isolation: verify record ownership before UPDATE
     if (req.user.role === 'investor' && INVESTOR_COLS[table]) {
@@ -788,6 +798,8 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
 
     if (['users'].includes(table))
       return res.status(403).json({ error: `Use /api/users for table: ${table}` });
+    if (ADMIN_WRITE_TABLES.has(table) && !['admin','director','fund_manager'].includes(req.user.role))
+      return res.status(403).json({ error: 'Forbidden.' });
 
     // Investor data isolation: verify record ownership before UPDATE
     if (req.user.role === 'investor' && INVESTOR_COLS[table]) {
@@ -1110,8 +1122,9 @@ router.delete('/:table/:id', requireAuth, validateTable, async (req, res) => {
 
     // Admin-only tables and investors/pools require admin/director role to delete
     if (
-      (ADMIN_ONLY_TABLES.has(table) || ['investors','investment_pools'].includes(table)) &&
-      !['admin','director'].includes(req.user.role)
+      (ADMIN_ONLY_TABLES.has(table) || ADMIN_WRITE_TABLES.has(table) ||
+       ['investors','investment_pools'].includes(table)) &&
+      !['admin','director','fund_manager'].includes(req.user.role)
     ) return res.status(403).json({ error: 'Forbidden — admin only.' });
 
     // Employee data isolation: staff can only delete their own rows
