@@ -470,19 +470,16 @@ input, textarea, [contenteditable] {
 .chart-wrap {
   width: 100% !important; max-width: 100% !important;
   overflow: hidden !important;
-  /* CRITICAL: do NOT GPU-promote this wrapper (no will-change / translateZ).
-     A will-change:transform layer lives permanently inside the document
-     scroller; Android WebView must re-tile it on every scroll and repaints
-     off-screen tiles WHITE → the whole content tree blanks out while the
-     sticky header stays. This is the same failure documented in Section 0.
-     The chart canvas composites fine on its own in normal flow; the real
-     protection against rendering into a hidden/0-size canvas is the
-     offsetParent===null guard in portal.js, not GPU promotion here.
-     contain:layout (without paint) isolates the chart's layout so Chart.js
-     resizing the canvas can't shift sibling content — without creating a
-     compositor layer. */
+  /* Promote to its own GPU compositor layer BEFORE Chart.js renders the canvas.
+     When a canvas creates its own GPU layer inside an already-promoted container,
+     Android WebView composites them together without triggering a full-page
+     repaint. Without this, canvas GPU layers cause sibling content to blank out
+     as Android repaints the surrounding stacking context. */
   position: relative !important;
-  contain: layout !important;
+  contain: layout paint !important;
+  will-change: transform !important;
+  transform: translateZ(0) !important;
+  -webkit-transform: translateZ(0) !important;
 }
 /* Override chart sizes by class (not by attribute selector for inline styles) */
 .chart-wrap--sm { height: 140px !important; }
