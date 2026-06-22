@@ -124,8 +124,7 @@ const ADMIN_ONLY_TABLES = new Set([
   'audit_events', 'fee_ledger', 'fund_notifications',
   'cattle_costs', 'cattle_cycles', 'cattle_animals',
   'return_schedules', 'investor_allocations',
-  'employees', 'employee_onboarding', 'employee_courses',
-  'course_progress', 'activity_feed',
+  'employees', 'employee_courses',
   'fica_checks',
   'compliance_calendar',
 ]);
@@ -160,10 +159,28 @@ const INVESTOR_COLS = {
   sub_accounts:          'investor_id',
 };
 
+/* ─── Employee-owned tables: rows belong to a specific employee ─── */
+/* Non-admin staff (with empId in JWT) are auto-filtered to their own rows. */
+/* Admin/director roles see all rows. */
+const EMPLOYEE_OWNED_COLS = {
+  kpi_scores:          'employee_id',
+  achievements:        'employee_id',
+  leave_requests:      'employee_id',
+  daily_checkins:      'employee_id',
+  okrs:                'employee_id',
+  pulse_responses:     'employee_id',
+  one_on_ones:         'employee_id',
+  personal_notes:      'employee_id',
+  payslips:            'employee_id',
+  activity_feed:       'employee_id',
+  course_progress:     'employee_id',
+  employee_onboarding: 'employee_id',
+};
+
 /* ─── Columns to strip from responses ─── */
 const STRIP_COLS = {
   users: ['password_hash', 'staff_pin'],
-  employees: ['pin_hash'],
+  employees: ['pin_hash', 'id_number', 'login_attempts', 'login_locked_until'],
 };
 
 function stripSensitive(table, rows) {
@@ -190,11 +207,6 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
   try {
     const table = req.params.table;
 
-    // Check admin-only tables
-    if (ADMIN_ONLY_TABLES.has(table) && !['admin','director','fund_manager'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Forbidden.' });
-    }
-
     let { page = 1, limit = 100, search, sort, order = 'asc', date_from, date_to, ...filters } = req.query;
     page  = Math.max(1, parseInt(page));
     limit = Math.min(10000, Math.max(1, parseInt(limit)));
@@ -202,6 +214,29 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
 
     const conditions = [];
     const params     = [];
+
+    // ─── Role-based access control ───
+    const isAdminOrDirector = ['admin', 'director', 'fund_manager'].includes(req.user.role);
+
+    // employee tables: admins get all; staff with empId are filtered to their own rows
+    if (!isAdminOrDirector) {
+      if (ADMIN_ONLY_TABLES.has(table)) {
+        return res.status(403).json({ error: 'Forbidden.' });
+      }
+      // Employee-owned tables: enforce row-level isolation by empId
+      if (req.user.empId) {
+        if (EMPLOYEE_OWNED_COLS[table]) {
+          params.push(req.user.empId);
+          conditions.push(`${EMPLOYEE_OWNED_COLS[table]} = $${params.length}`);
+        }
+        // peer_feedback: staff can only see rows they sent or received
+        if (table === 'peer_feedback') {
+          params.push(req.user.empId);
+          params.push(req.user.empId);
+          conditions.push(`(from_employee_id = $${params.length - 1} OR to_employee_id = $${params.length})`);
+        }
+      }
+    }
 
     // ─── Role-based data isolation ───
     // Investors only see their own data
@@ -708,6 +743,19 @@ router.put('/:table/:id', requireAuth, validateTable, async (req, res) => {
       }
     }
 
+    // Employee data isolation: staff can only modify their own rows
+    if (req.user.empId && !['admin','director','fund_manager'].includes(req.user.role)) {
+      if (EMPLOYEE_OWNED_COLS[table]) {
+        const ownerCol = EMPLOYEE_OWNED_COLS[table];
+        const { rows: ownerRows } = await pool.query(
+          `SELECT ${ownerCol} FROM ${table} WHERE ${key} = $1`, [req.params.id]
+        );
+        if (!ownerRows[0] || ownerRows[0][ownerCol] !== req.user.empId) {
+          return res.status(403).json({ error: 'Forbidden — you can only modify your own records.' });
+        }
+      }
+    }
+
     const body   = { ...req.body };
     delete body[key]; // don't update PK
     delete body.created_at;
@@ -750,6 +798,19 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
       );
       if (!ownerRows[0] || ownerRows[0][selectCol] !== req.user.investorId) {
         return res.status(404).json({ error: 'Record not found.' });
+      }
+    }
+
+    // Employee data isolation: staff can only modify their own rows
+    if (req.user.empId && !['admin','director','fund_manager'].includes(req.user.role)) {
+      if (EMPLOYEE_OWNED_COLS[table]) {
+        const ownerCol = EMPLOYEE_OWNED_COLS[table];
+        const { rows: ownerRows } = await pool.query(
+          `SELECT ${ownerCol} FROM ${table} WHERE ${key} = $1`, [req.params.id]
+        );
+        if (!ownerRows[0] || ownerRows[0][ownerCol] !== req.user.empId) {
+          return res.status(403).json({ error: 'Forbidden — you can only modify your own records.' });
+        }
       }
     }
 
@@ -1052,6 +1113,19 @@ router.delete('/:table/:id', requireAuth, validateTable, async (req, res) => {
       (ADMIN_ONLY_TABLES.has(table) || ['investors','investment_pools'].includes(table)) &&
       !['admin','director'].includes(req.user.role)
     ) return res.status(403).json({ error: 'Forbidden — admin only.' });
+
+    // Employee data isolation: staff can only delete their own rows
+    if (req.user.empId && !['admin','director','fund_manager'].includes(req.user.role)) {
+      if (EMPLOYEE_OWNED_COLS[table]) {
+        const ownerCol = EMPLOYEE_OWNED_COLS[table];
+        const { rows: ownerRows } = await pool.query(
+          `SELECT ${ownerCol} FROM ${table} WHERE ${key} = $1`, [req.params.id]
+        );
+        if (!ownerRows[0] || ownerRows[0][ownerCol] !== req.user.empId) {
+          return res.status(403).json({ error: 'Forbidden — you can only delete your own records.' });
+        }
+      }
+    }
 
     const result = await pool.query(
       `DELETE FROM ${table} WHERE ${key} = $1`,
