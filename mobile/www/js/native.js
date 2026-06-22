@@ -40,7 +40,7 @@
   /* ── Status bar ─────────────────────────────────── */
   async function initStatusBar() {
     if (!P.StatusBar) return;
-    const isDark = document.body.classList.contains('dark-mode');
+    const isDark = !!(document.body && document.body.classList.contains('dark-mode'));
     await P.StatusBar.setStyle({ style: isDark ? 'DARK' : 'LIGHT' });
     // overlay:true = WebView extends behind status bar (edge-to-edge).
     // Android 15 enforces edge-to-edge regardless of overlay:false, so using
@@ -67,7 +67,7 @@
 
   function syncStatusBar() {
     if (!P.StatusBar) return;
-    const isDark = document.body.classList.contains('dark-mode');
+    const isDark = !!(document.body && document.body.classList.contains('dark-mode'));
     P.StatusBar.setStyle({ style: isDark ? 'DARK' : 'LIGHT' }).catch(() => {});
     P.StatusBar.setBackgroundColor({ color: isDark ? '#0f1623' : '#ffffff' }).catch(() => {});
   }
@@ -234,6 +234,7 @@
 
   /* ── Dark-mode status bar sync ──────────────────── */
   function initDarkModeSync() {
+    if (!document.body) return;
     // Observe body class changes triggered by toggleDarkMode()
     const observer = new MutationObserver(() => syncStatusBar());
     observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
@@ -297,5 +298,13 @@
     console.log('[native] SV Capital native bridge initialised');
   }
 
-  init();
+  // Run init only once the DOM (document.body) exists. native.js may be loaded
+  // from <head>, in which case document.body is still null on first execution —
+  // reading document.body.classList there throws and aborts status-bar / safe-area
+  // setup, leaving the topbar clipped behind the system status bar.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
 })();
