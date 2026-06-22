@@ -3658,7 +3658,10 @@ async function submitMaturityInstruction(inv) {
     PORTAL.investments = [];
     await loadPortalData();
     loadMaturity();
-  } catch (e) { Toast.error('Failed to save instruction'); }
+  } catch (e) {
+    console.error('[maturity]', e);
+    Toast.error(e.message || 'Failed to save instruction');
+  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -4237,15 +4240,23 @@ function stmtInfoRow(label, val) {
 
 function getProductInfo(type) {
   const map = {
-    cattle:        { label:'Cattle Investment',        color:'#d97706', bg:'#fef3c7' },
-    solar_7yr:     { label:'Solar Investment (7yr)',   color:'#ea580c', bg:'#ffedd5' },
-    solar_6yr:     { label:'Solar Investment (6yr)',   color:'#ea580c', bg:'#fff7ed' },
-    solar_5yr:     { label:'Solar Investment (5yr)',   color:'#c2410c', bg:'#fff7ed' },
-    solar:         { label:'Solar Investment',         color:'#ea580c', bg:'#ffedd5' },
-    short_term:    { label:'Short Term Investment',    color:'#2563eb', bg:'#dbeafe' },
-    delivery_bike: { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
+    cattle:            { label:'Cattle Investment',        color:'#d97706', bg:'#fef3c7' },
+    solar_7yr:         { label:'Solar Investment (7yr)',   color:'#ea580c', bg:'#ffedd5' },
+    solar_6yr:         { label:'Solar Investment (6yr)',   color:'#ea580c', bg:'#fff7ed' },
+    solar_5yr:         { label:'Solar Investment (5yr)',   color:'#c2410c', bg:'#fff7ed' },
+    solar:             { label:'Solar Investment',         color:'#ea580c', bg:'#ffedd5' },
+    short_term:        { label:'Short Term Investment',    color:'#2563eb', bg:'#dbeafe' },
+    delivery_bike:     { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
+    delivery_bikes:    { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
+    smme:              { label:'SMME Funding',             color:'#059669', bg:'#d1fae5' },
+    smme_funding:      { label:'SMME Funding',             color:'#059669', bg:'#d1fae5' },
+    property:          { label:'Property Investment',      color:'#0891b2', bg:'#cffafe' },
+    fixed_term:        { label:'Fixed Term Investment',    color:'#7c3aed', bg:'#ede9fe' },
   };
-  return map[type] || { label: type || 'Investment', color:'#6b7280', bg:'#f3f4f6' };
+  const hit = map[type?.toLowerCase?.()];
+  if (hit) return hit;
+  const label = type ? type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Investment';
+  return { label, color:'#6b7280', bg:'#f3f4f6' };
 }
 
 function printStatement() {
@@ -4254,12 +4265,7 @@ function printStatement() {
     Toast.error('Please generate a statement first, then print.');
     return;
   }
-  const printWin = window.open('', '_blank', 'width=960,height=800');
-  if (!printWin) {
-    Toast.error('Pop-up blocked. Please allow pop-ups for this site.');
-    return;
-  }
-  printWin.document.write(`<!DOCTYPE html>
+  const _stmtHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -4320,8 +4326,20 @@ function printStatement() {
   </div>
   <div>${doc.innerHTML}</div>
 </body>
-</html>`);
-  printWin.document.close();
+</html>`;
+  const blob = new Blob([_stmtHTML], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+  if (!win) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SVC-Statement-${new Date().toISOString().slice(0,10)}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    Toast.success('Statement downloaded — open in a browser to save as PDF.');
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
 }
 
 /* ── Sub-account deposit ─────────────────────── */
@@ -7073,6 +7091,13 @@ function _kycFileSelected(file) {
   if (nameEl)   nameEl.textContent = file.name;
   const zone = document.getElementById('kycDropZone');
   if (zone) { zone.style.borderColor = '#22c55e'; zone.style.background = 'rgba(34,197,94,0.04)'; }
+  setTimeout(() => {
+    if (document.activeElement && document.activeElement !== document.body) {
+      document.activeElement.blur();
+    }
+    const modalBody = document.querySelector('#kycUploadModal .modal__body');
+    if (modalBody) modalBody.scrollTop = modalBody.scrollHeight;
+  }, 150);
 }
 
 function _kycHandleDrop(event) {

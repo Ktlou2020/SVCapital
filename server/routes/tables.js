@@ -47,7 +47,7 @@ async function _sendPush(investorId, payload) {
 
 /* ─── Input Validation ─── */
 const NUMERIC_FIELDS = new Set(['amount','wallet_balance','total_invested','total_returns','annual_rate','max_capacity','current_invested','recurring_amount','xp_points']);
-const STATUS_FIELDS  = { status: ['active','inactive','suspended','pending','pending_fica','fica_submitted','matured','paid_out','cancelled','rejected','open','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor'], fica_status: ['pending','approved','rejected','not_started','submitted'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','reinvest','pending'] };
+const STATUS_FIELDS  = { status: ['active','inactive','suspended','pending','pending_fica','fica_submitted','matured','paid_out','cancelled','rejected','open','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor','submitted'], fica_status: ['pending','approved','rejected','not_started','submitted'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','payout_custom','reinvest','pending'] };
 
 function validateBody(table, body, isCreate) {
   const errors = [];

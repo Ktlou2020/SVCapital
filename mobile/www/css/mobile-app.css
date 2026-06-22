@@ -970,10 +970,15 @@ body.dark-mode .modal__header::before { background: rgba(255,255,255,0.2) !impor
 }
 
 /* ─────────────────────────────────────────────────────────────
-   26. Font consistency — enforce Poppins over DM Serif Display
-   portal-premium.css applies DM Serif Display !important to financial
-   value elements. Override here (loaded last) to restore Poppins.
+   26. Font — enforce Poppins everywhere (loaded last, beats all prior sheets)
    ───────────────────────────────────────────────────────────── */
+body, button, input, select, textarea, label, p, span, div,
+h1, h2, h3, h4, h5, h6, a, li, td, th, option {
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+/* File inputs: 16px+ prevents iOS WebView from zooming in on focus */
+input[type="file"] { font-size: 16px !important; }
+/* Override DM Serif Display on financial value elements */
 .portfolio-hero__value,
 .ph-stat__value,
 .stat-card__value,
