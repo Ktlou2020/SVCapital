@@ -205,6 +205,7 @@ router.post('/register', async (req, res) => {
       email, password, phone,
       idNumber, province, occupation, role = 'investor',
       riskProfile = 'moderate', referredBy = '', notes = '',
+      termsAccepted = true, ficaConsent = true, popiaAccepted = true,
     } = req.body;
     const firstName = stripHtml(req.body.firstName);
     const lastName  = stripHtml(req.body.lastName);
@@ -260,6 +261,26 @@ router.post('/register', async (req, res) => {
       // Link investor_id on user
       await pool.query('UPDATE users SET investor_id = $1 WHERE id = $2', [invId, newUser.id]);
       newUser.investor_id = invId;
+
+      // Record policy acceptances for compliance audit trail
+      const _acceptedAt = new Date().toISOString();
+      const _ip  = (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || null;
+      const _ua  = req.headers['user-agent'] || null;
+      const _acceptances = [
+        { type: 'terms_of_service', flag: termsAccepted },
+        { type: 'privacy_policy',   flag: termsAccepted },  // bundled in same checkbox
+        { type: 'popia_notice',     flag: popiaAccepted },
+        { type: 'fica_consent',     flag: ficaConsent },
+        { type: 'risk_disclaimer',  flag: true },            // implied at registration
+      ];
+      for (const acc of _acceptances) {
+        if (!acc.flag) continue;
+        pool.query(
+          `INSERT INTO accepted_client_documents (investor_id, document_type, document_version, accepted_at, ip_address, user_agent)
+           VALUES ($1, $2, '1.0', $3, $4, $5)`,
+          [invId, acc.type, _acceptedAt, _ip, _ua]
+        ).catch(() => {});
+      }
 
       // Fire-and-forget welcome email
       setImmediate(() => emailService.sendWelcome({

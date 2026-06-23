@@ -369,6 +369,7 @@ function navigate(view, btnEl) {
     reconciliation: loadReconciliation,
     terms: loadTermsEditor,
     privacy: loadPrivacyEditor,
+    'accepted-docs': loadAcceptedDocuments,
   };
   if (loaders[view]) loaders[view]();
   // Close mobile sidebar after navigation
@@ -6047,6 +6048,140 @@ function exportReconciliationCSV() {
   const a = document.createElement('a'); a.href=url; a.download='reconciliation.csv'; a.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
   Toast.success('Reconciliation CSV exported');
+}
+
+/* ═══════════════════════════════════════════════
+   ACCEPTED CLIENT DOCUMENTS
+   ═══════════════════════════════════════════════ */
+let _acdRows = [];
+
+async function loadAcceptedDocuments() {
+  const tbody  = document.getElementById('acdBody');
+  const footer = document.getElementById('acdFooter');
+  const stats  = document.getElementById('acdStats');
+  if (!tbody) return;
+
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>';
+
+  try {
+    const [docsRes, investorsRes] = await Promise.all([
+      fetch('/api/tables/accepted_client_documents?limit=2000&order=accepted_at.desc', { credentials: 'include' }),
+      Promise.resolve(STATE.investors)
+    ]);
+
+    const docs = docsRes.ok ? await docsRes.json() : [];
+    const investors = Array.isArray(investorsRes) ? investorsRes : STATE.investors || [];
+
+    // Build investor lookup map
+    const invMap = {};
+    investors.forEach(i => { invMap[i.id] = i; });
+
+    // Attach investor info to each doc row
+    _acdRows = (Array.isArray(docs) ? docs : docs.data || []).map(d => ({
+      ...d,
+      investor: invMap[d.investor_id] || null,
+    }));
+
+    // Stats
+    if (stats) {
+      const types = ['terms_of_service','privacy_policy','popia_notice','fica_consent','risk_disclaimer'];
+      const total   = _acdRows.length;
+      const uniqInv = new Set(_acdRows.map(d => d.investor_id)).size;
+      const today   = _acdRows.filter(d => new Date(d.accepted_at) > new Date(Date.now() - 86400000)).length;
+      stats.innerHTML = [
+        { label:'Total Acceptances', value: total,    color:'#ff9b0c' },
+        { label:'Unique Investors',  value: uniqInv,  color:'#22c55e' },
+        { label:'Accepted Today',    value: today,    color:'#2F8C9B' },
+        { label:'Document Types',    value: types.filter(t => _acdRows.some(d => d.document_type === t)).length, color:'#a855f7' },
+      ].map(s => `
+        <div class="stat-card">
+          <div class="stat-card__label">${s.label}</div>
+          <div class="stat-card__value" style="color:${s.color}">${s.value.toLocaleString()}</div>
+        </div>
+      `).join('');
+    }
+
+    // Badge
+    const badge = document.getElementById('acceptedDocsBadge');
+    if (badge) { badge.textContent = _acdRows.length > 99 ? '99+' : _acdRows.length; badge.style.display = _acdRows.length ? 'inline-flex' : 'none'; }
+
+    renderAcceptedDocsTable();
+  } catch (e) {
+    console.error('[loadAcceptedDocuments]', e);
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:#ef4444">Failed to load — ${_esc(e.message)}</td></tr>`;
+  }
+}
+
+const _DOC_TYPE_LABELS = {
+  terms_of_service: 'Terms of Service',
+  privacy_policy:   'Privacy Policy',
+  popia_notice:     'POPIA Notice',
+  fica_consent:     'FICA Consent',
+  risk_disclaimer:  'Risk Disclaimer',
+};
+
+function renderAcceptedDocsTable() {
+  const tbody   = document.getElementById('acdBody');
+  const footer  = document.getElementById('acdFooter');
+  const search  = (document.getElementById('acdSearch')?.value || '').toLowerCase();
+  const typeVal = document.getElementById('acdTypeFilter')?.value || '';
+
+  if (!tbody) return;
+
+  let rows = _acdRows;
+  if (typeVal) rows = rows.filter(d => d.document_type === typeVal);
+  if (search) rows = rows.filter(d => {
+    const name = d.investor ? `${d.investor.first_name} ${d.investor.last_name}`.toLowerCase() : '';
+    const email = d.investor?.email?.toLowerCase() || '';
+    const type  = (d.document_type || '').toLowerCase();
+    return name.includes(search) || email.includes(search) || type.includes(search);
+  });
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:#7a92a8"><i class="fa-solid fa-file-circle-check" style="margin-right:8px"></i>No accepted documents found</td></tr>`;
+    if (footer) footer.textContent = '0 records';
+    return;
+  }
+
+  const docColor = { terms_of_service:'#2F8C9B', privacy_policy:'#22c55e', popia_notice:'#7c3aed', fica_consent:'#ff9b0c', risk_disclaimer:'#ef4444' };
+
+  tbody.innerHTML = rows.slice(0, 500).map(d => {
+    const inv  = d.investor;
+    const name = inv ? `${_esc(inv.first_name)} ${_esc(inv.last_name)}` : `<span style="color:#7a92a8">${_esc(d.investor_id || '—')}</span>`;
+    const email = inv ? `<div style="font-size:0.72rem;color:#7a92a8">${_esc(inv.email || '')}</div>` : '';
+    const col  = docColor[d.document_type] || '#7a92a8';
+    const label = _DOC_TYPE_LABELS[d.document_type] || d.document_type;
+    const acceptedAt = d.accepted_at ? new Date(d.accepted_at).toLocaleString('en-ZA', { dateStyle:'medium', timeStyle:'short' }) : '—';
+    const ua = d.user_agent ? d.user_agent.replace(/\(.*?\)/g,'').replace(/\s{2,}/g,' ').trim().slice(0,40) : '—';
+
+    return `<tr>
+      <td style="white-space:nowrap">${name}${email}</td>
+      <td><span style="background:${col}22;color:${col};padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:700">${label}</span></td>
+      <td style="color:#7a92a8;font-size:0.8rem">${_esc(d.document_version || '1.0')}</td>
+      <td style="font-size:0.82rem;white-space:nowrap">${acceptedAt}</td>
+      <td style="font-size:0.78rem;color:#7a92a8;font-family:monospace">${_esc(d.ip_address || '—')}</td>
+      <td style="font-size:0.72rem;color:#7a92a8;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(d.user_agent || '')}">${_esc(ua)}</td>
+    </tr>`;
+  }).join('');
+
+  if (footer) footer.textContent = `${rows.length} record${rows.length !== 1 ? 's' : ''} · sorted by acceptance date`;
+}
+
+function exportAcceptedDocsCSV() {
+  if (!_acdRows.length) { Toast.warning('No data to export'); return; }
+  const headers = ['Investor ID','First Name','Last Name','Email','Document Type','Version','Accepted At','IP Address'];
+  const esc = v => { const s = String(v ?? ''); return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g,'""')}"` : s; };
+  const data = _acdRows.map(d => [
+    d.investor_id || '', d.investor?.first_name || '', d.investor?.last_name || '', d.investor?.email || '',
+    _DOC_TYPE_LABELS[d.document_type] || d.document_type, d.document_version || '1.0',
+    d.accepted_at ? new Date(d.accepted_at).toISOString() : '', d.ip_address || '',
+  ]);
+  const csv = [headers.map(esc).join(','), ...data.map(r => r.map(esc).join(','))].join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = `accepted-client-documents-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  Toast.success('Accepted documents CSV exported');
 }
 
 /* ═══════════════════════════════════════════════

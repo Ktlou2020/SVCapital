@@ -116,6 +116,10 @@
       <button class="nav-item" data-view="privacy" onclick="navigate('privacy', this)">
         <i class="fa-solid fa-shield-halved"></i> Privacy Policy
       </button>
+      <button class="nav-item" data-view="accepted-docs" onclick="navigate('accepted-docs', this)">
+        <i class="fa-solid fa-file-circle-check"></i> Accepted Client Docs
+        <span class="nav-badge" id="acceptedDocsBadge" style="display:none">0</span>
+      </button>
       <button class="nav-item" data-view="settings" onclick="navigate('settings', this)">
         <i class="fa-solid fa-gear"></i> Settings
       </button>
@@ -1393,6 +1397,61 @@
             </table>
           </div>
           <div class="table-card__footer" id="reconcFooter" style="padding:10px 18px;font-size:12px;color:#7a92a8"></div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: ACCEPTED CLIENT DOCUMENTS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-accepted-docs">
+
+        <!-- Filter bar -->
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px">
+          <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;flex:1;min-width:200px">
+            <i class="fa-solid fa-magnifying-glass" style="color:#7a92a8;font-size:12px"></i>
+            <input type="text" id="acdSearch" placeholder="Search investor name or document type…" style="background:none;border:none;outline:none;color:#e8edf2;font-size:13px;width:100%" oninput="renderAcceptedDocsTable()">
+          </div>
+          <select id="acdTypeFilter" onchange="renderAcceptedDocsTable()" style="background:var(--dark-3);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;color:#e8edf2;font-size:13px;outline:none">
+            <option value="">All document types</option>
+            <option value="terms_of_service">Terms of Service</option>
+            <option value="privacy_policy">Privacy Policy</option>
+            <option value="popia_notice">POPIA Notice</option>
+            <option value="fica_consent">FICA Consent</option>
+            <option value="risk_disclaimer">Risk Disclaimer</option>
+          </select>
+          <button class="btn btn--secondary btn--sm" onclick="exportAcceptedDocsCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+          <button class="btn btn--secondary btn--sm" onclick="loadAcceptedDocuments()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+        </div>
+
+        <!-- Stats strip -->
+        <div class="stats-grid stats-grid--4" style="margin-bottom:18px" id="acdStats"></div>
+
+        <!-- Table -->
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Accepted Client Documents</div>
+              <div class="table-card__sub" id="acdSubtitle">Policy acceptance audit trail — timestamped at signup</div>
+            </div>
+          </div>
+          <div class="table-card__body" style="overflow-x:auto">
+            <table class="data-table" style="table-layout:fixed;width:100%">
+              <thead>
+                <tr>
+                  <th style="width:22%">Investor</th>
+                  <th style="width:20%">Document</th>
+                  <th style="width:10%">Version</th>
+                  <th style="width:20%">Accepted At</th>
+                  <th style="width:18%">IP Address</th>
+                  <th style="width:10%">Browser</th>
+                </tr>
+              </thead>
+              <tbody id="acdBody">
+                <tr><td colspan="6" style="text-align:center;padding:40px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-card__footer" id="acdFooter" style="padding:10px 18px;font-size:12px;color:#7a92a8"></div>
         </div>
       </div>
 

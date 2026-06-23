@@ -4262,7 +4262,7 @@ function buildStatementHTML(opts) {
           <img src="${logoUrl}" alt="" style="height:52px;width:52px;object-fit:contain;display:block">
           <div>
             <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:0.06em;line-height:1">SV CAPITAL</div>
-            <div style="font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:0.12em;margin-top:3px;font-weight:500">INVESTMENTS THAT MAKE SENSE</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:0.12em;margin-top:3px;font-weight:500">VENTURE BEYOND THE ORDINARY</div>
           </div>
         </div>
         <div style="text-align:right">
@@ -5506,17 +5506,56 @@ const POLICY_SECTIONS = [
     color: '#2F8C9B',
     title: 'Terms of Service',
     apiKey: 'terms',
-    staticContent: `<p>By accessing and using the SV Capital investor portal and mobile application, you agree to be bound by these Terms of Service.</p>
-<h4>1. Platform Use</h4>
-<p>The SV Capital platform is available exclusively to registered investors who have completed FICA/KYC verification. You may not share your login credentials with any third party.</p>
-<h4>2. Investment Risk</h4>
-<p>All investments carry risk. SV Capital investments are not guaranteed by the South African government, the Financial Sector Conduct Authority (FSCA), or any deposit insurance scheme. Past performance is not indicative of future results.</p>
-<h4>3. Eligibility</h4>
-<p>Investors must be natural persons or registered legal entities domiciled in South Africa. You must be 18 years or older to invest on your own behalf.</p>
-<h4>4. Fees</h4>
-<p>SV Capital charges no entry fees, exit fees, or monthly platform fees to investors. Revenue is derived from structuring fees charged at the project level, already factored into the quoted return rate.</p>
-<h4>5. Termination</h4>
-<p>SV Capital reserves the right to suspend or terminate any account found to be in breach of these terms, subject to repayment of outstanding capital and accrued returns.</p>`,
+    staticContent: `<p><em>Last updated: June 2025 &nbsp;·&nbsp; Version 1.0</em></p>
+<p>By registering for, accessing, or using the SV Capital investor portal, mobile application, or any associated services (collectively, the "Platform"), you agree to be legally bound by these Terms of Service. If you do not agree, do not use the Platform.</p>
+
+<h4>1. Definitions</h4>
+<p><strong>"SV Capital"</strong> means SV Capital (Pty) Ltd, a company registered in the Republic of South Africa, authorised as a Financial Services Provider under FSP licence number 52449.<br>
+<strong>"Investor"</strong> means any natural person or juristic entity that has registered an account on the Platform.<br>
+<strong>"Investment Pool"</strong> means a structured investment product offered through the Platform, including but not limited to cattle investment cycles, solar energy projects, and short-term business loan products.<br>
+<strong>"FICA"</strong> means the Financial Intelligence Centre Act 38 of 2001 and all regulations promulgated thereunder.<br>
+<strong>"Wallet"</strong> means the virtual account balance held in your investor profile on the Platform, representing funds available for investment.</p>
+
+<h4>2. Eligibility and Registration</h4>
+<p>To register and use the Platform, you must: (a) be a natural person of at least 18 years of age, or a duly authorised representative of a registered juristic entity; (b) be a South African citizen, permanent resident, or a foreign national with a valid passport, eligible to invest under applicable South African law; (c) complete the FICA/KYC identity verification process to the satisfaction of SV Capital; and (d) not be listed on any domestic or international sanctions, terrorist financing, or politically exposed persons lists.</p>
+<p>You may not create more than one individual investor account. Corporate entities may register a separate account distinct from personal accounts. Accounts created fraudulently, or by persons not meeting the above criteria, will be terminated without notice.</p>
+
+<h4>3. Account Security</h4>
+<p>You are solely responsible for maintaining the confidentiality of your login credentials. You must notify SV Capital immediately at <strong>support@svcapital.co.za</strong> if you become aware of any unauthorised access to your account. SV Capital will not be liable for any loss arising from your failure to maintain the security of your credentials. You agree not to share your account with any third party.</p>
+
+<h4>4. Investment Products and Services</h4>
+<p>The Platform provides access to alternative investment products. Each Investment Pool has specific terms including minimum investment amounts, fixed investment terms, target annual return rates, and maturity dates. Return rates are targets and are not guaranteed. SV Capital does not guarantee any specific return on investment.</p>
+<p>Once an investment is placed and confirmed, it is subject to the terms of the specific Investment Pool and may not be withdrawn before the maturity date without incurring an early exit penalty as specified in the Pool's terms. Maturity instructions must be submitted before the maturity date; failure to submit an instruction may result in automatic rollover at SV Capital's discretion.</p>
+
+<h4>5. Deposits and Withdrawals</h4>
+<p>Funds deposited to your Wallet are held in a designated trust or ring-fenced account and are not commingled with SV Capital's operating funds. Deposits are credited to your Wallet upon confirmation of receipt. Withdrawal requests are subject to: (a) verification of your bank account; (b) FICA compliance status; and (c) processing times of 1–5 business days. SV Capital reserves the right to perform enhanced due diligence before processing large withdrawals.</p>
+
+<h4>6. Fees and Charges</h4>
+<p>SV Capital charges no entry fees, exit fees, subscription fees, or management fees directly to investors. Revenue is derived from structuring and arrangement fees charged at the project/pool level, which are embedded in and already deducted from the quoted return rate presented to investors. Any third-party banking or payment processing charges incurred during deposits or withdrawals are for the investor's account.</p>
+
+<h4>7. Prohibited Activities</h4>
+<p>You agree not to: (a) use the Platform for any unlawful purpose, including money laundering, terrorist financing, or tax evasion; (b) attempt to gain unauthorised access to any part of the Platform or its underlying systems; (c) use automated tools, bots, or scripts to access or scrape the Platform; (d) misrepresent your identity or financial standing; (e) engage in any conduct that disrupts or interferes with the Platform's operation; or (f) resell or sub-license access to the Platform without SV Capital's prior written consent.</p>
+
+<h4>8. Intellectual Property</h4>
+<p>All content on the Platform, including software, text, graphics, logos, and data, is owned by or licensed to SV Capital and is protected by applicable intellectual property laws. You are granted a limited, non-exclusive, revocable licence to access and use the Platform for your personal investment purposes only. No licence to reproduce, distribute, or create derivative works is granted.</p>
+
+<h4>9. Limitation of Liability</h4>
+<p>To the fullest extent permitted by law, SV Capital, its directors, officers, employees, and agents shall not be liable for: (a) any indirect, incidental, special, consequential, or punitive damages; (b) loss of profits, revenue, data, or investment returns; (c) damages arising from your reliance on information provided on the Platform; or (d) system downtime, data loss, or security breaches not caused by SV Capital's gross negligence or wilful misconduct. SV Capital's total aggregate liability for any claim shall not exceed the total amount invested by you through the Platform in the 12 months preceding the claim.</p>
+
+<h4>10. Indemnification</h4>
+<p>You agree to indemnify and hold harmless SV Capital and its affiliates from any claims, losses, liabilities, costs, and expenses (including reasonable legal fees) arising from: (a) your use of the Platform; (b) your breach of these Terms; (c) your violation of any applicable law; or (d) any third-party claim arising from your actions on the Platform.</p>
+
+<h4>11. Amendments</h4>
+<p>SV Capital reserves the right to amend these Terms at any time. Material amendments will be communicated to registered investors via email and/or in-app notification at least 30 days before the effective date. Continued use of the Platform after the effective date constitutes acceptance of the amended Terms. If you do not accept the changes, you must cease using the Platform and request account closure.</p>
+
+<h4>12. Termination</h4>
+<p>SV Capital may suspend or terminate your account immediately if: (a) you breach these Terms; (b) we are required to do so by law or regulatory authority; (c) your FICA/KYC verification fails; or (d) we reasonably suspect fraudulent or criminal activity. Upon termination, any active investments will continue to their scheduled maturity, and remaining Wallet balances will be paid to your verified bank account within a reasonable period.</p>
+
+<h4>13. Governing Law and Dispute Resolution</h4>
+<p>These Terms are governed by the laws of the Republic of South Africa. Any dispute arising from these Terms shall first be submitted to mediation. If mediation fails, the dispute shall be referred to arbitration under the rules of the Arbitration Foundation of Southern Africa (AFSA), with proceedings conducted in English in South Africa. Nothing in this clause prevents either party from seeking urgent relief from a court of competent jurisdiction.</p>
+
+<h4>14. Contact</h4>
+<p><strong>SV Capital (Pty) Ltd</strong><br>Email: <strong>legal@svcapital.co.za</strong><br>Support: <strong>support@svcapital.co.za</strong><br>FSP No: 52449 — Regulated by the FSCA</p>`,
   },
   {
     id: 'pol_privacy',
@@ -5524,97 +5563,417 @@ const POLICY_SECTIONS = [
     color: '#22c55e',
     title: 'Privacy Policy',
     apiKey: 'privacy',
-    staticContent: `<p>SV Capital is committed to protecting your personal information in accordance with the Protection of Personal Information Act 4 of 2013 (POPIA).</p>
-<h4>1. Information We Collect</h4>
-<p>We collect your name, identity number, contact details, banking information, and investment activity for the purpose of providing investment services and complying with FICA obligations.</p>
-<h4>2. How We Use Your Information</h4>
-<p>Your personal information is used to manage your investment account, process transactions, comply with legal obligations, and communicate with you about your investments.</p>
-<h4>3. Information Sharing</h4>
-<p>We do not sell your personal information. We may share it with FICA-regulated third parties (e.g., identity verification providers) and regulatory bodies as required by law.</p>
-<h4>4. Data Security</h4>
-<p>We use industry-standard encryption and access controls to protect your data. All communication between the app and our servers is encrypted using TLS.</p>
-<h4>5. Your Rights</h4>
-<p>Under POPIA, you have the right to access, correct, or request deletion of your personal information. Contact our Information Officer at privacy@svcapital.co.za.</p>`,
+    staticContent: `<p><em>Last updated: June 2025 &nbsp;·&nbsp; Version 1.0</em></p>
+<p>SV Capital (Pty) Ltd ("SV Capital", "we", "us", "our") is committed to protecting your personal information and processing it lawfully, in compliance with the Protection of Personal Information Act 4 of 2013 ("POPIA") and all applicable South African data protection legislation.</p>
+
+<h4>1. Responsible Party</h4>
+<p><strong>SV Capital (Pty) Ltd</strong> is the Responsible Party for the personal information you provide. Our Information Officer is responsible for ensuring compliance with POPIA and may be contacted at <strong>privacy@svcapital.co.za</strong>.</p>
+
+<h4>2. Personal Information We Collect</h4>
+<p>We collect the following categories of personal information:</p>
+<ul>
+<li><strong>Identity Information:</strong> Full name, date of birth, South African ID number or passport number and expiry date, nationality, and a copy of your identity document.</li>
+<li><strong>Contact Information:</strong> Email address, mobile number, physical address, and province of residence.</li>
+<li><strong>Financial Information:</strong> Banking details (bank name, account number, account type, branch code), wallet balance, investment history, transaction records, and income/risk profile.</li>
+<li><strong>FICA/KYC Documentation:</strong> Proof of identity, proof of address, and any source-of-funds documentation required for regulatory compliance.</li>
+<li><strong>Device and Technical Information:</strong> IP address, browser type and version, operating system, session data, and usage patterns within the Platform.</li>
+<li><strong>Communication Records:</strong> Support ticket content, email correspondence, and in-app messages.</li>
+<li><strong>Referral Information:</strong> Where you were referred by another investor, their referral code is recorded.</li>
+</ul>
+
+<h4>3. Purposes of Processing</h4>
+<p>We process your personal information for the following purposes:</p>
+<ul>
+<li>Opening and managing your investor account;</li>
+<li>Processing investment transactions, deposits, and withdrawals;</li>
+<li>Complying with FICA, FAIS, POPIA, and all applicable financial services legislation;</li>
+<li>Verifying your identity and conducting risk assessments (KYC/AML);</li>
+<li>Communicating with you about your investments, account status, and platform updates;</li>
+<li>Generating investment certificates, account statements, and tax documentation (IT3b);</li>
+<li>Preventing, detecting, and investigating fraud, money laundering, and other unlawful activity;</li>
+<li>Improving the Platform and its features based on usage analytics;</li>
+<li>Responding to legal or regulatory requests, court orders, or governmental inquiries;</li>
+<li>Sending you transactional notifications and, with your consent, marketing communications.</li>
+</ul>
+
+<h4>4. Lawful Basis for Processing</h4>
+<p>We process your personal information on the following lawful grounds:</p>
+<ul>
+<li><strong>Contractual necessity:</strong> Processing required to fulfil our obligations to you as an investor;</li>
+<li><strong>Legal obligation:</strong> Processing required to comply with FICA, the Income Tax Act, FAIS, and POPIA;</li>
+<li><strong>Consent:</strong> For direct marketing and optional communications, where you have given explicit consent;</li>
+<li><strong>Legitimate interest:</strong> For fraud prevention, security monitoring, and platform improvement, where this does not override your rights.</li>
+</ul>
+
+<h4>5. Sharing of Personal Information</h4>
+<p>We do not sell, rent, or trade your personal information. We may share it with:</p>
+<ul>
+<li><strong>Identity verification providers:</strong> For FICA/KYC checks;</li>
+<li><strong>Payment processors:</strong> For processing deposits and withdrawals;</li>
+<li><strong>Regulatory bodies:</strong> FSCA, FIC, SARS, and other South African authorities as required by law;</li>
+<li><strong>Auditors and legal advisers:</strong> Under binding confidentiality obligations;</li>
+<li><strong>Cloud service providers:</strong> Who process data on our behalf under strict data processing agreements;</li>
+<li><strong>Law enforcement:</strong> Where legally compelled by court order or applicable legislation.</li>
+</ul>
+<p>All third parties are required to maintain the security of your information and to use it only for the purposes for which it was shared.</p>
+
+<h4>6. Cross-Border Transfers</h4>
+<p>Your personal information is primarily processed and stored within the Republic of South Africa. If any processing occurs outside South Africa, we ensure that the recipient country provides adequate protection and that appropriate safeguards (such as data processing agreements or binding corporate rules) are in place, as required by Section 72 of POPIA.</p>
+
+<h4>7. Retention of Personal Information</h4>
+<p>We retain your personal information only for as long as necessary to fulfil the purposes for which it was collected, or as required by law:</p>
+<ul>
+<li>FICA documentation and KYC records: minimum 5 years after account closure, as required by the Financial Intelligence Centre Act;</li>
+<li>Investment records and transaction history: minimum 5 years for tax purposes;</li>
+<li>Account information: retained while your account is active and for up to 7 years after closure;</li>
+<li>Audit logs and access records: 3 years;</li>
+<li>Support and complaint records: 3 years from resolution.</li>
+</ul>
+
+<h4>8. Security Measures</h4>
+<p>We implement appropriate technical and organisational security measures including: TLS encryption for all data in transit; AES-256 encryption for sensitive data at rest; role-based access controls limiting staff access to personal information; multi-factor authentication for admin systems; regular security audits and penetration testing; and incident response procedures. Despite these measures, no system is entirely secure. We will notify you of any security breach that poses a real risk of harm to you, in accordance with POPIA.</p>
+
+<h4>9. Cookies and Tracking</h4>
+<p>The Platform uses cookies and similar technologies for session management, security, and analytics. Strictly necessary cookies cannot be disabled as they are required for the Platform to function. Analytics cookies help us understand usage patterns and are collected in pseudonymised form. You may control cookie preferences via your browser settings; however, disabling certain cookies may affect Platform functionality.</p>
+
+<h4>10. Your Rights as a Data Subject</h4>
+<p>Under POPIA, you have the right to:</p>
+<ul>
+<li><strong>Access:</strong> Request a copy of the personal information we hold about you;</li>
+<li><strong>Correction:</strong> Request that inaccurate or incomplete information be corrected;</li>
+<li><strong>Deletion:</strong> Request deletion of your personal information, subject to our legal retention obligations;</li>
+<li><strong>Objection:</strong> Object to processing based on legitimate interests, including direct marketing;</li>
+<li><strong>Restriction:</strong> Request that processing be restricted in certain circumstances;</li>
+<li><strong>Complaint:</strong> Lodge a complaint with the Information Regulator of South Africa.</li>
+</ul>
+<p>To exercise any of these rights, contact our Information Officer at <strong>privacy@svcapital.co.za</strong>. We will respond within 30 days.</p>
+
+<h4>11. Direct Marketing</h4>
+<p>We may send you information about investment opportunities, platform features, and financial education content. You may opt out of marketing communications at any time by clicking "Unsubscribe" in any email, or by contacting <strong>privacy@svcapital.co.za</strong>. Transactional communications (such as investment confirmations and account statements) cannot be opted out of while your account is active.</p>
+
+<h4>12. Changes to This Policy</h4>
+<p>We may update this Privacy Policy from time to time. Material changes will be communicated via email or in-app notification before they take effect. Continued use of the Platform after the effective date constitutes acknowledgment of the updated Policy.</p>
+
+<h4>13. Contact</h4>
+<p><strong>Information Officer:</strong> privacy@svcapital.co.za<br>
+<strong>General:</strong> info@svcapital.co.za<br>
+<strong>Information Regulator (South Africa):</strong> inforeg.org.za &nbsp;·&nbsp; complaints.IR@justice.gov.za</p>`,
   },
   {
     id: 'pol_popia',
     icon: 'fa-lock',
     color: '#7c3aed',
     title: 'POPIA Notice',
-    staticContent: `<p>This notice is issued in compliance with Section 18 of the Protection of Personal Information Act 4 of 2013 (POPIA).</p>
-<h4>Responsible Party</h4>
-<p>SV Capital (Pty) Ltd, registered in the Republic of South Africa.</p>
-<h4>Information Officer</h4>
-<p>Our designated Information Officer can be reached at: <strong>privacy@svcapital.co.za</strong></p>
-<h4>Purpose of Processing</h4>
-<p>Your personal information is processed for: investor account management, FICA/KYC compliance, transaction processing, regulatory reporting, and investor communications.</p>
-<h4>Lawful Basis</h4>
-<p>Processing is carried out on the basis of contractual necessity, legal obligation (FICA, POPIA), and legitimate interests.</p>
-<h4>Retention Period</h4>
-<p>Investment records and FICA documentation are retained for a minimum of 5 years after account closure, as required by the Financial Intelligence Centre Act.</p>
-<h4>Complaints</h4>
-<p>If you believe your POPIA rights have been violated, you may lodge a complaint with the Information Regulator of South Africa at: <strong>inforeg.org.za</strong></p>`,
+    staticContent: `<p><em>Issued in compliance with Section 18 of the Protection of Personal Information Act 4 of 2013 (POPIA) &nbsp;·&nbsp; Version 1.0</em></p>
+
+<h4>1. Responsible Party</h4>
+<p><strong>SV Capital (Pty) Ltd</strong><br>
+Financial Services Provider · FSP No. 52449<br>
+Republic of South Africa<br>
+Email: <strong>info@svcapital.co.za</strong></p>
+
+<h4>2. Information Officer</h4>
+<p>The designated Information Officer (IO) responsible for ensuring SV Capital's compliance with POPIA may be contacted at: <strong>privacy@svcapital.co.za</strong>. The IO is registered with the Information Regulator of South Africa in accordance with Section 55 of POPIA.</p>
+
+<h4>3. Categories of Personal Information Processed</h4>
+<p>SV Capital processes the following categories of personal information:</p>
+<ul>
+<li><strong>Identifying information:</strong> Full legal name, date of birth, RSA ID number or passport details, photograph (where required for KYC);</li>
+<li><strong>Contact details:</strong> Email address, mobile number, physical and postal address;</li>
+<li><strong>Financial information:</strong> Bank account details, investment transactions, wallet balance, income level, risk profile;</li>
+<li><strong>FICA/KYC documentation:</strong> Certified copies of identity documents, proof of address, source-of-funds declarations;</li>
+<li><strong>Technical data:</strong> Device identifiers, IP addresses, browser information, usage logs;</li>
+<li><strong>Special categories:</strong> We do not intentionally collect special personal information as defined in Section 26 of POPIA (e.g., health, religious, or racial information).</li>
+</ul>
+
+<h4>4. Purposes of Processing</h4>
+<p>Your personal information is processed for the following specific, explicit, and legitimate purposes:</p>
+<ul>
+<li>Investor onboarding and account management;</li>
+<li>Identity verification and FICA/KYC compliance;</li>
+<li>Anti-money laundering (AML) and counter-terrorist financing (CTF) screening;</li>
+<li>Processing investment transactions and generating returns;</li>
+<li>Producing investment certificates, account statements, and IT3(b) tax certificates;</li>
+<li>Communicating investment performance, maturity notices, and regulatory updates;</li>
+<li>Complying with FSCA reporting obligations, SARS requirements, and FIC directives;</li>
+<li>Fraud prevention and platform security;</li>
+<li>Resolving complaints and support queries.</li>
+</ul>
+
+<h4>5. Lawful Grounds for Processing</h4>
+<p>Processing is carried out on the following grounds as contemplated in Section 11 of POPIA:</p>
+<ul>
+<li><strong>Consent (s.11(1)(a)):</strong> Where you have given specific, informed consent, including for direct marketing;</li>
+<li><strong>Contract (s.11(1)(b)):</strong> Where processing is necessary for the performance of our investment services agreement with you;</li>
+<li><strong>Legal obligation (s.11(1)(c)):</strong> Where we are required to process information to comply with FICA, FAIS, POPIA, and other applicable legislation;</li>
+<li><strong>Legitimate interest (s.11(1)(f)):</strong> For fraud prevention, security monitoring, and platform improvement, provided this does not override your rights and interests.</li>
+</ul>
+
+<h4>6. Sources of Personal Information</h4>
+<p>Personal information is collected directly from you during registration and throughout your use of the Platform. Additional information may be sourced from: identity verification bureaus (for FICA checks), credit bureaus (for risk assessment), payment processors (for banking verification), and public registers (e.g., CIPC for corporate investor verification).</p>
+
+<h4>7. Recipients of Personal Information</h4>
+<p>Your personal information may be shared with the following recipients:</p>
+<ul>
+<li>Identity and KYC verification service providers;</li>
+<li>Payment gateway providers and banks;</li>
+<li>The Financial Intelligence Centre (FIC), FSCA, SARS, and other regulatory bodies as required by law;</li>
+<li>Professional advisers (attorneys, auditors, compliance officers) under confidentiality obligations;</li>
+<li>Cloud infrastructure and data hosting providers under data processing agreements;</li>
+<li>Law enforcement agencies pursuant to valid legal process.</li>
+</ul>
+
+<h4>8. Cross-Border Transfers of Personal Information</h4>
+<p>In accordance with Section 72 of POPIA, personal information will only be transferred to a third party in a foreign country if: (a) the recipient is subject to a law, binding corporate rules, or binding agreement that provides an adequate level of protection substantially similar to POPIA; or (b) you have consented to the transfer. We will not transfer your information to jurisdictions that do not provide adequate protection without appropriate safeguards.</p>
+
+<h4>9. Retention Periods</h4>
+<table style="width:100%;border-collapse:collapse;font-size:0.87rem;margin-bottom:12px">
+<thead><tr style="background:rgba(0,0,0,0.05)"><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Category</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Retention Period</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Legal Basis</th></tr></thead>
+<tbody>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">FICA/KYC documentation</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">5 years after account closure</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">FIC Act s.23</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Investment and transaction records</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">5 years (tax purposes)</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Income Tax Act</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Account and profile data</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Duration of account + 7 years</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">FAIS Act</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Audit and access logs</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">3 years</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Legitimate interest</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Support and complaint records</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">3 years from resolution</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Legitimate interest</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Policy acceptance records</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Duration of account + 7 years</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Legal obligation / evidence</td></tr>
+</tbody>
+</table>
+
+<h4>10. Your Rights as a Data Subject</h4>
+<p>Sections 23–25 of POPIA afford you the following rights, which you may exercise by contacting our Information Officer:</p>
+<ul>
+<li><strong>Right of access (s.23):</strong> To request confirmation of whether we hold your personal information and to obtain a copy thereof;</li>
+<li><strong>Right to correction or deletion (s.24):</strong> To request that inaccurate, incomplete, or outdated information be corrected or destroyed;</li>
+<li><strong>Right to object (s.11(3)):</strong> To object to the processing of your personal information on the ground of legitimate interests or for direct marketing purposes;</li>
+<li><strong>Right to restriction:</strong> To request that processing be restricted in certain circumstances (e.g., while accuracy of data is disputed);</li>
+<li><strong>Right to complain:</strong> To lodge a complaint with the Information Regulator of South Africa.</li>
+</ul>
+<p>Requests will be responded to within 30 days. We may charge a reasonable fee for manifestly unfounded or excessive requests.</p>
+
+<h4>11. Objection to Direct Marketing</h4>
+<p>In terms of Section 69 of POPIA, you have the right to object, at any time, to your personal information being used for direct marketing purposes. To opt out, email <strong>privacy@svcapital.co.za</strong> or use the unsubscribe link in any marketing email.</p>
+
+<h4>12. Complaints to the Information Regulator</h4>
+<p>If you believe that SV Capital has infringed your rights under POPIA, you may lodge a complaint with:</p>
+<p><strong>The Information Regulator (South Africa)</strong><br>
+Website: <strong>inforeg.org.za</strong><br>
+Email: <strong>complaints.IR@justice.gov.za</strong><br>
+PAIAComplaints.IR@justice.gov.za (for PAIA complaints)</p>`,
   },
   {
     id: 'pol_risk',
     icon: 'fa-triangle-exclamation',
     color: '#d97706',
     title: 'Risk Disclaimer',
-    staticContent: `<p><strong>Important: Please read this disclaimer carefully before investing.</strong></p>
-<h4>General Risk Warning</h4>
-<p>All investments involve risk. The value of your investment can go down as well as up, and you may receive less than you invested. SV Capital investments are not deposits and are not covered by any government guarantee or deposit protection scheme.</p>
-<h4>Alternative Investment Risk</h4>
-<p>The products offered on this platform are alternative investments with specific risk characteristics including, but not limited to:</p>
-<ul>
-<li><strong>Liquidity Risk:</strong> Investments have fixed terms and cannot be redeemed early without penalty.</li>
-<li><strong>Operational Risk:</strong> The performance of underlying assets (cattle, solar installations, loans) may be affected by factors outside SV Capital's control.</li>
-<li><strong>Market Risk:</strong> Commodity prices (e.g., beef) may fluctuate, affecting returns on cattle products.</li>
-<li><strong>Credit Risk:</strong> Business loan borrowers may default, although loans are secured against collateral.</li>
-</ul>
-<h4>Suitability</h4>
-<p>These investments may not be suitable for all investors. Before investing, consider your investment objectives, financial situation, and risk tolerance. Consult a registered financial adviser if you are unsure.</p>
-<h4>No Advice</h4>
-<p>Nothing on this platform constitutes financial advice. SV Capital provides information only. Investment decisions are made solely by the investor.</p>`,
+    staticContent: `<p><em>Version 1.0 &nbsp;·&nbsp; Effective June 2025</em></p>
+<p><strong>Please read this Risk Disclaimer carefully before making any investment decision. By investing through the SV Capital Platform, you acknowledge that you have read, understood, and accepted the risks described herein.</strong></p>
+
+<h4>1. General Investment Risk Warning</h4>
+<p>All investments involve risk. The value of your investment, and any returns derived from it, may go down as well as up. You may receive back less than the amount you invested. Past performance of any Investment Pool or SV Capital's overall portfolio is not a reliable indicator of future performance. No investment return is guaranteed.</p>
+
+<h4>2. Not a Deposit</h4>
+<p>Investments made through SV Capital are not deposits and are not protected by any deposit insurance scheme, government guarantee, or scheme of arrangement under the Deposit Guarantee Scheme or any equivalent. Your invested capital is at risk.</p>
+
+<h4>3. Alternative Investment Risk</h4>
+<p>The products offered on this Platform are alternative investments — they differ significantly from listed equities, bonds, and traditional unit trusts. Alternative investments carry specific and heightened risks, including reduced regulatory oversight of underlying assets, less frequent valuation, and greater complexity. You should understand the nature of each Investment Pool before committing funds.</p>
+
+<h4>4. Liquidity Risk</h4>
+<p>Investment Pools have fixed terms. Once an investment is placed, your capital is locked in for the duration of the selected term. Early exit is not guaranteed and, where permitted, will attract an early exit penalty as specified in the Pool terms. You should only invest funds that you can afford to have unavailable for the full investment term. There is no secondary market for your investment interest.</p>
+
+<h4>5. Credit and Default Risk</h4>
+<p>For loan-based products, there is a risk that underlying borrowers may default on their obligations. While SV Capital structures loans with security and collateral where possible, the realisation of security may not fully recover your capital in all circumstances. SV Capital does not guarantee the creditworthiness of any borrower.</p>
+
+<h4>6. Commodity and Market Risk</h4>
+<p>Cattle investment products are subject to commodity risk. Live cattle prices are determined by market forces including supply and demand, feed costs, disease outbreaks, export restrictions, and consumer preferences. Adverse movements in beef prices may reduce or eliminate projected returns. SV Capital does not control commodity markets and cannot guarantee the price at which cattle will be sold.</p>
+
+<h4>7. Operational Risk (Cattle)</h4>
+<p>Cattle farming involves operational risks including, but not limited to: disease and mortality (including foot-and-mouth disease, anthrax, and other livestock diseases); drought and adverse weather affecting grazing and water availability; theft and security incidents; veterinary costs exceeding projections; and challenges in sourcing quality stock. Although SV Capital employs experienced farm managers and carries appropriate insurance where available, these risks cannot be entirely eliminated.</p>
+
+<h4>8. Renewable Energy and Solar Risk</h4>
+<p>Solar energy projects are subject to risks including: weather variability and reduced solar irradiance reducing output below projections; equipment failure or degradation; grid connectivity issues and load-shedding impacts; changes to government feed-in tariff or energy policy; counterparty risk of energy off-takers; and regulatory changes to the energy sector. Returns on solar projects are partly dependent on energy production volumes and prevailing energy tariffs.</p>
+
+<h4>9. Regulatory and Compliance Risk</h4>
+<p>The regulatory environment for alternative investments and financial technology in South Africa is evolving. Changes in legislation (including FICA, FAIS, or tax law), regulatory interpretation, or enforcement policy could affect SV Capital's ability to offer certain products or could impose additional compliance costs. SV Capital may be required to make changes to its products or operations in response to regulatory developments, which could affect investor returns.</p>
+
+<h4>10. Technology and Cybersecurity Risk</h4>
+<p>The Platform relies on technology infrastructure that may be subject to downtime, technical failures, data breaches, or cyberattacks. While SV Capital implements industry-standard security measures, no system is completely immune to security incidents. A technology failure could result in temporary inability to access your account or execute transactions. SV Capital maintains business continuity and disaster recovery plans to minimise the impact of such events.</p>
+
+<h4>11. Inflation Risk</h4>
+<p>The purchasing power of your returns may be eroded by inflation. If the rate of inflation exceeds the return rate of your investment, the real value of your returns will be negative even if the nominal return is positive.</p>
+
+<h4>12. Concentration Risk</h4>
+<p>Investing a significant portion of your total investable assets in any single Investment Pool or product type increases concentration risk. SV Capital recommends that you diversify your investments across different asset classes and Pool types to reduce the impact of any single investment's underperformance.</p>
+
+<h4>13. Suitability Warning</h4>
+<p>Alternative investments may not be suitable for all investors. These products are designed for investors who: understand the risks of illiquid, fixed-term investments; have an investment horizon that matches the product term; can afford to lose some or all of their invested capital; and have adequate financial resources for their day-to-day needs beyond the amounts invested. Before investing, carefully consider your investment objectives, risk tolerance, financial situation, and need for liquidity. If you are unsure, seek independent financial advice from a registered financial adviser authorised under FAIS.</p>
+
+<h4>14. No Financial Advice</h4>
+<p>Nothing on this Platform, including product descriptions, return rate projections, investment summaries, or communications from SV Capital staff (unless expressly provided by a registered financial adviser in terms of an advisory mandate), constitutes financial, investment, legal, or tax advice. Information is provided for general informational purposes only. Investment decisions are the sole responsibility of the investor.</p>
+
+<h4>15. Tax Considerations</h4>
+<p>Returns on investments may be subject to South African income tax, capital gains tax, or withholding tax depending on your tax status and the nature of the return. Interest income earned through the Platform must be declared in your annual tax return (ITR12). SV Capital issues IT3(b) certificates annually to assist with this. SV Capital does not provide tax advice; consult a registered tax practitioner for guidance specific to your circumstances.</p>
+
+<h4>16. Forward-Looking Statements</h4>
+<p>Any projected return rates, indicative timelines, or performance forecasts presented on this Platform are forward-looking statements based on current market conditions and assumptions. They do not constitute a guarantee or promise of future results. Actual outcomes may differ materially from projections.</p>`,
   },
   {
     id: 'pol_paia',
     icon: 'fa-folder-open',
     color: '#0891b2',
     title: 'PAIA Manual',
-    staticContent: `<p>This manual is published in terms of Section 51 of the Promotion of Access to Information Act 2 of 2000 (PAIA).</p>
-<h4>Company Details</h4>
-<p><strong>Company:</strong> SV Capital (Pty) Ltd<br>
-<strong>Registration No:</strong> Available on request<br>
-<strong>Physical Address:</strong> South Africa<br>
-<strong>Email:</strong> info@svcapital.co.za</p>
-<h4>Information Officer</h4>
-<p>Requests for access to records held by SV Capital must be directed to our Information Officer at: <strong>privacy@svcapital.co.za</strong></p>
-<h4>Records Available Without Request</h4>
-<p>The following records are automatically available to investors via the portal: account statements, transaction history, investment certificates, and FICA/KYC submission status.</p>
-<h4>How to Request Records</h4>
-<p>Submit a written request to our Information Officer including: your full name and identity number, a description of the record requested, and the reason for the request. We will respond within 30 days as required by PAIA.</p>
-<h4>Fees</h4>
-<p>A request fee of R35 applies per PAIA request (waived for personal information requests). Reproduction fees may apply for large records.</p>`,
+    staticContent: `<p><em>Published in terms of Section 51 of the Promotion of Access to Information Act 2 of 2000 (PAIA) &nbsp;·&nbsp; Version 1.0 &nbsp;·&nbsp; June 2025</em></p>
+
+<h4>1. Contact Details of SV Capital</h4>
+<p><strong>Legal Name:</strong> SV Capital (Pty) Ltd<br>
+<strong>Nature of Business:</strong> Alternative Investment Platform, licensed Financial Services Provider<br>
+<strong>FSP Number:</strong> 52449<br>
+<strong>Email:</strong> info@svcapital.co.za<br>
+<strong>PAIA Requests:</strong> privacy@svcapital.co.za<br>
+<strong>Registered Country:</strong> Republic of South Africa</p>
+
+<h4>2. Information Officer</h4>
+<p>The Information Officer is responsible for administering all PAIA requests on behalf of SV Capital.</p>
+<p><strong>Contact:</strong> privacy@svcapital.co.za<br>
+<strong>Postal:</strong> Marked "PAIA Request — Confidential" to the registered address of SV Capital (Pty) Ltd</p>
+<p>The Information Officer is registered with the Information Regulator of South Africa in accordance with POPIA s.55.</p>
+
+<h4>3. Guide on How to Access Information</h4>
+<p>The South African Human Rights Commission (SAHRC) has published a guide to assist persons who wish to access information held by private or public bodies. This guide is available on the SAHRC website at <strong>sahrc.org.za</strong>. SV Capital will, on request, provide a copy of or direct you to this guide.</p>
+
+<h4>4. Records Available Without Submitting a PAIA Request</h4>
+<p>The following records are automatically available to registered investors through the Platform without requiring a formal PAIA request:</p>
+<ul>
+<li>Your investor account profile and contact details;</li>
+<li>Account statements and transaction history;</li>
+<li>Investment certificates and confirmation documents;</li>
+<li>IT3(b) interest income certificates;</li>
+<li>FICA/KYC submission status and uploaded documentation (your own only);</li>
+<li>Support ticket history;</li>
+<li>Accepted policy documents and timestamps;</li>
+<li>Platform policies (Terms of Service, Privacy Policy, POPIA Notice, Risk Disclaimer, this PAIA Manual, and the Complaints Procedure).</li>
+</ul>
+
+<h4>5. Records Available on Request (Subject to PAIA)</h4>
+<p>The following categories of records may be made available on formal PAIA request, subject to the grounds for refusal set out in PAIA:</p>
+<ul>
+<li>Internal audit records relating to your account (where refusal grounds do not apply);</li>
+<li>Communications records between you and SV Capital staff;</li>
+<li>Records relating to a specific investment decision affecting your account;</li>
+<li>Any other record in which you have a personal interest.</li>
+</ul>
+<p>Records that do not pertain to you personally, or that are subject to grounds for refusal under PAIA (including records of third parties, commercially sensitive information, and legally privileged records), will not be disclosed without the consent of the affected party or a court order.</p>
+
+<h4>6. Grounds for Refusal</h4>
+<p>In terms of PAIA, SV Capital may refuse to grant access to records on the following grounds:</p>
+<ul>
+<li>Records containing personal information of third parties who have not consented to disclosure;</li>
+<li>Commercially sensitive information, including trade secrets, financial models, or proprietary investment strategies;</li>
+<li>Legally privileged communications (attorney-client privilege);</li>
+<li>Records that, if disclosed, could jeopardise a criminal investigation or legal proceedings;</li>
+<li>Records whose disclosure would be contrary to any binding agreement or court order.</li>
+</ul>
+
+<h4>7. How to Submit a PAIA Request</h4>
+<p>To request access to records held by SV Capital, you must:</p>
+<ol>
+<li>Complete Form C as prescribed by the Regulations under PAIA (available at <strong>justice.gov.za</strong>) or submit a written request containing the same information;</li>
+<li>Clearly identify the record(s) you wish to access;</li>
+<li>Provide a copy of your identity document;</li>
+<li>State the form in which you wish to receive the record (electronic copy, printed copy, or inspection);</li>
+<li>If requesting records about a third party, provide reasons and confirm you are authorised to do so;</li>
+<li>Submit the request to: <strong>privacy@svcapital.co.za</strong>, marked "PAIA Request".</li>
+</ol>
+
+<h4>8. Fees</h4>
+<table style="width:100%;border-collapse:collapse;font-size:0.87rem;margin-bottom:12px">
+<thead><tr style="background:rgba(0,0,0,0.05)"><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Fee Type</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Amount</th></tr></thead>
+<tbody>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Request fee (payable on submission)</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">R35.00</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Request for own personal information</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Waived</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Printed copies (A4 per page)</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">R1.10 per page</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Electronic copy (per megabyte)</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">R7.50 per MB</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Deposit (if reproduction fee exceeds R100)</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">1/3 of total fee upfront</td></tr>
+</tbody>
+</table>
+<p>Fees are prescribed in terms of the PAIA regulations and are subject to change by the Information Regulator.</p>
+
+<h4>9. Response Timeframes</h4>
+<p>SV Capital will respond to a PAIA request within <strong>30 days</strong> of receipt of a complete request and payment of the request fee. In complex cases, this period may be extended by a further 30 days with notice to the requester. If SV Capital fails to respond within the required period, this is deemed a refusal and may be appealed to the Information Regulator.</p>
+
+<h4>10. Internal Appeal and External Remedies</h4>
+<p>If your request is refused, you may:</p>
+<ul>
+<li>Lodge an internal appeal in writing to the Information Officer within 60 days of the refusal, setting out the grounds of appeal;</li>
+<li>Apply to the Information Regulator for a review of the refusal (at <strong>inforeg.org.za</strong>);</li>
+<li>Apply to a court of competent jurisdiction for appropriate relief.</li>
+</ul>
+
+<h4>11. Date of Compilation</h4>
+<p>This PAIA Manual was compiled in June 2025 and will be updated as required by law or as SV Capital's operations change. The current version is available on the Platform and will be provided free of charge upon request.</p>`,
   },
   {
     id: 'pol_complaints',
     icon: 'fa-comment-exclamation',
     color: '#ef4444',
     title: 'Complaints Procedure',
-    staticContent: `<p>SV Capital is committed to resolving investor complaints promptly and fairly.</p>
-<h4>Step 1: Log a Support Ticket</h4>
-<p>Contact us through the Support section of this portal. Describe your complaint clearly and include any relevant reference numbers or dates. We aim to respond within 2 business days.</p>
-<h4>Step 2: Escalation</h4>
-<p>If your complaint is not resolved within 10 business days, you may escalate it to our Compliance Officer at: <strong>compliance@svcapital.co.za</strong></p>
-<h4>Step 3: External Resolution</h4>
-<p>If SV Capital is unable to resolve your complaint to your satisfaction, you may refer the matter to:</p>
+    staticContent: `<p><em>Version 1.0 &nbsp;·&nbsp; Effective June 2025</em></p>
+<p>SV Capital (Pty) Ltd is committed to providing high-quality investment services and resolving all investor complaints promptly, fairly, and transparently. This procedure sets out how to lodge a complaint and what you can expect from us.</p>
+
+<h4>1. Scope</h4>
+<p>This Complaints Procedure applies to all complaints received from registered investors relating to: investment products offered on the Platform; account management and transactions; FICA/KYC processes; communications from SV Capital; data privacy and POPIA matters; and the conduct of SV Capital staff or representatives.</p>
+
+<h4>2. What Constitutes a Complaint</h4>
+<p>A complaint is any expression of dissatisfaction by an investor regarding SV Capital's products, services, conduct, or failure to act. Complaints are distinct from general queries (requests for information or assistance) and service requests (routine account actions). If in doubt, submit your concern as a complaint and SV Capital will categorise it appropriately.</p>
+
+<h4>3. How to Lodge a Complaint</h4>
+<p>You may lodge a complaint through any of the following channels:</p>
 <ul>
-<li><strong>FSCA:</strong> Financial Sector Conduct Authority — fsca.co.za</li>
-<li><strong>FAIS Ombud:</strong> For complaints related to financial advice — faisombud.co.za</li>
-<li><strong>Information Regulator:</strong> For POPIA/PAIA complaints — inforeg.org.za</li>
+<li><strong>In-Platform:</strong> Navigate to the Support section of this portal and submit a support ticket with category "Complaint";</li>
+<li><strong>Email:</strong> Send a written complaint to <strong>complaints@svcapital.co.za</strong>;</li>
+<li><strong>Compliance Officer:</strong> For escalated or serious complaints, email <strong>compliance@svcapital.co.za</strong>.</li>
 </ul>
-<h4>What We Will Do</h4>
-<p>We will acknowledge all complaints within 24 hours, investigate thoroughly, and provide a written response within 10 business days. Where a complaint is upheld, we will take corrective action promptly.</p>`,
+<p>When lodging a complaint, please include: your full name and investor ID; a clear description of the complaint and the events giving rise to it; the date(s) of the relevant events; any relevant reference numbers, transaction IDs, or correspondence; and the outcome or remedy you are seeking.</p>
+
+<h4>4. Acknowledgement</h4>
+<p>SV Capital will acknowledge all complaints within <strong>1 business day</strong> of receipt. The acknowledgement will confirm receipt, assign a complaint reference number, and provide the name and contact details of the person handling your complaint.</p>
+
+<h4>5. Investigation and Resolution (Stage 1)</h4>
+<p>Your complaint will be investigated by the relevant team within SV Capital. We aim to provide a full written response within <strong>5 business days</strong> of acknowledging the complaint. Where the complaint requires a more complex investigation, we will notify you of the extended timeline and provide weekly progress updates. In all cases, a final response will be provided within <strong>10 business days</strong> of acknowledgement, unless agreed otherwise with you in writing.</p>
+<p>The response will set out: a summary of your complaint as understood by SV Capital; the findings of our investigation; our decision (uphold, partially uphold, or reject) and the reasons therefor; any remedial action to be taken; and information about your escalation options if you are dissatisfied.</p>
+
+<h4>6. Escalation (Stage 2)</h4>
+<p>If you are not satisfied with the Stage 1 response, you may escalate your complaint to the Compliance Officer at <strong>compliance@svcapital.co.za</strong> within <strong>30 days</strong> of receiving the Stage 1 response. Your escalation should set out: the original complaint reference number; why you are dissatisfied with the Stage 1 response; and the outcome you are seeking. The Compliance Officer will conduct an independent review and provide a final internal response within <strong>10 business days</strong>.</p>
+
+<h4>7. External Dispute Resolution (Stage 3)</h4>
+<p>If SV Capital is unable to resolve your complaint to your satisfaction through our internal process, you may refer the matter to an appropriate external body:</p>
+<ul>
+<li><strong>Financial Sector Conduct Authority (FSCA):</strong> For complaints relating to market conduct, FAIS, and financial services regulation. Website: <strong>fsca.co.za</strong> &nbsp;·&nbsp; Tel: 0800 110 443</li>
+<li><strong>FAIS Ombud:</strong> For complaints relating to financial advice received from a financial adviser or intermediary. Website: <strong>faisombud.co.za</strong> &nbsp;·&nbsp; Tel: 012 762 5000</li>
+<li><strong>Information Regulator:</strong> For complaints specifically relating to POPIA or PAIA rights. Website: <strong>inforeg.org.za</strong> &nbsp;·&nbsp; Email: complaints.IR@justice.gov.za</li>
+<li><strong>National Consumer Commission (NCC):</strong> For complaints relating to consumer rights under the Consumer Protection Act. Website: <strong>thencc.org.za</strong></li>
+</ul>
+<p>You are not required to exhaust our internal procedure before referring a complaint to an external body, but we encourage you to do so as many matters can be resolved more efficiently through direct engagement.</p>
+
+<h4>8. Timeframe Summary</h4>
+<table style="width:100%;border-collapse:collapse;font-size:0.87rem;margin-bottom:12px">
+<thead><tr style="background:rgba(0,0,0,0.05)"><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Stage</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Action</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Timeframe</th></tr></thead>
+<tbody>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Receipt</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Acknowledgement issued</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">1 business day</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Stage 1</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Full written response</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">5–10 business days</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Stage 2</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Compliance Officer review</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">10 business days</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Stage 3</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">External referral</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">As per regulator</td></tr>
+</tbody>
+</table>
+
+<h4>9. Record Keeping</h4>
+<p>SV Capital maintains a complaints register as required by the FSCA and FAIS. All complaints are recorded with their reference number, date received, nature of complaint, response provided, and resolution outcome. This register is available for inspection by the FSCA upon request. Complaints records are retained for 5 years.</p>
+
+<h4>10. Contact Details</h4>
+<p><strong>General Support:</strong> support@svcapital.co.za<br>
+<strong>Complaints:</strong> complaints@svcapital.co.za<br>
+<strong>Compliance Officer:</strong> compliance@svcapital.co.za<br>
+<strong>Information Officer (POPIA/PAIA):</strong> privacy@svcapital.co.za<br>
+<strong>Regulator:</strong> FSCA · FSP No. 52449 · fsca.co.za</p>`,
   },
 ];
 

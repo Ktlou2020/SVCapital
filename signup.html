@@ -2514,11 +2514,14 @@ async function _doSubmit(skippedFica) {
       email, password, firstName, lastName,
       phone: fullPhone,
       idNumber, province,
-      occupation:  '',
-      role:        'investor',
-      referredBy:  referral || '',
-      riskProfile: selectedRisk,
-      notes:       `${docNotes} Experience: ${v('investExp')}. Heard: ${v('hearAbout')}. FICA docs: ${uploadedDocs.join(', ') || 'none'}.`,
+      occupation:   '',
+      role:         'investor',
+      referredBy:   referral || '',
+      riskProfile:  selectedRisk,
+      notes:        `${docNotes} Experience: ${v('investExp')}. Heard: ${v('hearAbout')}. FICA docs: ${uploadedDocs.join(', ') || 'none'}.`,
+      termsAccepted: !!(document.getElementById('termsCheck')?.checked),
+      ficaConsent:   !!(document.getElementById('ficaConsentCheck')?.checked),
+      popiaAccepted: !!(document.getElementById('popiaCheck')?.checked),
     });
 
     const assignedId = regData.user.investorId;
