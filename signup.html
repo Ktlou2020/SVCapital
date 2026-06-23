@@ -1958,34 +1958,40 @@ function toggleCitizenship(type) {
   const formSteps     = document.getElementById('formSteps');
   const step1         = document.getElementById('step1');
 
+  if (!isSA) {
+    // International users see the waitlist panel only — registration not yet available
+    if (waitlistPanel) waitlistPanel.style.display = 'block';
+    if (formSteps) formSteps.style.display = 'none';
+    if (step1) step1.style.display = 'none';
+    hideError();
+    return;
+  }
+
+  // SA / resident: show the normal registration form
   if (waitlistPanel) waitlistPanel.style.display = 'none';
   if (formSteps) formSteps.style.display = '';
   if (step1) step1.style.display = 'block';
 
-  document.getElementById('infoStripSA').style.display     = isSA ? '' : 'none';
-  document.getElementById('infoStripIntl').style.display   = isSA ? 'none' : 'flex';
-  document.getElementById('saIdGroup').style.display       = isSA ? '' : 'none';
-  document.getElementById('passportGroup').style.display   = isSA ? 'none' : 'block';
-  document.getElementById('saProvinceGroup').style.display = isSA ? '' : 'none';
-  document.getElementById('intlRegionGroup').style.display = isSA ? 'none' : '';
+  document.getElementById('infoStripSA').style.display     = '';
+  document.getElementById('infoStripIntl').style.display   = 'none';
+  document.getElementById('saIdGroup').style.display       = '';
+  document.getElementById('passportGroup').style.display   = 'none';
+  document.getElementById('saProvinceGroup').style.display = '';
+  document.getElementById('intlRegionGroup').style.display = 'none';
 
-  document.getElementById('phoneDialCode').value = isSA ? '+27' : '+44';
+  document.getElementById('phoneDialCode').value = '+27';
   const ph = document.getElementById('phone');
-  if (ph) ph.placeholder = isSA ? '71 234 5678' : '1234 5678';
+  if (ph) ph.placeholder = '71 234 5678';
   const hint = document.getElementById('phoneHint');
-  if (hint) hint.textContent = isSA
-    ? 'Enter your number without the leading 0 — e.g. 71 234 5678'
-    : 'Enter your local number without country code';
+  if (hint) hint.textContent = 'Enter your number without the leading 0 — e.g. 71 234 5678';
 
   const ct = document.getElementById('ficaConsentText');
-  if (ct) ct.textContent = isSA
-    ? 'I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.'
-    : 'I confirm that I am an international client, and I consent to passport-based identity verification and compliance screening required by SV Capital.';
+  if (ct) ct.textContent = 'I confirm that I am a South African citizen or permanent resident, and I consent to FICA / FAIS identity verification as required by the Financial Intelligence Centre Act.';
 
   const idVal = document.getElementById('idValidation');
   if (idVal) { idVal.style.display = 'none'; idVal.innerHTML = ''; }
   const idHint = document.getElementById('idHint');
-  if (idHint) idHint.style.display = isSA ? '' : 'none';
+  if (idHint) idHint.style.display = '';
 
   hideError();
   persistDraft();

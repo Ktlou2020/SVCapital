@@ -344,7 +344,7 @@ function navigate(view, btnEl) {
     transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
     auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications', aml: 'AML Compliance Review',
     migrate: 'Data Migration', compliance: 'Compliance Calendar', reconciliation: 'Financial Reconciliation',
-    terms: 'Terms of Use', privacy: 'Privacy Policy &amp; POPIA Notice'
+    terms: 'Terms of Use', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest'
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -371,6 +371,7 @@ function navigate(view, btnEl) {
     terms: loadTermsEditor,
     privacy: loadPrivacyEditor,
     'accepted-docs': loadAcceptedDocuments,
+    intlinterest: loadIntlInterest,
   };
   if (loaders[view]) loaders[view]();
   // Close mobile sidebar after navigation
@@ -6453,6 +6454,103 @@ function adminCmdKeyNav(e) {
   if (e.key==='ArrowUp')   { e.preventDefault(); adminCmdHover((_adminCmdActive-1+count)%count); }
   if (e.key==='Enter')     { e.preventDefault(); if (_adminCmdActive>=0) adminCmdSelect(_adminCmdActive); else if(count>0) adminCmdSelect(0); }
   if (e.key==='Escape')    { closeAdminCmd(); }
+}
+
+/* ═══════════════════════════════════════════════
+   INTERNATIONAL INTEREST
+   ═══════════════════════════════════════════════ */
+let _intlData = [];
+
+async function loadIntlInterest() {
+  try {
+    const res = await API._fetch('GET', 'tables/international_waitlist?_limit=2000&_order=created_at.desc');
+    _intlData = res.data || [];
+    _renderIntlInterest(_intlData);
+    _updateIntlStats(_intlData);
+    _buildIntlCountryFilter(_intlData);
+    const badge = document.getElementById('intlInterestBadge');
+    if (badge) { badge.textContent = _intlData.length; badge.style.display = _intlData.length ? '' : 'none'; }
+  } catch (err) {
+    console.error('[intl interest] load error:', err);
+    const body = document.getElementById('intlInterestBody');
+    if (body) body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#ef4444;padding:24px">Failed to load: ${err.message}</td></tr>`;
+  }
+}
+
+function _updateIntlStats(data) {
+  const el = v => document.getElementById(v);
+  if (el('ii-total')) el('ii-total').textContent = data.length.toLocaleString();
+  const countries = [...new Set(data.map(r => r.country).filter(Boolean))];
+  if (el('ii-countries')) el('ii-countries').textContent = countries.length;
+  const now = new Date();
+  const thisMonth = data.filter(r => {
+    const d = new Date(r.created_at);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }).length;
+  if (el('ii-this-month')) el('ii-this-month').textContent = thisMonth;
+}
+
+function _buildIntlCountryFilter(data) {
+  const sel = document.getElementById('intlCountryFilter');
+  if (!sel) return;
+  const countries = [...new Set(data.map(r => r.country).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All countries</option>' +
+    countries.map(c => `<option value="${_esc(c)}">${_esc(c)}</option>`).join('');
+}
+
+function _renderIntlInterest(data) {
+  const body = document.getElementById('intlInterestBody');
+  const footer = document.getElementById('intlInterestFooter');
+  if (!body) return;
+  if (!data.length) {
+    body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#7a92a8;padding:32px"><i class="fa-solid fa-earth-africa" style="font-size:1.5rem;margin-bottom:8px;display:block"></i>No international interest registrations yet</td></tr>`;
+    if (footer) footer.textContent = '';
+    return;
+  }
+  body.innerHTML = data.map(r => `
+    <tr>
+      <td style="font-weight:600;color:#e8edf2">${_esc(r.full_name || '—')}</td>
+      <td><a href="mailto:${_esc(r.email)}" style="color:#FF9B0C;text-decoration:none">${_esc(r.email)}</a></td>
+      <td>${_esc(r.country || '—')}</td>
+      <td style="color:#7a92a8">${r.created_at ? new Date(r.created_at).toLocaleDateString('en-ZA',{day:'2-digit',month:'short',year:'numeric'}) : '—'}</td>
+    </tr>`).join('');
+  if (footer) footer.textContent = `${data.length} registration${data.length !== 1 ? 's' : ''}`;
+}
+
+function filterIntlInterest(q) {
+  const lower = (q || '').toLowerCase();
+  const filtered = lower
+    ? _intlData.filter(r =>
+        (r.full_name || '').toLowerCase().includes(lower) ||
+        (r.email || '').toLowerCase().includes(lower) ||
+        (r.country || '').toLowerCase().includes(lower))
+    : _intlData;
+  _renderIntlInterest(filtered);
+}
+
+function filterIntlInterestCountry(country) {
+  const filtered = country
+    ? _intlData.filter(r => r.country === country)
+    : _intlData;
+  _renderIntlInterest(filtered);
+}
+
+function exportIntlInterestCSV() {
+  if (!_intlData.length) { Toast.info('No data to export.'); return; }
+  const rows = [['Full Name', 'Email', 'Country', 'Registered At']];
+  _intlData.forEach(r => rows.push([
+    `"${(r.full_name || '').replace(/"/g, '""')}"`,
+    `"${(r.email || '').replace(/"/g, '""')}"`,
+    `"${(r.country || '').replace(/"/g, '""')}"`,
+    r.created_at ? new Date(r.created_at).toISOString() : '',
+  ]));
+  const csv  = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `intl-interest-${Date.now()}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  Toast.success('CSV exported');
 }
 
 document.addEventListener('keydown', e => {

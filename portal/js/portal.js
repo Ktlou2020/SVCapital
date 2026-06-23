@@ -3019,8 +3019,8 @@ const _POOL_META = {
   solar_7yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
   solar_6yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
   solar_5yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  cattle:        { blurb: 'Invests in livestock purchasing, management, and resale cycles.',    risk: 'Medium-High',  riskColor: '#ff9b0c' },
-  short_term:    { blurb: 'Short-duration bridging finance to vetted borrowers. High liquidity.', risk: 'Medium',    riskColor: '#f59e0b' },
+  cattle:        { blurb: 'Partner with Beefcor — SA\'s premier feedlot — and earn returns as your herd grows from 200kg to 500kg.', risk: 'Medium-High',  riskColor: '#ff9b0c' },
+  short_term:    { blurb: 'Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.', risk: 'Medium',    riskColor: '#f59e0b' },
   delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Low-Medium',   riskColor: '#22c55e' },
 };
 
@@ -6106,19 +6106,23 @@ function _endTour(completed) {
   localStorage.setItem('svc_tour_done', '1');
 
   if (completed) {
-    // Award tour XP
-    _postQuestComplete('complete_tour', { completed: true }).then(result => {
-      if (result && !result.error) {
-        Toast.success(`Tour complete! +${result.xpAwarded} XP earned`);
-        if (PORTAL.quests) {
-          PORTAL.quests.xp  = result.newXP;
-          PORTAL.quests.completedIds = [...(PORTAL.quests.completedIds || []), 'complete_tour'];
+    const alreadyClaimed = PORTAL.quests?.completedIds?.includes('complete_tour');
+    if (alreadyClaimed) {
+      Toast.info('Tour complete! XP already claimed — come back any time to revisit.');
+    } else {
+      _postQuestComplete('complete_tour', { completed: true }).then(result => {
+        if (result && !result.error) {
+          Toast.success(`Tour complete! +${result.xpAwarded} XP earned`);
+          if (PORTAL.quests) {
+            PORTAL.quests.xp  = result.newXP;
+            PORTAL.quests.completedIds = [...(PORTAL.quests.completedIds || []), 'complete_tour'];
+          }
+          if (result.leveledUp) _showLevelUpModal(result);
+          renderXPWidget();
+          _updateXPNavBadge();
         }
-        if (result.leveledUp) _showLevelUpModal(result);
-        renderXPWidget();
-        _updateXPNavBadge();
-      }
-    }).catch(() => {});
+      }).catch(() => {});
+    }
   }
 }
 
