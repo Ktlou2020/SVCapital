@@ -276,16 +276,34 @@
   function guard(requiredAppKey) {
     const session = getSession();
 
-    // ── JWT bypass: if a valid svc_token JWT exists, allow access ──
-    // This lets users logged in via /login.html (JWT auth) access staff pages
-    // without needing a separate staffSession.
     if (!session) {
       try {
         const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
         if (jwt) {
           const payload = JSON.parse(atob(jwt.split('.')[1]));
           if (payload && payload.exp * 1000 > Date.now()) {
-            // Valid JWT present — allow access, skip staffSession check
+            const jwtRole = payload.role || '';
+            // Investors have no staff access — send them to the staff login
+            if (!jwtRole || jwtRole === 'investor') {
+              sessionStorage.setItem('staffLoginRedirect', window.location.pathname);
+              window.location.replace(LOGIN_URL());
+              return false;
+            }
+            // Staff JWT: enforce RBAC based on JWT role before granting access
+            const appKey = requiredAppKey || currentAppKey();
+            if (appKey) {
+              const JWT_ROLE_APPS = {
+                director: EXECUTIVE_APPS,
+                admin:    ['employee', 'team', 'fund', 'admin', 'accounting'],
+                ifa:      ['employee', 'ifa'],
+                staff:    ['employee'],
+              };
+              const allowed = JWT_ROLE_APPS[jwtRole] || ['employee'];
+              if (!allowed.includes(appKey)) {
+                window.location.replace(HUB_URL() + '?denied=' + encodeURIComponent(appKey));
+                return false;
+              }
+            }
             return true;
           }
         }

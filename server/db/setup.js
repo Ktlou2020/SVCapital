@@ -882,6 +882,27 @@ CREATE TABLE IF NOT EXISTS international_waitlist (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE (email)
 );
+
+CREATE TABLE IF NOT EXISTS gifts (
+  id              TEXT PRIMARY KEY,
+  sender_id       TEXT REFERENCES investors(id) ON DELETE CASCADE,
+  recipient_id    TEXT REFERENCES investors(id) ON DELETE SET NULL,
+  recipient_email TEXT NOT NULL,
+  recipient_name  TEXT,
+  amount          NUMERIC(18,2) NOT NULL CHECK (amount > 0),
+  message         TEXT,
+  status          TEXT DEFAULT 'pending'
+                    CHECK (status IN ('pending','claimed','expired','cancelled')),
+  claim_token     TEXT UNIQUE,
+  sent_at         TIMESTAMPTZ DEFAULT NOW(),
+  claimed_at      TIMESTAMPTZ,
+  expires_at      TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '30 days'),
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS gifts_sender_idx          ON gifts(sender_id);
+CREATE INDEX IF NOT EXISTS gifts_recipient_idx       ON gifts(recipient_id);
+CREATE INDEX IF NOT EXISTS gifts_recipient_email_idx ON gifts(recipient_email);
+CREATE INDEX IF NOT EXISTS gifts_claim_token_idx     ON gifts(claim_token);
 `;
 
 async function autoSetup() {

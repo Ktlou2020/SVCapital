@@ -716,6 +716,7 @@ html, body {
 .kpi-trend { font-size: 0.72rem; color: var(--muted); min-width: 50px; text-align: right; }
 
 .chart-container {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
