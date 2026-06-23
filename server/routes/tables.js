@@ -116,6 +116,7 @@ const ALLOWED_TABLES = {
   quest_completions:     'id',   // read via generic API; writes via /api/quests/*
   users:                 'id',   // limited, no password_hash exposed
   investment_waitlist:      'id',
+  international_waitlist:   'id',
   compliance_calendar:      'id',
   accepted_client_documents: 'id',
 };
