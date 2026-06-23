@@ -1722,7 +1722,7 @@ function renderOverviewTxns() {
 
   if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No transactions yet</td></tr>'; return; }
 
-  const _txnIsPositive = t => !['withdrawal', 'fee', 'investment'].includes(t.type);
+  const _txnIsPositive = t => !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
   body.innerHTML = recent.map(t => {
     const pos = _txnIsPositive(t);
     return `<tr>
@@ -2042,7 +2042,7 @@ function renderMyTxnTable() {
     return;
   }
 
-  const _isPosTxn = t => !['withdrawal', 'fee', 'investment'].includes(t.type);
+  const _isPosTxn = t => !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
   body.innerHTML = sorted.map(t => {
     const pos = _isPosTxn(t);
     return `<tr>
@@ -2166,7 +2166,7 @@ async function loadWallet() {
   }
 
   activity.innerHTML = walletTxns.map(t => {
-    const isOut = t.type === 'withdrawal';
+    const isOut = ['withdrawal', 'gift_sent'].includes(t.type);
     const colour = isOut ? '#ef4444' : '#22c55e';
     const sign   = isOut ? '−' : '+';
     const statusTag = t.status === 'pending' ? ' <span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:1px 6px;border-radius:4px;font-weight:600">Pending</span>' :
@@ -4087,7 +4087,7 @@ function buildStatementHTML(opts) {
   // ─── TRANSACTION LEDGER ───
   if (incTransactions) {
     const txnRows = transactions.length > 0 ? transactions.map(t => {
-      const isPos = t.type !== 'withdrawal' && t.type !== 'fee' && t.type !== 'investment';
+      const isPos = !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
       const amt = isPos ? `+${fmtNum(Math.abs(t.amount))}` : `-${fmtNum(Math.abs(t.amount))}`;
       const amtColor = isPos ? '#22C55E' : '#EF4444';
       const typeMap = {deposit:'Deposit',withdrawal:'Withdrawal',investment:'Investment',return:'Return',payout:'Payout',fee:'Fee',referral_bonus:'Referral Bonus',gift_sent:'Gift Sent',gift_received:'Gift Received',reward:'XP Reward'};
@@ -8080,13 +8080,14 @@ async function sendGift() {
         document.getElementById('giftRecipientStatus').textContent = '';
         document.querySelectorAll('.gift-preset').forEach(b => b.classList.remove('active'));
         updateGiftPreview();
-        // Update local wallet balance
+        // Update local wallet balance immediately
         if (inv) { inv.wallet_balance = Math.max(0, (parseFloat(inv.wallet_balance)||0) - amount); }
         const balHint = document.getElementById('giftBalanceHint');
         if (balHint && inv) balHint.textContent = `Your wallet balance: ${Utils.rand(inv.wallet_balance)}`;
-        // Refresh history
+        // Refresh gift history and reload transactions in background
         _launchGiftConfetti();
         await _loadSentGifts();
+        loadPortalData().then(() => { renderOverviewTxns(); renderWallet(); }).catch(() => {});
       }
     } catch (e) {
       Toast.error('Failed to send gift: ' + (e.message || 'unknown error'));
