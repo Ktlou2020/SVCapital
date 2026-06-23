@@ -257,10 +257,13 @@
           </div>
           <div class="kpi kpi--purple">
             <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-chart-pie"></i></div></div>
-            <div class="kpi__value">—</div>
+            <div class="kpi__value" id="ds-alpha">—</div>
             <div class="kpi__label">Avg Alpha vs Benchmark</div>
           </div>
         </div>
+
+        <!-- Risk Indicators Strip -->
+        <div id="dashRiskStrip"></div>
 
         <!-- ── Investment Products Row ── -->
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
@@ -305,6 +308,11 @@
           </a>
         </div>
 
+        <!-- Portfolio Composition Panel -->
+        <div class="panel mb-20" id="dashPortfolioPanel" style="margin-bottom:18px">
+          <div style="text-align:center;padding:24px;color:rgba(255,255,255,.4)"><i class="fa-solid fa-spinner fa-spin"></i> Loading portfolio…</div>
+        </div>
+
         <!-- Live Event Ticker -->
         <div id="dashEventTicker" style="margin-bottom:18px"></div>
 
@@ -317,8 +325,8 @@
             </div>
             <div class="tbl-wrap">
               <table class="data-table">
-                <thead><tr><th>Run</th><th>Product</th><th>Capital</th><th>Rate</th><th>Net Return</th><th>Status</th></tr></thead>
-                <tbody id="dashRunsBody"><tr><td colspan="6"><div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div></td></tr></tbody>
+                <thead><tr><th>Run</th><th>Product</th><th>Capital</th><th>Rate</th><th>Alpha</th><th>Net Return</th><th>Status</th></tr></thead>
+                <tbody id="dashRunsBody"><tr><td colspan="7"><div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div></td></tr></tbody>
               </table>
             </div>
           </div>
@@ -346,6 +354,17 @@
           </div>
         </div>
 
+        <!-- Capital Waterfall Chart -->
+        <div class="panel mt-16" style="margin-top:18px">
+          <div class="panel__hd">
+            <div><div class="panel__title"><i class="fa-solid fa-water" style="color:#D4AF37;margin-right:8px"></i>Return Waterfall — Gross to Net</div>
+            <div class="panel__sub">Completed fund runs · fee attribution</div></div>
+          </div>
+          <div class="panel__bd">
+            <div class="chart-box chart-box--md"><canvas id="dashWaterfallChart"></canvas></div>
+          </div>
+        </div>
+
         <!-- Returns chart - full width -->
         <div class="panel mt-16" style="margin-top:18px">
           <div class="panel__hd">
@@ -356,75 +375,16 @@
           </div>
         </div>
 
-        <!-- Product Consoles -->
+        <!-- Live Product Consoles (dynamically rendered) -->
         <div class="panel" style="margin-top:18px">
           <div class="panel__hd">
             <div>
               <div class="panel__title">Product Management Consoles</div>
-              <div class="panel__sub">Access product-specific operational tools and live NAV</div>
+              <div class="panel__sub">Live operational data · Click to open full product dashboard</div>
             </div>
           </div>
-          <div class="panel__bd" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;padding:16px">
-
-            <!-- Cattle Finance -->
-            <a href="cattle.html" style="text-decoration:none">
-              <div style="background:linear-gradient(135deg,#0d1e13,#1a3a26);border-radius:12px;padding:20px;color:#fff;cursor:pointer;transition:transform .18s,box-shadow .18s;display:block"
-                   onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 30px rgba(45,106,79,.35)'"
-                   onmouseout="this.style.transform='';this.style.boxShadow=''">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-                  <div style="width:40px;height:40px;background:rgba(116,198,157,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">🐄</div>
-                  <div>
-                    <div style="font-size:14px;font-weight:700">Cattle Finance</div>
-                    <div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.8px">Live Product</div>
-                  </div>
-                  <div style="margin-left:auto;font-size:10px;background:rgba(116,198,157,.2);color:#74c69d;padding:3px 8px;border-radius:20px;font-weight:700">ACTIVE</div>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-                  <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Target Return</div><div style="font-size:16px;font-weight:800;color:#74c69d">14.83%</div></div>
-                  <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Cycle Term</div><div style="font-size:16px;font-weight:800">~183 days</div></div>
-                </div>
-                <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:14px">Physical cattle backed · Feedlot backgrounding · Live NAV engine</div>
-                <div style="display:flex;align-items:center;justify-content:space-between">
-                  <span style="font-size:11px;color:#74c69d;font-weight:600"><i class="fa-solid fa-chart-line"></i> View NAV Dashboard</span>
-                  <i class="fa-solid fa-arrow-right" style="color:rgba(255,255,255,.3)"></i>
-                </div>
-              </div>
-            </a>
-
-            <!-- Solar — Coming Soon -->
-            <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:20px;color:#fff;opacity:.65">
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-                <div style="width:40px;height:40px;background:rgba(255,193,7,.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">☀️</div>
-                <div>
-                  <div style="font-size:14px;font-weight:700">Solar Finance</div>
-                  <div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.8px">5/6/7 Year Terms</div>
-                </div>
-                <div style="margin-left:auto;font-size:10px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.4);padding:3px 8px;border-radius:20px;font-weight:700">SOON</div>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-                <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Target Return</div><div style="font-size:16px;font-weight:800;color:#ffc107">13.5–21.4%</div></div>
-                <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Term</div><div style="font-size:16px;font-weight:800">5–7 Years</div></div>
-              </div>
-              <div style="font-size:11px;color:rgba(255,255,255,.5)">Solar asset backed · Long-term amortising · NAV console coming soon</div>
-            </div>
-
-            <!-- SMME Short-Term -->
-            <div style="background:linear-gradient(135deg,#1e1a0d,#2e2510);border-radius:12px;padding:20px;color:#fff;opacity:.65">
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-                <div style="width:40px;height:40px;background:rgba(244,162,97,.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">🏢</div>
-                <div>
-                  <div style="font-size:14px;font-weight:700">SMME Short-Term</div>
-                  <div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.8px">5-Month Loan</div>
-                </div>
-                <div style="margin-left:auto;font-size:10px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.4);padding:3px 8px;border-radius:20px;font-weight:700">SOON</div>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-                <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Target Return</div><div style="font-size:16px;font-weight:800;color:#f4a261">13.92%</div></div>
-                <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Term</div><div style="font-size:16px;font-weight:800">~150 days</div></div>
-              </div>
-              <div style="font-size:11px;color:rgba(255,255,255,.5)">Working capital loans · SMME portfolio tracking · Coming soon</div>
-            </div>
-
+          <div id="dashProductConsoles">
+            <div style="text-align:center;padding:24px;color:rgba(255,255,255,.4)"><i class="fa-solid fa-spinner fa-spin"></i> Loading product data…</div>
           </div>
         </div>
       </div>
