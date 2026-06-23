@@ -395,6 +395,11 @@ CREATE INDEX IF NOT EXISTS gifts_recipient_idx      ON gifts(recipient_id);
 CREATE INDEX IF NOT EXISTS gifts_recipient_email_idx ON gifts(recipient_email);
 CREATE INDEX IF NOT EXISTS gifts_claim_token_idx    ON gifts(claim_token);
 
+/* ─── POOL → PRODUCT LINKAGE (added migration) ─── */
+ALTER TABLE cattle_cycles    ADD COLUMN IF NOT EXISTS pool_id TEXT REFERENCES investment_pools(id) ON DELETE SET NULL;
+ALTER TABLE solar_projects   ADD COLUMN IF NOT EXISTS pool_id TEXT REFERENCES investment_pools(id) ON DELETE SET NULL;
+ALTER TABLE shortterm_loans  ADD COLUMN IF NOT EXISTS pool_id TEXT REFERENCES investment_pools(id) ON DELETE SET NULL;
+
 `;
 
 async function migrate() {
