@@ -2529,10 +2529,10 @@ function _pmInvestorId() {
  * openTopUpModal(gateway?)
  * Call with no arg (generic) or 'paystack' / 'ozow' to pre-select.
  */
-function openTopUpModal(gateway) {
+function openTopUpModal(gateway, saId) {
   _pmAmount  = 0;
   _pmGateway = null;
-  _pmSaId    = null;
+  _pmSaId    = saId || null;
 
   SVC.track('svc_topup_modal_opened', { gateway: gateway || 'default' });
 
@@ -2550,7 +2550,7 @@ function openTopUpModal(gateway) {
   Modal.open('topUpModal');
 
   // If a gateway was passed, pre-fill and jump to step 2 after amount chip
-  if (gateway === 'paystack' || gateway === 'ozow') {
+  if (gateway === 'paystack') {
     _pmGateway = gateway;
   }
 }
@@ -2625,7 +2625,7 @@ function goToStep2() {
   // If a gateway was pre-selected from the wallet card, highlight it
   if (_pmGateway) {
     document.querySelectorAll('.pm-gateway-card').forEach(c => c.classList.remove('selected'));
-    const card = _pmEl(_pmGateway === 'paystack' ? 'gwPaystack' : _pmGateway === 'ozow' ? 'gwOzow' : 'gwEft');
+    const card = _pmEl(_pmGateway === 'paystack' ? 'gwPaystack' : 'gwEft');
     if (card) card.classList.add('selected');
   }
 
@@ -2645,7 +2645,7 @@ function goToStep1() {
 function selectGateway(gw) {
   _pmGateway = gw;
   document.querySelectorAll('.pm-gateway-card').forEach(c => c.classList.remove('selected'));
-  const map = { paystack: 'gwPaystack', ozow: 'gwOzow', eft: 'gwEft' };
+  const map = { paystack: 'gwPaystack', eft: 'gwEft' };
   const card = _pmEl(map[gw]);
   if (card) card.classList.add('selected');
   // Refresh fee strip whenever gateway changes
@@ -2658,8 +2658,7 @@ function proceedPayment() {
     return;
   }
   if (_pmGateway === 'paystack') launchPaystack();
-  else if (_pmGateway === 'ozow')    launchOzow();
-  else if (_pmGateway === 'eft')     showEftDetails();
+  else if (_pmGateway === 'eft') showEftDetails();
 }
 
 /* ── Paystack inline popup (v2 API) ─────────────── */
@@ -2748,91 +2747,6 @@ function launchPaystack() {
       _pmSetStepLabel('Step 2 of 3 — Choose payment method');
     }
   }, 300);
-}
-
-/* ── Ozow redirect ──────────────────────────── */
-/**
- * Ozow uses a server-side hash; on the frontend we build the
- * payment URL and redirect the client. For test/sandbox mode we
- * simulate the redirect — in production replace with your real
- * Ozow site-code and server-generated hash.
- *
- * Ozow sandbox URL: https://pay.ozow.com/
- * Required params: SiteCode, CountryCode, CurrencyCode, Amount,
- *                  TransactionReference, BankReference, Customer,
- *                  CancelUrl, ErrorUrl, SuccessUrl, IsTest
- */
-async function launchOzow() {
-  _pmShowOnly('pmStep3Processing');
-  _pmSetProgress(100);
-  _pmSetStepLabel('Step 3 of 3 — Ozow');
-  _pmEl('pmProcessingTitle').textContent    = 'Preparing Ozow payment…';
-  _pmEl('pmProcessingSubtitle').textContent = 'Securing your session — please wait';
-
-  const ref          = `SVC-OZ-${Date.now()}`;
-  const totalCharged = _pmTotal(_pmAmount);
-  const baseUrl      = window.location.href.split('?')[0];
-  const successUrl   = `${baseUrl}?payment=success&ref=${ref}&gw=ozow`;
-  const cancelUrl    = `${baseUrl}?payment=cancelled&gw=ozow`;
-  const errorUrl     = `${baseUrl}?payment=error&gw=ozow`;
-  const amountFmt    = totalCharged.toFixed(2);
-
-  // Persist amount to sessionStorage so it survives the redirect
-  try {
-    sessionStorage.setItem('svc_ozow_amount', String(_pmAmount));
-    sessionStorage.setItem('svc_ozow_ref',    ref);
-    sessionStorage.setItem('svc_ozow_inv_id', _pmInvestorId());
-  } catch (_) { /* private-mode browsers may block sessionStorage */ }
-
-  try {
-    // Server generates the SHA-512 hash using OZOW_PRIVATE_KEY (never leaves server).
-    // Server also returns OZOW_SITE_CODE and isTest so the frontend doesn't need them hardcoded.
-    const hashRes = await API._fetch('POST', 'payments/ozow-hash', {
-      countryCode:    'ZA',
-      currencyCode:   'ZAR',
-      amount:         amountFmt,
-      transactionRef: ref,
-      bankRef:        _pmInvestorId(),
-      cancelUrl,
-      errorUrl,
-      successUrl,
-    });
-    const hash     = hashRes.hash;
-    const siteCode = hashRes.siteCode;
-    const isTest   = hashRes.isTest || 'false';
-    if (!hash || !siteCode) throw new Error('Invalid response from payment server');
-
-    // Pre-record a pending deposit (base amount — fee stays with gateway)
-    await _recordDeposit('ozow', ref, 'pending', false);
-
-    _pmEl('pmProcessingTitle').textContent    = 'Redirecting to Ozow…';
-    _pmEl('pmProcessingSubtitle').textContent = 'You will be taken to the Ozow secure payment page';
-
-    const ozowUrl = [
-      'https://pay.ozow.com/',
-      `?SiteCode=${encodeURIComponent(siteCode)}`,
-      `&CountryCode=ZA`,
-      `&CurrencyCode=ZAR`,
-      `&Amount=${amountFmt}`,
-      `&TransactionReference=${encodeURIComponent(ref)}`,
-      `&BankReference=${encodeURIComponent(_pmInvestorId())}`,
-      `&Customer=${encodeURIComponent(_pmInvestorName())}`,
-      `&CancelUrl=${encodeURIComponent(cancelUrl)}`,
-      `&ErrorUrl=${encodeURIComponent(errorUrl)}`,
-      `&SuccessUrl=${encodeURIComponent(successUrl)}`,
-      `&IsTest=${isTest}`,
-      `&HashCheck=${hash}`,
-    ].join('');
-
-    setTimeout(() => { window.location.href = ozowUrl; }, 800);
-  } catch (err) {
-    console.error('Ozow launch error:', err);
-    const msg = err.message?.includes('not configured') ? err.message : 'Could not initialise Ozow payment — please contact support.';
-    Toast.error(msg);
-    _pmShowOnly('pmStep2');
-    _pmSetProgress(66);
-    _pmSetStepLabel('Step 2 of 3 — Choose Payment Method');
-  }
 }
 
 /* ── EFT (manual) ───────────────────────────── */
@@ -2937,12 +2851,12 @@ async function _showDepositSuccess(gateway, reference) {
   _pmShowOnly('pmStep3Success');
   _pmSetProgress(100);
   _pmSetStepLabel('Complete');
-  const isGateway = gateway === 'paystack' || gateway === 'ozow';
+  const isGateway = gateway === 'paystack';
   const fee = isGateway ? _pmFee(_pmAmount) : 0;
   const fmtBase = `R${_pmAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   _pmEl('pmSuccessAmount').innerHTML =
     `<strong style="color:#22c55e">${fmtBase}</strong> successfully credited to your wallet` +
-    (fee > 0 ? `<br><span style="font-size:0.75rem;color:#6b7280">R${fee.toFixed(2)} gateway fee charged by ${gateway === 'paystack' ? 'Paystack' : 'Ozow'}</span>` : '');
+    (fee > 0 ? `<br><span style="font-size:0.75rem;color:#6b7280">R${fee.toFixed(2)} gateway fee charged by Paystack</span>` : '');
   _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
   showSuccessOverlay({ title: 'Payment Received!', subtitle: `${fmtBase} added to your wallet` });
   await loadPortalData();
@@ -3058,99 +2972,6 @@ function closePaymentModal() {
   }
 }
 
-/* ── handle Ozow return URL params ─────────── */
-(function checkOzowReturn() {
-  const params  = new URLSearchParams(window.location.search);
-  const payment = params.get('payment');
-  const ref     = params.get('ref');
-  const gw      = params.get('gw');
-
-  if (!payment) return;
-
-  // Clean URL immediately so refresh doesn't retrigger
-  window.history.replaceState({}, document.title, window.location.pathname);
-
-  if (payment === 'success' && gw === 'ozow' && ref) {
-
-    // ── Restore the deposit amount that was saved before redirect ──
-    let ozowAmount = 0;
-    try {
-      const stored = sessionStorage.getItem('svc_ozow_amount');
-      ozowAmount   = stored ? parseFloat(stored) : 0;
-      // Keep sessionStorage until we confirm we've handled it
-    } catch (_) { /* private-mode browsers */ }
-
-    // Wait for portal data to load before crediting the wallet
-    setTimeout(async () => {
-      try {
-        // Ensure portal data is ready
-        if (!PORTAL.investor) await loadPortalData();
-
-        const investorId = _pmInvestorId();
-
-        // 1. Find the matching pending transaction and mark it completed
-        const txnRes  = await API.transactions.list({ limit: 200 });
-        const allTxns = txnRes.data || [];
-        const match   = allTxns.find(t =>
-          t.reference === ref &&
-          (t.investor_id === investorId || t.investor_id === (sessionStorage.getItem('svc_ozow_inv_id') || investorId))
-        );
-        if (match) {
-          await API.transactions.update(match.id, { ...match, status: 'completed' });
-          // If the transaction has an amount recorded, use that as the canonical credit
-          if (!ozowAmount && match.amount > 0) ozowAmount = match.amount;
-        }
-
-        // 2. Credit wallet balance — use restored ozowAmount (or _pmAmount as fallback)
-        const creditAmount = ozowAmount || _pmAmount;
-        if (PORTAL.investor && creditAmount > 0) {
-          const currentBalance = parseFloat(PORTAL.investor.wallet_balance) || 0;
-          const newBalance     = Math.round((currentBalance + creditAmount) * 100) / 100;
-          try {
-            await API.investors.update(PORTAL.investor.id, { wallet_balance: newBalance });
-          } catch (_dbErr) {
-            // Retry with full record spread
-            await API.investors.update(PORTAL.investor.id, {
-              ...PORTAL.investor,
-              wallet_balance: newBalance,
-            });
-          }
-          // Update local cache so all UI elements show the new balance immediately
-          PORTAL.investor.wallet_balance = newBalance;
-          _refreshWalletUI(newBalance);
-
-          // Also record any outstanding fee transaction if it wasn't logged pre-redirect
-          // (only if the pre-record call failed before the redirect)
-        }
-
-        // Clean up sessionStorage
-        try {
-          sessionStorage.removeItem('svc_ozow_amount');
-          sessionStorage.removeItem('svc_ozow_ref');
-          sessionStorage.removeItem('svc_ozow_inv_id');
-        } catch (_) { /* ignore */ }
-
-      } catch (err) {
-        console.error('Ozow return handler error:', err);
-      }
-
-      Toast.success(`Ozow payment successful! R${ozowAmount ? ozowAmount.toLocaleString('en-ZA') : ''} has been credited to your wallet.`);
-      navigate('wallet', document.querySelector('[data-view=wallet]'));
-      loadPortalData().then(() => loadWallet());
-    }, 800);
-
-  } else if (payment === 'cancelled') {
-    Toast.info('Ozow payment was cancelled. No funds were deducted.');
-    navigate('wallet', document.querySelector('[data-view=wallet]'));
-    // Clear any stored Ozow session state
-    try { sessionStorage.removeItem('svc_ozow_amount'); sessionStorage.removeItem('svc_ozow_ref'); sessionStorage.removeItem('svc_ozow_inv_id'); } catch (_) { /* ignore */ }
-
-  } else if (payment === 'error') {
-    Toast.error('Ozow payment failed. Please try again or contact support.');
-    navigate('wallet', document.querySelector('[data-view=wallet]'));
-    try { sessionStorage.removeItem('svc_ozow_amount'); sessionStorage.removeItem('svc_ozow_ref'); sessionStorage.removeItem('svc_ozow_inv_id'); } catch (_) { /* ignore */ }
-  }
-})();
 
 /* ═══════════════════════════════════════════════
    MARKETPLACE
@@ -3422,7 +3243,8 @@ function openInvestModal(poolId) {
   SVC.track('view_item', { items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type }] });
   SVC.track('select_item', { items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type }] });
 
-  const walletBal  = parseFloat(PORTAL.investor?.wallet_balance) || 0;
+  const _activeSa  = _pmSaId ? PORTAL.subAccounts.find(s => s.id === _pmSaId) : null;
+  const walletBal  = _activeSa ? (parseFloat(_activeSa.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
   const pi         = Utils.productInfo(pool.product_type);
   const meta       = _POOL_META[pool.product_type] || { risk: 'Medium', riskColor: '#f59e0b' };
   const maturityDt = new Date();
@@ -3432,6 +3254,7 @@ function openInvestModal(poolId) {
   document.getElementById('investModalTitle').textContent = `Invest in ${pool.name}`;
 
   document.getElementById('investModalBody').innerHTML = `
+    ${_activeSa ? `<div style="background:rgba(255,155,12,0.1);border:1px solid rgba(255,155,12,0.3);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:0.82rem;color:#ff9b0c;display:flex;align-items:center;gap:8px"><i class="fa-solid fa-wallet"></i><span>Investing from <strong>${_esc(_activeSa.name)}</strong> sub-account &mdash; available: <strong>${Utils.rand(walletBal)}</strong></span></div>` : ''}
     <!-- Pool summary card -->
     <div class="invest-modal-pool-card">
       <div class="invest-modal-pool-icon" style="background:${pi.color}20;color:${pi.color}">
@@ -3488,7 +3311,7 @@ function openInvestModal(poolId) {
 
     <!-- What happens next timeline -->
     <div class="invest-next-steps">
-      <div class="ins-step"><div class="ins-dot ins-dot--active"></div><div class="ins-label"><b>Now</b> — funds deducted from wallet</div></div>
+      <div class="ins-step"><div class="ins-dot ins-dot--active"></div><div class="ins-label"><b>Now</b> — funds deducted from ${_activeSa ? `<em>${_activeSa.name}</em> sub-account` : 'wallet'}</div></div>
       <div class="ins-step"><div class="ins-dot"></div><div class="ins-label"><b>Ongoing</b> — returns accrue daily</div></div>
       <div class="ins-step"><div class="ins-dot"></div><div class="ins-label"><b>${maturityStr}</b> — payout to your wallet</div></div>
     </div>
@@ -3531,7 +3354,8 @@ async function confirmInvestment(pool) {
   const amount = parseFloat(document.getElementById('investAmount').value);
   if (!amount || amount < pool.min_investment) { Toast.error(`Minimum investment is ${Utils.rand(pool.min_investment)}`); return; }
 
-  const wallet = parseFloat(PORTAL.investor?.wallet_balance) || 0;
+  const _confSa = _pmSaId ? PORTAL.subAccounts.find(s => s.id === _pmSaId) : null;
+  const wallet = _confSa ? (parseFloat(_confSa.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
   const platformFee = Math.round(amount * 0.01 * 100) / 100;
   const totalDeducted = amount + platformFee;
   if (totalDeducted > wallet) { Toast.error(`Insufficient balance. This investment requires ${Utils.rand(totalDeducted)} (${Utils.rand(amount)} + ${Utils.rand(platformFee)} platform fee).`); return; }
@@ -3579,6 +3403,22 @@ async function confirmInvestment(pool) {
     // Wallet deduction and total_invested update are handled atomically server-side
     // in the investment creation hook — do not also set wallet_balance here.
 
+    // For sub-account investments, update the local sub-account cache so the UI
+    // reflects the new wallet/invested balances without waiting for a full reload.
+    if (_pmSaId) {
+      const saIdx = PORTAL.subAccounts.findIndex(s => s.id === _pmSaId);
+      if (saIdx !== -1) {
+        const sa = PORTAL.subAccounts[saIdx];
+        const newSaWallet   = Math.max(0, Math.round(((parseFloat(sa.wallet_balance) || 0) - amount) * 100) / 100);
+        const newSaInvested = Math.round(((parseFloat(sa.total_invested) || 0) + amount) * 100) / 100;
+        try {
+          await API._fetch('PATCH', `tables/sub_accounts/${_pmSaId}`, { wallet_balance: newSaWallet, total_invested: newSaInvested });
+          PORTAL.subAccounts[saIdx].wallet_balance = newSaWallet;
+          PORTAL.subAccounts[saIdx].total_invested  = newSaInvested;
+        } catch (saErr) { console.warn('Sub-account balance update failed:', saErr); }
+      }
+    }
+
     Toast.success(`Successfully invested ${Utils.rand(amount)} in ${pool.name}!`);
     Modal.close('investModal');
 
@@ -3587,6 +3427,7 @@ async function confirmInvestment(pool) {
     if (_pmSaId) {
       SVC.track('svc_subaccount_invested', { sub_account_id: _pmSaId, amount: amount });
     }
+    _pmSaId = null;  // clear after investment completes
 
     // Reload data
     await loadPortalData();
@@ -4398,9 +4239,8 @@ function printStatement() {
 
 /* ── Sub-account deposit ─────────────────────── */
 function openSaDeposit(saId) {
-  _pmSaId = saId;
-  Modal.close('saDetailModal'); // close detail view if open
-  openTopUpModal();
+  Modal.close('saDetailModal');
+  openTopUpModal(null, saId);
 }
 
 /* ─── Profile ─── */
@@ -6968,10 +6808,7 @@ function openSaInvest(saId) {
   if (sa.kyc_status !== 'approved') { Toast.warn('FICA documents must be approved before investing'); return; }
   if ((parseFloat(sa.wallet_balance) || 0) <= 0) { Toast.warn('Please deposit funds first'); return; }
 
-  // Reuse the main invest modal but tag it to the sub account
-  const pool = PORTAL.pools[0];
-  if (!pool) { Toast.warn('No investment products available'); return; }
-  // Navigate to marketplace so investor picks a pool
+  _pmSaId = saId;  // tag all investments made after this to the sub-account
   Modal.close('saDetailModal');
   Toast.info(`Investing from ${sa.name} — select a product below`);
   navigate('marketplace', document.querySelector('[data-view="marketplace"]'));
