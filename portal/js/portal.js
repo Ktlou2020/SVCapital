@@ -1236,6 +1236,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && _p
 window._stopPolling = function () { if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; } };
 
 document.addEventListener('DOMContentLoaded', async () => {
+  _preloadLogo(); // warm logo cache for PDF generation
   Toast.init();
   initDarkMode();
   initPortalFormUX();
@@ -4051,33 +4052,8 @@ function buildStatementHTML(opts) {
   const memberSince = investor.date_joined ? fmtDate(investor.date_joined) : '20 Aug 2022';
   const ficaStatus = investor.fica_status || 'approved';
 
-  // SVG logo (inline base64-friendly reference)
-  const logoSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 106.921 106.921" width="54" height="54">
-    <defs>
-      <linearGradient id="sl1" x1="0.874" x2="0.11" y1="0.034" y2="0.986" gradientUnits="objectBoundingBox">
-        <stop offset="0" stop-color="#ff9b0c"/><stop offset="0.997" stop-color="#ff5229"/>
-      </linearGradient>
-      <linearGradient id="sl2" x1="0.5" x2="0.5" y1="0.027" y2="0.994" gradientUnits="objectBoundingBox">
-        <stop offset="0" stop-color="#eda5ff"/><stop offset="1" stop-color="#fec24f"/>
-      </linearGradient>
-      <linearGradient id="sl3" x2="1" y1="0.5" y2="0.5" gradientUnits="objectBoundingBox">
-        <stop offset="0" stop-color="#65ed00"/><stop offset="0.997" stop-color="#0096ff"/>
-      </linearGradient>
-      <linearGradient id="sl6" x1="0.131" x2="0.889" y1="0.029" y2="0.996" gradientUnits="objectBoundingBox">
-        <stop offset="0.003" stop-color="#ffe86a"/><stop offset="1" stop-color="#ffb782"/>
-      </linearGradient>
-      <linearGradient id="sl7" x1="0.049" x2="0.965" y1="0.044" y2="0.971" gradientUnits="objectBoundingBox">
-        <stop offset="0" stop-color="#ff9b0c"/><stop offset="0.997" stop-color="#ff5229"/>
-      </linearGradient>
-    </defs>
-    <g transform="translate(7,4)">
-      <path d="M47.268 21.928s-10.411-21.618-.073-41.726 33.975-24.223 33.975-24.223 10.41 21.619.073 41.727S47.268 21.928 47.268 21.928z" fill="url(#sl1)" opacity="0.85" transform="translate(-0.569 43.969)"/>
-      <path d="M41.394 17.261s20.658-15.612 20.658-40.011-20.658-40.011-20.658-40.011-20.657 15.612-20.657 40.011 20.657 40.011 20.657 40.011z" fill="url(#sl2)" opacity="0.85" transform="translate(5.99 48.73)"/>
-      <path d="M4.457 53.091a18.793 18.793 0 0 0 12.588 5.087 18.791 18.791 0 0 0 12.586-5.086 18.79 18.79 0 0 0-12.587-5.087A18.8 18.8 0 0 0 4.457 53.091z" fill="url(#sl3)" opacity="0.85" transform="translate(21.126 20.591)"/>
-      <path d="M34.864 21.928s10.411-21.618.074-41.726-33.975-24.223-33.975-24.223-10.411 21.619-.074 41.727 33.975 24.222 33.975 24.222z" fill="url(#sl6)" opacity="0.85" transform="translate(22.194 43.969)"/>
-      <path d="M32.301 28.28s2.935-21.1-11.262-35.3-35.3-11.261-35.3-11.261-2.935 21.1 11.262 35.3 35.3 11.261 35.3 11.261z" fill="url(#sl7)" opacity="0.85" transform="translate(24.945 36.806)"/>
-    </g>
-  </svg>`;
+  // Logo URL — absolute so it resolves correctly inside the statement div
+  const logoUrl = new URL('../assets/logo.png', window.location.href).href;
 
   let sections = '';
 
@@ -4281,9 +4257,9 @@ function buildStatementHTML(opts) {
     <div id="stmtPrintArea" style="font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%">
 
       <!-- Header Band -->
-      <div style="background:linear-gradient(135deg,#1a3a4a 0%,#0d2535 100%);padding:32px 40px;display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:16px">
-          ${logoSVG}
+      <div style="background:linear-gradient(135deg,#1a3a4a 0%,#0d2535 100%);padding:28px 40px;display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:14px">
+          <img src="${logoUrl}" alt="" style="height:52px;width:52px;object-fit:contain;display:block">
           <div>
             <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:0.06em;line-height:1">SV CAPITAL</div>
             <div style="font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:0.12em;margin-top:3px;font-weight:500">INVESTMENTS THAT MAKE SENSE</div>
@@ -7024,8 +7000,7 @@ body{font-family:'Inter',sans-serif;background:#fff;color:#111;-webkit-print-col
 .no-print button{background:#FF9B0C;color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
 .wrap{max-width:700px;margin:60px auto 32px;padding:40px}
 .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #1a2235}
-.logo{font-size:1.6rem;font-weight:800;color:#1a2235;letter-spacing:-0.5px}
-.logo span{color:#FF9B0C}
+.logo img{height:48px;max-width:220px;object-fit:contain;display:block}
 .cert-badge{background:#1a2235;color:#fff;padding:8px 16px;border-radius:6px;font-size:0.75rem;font-weight:700;text-align:right}
 .cert-badge small{display:block;color:#9ca3af;font-size:0.65rem;font-weight:400}
 h1{font-size:1.25rem;font-weight:800;color:#1a2235;margin:0 0 4px}
@@ -7049,8 +7024,8 @@ td:last-child{text-align:right;font-weight:600}
 <div class="wrap">
   <div class="hdr">
     <div>
-      <div class="logo">SV <span>Capital</span></div>
-      <div style="font-size:0.75rem;color:#6b7280;margin-top:4px">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSCA Regulated</div>
+      <div class="logo"><img src="${window.location.origin}/assets/logo.svg" alt="SV Capital"></div>
+      <div style="font-size:0.75rem;color:#6b7280;margin-top:6px">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSCA Regulated</div>
     </div>
     <div class="cert-badge">
       IT3(b) INTEREST INCOME CERTIFICATE
@@ -7865,6 +7840,23 @@ function generateInvestmentCertificate(invId) {
   });
 }
 
+/* ── PDF: logo cache ── */
+let _cachedLogoDataUrl = null;
+async function _preloadLogo() {
+  try {
+    const url  = new URL('../assets/logo.png', window.location.href).href;
+    const resp = await fetch(url);
+    if (!resp.ok) return;
+    const blob = await resp.blob();
+    _cachedLogoDataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (_) {}
+}
+
 /* ── PDF helper: get jsPDF instance ── */
 function _getPDF(orientation = 'portrait') {
   // jsPDF 2.x UMD exposes window.jspdf.jsPDF; older builds use window.jsPDF
@@ -7881,22 +7873,25 @@ function _getPDF(orientation = 'portrait') {
 /* ── PDF: dark header bar ── */
 function _pdfHeader(doc, title, subtitle) {
   const W = doc.internal.pageSize.getWidth();
-  // Dark header
+  // Dark header band
   doc.setFillColor(26, 34, 53); // #1a2235
   doc.rect(0, 0, W, 38, 'F');
   // Gold accent line
-  doc.setFillColor(255, 155, 12); // #FF9B0C
+  doc.setFillColor(255, 155, 12);
   doc.rect(0, 38, W, 2, 'F');
-  // "SV CAPITAL" text in gold
-  doc.setFontSize(18);
+  // Logo icon (square lotus mark) + brand name text
+  if (_cachedLogoDataUrl) {
+    doc.addImage(_cachedLogoDataUrl, 'PNG', 9, 7, 22, 22);
+  }
+  const textX = _cachedLogoDataUrl ? 34 : 14;
+  doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(255, 155, 12);
-  doc.text('SV Capital', 14, 17);
-  // Subtitle
-  doc.setFontSize(9);
+  doc.text('SV Capital', textX, 17);
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(156, 163, 175);
-  doc.text('SmartVest Financial Services · FSP #52449', 14, 24);
+  doc.text('SmartVest Financial Services · FSP #52449', textX, 24);
   // Document title (right aligned)
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
