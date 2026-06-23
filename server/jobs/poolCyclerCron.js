@@ -58,7 +58,6 @@ async function cycleExpiredPools() {
   }
 
   let cycled = 0;
-  const today = new Date();
 
   for (const p of expired) {
     const client = await pool.connect();
@@ -81,22 +80,22 @@ async function cycleExpiredPools() {
         [p.id]
       );
 
-      // Calculate successor dates
-      let openDate, closeDate;
+      // Calculate successor dates.
+      // Open date = day after the previous pool's close (end_date).
+      // Close date is calculated relative to the previous pool's end_date.
+      const prevClose = new Date(p.end_date);
+      const openDate  = new Date(prevClose);
+      openDate.setDate(openDate.getDate() + 1);
 
+      let closeDate;
       if (p.product_type === 'cattle') {
-        // Open today, close last day of month 2 months from now
-        const closeMonth = today.getMonth() + 2;  // may exceed 11 — Date handles rollover
-        const closeYear  = today.getFullYear() + Math.floor(closeMonth / 12);
-        closeDate = lastDayOfMonth(closeYear, ((closeMonth % 12) + 12) % 12);
-        openDate  = today;
+        // Close = last day of the month 2 calendar months after the previous close
+        const cm = prevClose.getMonth() + 2;
+        const cy = prevClose.getFullYear() + Math.floor(cm / 12);
+        closeDate = lastDayOfMonth(cy, ((cm % 12) + 12) % 12);
       } else {
-        // short_term / smme: open 1st of next month, close last day of next month
-        const nextMonth = today.getMonth() + 1;
-        const nextYear  = today.getFullYear() + (nextMonth > 11 ? 1 : 0);
-        const nm        = nextMonth % 12;
-        openDate  = firstDayOfMonth(nextYear, nm);
-        closeDate = lastDayOfMonth(nextYear, nm);
+        // short_term / smme: close = last day of the month in which the new pool opens
+        closeDate = lastDayOfMonth(openDate.getFullYear(), openDate.getMonth());
       }
 
       const closeLabel = `${MONTH_NAMES[closeDate.getMonth()]} ${closeDate.getFullYear()}`;
