@@ -2647,14 +2647,14 @@ body.dark-mode .tab-btn.active { color: #ff9b0c !important; }
 .sa-kyc-badge--pending{ background:rgba(251,191,36,0.2);color:#fbbf24; }
 .sa-kyc-badge--missing{ background:rgba(239,68,68,0.18);color:#f87171; }
 
-.sa-card__body  { padding:14px 18px; }
-.sa-card__name  { font-size:1rem;font-weight:800;color:var(--white);margin-bottom:12px; }
+.sa-card__body  { padding:16px 18px;border-top:1px solid rgba(255,255,255,0.07);color:#fff; }
+.sa-card__name  { font-size:1rem;font-weight:800;color:#fff;margin-bottom:12px;letter-spacing:-0.01em; }
 .sa-card__stats { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px; }
-.sa-stat        { background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px; }
-.sa-stat__label { font-size:0.65rem;text-transform:uppercase;color:rgba(255,255,255,0.8);letter-spacing:.4px; }
-.sa-stat__value { font-size:0.95rem;font-weight:800;color:var(--white);margin-top:2px; }
+.sa-stat        { background:rgba(255,255,255,0.07);border-radius:8px;padding:10px 12px;border:1px solid rgba(255,255,255,0.06); }
+.sa-stat__label { font-size:0.65rem;text-transform:uppercase;color:rgba(255,255,255,0.65);letter-spacing:.5px;font-weight:600; }
+.sa-stat__value { font-size:0.95rem;font-weight:800;color:#fff;margin-top:3px; }
 
-.sa-card__actions { padding:10px 18px 16px;display:flex;gap:8px;flex-wrap:wrap; }
+.sa-card__actions { padding:10px 18px 16px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid rgba(255,255,255,0.06); }
 
 /* ── Goal bar ── */
 .sa-goal-bar       { margin-top:6px; }
