@@ -1856,7 +1856,7 @@ async function rejectKyc(id, btn) {
   const reviewedBy = _getAdminName();
   await _withBtn(btn, async () => {
     try {
-      await API.kyc.update(id, { status: 'rejected', rejection_reason: reason, reviewed_by: reviewedBy, reviewed_date: new Date().toISOString() });
+      await API.kyc.update(id, { status: 'rejected', notes: reason, reviewed_by: reviewedBy, reviewed_at: new Date().toISOString() });
       Toast.success('Document rejected');
       await loadKYC();
     } catch (e) {
@@ -4665,7 +4665,7 @@ function exportKYCCSV() {
     const inv = STATE.investors.find(i => i.id === k.investor_id);
     const name = k.investor_name || (inv ? `${inv.first_name} ${inv.last_name}` : k.investor_id);
     return [k.id, name, k.investor_id, k.doc_type || k.document_type || '', k.file_name || '',
-      k.status, Utils.date(k.submitted_at || k.submitted_date || k.created_at), Utils.date(k.reviewed_date)];
+      k.status, Utils.date(k.submitted_at || k.submitted_date || k.created_at), Utils.date(k.reviewed_at)];
   })];
   _downloadCSV(rows, `kyc-${new Date().toISOString().slice(0,10)}.csv`);
   Toast.success(`Exported ${STATE.kyc.length} KYC records`);
@@ -4778,7 +4778,7 @@ async function bulkApproveKyc() {
     const reviewedBy = _getAdminName();
     const reviewedDate = new Date().toISOString();
     for (let i = 0; i < ids.length; i++) {
-      await API.kyc.update(ids[i], { status: 'approved', reviewed_by: reviewedBy, reviewed_date: reviewedDate });
+      await API.kyc.update(ids[i], { status: 'approved', reviewed_by: reviewedBy, reviewed_at: reviewedDate });
       // Sync investor record so status/badges reflect approval
       const doc = STATE.kyc.find(k => k.id === ids[i]);
       if (doc?.investor_id) {
@@ -4808,7 +4808,7 @@ async function bulkRejectKyc() {
   if (rejectBtn)  rejectBtn.disabled  = true;
   try {
     for (let i = 0; i < ids.length; i++) {
-      await API.kyc.update(ids[i], { status: 'rejected', rejection_reason: reason, reviewed_by: _getAdminName(), reviewed_date: new Date().toISOString() });
+      await API.kyc.update(ids[i], { status: 'rejected', notes: reason, reviewed_by: _getAdminName(), reviewed_at: new Date().toISOString() });
       if ((i + 1) % 5 === 0) Toast.info(`Processing ${i + 1}/${total}...`);
     }
     _kycSelected.clear();
