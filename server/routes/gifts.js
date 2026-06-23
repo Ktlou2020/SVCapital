@@ -75,8 +75,8 @@ router.post('/send', requireAuth, async (req, res) => {
 
     // Record sender transaction
     await client.query(
-      `INSERT INTO transactions (id, investor_id, type, amount, status, description, created_at)
-       VALUES ($1,$2,'gift_sent',$3,'completed',$4,NOW())`,
+      `INSERT INTO transactions (id, investor_id, type, amount, status, description, transaction_date, created_at)
+       VALUES ($1,$2,'gift_sent',$3,'completed',$4,NOW(),NOW())`,
       [`TXN-${giftId}-S`, senderId, -amt, `Gift sent to ${recipientDisplayName}`]
     );
 
@@ -102,8 +102,8 @@ router.post('/send', requireAuth, async (req, res) => {
         [amt, recipient.id]
       );
       await client.query(
-        `INSERT INTO transactions (id, investor_id, type, amount, status, description, created_at)
-         VALUES ($1,$2,'gift_received',$3,'completed',$4,NOW())`,
+        `INSERT INTO transactions (id, investor_id, type, amount, status, description, transaction_date, created_at)
+         VALUES ($1,$2,'gift_received',$3,'completed',$4,NOW(),NOW())`,
         [`TXN-${giftId}-R`, recipient.id, amt, `Investment gift from ${senderName}`]
       );
     }
@@ -207,8 +207,8 @@ router.post('/claim/:token', requireAuth, async (req, res) => {
     const senderName = sender ? `${sender.first_name} ${sender.last_name}`.trim() : 'Someone';
 
     await client.query(
-      `INSERT INTO transactions (id, investor_id, type, amount, status, description, created_at)
-       VALUES ($1,$2,'gift_received',$3,'completed',$4,NOW())`,
+      `INSERT INTO transactions (id, investor_id, type, amount, status, description, transaction_date, created_at)
+       VALUES ($1,$2,'gift_received',$3,'completed',$4,NOW(),NOW())`,
       [`TXN-CLAIM-${gift.id}`, claimantId, gift.amount, `Investment gift from ${senderName}`]
     );
 

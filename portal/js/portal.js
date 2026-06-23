@@ -1717,7 +1717,7 @@ function renderOverviewInvestments() {
 
 function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
-  const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date)).slice(0, 5);
+  const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0)).slice(0, 5);
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
 
   if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No transactions yet</td></tr>'; return; }
@@ -2025,7 +2025,7 @@ function renderMyTxnTable() {
   const body = document.getElementById('myTxnBody');
   const filter = document.getElementById('myTxnTypeFilter').value;
   const items = filter ? PORTAL.transactions.filter(t => t.type === filter) : PORTAL.transactions;
-  const sorted = [...items].sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
+  const sorted = [...items].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0));
 
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
 
@@ -2148,7 +2148,7 @@ async function loadWallet() {
 
   const activity = document.getElementById('walletActivity');
   const walletTxns = [...PORTAL.transactions]
-    .filter(t => ['deposit', 'return', 'payout', 'referral_bonus', 'withdrawal'].includes(t.type))
+    .filter(t => ['deposit', 'return', 'payout', 'referral_bonus', 'withdrawal', 'gift_sent', 'gift_received'].includes(t.type))
     .sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0))
     .slice(0, 8);
 
