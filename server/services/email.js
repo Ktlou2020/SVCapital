@@ -619,6 +619,51 @@ function sendFicaResubmitReminder(investor) {
   });
 }
 
+/* ── Gift: received by existing investor ──────────────────── */
+function sendGiftReceived(to, { senderName, amount, message, recipientName }) {
+  const amt = parseFloat(amount).toLocaleString('en-ZA', { minimumFractionDigits: 2 });
+  return _send({
+    to,
+    subject: `🎁 ${senderName} sent you a R${Math.round(amount)} investment gift`,
+    text: `${senderName} sent you a R${amt} investment gift! ${message ? `"${message}" ` : ''}The funds are now in your SV Capital wallet.`,
+    html: _wrap(`
+      <h2>You've received an investment gift! 🎁</h2>
+      <p>Hi ${recipientName},</p>
+      <p><strong>${senderName}</strong> just sent you an investment gift on SV Capital.</p>
+      ${message ? `<div class="box" style="border-left:4px solid #ff9b0c;background:#fffbf0"><p style="font-style:italic;color:#555;margin:0">&ldquo;${message}&rdquo;</p></div>` : ''}
+      <span class="big">R${amt}</span>
+      <p>This amount has been added directly to your wallet and is ready to invest right now.</p>
+      <a href="${BASE_URL}/portal/" class="btn">Go to My Wallet →</a>
+      <p style="font-size:0.8rem;color:#aaa;margin-top:24px">Gift sender: ${senderName} &nbsp;·&nbsp; SV Capital — Venture Beyond the Ordinary</p>
+    `),
+  });
+}
+
+/* ── Gift: invite to non-investor ─────────────────────────── */
+function sendGiftInvite(to, { senderName, amount, message, recipientName, signupUrl }) {
+  const amt = parseFloat(amount).toLocaleString('en-ZA', { minimumFractionDigits: 2 });
+  return _send({
+    to,
+    subject: `🎁 You have a R${Math.round(amount)} investment gift waiting for you`,
+    text: `${senderName} sent you a R${amt} investment gift on SV Capital! ${message ? `"${message}" ` : ''}Sign up to claim it: ${signupUrl}`,
+    html: _wrap(`
+      <h2>You have an investment gift waiting! 🎁</h2>
+      <p>Hi${recipientName ? ` ${recipientName}` : ''},</p>
+      <p><strong>${senderName}</strong> sent you an investment gift through SV Capital — South Africa's smart investment platform.</p>
+      ${message ? `<div class="box" style="border-left:4px solid #ff9b0c;background:#fffbf0"><p style="font-style:italic;color:#555;margin:0">&ldquo;${message}&rdquo;</p></div>` : ''}
+      <span class="big">R${amt}</span>
+      <p>Create your free SV Capital account to claim this gift. It'll be waiting in your wallet — ready to start earning returns immediately.</p>
+      <a href="${signupUrl}" class="btn" style="font-size:1rem">Claim Your Gift →</a>
+      <div class="box">
+        <div class="row"><span class="lbl">Gift Amount</span><span class="val gold">R${amt}</span></div>
+        <div class="row"><span class="lbl">From</span><span class="val">${senderName}</span></div>
+        <div class="row"><span class="lbl">Valid for</span><span class="val">30 days</span></div>
+      </div>
+      <p style="font-size:0.8rem;color:#aaa">SV Capital (Pty) Ltd is a licensed FSP (FSP #52449). This gift was sent by an existing SV Capital investor. To decline, simply ignore this email.</p>
+    `),
+  });
+}
+
 module.exports = {
   sendWelcome,
   sendDepositConfirmed,
@@ -639,4 +684,6 @@ module.exports = {
   sendKycRejected,
   sendLoginAlert,
   sendFicaResubmitReminder,
+  sendGiftReceived,
+  sendGiftInvite,
 };

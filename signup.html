@@ -2561,6 +2561,19 @@ async function _doSubmit(skippedFica) {
     clearDraft();
     _FT.submitSuccess();
     launchConfetti();
+
+    // Auto-claim gift if signup was triggered by a gift link
+    const giftToken = new URLSearchParams(window.location.search).get('gift');
+    if (giftToken) {
+      try {
+        const gr = await API._fetch('POST', `gifts/claim/${giftToken}`);
+        if (gr.success) {
+          document.getElementById('successMsg').textContent +=
+            ` 🎁 A gift of ${gr.senderName ? `from ${gr.senderName} ` : ''}has been added to your wallet!`;
+        }
+      } catch (_) {}
+    }
+
     setTimeout(() => { window.location.href = '/portal/index.html'; }, 4000);
 
   } catch (err) {

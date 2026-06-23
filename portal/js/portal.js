@@ -1168,6 +1168,7 @@ function navigate(view, btnEl) {
     support: 'Support', referral: 'Refer & Earn', statement: 'Account Statement',
     quests: 'Earn Rewards', learn: 'Learning Hub', subaccounts: 'My Accounts',
     documents: 'Document Vault', policies: 'Platform Policies',
+    gifts: 'Send a Gift',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
 
@@ -1186,6 +1187,7 @@ function navigate(view, btnEl) {
     referral: loadReferralDashboard,
     documents: loadDocuments,
     policies: renderPoliciesView,
+    gifts: loadGiftsView,
     profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderKycStatusPanel(); },
   };
   if (loaders[view]) loaders[view]();
@@ -1514,17 +1516,13 @@ function renderOverview(skipCharts) {
   const referralTotal = PORTAL.transactions
     .filter(t => t.type === 'referral_bonus' && t.status !== 'rejected')
     .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
-  const xpCash = PORTAL.quests
-    ? XP_LEVELS.filter(l => l.min > 0 && (PORTAL.quests.xp || 0) >= l.min).length * 50
-    : 0;
   const rewEl = document.getElementById('pov-rewards');
   if (rewEl) {
-    const totalRewards = referralTotal + xpCash;
-    if (totalRewards > 0) {
-      _animateNum(rewEl, totalRewards, 'R ', '', 900);
+    const xp = PORTAL.quests?.xp || 0;
+    const lvl = _getLevelForXP(xp);
+    if (referralTotal > 0) {
+      _animateNum(rewEl, referralTotal, 'R ', '', 900);
     } else {
-      const xp = PORTAL.quests?.xp || 0;
-      const lvl = _getLevelForXP(xp);
       rewEl.textContent = `${lvl.label} · ${xp} XP`;
     }
   }
@@ -1732,7 +1730,7 @@ function renderOverviewInvestments() {
 function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
   const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date)).slice(0, 5);
-  const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red' };
+  const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
 
   if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No transactions yet</td></tr>'; return; }
 
@@ -2041,7 +2039,7 @@ function renderMyTxnTable() {
   const items = filter ? PORTAL.transactions.filter(t => t.type === filter) : PORTAL.transactions;
   const sorted = [...items].sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
 
-  const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red' };
+  const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
 
   if (!sorted.length) {
     body.innerHTML = `<tr><td colspan="6" style="padding:0;border:none">
@@ -4203,7 +4201,7 @@ function buildStatementHTML(opts) {
       const isPos = t.type !== 'withdrawal' && t.type !== 'fee' && t.type !== 'investment';
       const amt = isPos ? `+${fmtNum(Math.abs(t.amount))}` : `-${fmtNum(Math.abs(t.amount))}`;
       const amtColor = isPos ? '#22C55E' : '#EF4444';
-      const typeMap = {deposit:'Deposit',withdrawal:'Withdrawal',investment:'Investment',return:'Return',payout:'Payout',fee:'Fee',referral_bonus:'Referral Bonus'};
+      const typeMap = {deposit:'Deposit',withdrawal:'Withdrawal',investment:'Investment',return:'Return',payout:'Payout',fee:'Fee',referral_bonus:'Referral Bonus',gift_sent:'Gift Sent',gift_received:'Gift Received',reward:'XP Reward'};
       return `<tr style="border-bottom:1px solid #f0f0f0">
         <td style="padding:7px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${t.reference || '—'}</td>
         <td style="padding:7px 10px;font-size:11px;color:#1a1a1a">${typeMap[t.type] || t.type}</td>
@@ -4651,13 +4649,12 @@ function renderQuestView() {
     heroBar.style.background = lvl.color;
   }
   const heroTrackLabel = document.getElementById('questXpTrackLabel');
-  if (heroTrackLabel) heroTrackLabel.textContent = next ? `${(next.min - xp).toLocaleString('en-ZA')} XP to ${next.label} (+R50)` : 'Maximum level reached!';
+  if (heroTrackLabel) heroTrackLabel.textContent = next ? `${(next.min - xp).toLocaleString('en-ZA')} XP to ${next.label}` : 'Maximum level reached!';
 
-  // ── Rewards earned (levels passed × R50)
-  const levelsEarned = XP_LEVELS.filter(l => l.min > 0 && xp >= l.min).length;
-  const xpCashValue  = levelsEarned * 50;
-  const rewardsEl = document.getElementById('questRewardsEarned');
-  if (rewardsEl) rewardsEl.textContent = `R${xpCashValue}`;
+  // ── Quests completed count
+  const questsEl = document.getElementById('questRewardsEarned');
+  const completedCount = PORTAL.quests?.completed?.length || 0;
+  if (questsEl) questsEl.textContent = `${completedCount} Quest${completedCount !== 1 ? 's' : ''}`;
 
   // ── Rewards stats row ────────────────────────────────────────
   const referralBonuses = PORTAL.transactions
@@ -4673,9 +4670,9 @@ function renderQuestView() {
     const rwTot  = document.getElementById('rwStatTotal');
     if (rwXP)   rwXP.textContent   = xp.toLocaleString('en-ZA') + ' XP';
     if (rwLvl)  rwLvl.innerHTML    = `<i class="fa-solid ${lvl.icon}" style="margin-right:4px"></i>${lvl.label}`;
-    if (rwCash) rwCash.textContent = `R${xpCashValue}`;
+    if (rwCash) rwCash.textContent = completedCount;
     if (rwRef)  rwRef.textContent  = `R${referralBonuses.toFixed(2)}`;
-    if (rwTot)  rwTot.textContent  = `R${(xpCashValue + referralBonuses).toFixed(2)}`;
+    if (rwTot)  rwTot.textContent  = `${XP_LEVELS.filter(l => l.min > 0 && xp >= l.min).length} / ${XP_LEVELS.length - 1}`;
   }
 
   // ── Level track
@@ -4690,7 +4687,7 @@ function renderQuestView() {
             <i class="fa-solid ${l.icon}"></i>
           </div>
           <div class="level-step__name">${l.label}</div>
-          ${l.min > 0 ? `<div class="level-step__reward" style="color:${isCurrent||isDone?l.color:'#9ca3af'}">+R50</div>` : ''}
+          ${l.min > 0 ? `<div class="level-step__reward" style="color:${isCurrent||isDone?l.color:'#9ca3af'}">${l.min} XP</div>` : ''}
         </div>`;
     }).join('');
   }
@@ -4795,7 +4792,7 @@ function renderQuestView() {
           <div class="pending-section__title-row">
             <div>
               <div class="pending-section__title"><i class="fa-solid fa-list-check"></i> What to do next</div>
-              <div class="pending-section__sub">${totalPending} reward${totalPending !== 1 ? 's' : ''} waiting for you · <span style="color:var(--gold)">${pendingXP} XP available</span>${nextLvlXp > 0 ? ` · <span style="color:#22c55e">${nextLvlXp} XP to next level (+R50)</span>` : ''}</div>
+              <div class="pending-section__sub">${totalPending} quest${totalPending !== 1 ? 's' : ''} waiting for you · <span style="color:var(--gold)">${pendingXP} XP available</span>${nextLvlXp > 0 ? ` · <span style="color:#22c55e">${nextLvlXp} XP to next level</span>` : ''}</div>
             </div>
           </div>
         </div>
@@ -4997,12 +4994,7 @@ function _showLevelUpModal(result) {
   document.getElementById('levelupXP').textContent    = `${result.newXP.toLocaleString('en-ZA')} XP total`;
 
   const rewardEl = document.getElementById('levelupReward');
-  if (result.rewardGiven > 0) {
-    rewardEl.innerHTML = `<strong>R${result.rewardGiven}</strong> has been added to your wallet! 🎉`;
-    rewardEl.style.display = 'block';
-  } else {
-    rewardEl.style.display = 'none';
-  }
+  if (rewardEl) rewardEl.style.display = 'none';
 
   document.getElementById('levelUpModal').style.display = 'flex';
   _launchConfettiParticles();
@@ -6107,7 +6099,7 @@ const TOUR_STEPS = [
     position: 'right',
     icon: 'fa-trophy',
     title: 'Earn Rewards',
-    body: 'Complete quests and surveys to earn XP. Every time you level up, <strong>R50 is added to your wallet</strong>. There are 8 levels to reach.',
+    body: 'Complete quests and surveys to earn XP and climb through 8 levels — from Seed to Luminary. Unlock badges and show off your progress.',
   },
   {
     id: 'nav_learn',
@@ -8083,6 +8075,231 @@ function _viewKycDoc(docId) {
   }).catch(() => Toast.error('Could not load document'));
 }
 
+/* ═══════════════════════════════════════════════════════
+   GIFT FEATURE
+═══════════════════════════════════════════════════════ */
+let _giftEmailDebounce = null;
+let _giftSentCache = [];
+let _giftReceivedCache = [];
+
+async function loadGiftsView() {
+  const inv = PORTAL.investor;
+  const balHint = document.getElementById('giftBalanceHint');
+  if (balHint && inv) balHint.textContent = `Your wallet balance: ${Utils.rand(inv.wallet_balance || 0)}`;
+  const fromEl = document.getElementById('previewFrom');
+  if (fromEl && inv) fromEl.textContent = `From: ${inv.first_name} ${inv.last_name}`;
+  updateGiftPreview();
+  await Promise.all([_loadSentGifts(), _loadReceivedGifts()]);
+}
+
+function setGiftAmount(amount) {
+  document.getElementById('giftAmount').value = amount;
+  document.querySelectorAll('.gift-preset').forEach(b => {
+    b.classList.toggle('active', parseInt(b.textContent.replace(/\D/g,'')) === amount);
+  });
+  updateGiftPreview();
+}
+
+function updateGiftPreview() {
+  const amt = parseFloat(document.getElementById('giftAmount')?.value) || 0;
+  const to  = document.getElementById('giftRecipientName')?.value?.trim()
+            || document.getElementById('giftRecipientEmail')?.value?.trim()?.split('@')[0]
+            || '—';
+  const msg = document.getElementById('giftMessage')?.value?.trim() || '';
+  const inv = PORTAL.investor;
+
+  const amtEl = document.getElementById('previewAmount');
+  const toEl  = document.getElementById('previewTo');
+  const msgEl = document.getElementById('previewMessage');
+  if (amtEl) amtEl.textContent = amt > 0 ? Utils.rand(amt) : 'R—';
+  if (toEl)  toEl.textContent  = `To: ${to}`;
+  if (msgEl) msgEl.textContent = msg ? `"${msg}"` : '';
+  if (document.getElementById('previewFrom') && inv) {
+    document.getElementById('previewFrom').textContent = `From: ${inv.first_name} ${inv.last_name}`;
+  }
+}
+
+function onGiftEmailInput() {
+  clearTimeout(_giftEmailDebounce);
+  updateGiftPreview();
+  const email = document.getElementById('giftRecipientEmail')?.value?.trim();
+  const statusEl = document.getElementById('giftRecipientStatus');
+  if (!statusEl) return;
+  if (!email || !email.includes('@')) { statusEl.textContent = ''; return; }
+  statusEl.textContent = '…';
+  statusEl.style.color = 'var(--text-muted)';
+  _giftEmailDebounce = setTimeout(async () => {
+    try {
+      const res = await API._fetch('GET', `gifts/check-recipient?email=${encodeURIComponent(email)}`);
+      if (res.exists) {
+        statusEl.textContent = `✓ ${res.name} is on SV Capital`;
+        statusEl.style.color = '#22c55e';
+        if (!document.getElementById('giftRecipientName').value) {
+          document.getElementById('giftRecipientName').value = res.name;
+          updateGiftPreview();
+        }
+      } else {
+        statusEl.textContent = '✉ Will receive an invite email';
+        statusEl.style.color = '#ff9b0c';
+      }
+    } catch (_) { statusEl.textContent = ''; }
+  }, 500);
+}
+
+async function sendGift() {
+  const btn   = document.getElementById('giftSendBtn');
+  const email = document.getElementById('giftRecipientEmail')?.value?.trim();
+  const name  = document.getElementById('giftRecipientName')?.value?.trim();
+  const amount= parseFloat(document.getElementById('giftAmount')?.value);
+  const msg   = document.getElementById('giftMessage')?.value?.trim();
+
+  if (!email || !email.includes('@')) { Toast.error('Please enter a valid recipient email'); return; }
+  if (!amount || amount < 50) { Toast.error('Minimum gift amount is R50'); return; }
+
+  const inv = PORTAL.investor;
+  if (inv && (parseFloat(inv.wallet_balance) || 0) < amount) {
+    Toast.error('Insufficient wallet balance'); return;
+  }
+
+  await _withBtn(btn, async () => {
+    try {
+      const res = await API._fetch('POST', 'gifts/send', { recipientEmail: email, recipientName: name, amount, message: msg });
+      if (res.success) {
+        Toast.success(res.recipientExists
+          ? `🎁 Gift sent! The funds have been added to their wallet.`
+          : `🎁 Gift sent! ${email} will receive an invitation to claim it.`);
+        // Reset form
+        document.getElementById('giftAmount').value = '';
+        document.getElementById('giftRecipientEmail').value = '';
+        document.getElementById('giftRecipientName').value = '';
+        document.getElementById('giftMessage').value = '';
+        document.getElementById('giftCharCount').textContent = '0/280';
+        document.getElementById('giftRecipientStatus').textContent = '';
+        document.querySelectorAll('.gift-preset').forEach(b => b.classList.remove('active'));
+        updateGiftPreview();
+        // Update local wallet balance
+        if (inv) { inv.wallet_balance = Math.max(0, (parseFloat(inv.wallet_balance)||0) - amount); }
+        const balHint = document.getElementById('giftBalanceHint');
+        if (balHint && inv) balHint.textContent = `Your wallet balance: ${Utils.rand(inv.wallet_balance)}`;
+        // Refresh history
+        _launchGiftConfetti();
+        await _loadSentGifts();
+      }
+    } catch (e) {
+      Toast.error('Failed to send gift: ' + (e.message || 'unknown error'));
+    }
+  });
+}
+
+async function _loadSentGifts() {
+  try {
+    const res = await API._fetch('GET', 'gifts/my');
+    _giftSentCache = res.data || [];
+    _renderGiftHistory('sent');
+  } catch (_) {}
+}
+
+async function _loadReceivedGifts() {
+  try {
+    const res = await API._fetch('GET', 'gifts/received');
+    _giftReceivedCache = res.data || [];
+    _renderGiftHistory('received');
+  } catch (_) {}
+}
+
+function switchGiftTab(tab) {
+  document.getElementById('giftTabSent').classList.toggle('active', tab === 'sent');
+  document.getElementById('giftTabReceived').classList.toggle('active', tab === 'received');
+  document.getElementById('giftHistorySent').style.display     = tab === 'sent'     ? '' : 'none';
+  document.getElementById('giftHistoryReceived').style.display = tab === 'received' ? '' : 'none';
+}
+
+function _renderGiftHistory(type) {
+  const isSent = type === 'sent';
+  const data   = isSent ? _giftSentCache : _giftReceivedCache;
+  const listEl = document.getElementById(isSent ? 'giftSentList' : 'giftReceivedList');
+  const emptyEl= document.getElementById(isSent ? 'giftSentEmpty' : 'giftReceivedEmpty');
+  if (!listEl) return;
+
+  if (!data.length) {
+    if (emptyEl) emptyEl.style.display = 'flex';
+    listEl.innerHTML = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  const statusColors = { pending:'#ff9b0c', claimed:'#22c55e', expired:'#6b7280', cancelled:'#ef4444' };
+  const statusLabels = { pending:'Pending — awaiting claim', claimed:'Claimed', expired:'Expired', cancelled:'Cancelled' };
+
+  listEl.innerHTML = data.map(g => {
+    const iconBg = isSent ? 'rgba(255,155,12,0.12)' : 'rgba(34,197,94,0.12)';
+    const iconColor = isSent ? '#ff9b0c' : '#22c55e';
+    const personName = isSent
+      ? (g.r_first ? `${g.r_first} ${g.r_last}`.trim() : (g.recipient_name || g.recipient_email))
+      : (g.s_first ? `${g.s_first} ${g.s_last}`.trim() : 'SV Capital Gift');
+    const dateStr = Utils.date ? Utils.date(g.created_at) : new Date(g.created_at).toLocaleDateString('en-ZA');
+    const msgSnippet = g.message ? `"${g.message.slice(0,60)}${g.message.length > 60 ? '…' : ''}"` : '';
+    const cancelBtn = isSent && g.status === 'pending'
+      ? `<button class="gift-row__cancel" onclick="cancelGift('${g.id}')">Cancel & Refund</button>` : '';
+
+    return `<div class="gift-row">
+      <div class="gift-row__icon" style="background:${iconBg};color:${iconColor}">
+        <i class="fa-solid fa-${isSent ? 'paper-plane' : 'gift'}"></i>
+      </div>
+      <div class="gift-row__body">
+        <div class="gift-row__name">${_esc ? _esc(personName) : personName}</div>
+        <div class="gift-row__meta">${dateStr}${msgSnippet ? ` · ${msgSnippet}` : ''}</div>
+      </div>
+      <div class="gift-row__right">
+        <div class="gift-row__amount">${isSent ? '-' : '+'}${Utils.rand ? Utils.rand(g.amount) : 'R'+g.amount}</div>
+        <div class="gift-row__status" style="color:${statusColors[g.status]||'#888'}">${statusLabels[g.status]||g.status}</div>
+        ${cancelBtn}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function cancelGift(giftId) {
+  if (!await Confirm.ask('Cancel this gift?', { body: 'The gift amount will be refunded to your wallet.', confirmLabel: 'Cancel Gift' })) return;
+  try {
+    await API._fetch('DELETE', `gifts/${giftId}`);
+    Toast.success('Gift cancelled — funds refunded to your wallet');
+    const inv = PORTAL.investor;
+    const gift = _giftSentCache.find(g => g.id === giftId);
+    if (gift && inv) {
+      inv.wallet_balance = (parseFloat(inv.wallet_balance)||0) + parseFloat(gift.amount);
+      const balHint = document.getElementById('giftBalanceHint');
+      if (balHint) balHint.textContent = `Your wallet balance: ${Utils.rand(inv.wallet_balance)}`;
+    }
+    await _loadSentGifts();
+  } catch (e) {
+    Toast.error('Failed to cancel: ' + (e.message || 'unknown error'));
+  }
+}
+
+function _launchGiftConfetti() {
+  const colours = ['#ff9b0c','#ff5229','#D4AF37','#22c55e','#a855f7'];
+  for (let i = 0; i < 60; i++) {
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;top:${Math.random()*40}%;left:${Math.random()*100}%;
+      width:${6+Math.random()*6}px;height:${6+Math.random()*6}px;
+      background:${colours[Math.floor(Math.random()*colours.length)]};
+      border-radius:${Math.random()>.5?'50%':'2px'};
+      pointer-events:none;z-index:99999;opacity:1;
+      transform:rotate(${Math.random()*360}deg);
+      animation:giftConfettiFall ${1+Math.random()*1.5}s ease-out ${Math.random()*0.5}s forwards`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2500);
+  }
+}
+/* inject confetti keyframes once */
+if (!document.getElementById('giftConfettiStyle')) {
+  const s = document.createElement('style');
+  s.id = 'giftConfettiStyle';
+  s.textContent = `@keyframes giftConfettiFall{to{transform:translateY(80vh) rotate(720deg);opacity:0}}`;
+  document.head.appendChild(s);
+}
+
 function loadDocuments() {
   if (!PORTAL.investor) { Toast.error('Portfolio data still loading'); return; }
   _renderKycDocsList();
@@ -8553,7 +8770,7 @@ function downloadStatement() {
     doc.setTextColor(156, 163, 175);
     doc.text('No transactions in the last 90 days.', 14, y + 10);
   } else {
-    const typeMap = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus' };
+    const typeMap = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus', gift_sent: 'Gift Sent', gift_received: 'Gift Received', reward: 'XP Reward' };
     const tableHead = [['Date', 'Type', 'Description', 'Amount', 'Status']];
     const tableBody = txns.map(t => [
       Utils.date(t.transaction_date || t.created_at),

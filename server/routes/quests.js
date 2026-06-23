@@ -9,16 +9,16 @@ const router = require('express').Router();
 const pool   = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 
-/* ─── XP Level thresholds — each level-up pays R50 ─── */
+/* ─── XP Level thresholds ─── */
 const XP_LEVELS = [
-  { id: 'seed',       label: 'Seed',       min: 0,    reward: 0  },
-  { id: 'sprout',     label: 'Sprout',     min: 100,  reward: 50 },
-  { id: 'grower',     label: 'Grower',     min: 300,  reward: 50 },
-  { id: 'cultivator', label: 'Cultivator', min: 600,  reward: 50 },
-  { id: 'harvester',  label: 'Harvester',  min: 1000, reward: 50 },
-  { id: 'pioneer',    label: 'Pioneer',    min: 1500, reward: 50 },
-  { id: 'architect',  label: 'Architect',  min: 2500, reward: 50 },
-  { id: 'luminary',   label: 'Luminary',   min: 5000, reward: 50 },
+  { id: 'seed',       label: 'Seed',       min: 0    },
+  { id: 'sprout',     label: 'Sprout',     min: 100  },
+  { id: 'grower',     label: 'Grower',     min: 300  },
+  { id: 'cultivator', label: 'Cultivator', min: 600  },
+  { id: 'harvester',  label: 'Harvester',  min: 1000 },
+  { id: 'pioneer',    label: 'Pioneer',    min: 1500 },
+  { id: 'architect',  label: 'Architect',  min: 2500 },
+  { id: 'luminary',   label: 'Luminary',   min: 5000 },
 ];
 
 function getLevelForXP(xp) {
@@ -229,39 +229,26 @@ router.post('/complete', requireAuth, async (req, res) => {
     const newXP   = prevXP + quest.xp;
     const prevLvl = getLevelForXP(prevXP);
     const newLvl  = getLevelForXP(newXP);
-    const leveledUp   = newLvl.id !== prevLvl.id;
-    const rewardGiven = leveledUp ? newLvl.reward : 0;
-    const newWallet   = (parseFloat(inv[0]?.wallet_balance) || 0) + rewardGiven;
+    const leveledUp = newLvl.id !== prevLvl.id;
 
     // Update investor — merge survey data into investor_profile
     await pool.query(
       `UPDATE investors SET
          xp_points          = $1,
          xp_level           = $2,
-         wallet_balance      = $3,
-         investor_profile    = COALESCE(investor_profile, '{}') || $4::jsonb,
+         investor_profile    = COALESCE(investor_profile, '{}') || $3::jsonb,
          updated_at          = NOW()
-       WHERE id = $5`,
-      [newXP, newLvl.id, newWallet, JSON.stringify(data), investorId]
+       WHERE id = $4`,
+      [newXP, newLvl.id, JSON.stringify(data), investorId]
     );
 
-    // Credit reward transaction
-    if (rewardGiven > 0) {
-      const txnId = `TXN-REWARD-${Date.now()}`;
-      await pool.query(
-        `INSERT INTO transactions (id, investor_id, type, amount, status, description, created_at)
-         VALUES ($1,$2,'reward',$3,'completed',$4,NOW())`,
-        [txnId, investorId, rewardGiven, `Level-up reward — ${newLvl.label} 🎉`]
-      );
-    }
-
     const nextLevel = XP_LEVELS.find(l => l.min > newXP) || null;
-    console.log(`[Quests] ${investorId} completed ${questId} +${quest.xp}XP → ${newLvl.id}${leveledUp ? ` (+R${rewardGiven})` : ''}`);
+    console.log(`[Quests] ${investorId} completed ${questId} +${quest.xp}XP → ${newLvl.id}`);
 
     res.json({
       success: true, xpAwarded: quest.xp, newXP,
       prevLevel: prevLvl.id, newLevel: newLvl.id,
-      leveledUp, rewardGiven, nextLevel,
+      leveledUp, rewardGiven: 0, nextLevel,
       xpToNext: nextLevel ? nextLevel.min - newXP : 0,
     });
   } catch (err) {
