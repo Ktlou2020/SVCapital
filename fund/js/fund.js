@@ -1243,8 +1243,16 @@ async function markSchedPaid(schedId) {
 ═══════════════════════════════════════════════ */
 async function loadPools() {
   try {
-    const pools = await apiGet('investment_pools');
-    S.pools = pools;
+    const [pools, cattle, solar, loans] = await Promise.all([
+      apiGet('investment_pools'),
+      intFetchAll('cattle_cycles').catch(() => []),
+      intFetchAll('solar_projects').catch(() => []),
+      intFetchAll('shortterm_loans').catch(() => []),
+    ]);
+    S.pools  = pools;
+    S.cattle = cattle;
+    S.solar  = solar;
+    S.loans  = loans;
     renderPoolsOverview();
   } catch(e) { T.error('Failed to load pools'); }
 }
@@ -1254,14 +1262,28 @@ function renderPoolsOverview() {
   if (!el) return;
 
   if (!S.pools.length) {
-    el.innerHTML = `<tr><td colspan="8"><div class="empty"><i class="fa-solid fa-layer-group"></i><p>No pools found</p></div></td></tr>`;
+    el.innerHTML = `<tr><td colspan="9"><div class="empty"><i class="fa-solid fa-layer-group"></i><p>No pools found</p></div></td></tr>`;
     return;
   }
 
+  const _linkedProducts = (poolId, type) => {
+    let items = [];
+    if (type === 'cattle')      items = (S.cattle||[]).filter(x => x.pool_id === poolId);
+    else if (type.startsWith('solar')) items = (S.solar||[]).filter(x => x.pool_id === poolId);
+    else if (type === 'short_term' || type === 'smme') items = (S.loans||[]).filter(x => x.pool_id === poolId);
+    if (!items.length) return `<span style="color:rgba(255,255,255,.25);font-size:0.72rem">None linked</span>`;
+    return items.map(it => {
+      const label = it.batch_name || it.project_name || it.business_name || it.loan_ref || it.id;
+      const color = type === 'cattle' ? '#74c69d' : type.startsWith('solar') ? '#f59e0b' : '#60a5fa';
+      return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;font-weight:700;background:${color}18;color:${color};padding:2px 8px;border-radius:20px;margin:1px">${label}</span>`;
+    }).join('');
+  };
+
   el.innerHTML = S.pools.map(p => {
     const fillPct = p.target_amount > 0 ? Math.min(100, Math.round((p.raised_amount||0)/p.target_amount*100)) : 0;
+    const name = p.name || p.pool_name || p.id;
     return `<tr>
-      <td><div class="td-h">${p.pool_name}</div><div class="td-m mono">${p.id}</div></td>
+      <td><div class="td-h">${name}</div><div class="td-m mono">${p.id}</div></td>
       <td>${productBadge(p.product_type)}</td>
       <td class="td-gold">${fmt.rand(p.raised_amount||0)}</td>
       <td class="td-m">${fmt.rand(p.target_amount||0)}</td>
@@ -1271,8 +1293,16 @@ function renderPoolsOverview() {
           <div style="font-size:0.68rem;color:var(--text-muted);text-align:right">${fillPct}%</div>
         </div>
       </td>
-      <td><span class="td-orange">${fmt.pct(p.benchmark_rate)}</span></td>
+      <td><span class="td-orange">${fmt.pct(p.benchmark_rate||p.annual_rate)}</span></td>
       <td class="td-m">${p.investor_count||0} investors</td>
+      <td style="max-width:200px">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:3px">
+          ${_linkedProducts(p.id, p.product_type)}
+          <button class="btn btn--xs" style="background:rgba(255,255,255,.07);color:rgba(255,255,255,.5);border:none;margin-top:2px" onclick="openLinkProductModal('${p.id}')">
+            <i class="fa-solid fa-link"></i> Manage
+          </button>
+        </div>
+      </td>
       <td>
         <div class="flex-c gap-6">
           ${poolStatusBadge(p.status)}
@@ -1281,6 +1311,101 @@ function renderPoolsOverview() {
       </td>
     </tr>`;
   }).join('');
+}
+
+let _linkingPoolId = null;
+
+function openLinkProductModal(poolId) {
+  _linkingPoolId = poolId;
+  const pool = S.pools.find(p => p.id === poolId);
+  if (!pool) return;
+
+  const type = pool.product_type;
+  const name = pool.name || pool.pool_name || poolId;
+  const titleEl = document.getElementById('poolLinkTitle');
+  if (titleEl) titleEl.textContent = `Link Products — ${name}`;
+
+  let products = [], productLabel = '', productTable = '', nameField = '';
+  if (type === 'cattle') {
+    products = S.cattle || []; productLabel = 'Cattle Cycle'; productTable = 'cattle_cycles'; nameField = 'batch_name';
+  } else if (type.startsWith('solar')) {
+    products = S.solar || []; productLabel = 'Solar Project'; productTable = 'solar_projects'; nameField = 'project_name';
+  } else if (type === 'short_term' || type === 'smme') {
+    products = S.loans || []; productLabel = 'Short-Term Loan'; productTable = 'shortterm_loans'; nameField = 'business_name';
+  }
+
+  const linked   = products.filter(p => p.pool_id === poolId);
+  const available = products.filter(p => !p.pool_id);
+  const color = type === 'cattle' ? '#74c69d' : type.startsWith('solar') ? '#f59e0b' : '#60a5fa';
+
+  const pLabel = it => it[nameField] || it.loan_ref || it.id;
+  const pSub   = it => [it.status, it.purchase_value ? fmt.rand(it.purchase_value) : it.capital_deployed ? fmt.rand(it.capital_deployed) : it.amount_disbursed ? fmt.rand(it.amount_disbursed) : null].filter(Boolean).join(' · ');
+
+  const body = document.getElementById('poolLinkBody');
+  if (!body) return;
+
+  body.innerHTML = `
+    ${linked.length ? `
+      <div style="margin-bottom:16px">
+        <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.35);margin-bottom:8px">Linked to this pool</div>
+        ${linked.map(it => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:${color}10;border:1px solid ${color}30;border-radius:8px;margin-bottom:6px">
+            <div>
+              <div style="font-size:0.85rem;font-weight:700;color:${color}">${pLabel(it)}</div>
+              <div style="font-size:0.72rem;color:rgba(255,255,255,.4);margin-top:2px">${pSub(it)}</div>
+            </div>
+            <button class="btn btn--xs btn--danger" onclick="unlinkProductFromPool('${it.id}','${productTable}')">
+              <i class="fa-solid fa-unlink"></i> Unlink
+            </button>
+          </div>`).join('')}
+      </div>` : ''}
+
+    <div>
+      <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.35);margin-bottom:8px">
+        Available ${productLabel}s ${available.length ? `(${available.length})` : ''}
+      </div>
+      ${available.length ? available.map(it => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;margin-bottom:6px">
+          <div>
+            <div style="font-size:0.85rem;font-weight:700;color:#fff">${pLabel(it)}</div>
+            <div style="font-size:0.72rem;color:rgba(255,255,255,.4);margin-top:2px">${pSub(it)}</div>
+          </div>
+          <button class="btn btn--xs btn--primary" onclick="linkProductToPool('${it.id}','${productTable}')">
+            <i class="fa-solid fa-link"></i> Link
+          </button>
+        </div>`).join('') :
+        `<div style="text-align:center;padding:20px;color:rgba(255,255,255,.3);font-size:0.82rem">
+          <i class="fa-solid fa-check-circle" style="margin-bottom:8px;display:block;font-size:24px;color:${color}"></i>
+          All ${productLabel}s are already linked or none exist yet
+        </div>`}
+    </div>
+  `;
+
+  M.open('poolLinkModal');
+}
+
+async function linkProductToPool(productId, productTable) {
+  try {
+    await apiPatch(productTable, productId, { pool_id: _linkingPoolId });
+    const arr = productTable === 'cattle_cycles' ? S.cattle : productTable === 'solar_projects' ? S.solar : S.loans;
+    const item = arr.find(x => x.id === productId);
+    if (item) item.pool_id = _linkingPoolId;
+    openLinkProductModal(_linkingPoolId);
+    renderPoolsOverview();
+    T.success('Product linked to pool');
+  } catch(e) { T.error('Failed to link: ' + e.message); }
+}
+
+async function unlinkProductFromPool(productId, productTable) {
+  try {
+    await apiPatch(productTable, productId, { pool_id: null });
+    const arr = productTable === 'cattle_cycles' ? S.cattle : productTable === 'solar_projects' ? S.solar : S.loans;
+    const item = arr.find(x => x.id === productId);
+    if (item) item.pool_id = null;
+    openLinkProductModal(_linkingPoolId);
+    renderPoolsOverview();
+    T.success('Product unlinked');
+  } catch(e) { T.error('Failed to unlink: ' + e.message); }
 }
 
 function openNewRunFromPool(poolId) {
