@@ -372,6 +372,10 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startRecurringCron } = require('./jobs/recurringCron');
   startRecurringCron();
 
+  // Start pool auto-cycling cron (daily 00:30 SAST)
+  const { startPoolCyclerCron } = require('./jobs/poolCyclerCron');
+  startPoolCyclerCron();
+
   // Email queue processor — runs every 2 minutes
   const emailQueueCron = require('node-cron');
   const { processQueue } = require('./services/emailQueue');
