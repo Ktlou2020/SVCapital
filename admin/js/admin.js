@@ -6463,7 +6463,7 @@ let _intlData = [];
 
 async function loadIntlInterest() {
   try {
-    const res = await API._fetch('GET', 'tables/international_waitlist?_limit=2000&_order=created_at.desc');
+    const res = await API._fetch('GET', 'tables/international_waitlist?limit=2000&sort=created_at&order=desc');
     _intlData = res.data || [];
     _renderIntlInterest(_intlData);
     _updateIntlStats(_intlData);
