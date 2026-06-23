@@ -1668,6 +1668,15 @@ html, body {
 .profile-row-label { color: var(--muted); min-width: 140px; }
 .profile-row-val { color: var(--text); flex: 1; }
 
+/* ─── Poppins for all numeric/metric values ─────────────────────────── */
+.kpi-val, .stat-val, .stat-value, .eva-stat-val,
+.metric-value, .perf-val, .chart-kpi, .score-val,
+.level-num, .xp-num, .salary-val, .payslip-total,
+[class*="__value"],[class*="-value"],[class*="__val"],[class*="-val"],
+[class*="stat-num"],[class*="metric-num"] {
+  font-family: 'Poppins', 'Inter', system-ui, sans-serif !important;
+}
+
 /* ─── Scrollbar ─────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

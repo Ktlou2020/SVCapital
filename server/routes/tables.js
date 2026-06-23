@@ -567,10 +567,18 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         (clean.type === 'deposit' || clean.type === 'return' || clean.type === 'payout' || clean.type === 'referral_bonus')) {
       setImmediate(async () => {
         try {
-          await pool.query(
-            'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-            [parseFloat(clean.amount), clean.investor_id]
-          );
+          if (clean.sub_account_id && clean.type === 'deposit') {
+            // Route deposit credit to the sub-account wallet when sub_account_id is set
+            await pool.query(
+              'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1 WHERE id = $2',
+              [parseFloat(clean.amount), clean.sub_account_id]
+            );
+          } else {
+            await pool.query(
+              'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+              [parseFloat(clean.amount), clean.investor_id]
+            );
+          }
         } catch (err) {
           console.error('[wallet hook] credit error:', err.message);
         }

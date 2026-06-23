@@ -903,6 +903,22 @@ CREATE INDEX IF NOT EXISTS gifts_sender_idx          ON gifts(sender_id);
 CREATE INDEX IF NOT EXISTS gifts_recipient_idx       ON gifts(recipient_id);
 CREATE INDEX IF NOT EXISTS gifts_recipient_email_idx ON gifts(recipient_email);
 CREATE INDEX IF NOT EXISTS gifts_claim_token_idx     ON gifts(claim_token);
+
+CREATE TABLE IF NOT EXISTS product_factsheets (
+  id          TEXT PRIMARY KEY,
+  pool_id     TEXT REFERENCES investment_pools(id) ON DELETE CASCADE,
+  pool_name   TEXT,
+  file_name   TEXT NOT NULL,
+  file_url    TEXT NOT NULL,
+  file_size   BIGINT,
+  mime_type   TEXT DEFAULT 'application/pdf',
+  version     TEXT,
+  uploaded_by TEXT,
+  is_current  BOOLEAN DEFAULT true,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS factsheets_pool_idx     ON product_factsheets(pool_id);
+CREATE INDEX IF NOT EXISTS factsheets_current_idx  ON product_factsheets(pool_id, is_current);
 `;
 
 async function autoSetup() {

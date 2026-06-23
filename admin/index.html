@@ -9,7 +9,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SV Capital — Admin Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="../css/admin.css" />
@@ -1766,6 +1766,40 @@
 </div>
 
 <!-- Edit Pool Modal -->
+<!-- ── Factsheet Manager Modal ── -->
+<div class="modal-overlay" id="adminFactsheetModal" onclick="if(event.target===this)Modal.close('adminFactsheetModal')">
+  <div class="modal modal--md">
+    <div class="modal__header">
+      <span class="modal__title" id="adminFsTitle">Product Factsheets</span>
+      <button class="modal__close" onclick="Modal.close('adminFactsheetModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:14px">Upload a PDF factsheet. The uploaded file becomes the current factsheet; previous versions are kept as history.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label class="form-label">Factsheet Name</label>
+          <input class="form-input" id="adminFsFileName" placeholder="e.g. Cattle Fund June 2025" />
+        </div>
+        <div>
+          <label class="form-label">Version (optional)</label>
+          <input class="form-input" id="adminFsVersion" placeholder="e.g. 1.2" />
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label class="form-label">PDF File</label>
+        <input class="form-input" type="file" id="adminFsFileInput" accept=".pdf,application/pdf" />
+      </div>
+      <button class="btn btn--primary btn--full" id="adminFsUploadBtn" onclick="uploadFactsheet()">
+        <i class="fa-solid fa-upload"></i> Upload Factsheet
+      </button>
+      <div style="margin-top:20px">
+        <div style="font-size:0.75rem;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">History</div>
+        <div id="adminFsList" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="editPoolModal" onclick="if(event.target===this)Modal.close('editPoolModal')">
   <div class="modal">
     <div class="modal__header">
