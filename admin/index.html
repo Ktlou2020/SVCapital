@@ -94,6 +94,9 @@
       </button>
 
       <div class="nav-section-label">Operations</div>
+      <button class="nav-item" data-view="opsconsole" onclick="navigate('opsconsole', this)">
+        <i class="fa-solid fa-terminal"></i><span>Ops Console</span>
+      </button>
       <button class="nav-item" data-view="support" onclick="navigate('support', this)">
         <i class="fa-solid fa-headset"></i> Support Tickets
         <span class="nav-badge" id="ticketBadge">0</span>
@@ -810,6 +813,153 @@
             </table>
           </div>
         </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: OPERATIONS CONSOLE
+      ══════════════════════════════════ -->
+      <div class="view" id="view-opsconsole">
+
+        <!-- Platform Health Strip -->
+        <div class="panel mb-16" id="opsHealthPanel">
+          <div class="panel__header" style="display:flex;align-items:center;justify-content:space-between">
+            <span class="panel__title"><i class="fa-solid fa-satellite-dish" style="color:var(--orange);margin-right:8px"></i>Platform Health</span>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span id="opsHealthChecked" style="font-size:0.72rem;color:var(--text-muted)">Checking…</span>
+              <button class="btn btn--secondary btn--sm" onclick="loadOpsConsole()"><i class="fa-solid fa-rotate"></i> Refresh All</button>
+            </div>
+          </div>
+          <div class="panel__body">
+            <div id="opsHealthGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
+              <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem;grid-column:1/-1">Checking services…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPI tiles row -->
+        <div class="stats-row mb-16" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))" id="opsKpiRow">
+          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">AUM</span></div><div class="stat-card__value" id="ops-aum">—</div><div class="stat-card__label">Active Under Management</div></div>
+          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-wallet"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">WALLETS</span></div><div class="stat-card__value" id="ops-wallets">—</div><div class="stat-card__label">Total Wallet Pool</div></div>
+          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-down-to-arc"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">DEPOSITS</span></div><div class="stat-card__value" id="ops-dep-val">—</div><div class="stat-card__label">Pending Deposits</div></div>
+          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-up-from-arc"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">WITHDRAWALS</span></div><div class="stat-card__value" id="ops-with-val">—</div><div class="stat-card__label">Pending Withdrawals</div></div>
+          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-id-card"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">FICA</span></div><div class="stat-card__value" id="ops-fica">—</div><div class="stat-card__label">FICA Pending</div></div>
+          <div class="stat-card stat-card--red" style="--red:#ef4444"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-headset"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">SUPPORT</span></div><div class="stat-card__value" id="ops-tickets">—</div><div class="stat-card__label">Open Tickets</div></div>
+        </div>
+
+        <!-- Money in Motion + Investor Growth side-by-side -->
+        <div class="grid-2 mb-16">
+
+          <!-- Money in Motion -->
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-money-bill-transfer" style="color:var(--orange);margin-right:8px"></i>Money in Motion</span>
+              <button class="btn btn--secondary btn--sm" onclick="navigate('transactions', document.querySelector('[data-view=transactions]'))"><i class="fa-solid fa-arrow-right"></i> Transactions</button>
+            </div>
+            <div class="panel__body" id="opsMoneyPanel">
+              <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem">Loading…</div>
+            </div>
+          </div>
+
+          <!-- Investor Pulse -->
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-users" style="color:#3b82f6;margin-right:8px"></i>Investor Pulse</span>
+              <button class="btn btn--secondary btn--sm" onclick="navigate('investors', document.querySelector('[data-view=investors]'))"><i class="fa-solid fa-arrow-right"></i> Investors</button>
+            </div>
+            <div class="panel__body" id="opsInvestorPulse">
+              <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem">Loading…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Funnel + AUM by Product side-by-side -->
+        <div class="grid-2 mb-16">
+
+          <!-- Investor Lifecycle Funnel -->
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-filter" style="color:var(--orange);margin-right:8px"></i>Investor Lifecycle Funnel</span></div>
+            <div class="panel__body" id="opsFunnelPanel">
+              <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem">Loading…</div>
+            </div>
+          </div>
+
+          <!-- AUM by Product -->
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-chart-pie" style="color:var(--orange);margin-right:8px"></i>AUM by Product</span></div>
+            <div class="panel__body">
+              <div class="chart-wrap chart-wrap--md"><canvas id="opsAumByTypeChart"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Pools + 7-day Velocity side-by-side -->
+        <div class="grid-2 mb-16">
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-trophy" style="color:#f59e0b;margin-right:8px"></i>Top Pools by Volume</span>
+              <button class="btn btn--secondary btn--sm" onclick="navigate('pools', document.querySelector('[data-view=pools]'))"><i class="fa-solid fa-arrow-right"></i> Pools</button>
+            </div>
+            <div class="panel__body" id="opsTopPools">
+              <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem">Loading…</div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-bolt" style="color:var(--orange);margin-right:8px"></i>7-Day Transaction Velocity</span></div>
+            <div class="panel__body">
+              <div class="chart-wrap chart-wrap--md"><canvas id="opsVelocityChart"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Communications Intelligence -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-paper-plane" style="color:var(--orange);margin-right:8px"></i>Communications Intelligence</span>
+            <button class="btn btn--secondary btn--sm" onclick="navigate('comms', document.querySelector('[data-view=comms]'))"><i class="fa-solid fa-arrow-right"></i> Broadcast</button>
+          </div>
+          <div class="panel__body" id="opsCommsPanel">
+            <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Live Audit Stream + Quick Actions side-by-side -->
+        <div class="grid-2 mb-16">
+
+          <!-- Live Audit Stream -->
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-scroll" style="color:var(--orange);margin-right:8px"></i>Live Audit Stream</span>
+              <button class="btn btn--secondary btn--sm" onclick="navigate('auditlog', document.querySelector('[data-view=auditlog]'))"><i class="fa-solid fa-arrow-right"></i> Full Log</button>
+            </div>
+            <div class="panel__body" id="opsAuditStream" style="max-height:400px;overflow-y:auto">
+              <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem">Loading…</div>
+            </div>
+          </div>
+
+          <!-- Quick Actions + Platform Links -->
+          <div class="panel" style="display:flex;flex-direction:column;gap:0">
+            <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-rocket" style="color:var(--orange);margin-right:8px"></i>Quick Actions</span></div>
+            <div class="panel__body" style="flex:1;display:flex;flex-direction:column;gap:10px" id="opsQuickActions">
+              <button class="btn btn--primary" style="justify-content:flex-start;gap:10px" onclick="navigate('comms', document.querySelector('[data-view=comms]'))"><i class="fa-solid fa-paper-plane" style="width:16px"></i> Send Broadcast</button>
+              <button class="btn btn--secondary" style="justify-content:flex-start;gap:10px" onclick="navigate('kyc', document.querySelector('[data-view=kyc]'))"><i class="fa-solid fa-id-card" style="width:16px"></i> Review FICA Queue</button>
+              <button class="btn btn--secondary" style="justify-content:flex-start;gap:10px" onclick="navigate('withdrawals', document.querySelector('[data-view=withdrawals]'))"><i class="fa-solid fa-money-check-dollar" style="width:16px"></i> Process Withdrawals</button>
+              <button class="btn btn--secondary" style="justify-content:flex-start;gap:10px" onclick="navigate('aml', document.querySelector('[data-view=aml]'))"><i class="fa-solid fa-shield-halved" style="width:16px"></i> AML Review</button>
+              <button class="btn btn--secondary" style="justify-content:flex-start;gap:10px" onclick="navigate('support', document.querySelector('[data-view=support]'))"><i class="fa-solid fa-headset" style="width:16px"></i> Support Tickets</button>
+              <button class="btn btn--secondary" style="justify-content:flex-start;gap:10px" onclick="opsExportSummary()"><i class="fa-solid fa-file-csv" style="width:16px"></i> Export Ops Summary CSV</button>
+              <div style="border-top:1px solid rgba(0,0,0,0.07);margin:4px 0;padding-top:10px">
+                <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800;margin-bottom:8px">External Platforms</div>
+                <div style="display:flex;flex-direction:column;gap:6px" id="opsPlatformLinks">
+                  <a href="https://resend.com/emails" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="justify-content:flex-start;gap:8px;text-decoration:none"><i class="fa-solid fa-envelope" style="color:#3b82f6;width:14px"></i> Resend Email Dashboard <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.65rem;margin-left:auto;color:var(--text-muted)"></i></a>
+                  <a href="https://account.africastalking.com/" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="justify-content:flex-start;gap:8px;text-decoration:none"><i class="fa-solid fa-message" style="color:#22c55e;width:14px"></i> Africa's Talking Dashboard <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.65rem;margin-left:auto;color:var(--text-muted)"></i></a>
+                  <a href="https://dashboard.paystack.com/" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="justify-content:flex-start;gap:8px;text-decoration:none"><i class="fa-solid fa-credit-card" style="color:#f59e0b;width:14px"></i> Paystack Dashboard <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.65rem;margin-left:auto;color:var(--text-muted)"></i></a>
+                  <a href="https://portal.smileidentity.com/" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="justify-content:flex-start;gap:8px;text-decoration:none"><i class="fa-solid fa-fingerprint" style="color:#a855f7;width:14px"></i> Smile Identity Portal <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.65rem;margin-left:auto;color:var(--text-muted)"></i></a>
+                  <a href="https://stitch.money/" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="justify-content:flex-start;gap:8px;text-decoration:none"><i class="fa-solid fa-building-columns" style="color:#2F8C9B;width:14px"></i> Stitch Bank Data <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.65rem;margin-left:auto;color:var(--text-muted)"></i></a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- ══════════════════════════════════
