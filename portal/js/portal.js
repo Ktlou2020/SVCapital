@@ -3413,8 +3413,9 @@ async function confirmInvestment(pool) {
     maturityDate.setMonth(maturityDate.getMonth() + pool.term_months);
 
     // Create investment (server-side hook deducts wallet + fee atomically)
+    const investmentId = Utils.genId('INVST');
     await API.investments.create({
-      id: Utils.genId('INVST'),
+      id: investmentId,
       investor_id: DEMO_INVESTOR_ID,
       pool_id: pool.id,
       product_type: pool.product_type,
