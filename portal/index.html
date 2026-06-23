@@ -207,14 +207,14 @@
           </button>
           <!-- Notification dropdown -->
           <div id="notifPanel" style="display:none;position:absolute;top:calc(100% + 8px);right:0;width:320px;background:#fff;border:1px solid rgba(0,0,0,0.09);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.13);z-index:999;overflow:hidden">
-            <div style="padding:14px 18px 10px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between">
-              <span style="font-size:0.88rem;font-weight:800;color:#1a1a1a">Notifications</span>
+            <div id="notifPanelHeader" style="padding:14px 18px 10px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between">
+              <span id="notifPanelTitle" style="font-size:0.88rem;font-weight:800;color:#1a1a1a">Notifications</span>
               <button onclick="markAllRead()" style="font-size:0.7rem;color:#ff9b0c;font-weight:700;background:none;border:none;cursor:pointer">Mark all read</button>
             </div>
             <div id="notifList" style="max-height:340px;overflow-y:auto">
               <div id="notifEmpty" style="padding:24px 18px;text-align:center;color:#999;font-size:0.82rem">Loading…</div>
             </div>
-            <div style="padding:10px 18px;border-top:1px solid rgba(0,0,0,0.07);text-align:center">
+            <div id="notifPanelFooter" style="padding:10px 18px;border-top:1px solid rgba(0,0,0,0.07);text-align:center">
               <button onclick="navigate('support', document.querySelector('[data-view=support]'));toggleNotifPanel()" style="font-size:0.78rem;color:#ff9b0c;font-weight:600;background:none;border:none;cursor:pointer">View all in Support →</button>
             </div>
           </div>

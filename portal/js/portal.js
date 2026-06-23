@@ -918,7 +918,11 @@ function loadNotifications() {
   if (!list) return;
 
   const notifs = [];
-  const inv = PORTAL.investor;
+  const inv         = PORTAL.investor;
+  const investments = PORTAL.investments  || [];
+  const tickets     = PORTAL.tickets      || [];
+  const transactions= PORTAL.transactions || [];
+  const pools       = PORTAL.pools        || [];
 
   // 1. Low wallet balance
   if (inv && parseFloat(inv.wallet_balance) < 500) {
@@ -934,7 +938,7 @@ function loadNotifications() {
 
   // 2. Investments maturing within 60 days
   const now = new Date();
-  const soon = PORTAL.investments.filter(i => {
+  const soon = investments.filter(i => {
     if (i.status !== 'active') return false;
     const end = new Date(i.end_date || i.maturity_date);
     if (!end || isNaN(end)) return false;
@@ -1019,7 +1023,7 @@ function loadNotifications() {
   }
 
   // 5. Maturity overdue — investment has matured but no instruction yet
-  const overdue = PORTAL.investments.filter(i => {
+  const overdue = investments.filter(i => {
     if (i.status !== 'matured') return false;
     return !i.maturity_instruction;
   });
@@ -1035,7 +1039,7 @@ function loadNotifications() {
   }
 
   // 6. Support ticket responses — one notification per answered ticket
-  const answered = PORTAL.tickets.filter(t => t.admin_response && t.admin_response.trim());
+  const answered = tickets.filter(t => t.admin_response && t.admin_response.trim());
   answered.forEach(t => {
     notifs.push({
       icon: 'fa-reply', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#2F8C9B',
@@ -1048,7 +1052,7 @@ function loadNotifications() {
   });
 
   // 7. Pending withdrawal submitted
-  const pendingWithdrawal = PORTAL.transactions.find(t => t.type === 'withdrawal' && t.status === 'pending');
+  const pendingWithdrawal = transactions.find(t => t.type === 'withdrawal' && t.status === 'pending');
   if (pendingWithdrawal) {
     notifs.push({
       icon: 'fa-money-bill-transfer', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#6366f1',
@@ -1061,7 +1065,7 @@ function loadNotifications() {
   }
 
   // 8. New pools opened in last 14 days
-  const newPools = PORTAL.pools.filter(p => {
+  const newPools = pools.filter(p => {
     if (p.status !== 'open') return false;
     return (now - new Date(p.created_at)) < 14 * 86400000;
   });

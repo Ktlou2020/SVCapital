@@ -1285,6 +1285,23 @@ body.dark-mode .learn-expand-btn      { background: rgba(255,255,255,0.06) !impo
 body.dark-mode .notif-item { border-color: rgba(255,255,255,0.06) !important; color: #c8d0dc !important; }
 body.dark-mode .notif-title { color: #e2e8f0 !important; }
 body.dark-mode .notif-sub   { color: #6b7280 !important; }
+body.dark-mode #notifPanel {
+  background: rgba(16,21,31,0.98) !important;
+  border-color: rgba(255,255,255,0.08) !important;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(212,175,55,0.06) !important;
+  backdrop-filter: blur(20px) !important;
+}
+body.dark-mode #notifPanelHeader {
+  border-bottom-color: rgba(255,255,255,0.07) !important;
+}
+body.dark-mode #notifPanelTitle { color: #e2e8f0 !important; }
+body.dark-mode #notifPanelFooter {
+  border-top-color: rgba(255,255,255,0.07) !important;
+}
+body.dark-mode #notifEmpty { color: #6b7280 !important; }
+body.dark-mode .notif-item:hover { background: rgba(255,155,12,0.05) !important; }
+body.dark-mode .notif-item.unread { border-left: 2px solid #ff9b0c; }
+body.dark-mode .notif-dot { border-color: rgba(16,21,31,0.8) !important; }
 body.dark-mode .xp-progress-next { color: #6b7280 !important; }
 body.dark-mode .xp-progress-right { color: #e2e8f0 !important; }
 body.dark-mode .learn-header__title { color: #e2e8f0 !important; }
