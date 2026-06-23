@@ -20,8 +20,10 @@ function _wrap(body) {
 body{background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#222}
 .shell{max-width:580px;margin:32px auto;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 6px 32px rgba(0,0,0,.10)}
 .hdr{background:linear-gradient(135deg,#1a2235 0%,#253352 100%);padding:30px 40px;text-align:center}
-.logo{font-size:1.55rem;font-weight:800;letter-spacing:-0.5px;color:#ff9b0c}
-.logo em{color:#fff;font-style:normal}
+.logo{display:flex;align-items:center;justify-content:center;gap:12px}
+.logo img{height:48px;width:48px;object-fit:contain;display:block;flex-shrink:0}
+.logo-text{font-size:1.55rem;font-weight:800;letter-spacing:-0.5px;color:#ff9b0c}
+.logo-text em{color:#fff;font-style:normal}
 .bdy{padding:38px 40px}
 h2{font-size:1.2rem;font-weight:700;color:#1a2235;margin-bottom:14px}
 p{font-size:0.93rem;color:#444;line-height:1.65;margin-bottom:14px}
@@ -39,7 +41,7 @@ p{font-size:0.93rem;color:#444;line-height:1.65;margin-bottom:14px}
 @media(max-width:600px){.bdy,.hdr,.ftr{padding:24px 20px}}
 </style></head><body>
 <div class="shell">
-  <div class="hdr"><div class="logo">SV <em>Capital</em></div></div>
+  <div class="hdr"><div class="logo"><img src="${BASE_URL}/assets/logo.png" alt="" /><span class="logo-text">SV <em>Capital</em></span></div></div>
   <div class="bdy">${body}</div>
   <div class="ftr">SV Capital (Pty) Ltd &nbsp;·&nbsp; <a href="${BASE_URL}">platform.svcapital.co.za</a><br>
   This is an automated message — please do not reply directly.</div>
@@ -380,7 +382,10 @@ function sendMonthlyStatement(investor, { investments, recentTransactions }) {
 <body style="margin:0;padding:0;background:#0d0d0d;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
 <div style="max-width:600px;margin:0 auto;padding:40px 20px">
   <div style="text-align:center;margin-bottom:32px">
-    <div style="font-size:28px;font-weight:900;color:#FF9B0C;letter-spacing:-0.5px">SV Capital</div>
+    <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:6px">
+      <img src="${BASE_URL}/assets/logo.png" alt="" style="height:48px;width:48px;object-fit:contain;display:block">
+      <span style="font-size:28px;font-weight:900;color:#FF9B0C;letter-spacing:-0.5px">SV <span style="color:#fff">Capital</span></span>
+    </div>
     <div style="font-size:13px;color:#6b7280;margin-top:4px">Monthly Statement — ${monthName}</div>
   </div>
 

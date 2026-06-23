@@ -166,14 +166,14 @@
             <span class="notif-dot" id="adminNotifDot"></span>
           </button>
           <div id="adminNotifPanel" style="display:none;position:absolute;top:calc(100% + 8px);right:0;width:320px;background:#fff;border:1px solid rgba(0,0,0,0.09);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.13);z-index:999;overflow:hidden">
-            <div style="padding:14px 18px 10px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between">
-              <span style="font-size:0.88rem;font-weight:800;color:#1a1a1a">Admin Alerts</span>
+            <div style="padding:14px 18px 10px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:0.88rem;font-weight:800;color:var(--text)">Admin Alerts</span>
               <button onclick="adminMarkAllRead()" style="font-size:0.7rem;color:#FF8215;font-weight:700;background:none;border:none;cursor:pointer">Mark all read</button>
             </div>
             <div id="adminNotifBody" style="max-height:340px;overflow-y:auto">
-              <div style="padding:24px 18px;text-align:center;color:#888;font-size:0.82rem">Loading alerts…</div>
+              <div style="padding:24px 18px;text-align:center;color:var(--text-muted);font-size:0.82rem">Loading alerts…</div>
             </div>
-            <div style="padding:10px 18px;border-top:1px solid rgba(0,0,0,0.07);text-align:center">
+            <div style="padding:10px 18px;border-top:1px solid rgba(255,255,255,0.07);text-align:center">
               <button onclick="navigate('support', document.querySelector('[data-view=support]'));toggleAdminNotif()" style="font-size:0.78rem;color:#FF8215;font-weight:600;background:none;border:none;cursor:pointer">View all in Support &rarr;</button>
             </div>
           </div>

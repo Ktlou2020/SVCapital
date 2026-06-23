@@ -770,7 +770,7 @@ function renderOpenPoolsWidget() {
     const pct = Utils.poolFillPct(p);
     return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">
       <div class="flex-between mb-4">
-        <span style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${p.name}</span>
+        <span style="font-size:0.82rem;font-weight:700;color:var(--text)">${p.name}</span>
         <span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span>
       </div>
       <div class="pool-card__progress-label">
@@ -810,7 +810,7 @@ function renderPendingActions() {
   }
 
   el.innerHTML = actions.map(a => `
-    <button type="button" style="width:100%;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:#fff;margin-bottom:10px;cursor:pointer;transition:transform .15s ease, box-shadow .15s ease" onclick="navigate('${a.view}', document.querySelector('[data-view=${a.view}]'))" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.08)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+    <button type="button" style="width:100%;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--dark-3);margin-bottom:10px;cursor:pointer;transition:transform .15s ease, box-shadow .15s ease" onclick="navigate('${a.view}', document.querySelector('[data-view=${a.view}]'))" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.3)';this.style.borderColor='rgba(212,175,55,0.3)'" onmouseout="this.style.transform='';this.style.boxShadow='';this.style.borderColor=''">
       <div style="display:flex;align-items:flex-start;gap:12px">
         <div style="width:34px;height:34px;border-radius:10px;background:${a.color}18;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <i class="fa-solid ${a.icon}" style="color:${a.color};font-size:0.8rem"></i>
@@ -1330,7 +1330,7 @@ async function viewInvestor(id) {
         </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:16px">No transactions on record</td></tr>'}</tbody>
     </table>
 
-    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Admin Notes (Persistent)</div>
+    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:var(--text)">Admin Notes (Persistent)</div>
     <div class="panel mb-16">
       <div class="panel__header">
         <span class="panel__title">Notes History</span>
@@ -1345,7 +1345,7 @@ async function viewInvestor(id) {
       </div>
     </div>
 
-    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Activity Timeline</div>
+    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:var(--text)">Activity Timeline</div>
     <div class="panel mb-16">
       <div class="panel__body" style="padding:0 4px">
         <div id="investorTimeline" style="max-height:320px;overflow-y:auto;padding:4px 0">
@@ -1874,7 +1874,7 @@ function _capacityBar(pool) {
   const color = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#22c55e';
   const fullBadge = cur >= max ? ' <span style="display:inline-block;background:#ef4444;color:#fff;font-size:0.65rem;font-weight:700;padding:1px 6px;border-radius:20px;vertical-align:middle;margin-left:4px">Full</span>' : '';
   return `<div style="min-width:100px">${fullBadge}
-    <div style="height:4px;background:rgba(0,0,0,0.1);border-radius:2px;margin-bottom:3px">
+    <div style="height:4px;background:rgba(255,255,255,0.08);border-radius:2px;margin-bottom:3px">
       <div style="height:100%;width:${pct}%;background:${color};border-radius:2px"></div>
     </div>
     <div style="font-size:0.68rem;color:var(--text-muted)">${pct}% · R${(cur/1000).toFixed(0)}k / R${(max/1000).toFixed(0)}k</div>
@@ -1937,13 +1937,13 @@ function renderPoolsGrid() {
         <button class="btn btn--secondary btn--sm" onclick="togglePoolManageMenu(event,'pool-menu-${pid}')">
           <i class="fa-solid fa-ellipsis-vertical"></i> Manage
         </button>
-        <div id="pool-menu-${pid}" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:#ffffff;border:1px solid rgba(0,0,0,0.1);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.12);z-index:99;min-width:180px;overflow:hidden">
+        <div id="pool-menu-${pid}" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--dark-3);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:99;min-width:180px;overflow:hidden">
           ${canSetWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="setPoolWaitlist('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-clock" style="color:#f59e0b;width:16px"></i> Set to Waitlist</button>` : ''}
           ${isWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="reopenPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-door-open" style="color:#22c55e;width:16px"></i> Reopen Pool</button>` : ''}
           <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="editPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-pen" style="width:16px"></i> Edit Pool</button>
           ${p.status === 'open' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="closePool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-lock" style="color:#ef4444;width:16px"></i> Close Pool</button>` : ''}
           ${p.status === 'matured' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="markPaidOut('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-check" style="color:#22c55e;width:16px"></i> Mark Paid Out</button>` : ''}
-          <div style="height:1px;background:rgba(0,0,0,0.07);margin:4px 0"></div>
+          <div style="height:1px;background:var(--border);margin:4px 0"></div>
           <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem;color:#ef4444" onclick="deletePool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-trash" style="width:16px"></i> Delete Pool</button>
         </div>
       </div>`;
@@ -2708,7 +2708,7 @@ function renderTxnTable() {
   body.innerHTML = page.map(t => {
     const isPendingDeposit = t.type === 'deposit' && t.status === 'pending';
     const statusCell = isPendingDeposit
-      ? `<select class="tbl-filter" style="font-size:0.72rem;padding:4px 8px;border-radius:6px;border:1.5px solid rgba(255,130,21,0.4);background:#fff;color:#1a1a1a;cursor:pointer" onchange="changeTxnStatus('${t.id}', this.value, '${t.investor_id}', ${t.amount})">
+      ? `<select class="tbl-filter" style="font-size:0.72rem;padding:4px 8px;border-radius:6px;border:1.5px solid rgba(255,130,21,0.4);background:var(--dark-4);color:var(--text);cursor:pointer" onchange="changeTxnStatus('${t.id}', this.value, '${t.investor_id}', ${t.amount})">
            <option value="pending" ${t.status==='pending'?'selected':''}>Pending</option>
            <option value="processing" ${t.status==='processing'?'selected':''}>Processing</option>
            <option value="completed" ${t.status==='completed'?'selected':''}>Completed</option>
@@ -3509,15 +3509,15 @@ function renderConversionFunnel() {
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
               <div style="display:flex;align-items:center;gap:7px">
                 <span style="font-size:0.8rem">${s.icon}</span>
-                <span style="font-size:0.81rem;font-weight:600;color:#1a1a1a">${s.label}</span>
+                <span style="font-size:0.81rem;font-weight:600;color:var(--text)">${s.label}</span>
                 ${i > 0 && dropOff > 0 ? `<span style="font-size:0.68rem;color:${dropColor};background:${dropColor}22;padding:1px 6px;border-radius:4px">−${dropOff}% drop</span>` : ''}
               </div>
               <div style="display:flex;gap:10px;align-items:center">
-                <span style="font-size:0.88rem;font-weight:700;color:#1a1a1a">${s.count.toLocaleString()}</span>
+                <span style="font-size:0.88rem;font-weight:700;color:var(--text)">${s.count.toLocaleString()}</span>
                 <span style="font-size:0.75rem;color:var(--text-muted);min-width:34px;text-align:right">${pct}%</span>
               </div>
             </div>
-            <div style="height:6px;background:rgba(0,0,0,0.06);border-radius:3px;overflow:hidden">
+            <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden">
               <div style="height:100%;width:${pct}%;background:${s.color};border-radius:3px;transition:width 0.7s ease"></div>
             </div>
           </div>`;
@@ -3525,7 +3525,7 @@ function renderConversionFunnel() {
     </div>
 
     <!-- Summary metrics -->
-    <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(0,0,0,0.08);display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px">
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px">
       <div style="background:rgba(212,175,55,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">End-to-end</div>
         <div style="font-size:1.1rem;font-weight:700;color:#D4AF37">${invested > 0 ? Math.round(invested/total*100) : 0}%</div>
@@ -3610,14 +3610,14 @@ function renderSignupFriction(data, panel) {
     const dropColor = dropOff >= 40 ? '#ef4444' : dropOff >= 20 ? '#f97316' : '#f59e0b';
     const timeRow  = avg_time_per_step.find(t => t.step === step);
     return `
-      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(0,0,0,0.05)">
-        <div style="width:90px;font-size:0.78rem;font-weight:600;color:#1a1a1a;flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="width:90px;font-size:0.78rem;font-weight:600;color:var(--text);flex-shrink:0">
           <span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:${stepColors[step]};color:#fff;font-size:0.65rem;font-weight:700;text-align:center;line-height:20px;margin-right:5px">${step}</span>${stepNames[step]}
         </div>
-        <div style="flex:1;height:8px;background:rgba(0,0,0,0.07);border-radius:4px;overflow:hidden">
+        <div style="flex:1;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden">
           <div style="height:100%;width:${pct}%;background:${stepColors[step]};border-radius:4px;transition:width 0.6s ease"></div>
         </div>
-        <div style="width:40px;text-align:right;font-size:0.82rem;font-weight:700;color:#1a1a1a">${sessions.toLocaleString()}</div>
+        <div style="width:40px;text-align:right;font-size:0.82rem;font-weight:700;color:var(--text)">${sessions.toLocaleString()}</div>
         ${step > 1 && dropOff > 0
           ? `<div style="width:66px;font-size:0.68rem;color:${dropColor};background:${dropColor}18;padding:2px 6px;border-radius:4px;text-align:center">−${dropOff}% drop</div>`
           : '<div style="width:66px"></div>'}
@@ -3630,7 +3630,7 @@ function renderSignupFriction(data, panel) {
     ? top_errors.slice(0, 6).map(e => `
         <tr>
           <td style="padding:6px 8px;font-size:0.75rem;color:var(--text-muted);white-space:nowrap">Step ${e.step}</td>
-          <td style="padding:6px 8px;font-size:0.75rem;color:#1a1a1a;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.error_message}">${e.error_message}</td>
+          <td style="padding:6px 8px;font-size:0.75rem;color:var(--text);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.error_message}">${e.error_message}</td>
           <td style="padding:6px 8px;font-size:0.75rem;font-weight:700;color:#ef4444;text-align:right">${e.count}</td>
         </tr>`).join('')
     : '<tr><td colspan="3" style="padding:12px;font-size:0.78rem;color:var(--text-muted);text-align:center">No errors recorded yet</td></tr>';
@@ -3640,7 +3640,7 @@ function renderSignupFriction(data, panel) {
     ? top_error_fields.slice(0, 6).map(f => `
         <tr>
           <td style="padding:6px 8px;font-size:0.75rem;color:var(--text-muted);white-space:nowrap">Step ${f.step}</td>
-          <td style="padding:6px 8px;font-size:0.75rem;font-weight:600;color:#1a1a1a">${f.field_name}</td>
+          <td style="padding:6px 8px;font-size:0.75rem;font-weight:600;color:var(--text)">${f.field_name}</td>
           <td style="padding:6px 8px;font-size:0.75rem;font-weight:700;color:#f97316;text-align:right">${f.count}</td>
         </tr>`).join('')
     : '<tr><td colspan="3" style="padding:12px;font-size:0.78rem;color:var(--text-muted);text-align:center">No field data yet</td></tr>';
@@ -3653,10 +3653,10 @@ function renderSignupFriction(data, panel) {
     const c = colors[d.device_type] || '#6b7280';
     return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
       <div style="width:62px;font-size:0.75rem;color:var(--text-muted);text-transform:capitalize">${d.device_type}</div>
-      <div style="flex:1;height:6px;background:rgba(0,0,0,0.07);border-radius:3px;overflow:hidden">
+      <div style="flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden">
         <div style="height:100%;width:${pct}%;background:${c};border-radius:3px"></div>
       </div>
-      <div style="width:32px;text-align:right;font-size:0.75rem;font-weight:600;color:#1a1a1a">${pct}%</div>
+      <div style="width:32px;text-align:right;font-size:0.75rem;font-weight:600;color:var(--text)">${pct}%</div>
     </div>`;
   }).join('');
 
@@ -3708,9 +3708,9 @@ function renderSignupFriction(data, panel) {
         <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Most Common Validation Errors</div>
         <table style="width:100%;border-collapse:collapse">
           <thead><tr>
-            <th style="font-size:0.65rem;color:var(--text-muted);text-align:left;padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.08)">Step</th>
-            <th style="font-size:0.65rem;color:var(--text-muted);text-align:left;padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.08)">Error</th>
-            <th style="font-size:0.65rem;color:var(--text-muted);text-align:right;padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.08)">#</th>
+            <th style="font-size:0.65rem;color:var(--text-muted);text-align:left;padding:4px 8px;border-bottom:1px solid var(--border)">Step</th>
+            <th style="font-size:0.65rem;color:var(--text-muted);text-align:left;padding:4px 8px;border-bottom:1px solid var(--border)">Error</th>
+            <th style="font-size:0.65rem;color:var(--text-muted);text-align:right;padding:4px 8px;border-bottom:1px solid var(--border)">#</th>
           </tr></thead>
           <tbody>${errHtml}</tbody>
         </table>
@@ -3721,9 +3721,9 @@ function renderSignupFriction(data, panel) {
         <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Most Friction — Fields</div>
         <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
           <thead><tr>
-            <th style="font-size:0.65rem;color:var(--text-muted);text-align:left;padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.08)">Step</th>
-            <th style="font-size:0.65rem;color:var(--text-muted);text-align:left;padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.08)">Field</th>
-            <th style="font-size:0.65rem;color:var(--text-muted);text-align:right;padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.08)">#</th>
+            <th style="font-size:0.65rem;color:var(--text-muted);text-align:left;padding:4px 8px;border-bottom:1px solid var(--border)">Step</th>
+            <th style="font-size:0.65rem;color:var(--text-muted);text-align:left;padding:4px 8px;border-bottom:1px solid var(--border)">Field</th>
+            <th style="font-size:0.65rem;color:var(--text-muted);text-align:right;padding:4px 8px;border-bottom:1px solid var(--border)">#</th>
           </tr></thead>
           <tbody>${fieldHtml}</tbody>
         </table>
@@ -4025,7 +4025,7 @@ function viewIFA(ifaId) {
         <div class="flex-center gap-12 mb-16">
           <div class="avatar avatar--lg avatar--gold">${initials.toUpperCase()}</div>
           <div>
-            <div style="font-size:1.1rem;font-weight:800;color:#1a1a1a">${_esc(ifa.first_name)} ${_esc(ifa.last_name)}</div>
+            <div style="font-size:1.1rem;font-weight:800;color:var(--text)">${_esc(ifa.first_name)} ${_esc(ifa.last_name)}</div>
             <div style="color:var(--ci-text-muted,#6b7280);font-size:0.8rem">${_esc(ifa.email)}</div>
             <div style="color:var(--text-muted);font-size:0.75rem;margin-top:2px">${_esc(ifa.company_name) || ''}</div>
             <div class="mt-6"><span class="badge" style="background:${statusColor}20;color:${statusColor}">${_esc(ifa.status)}</span></div>
@@ -4059,7 +4059,7 @@ function viewIFA(ifaId) {
     </div>
 
     <div class="flex-between mb-12" style="align-items:center">
-      <div style="font-size:0.85rem;font-weight:700;color:#1a1a1a">Linked Clients (${clients.length})</div>
+      <div style="font-size:0.85rem;font-weight:700;color:var(--text)">Linked Clients (${clients.length})</div>
       <button class="btn btn--primary btn--sm" onclick="openLinkClientModal('${ifa.id}');Modal.close('ifaDetailModal')">
         <i class="fa-solid fa-user-plus"></i> Link Client
       </button>
@@ -4379,7 +4379,7 @@ function setupGlobalSearch() {
 
   const dropdown = document.createElement('div');
   dropdown.id = 'globalSearchDropdown';
-  dropdown.style.cssText = 'display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid rgba(0,0,0,0.1);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.15);z-index:9999;max-height:420px;overflow-y:auto';
+  dropdown.style.cssText = 'display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--dark-2);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.5);z-index:9999;max-height:420px;overflow-y:auto';
   input.parentElement.style.position = 'relative';
   input.parentElement.appendChild(dropdown);
 
@@ -4393,7 +4393,7 @@ function setupGlobalSearch() {
   const highlight = idx => {
     const items = [...dropdown.querySelectorAll('.gs-item')];
     items.forEach((el, itemIdx) => {
-      el.style.background = itemIdx === idx ? '#f7f8fa' : '';
+      el.style.background = itemIdx === idx ? 'rgba(212,175,55,0.08)' : '';
       el.setAttribute('aria-selected', itemIdx === idx ? 'true' : 'false');
     });
     activeIndex = idx;
@@ -4401,7 +4401,7 @@ function setupGlobalSearch() {
     if (active) active.scrollIntoView({ block: 'nearest' });
   };
   const renderHint = msg => {
-    dropdown.innerHTML = `<div style="padding:16px 18px;color:#64748b;font-size:0.8rem;line-height:1.5">${msg}</div>`;
+    dropdown.innerHTML = `<div style="padding:16px 18px;color:var(--text-muted);font-size:0.8rem;line-height:1.5">${msg}</div>`;
     dropdown.style.display = 'block';
   };
   const runSearch = () => {
@@ -4450,25 +4450,25 @@ function setupGlobalSearch() {
 
     let idx = 0;
     dropdown.innerHTML = `
-      <div style="padding:10px 14px;border-bottom:1px solid rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fbfbfc;position:sticky;top:0;z-index:1">
-        <span style="font-size:0.74rem;font-weight:800;color:#334155;letter-spacing:0.02em">${flatResults.length} result${flatResults.length === 1 ? '' : 's'}</span>
-        <span style="font-size:0.7rem;color:#94a3b8">↑ ↓ move · Enter open · Esc close</span>
+      <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--dark-3);position:sticky;top:0;z-index:1">
+        <span style="font-size:0.74rem;font-weight:800;color:var(--text);letter-spacing:0.02em">${flatResults.length} result${flatResults.length === 1 ? '' : 's'}</span>
+        <span style="font-size:0.7rem;color:var(--text-dim)">↑ ↓ move · Enter open · Esc close</span>
       </div>
       ${groups.map(group => {
         const html = group.items.map(item => {
           const current = idx++;
           return `
-            <div class="gs-item" data-idx="${current}" tabindex="0" role="option" aria-selected="false" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(0,0,0,0.05)">
+            <div class="gs-item" data-idx="${current}" tabindex="0" role="option" aria-selected="false" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)">
               <div style="width:30px;height:30px;border-radius:8px;background:${item.color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
                 <i class="fa-solid ${item.icon}" style="color:${item.color};font-size:0.8rem"></i>
               </div>
               <div style="min-width:0">
-                <div style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${item.title}</div>
-                <div style="font-size:0.72rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.sub}</div>
+                <div style="font-size:0.82rem;font-weight:700;color:var(--text)">${item.title}</div>
+                <div style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.sub}</div>
               </div>
             </div>`;
         }).join('');
-        return `<div><div style="padding:8px 16px 6px;font-size:0.68rem;font-weight:800;letter-spacing:0.08em;color:#94a3b8;text-transform:uppercase;background:#fff">${group.label}</div>${html}</div>`;
+        return `<div><div style="padding:8px 16px 6px;font-size:0.68rem;font-weight:800;letter-spacing:0.08em;color:var(--text-dim);text-transform:uppercase;background:var(--dark-2)">${group.label}</div>${html}</div>`;
       }).join('')}`;
 
     dropdown.querySelectorAll('.gs-item').forEach((el, idx) => {
@@ -4969,7 +4969,7 @@ function _renderBroadcastHistory() {
   body.innerHTML = _broadcastHistory.map(h => `
     <div style="padding:12px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:0.82rem;font-weight:700;color:#1a1a1a">${h.subject || '(SMS)'}</span>
+        <span style="font-size:0.82rem;font-weight:700;color:var(--text)">${h.subject || '(SMS)'}</span>
         <span style="font-size:0.7rem;color:var(--text-dim)">${Utils.date(h.date)}</span>
       </div>
       <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:6px">${h.message}</div>
@@ -5335,12 +5335,12 @@ function _timelineItem(icon, colorHex, text, date) {
     return `${r},${g},${b}`;
   };
   const rgb = hexToRgb(colorHex.replace('#','').length === 6 ? colorHex : '#7a92a8');
-  return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.07)">
+  return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
     <div style="width:28px;height:28px;border-radius:50%;background:rgba(${rgb},0.12);border:1px solid rgba(${rgb},0.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
       <i class="fa-solid ${icon}" style="font-size:0.7rem;color:${colorHex}"></i>
     </div>
     <div style="flex:1">
-      <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${text}</div>
+      <div style="font-size:0.82rem;font-weight:600;color:var(--text)">${text}</div>
       <div style="font-size:0.7rem;color:#6b7280">${Utils.date(date)}</div>
     </div>
   </div>`;
