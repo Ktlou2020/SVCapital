@@ -3398,12 +3398,6 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest) {
 }
 
 async function confirmInvestment(pool) {
-  if (!_isInvestorFicaApproved(PORTAL.investor)) {
-    Toast.error('Your FICA verification must be approved before you can invest.');
-    navigate('profile', document.querySelector('[data-view=profile]'));
-    openKycUploadModal();
-    return;
-  }
   const amount = parseFloat(document.getElementById('investAmount').value);
   if (!amount || amount < pool.min_investment) { Toast.error(`Minimum investment is ${Utils.rand(pool.min_investment)}`); return; }
 
