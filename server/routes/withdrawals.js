@@ -44,7 +44,7 @@ router.post('/request', requireAuth, async (req, res) => {
       await client.query('BEGIN');
 
       const { rows: [row] } = await client.query(
-        'SELECT id, first_name, last_name, email, wallet_balance FROM investors WHERE id = $1 FOR UPDATE',
+        'SELECT id, first_name, last_name, email, wallet_balance, fica_status, kyc_status, status FROM investors WHERE id = $1 FOR UPDATE',
         [investorId]
       );
       if (!row) {
@@ -52,6 +52,14 @@ router.post('/request', requireAuth, async (req, res) => {
         return res.status(404).json({ error: 'Investor record not found.' });
       }
       investor = row;
+
+      const ficaOk = ['approved', 'verified', 'active'].includes((investor.fica_status || '').toLowerCase())
+        || ['approved', 'verified', 'active'].includes((investor.kyc_status || '').toLowerCase())
+        || ['approved', 'verified', 'active'].includes((investor.status || '').toLowerCase());
+      if (!ficaOk) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'FICA/KYC verification is required before withdrawing funds.' });
+      }
 
       if (parseFloat(investor.wallet_balance) < numAmount) {
         await client.query('ROLLBACK');

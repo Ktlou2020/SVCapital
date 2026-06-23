@@ -458,13 +458,7 @@ function renderWalletReadinessPanel() {
   let ctaAction = "openTopUpModal()";
   let accent = '#FF9B0C';
 
-  if (!ficaApproved) {
-    headline = 'Complete FICA/KYC first to unlock investing.';
-    subcopy = 'Once verified, you can fund your wallet and invest without hitting a dead-end later.';
-    ctaLabel = 'Complete FICA/KYC';
-    ctaAction = "navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()";
-    accent = '#2F8C9B';
-  } else if (affordable.length) {
+  if (affordable.length) {
     const best = affordable[0];
     headline = `You can already invest in ${affordable.length} open pool${affordable.length === 1 ? '' : 's'}.`;
     subcopy = best ? `${best.name} is the closest match for your current wallet balance.` : subcopy;
@@ -483,7 +477,7 @@ function renderWalletReadinessPanel() {
   panel.innerHTML = `
     <div class="panel__header" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span class="panel__title"><i class="fa-solid fa-bolt" style="color:${accent}"></i> Wallet Readiness</span>
-      <span style="margin-left:auto;font-size:0.72rem;font-weight:700;color:${accent};background:${accent}14;padding:4px 10px;border-radius:999px;border:1px solid ${accent}2f">${ficaApproved ? 'Investment ready checks' : 'Verification blocking progress'}</span>
+      <span style="margin-left:auto;font-size:0.72rem;font-weight:700;color:${accent};background:${accent}14;padding:4px 10px;border-radius:999px;border:1px solid ${accent}2f">${ficaApproved ? 'Investment ready checks' : 'FICA pending — withdrawals locked'}</span>
     </div>
     <div class="panel__body" style="display:flex;flex-direction:column;gap:14px">
       <div style="border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(255,255,255,0.98),rgba(255,155,12,0.05))">
@@ -502,8 +496,8 @@ function renderWalletReadinessPanel() {
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Verification</div>
-          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#2F8C9B'};margin-top:6px">${ficaApproved ? 'FICA/KYC approved' : 'FICA/KYC needed'}</div>
-          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.'}</div>
+          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#2F8C9B'};margin-top:6px">${ficaApproved ? 'FICA/KYC approved' : 'FICA/KYC pending'}</div>
+          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${ficaApproved ? (bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.') : 'You can invest and top up. Withdrawals unlock once FICA is approved.'}</div>
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Money in motion</div>
@@ -544,13 +538,7 @@ function renderMarketConversionPanel(pools) {
   let actionLabel = 'Review wallet';
   let accent = '#2F8C9B';
 
-  if (!ficaApproved) {
-    title = 'Your first investment is blocked by pending FICA/KYC.';
-    sub = 'Complete verification before funding more or choosing an amount so your first investment can go through cleanly.';
-    action = "navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()";
-    actionLabel = 'Complete FICA/KYC';
-    accent = '#2F8C9B';
-  } else if (affordable.length) {
+  if (affordable.length) {
     title = `You can invest right now in ${affordable.length} open pool${affordable.length === 1 ? '' : 's'}.`;
     sub = 'Recommended pools below are ranked by affordability, urgency, and expected return so you can act quickly.';
     action = "openInvestModal('" + affordable[0].id + "')";
@@ -3117,15 +3105,6 @@ function renderMarketplace() {
             </button>
           </div>`;
       }
-    } else if (!ficaApproved) {
-      ctaHtml = `<div style="display:flex;flex-direction:column;gap:6px;margin-top:2px">
-                   <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.18);border-radius:8px;font-size:0.78rem;color:#2F8C9B">
-                     <i class="fa-solid fa-shield-halved"></i> Complete FICA before your first investment
-                   </div>
-                   <button class="btn btn--secondary btn--full" onclick="navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()">
-                     <i class="fa-solid fa-upload"></i> Complete FICA
-                   </button>
-                 </div>`;
     } else if (canInvest) {
       ctaHtml = `<button class="btn btn--primary btn--full" onclick='openInvestModal(${JSON.stringify(pool.id)})'>
                    <i class="fa-solid fa-coins"></i> Invest Now
@@ -3313,12 +3292,6 @@ async function joinWaitlist(poolId) {
 function openInvestModal(poolId) {
   const pool = PORTAL.pools.find(p => p.id === poolId);
   if (!pool) return;
-  if (!_isInvestorFicaApproved(PORTAL.investor)) {
-    Toast.info('Complete FICA verification before making your first investment.');
-    navigate('profile', document.querySelector('[data-view=profile]'));
-    openKycUploadModal();
-    return;
-  }
 
   SVC.track('view_item', { items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type }] });
   SVC.track('select_item', { items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type }] });
@@ -7085,6 +7058,19 @@ function openWithdrawalModal() {
   const status   = inv?.bank_account_status;
   const pendingWithdrawal = (PORTAL.transactions || []).find(t => t.type === 'withdrawal' && t.status === 'pending');
   SVC.track('svc_withdrawal_modal_opened', { wallet_balance_bucket: _amtBucket(balance), has_bank_account: !!(inv?.bank_account_number) });
+
+  if (!_isInvestorFicaApproved(inv)) {
+    content.innerHTML = `
+      <div style="text-align:center;padding:20px 0">
+        <i class="fa-solid fa-shield-halved" style="font-size:2.5rem;color:#2F8C9B;margin-bottom:16px"></i>
+        <p style="font-size:0.9rem;font-weight:700;color:#1a1a1a;margin-bottom:8px">FICA verification required</p>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px">You need to complete FICA/KYC verification before you can withdraw funds. You can still top up your wallet and invest in the meantime.</p>
+        <button class="btn btn--primary" onclick="Modal.close('withdrawalModal');navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()"><i class="fa-solid fa-upload"></i> Complete FICA/KYC</button>
+      </div>`;
+    footer.style.display = 'none';
+    Modal.open('withdrawalModal');
+    return;
+  }
 
   if (!inv?.bank_account_number) {
     content.innerHTML = `

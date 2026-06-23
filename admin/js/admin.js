@@ -344,7 +344,8 @@ function navigate(view, btnEl) {
     transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
     auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications', aml: 'AML Compliance Review',
     migrate: 'Data Migration', compliance: 'Compliance Calendar', reconciliation: 'Financial Reconciliation',
-    terms: 'Terms of Use', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest'
+    terms: 'Terms of Use', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest',
+    opsconsole: 'Operations Console'
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -372,6 +373,7 @@ function navigate(view, btnEl) {
     privacy: loadPrivacyEditor,
     'accepted-docs': loadAcceptedDocuments,
     intlinterest: loadIntlInterest,
+    opsconsole: loadOpsConsole,
   };
   if (loaders[view]) loaders[view]();
   // Close mobile sidebar after navigation
@@ -4937,6 +4939,374 @@ function renderAuditTable(res) {
 }
 
 /* ═══════════════════════════════════════════════
+   OPERATIONS CONSOLE
+   ═══════════════════════════════════════════════ */
+
+let _opsVelocityChart = null;
+let _opsAumByTypeChart = null;
+let _opsSummaryCache = null;
+
+async function _opsGet(path) {
+  const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+  const res = await fetch(`/api/opsconsole/${path}`, {
+    credentials: 'include',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error(`${path} ${res.status}`);
+  return res.json();
+}
+
+function _opsR(v) {
+  if (v == null || isNaN(v)) return '—';
+  if (v >= 1_000_000) return `R${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 1_000)     return `R${(v / 1_000).toFixed(1)}k`;
+  return `R${Number(v).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
+}
+
+async function loadOpsConsole() {
+  try {
+    const [summary, health, funnel, comms, activity, velocity] = await Promise.all([
+      _opsGet('summary').catch(() => null),
+      _opsGet('health').catch(() => null),
+      _opsGet('funnel').catch(() => null),
+      _opsGet('comms').catch(() => null),
+      _opsGet('activity').catch(() => null),
+      _opsGet('velocity').catch(() => null),
+    ]);
+
+    _opsSummaryCache = summary;
+
+    if (health) _opsRenderHealth(health);
+    if (summary) _opsRenderKpis(summary);
+    if (summary) _opsRenderMoney(summary);
+    if (summary) _opsRenderInvestorPulse(summary);
+    if (funnel)  _opsRenderFunnel(funnel);
+    if (summary) _opsRenderAumByType(summary);
+    if (summary) _opsRenderTopPools(summary);
+    if (velocity) _opsRenderVelocity(velocity);
+    if (comms)   _opsRenderComms(comms);
+    if (activity) _opsRenderAuditStream(activity);
+  } catch (e) {
+    console.error('[loadOpsConsole]', e);
+    Toast.error('Operations Console failed to load');
+  }
+}
+
+function _opsRenderHealth(health) {
+  const grid = document.getElementById('opsHealthGrid');
+  const checkedEl = document.getElementById('opsHealthChecked');
+  if (!grid) return;
+  if (checkedEl && health.checkedAt) {
+    checkedEl.textContent = `Last checked: ${new Date(health.checkedAt).toLocaleTimeString('en-ZA')}`;
+  }
+  const services = health.services || {};
+  grid.innerHTML = Object.entries(services).map(([key, svc]) => {
+    const ok   = svc.ok;
+    const conf = svc.configured;
+    const color  = ok ? '#22c55e' : conf ? '#ef4444' : '#9ca3af';
+    const icon   = ok ? 'fa-circle-check' : conf ? 'fa-circle-xmark' : 'fa-circle-minus';
+    const status = ok ? 'Online' : conf ? 'Error' : 'Not configured';
+    const latency = (svc.ms && svc.ms > 0) ? `${svc.ms}ms` : '';
+    const extra  = key === 'push' ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">${(svc.subscribers||0).toLocaleString()} subscribers</div>` : svc.note ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px">${svc.note}</div>` : latency ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px">${latency}</div>` : '';
+    return `<div style="padding:14px 12px;border:1.5px solid ${color}22;border-radius:12px;background:${color}08;text-align:center">
+      <i class="fa-solid ${icon}" style="font-size:1.4rem;color:${color};margin-bottom:6px"></i>
+      <div style="font-size:0.78rem;font-weight:800;color:#1a1a1a;line-height:1.2;margin-bottom:2px">${svc.name}</div>
+      <div style="font-size:0.72rem;font-weight:700;color:${color}">${status}</div>
+      ${extra}
+    </div>`;
+  }).join('');
+}
+
+function _opsRenderKpis(s) {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('ops-aum',      _opsR(s.aum));
+  set('ops-wallets',  _opsR(s.totalWalletBalance));
+  set('ops-dep-val',  s.pendingDeposits?.count != null ? `${s.pendingDeposits.count} · ${_opsR(s.pendingDeposits.value)}` : '—');
+  set('ops-with-val', s.pendingWithdrawals?.count != null ? `${s.pendingWithdrawals.count} · ${_opsR(s.pendingWithdrawals.value)}` : '—');
+  set('ops-fica',     s.investors?.ficaPending ?? '—');
+  set('ops-tickets',  s.operations?.openTickets ?? '—');
+}
+
+function _opsRenderMoney(s) {
+  const el = document.getElementById('opsMoneyPanel');
+  if (!el) return;
+  const row = (icon, label, val, color, note) =>
+    `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
+      <div style="width:36px;height:36px;border-radius:10px;background:${color}15;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <i class="fa-solid ${icon}" style="color:${color};font-size:0.9rem"></i>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.78rem;color:var(--text-muted);font-weight:600">${label}</div>
+        ${note ? `<div style="font-size:0.68rem;color:var(--text-muted)">${note}</div>` : ''}
+      </div>
+      <div style="font-size:0.92rem;font-weight:900;color:#1a1a1a;white-space:nowrap">${val}</div>
+    </div>`;
+  el.innerHTML = `
+    ${row('fa-chart-line', 'Total AUM (active investments)', _opsR(s.aum), '#22c55e')}
+    ${row('fa-wallet', 'Total wallet pool', _opsR(s.totalWalletBalance), '#3b82f6')}
+    ${row('fa-arrow-down-to-arc', `Pending deposits (${s.pendingDeposits?.count ?? 0})`, _opsR(s.pendingDeposits?.value), '#22c55e', 'Awaiting admin approval')}
+    ${row('fa-arrow-up-from-arc', `Pending withdrawals (${s.pendingWithdrawals?.count ?? 0})`, _opsR(s.pendingWithdrawals?.value), '#f59e0b', 'In payout queue')}
+    ${row('fa-clock', `Pending investments (${s.pendingInvestments?.count ?? 0})`, _opsR(s.pendingInvestments?.value), '#a855f7', 'Awaiting allocation')}
+    ${row('fa-coins', 'Deposits this month', _opsR(s.monthDeposits?.value), '#3b82f6', `${s.monthDeposits?.count ?? 0} transactions`)}
+    ${row('fa-hand-holding-dollar', 'Returns distributed this month', _opsR(s.returnsDistributed), '#22c55e')}
+    ${row('fa-bolt', 'Deposit velocity (7 days)', _opsR(s.investVol7d), '#FF9B0C')}
+  `.replace(/<div[^>]*><\/div>$/, '');
+}
+
+function _opsRenderInvestorPulse(s) {
+  const el = document.getElementById('opsInvestorPulse');
+  if (!el) return;
+  const inv = s.investors || {};
+  const growthPct = inv.prevMonth > 0 ? (((inv.newMonth - inv.prevMonth) / inv.prevMonth) * 100).toFixed(1) : null;
+  const growthHtml = growthPct !== null
+    ? `<span style="font-size:0.72rem;color:${parseFloat(growthPct)>=0?'#22c55e':'#ef4444'};font-weight:700;margin-left:6px">${parseFloat(growthPct)>=0?'↑':'↓'}${Math.abs(growthPct)}% vs last month</span>`
+    : '';
+  const tile = (label, val, color) =>
+    `<div style="text-align:center;padding:12px 8px;border:1px solid rgba(0,0,0,0.06);border-radius:10px;background:#fff">
+      <div style="font-size:1.2rem;font-weight:900;color:${color}">${val ?? '—'}</div>
+      <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;font-weight:600">${label}</div>
+    </div>`;
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+      ${tile('Total', inv.total, '#1a1a1a')}
+      ${tile('Active Investors', inv.active, '#22c55e')}
+      ${tile('FICA Approved', inv.ficaApproved, '#3b82f6')}
+      ${tile('FICA Pending', inv.ficaPending, '#f59e0b')}
+      ${tile('New Today', inv.newToday, '#a855f7')}
+      ${tile('New This Month', inv.newMonth, '#FF9B0C')}
+    </div>
+    <div style="display:flex;align-items:center;padding:10px 12px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;font-size:0.82rem;color:#1a1a1a">
+      <i class="fa-solid fa-user-plus" style="color:#3b82f6;margin-right:8px"></i>
+      <strong>${inv.newWeek ?? '—'}</strong>&nbsp;new investors this week ${growthHtml}
+    </div>
+  `;
+}
+
+function _opsRenderFunnel(funnel) {
+  const el = document.getElementById('opsFunnelPanel');
+  if (!el || !funnel.stages?.length) return;
+  const stages = funnel.stages;
+  const max = stages[0]?.count || 1;
+  el.innerHTML = stages.map((stage, i) => {
+    const pct = Math.round((stage.count / max) * 100);
+    const convPct = i > 0 ? Math.round((stage.count / stages[i-1].count) * 100) : 100;
+    const color = ['#3b82f6','#22c55e','#f59e0b','#a855f7','#FF9B0C'][i] || '#3b82f6';
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:0.78rem;font-weight:700;color:#1a1a1a">${stage.label}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${i > 0 ? `<span style="font-size:0.68rem;color:${convPct >= 50 ? '#22c55e' : '#f59e0b'};font-weight:700">${convPct}% from prev</span>` : ''}
+          <span style="font-size:0.82rem;font-weight:900;color:#1a1a1a">${(stage.count||0).toLocaleString()}</span>
+        </div>
+      </div>
+      <div style="height:8px;background:rgba(0,0,0,0.06);border-radius:999px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${color};border-radius:999px;transition:width 0.4s ease"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _opsRenderAumByType(s) {
+  const ctx = document.getElementById('opsAumByTypeChart');
+  if (!ctx || !s.aumByType?.length) return;
+  if (_opsAumByTypeChart) { _opsAumByTypeChart.destroy(); _opsAumByTypeChart = null; }
+  const typeLabel = { cattle: 'Cattle', solar: 'Solar', short_term: 'Short-Term', delivery: 'Delivery' };
+  const colors = ['#FF9B0C','#22c55e','#3b82f6','#a855f7','#f59e0b','#2F8C9B'];
+  const labels  = s.aumByType.map(r => typeLabel[r.type] || r.type);
+  const data    = s.aumByType.map(r => r.volume);
+  _opsAumByTypeChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data, backgroundColor: colors.slice(0, data.length), borderWidth: 2, borderColor: '#fff' }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#3d5268', font: { size: 11 }, padding: 12 } },
+        tooltip: { callbacks: { label: c => ` ${c.label}: ${_opsR(c.parsed)}` } },
+      },
+    },
+  });
+}
+
+function _opsRenderTopPools(s) {
+  const el = document.getElementById('opsTopPools');
+  if (!el || !s.topPools?.length) { if (el) el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.82rem">No pool data</div>'; return; }
+  const maxVol = Math.max(...s.topPools.map(p => p.volume), 1);
+  const typeColor = { cattle: '#FF9B0C', solar: '#22c55e', short_term: '#3b82f6', delivery: '#a855f7' };
+  el.innerHTML = s.topPools.map((p, i) => {
+    const pct = Math.round((p.volume / maxVol) * 100);
+    const color = typeColor[p.type] || '#9ca3af';
+    return `<div style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:18px;height:18px;border-radius:50%;background:${color};display:inline-flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:900;color:#fff;flex-shrink:0">${i+1}</span>
+          <span style="font-size:0.8rem;font-weight:700;color:#1a1a1a">${p.name}</span>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:0.82rem;font-weight:900;color:#1a1a1a">${_opsR(p.volume)}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted)">${p.investors} investors</div>
+        </div>
+      </div>
+      <div style="height:5px;background:rgba(0,0,0,0.06);border-radius:999px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${color};border-radius:999px"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _opsRenderVelocity(velocity) {
+  const ctx = document.getElementById('opsVelocityChart');
+  if (!ctx) return;
+  if (_opsVelocityChart) { _opsVelocityChart.destroy(); _opsVelocityChart = null; }
+
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+  const dayLabel = d => { const dt = new Date(d + 'T00:00:00'); return dt.toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric' }); };
+
+  const rows = velocity.velocity || [];
+  const getVol = (day, type) => {
+    const r = rows.find(r => r.day?.slice(0,10) === day && r.type === type);
+    return r ? parseFloat(r.volume) : 0;
+  };
+
+  _opsVelocityChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: days.map(dayLabel),
+      datasets: [
+        { label: 'Deposits', data: days.map(d => getVol(d, 'deposit')), backgroundColor: 'rgba(34,197,94,0.7)', borderColor: '#22c55e', borderWidth: 1, borderRadius: 4 },
+        { label: 'Withdrawals', data: days.map(d => getVol(d, 'withdrawal')), backgroundColor: 'rgba(239,68,68,0.6)', borderColor: '#ef4444', borderWidth: 1, borderRadius: 4 },
+        { label: 'Returns', data: days.map(d => getVol(d, 'return')), backgroundColor: 'rgba(255,155,12,0.6)', borderColor: '#FF9B0C', borderWidth: 1, borderRadius: 4 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#7a92a8', font: { size: 11 } } },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${_opsR(c.parsed.y)}` } },
+      },
+      scales: {
+        x: { ticks: { color: '#3d5268', font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { color: '#3d5268', callback: v => 'R'+(v/1000).toFixed(0)+'k' }, grid: { color: 'rgba(0,0,0,0.05)' } },
+        stacked: false,
+      },
+    },
+  });
+}
+
+function _opsRenderComms(comms) {
+  const el = document.getElementById('opsCommsPanel');
+  if (!el) return;
+  const push = comms.push || {};
+  const recent = comms.recentNotifications || [];
+  const tile = (icon, label, val, color) =>
+    `<div style="text-align:center;padding:14px 10px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
+      <i class="fa-solid ${icon}" style="color:${color};font-size:1.2rem;margin-bottom:6px"></i>
+      <div style="font-size:1.1rem;font-weight:900;color:#1a1a1a">${val ?? '—'}</div>
+      <div style="font-size:0.7rem;color:var(--text-muted);font-weight:600;margin-top:2px">${label}</div>
+    </div>`;
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+      ${tile('fa-bell', 'Push Subscribers', (push.subscribers||0).toLocaleString(), '#3b82f6')}
+      ${tile('fa-paper-plane', 'Pushes Sent (month)', push.sentThisMonth ?? 0, '#22c55e')}
+      ${tile('fa-users', 'Push Recipients (month)', (push.recipientsThisMonth||0).toLocaleString(), '#a855f7')}
+    </div>
+    ${recent.length ? `
+      <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800;margin-bottom:8px">Recent Push Notifications</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${recent.map(n => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,0,0,0.02);border:1px solid rgba(0,0,0,0.06);border-radius:8px">
+            <i class="fa-solid fa-bell" style="color:#3b82f6;font-size:0.8rem;flex-shrink:0"></i>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.78rem;font-weight:700;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.title || '(no title)'}</div>
+              <div style="font-size:0.7rem;color:var(--text-muted)">${n.body ? n.body.slice(0,60)+'…' : ''}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:0.75rem;font-weight:700;color:#1a1a1a">${(n.recipient_count||0).toLocaleString()} recv</div>
+              <div style="font-size:0.65rem;color:var(--text-muted)">${new Date(n.created_at).toLocaleDateString('en-ZA')}</div>
+            </div>
+          </div>`).join('')}
+      </div>` : '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:0.82rem">No push notifications sent yet.</div>'}
+  `;
+}
+
+const _ACTION_COLOR = {
+  'withdrawal.approved':'#22c55e', 'withdrawal.rejected':'#ef4444',
+  'investment.created':'#3b82f6', 'investment.approved':'#22c55e',
+  'kyc.approved':'#22c55e', 'kyc.rejected':'#ef4444',
+  'investor.suspended':'#ef4444', 'broadcast.sent':'#a855f7',
+  'deposit.approved':'#22c55e', 'deposit.rejected':'#ef4444',
+};
+
+function _opsRenderAuditStream(activity) {
+  const el = document.getElementById('opsAuditStream');
+  if (!el) return;
+  const events = activity.events || [];
+  if (!events.length) { el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem">No audit events yet.</div>'; return; }
+  el.innerHTML = events.map(ev => {
+    const color = _ACTION_COLOR[ev.action] || '#9ca3af';
+    const ago = _timeAgo(ev.created_at);
+    return `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.05)">
+      <div style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;margin-top:5px"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.76rem;font-weight:700;color:#1a1a1a">${ev.action || ev.entity_type || 'event'}</div>
+        <div style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ev.description || '—'}</div>
+        <div style="font-size:0.65rem;color:#9ca3af;margin-top:1px">${ev.actor_email || 'system'} · ${ago}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _timeAgo(isoStr) {
+  if (!isoStr) return '—';
+  const diff = Date.now() - new Date(isoStr).getTime();
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
+  return `${Math.floor(diff/86400000)}d ago`;
+}
+
+async function opsExportSummary() {
+  try {
+    const s = _opsSummaryCache;
+    if (!s) { Toast.error('Load the console first'); return; }
+    const rows = [
+      ['Metric', 'Value'],
+      ['AUM (Active)', s.aum],
+      ['Total Wallet Pool', s.totalWalletBalance],
+      ['Pending Deposits (count)', s.pendingDeposits?.count],
+      ['Pending Deposits (value)', s.pendingDeposits?.value],
+      ['Pending Withdrawals (count)', s.pendingWithdrawals?.count],
+      ['Pending Withdrawals (value)', s.pendingWithdrawals?.value],
+      ['Total Investors', s.investors?.total],
+      ['Active Investors', s.investors?.active],
+      ['FICA Pending', s.investors?.ficaPending],
+      ['FICA Approved', s.investors?.ficaApproved],
+      ['New Today', s.investors?.newToday],
+      ['New This Week', s.investors?.newWeek],
+      ['New This Month', s.investors?.newMonth],
+      ['Returns Distributed (month)', s.returnsDistributed],
+      ['Open Support Tickets', s.operations?.openTickets],
+      ['AML Flags', s.operations?.amlFlags],
+      ['Exported', new Date().toISOString()],
+    ];
+    const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `ops-summary-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    Toast.success('Ops summary exported');
+  } catch (e) {
+    Toast.error('Export failed');
+  }
+}
+
+/* ═══════════════════════════════════════════════
    BROADCAST COMMUNICATIONS (Feature 9)
    ═══════════════════════════════════════════════ */
 let _broadcastHistory = [];
@@ -6463,7 +6833,7 @@ let _intlData = [];
 
 async function loadIntlInterest() {
   try {
-    const res = await API._fetch('GET', 'tables/international_waitlist?_limit=2000&_order=created_at.desc');
+    const res = await API._fetch('GET', 'tables/international_waitlist?limit=2000&sort=created_at&order=desc');
     _intlData = res.data || [];
     _renderIntlInterest(_intlData);
     _updateIntlStats(_intlData);
