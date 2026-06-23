@@ -1942,7 +1942,7 @@ function renderPoolsGrid() {
         <button class="btn btn--secondary btn--sm" onclick="togglePoolManageMenu(event,'pool-menu-${pid}')">
           <i class="fa-solid fa-ellipsis-vertical"></i> Manage
         </button>
-        <div id="pool-menu-${pid}" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--dark-3);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:99;min-width:180px;overflow:hidden">
+        <div id="pool-menu-${pid}" style="display:none;position:fixed;background:var(--dark-3);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:9999;min-width:180px;overflow:hidden">
           ${canSetWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="setPoolWaitlist('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-clock" style="color:#f59e0b;width:16px"></i> Set to Waitlist</button>` : ''}
           ${isWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="reopenPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-door-open" style="color:#22c55e;width:16px"></i> Reopen Pool</button>` : ''}
           <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="editPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-pen" style="width:16px"></i> Edit Pool</button>
@@ -2086,17 +2086,31 @@ function togglePoolManageMenu(evt, menuId) {
   // Close all other menus first
   document.querySelectorAll('[id^="pool-menu-"]').forEach(m => { if (m.id !== menuId) m.style.display = 'none'; });
   const menu = document.getElementById(menuId);
-  if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-  // Close on outside click
-  setTimeout(() => {
-    document.addEventListener('click', function closeMenu(e) {
-      const menu2 = document.getElementById(menuId);
-      if (menu2 && !menu2.contains(e.target)) {
-        menu2.style.display = 'none';
-        document.removeEventListener('click', closeMenu);
-      }
-    });
-  }, 10);
+  if (!menu) return;
+  const isHidden = menu.style.display === 'none' || !menu.style.display;
+  if (isHidden) {
+    // Position fixed below the button, aligned to its right edge
+    const btn = evt.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    menu.style.display = 'block';
+    const menuW = menu.offsetWidth || 180;
+    const left = Math.min(rect.right - menuW, window.innerWidth - menuW - 8);
+    const top = rect.bottom + 4;
+    menu.style.top  = top + 'px';
+    menu.style.left = Math.max(8, left) + 'px';
+    // Close on outside click
+    setTimeout(() => {
+      document.addEventListener('click', function closeMenu(e) {
+        const menu2 = document.getElementById(menuId);
+        if (menu2 && !menu2.contains(e.target)) {
+          menu2.style.display = 'none';
+          document.removeEventListener('click', closeMenu);
+        }
+      });
+    }, 10);
+  } else {
+    menu.style.display = 'none';
+  }
 }
 
 async function _loadWaitlistCount(poolId) {
