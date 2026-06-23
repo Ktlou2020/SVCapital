@@ -359,6 +359,20 @@ CREATE TABLE IF NOT EXISTS employees (
 );
 CREATE INDEX IF NOT EXISTS employees_email_idx ON employees(email);
 
+/* ─── ACCEPTED CLIENT DOCUMENTS ─── */
+CREATE TABLE IF NOT EXISTS accepted_client_documents (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  investor_id      TEXT REFERENCES investors(id) ON DELETE CASCADE,
+  document_type    TEXT NOT NULL
+                     CHECK (document_type IN ('terms_of_service','privacy_policy','popia_notice','fica_consent','risk_disclaimer')),
+  document_version TEXT NOT NULL DEFAULT '1.0',
+  accepted_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ip_address       TEXT,
+  user_agent       TEXT
+);
+CREATE INDEX IF NOT EXISTS acd_investor_idx    ON accepted_client_documents(investor_id);
+CREATE INDEX IF NOT EXISTS acd_accepted_at_idx ON accepted_client_documents(accepted_at DESC);
+
 `;
 
 async function migrate() {

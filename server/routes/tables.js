@@ -115,8 +115,9 @@ const ALLOWED_TABLES = {
   fica_checks:           'id',   // read-only via generic API; writes via /api/fica/*
   quest_completions:     'id',   // read via generic API; writes via /api/quests/*
   users:                 'id',   // limited, no password_hash exposed
-  investment_waitlist:   'id',
-  compliance_calendar:   'id',
+  investment_waitlist:      'id',
+  compliance_calendar:      'id',
+  accepted_client_documents: 'id',
 };
 
 /* ─── Tables that require admin/director role for READ ─── */
@@ -124,7 +125,7 @@ const ADMIN_ONLY_TABLES = new Set([
   'audit_events', 'fee_ledger', 'fund_notifications',
   'cattle_costs', 'cattle_cycles', 'cattle_animals',
   'return_schedules', 'investor_allocations',
-  'fica_checks',
+  'fica_checks', 'accepted_client_documents',
   'compliance_calendar',
 ]);
 // NOTE: `employees` is intentionally NOT admin-only — it is row-isolated via
