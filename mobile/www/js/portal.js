@@ -4282,7 +4282,7 @@ function buildStatementHTML(opts) {
           ${logoSVG}
           <div>
             <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:0.06em;line-height:1">SV CAPITAL</div>
-            <div style="font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:0.12em;margin-top:3px;font-weight:500">INVESTMENTS THAT MAKE SENSE</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:0.12em;margin-top:3px;font-weight:500">VENTURE BEYOND THE ORDINARY</div>
           </div>
         </div>
         <div style="text-align:right">
