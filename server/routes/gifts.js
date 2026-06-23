@@ -8,9 +8,10 @@ const email   = require('../services/email');
 
 const MIN_GIFT = 50;
 
-/* ── POST /api/gifts/send ───────────────────────────────────────
-   Deducts from sender wallet, creates gift, emails recipient.
-─────────────────────────────────────────────────────────────── */
+/* ── POST /api/gifts/send ───────────────────────────────────────────────────
+   Checks sender wallet balance, then atomically deducts and creates the gift
+   inside a single DB transaction so money can never be lost mid-flight.
+─────────────────────────────────────────────────────────────────────────── */
 router.post('/send', requireAuth, async (req, res) => {
   const { recipientEmail, recipientName, amount, message } = req.body;
   const senderId = req.user?.investorId || req.user?.id;
@@ -23,20 +24,44 @@ router.post('/send', requireAuth, async (req, res) => {
     return res.status(400).json({ error: `Minimum gift amount is R${MIN_GIFT}` });
   }
 
+  const client = await pool.connect();
   try {
-    const { rows: [sender] } = await pool.query(
-      'SELECT first_name, last_name, wallet_balance, email FROM investors WHERE id = $1',
+    await client.query('BEGIN');
+
+    // Lock sender row for the duration of the transaction (prevents double-spend)
+    const { rows: [sender] } = await client.query(
+      'SELECT first_name, last_name, wallet_balance, email FROM investors WHERE id = $1 FOR UPDATE',
       [senderId]
     );
-    if (!sender) return res.status(404).json({ error: 'Sender not found' });
+    if (!sender) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Sender account not found' });
+    }
     if (sender.email?.toLowerCase() === recipientEmail.toLowerCase()) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ error: 'You cannot send a gift to yourself' });
     }
-    if ((parseFloat(sender.wallet_balance) || 0) < amt) {
-      return res.status(400).json({ error: 'Insufficient wallet balance to send this gift' });
+
+    const walletBalance = parseFloat(sender.wallet_balance) || 0;
+    if (walletBalance < amt) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: `Insufficient wallet balance. You have R${walletBalance.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available.`,
+      });
     }
 
-    const { rows: [recipient] } = await pool.query(
+    // Deduct from sender wallet — the WHERE clause is a final safety net against
+    // concurrent requests that both passed the balance check above
+    const { rowCount } = await client.query(
+      'UPDATE investors SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2 AND wallet_balance >= $1',
+      [amt, senderId]
+    );
+    if (!rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Insufficient wallet balance' });
+    }
+
+    const { rows: [recipient] } = await client.query(
       'SELECT id, first_name, last_name, email FROM investors WHERE LOWER(email) = LOWER($1)',
       [recipientEmail]
     );
@@ -48,25 +73,18 @@ router.post('/send', requireAuth, async (req, res) => {
       || (recipient ? `${recipient.first_name} ${recipient.last_name}`.trim() : null)
       || recipientEmail.split('@')[0];
 
-    // Deduct from sender wallet
-    await pool.query(
-      'UPDATE investors SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2',
-      [amt, senderId]
-    );
-
     // Record sender transaction
-    const txnSentId = `TXN-${giftId}-S`;
-    await pool.query(
+    await client.query(
       `INSERT INTO transactions (id, investor_id, type, amount, status, description, created_at)
        VALUES ($1,$2,'gift_sent',$3,'completed',$4,NOW())`,
-      [txnSentId, senderId, -amt, `Gift sent to ${recipientDisplayName}`]
+      [`TXN-${giftId}-S`, senderId, -amt, `Gift sent to ${recipientDisplayName}`]
     );
 
     const isExisting = !!recipient;
     const giftStatus = isExisting ? 'claimed' : 'pending';
 
     // Create gift record
-    await pool.query(
+    await client.query(
       `INSERT INTO gifts (id, sender_id, recipient_id, recipient_email, recipient_name,
          amount, message, status, claim_token, claimed_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
@@ -79,37 +97,45 @@ router.post('/send', requireAuth, async (req, res) => {
 
     if (isExisting) {
       // Instantly credit recipient wallet
-      await pool.query(
+      await client.query(
         'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
         [amt, recipient.id]
       );
-      const txnRecvId = `TXN-${giftId}-R`;
-      await pool.query(
+      await client.query(
         `INSERT INTO transactions (id, investor_id, type, amount, status, description, created_at)
          VALUES ($1,$2,'gift_received',$3,'completed',$4,NOW())`,
-        [txnRecvId, recipient.id, amt, `Investment gift from ${senderName}`]
+        [`TXN-${giftId}-R`, recipient.id, amt, `Investment gift from ${senderName}`]
       );
+    }
+
+    await client.query('COMMIT');
+
+    // Fire-and-forget emails after the transaction is committed
+    if (isExisting) {
       email.sendGiftReceived(recipientEmail, {
         senderName, amount: amt, message: message?.trim() || null,
         recipientName: `${recipient.first_name} ${recipient.last_name}`.trim(),
       }).catch(() => {});
     } else {
       const BASE = process.env.BASE_URL || 'https://platform.svcapital.co.za';
-      const signupUrl = `${BASE}/signup.html?gift=${claimToken}`;
       email.sendGiftInvite(recipientEmail, {
         senderName, amount: amt, message: message?.trim() || null,
-        recipientName: recipientDisplayName, signupUrl,
+        recipientName: recipientDisplayName,
+        signupUrl: `${BASE}/signup.html?gift=${claimToken}`,
       }).catch(() => {});
     }
 
     res.json({ success: true, giftId, recipientExists: isExisting });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('[gifts/send]', err.message);
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 
-/* ── GET /api/gifts/my ──── sent gifts ────────────────────────── */
+/* ── GET /api/gifts/my ──── sent gifts ──────────────────────────────────── */
 router.get('/my', requireAuth, async (req, res) => {
   const senderId = req.user?.investorId || req.user?.id;
   try {
@@ -125,7 +151,7 @@ router.get('/my', requireAuth, async (req, res) => {
   }
 });
 
-/* ── GET /api/gifts/received ── received gifts ─────────────────── */
+/* ── GET /api/gifts/received ── received gifts ──────────────────────────── */
 router.get('/received', requireAuth, async (req, res) => {
   const investorId = req.user?.investorId || req.user?.id;
   try {
@@ -141,70 +167,93 @@ router.get('/received', requireAuth, async (req, res) => {
   }
 });
 
-/* ── POST /api/gifts/claim/:token ── new-user gift claim ────────── */
+/* ── POST /api/gifts/claim/:token ── new-user gift claim ─────────────────── */
 router.post('/claim/:token', requireAuth, async (req, res) => {
   const claimantId = req.user?.investorId || req.user?.id;
+  const client = await pool.connect();
   try {
-    const { rows: [gift] } = await pool.query(
-      'SELECT * FROM gifts WHERE claim_token = $1',
+    await client.query('BEGIN');
+
+    const { rows: [gift] } = await client.query(
+      'SELECT * FROM gifts WHERE claim_token = $1 FOR UPDATE',
       [req.params.token]
     );
-    if (!gift) return res.status(404).json({ error: 'Gift not found' });
-    if (gift.status !== 'pending') return res.status(400).json({ error: 'Gift already claimed' });
-    if (new Date(gift.expires_at) < new Date()) return res.status(400).json({ error: 'Gift has expired' });
+    if (!gift) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Gift not found' }); }
+    if (gift.status !== 'pending') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Gift already claimed or cancelled' }); }
+    if (new Date(gift.expires_at) < new Date()) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Gift has expired' }); }
 
-    const { rows: [claimant] } = await pool.query(
+    const { rows: [claimant] } = await client.query(
       'SELECT email, first_name, last_name FROM investors WHERE id = $1',
       [claimantId]
     );
-    if (!claimant) return res.status(404).json({ error: 'Investor not found' });
+    if (!claimant) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Investor not found' }); }
     if (claimant.email.toLowerCase() !== gift.recipient_email.toLowerCase()) {
+      await client.query('ROLLBACK');
       return res.status(403).json({ error: 'This gift was sent to a different email address' });
     }
 
-    await pool.query('UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2', [gift.amount, claimantId]);
-    await pool.query(
+    await client.query(
+      'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+      [gift.amount, claimantId]
+    );
+    await client.query(
       `UPDATE gifts SET status = 'claimed', claimed_at = NOW(), recipient_id = $1 WHERE id = $2`,
       [claimantId, gift.id]
     );
 
-    const { rows: [sender] } = await pool.query('SELECT first_name, last_name FROM investors WHERE id = $1', [gift.sender_id]);
+    const { rows: [sender] } = await client.query(
+      'SELECT first_name, last_name FROM investors WHERE id = $1', [gift.sender_id]
+    );
     const senderName = sender ? `${sender.first_name} ${sender.last_name}`.trim() : 'Someone';
 
-    await pool.query(
+    await client.query(
       `INSERT INTO transactions (id, investor_id, type, amount, status, description, created_at)
        VALUES ($1,$2,'gift_received',$3,'completed',$4,NOW())`,
       [`TXN-CLAIM-${gift.id}`, claimantId, gift.amount, `Investment gift from ${senderName}`]
     );
 
+    await client.query('COMMIT');
     res.json({ success: true, amount: gift.amount, senderName });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('[gifts/claim]', err.message);
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 
-/* ── DELETE /api/gifts/:id ── cancel pending gift ────────────── */
+/* ── DELETE /api/gifts/:id ── cancel pending gift & refund ─────────────── */
 router.delete('/:id', requireAuth, async (req, res) => {
   const senderId = req.user?.investorId || req.user?.id;
+  const client = await pool.connect();
   try {
-    const { rows: [gift] } = await pool.query(
-      'SELECT * FROM gifts WHERE id = $1 AND sender_id = $2',
+    await client.query('BEGIN');
+
+    const { rows: [gift] } = await client.query(
+      'SELECT * FROM gifts WHERE id = $1 AND sender_id = $2 FOR UPDATE',
       [req.params.id, senderId]
     );
-    if (!gift) return res.status(404).json({ error: 'Gift not found' });
-    if (gift.status !== 'pending') return res.status(400).json({ error: 'Only pending gifts can be cancelled' });
+    if (!gift) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Gift not found' }); }
+    if (gift.status !== 'pending') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Only pending gifts can be cancelled' }); }
 
-    await pool.query(`UPDATE gifts SET status = 'cancelled' WHERE id = $1`, [gift.id]);
-    await pool.query('UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2', [gift.amount, senderId]);
+    await client.query(`UPDATE gifts SET status = 'cancelled' WHERE id = $1`, [gift.id]);
+    await client.query(
+      'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+      [gift.amount, senderId]
+    );
 
+    await client.query('COMMIT');
     res.json({ success: true, refunded: gift.amount });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 
-/* ── GET /api/gifts/check-recipient ── look up email ─────────── */
+/* ── GET /api/gifts/check-recipient ── look up email ─────────────────────── */
 router.get('/check-recipient', requireAuth, async (req, res) => {
   const { email: recipientEmail } = req.query;
   if (!recipientEmail) return res.status(400).json({ error: 'email required' });

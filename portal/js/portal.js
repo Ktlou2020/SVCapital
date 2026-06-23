@@ -8059,8 +8059,9 @@ async function sendGift() {
   if (!amount || amount < 50) { Toast.error('Minimum gift amount is R50'); return; }
 
   const inv = PORTAL.investor;
-  if (inv && (parseFloat(inv.wallet_balance) || 0) < amount) {
-    Toast.error('Insufficient wallet balance'); return;
+  const walletBal = parseFloat(inv?.wallet_balance) || 0;
+  if (walletBal < amount) {
+    Toast.error(`Insufficient balance — you have ${Utils.rand(walletBal)} available in your wallet`); return;
   }
 
   await _withBtn(btn, async () => {
