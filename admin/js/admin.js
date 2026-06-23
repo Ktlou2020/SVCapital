@@ -3044,13 +3044,11 @@ async function viewTicket(id) {
   const tktInvName = tkt.investor_name || (tktInv ? `${tktInv.first_name} ${tktInv.last_name}` : tkt.investor_id || '—');
   const tktEmail   = tkt.investor_email || tktInv?.email || '';
 
-  // Load admin users for the "Assigned To" dropdown
+  // Load employees for the "Assigned To" dropdown
   let adminUsers = [];
   try {
-    const uRes = await API.users.list({ limit: 100 });
-    adminUsers = (uRes.data || uRes || []).filter(u =>
-      ['admin','director','staff','fund_manager'].includes(u.role) && u.is_active !== false
-    );
+    const uRes = await API._fetch('GET', 'tables/employees', null, { limit: 200, sort: 'first_name', order: 'asc' });
+    adminUsers = (uRes.data || uRes || []).filter(u => u.status === 'active' || !u.status);
   } catch (_) {}
 
   const assignedOpts = [
@@ -5010,7 +5008,7 @@ function _opsRenderHealth(health) {
     const extra  = key === 'push' ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">${(svc.subscribers||0).toLocaleString()} subscribers</div>` : svc.note ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px">${svc.note}</div>` : latency ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px">${latency}</div>` : '';
     return `<div style="padding:14px 12px;border:1.5px solid ${color}22;border-radius:12px;background:${color}08;text-align:center">
       <i class="fa-solid ${icon}" style="font-size:1.4rem;color:${color};margin-bottom:6px"></i>
-      <div style="font-size:0.78rem;font-weight:800;color:#1a1a1a;line-height:1.2;margin-bottom:2px">${svc.name}</div>
+      <div style="font-size:0.78rem;font-weight:800;color:#e8edf2;line-height:1.2;margin-bottom:2px">${svc.name}</div>
       <div style="font-size:0.72rem;font-weight:700;color:${color}">${status}</div>
       ${extra}
     </div>`;
@@ -5031,15 +5029,15 @@ function _opsRenderMoney(s) {
   const el = document.getElementById('opsMoneyPanel');
   if (!el) return;
   const row = (icon, label, val, color, note) =>
-    `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
-      <div style="width:36px;height:36px;border-radius:10px;background:${color}15;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+    `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.07)">
+      <div style="width:36px;height:36px;border-radius:10px;background:${color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
         <i class="fa-solid ${icon}" style="color:${color};font-size:0.9rem"></i>
       </div>
       <div style="flex:1;min-width:0">
         <div style="font-size:0.78rem;color:var(--text-muted);font-weight:600">${label}</div>
         ${note ? `<div style="font-size:0.68rem;color:var(--text-muted)">${note}</div>` : ''}
       </div>
-      <div style="font-size:0.92rem;font-weight:900;color:#1a1a1a;white-space:nowrap">${val}</div>
+      <div style="font-size:0.92rem;font-weight:900;color:#e8edf2;white-space:nowrap">${val}</div>
     </div>`;
   el.innerHTML = `
     ${row('fa-chart-line', 'Total AUM (active investments)', _opsR(s.aum), '#22c55e')}
@@ -5062,20 +5060,20 @@ function _opsRenderInvestorPulse(s) {
     ? `<span style="font-size:0.72rem;color:${parseFloat(growthPct)>=0?'#22c55e':'#ef4444'};font-weight:700;margin-left:6px">${parseFloat(growthPct)>=0?'↑':'↓'}${Math.abs(growthPct)}% vs last month</span>`
     : '';
   const tile = (label, val, color) =>
-    `<div style="text-align:center;padding:12px 8px;border:1px solid rgba(0,0,0,0.06);border-radius:10px;background:#fff">
+    `<div style="text-align:center;padding:12px 8px;border:1px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(255,255,255,0.05)">
       <div style="font-size:1.2rem;font-weight:900;color:${color}">${val ?? '—'}</div>
       <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;font-weight:600">${label}</div>
     </div>`;
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
-      ${tile('Total', inv.total, '#1a1a1a')}
+      ${tile('Total', inv.total, '#e8edf2')}
       ${tile('Active Investors', inv.active, '#22c55e')}
       ${tile('FICA Approved', inv.ficaApproved, '#3b82f6')}
       ${tile('FICA Pending', inv.ficaPending, '#f59e0b')}
       ${tile('New Today', inv.newToday, '#a855f7')}
       ${tile('New This Month', inv.newMonth, '#FF9B0C')}
     </div>
-    <div style="display:flex;align-items:center;padding:10px 12px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;font-size:0.82rem;color:#1a1a1a">
+    <div style="display:flex;align-items:center;padding:10px 12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:10px;font-size:0.82rem;color:#e8edf2">
       <i class="fa-solid fa-user-plus" style="color:#3b82f6;margin-right:8px"></i>
       <strong>${inv.newWeek ?? '—'}</strong>&nbsp;new investors this week ${growthHtml}
     </div>
@@ -5093,13 +5091,13 @@ function _opsRenderFunnel(funnel) {
     const color = ['#3b82f6','#22c55e','#f59e0b','#a855f7','#FF9B0C'][i] || '#3b82f6';
     return `<div style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:0.78rem;font-weight:700;color:#1a1a1a">${stage.label}</span>
+        <span style="font-size:0.78rem;font-weight:700;color:#e8edf2">${stage.label}</span>
         <div style="display:flex;align-items:center;gap:8px">
           ${i > 0 ? `<span style="font-size:0.68rem;color:${convPct >= 50 ? '#22c55e' : '#f59e0b'};font-weight:700">${convPct}% from prev</span>` : ''}
-          <span style="font-size:0.82rem;font-weight:900;color:#1a1a1a">${(stage.count||0).toLocaleString()}</span>
+          <span style="font-size:0.82rem;font-weight:900;color:#e8edf2">${(stage.count||0).toLocaleString()}</span>
         </div>
       </div>
-      <div style="height:8px;background:rgba(0,0,0,0.06);border-radius:999px;overflow:hidden">
+      <div style="height:8px;background:rgba(255,255,255,0.08);border-radius:999px;overflow:hidden">
         <div style="height:100%;width:${pct}%;background:${color};border-radius:999px;transition:width 0.4s ease"></div>
       </div>
     </div>`;
@@ -5118,12 +5116,12 @@ function _opsRenderAumByType(s) {
     type: 'doughnut',
     data: {
       labels,
-      datasets: [{ data, backgroundColor: colors.slice(0, data.length), borderWidth: 2, borderColor: '#fff' }],
+      datasets: [{ data, backgroundColor: colors.slice(0, data.length), borderWidth: 2, borderColor: '#1a2535' }],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'bottom', labels: { color: '#3d5268', font: { size: 11 }, padding: 12 } },
+        legend: { position: 'bottom', labels: { color: '#7a92a8', font: { size: 11 }, padding: 12 } },
         tooltip: { callbacks: { label: c => ` ${c.label}: ${_opsR(c.parsed)}` } },
       },
     },
@@ -5142,14 +5140,14 @@ function _opsRenderTopPools(s) {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="width:18px;height:18px;border-radius:50%;background:${color};display:inline-flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:900;color:#fff;flex-shrink:0">${i+1}</span>
-          <span style="font-size:0.8rem;font-weight:700;color:#1a1a1a">${p.name}</span>
+          <span style="font-size:0.8rem;font-weight:700;color:#e8edf2">${p.name}</span>
         </div>
         <div style="text-align:right">
-          <div style="font-size:0.82rem;font-weight:900;color:#1a1a1a">${_opsR(p.volume)}</div>
+          <div style="font-size:0.82rem;font-weight:900;color:#e8edf2">${_opsR(p.volume)}</div>
           <div style="font-size:0.68rem;color:var(--text-muted)">${p.investors} investors</div>
         </div>
       </div>
-      <div style="height:5px;background:rgba(0,0,0,0.06);border-radius:999px;overflow:hidden">
+      <div style="height:5px;background:rgba(255,255,255,0.08);border-radius:999px;overflow:hidden">
         <div style="height:100%;width:${pct}%;background:${color};border-radius:999px"></div>
       </div>
     </div>`;
@@ -5191,8 +5189,8 @@ function _opsRenderVelocity(velocity) {
         tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${_opsR(c.parsed.y)}` } },
       },
       scales: {
-        x: { ticks: { color: '#3d5268', font: { size: 10 } }, grid: { display: false } },
-        y: { ticks: { color: '#3d5268', callback: v => 'R'+(v/1000).toFixed(0)+'k' }, grid: { color: 'rgba(0,0,0,0.05)' } },
+        x: { ticks: { color: '#7a92a8', font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { color: '#7a92a8', callback: v => 'R'+(v/1000).toFixed(0)+'k' }, grid: { color: 'rgba(255,255,255,0.05)' } },
         stacked: false,
       },
     },
@@ -5205,9 +5203,9 @@ function _opsRenderComms(comms) {
   const push = comms.push || {};
   const recent = comms.recentNotifications || [];
   const tile = (icon, label, val, color) =>
-    `<div style="text-align:center;padding:14px 10px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
+    `<div style="text-align:center;padding:14px 10px;border:1px solid rgba(255,255,255,0.08);border-radius:12px;background:rgba(255,255,255,0.05)">
       <i class="fa-solid ${icon}" style="color:${color};font-size:1.2rem;margin-bottom:6px"></i>
-      <div style="font-size:1.1rem;font-weight:900;color:#1a1a1a">${val ?? '—'}</div>
+      <div style="font-size:1.1rem;font-weight:900;color:#e8edf2">${val ?? '—'}</div>
       <div style="font-size:0.7rem;color:var(--text-muted);font-weight:600;margin-top:2px">${label}</div>
     </div>`;
   el.innerHTML = `
@@ -5217,17 +5215,17 @@ function _opsRenderComms(comms) {
       ${tile('fa-users', 'Push Recipients (month)', (push.recipientsThisMonth||0).toLocaleString(), '#a855f7')}
     </div>
     ${recent.length ? `
-      <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800;margin-bottom:8px">Recent Push Notifications</div>
+      <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#7a92a8;font-weight:800;margin-bottom:8px">Recent Push Notifications</div>
       <div style="display:flex;flex-direction:column;gap:6px">
         ${recent.map(n => `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,0,0,0.02);border:1px solid rgba(0,0,0,0.06);border-radius:8px">
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px">
             <i class="fa-solid fa-bell" style="color:#3b82f6;font-size:0.8rem;flex-shrink:0"></i>
             <div style="flex:1;min-width:0">
-              <div style="font-size:0.78rem;font-weight:700;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.title || '(no title)'}</div>
+              <div style="font-size:0.78rem;font-weight:700;color:#e8edf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.title || '(no title)'}</div>
               <div style="font-size:0.7rem;color:var(--text-muted)">${n.body ? n.body.slice(0,60)+'…' : ''}</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:0.75rem;font-weight:700;color:#1a1a1a">${(n.recipient_count||0).toLocaleString()} recv</div>
+              <div style="font-size:0.75rem;font-weight:700;color:#e8edf2">${(n.recipient_count||0).toLocaleString()} recv</div>
               <div style="font-size:0.65rem;color:var(--text-muted)">${new Date(n.created_at).toLocaleDateString('en-ZA')}</div>
             </div>
           </div>`).join('')}
@@ -5251,12 +5249,12 @@ function _opsRenderAuditStream(activity) {
   el.innerHTML = events.map(ev => {
     const color = _ACTION_COLOR[ev.action] || '#9ca3af';
     const ago = _timeAgo(ev.created_at);
-    return `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.05)">
+    return `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
       <div style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;margin-top:5px"></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:0.76rem;font-weight:700;color:#1a1a1a">${ev.action || ev.entity_type || 'event'}</div>
+        <div style="font-size:0.76rem;font-weight:700;color:#e8edf2">${ev.action || ev.entity_type || 'event'}</div>
         <div style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ev.description || '—'}</div>
-        <div style="font-size:0.65rem;color:#9ca3af;margin-top:1px">${ev.actor_email || 'system'} · ${ago}</div>
+        <div style="font-size:0.65rem;color:#7a92a8;margin-top:1px">${ev.actor_email || 'system'} · ${ago}</div>
       </div>
     </div>`;
   }).join('');

@@ -14,6 +14,9 @@ const S = {
   investors:    [],
   pools:        [],
   allocations:  [],
+  cattle:       [],
+  solar:        [],
+  loans:        [],
   auditEvents:  [],
   currentView:  'dashboard',
   charts:       {},
@@ -239,16 +242,24 @@ const apiDelete = (t,id)    => apiFetch(`tables/${t}/${id}`, { method:'DELETE' }
 ═══════════════════════════════════════════════ */
 async function loadDashboard() {
   try {
-    const [runs, scheds, pools, investments] = await Promise.all([
+    const [runs, scheds, pools, investments, cattle, solar, loans, allocations] = await Promise.all([
       apiGet('fund_runs'),
       apiGet('return_schedules'),
       apiGet('investment_pools'),
-      apiGet('investments')
+      apiGet('investments'),
+      intFetchAll('cattle_cycles').catch(()=>[]),
+      intFetchAll('solar_projects').catch(()=>[]),
+      intFetchAll('shortterm_loans').catch(()=>[]),
+      intFetchAll('investor_allocations').catch(()=>[])
     ]);
     S.runs        = runs;
     S.schedules   = scheds;
     S.pools       = pools;
     S.investments = investments;
+    S.cattle      = cattle;
+    S.solar       = solar;
+    S.loans       = loans;
+    S.allocations = allocations;
     renderDashboard();
   } catch(e) {
     console.error('Dashboard error:', e);
@@ -262,13 +273,19 @@ function renderDashboard() {
   const pools     = S.pools;
   const invests   = S.investments;
 
-  const totalAUM         = invests.filter(i=>i.status==='active').reduce((s,i)=>s+(i.amount||0),0);
-  const totalDeployed    = runs.filter(r=>r.status==='completed'||r.status==='in_progress').reduce((s,r)=>s+(r.capital_deployed||0),0);
-  const totalGrossReturn = runs.filter(r=>r.status==='completed').reduce((s,r)=>s+(r.total_return_gross||0),0);
-  const totalNetReturn   = runs.filter(r=>r.status==='completed').reduce((s,r)=>s+(r.total_return_net||0),0);
+  const totalAUM         = invests.filter(i=>i.status==='active').reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+  const totalDeployed    = runs.filter(r=>r.status==='completed'||r.status==='in_progress').reduce((s,r)=>s+(parseFloat(r.capital_deployed)||0),0);
+  const totalGrossReturn = runs.filter(r=>r.status==='completed').reduce((s,r)=>s+(parseFloat(r.total_return_gross)||0),0);
+  const totalNetReturn   = runs.filter(r=>r.status==='completed').reduce((s,r)=>s+(parseFloat(r.total_return_net)||0),0);
   const pendingPayouts   = scheds.filter(s=>s.status==='scheduled'||s.status==='processing').length;
   const completedRuns    = runs.filter(r=>r.status==='completed').length;
   const activeRuns       = runs.filter(r=>r.status==='in_progress').length;
+
+  // Alpha vs benchmark (basis points)
+  const alphaRuns = runs.filter(r => r.status==='completed' && parseFloat(r.actual_rate)>0 && parseFloat(r.benchmark_rate)>0);
+  const avgAlpha  = alphaRuns.length
+    ? alphaRuns.reduce((s,r) => s + (parseFloat(r.actual_rate) - parseFloat(r.benchmark_rate)) * 10000, 0) / alphaRuns.length
+    : null;
 
   const set = (id,v) => { const e=document.getElementById(id); if(e) e.textContent=v; };
   set('ds-aum',         fmt.rand(totalAUM));
@@ -278,6 +295,7 @@ function renderDashboard() {
   set('ds-pending',     pendingPayouts);
   set('ds-runs',        completedRuns);
   set('ds-active-runs', activeRuns);
+  set('ds-alpha',       avgAlpha !== null ? (avgAlpha > 0 ? '+' : '') + avgAlpha.toFixed(0) + ' bps' : '—');
   const activePools = pools.filter(p=>p.status==='open'||p.status==='active'||p.status==='filling').length;
   set('ds-pools', activePools);
 
@@ -291,23 +309,40 @@ function renderDashboard() {
   renderRunTypeChart();
   renderReturnsChart();
   renderEventTicker();
+  renderRiskStrip();
+  renderPortfolioComposition();
+  renderCapitalWaterfall();
+  renderLiveProductCards();
 }
 
 function renderDashboardRunsTable() {
   const el = document.getElementById('dashRunsBody');
   if (!el) return;
+  // Update header to include alpha column
+  const thead = el.closest('table')?.querySelector('thead tr');
+  if (thead && thead.children.length === 6) {
+    thead.innerHTML = '<th>Run</th><th>Product</th><th>Capital</th><th>Rate</th><th>Alpha</th><th>Net Return</th><th>Status</th>';
+  }
   const recent = S.runs.slice(0, 6);
-  if (!recent.length) { el.innerHTML = `<tr><td colspan="6"><div class="empty"><i class="fa-solid fa-folder-open"></i><p>No fund runs yet</p></div></td></tr>`; return; }
-  el.innerHTML = recent.map(r => `
+  if (!recent.length) { el.innerHTML = `<tr><td colspan="7"><div class="empty"><i class="fa-solid fa-folder-open"></i><p>No fund runs yet</p></div></td></tr>`; return; }
+  el.innerHTML = recent.map(r => {
+    const actual = parseFloat(r.actual_rate);
+    const bench  = parseFloat(r.benchmark_rate);
+    const alphaBps = (actual > 0 && bench > 0) ? Math.round((actual - bench) * 10000) : null;
+    const alphaHtml = alphaBps !== null
+      ? `<span style="font-size:11px;font-weight:700;color:${alphaBps>=0?'#74c69d':'#f87171'}">${alphaBps>=0?'+':''}${alphaBps} bps</span>`
+      : `<span class="td-m">—</span>`;
+    return `
     <tr class="row--clickable" onclick="viewRun('${r.id}')">
       <td><div class="td-h">${r.run_name}</div><div class="td-m">${r.id}</div></td>
       <td>${productBadge(r.product_type)}</td>
       <td class="td-gold">${fmt.rand(r.capital_deployed)}</td>
-      <td>${r.actual_rate ? `<span class="td-green">${fmt.pct(r.actual_rate)}</span>` : `<span class="td-m">${fmt.pct(r.benchmark_rate)} bench</span>`}</td>
+      <td>${actual > 0 ? `<span class="td-green">${fmt.pct(r.actual_rate)}</span>` : `<span class="td-m">${fmt.pct(r.benchmark_rate)} bench</span>`}</td>
+      <td>${alphaHtml}</td>
       <td class="td-green">${fmt.rand(r.total_return_net)}</td>
       <td>${runStatusBadge(r.status)}</td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 function renderUpcomingPayoutsWidget() {
@@ -318,18 +353,29 @@ function renderUpcomingPayoutsWidget() {
     el.innerHTML = `<div class="empty" style="padding:24px"><i class="fa-solid fa-calendar-check"></i><p>No pending payouts</p></div>`;
     return;
   }
-  el.innerHTML = pending.map(s=>`
+  const totalVal = pending.reduce((s,p)=>s+(parseFloat(p.total_payout)||0),0);
+  const now = new Date();
+  const rows = pending.map(s=>{
+    const payDate = new Date(s.scheduled_payout_date || s.expected_date);
+    const daysLeft = Math.ceil((payDate - now) / 86400000);
+    const urgencyColor = daysLeft <= 7 ? '#f87171' : daysLeft <= 30 ? '#fb923c' : '#74c69d';
+    const urgencyLabel = daysLeft <= 0 ? 'Overdue' : daysLeft === 1 ? '1 day' : `${daysLeft}d`;
+    return `
     <div class="flex-b" style="padding:10px 0;border-bottom:1px solid var(--border)">
-      <div>
-        <div style="font-size:0.82rem;font-weight:600;color:var(--text-h)">${s.investor_name}</div>
-        <div style="font-size:0.72rem;color:var(--text-muted)">${s.pool_name} · ${fmt.date(s.scheduled_payout_date)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.82rem;font-weight:600;color:var(--text-h)">${s.investor_name||'—'}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">${s.pool_name||''} · ${fmt.date(s.scheduled_payout_date)}</div>
       </div>
-      <div style="text-align:right">
+      <div style="text-align:right;flex-shrink:0">
         <div class="td-gold fw7" style="font-size:0.88rem">${fmt.rand(s.total_payout)}</div>
-        <div style="font-size:0.68rem;color:var(--text-muted)">incl. ${fmt.rand(s.net_return)} return</div>
+        <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;margin-top:2px">
+          <span style="font-size:0.68rem;color:var(--text-muted)">incl. ${fmt.rand(s.net_return)} return</span>
+          <span style="font-size:9px;font-weight:700;color:${urgencyColor};background:${urgencyColor}18;padding:1px 5px;border-radius:6px">${urgencyLabel}</span>
+        </div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
+  el.innerHTML = `<div style="padding:8px 0 4px;font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Total due: <span style="color:#D4AF37;font-weight:700">${fmt.rand(totalVal)}</span></div>` + rows;
 }
 
 function renderRunTypeChart() {
@@ -377,6 +423,209 @@ function renderReturnsChart() {
       }
     }
   });
+}
+
+function renderRiskStrip() {
+  const el = document.getElementById('dashRiskStrip');
+  if (!el) return;
+  const now = new Date();
+  const in30 = new Date(now.getTime() + 30*86400000);
+  const in90 = new Date(now.getTime() + 90*86400000);
+  const overdueLoans = (S.loans||[]).filter(l => l.status === 'overdue');
+  const obligations30 = (S.schedules||[]).filter(s => {
+    if (s.status === 'paid' || s.status === 'cancelled') return false;
+    const d = new Date(s.scheduled_payout_date || s.expected_date);
+    return d >= now && d <= in30;
+  });
+  const obligations90Val = (S.schedules||[]).filter(s => {
+    if (s.status === 'paid' || s.status === 'cancelled') return false;
+    const d = new Date(s.scheduled_payout_date || s.expected_date);
+    return d >= now && d <= in90;
+  }).reduce((acc, p) => acc + (parseFloat(p.total_payout)||0), 0);
+  const totalRaised = (S.pools||[]).reduce((acc, p) => acc + (parseFloat(p.raised_amount)||0), 0);
+  const cattleDep = (S.cattle||[]).filter(c=>['active','in_progress'].includes(c.status)).reduce((s,c)=>s+(parseFloat(c.purchase_value)||parseFloat(c.purchase_price)||0),0);
+  const solarDep  = (S.solar||[]).filter(p=>p.status==='active').reduce((s,p)=>s+(parseFloat(p.capital_deployed)||0),0);
+  const loansDep  = (S.loans||[]).filter(l=>['active','overdue'].includes(l.status)).reduce((s,l)=>s+(parseFloat(l.disbursement_amount)||0),0);
+  const runsDep   = (S.runs||[]).filter(r=>r.status==='in_progress').reduce((s,r)=>s+(parseFloat(r.capital_deployed)||0),0);
+  const totalDep  = cattleDep + solarDep + loansDep + runsDep;
+  const liqRatio  = obligations90Val > 0 ? (totalRaised - totalDep) / obligations90Val : 99;
+  const liqStatus = liqRatio >= 2 ? {label:'Healthy',color:'#74c69d',icon:'fa-circle-check'}
+    : liqRatio >= 1.2 ? {label:'Watch',color:'#fb923c',icon:'fa-triangle-exclamation'}
+    : {label:'Critical',color:'#f87171',icon:'fa-circle-xmark'};
+  const segments = [{name:'Cattle',v:cattleDep},{name:'Solar',v:solarDep},{name:'Loans',v:loansDep},{name:'Runs',v:runsDep}].filter(s=>s.v>0);
+  const maxSeg = segments.length ? segments.reduce((a,b)=>a.v>b.v?a:b) : null;
+  const concPct = totalDep > 0 && maxSeg ? Math.round(maxSeg.v/totalDep*100) : 0;
+
+  const card = (icon,label,val,sub,color) =>
+    `<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:rgba(255,255,255,.03);border:1px solid ${color}22;border-radius:12px;flex:1;min-width:180px">
+      <div style="width:36px;height:36px;border-radius:9px;background:${color}18;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid ${icon}" style="color:${color};font-size:14px"></i></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.4);margin-bottom:2px">${label}</div>
+        <div style="font-size:18px;font-weight:900;color:${color};line-height:1.1">${val}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:2px">${sub}</div>
+      </div>
+    </div>`;
+
+  el.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px">
+    ${card(liqStatus.icon,'Liquidity Coverage',liqRatio>99?'∞':liqRatio.toFixed(1)+'x',liqStatus.label+' · 90-day horizon',liqStatus.color)}
+    ${card('fa-triangle-exclamation','Overdue Loans',overdueLoans.length,overdueLoans.length>0?fmt.rand(overdueLoans.reduce((s,l)=>s+(parseFloat(l.disbursement_amount)||0),0))+' at risk':'No overdue accounts',overdueLoans.length>0?'#f87171':'#74c69d')}
+    ${card('fa-calendar-exclamation','Obligations (30d)',obligations30.length+' payouts',fmt.rand(obligations30.reduce((s,p)=>s+(parseFloat(p.total_payout)||0),0))+' due soon','#fb923c')}
+    ${card('fa-chart-pie','Concentration Risk',concPct+'%',maxSeg?maxSeg.name+' is largest position':'No active positions',concPct>65?'#f87171':concPct>45?'#fb923c':'#74c69d')}
+  </div>`;
+}
+
+function renderPortfolioComposition() {
+  const el = document.getElementById('dashPortfolioPanel');
+  if (!el) return;
+  const totalRaised = (S.pools||[]).reduce((s,p)=>s+(parseFloat(p.raised_amount)||0),0);
+  const cattleDep = (S.cattle||[]).filter(c=>['active','in_progress'].includes(c.status)).reduce((s,c)=>s+(parseFloat(c.purchase_value)||parseFloat(c.purchase_price)||0),0);
+  const solarDep  = (S.solar||[]).filter(p=>p.status==='active').reduce((s,p)=>s+(parseFloat(p.capital_deployed)||0),0);
+  const loansDep  = (S.loans||[]).filter(l=>['active','overdue'].includes(l.status)).reduce((s,l)=>s+(parseFloat(l.disbursement_amount)||0),0);
+  const runsDep   = (S.runs||[]).filter(r=>r.status==='in_progress').reduce((s,r)=>s+(parseFloat(r.capital_deployed)||0),0);
+  const totalDep  = cattleDep + solarDep + loansDep + runsDep;
+  const undeployed = Math.max(0, totalRaised - totalDep);
+  const totalAUM  = (S.investments||[]).filter(i=>i.status==='active').reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+
+  const segments = [
+    {label:'Cattle Finance', val:cattleDep, color:'#74c69d', icon:'fa-cow', active:(S.cattle||[]).filter(c=>['active','in_progress'].includes(c.status)).length},
+    {label:'Solar Finance',  val:solarDep,  color:'#f59e0b', icon:'fa-solar-panel', active:(S.solar||[]).filter(p=>p.status==='active').length},
+    {label:'Short-Term Loans',val:loansDep, color:'#60a5fa', icon:'fa-hand-holding-dollar', active:(S.loans||[]).filter(l=>l.status==='active').length},
+    {label:'Fund Runs',      val:runsDep,   color:'#c084fc', icon:'fa-play-circle', active:(S.runs||[]).filter(r=>r.status==='in_progress').length},
+  ].filter(s=>s.val>0);
+
+  const deployedPct = totalRaised > 0 ? (totalDep/totalRaised*100).toFixed(1) : 0;
+  const maxVal = Math.max(...segments.map(s=>s.val), 1);
+
+  el.innerHTML = `
+    <div class="panel__hd">
+      <div><div class="panel__title"><i class="fa-solid fa-layer-group" style="color:#c084fc;margin-right:8px"></i>Portfolio Composition — Live Deployment</div>
+      <div class="panel__sub">Portfolio AUM: ${fmt.rand(totalAUM)} · ${deployedPct}% of raised capital deployed across ${segments.length} product${segments.length!==1?'s':''}</div></div>
+    </div>
+    <div class="panel__bd">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
+        <div style="background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.2);border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.4);margin-bottom:5px">Total Raised</div>
+          <div style="font-size:18px;font-weight:900;color:#D4AF37">${fmt.rand(totalRaised)}</div>
+        </div>
+        <div style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.4);margin-bottom:5px">Total Deployed</div>
+          <div style="font-size:18px;font-weight:900;color:#f87171">${fmt.rand(totalDep)}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.3);margin-top:3px">${deployedPct}% of raised</div>
+        </div>
+        <div style="background:rgba(116,198,157,.08);border:1px solid rgba(116,198,157,.2);border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.4);margin-bottom:5px">Undeployed</div>
+          <div style="font-size:18px;font-weight:900;color:#74c69d">${fmt.rand(undeployed)}</div>
+        </div>
+        <div style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.2);border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.4);margin-bottom:5px">Investor AUM</div>
+          <div style="font-size:18px;font-weight:900;color:#c084fc">${fmt.rand(totalAUM)}</div>
+        </div>
+      </div>
+      ${segments.length ? `<div style="display:flex;flex-direction:column;gap:14px">
+        ${segments.map(seg=>{
+          const pct=Math.round(seg.val/Math.max(totalDep,1)*100);
+          const barPct=Math.round(seg.val/maxVal*100);
+          return `<div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <i class="fa-solid ${seg.icon}" style="color:${seg.color};font-size:13px;width:16px"></i>
+                <span style="font-size:13px;font-weight:700;color:#fff">${seg.label}</span>
+                ${seg.active>0?`<span style="font-size:10px;background:${seg.color}22;color:${seg.color};padding:1px 7px;border-radius:8px;font-weight:700">${seg.active} active</span>`:''}
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:14px;font-weight:800;color:${seg.color}">${fmt.rand(seg.val)}</div>
+                <div style="font-size:10px;color:rgba(255,255,255,.35)">${pct}% of deployed</div>
+              </div>
+            </div>
+            <div style="height:6px;background:rgba(255,255,255,.06);border-radius:999px;overflow:hidden">
+              <div style="height:100%;width:${barPct}%;background:${seg.color};border-radius:999px;transition:width 0.5s ease"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>` : `<div class="empty" style="padding:24px"><i class="fa-solid fa-chart-pie"></i><p>No deployed capital yet</p></div>`}
+    </div>`;
+}
+
+function renderCapitalWaterfall() {
+  const ctx = document.getElementById('dashWaterfallChart');
+  if (!ctx) return;
+  const completed = (S.runs||[]).filter(r=>r.status==='completed');
+  const gross   = completed.reduce((s,r)=>s+(parseFloat(r.total_return_gross)||0),0);
+  const mgmt    = completed.reduce((s,r)=>s+(parseFloat(r.management_fee_amount)||0),0);
+  const perf    = completed.reduce((s,r)=>s+(parseFloat(r.performance_fee_amount)||0),0);
+  const net     = completed.reduce((s,r)=>s+(parseFloat(r.total_return_net)||0),0);
+  if (S.charts.waterfall) { S.charts.waterfall.destroy(); S.charts.waterfall = null; }
+  S.charts.waterfall = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Gross Returns Generated','− Management Fees','− Performance Fees','Net Returns to Investors'],
+      datasets:[{
+        data:[gross, mgmt, perf, net],
+        backgroundColor:['rgba(212,175,55,0.75)','rgba(248,113,113,0.7)','rgba(251,146,60,0.7)','rgba(116,198,157,0.75)'],
+        borderColor:['#D4AF37','#f87171','#fb923c','#74c69d'],
+        borderWidth:1.5, borderRadius:6,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c=>` ${fmt.rand(Math.abs(c.parsed.y))}`}}
+      },
+      scales:{
+        x:{ticks:{color:'#64748b',font:{size:10}},grid:{display:false}},
+        y:{ticks:{color:'#64748b',callback:v=>'R'+(Math.abs(v)/1000).toFixed(0)+'k'},grid:{color:'rgba(255,255,255,.05)'}}
+      }
+    }
+  });
+}
+
+function renderLiveProductCards() {
+  const el = document.getElementById('dashProductConsoles');
+  if (!el) return;
+  const activeCattle  = (S.cattle||[]).filter(c=>['active','in_progress'].includes(c.status));
+  const totalAnimals  = activeCattle.reduce((s,c)=>s+(parseInt(c.no_purchased)||parseInt(c.no_live)||0),0);
+  const cattleDep     = activeCattle.reduce((s,c)=>s+(parseFloat(c.purchase_value)||parseFloat(c.purchase_price)||0),0);
+  const activeSolar   = (S.solar||[]).filter(p=>p.status==='active');
+  const solarDep      = activeSolar.reduce((s,p)=>s+(parseFloat(p.capital_deployed)||0),0);
+  const activeLoans   = (S.loans||[]).filter(l=>l.status==='active');
+  const overdueLoans  = (S.loans||[]).filter(l=>l.status==='overdue');
+  const loansDep      = [...activeLoans,...overdueLoans].reduce((s,l)=>s+(parseFloat(l.disbursement_amount)||0),0);
+
+  const card = (href,bg,borderColor,icon,emoji,titleText,subtitle,statusLabel,statusColor,stats,cta,ctaColor) => `
+    <a href="${href}" style="text-decoration:none">
+      <div style="background:${bg};border-radius:12px;padding:20px;color:#fff;cursor:pointer;transition:transform .18s,box-shadow .18s;border:1px solid ${borderColor}22"
+           onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 10px 35px ${borderColor}30'"
+           onmouseout="this.style.transform='';this.style.boxShadow=''">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div style="width:40px;height:40px;background:${borderColor}20;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">${emoji}</div>
+          <div style="flex:1"><div style="font-size:14px;font-weight:700">${titleText}</div><div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.8px">${subtitle}</div></div>
+          <div style="font-size:10px;background:${statusColor}22;color:${statusColor};padding:3px 9px;border-radius:20px;font-weight:700">${statusLabel}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">${stats}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:11px;color:${ctaColor};font-weight:600"><i class="fa-solid fa-chart-line"></i> ${cta}</span>
+          <i class="fa-solid fa-arrow-right" style="color:rgba(255,255,255,.3)"></i>
+        </div>
+      </div>
+    </a>`;
+
+  const stat = (label,val,color) => `<div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px">${label}</div><div style="font-size:15px;font-weight:800;color:${color||'#fff'}">${val}</div></div>`;
+
+  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;padding:16px">
+    ${card('cattle.html','linear-gradient(135deg,#0d1e13,#1a3a26)','#74c69d','fa-cow','🐄','Cattle Finance','Physical asset backed · Beefcor feedlot',
+      activeCattle.length>0?'ACTIVE':'IDLE',activeCattle.length>0?'#74c69d':'rgba(255,255,255,.3)',
+      stat('Active Cycles',activeCattle.length,'#74c69d')+stat('Animals',totalAnimals>0?totalAnimals.toLocaleString():'—')+stat('Deployed',cattleDep>0?fmt.rand(cattleDep):'—','#D4AF37')+stat('Target Return','14.83%','#74c69d'),
+      'View NAV Dashboard','#74c69d')}
+    ${card('solar.html','linear-gradient(135deg,#1a1200,#2a1f00)','#f59e0b','fa-solar-panel','☀️','Solar Finance','5yr · 6yr · 7yr products',
+      activeSolar.length>0?'ACTIVE':'IDLE',activeSolar.length>0?'#f59e0b':'rgba(255,255,255,.3)',
+      stat('Active Projects',activeSolar.length,'#f59e0b')+stat('Return Range','13.5–21.4%')+stat('Deployed',solarDep>0?fmt.rand(solarDep):'—','#D4AF37')+stat('Max Term','7 Years'),
+      'View Solar Dashboard','#f59e0b')}
+    ${card('shortterm.html','linear-gradient(135deg,#0d1832,#0a1428)','#60a5fa','fa-hand-holding-dollar','🏢','SMME Short-Term Loans','Business asset finance · 5-month cycles',
+      overdueLoans.length>0?overdueLoans.length+' OVERDUE':activeLoans.length>0?'ACTIVE':'IDLE',overdueLoans.length>0?'#f87171':activeLoans.length>0?'#60a5fa':'rgba(255,255,255,.3)',
+      stat('Active Loans',activeLoans.length,'#60a5fa')+stat('Overdue',overdueLoans.length,overdueLoans.length>0?'#f87171':'rgba(255,255,255,.3)')+stat('Deployed',loansDep>0?fmt.rand(loansDep):'—','#D4AF37')+stat('Target Return','13.92%','#60a5fa'),
+      'View Loan Dashboard','#60a5fa')}
+  </div>`;
 }
 
 /* ═══════════════════════════════════════════════
