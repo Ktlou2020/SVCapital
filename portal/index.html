@@ -2226,6 +2226,17 @@
 </div>
 
 <!-- Sub Account FICA Upload Modal -->
+<!-- ── Factsheet Viewer Modal ── -->
+<div class="modal-overlay" id="factsheetModal" onclick="if(event.target===this)Modal.close('factsheetModal')">
+  <div class="modal modal--md">
+    <div class="modal__header">
+      <span class="modal__title" id="fsModalTitle">Product Factsheets</span>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('factsheetModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="fsModalBody" style="min-height:120px"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="saFicaModal" onclick="if(event.target===this)Modal.close('saFicaModal')">
   <div class="modal modal--lg">
     <div class="modal__header">

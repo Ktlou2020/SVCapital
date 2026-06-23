@@ -2686,15 +2686,17 @@ function launchPaystack() {
         currency: 'ZAR',
         ref:      `SVC-PS-${Date.now()}`,
         metadata: {
-          investor_id:   _pmInvestorId(),
-          investor_name: _pmInvestorName(),
-          wallet_credit: _pmAmount,
-          gateway_fee:   _pmFee(_pmAmount),
+          investor_id:    _pmInvestorId(),
+          investor_name:  _pmInvestorName(),
+          wallet_credit:  _pmAmount,
+          gateway_fee:    _pmFee(_pmAmount),
+          sub_account_id: _pmSaId || undefined,
           custom_fields: [
-            { display_name: 'Investor ID',    variable_name: 'investor_id',   value: _pmInvestorId() },
-            { display_name: 'Investor Name',  variable_name: 'investor_name', value: _pmInvestorName() },
-            { display_name: 'Wallet Credit',  variable_name: 'wallet_credit', value: `R${_pmAmount}` },
-            { display_name: 'Gateway Fee',    variable_name: 'gateway_fee',   value: `R${_pmFee(_pmAmount)}` },
+            { display_name: 'Investor ID',      variable_name: 'investor_id',    value: _pmInvestorId() },
+            { display_name: 'Investor Name',    variable_name: 'investor_name',  value: _pmInvestorName() },
+            { display_name: 'Wallet Credit',    variable_name: 'wallet_credit',  value: `R${_pmAmount}` },
+            { display_name: 'Gateway Fee',      variable_name: 'gateway_fee',    value: `R${_pmFee(_pmAmount)}` },
+            { display_name: 'Sub Account ID',   variable_name: 'sub_account_id', value: _pmSaId || '' },
           ]
         },
         onSuccess: async function(transaction) {
@@ -2709,13 +2711,23 @@ function launchPaystack() {
               reference:    transaction.reference,
               investorId:   _pmInvestorId(),
               walletCredit: _pmAmount,
+              subAccountId: _pmSaId || undefined,
             });
             if (result.error) throw new Error(result.error);
 
             // Update local cache so UI reflects the new balance immediately
-            if (!result.alreadyProcessed && PORTAL.investor) {
-              PORTAL.investor.wallet_balance = (parseFloat(PORTAL.investor.wallet_balance) || 0) + _pmAmount;
-              _refreshWalletUI(PORTAL.investor.wallet_balance);
+            if (!result.alreadyProcessed) {
+              if (_pmSaId) {
+                // Credit sub-account wallet locally
+                const saIdx = PORTAL.subAccounts.findIndex(s => s.id === _pmSaId);
+                if (saIdx !== -1) {
+                  PORTAL.subAccounts[saIdx].wallet_balance =
+                    Math.round(((parseFloat(PORTAL.subAccounts[saIdx].wallet_balance) || 0) + _pmAmount) * 100) / 100;
+                }
+              } else if (PORTAL.investor) {
+                PORTAL.investor.wallet_balance = (parseFloat(PORTAL.investor.wallet_balance) || 0) + _pmAmount;
+                _refreshWalletUI(PORTAL.investor.wallet_balance);
+              }
             }
 
             // If Paystack returned a reusable authorization, refresh the auto top-up card
@@ -2911,34 +2923,30 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
       });
     }
 
-    // 3. If completed, update the investor's wallet_balance in the DB.
-    //    Paystack deposits are now handled server-side via /api/payments/paystack/verify
-    //    (which uses an atomic SQL increment). Only run this client-side PATCH for
-    //    non-Paystack gateways (EFT, Ozow, admin top-ups) to avoid double-crediting.
-    if (status === 'completed' && PORTAL.investor && gateway !== 'paystack') {
-      const currentBalance = parseFloat(PORTAL.investor.wallet_balance) || 0;
-      const newBalance     = Math.round((currentBalance + _pmAmount) * 100) / 100;
-
-      try {
-        await API.investors.update(PORTAL.investor.id, { wallet_balance: newBalance });
-      } catch (dbErr) {
-        console.warn('wallet_balance PATCH failed:', dbErr.message);
-      }
-
-      PORTAL.investor.wallet_balance = newBalance;
-      _refreshWalletUI(newBalance);
-    }
-
-    // If this is a sub-account deposit, also update the sub-account wallet
-    if (status === 'completed' && _pmSaId) {
-      try {
+    // 3. If completed, update the correct wallet in the DB.
+    //    Paystack deposits are handled server-side via /api/payments/paystack/verify.
+    //    For EFT/other gateways, patch the appropriate wallet client-side.
+    if (status === 'completed' && gateway !== 'paystack') {
+      if (_pmSaId) {
+        // Sub-account deposit: credit sub-account wallet ONLY (not main investor wallet)
         const saIdx = PORTAL.subAccounts.findIndex(s => s.id === _pmSaId);
         if (saIdx !== -1) {
           const newSaBal = Math.round(((parseFloat(PORTAL.subAccounts[saIdx].wallet_balance) || 0) + _pmAmount) * 100) / 100;
-          await API._fetch('PATCH', `tables/sub_accounts/${_pmSaId}`, { wallet_balance: newSaBal });
-          PORTAL.subAccounts[saIdx].wallet_balance = newSaBal;
+          try {
+            await API._fetch('PATCH', `tables/sub_accounts/${_pmSaId}`, { wallet_balance: newSaBal });
+            PORTAL.subAccounts[saIdx].wallet_balance = newSaBal;
+          } catch (saErr) { console.warn('Sub-account wallet update failed:', saErr); }
         }
-      } catch (saErr) { console.warn('Sub-account wallet update failed:', saErr); }
+      } else if (PORTAL.investor) {
+        const newBalance = Math.round(((parseFloat(PORTAL.investor.wallet_balance) || 0) + _pmAmount) * 100) / 100;
+        try {
+          await API.investors.update(PORTAL.investor.id, { wallet_balance: newBalance });
+        } catch (dbErr) {
+          console.warn('wallet_balance PATCH failed:', dbErr.message);
+        }
+        PORTAL.investor.wallet_balance = newBalance;
+        _refreshWalletUI(newBalance);
+      }
     }
 
     if (showSuccess) {
@@ -3132,61 +3140,133 @@ function renderMarketplace() {
 
     const highlighted = idx === 0 && pool.status === 'open';
 
+    // Factsheet link — loaded async into dataset on the card
+    const fsAttr = `data-pool-id="${pool.id}"`;
+
     return `
-      <div class="market-pool-card" style="${highlighted ? 'border-color:rgba(255,155,12,0.38);box-shadow:0 12px 28px rgba(255,155,12,0.12)' : ''}">
-        <div class="flex-between">
-          <div class="market-pool-card__icon" style="background:${pi.color}18;color:${pi.color}"><i class="fa-solid ${pi.icon}"></i></div>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
-            ${highlighted ? '<span style="font-size:0.65rem;font-weight:800;color:#FF8215;background:rgba(255,155,12,0.12);padding:3px 8px;border-radius:999px;border:1px solid rgba(255,155,12,0.2)">Best next step</span>' : ''}
-            <span class="pool-risk-badge" style="background:${meta.riskColor}18;color:${meta.riskColor}">${meta.risk} risk</span>
-            ${isWaitlisted
-              ? '<span class="badge badge--red" style="font-size:0.65rem"><i class="fa-solid fa-lock"></i> Pool Full</span>'
-              : (urgency ? '<span class="pool-urgency-badge"><i class="fa-solid fa-fire"></i> Closing soon</span>' : Utils.statusBadge(pool.status))
-            }
+      <div class="market-pool-card mpc-v2 ${highlighted ? 'mpc-v2--featured' : ''}" ${fsAttr}>
+        <!-- Card header accent strip -->
+        <div class="mpc2-accent" style="background:linear-gradient(90deg,${pi.color},${pi.color}88)"></div>
+
+        <div class="mpc2-top">
+          <!-- Icon + badges row -->
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+            <div class="mpc2-icon" style="background:${pi.color}18;color:${pi.color}">
+              <i class="fa-solid ${pi.icon}"></i>
+            </div>
+            <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+              ${highlighted ? `<span class="mpc2-badge mpc2-badge--featured"><i class="fa-solid fa-star" style="font-size:0.6rem"></i> Best Next Step</span>` : ''}
+              <span class="mpc2-badge" style="background:${meta.riskColor}14;color:${meta.riskColor};border-color:${meta.riskColor}30">${meta.risk} risk</span>
+              ${isWaitlisted
+                ? '<span class="mpc2-badge mpc2-badge--full"><i class="fa-solid fa-lock"></i> Pool Full</span>'
+                : (urgency ? '<span class="mpc2-badge mpc2-badge--urgent"><i class="fa-solid fa-fire"></i> Closing Soon</span>' : '')
+              }
+            </div>
+          </div>
+
+          <!-- Title + blurb -->
+          <div style="margin-top:14px">
+            <div class="mpc2-title">${pool.name}</div>
+            <div class="mpc2-blurb">${meta.blurb}</div>
           </div>
         </div>
 
-        <div>
-          <div class="market-pool-card__title">${pool.name}</div>
-          <div class="market-pool-card__blurb">${meta.blurb}</div>
-        </div>
-
-        <div class="pool-rate-row">
-          <div>
-            <div class="market-pool-card__rate">${Utils.pct(pool.annual_rate)}</div>
-            <div class="market-pool-card__rate-label">per annum</div>
+        <!-- Key metrics -->
+        <div class="mpc2-metrics">
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${pi.color},${pi.color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${Utils.pct(pool.annual_rate)}</div>
+            <div class="mpc2-metric__lbl">per annum</div>
           </div>
-          <div class="pool-rate-divider"></div>
-          <div>
-            <div class="market-pool-card__rate" style="font-size:1.4rem">${pool.term_months}mo</div>
-            <div class="market-pool-card__rate-label">fixed term</div>
+          <div class="mpc2-metric-sep"></div>
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val">${pool.term_months}<span style="font-size:1rem;opacity:0.7">mo</span></div>
+            <div class="mpc2-metric__lbl">fixed term</div>
           </div>
-          <div class="pool-rate-divider"></div>
-          <div>
-            <div class="market-pool-card__rate" style="font-size:1.4rem">${Utils.rand(pool.min_investment)}</div>
-            <div class="market-pool-card__rate-label">minimum</div>
+          <div class="mpc2-metric-sep"></div>
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(pool.min_investment)}</div>
+            <div class="mpc2-metric__lbl">minimum</div>
           </div>
         </div>
 
-        <div class="market-pool-stats">
-          <div class="mps"><span class="mps__label"><i class="fa-solid fa-users" style="font-size:0.65rem"></i> Investors</span><span class="mps__value">${pool.investor_count}</span></div>
-          <div class="mps"><span class="mps__label"><i class="fa-solid fa-clock" style="font-size:0.65rem"></i> Closes in</span><span class="mps__value" style="${urgency?'color:var(--gold)':''}">${days !== null ? days + 'd' : '—'}</span></div>
-          <div class="mps"><span class="mps__label"><i class="fa-solid fa-building-columns" style="font-size:0.65rem"></i> Partner</span><span class="mps__value" style="font-size:0.72rem">${pool.partner_name}</span></div>
+        <!-- Info pills -->
+        <div class="mpc2-pills">
+          <div class="mpc2-pill">
+            <i class="fa-solid fa-users"></i>
+            <span><strong>${pool.investor_count || 0}</strong> investor${pool.investor_count !== 1 ? 's' : ''}</span>
+          </div>
+          ${days !== null ? `<div class="mpc2-pill${urgency ? ' mpc2-pill--urgent' : ''}">
+            <i class="fa-solid fa-clock"></i>
+            <span>Closes in <strong>${days}d</strong></span>
+          </div>` : ''}
+          ${pool.partner_name ? `<div class="mpc2-pill">
+            <i class="fa-solid fa-handshake"></i>
+            <span><strong>${pool.partner_name}</strong></span>
+          </div>` : ''}
         </div>
 
-        <div>
-          <div class="pool-card__progress-label">
+        <!-- Funding progress -->
+        <div class="mpc2-progress">
+          <div class="mpc2-progress__labels">
             <span>${Utils.rand(pool.raised_amount)} raised</span>
-            <span>${pct}% funded</span>
+            <span style="font-weight:700;color:${pct >= 90 ? '#ef4444' : pct >= 60 ? '#f59e0b' : pi.color}">${pct}% funded</span>
           </div>
-          <div class="progress-bar"><div class="progress-fill${(pool.product_type || '').includes('solar') ? ' progress-fill--green' : pool.product_type === 'short_term' ? ' progress-fill--blue' : ''}" style="width:${pct}%"></div></div>
+          <div class="mpc2-progress__track">
+            <div class="mpc2-progress__fill" style="width:${pct}%;background:linear-gradient(90deg,${pi.color},${pi.color}aa)"></div>
+          </div>
           ${capacityBarHtml}
         </div>
 
-        ${ctaHtml}
+        <!-- CTA + factsheet -->
+        <div class="mpc2-footer">
+          <div style="flex:1">${ctaHtml}</div>
+          <button class="mpc2-fs-btn" onclick="viewFactsheet('${pool.id}','${pool.name}')" title="View factsheet">
+            <i class="fa-solid fa-file-pdf"></i>
+          </button>
+        </div>
       </div>
     `;
   }).join('');
+}
+
+/* ─── Factsheet viewer ───────────────────────────────────────────── */
+async function viewFactsheet(poolId, poolName) {
+  const modal = document.getElementById('factsheetModal');
+  const title = document.getElementById('fsModalTitle');
+  const body  = document.getElementById('fsModalBody');
+  if (!modal || !body) return;
+
+  if (title) title.textContent = `${poolName} — Factsheets`;
+  body.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>`;
+  Modal.open('factsheetModal');
+
+  try {
+    const res = await API._fetch('GET', `factsheets?pool_id=${poolId}`);
+    const sheets = res.data || [];
+    if (!sheets.length) {
+      body.innerHTML = `<div class="empty-state" style="padding:32px">
+        <i class="fa-solid fa-file-pdf" style="font-size:2rem;color:var(--border-dark)"></i>
+        <div class="empty-state__title" style="margin-top:12px">No factsheet uploaded yet</div>
+        <div class="empty-state__sub">Contact your investment manager for product documentation.</div>
+      </div>`;
+      return;
+    }
+    body.innerHTML = `
+      <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:16px">${sheets.length} factsheet${sheets.length > 1 ? 's' : ''} available — most recent first</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${sheets.map((s, i) => `
+          <a href="${s.file_url}" target="_blank" rel="noopener" class="fs-row ${s.is_current ? 'fs-row--current' : ''}">
+            <div class="fs-row__icon"><i class="fa-solid fa-file-pdf"></i></div>
+            <div class="fs-row__info">
+              <div class="fs-row__name">${_esc(s.file_name)}${s.is_current ? ' <span class="fs-current-tag">Current</span>' : ''}</div>
+              <div class="fs-row__meta">${s.version ? `v${_esc(s.version)} · ` : ''}${Utils.date(s.created_at)}${s.uploaded_by ? ` · ${_esc(s.uploaded_by)}` : ''}</div>
+            </div>
+            <i class="fa-solid fa-arrow-up-right-from-square fs-row__arrow"></i>
+          </a>`).join('')}
+      </div>`;
+  } catch (err) {
+    body.innerHTML = `<div style="color:var(--red);text-align:center;padding:24px">Failed to load factsheets. Please try again.</div>`;
+  }
 }
 
 /* ─── Waitlist ───────────────────────────────────────────────────── */

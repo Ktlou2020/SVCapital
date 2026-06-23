@@ -1989,6 +1989,7 @@ function renderPoolsGrid() {
 
         <div class="pool-card__actions">
           <button class="btn btn--secondary btn--sm flex-1" onclick='editPool(${JSON.stringify(p.id)})'><i class="fa-solid fa-pen"></i> Edit</button>
+          <button class="btn btn--secondary btn--sm" onclick='openFactsheetManager(${JSON.stringify(p.id)},${JSON.stringify(p.name)})' title="Manage factsheets"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>
           ${manageDropdown}
         </div>
       </div>
@@ -2121,6 +2122,111 @@ async function setPoolWaitlist(id) {
     Toast.success('Pool set to Waitlist');
     await loadPools();
   } catch (e) { Toast.error('Failed to update pool status'); }
+}
+
+/* ── Factsheet Manager ─────────────────────────────── */
+async function openFactsheetManager(poolId, poolName) {
+  const modal = document.getElementById('adminFactsheetModal');
+  const title = document.getElementById('adminFsTitle');
+  const list  = document.getElementById('adminFsList');
+  if (!modal) return;
+  if (title) title.textContent = `${poolName} — Factsheets`;
+  modal.dataset.poolId   = poolId;
+  modal.dataset.poolName = poolName;
+  // Reset file input
+  const inp = document.getElementById('adminFsFileInput');
+  if (inp) inp.value = '';
+  const namEl = document.getElementById('adminFsFileName');
+  if (namEl) namEl.value = '';
+  const verEl = document.getElementById('adminFsVersion');
+  if (verEl) verEl.value = '';
+  Modal.open('adminFactsheetModal');
+  await _loadAdminFactsheets(poolId, list);
+}
+
+async function _loadAdminFactsheets(poolId, listEl) {
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="color:var(--text-dim);font-size:0.8rem;text-align:center;padding:20px"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+  try {
+    const res = await API._fetch('GET', `factsheets?pool_id=${poolId}`);
+    const sheets = res.data || [];
+    if (!sheets.length) {
+      listEl.innerHTML = '<div style="color:var(--text-dim);font-size:0.78rem;text-align:center;padding:16px">No factsheets yet — upload one above.</div>';
+      return;
+    }
+    listEl.innerHTML = sheets.map(s => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--dark-3);border-radius:10px;border:1px solid var(--border)">
+        <i class="fa-solid fa-file-pdf" style="color:#ef4444;font-size:1.1rem;flex-shrink:0"></i>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.82rem;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            ${_esc(s.file_name)}
+            ${s.is_current ? '<span style="font-size:0.6rem;background:rgba(34,197,94,0.15);color:#22c55e;padding:1px 6px;border-radius:99px;font-weight:800">CURRENT</span>' : ''}
+          </div>
+          <div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">${s.version ? `v${_esc(s.version)} · ` : ''}${Utils.date(s.created_at)}${s.uploaded_by ? ` · ${_esc(s.uploaded_by)}` : ''}</div>
+        </div>
+        <a href="${s.file_url}" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" title="Open"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+        <button class="btn btn--ghost btn--sm" style="color:#ef4444" onclick="deleteFactsheet('${s.id}','${poolId}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
+      </div>`).join('');
+  } catch (e) {
+    listEl.innerHTML = `<div style="color:#ef4444;font-size:0.78rem;text-align:center;padding:12px">${e.message}</div>`;
+  }
+}
+
+async function uploadFactsheet() {
+  const modal   = document.getElementById('adminFactsheetModal');
+  const poolId  = modal?.dataset.poolId;
+  const poolName= modal?.dataset.poolName;
+  const fileInput = document.getElementById('adminFsFileInput');
+  const nameEl  = document.getElementById('adminFsFileName');
+  const verEl   = document.getElementById('adminFsVersion');
+  const btn     = document.getElementById('adminFsUploadBtn');
+
+  if (!poolId) return;
+  const fileName = nameEl?.value?.trim();
+  const version  = verEl?.value?.trim();
+  const file     = fileInput?.files?.[0];
+
+  if (!fileName) { Toast.error('Enter a factsheet name'); return; }
+  if (!file) { Toast.error('Select a PDF file to upload'); return; }
+
+  // Read file as base64 data URL and use it directly as the file_url
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading…'; }
+      const res = await API._fetch('POST', 'factsheets/upload', {
+        pool_id:   poolId,
+        pool_name: poolName,
+        file_name: fileName,
+        file_url:  e.target.result,  // base64 data URL stored in DB
+        file_size: file.size,
+        mime_type: file.type || 'application/pdf',
+        version,
+      });
+      if (res.error) throw new Error(res.error);
+      Toast.success('Factsheet uploaded');
+      if (nameEl) nameEl.value = '';
+      if (verEl)  verEl.value  = '';
+      if (fileInput) fileInput.value = '';
+      await _loadAdminFactsheets(poolId, document.getElementById('adminFsList'));
+    } catch (err) {
+      Toast.error('Upload failed: ' + err.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-upload"></i> Upload'; }
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function deleteFactsheet(fsId, poolId) {
+  if (!await Confirm.ask('Delete factsheet?', { body: 'This cannot be undone.', confirmLabel: 'Delete', danger: true })) return;
+  try {
+    await API._fetch('DELETE', `factsheets/${fsId}`);
+    Toast.success('Factsheet deleted');
+    await _loadAdminFactsheets(poolId, document.getElementById('adminFsList'));
+  } catch (e) {
+    Toast.error('Delete failed: ' + e.message);
+  }
 }
 
 async function reopenPool(id) {

@@ -30,7 +30,7 @@ router.get('/config', requireAuth, (req, res) => {
    Shared helper — atomically credit wallet and record deposit
    Idempotent: skips silently if the reference is already processed.
 ────────────────────────────────────────────────────────── */
-async function creditWallet(investorId, amount, reference, actorEmail = null, source = 'paystack') {
+async function creditWallet(investorId, amount, reference, actorEmail = null, source = 'paystack', subAccountId = null) {
   // Idempotency check — never double-credit the same reference
   const dupCheck = await pool.query(
     `SELECT id FROM transactions
@@ -46,14 +46,23 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
   if (!invRes.rows[0]) throw new Error(`Investor ${investorId} not found`);
   const investor = invRes.rows[0];
 
-  // Atomic SQL increment — safe against race conditions
-  await pool.query(
-    'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-    [parseFloat(amount), investorId]
-  );
+  // Route credit: sub-account wallet takes priority when sub_account_id is present
+  if (subAccountId) {
+    await pool.query(
+      'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1 WHERE id = $2',
+      [parseFloat(amount), subAccountId]
+    );
+  } else {
+    // Atomic SQL increment — safe against race conditions
+    await pool.query(
+      'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+      [parseFloat(amount), investorId]
+    );
+  }
 
   const sourceLabel = source === 'webhook' ? 'Paystack (confirmed)' : 'Paystack';
-  const desc = `Wallet top-up via ${sourceLabel} — R${Number(amount).toLocaleString('en-ZA')} credited`;
+  const dest = subAccountId ? `sub-account` : 'wallet';
+  const desc = `Top-up via ${sourceLabel} — R${Number(amount).toLocaleString('en-ZA')} credited to ${dest}`;
 
   // Upsert transaction: update pending → completed, or insert fresh
   const existingTx = await pool.query(
@@ -67,9 +76,9 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
     );
   } else {
     await pool.query(
-      `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
-       VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, $4, NOW(), NOW())`,
-      [investorId, amount, reference, desc]
+      `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, sub_account_id, transaction_date, created_at)
+       VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, $4, $5, NOW(), NOW())`,
+      [investorId, amount, reference, desc, subAccountId || null]
     );
   }
 
@@ -88,8 +97,8 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
     description: `Paystack deposit R${amount} credited to ${investorId}`,
   }).catch(() => {});
 
-  console.log(`[payments] Credited R${amount} to investor ${investorId}, ref: ${reference}`);
-  return { alreadyProcessed: false, amount, investorId };
+  console.log(`[payments] Credited R${amount} to ${subAccountId ? `sub-account ${subAccountId}` : `investor ${investorId}`}, ref: ${reference}`);
+  return { alreadyProcessed: false, amount, investorId, subAccountId };
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -99,7 +108,7 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
    credits the investor's wallet.
 ────────────────────────────────────────────────────────── */
 router.post('/paystack/verify', requireAuth, async (req, res) => {
-  const { reference, investorId, walletCredit } = req.body;
+  const { reference, investorId, walletCredit, subAccountId } = req.body;
   if (!reference) return res.status(400).json({ error: 'reference is required' });
 
   const resolvedInvestorId = investorId || req.user.investorId;
@@ -137,7 +146,7 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
     // Always credit the authenticated user — never trust investor_id from Paystack metadata.
     const creditAmount = Number(psData.data.metadata?.wallet_credit) || (psData.data.amount / 100);
 
-    const result = await creditWallet(resolvedInvestorId, creditAmount, reference, req.user?.email);
+    const result = await creditWallet(resolvedInvestorId, creditAmount, reference, req.user?.email, 'paystack', subAccountId || null);
     aml.checkDeposit(pool, resolvedInvestorId, creditAmount, reference).catch(e => console.error('[aml]', e.message));
 
     // Save reusable authorization code for future auto top-ups
@@ -196,9 +205,10 @@ router.post('/paystack/webhook', async (req, res) => {
   const { event, data } = req.body;
   if (event !== 'charge.success') return;
 
-  const reference  = data?.reference;
-  const investorId = data?.metadata?.investor_id;
-  const creditAmt  = Number(data?.metadata?.wallet_credit) || (data?.amount / 100);
+  const reference    = data?.reference;
+  const investorId   = data?.metadata?.investor_id;
+  const creditAmt    = Number(data?.metadata?.wallet_credit) || (data?.amount / 100);
+  const subAccountId = data?.metadata?.sub_account_id || null;
 
   if (!investorId) {
     console.warn('[payments/webhook] No investor_id in metadata, ref:', reference);
@@ -206,7 +216,7 @@ router.post('/paystack/webhook', async (req, res) => {
   }
 
   try {
-    const result = await creditWallet(investorId, creditAmt, reference, null, 'webhook');
+    const result = await creditWallet(investorId, creditAmt, reference, null, 'webhook', subAccountId);
     if (!result.alreadyProcessed) {
       console.log(`[payments/webhook] charge.success — credited R${creditAmt} to ${investorId}`);
       aml.checkDeposit(pool, investorId, creditAmt, reference).catch(e => console.error('[aml]', e.message));
