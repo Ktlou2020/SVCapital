@@ -209,9 +209,10 @@ function _syncAdminNotifDot() {
 }
 
 function adminMarkAllRead() {
-  document.querySelectorAll('#adminNotifPanel .notif-item.unread').forEach(el => el.classList.remove('unread'));
+  const body = document.getElementById('adminNotifBody');
+  if (body) body.innerHTML = '<div style="padding:24px 18px;text-align:center;color:#888;font-size:0.82rem"><i class="fa-solid fa-circle-check" style="color:#22c55e;margin-right:6px"></i>No pending actions — all clear!</div>';
   const dot = document.getElementById('adminNotifDot');
-  if (dot) dot.classList.remove('has-unread');
+  if (dot) { dot.classList.remove('has-unread'); dot.textContent = ''; }
 }
 
 /* ── Dynamic admin notification panel ─────────────────────────────────────
@@ -1490,10 +1491,10 @@ function renderWithdrawalsTable() {
     const bankAcct   = inv?.bank_account_number || bankNotes.account_number || '';
     const bankHolder = inv?.bank_account_holder || bankNotes.account_holder || (inv ? `${inv.first_name} ${inv.last_name}` : '—');
     const branchCode = inv?.bank_branch_code || bankNotes.branch_code || '—';
-    const bankDisplay = showActions && bankAcct
+    const bankDisplay = bankAcct
       ? `<div style="font-size:0.78rem;font-weight:600;color:var(--text)">${bankName}</div>
          <div style="font-size:0.7rem;color:var(--text-muted)">${bankHolder}</div>
-         <div style="font-size:0.68rem;font-family:monospace;color:var(--gold)">••••${String(bankAcct).slice(-4)} · ${branchCode}</div>`
+         <div style="font-size:0.68rem;font-family:monospace;color:var(--gold)">${String(bankAcct)} · ${branchCode}</div>`
       : `<div class="clip">${bankName}</div>`;
 
     return `<tr>
@@ -1831,7 +1832,7 @@ async function approveKyc(id, btn) {
   const reviewedBy = _getAdminName();
   await _withBtn(btn, async () => {
     try {
-      await API.kyc.update(id, { status: 'approved', reviewed_by: reviewedBy, reviewed_date: new Date().toISOString() });
+      await API.kyc.update(id, { status: 'approved', reviewed_by: reviewedBy, reviewed_at: new Date().toISOString() });
       // Also update the investor's kyc_status so filters/badges reflect the change
       const doc = STATE.kyc.find(k => k.id === id);
       if (doc?.investor_id) {
@@ -2497,12 +2498,14 @@ function viewInvestmentDetail(id) {
   const inv = STATE.investments.find(i => i.id === id);
   if (!inv) return;
   const pi = Utils.productInfo(inv.product_type);
+  const invRecord = STATE.investors.find(i => i.id === inv.investor_id);
+  const email = inv.investor_email || invRecord?.email || '—';
 
   document.getElementById('invDetailTitle').textContent = `Investment — ${inv.pool_name}`;
   document.getElementById('invDetailBody').innerHTML = `
     <div class="grid-2 mb-16" style="gap:12px">
       <div class="info-row"><span class="info-row__label">Investor</span><span class="info-row__value td-strong">${_esc(inv.investor_name)}</span></div>
-      <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value td-muted">${_esc(inv.investor_email) || '—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value td-muted">${_esc(email)}</span></div>
       <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(inv.pool_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Product</span><span class="info-row__value"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></span></div>
       <div class="info-row"><span class="info-row__label">Invested Amount</span><span class="info-row__value td-gold fw-700">${Utils.rand(inv.amount)}</span></div>
@@ -4599,13 +4602,14 @@ function exportMaturityCSV() {
 function exportWithdrawalsCSV() {
   const all = STATE.withdrawals || [];
   if (!all.length) { Toast.error('Load withdrawals first'); return; }
-  const headers = ['ID','Investor','Investor ID','Amount','Bank','Reference','Status','Date'];
+  const headers = ['ID','Investor Name','Investor ID','Amount','Bank','Account Number','Reference','Status','Date'];
   const rows = [headers, ...all.map(w => {
     const inv = STATE.investors.find(i => i.id === w.investor_id);
     const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id;
     let bankNotes = {}; try { if (inv?.notes?.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
-    const bank = inv?.bank_name || bankNotes.bank_name || '—';
-    return [w.id, name, w.investor_id, Math.abs(w.amount||0), bank, w.reference||'', w.status, Utils.date(w.created_at||w.transaction_date)];
+    const bank    = inv?.bank_name           || bankNotes.bank_name      || '—';
+    const acctNo  = inv?.bank_account_number || bankNotes.account_number || '—';
+    return [w.id, name, w.investor_id, Math.abs(w.amount||0), bank, acctNo, w.reference||'', w.status, Utils.date(w.created_at||w.transaction_date)];
   })];
   _downloadCSV(rows, `withdrawals-${new Date().toISOString().slice(0,10)}.csv`);
   Toast.success(`Exported ${all.length} withdrawals`);
