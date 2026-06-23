@@ -132,6 +132,11 @@
         <span class="xp-nav-badge" id="xpNavBadge" style="display:none"></span>
       </button>
 
+      <button class="nav-item" data-view="gifts" onclick="navigate('gifts', this)">
+        <i class="fa-solid fa-gift"></i> Send a Gift
+        <span class="nav-badge" id="giftsBadge" style="display:none"></span>
+      </button>
+
       <div class="nav-section-label">Account</div>
       <button class="nav-item" data-view="profile" onclick="navigate('profile', this)">
         <i class="fa-solid fa-user-circle"></i> My Profile
@@ -1424,8 +1429,8 @@
           </div>
           <div class="xp-hero__right">
             <div class="xp-hero__earned">
-              <div class="xp-hero__earned-label">Rewards Earned</div>
-              <div class="xp-hero__earned-val" id="questRewardsEarned">R0</div>
+              <div class="xp-hero__earned-label">Quests Done</div>
+              <div class="xp-hero__earned-val" id="questRewardsEarned">0 Quests</div>
             </div>
           </div>
         </div>
@@ -1441,16 +1446,16 @@
             <div class="rewards-stat__label">Current Level</div>
           </div>
           <div class="rewards-stat">
-            <div class="rewards-stat__val" id="rwStatCash" style="color:#22c55e">R0</div>
-            <div class="rewards-stat__label">XP Cash Rewards</div>
+            <div class="rewards-stat__val" id="rwStatCash" style="color:#22c55e">0</div>
+            <div class="rewards-stat__label">Quests Completed</div>
           </div>
           <div class="rewards-stat">
             <div class="rewards-stat__val" id="rwStatRef" style="color:#ff9b0c">R0</div>
             <div class="rewards-stat__label">Referral Bonuses</div>
           </div>
           <div class="rewards-stat">
-            <div class="rewards-stat__val" id="rwStatTotal" style="color:#D4AF37">R0</div>
-            <div class="rewards-stat__label">Total Rewards Value</div>
+            <div class="rewards-stat__val" id="rwStatTotal" style="color:#D4AF37">0 / 7</div>
+            <div class="rewards-stat__label">Levels Reached</div>
           </div>
         </div>
 
@@ -1552,6 +1557,117 @@
           <!-- rendered by renderPoliciesView() -->
         </div>
       </div><!-- end view-policies -->
+
+      <!-- ══════════════════════════════════
+           VIEW: SEND A GIFT
+      ══════════════════════════════════ -->
+      <div class="view" id="view-gifts">
+        <!-- Compose section -->
+        <div class="gift-compose-wrap">
+
+          <!-- Left: Form -->
+          <div class="gift-form-panel">
+            <div class="gift-form-header">
+              <div class="gift-form-icon"><i class="fa-solid fa-gift"></i></div>
+              <div>
+                <div class="gift-form-title">Send an Investment Gift</div>
+                <div class="gift-form-sub">Give someone the gift of growing wealth</div>
+              </div>
+            </div>
+
+            <!-- Amount selector -->
+            <div class="gift-field-group">
+              <label class="gift-label">Gift Amount</label>
+              <div class="gift-presets">
+                <button class="gift-preset" onclick="setGiftAmount(100)">R100</button>
+                <button class="gift-preset" onclick="setGiftAmount(250)">R250</button>
+                <button class="gift-preset" onclick="setGiftAmount(500)">R500</button>
+                <button class="gift-preset" onclick="setGiftAmount(1000)">R1 000</button>
+                <button class="gift-preset" onclick="setGiftAmount(2500)">R2 500</button>
+              </div>
+              <div class="gift-input-row">
+                <span class="gift-currency">R</span>
+                <input id="giftAmount" type="number" min="50" step="50" placeholder="Custom amount"
+                  oninput="updateGiftPreview()" class="gift-input" />
+              </div>
+              <div class="gift-hint" id="giftBalanceHint"></div>
+            </div>
+
+            <!-- Recipient -->
+            <div class="gift-field-group">
+              <label class="gift-label">Recipient Email</label>
+              <div style="position:relative">
+                <input id="giftRecipientEmail" type="email" placeholder="friend@example.com"
+                  oninput="onGiftEmailInput()" class="gift-input" />
+                <div class="gift-recipient-status" id="giftRecipientStatus"></div>
+              </div>
+              <input id="giftRecipientName" type="text" placeholder="Recipient name (optional)"
+                oninput="updateGiftPreview()" class="gift-input" style="margin-top:8px" />
+            </div>
+
+            <!-- Message -->
+            <div class="gift-field-group">
+              <label class="gift-label">Personal Message <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+              <textarea id="giftMessage" rows="4" maxlength="280" placeholder="Write a heartfelt message..."
+                oninput="updateGiftPreview();document.getElementById('giftCharCount').textContent=this.value.length+'/280'"
+                class="gift-textarea"></textarea>
+              <div style="text-align:right;font-size:0.72rem;color:var(--text-muted);margin-top:3px" id="giftCharCount">0/280</div>
+            </div>
+
+            <button class="btn btn--primary gift-send-btn" id="giftSendBtn" onclick="sendGift()">
+              <i class="fa-solid fa-paper-plane"></i> Send Gift
+            </button>
+          </div>
+
+          <!-- Right: Live gift card preview -->
+          <div class="gift-preview-panel">
+            <div class="gift-card-label">Preview</div>
+            <div class="gift-card" id="giftCardPreview">
+              <div class="gift-card__ribbon">
+                <div class="gift-card__ribbon-h"></div>
+                <div class="gift-card__ribbon-v"></div>
+                <div class="gift-card__bow"><i class="fa-solid fa-gift"></i></div>
+              </div>
+              <div class="gift-card__logo">
+                <img src="../assets/logo.png" alt="SV Capital" style="width:32px;height:32px;object-fit:contain;border-radius:8px">
+                <span>SV Capital</span>
+              </div>
+              <div class="gift-card__amount" id="previewAmount">R—</div>
+              <div class="gift-card__label-row">Investment Gift</div>
+              <div class="gift-card__to" id="previewTo">To: —</div>
+              <div class="gift-card__message" id="previewMessage"></div>
+              <div class="gift-card__from" id="previewFrom">From: —</div>
+              <div class="gift-card__footer">Venture Beyond the Ordinary</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabs: Sent / Received -->
+        <div class="gift-history-tabs">
+          <button class="gift-tab active" id="giftTabSent" onclick="switchGiftTab('sent')">
+            <i class="fa-solid fa-paper-plane"></i> Gifts Sent
+          </button>
+          <button class="gift-tab" id="giftTabReceived" onclick="switchGiftTab('received')">
+            <i class="fa-solid fa-inbox"></i> Gifts Received
+          </button>
+        </div>
+
+        <div id="giftHistorySent" class="gift-history-panel">
+          <div class="gift-history-empty" id="giftSentEmpty" style="display:none">
+            <i class="fa-solid fa-gift" style="font-size:2rem;color:var(--text-muted);margin-bottom:10px"></i>
+            <div>No gifts sent yet. Send your first investment gift above!</div>
+          </div>
+          <div id="giftSentList"></div>
+        </div>
+
+        <div id="giftHistoryReceived" class="gift-history-panel" style="display:none">
+          <div class="gift-history-empty" id="giftReceivedEmpty" style="display:none">
+            <i class="fa-solid fa-inbox" style="font-size:2rem;color:var(--text-muted);margin-bottom:10px"></i>
+            <div>No gifts received yet.</div>
+          </div>
+          <div id="giftReceivedList"></div>
+        </div>
+      </div><!-- end view-gifts -->
 
       <!-- ══ SURVEY MODAL ══ -->
       <div class="modal-overlay" id="surveyModal" onclick="if(event.target===this)closeSurveyModal()">

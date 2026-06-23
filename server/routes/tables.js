@@ -160,7 +160,7 @@ const INVESTOR_COLS = {
   return_schedules:      'investor_id',
   investor_allocations:  'investor_id',
   investment_waitlist:   'investor_id',
-  sub_accounts:          'investor_id',
+  sub_accounts:          'parent_investor_id',
 };
 
 /* ─── Employee-owned tables: rows belong to a specific employee ─── */

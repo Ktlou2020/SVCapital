@@ -2973,3 +2973,70 @@ body.dark-mode input, body.dark-mode select, body.dark-mode textarea {
   border-color: rgba(255,255,255,0.1) !important;
 }
 body.dark-mode input::placeholder { color: #4b5563 !important; }
+
+/* ═══════════════════════════════════════
+   GIFT FEATURE
+═══════════════════════════════════════ */
+.gift-compose-wrap { display:flex;gap:28px;margin-bottom:32px;align-items:flex-start;flex-wrap:wrap; }
+.gift-form-panel   { flex:1;min-width:280px;background:var(--panel);border-radius:18px;padding:28px;border:1px solid var(--border); }
+.gift-preview-panel{ flex:0 0 300px;display:flex;flex-direction:column;align-items:center;gap:12px; }
+.gift-form-header  { display:flex;align-items:center;gap:14px;margin-bottom:24px; }
+.gift-form-icon    { width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#ff5229,#ff9b0c);display:flex;align-items:center;justify-content:center;font-size:1.4rem;color:#fff;flex-shrink:0; }
+.gift-form-title   { font-size:1.1rem;font-weight:800;color:var(--white); }
+.gift-form-sub     { font-size:0.78rem;color:var(--text-muted);margin-top:2px; }
+.gift-field-group  { margin-bottom:20px; }
+.gift-label        { display:block;font-size:0.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px; }
+.gift-presets      { display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px; }
+.gift-preset       { padding:5px 13px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--text);font-size:0.78rem;font-weight:600;cursor:pointer;transition:all .15s; }
+.gift-preset:hover,.gift-preset.active { background:var(--gold);border-color:var(--gold);color:#000; }
+.gift-input-row    { display:flex;align-items:center;gap:8px; }
+.gift-currency     { font-size:1.1rem;font-weight:700;color:var(--gold); }
+.gift-input        { width:100%;padding:10px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--input-bg,rgba(255,255,255,0.04));color:var(--text);font-size:0.93rem;outline:none;transition:border-color .15s; }
+.gift-input:focus  { border-color:var(--gold); }
+.gift-textarea     { width:100%;padding:10px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--input-bg,rgba(255,255,255,0.04));color:var(--text);font-size:0.88rem;resize:vertical;outline:none;transition:border-color .15s;font-family:inherit; }
+.gift-textarea:focus { border-color:var(--gold); }
+.gift-hint         { font-size:0.74rem;color:var(--text-muted);margin-top:5px; }
+.gift-send-btn     { width:100%;padding:14px;font-size:1rem;border-radius:12px;margin-top:4px; }
+.gift-recipient-status { position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:0.78rem;font-weight:600; }
+
+/* Gift card preview */
+.gift-card-label   { font-size:0.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);font-weight:600;margin-bottom:6px; }
+.gift-card         { width:280px;min-height:380px;border-radius:22px;background:linear-gradient(145deg,#1a1a2e 0%,#16213e 40%,#0f3460 70%,#533483 100%);padding:28px 24px 24px;position:relative;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08);display:flex;flex-direction:column;gap:12px; }
+.gift-card::before { content:'';position:absolute;top:-40px;right:-40px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,rgba(255,155,12,.25) 0%,transparent 70%);pointer-events:none; }
+.gift-card::after  { content:'';position:absolute;bottom:-30px;left:-30px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(83,52,131,.4) 0%,transparent 70%);pointer-events:none; }
+.gift-card__ribbon { position:absolute;top:0;right:32px;display:flex;flex-direction:column;align-items:center;gap:0; }
+.gift-card__ribbon-h { width:44px;height:10px;background:linear-gradient(135deg,#ff5229,#ff9b0c);border-radius:0 0 4px 4px; }
+.gift-card__ribbon-v { width:10px;height:30px;background:linear-gradient(180deg,#ff9b0c,#ff5229);border-radius:0 0 4px 4px; }
+.gift-card__bow    { position:absolute;top:6px;font-size:1.3rem;color:#ff9b0c;filter:drop-shadow(0 2px 4px rgba(255,155,12,.5)); }
+.gift-card__logo   { display:flex;align-items:center;gap:8px;color:#fff;font-size:0.85rem;font-weight:700;letter-spacing:.02em;position:relative;z-index:1; }
+.gift-card__amount { font-size:2.4rem;font-weight:900;color:#fff;letter-spacing:-1px;line-height:1;position:relative;z-index:1;text-shadow:0 2px 12px rgba(255,155,12,.4); }
+.gift-card__label-row { font-size:0.7rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.5);position:relative;z-index:1; }
+.gift-card__to     { font-size:0.88rem;color:rgba(255,255,255,.9);font-weight:600;position:relative;z-index:1; }
+.gift-card__message{ font-size:0.8rem;color:rgba(255,255,255,.7);font-style:italic;line-height:1.5;position:relative;z-index:1;word-break:break-word;flex:1; }
+.gift-card__from   { font-size:0.8rem;color:rgba(255,255,255,.6);position:relative;z-index:1; }
+.gift-card__footer { font-size:0.65rem;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.25);position:relative;z-index:1;border-top:1px solid rgba(255,255,255,.08);padding-top:10px;margin-top:4px; }
+
+/* Gift history */
+.gift-history-tabs { display:flex;gap:8px;margin-bottom:16px; }
+.gift-tab          { padding:8px 20px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--text-muted);font-size:0.83rem;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:7px; }
+.gift-tab.active   { background:var(--gold);border-color:var(--gold);color:#000; }
+.gift-history-panel{ background:var(--panel);border-radius:16px;border:1px solid var(--border);overflow:hidden; }
+.gift-history-empty{ padding:40px 24px;text-align:center;color:var(--text-muted);font-size:0.85rem;display:flex;flex-direction:column;align-items:center;gap:8px; }
+.gift-row          { display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid var(--border);transition:background .12s; }
+.gift-row:last-child { border-bottom:none; }
+.gift-row:hover    { background:rgba(255,155,12,.04); }
+.gift-row__icon    { width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0; }
+.gift-row__body    { flex:1;min-width:0; }
+.gift-row__name    { font-size:0.88rem;font-weight:700;color:var(--white); }
+.gift-row__meta    { font-size:0.75rem;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.gift-row__right   { text-align:right;flex-shrink:0; }
+.gift-row__amount  { font-size:0.95rem;font-weight:800;color:var(--gold); }
+.gift-row__status  { font-size:0.7rem;margin-top:3px; }
+.gift-row__cancel  { background:none;border:1px solid var(--border);color:var(--text-muted);font-size:0.7rem;padding:3px 9px;border-radius:6px;cursor:pointer;transition:all .12s; }
+.gift-row__cancel:hover { border-color:#ef4444;color:#ef4444; }
+
+@media(max-width:700px){
+  .gift-compose-wrap { flex-direction:column; }
+  .gift-preview-panel { width:100%;flex:none; }
+  .gift-card { width:100%; }
+}

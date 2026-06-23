@@ -154,6 +154,7 @@ app.use('/api/migrate',   require('./routes/migrate'));
 app.use('/api/settings',  require('./routes/settings'));
 app.use('/api/legal',     require('./routes/legal'));
 app.use('/api/quests',    require('./routes/quests'));
+app.use('/api/gifts',     require('./routes/gifts'));
 
 /* ─── One-time Provision Endpoint ───────────────────────────────────────────
    GET /api/provision?secret=<PROVISION_SECRET>
