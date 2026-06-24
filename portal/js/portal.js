@@ -2145,6 +2145,8 @@ async function loadWallet() {
 
   _loadAutoTopUpCard().catch(() => {});
   renderWalletReadinessPanel();
+  // Pre-render recurring tab if it's already visible (or will be on re-render)
+  if (document.getElementById('walletRecurringTab')?.style.display !== 'none') _renderRecurringTab();
 
   const activity = document.getElementById('walletActivity');
   const walletTxns = [...PORTAL.transactions]
@@ -9186,13 +9188,9 @@ async function sendTicketReply() {
 function updateRecurringToggleStyle() {
   const toggle = document.getElementById('recurringEnabledToggle');
   const slider = document.getElementById('recurringToggleSlider');
-  if (slider) {
-    if (toggle && toggle.checked) {
-      slider.classList.add('recurring-toggle-on');
-    } else {
-      slider.classList.remove('recurring-toggle-on');
-    }
-  }
+  if (!slider) return;
+  const on = !!(toggle && toggle.checked);
+  slider.style.background = on ? '#ff9b0c' : '#ccc';
 }
 
 function openRecurringModal() {
