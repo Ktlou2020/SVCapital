@@ -335,6 +335,8 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investors ADD COLUMN recurring_amount NUMERIC(12,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN recurring_pool_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN recurring_enabled BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN recurring_product_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN recurring_day INT DEFAULT 1; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Auto wallet top-up (Paystack authorization-based recurring charge)
   BEGIN ALTER TABLE investors ADD COLUMN auto_topup_enabled BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN auto_topup_amount NUMERIC(12,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -356,6 +358,7 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investment_pools ADD COLUMN management_fee_frequency TEXT DEFAULT 'once'; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investment_pools ADD COLUMN operational_fee_pct NUMERIC(8,4) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investment_pools ADD COLUMN operational_fee_frequency TEXT DEFAULT 'annual'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investment_pools ADD COLUMN maturity_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- EVA tracking on investments (20% of net-VAT management fee, new funds only)
   BEGIN ALTER TABLE investments ADD COLUMN is_reinvestment BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN eva_amount NUMERIC(12,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;

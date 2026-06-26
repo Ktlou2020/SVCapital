@@ -2201,22 +2201,28 @@ function _renderRecurringTab() {
   const listEl     = document.getElementById('recurringInvestmentsList');
   if (!statusCard || !listEl) return;
 
-  const pool     = (PORTAL.pools || []).find(p => p.id === inv?.recurring_pool_id);
-  const isActive = !!(inv?.recurring_enabled && inv?.recurring_amount);
+  const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar Energy 7yr', solar_6yr:'Solar Energy 6yr', solar_5yr:'Solar Energy 5yr', short_term:'Short Term', smme:'SMME Finance', delivery_bike:'Delivery Bike', other:'Other' };
+  const productType = inv?.recurring_product_type;
+  const isActive    = !!(inv?.recurring_enabled && inv?.recurring_amount && productType);
+  const day         = inv?.recurring_day || 1;
 
   const badge = document.getElementById('recurringActiveBadge');
   if (badge) badge.style.display = isActive ? 'inline-flex' : 'none';
 
   if (isActive) {
-    const today      = new Date();
-    const nextDate   = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-    const daysUntil  = Math.ceil((nextDate - today) / 86400000);
+    const today     = new Date();
+    const thisMonth = new Date(today.getFullYear(), today.getMonth(), day);
+    const nextRun   = thisMonth > today
+      ? thisMonth
+      : new Date(today.getFullYear(), today.getMonth() + 1, day);
+    const daysUntil = Math.ceil((nextRun - today) / 86400000);
+    const suffix    = day === 1 ? 'st' : day === 2 ? 'nd' : day === 3 ? 'rd' : 'th';
     statusCard.innerHTML = `
       <div class="wallet-card__label">Recurring Investment
         <span style="background:rgba(34,197,94,0.15);color:#22c55e;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:8px;vertical-align:middle">Active</span>
       </div>
       <div class="wallet-card__value" style="color:#ff9b0c">${Utils.rand(inv.recurring_amount)}<span style="font-size:0.85rem;font-weight:500;color:#6b7280;margin-left:4px">/ month</span></div>
-      <div class="wallet-card__sub"><i class="fa-solid fa-layer-group" style="margin-right:4px"></i>${pool ? pool.name : 'Selected pool'} &nbsp;·&nbsp; Next investment in <strong>${daysUntil} day${daysUntil !== 1 ? 's' : ''}</strong></div>
+      <div class="wallet-card__sub"><i class="fa-solid fa-layer-group" style="margin-right:4px"></i>${PRODUCT_LABELS[productType] || productType} &nbsp;·&nbsp; Every ${day}${suffix} of the month &nbsp;·&nbsp; Next in <strong>${daysUntil} day${daysUntil !== 1 ? 's' : ''}</strong></div>
       <div class="wallet-card__actions">
         <button class="btn btn--secondary" onclick="openRecurringModal()"><i class="fa-solid fa-pen"></i> Edit</button>
         <button class="btn btn--secondary" style="color:#ef4444;border-color:rgba(239,68,68,0.3)" onclick="_cancelRecurring()"><i class="fa-solid fa-xmark"></i> Cancel</button>
@@ -2231,8 +2237,9 @@ function _renderRecurringTab() {
       </div>`;
   }
 
-  const recurringInvs = pool
-    ? PORTAL.investments.filter(i => i.status === 'active' && i.pool_id === inv?.recurring_pool_id)
+  // Show active investments matching the selected product type
+  const recurringInvs = productType
+    ? PORTAL.investments.filter(i => i.status === 'active' && i.product_type === productType)
     : [];
 
   if (!recurringInvs.length) {
@@ -2267,12 +2274,14 @@ async function _cancelRecurring() {
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
   try {
     await API._fetch('PATCH', `tables/investors/${investorId}`, {
-      recurring_enabled: false, recurring_amount: null, recurring_pool_id: null,
+      recurring_enabled: false, recurring_amount: null,
+      recurring_product_type: null, recurring_day: null,
     });
     if (PORTAL.investor) {
-      PORTAL.investor.recurring_enabled = false;
-      PORTAL.investor.recurring_amount  = null;
-      PORTAL.investor.recurring_pool_id = null;
+      PORTAL.investor.recurring_enabled      = false;
+      PORTAL.investor.recurring_amount       = null;
+      PORTAL.investor.recurring_product_type = null;
+      PORTAL.investor.recurring_day          = null;
     }
     Toast.success('Recurring investment cancelled');
     _renderRecurringTab();
@@ -9194,30 +9203,19 @@ function updateRecurringToggleStyle() {
 }
 
 function openRecurringModal() {
-  // Populate pool selector
-  const sel = document.getElementById('recurringPoolSelect');
-  if (sel) {
-    sel.innerHTML = '<option value="">Select a pool…</option>' +
-      (PORTAL.pools || []).filter(p => p.status === 'open').map(p =>
-        `<option value="${p.id}">${p.name} — ${Utils.pct(p.annual_rate || p.benchmark_rate)} p.a.</option>`
-      ).join('');
-  }
-
-  // Load existing settings from investor
-  const inv = PORTAL.investor;
-  const toggle = document.getElementById('recurringEnabledToggle');
-  const amtEl  = document.getElementById('recurringAmount');
+  const inv     = PORTAL.investor;
+  const toggle  = document.getElementById('recurringEnabledToggle');
+  const amtEl   = document.getElementById('recurringAmount');
+  const prodSel = document.getElementById('recurringProductSelect');
+  const daySel  = document.getElementById('recurringDay');
 
   if (toggle) {
     toggle.checked = !!(inv && inv.recurring_enabled);
     updateRecurringToggleStyle();
   }
-  if (amtEl && inv && inv.recurring_amount) {
-    amtEl.value = inv.recurring_amount;
-  }
-  if (sel && inv && inv.recurring_pool_id) {
-    sel.value = inv.recurring_pool_id;
-  }
+  if (amtEl && inv?.recurring_amount)         amtEl.value   = inv.recurring_amount;
+  if (prodSel && inv?.recurring_product_type) prodSel.value = inv.recurring_product_type;
+  if (daySel  && inv?.recurring_day)          daySel.value  = inv.recurring_day;
 
   Modal.open('recurringModal');
 }
@@ -9225,47 +9223,49 @@ function openRecurringModal() {
 async function saveRecurringInvestment() {
   const toggle  = document.getElementById('recurringEnabledToggle');
   const amtEl   = document.getElementById('recurringAmount');
-  const poolSel = document.getElementById('recurringPoolSelect');
+  const prodSel = document.getElementById('recurringProductSelect');
+  const daySel  = document.getElementById('recurringDay');
 
-  const enabled  = !!(toggle && toggle.checked);
-  const amount   = parseFloat(amtEl?.value || 0);
-  const poolId   = poolSel?.value || null;
+  const enabled     = !!(toggle && toggle.checked);
+  const amount      = parseFloat(amtEl?.value || 0);
+  const productType = prodSel?.value || null;
+  const day         = parseInt(daySel?.value || 1, 10);
 
   if (enabled) {
     if (!amount || amount < 100) { Toast.error('Please enter a monthly amount of at least R100'); return; }
-    if (!poolId) { Toast.error('Please select an investment pool'); return; }
+    if (!productType) { Toast.error('Please select a product type'); return; }
+    if (!day || day < 1 || day > 28) { Toast.error('Please select a valid day (1–28)'); return; }
   }
 
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
   try {
     await API._fetch('PATCH', `tables/investors/${investorId}`, {
-      recurring_enabled: enabled,
-      recurring_amount:  enabled ? amount : null,
-      recurring_pool_id: enabled ? poolId : null,
+      recurring_enabled:      enabled,
+      recurring_amount:       enabled ? amount       : null,
+      recurring_product_type: enabled ? productType  : null,
+      recurring_day:          enabled ? day          : null,
     });
 
-    // Update local state
     if (PORTAL.investor) {
-      PORTAL.investor.recurring_enabled  = enabled;
-      PORTAL.investor.recurring_amount   = enabled ? amount : null;
-      PORTAL.investor.recurring_pool_id  = enabled ? poolId : null;
+      PORTAL.investor.recurring_enabled      = enabled;
+      PORTAL.investor.recurring_amount       = enabled ? amount      : null;
+      PORTAL.investor.recurring_product_type = enabled ? productType : null;
+      PORTAL.investor.recurring_day          = enabled ? day         : null;
     }
 
     Modal.close('recurringModal');
+    SVC.track('svc_recurring_investment_set', { enabled, product_type: productType, amount, day });
 
-    SVC.track('svc_recurring_investment_set', { enabled: enabled, pool_id: poolId, amount: amount });
-
+    const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar 7yr', solar_6yr:'Solar 6yr', solar_5yr:'Solar 5yr', short_term:'Short Term', smme:'SMME Finance', delivery_bike:'Delivery Bike', other:'Other' };
     if (enabled) {
-      const pool = (PORTAL.pools || []).find(p => p.id === poolId);
-      Toast.success(`Recurring investment of ${Utils.rand(amount)}/month set up${pool ? ' in ' + pool.name : ''}!`);
+      const suffix = day === 1 ? 'st' : day === 2 ? 'nd' : day === 3 ? 'rd' : 'th';
+      Toast.success(`Recurring ${Utils.rand(amount)}/month into ${PRODUCT_LABELS[productType] || productType} set for the ${day}${suffix} of each month`);
     } else {
       Toast.success('Recurring investment disabled.');
     }
 
     _renderRecurringStatusSummary();
-    // Refresh the recurring tab if it's currently visible
     if (document.getElementById('walletRecurringTab')?.style.display !== 'none') _renderRecurringTab();
-    // Update badge
     const badge = document.getElementById('recurringActiveBadge');
     if (badge) badge.style.display = enabled ? 'inline-flex' : 'none';
   } catch (e) {
@@ -9279,10 +9279,12 @@ function _renderRecurringStatusSummary() {
   const summaryEl = document.getElementById('recurringStatusSummary');
   if (!summaryEl) return;
 
-  if (inv && inv.recurring_enabled && inv.recurring_amount) {
-    const pool = (PORTAL.pools || []).find(p => p.id === inv.recurring_pool_id);
+  const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar 7yr', solar_6yr:'Solar 6yr', solar_5yr:'Solar 5yr', short_term:'Short Term', smme:'SMME Finance', delivery_bike:'Delivery Bike', other:'Other' };
+  if (inv && inv.recurring_enabled && inv.recurring_amount && inv.recurring_product_type) {
+    const day    = inv.recurring_day || 1;
+    const suffix = day === 1 ? 'st' : day === 2 ? 'nd' : day === 3 ? 'rd' : 'th';
     summaryEl.style.display = '';
-    summaryEl.innerHTML = `<i class="fa-solid fa-check-circle" style="color:#22c55e"></i> <strong>Active:</strong> ${Utils.rand(inv.recurring_amount)}/month into ${pool ? _esc(pool.name) : 'selected pool'}`;
+    summaryEl.innerHTML = `<i class="fa-solid fa-check-circle" style="color:#22c55e"></i> <strong>Active:</strong> ${Utils.rand(inv.recurring_amount)}/month into ${PRODUCT_LABELS[inv.recurring_product_type] || inv.recurring_product_type} on the ${day}${suffix}`;
   } else {
     summaryEl.style.display = 'none';
   }
