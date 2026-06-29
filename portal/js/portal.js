@@ -3479,25 +3479,23 @@ async function confirmInvestment(pool) {
       reference:        `INVST-${Date.now()}`,
       description:      `Investment into ${pool.name}`,
       pool_id:          pool.id,
+      sub_account_id:   _pmSaId || undefined,
       transaction_date: new Date().toISOString(),
     });
 
     // Wallet deduction and total_invested update are handled atomically server-side
     // in the investment creation hook — do not also set wallet_balance here.
 
-    // For sub-account investments, update the local sub-account cache so the UI
-    // reflects the new wallet/invested balances without waiting for a full reload.
+    // Sub-account wallet deduction (amount + fee) and total_invested are handled
+    // atomically server-side in the investment hook — do NOT also PATCH the
+    // sub-account here (that would double-deduct). Optimistically update the
+    // local cache for instant UI; loadPortalData() below refreshes the truth.
     if (_pmSaId) {
       const saIdx = PORTAL.subAccounts.findIndex(s => s.id === _pmSaId);
       if (saIdx !== -1) {
         const sa = PORTAL.subAccounts[saIdx];
-        const newSaWallet   = Math.max(0, Math.round(((parseFloat(sa.wallet_balance) || 0) - amount) * 100) / 100);
-        const newSaInvested = Math.round(((parseFloat(sa.total_invested) || 0) + amount) * 100) / 100;
-        try {
-          await API._fetch('PATCH', `tables/sub_accounts/${_pmSaId}`, { wallet_balance: newSaWallet, total_invested: newSaInvested });
-          PORTAL.subAccounts[saIdx].wallet_balance = newSaWallet;
-          PORTAL.subAccounts[saIdx].total_invested  = newSaInvested;
-        } catch (saErr) { console.warn('Sub-account balance update failed:', saErr); }
+        PORTAL.subAccounts[saIdx].wallet_balance = Math.max(0, Math.round(((parseFloat(sa.wallet_balance) || 0) - totalDeducted) * 100) / 100);
+        PORTAL.subAccounts[saIdx].total_invested  = Math.round(((parseFloat(sa.total_invested) || 0) + amount) * 100) / 100;
       }
     }
 
