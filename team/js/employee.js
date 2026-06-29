@@ -2768,26 +2768,36 @@ function openProfileEditModal() {
 }
 
 async function saveProfile() {
+  // Empty values are sent as null. This matters for DATE columns like
+  // birth_date — Postgres rejects '' (invalid date), which previously failed
+  // the whole save so nothing (incl. ID number) persisted.
+  const val = id => { const v = (document.getElementById(id)?.value || '').trim(); return v === '' ? null : v; };
+  const birth_date = val('prof-dob');
+  const id_number  = val('prof-idnum');
   const updates = {
-    phone:                   document.getElementById('prof-phone')?.value || '',
-    birth_date:              document.getElementById('prof-dob')?.value || '',
-    id_number:               document.getElementById('prof-idnum')?.value || '',
-    bio:                     document.getElementById('prof-bio')?.value || '',
-    emergency_contact_name:  document.getElementById('prof-ecname')?.value || '',
-    emergency_contact_phone: document.getElementById('prof-ecphone')?.value || '',
-    address_line1:           document.getElementById('prof-addr1')?.value || '',
-    address_line2:           document.getElementById('prof-addr2')?.value || '',
-    address_city:            document.getElementById('prof-city')?.value || '',
-    address_province:        document.getElementById('prof-province')?.value || '',
-    address_postal_code:     document.getElementById('prof-postal')?.value || '',
-    bank_name:               document.getElementById('prof-bank')?.value || '',
-    bank_account_number:     document.getElementById('prof-accnum')?.value || '',
-    bank_account_type:       document.getElementById('prof-acctype')?.value || '',
-    bank_branch_code:        document.getElementById('prof-branch')?.value || '',
-    bank_account_holder:     document.getElementById('prof-holder')?.value || '',
+    phone:                   val('prof-phone'),
+    birth_date,
+    id_number,
+    bio:                     val('prof-bio'),
+    emergency_contact_name:  val('prof-ecname'),
+    emergency_contact_phone: val('prof-ecphone'),
+    address_line1:           val('prof-addr1'),
+    address_line2:           val('prof-addr2'),
+    address_city:            val('prof-city'),
+    address_province:        val('prof-province'),
+    address_postal_code:     val('prof-postal'),
+    bank_name:               val('prof-bank'),
+    bank_account_number:     val('prof-accnum'),
+    bank_account_type:       val('prof-acctype'),
+    bank_branch_code:        val('prof-branch'),
+    bank_account_holder:     val('prof-holder'),
   };
   const r = await patch(`tables/employees/${_emp.id}`, updates);
+  if (r && r.error) { showToast(r.error || 'Could not save profile — please try again.', 'error'); return; }
   Object.assign(_emp, r);
+  // Reflect locally in case the API response omits a field on this view
+  _emp.birth_date = birth_date;
+  _emp.id_number  = id_number;
   closeModal('generic-modal');
   renderProfile();
   renderTopbar();
@@ -2799,9 +2809,9 @@ function renderLeaveCalendar() {
   const el = document.getElementById('view-calendar');
   const allLeave = []; // will load all employees' approved leave
 
-  // Gather all leave from all employees by fetching fresh
-  fetchAll('leave_requests').then(allReqs => {
-    const approved = allReqs.filter(l => l.status === 'approved' || l.status === 'pending');
+  // Load everyone's APPROVED leave from the shared team calendar endpoint
+  get('tables/leave-calendar').then(res => {
+    const approved = res.data || [];
 
     const today = new Date();
     const calYear  = today.getFullYear();
@@ -2837,7 +2847,15 @@ function renderCalendarView(container, leaveList, year, month) {
   leaveList.forEach(l => {
     const start = new Date(l.start_date+'T00:00:00');
     const end   = new Date(l.end_date+'T00:00:00');
-    const emp   = _employees.find(e=>e.id===l.employee_id);
+    // The shared calendar embeds the employee's display fields on each leave
+    // row (staff can't read other employees' records directly).
+    const emp = _employees.find(e=>e.id===l.employee_id) || {
+      id: l.employee_id,
+      first_name: l.first_name || 'Employee',
+      last_name:  l.last_name || '',
+      avatar_color: l.avatar_color || '#7c5cfc',
+      avatar_initials: l.avatar_initials || ((l.first_name||'E')[0] + (l.last_name||'')[0]).toUpperCase(),
+    };
     if (!emp) return;
     for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
       const key = d.toISOString().slice(0,10);
@@ -2944,7 +2962,7 @@ function renderCalendarView(container, leaveList, year, month) {
           const s=new Date(l.start_date+'T00:00:00'); const e=new Date(l.end_date+'T00:00:00');
           return (s.getFullYear()===year&&s.getMonth()===month)||(e.getFullYear()===year&&e.getMonth()===month);
         }).map(l=>{
-          const emp=_employees.find(e=>e.id===l.employee_id)||{};
+          const emp=_employees.find(e=>e.id===l.employee_id)||{ first_name:l.first_name, last_name:l.last_name, avatar_color:l.avatar_color, avatar_initials:l.avatar_initials };
           const sc={approved:'chip-green',pending:'chip-gold',rejected:'chip-red'};
           return `<div class="kudos-card">
             <div class="kudos-avatar" style="background:${emp.avatar_color||'#7c5cfc'}">${emp.avatar_initials||'?'}</div>
@@ -2993,9 +3011,8 @@ function shiftCalMonth(dir) {
   if (_calMonth > 11) { _calMonth = 0; _calYear++; }
   if (_calMonth < 0)  { _calMonth = 11; _calYear--; }
   const el = document.getElementById('view-calendar');
-  fetchAll('leave_requests').then(allReqs => {
-    const approved = allReqs.filter(l=>l.status==='approved'||l.status==='pending');
-    renderCalendarView(el, approved, _calYear, _calMonth);
+  get('tables/leave-calendar').then(res => {
+    renderCalendarView(el, res.data || [], _calYear, _calMonth);
   });
 }
 

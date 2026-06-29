@@ -489,6 +489,22 @@
   </div>
 </div>
 
+<!-- Leave Requests Sign-in Alert -->
+<div class="dir-modal-overlay" id="leaveAlertModal">
+  <div class="dir-modal" style="max-width:440px">
+    <div class="dir-modal-header">
+      <div class="modal-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b"><i class="fa-solid fa-calendar-day"></i></div>
+      <h3>Leave Requests Pending</h3>
+      <button class="btn btn--ghost btn--sm" onclick="closeModal('leaveAlertModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="dir-modal-body" id="leaveAlertBody"></div>
+    <div class="dir-modal-footer">
+      <button class="btn btn--ghost" onclick="closeModal('leaveAlertModal')">Dismiss</button>
+      <button class="btn btn--gold btn--sm" onclick="closeModal('leaveAlertModal');navTo('leave',document.querySelector('[data-view=leave]'))"><i class="fa-solid fa-list-check"></i> Review Now</button>
+    </div>
+  </div>
+</div>
+
 <!-- Edit Employee Modal -->
 <div class="dir-modal-overlay" id="editEmpModal">
   <div class="dir-modal">

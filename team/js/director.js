@@ -168,11 +168,32 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   navTo('overview', document.querySelector('[data-view=overview]'));
 
+  // Sign-in popup: alert directors to any leave requests awaiting review
+  _showPendingLeavePopup();
+
   // Auto-generate payslips on the 25th
   if (new Date().getDate() >= 25) {
     setTimeout(autoGenerateMissingPayslips, 1200);
   }
 });
+
+function _showPendingLeavePopup() {
+  const pending = _leaveReqs.filter(l => (l.status || 'pending') === 'pending');
+  if (!pending.length) return;
+  const body = document.getElementById('leaveAlertBody');
+  if (body) {
+    const rows = pending.slice(0, 6).map(l =>
+      `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border2);font-size:0.84rem">
+         <span style="font-weight:600;color:var(--text)">${_leaveEmpName(l.employee_id)}</span>
+         <span style="color:var(--muted);text-transform:capitalize">${(l.leave_type||'leave').replace(/_/g,' ')} · ${l.days_requested||'—'}d</span>
+       </div>`).join('');
+    body.innerHTML = `
+      <p style="font-size:0.9rem;color:var(--text);margin-bottom:6px">You have <b style="color:#f59e0b">${pending.length}</b> leave request${pending.length>1?'s':''} awaiting your review.</p>
+      <div>${rows}${pending.length>6?`<div style="font-size:0.78rem;color:var(--muted);padding-top:8px">…and ${pending.length-6} more</div>`:''}</div>`;
+  }
+  // Slight delay so it appears after the panel renders
+  setTimeout(() => openModal('leaveAlertModal'), 600);
+}
 
 async function loadAll() {
   const [emps, ob, courses, payslips, kpis, leave] = await Promise.all([
@@ -1909,6 +1930,19 @@ function renderActivityFeed() {
     const pct = ob.tasks_total > 0 ? Math.round((ob.tasks_completed||0)/ob.tasks_total*100) : 0;
     if (emp) events.push({ icon:'fa-spinner', color:'#60a5fa', text:`<b>${emp.first_name} ${emp.last_name}</b> — onboarding ${pct}% complete`, date: ob.updated_at });
   });
+  // Leave requests — pending highlighted, plus recently decided
+  _leaveReqs.slice()
+    .sort((a,b) => new Date(b.created_at||b.start_date||0) - new Date(a.created_at||b.start_date||0))
+    .slice(0,5).forEach(l => {
+      const nm = _leaveEmpName(l.employee_id);
+      const st = l.status || 'pending';
+      if (st === 'pending') {
+        events.push({ icon:'fa-calendar-day', color:'#f59e0b', text:`<b>${nm}</b> requested ${(l.leave_type||'leave').replace(/_/g,' ')} leave`, date: l.created_at || l.start_date });
+      } else {
+        const ok = st === 'approved';
+        events.push({ icon: ok?'fa-calendar-check':'fa-calendar-xmark', color: ok?'#22c55e':'#ef4444', text:`<b>${nm}</b>'s leave was ${ok?'approved':'declined'}`, date: l.approved_at || l.updated_at || l.created_at });
+      }
+    });
   events.sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
   if (!events.length) { el.innerHTML = `<div style="color:var(--muted);font-size:0.78rem;text-align:center;padding:20px">No recent activity</div>`; return; }
   el.innerHTML = events.slice(0,8).map(ev => `
