@@ -20,7 +20,7 @@ const DEFAULT_RBAC = {
   'Marketing':           ['employee'],
   'Marketing Associate': ['employee'],
   'Junior Analyst':      ['employee'],
-  'Admin':               ['employee'],
+  'Admin':               ['employee','admin','accounting'],
 };
 
 /* GET /api/settings/rbac — public read so staff-auth.js can load it without auth */
