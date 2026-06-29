@@ -129,7 +129,7 @@
       label:       'IFA Portal',
       description: 'Independent Financial Adviser tools & reporting',
       icon:        'fa-solid fa-handshake',
-      color:       '#06b6d4',
+      color:       '#656565',
       path:        '/ifa/index.html',
       guard:       true,
     },

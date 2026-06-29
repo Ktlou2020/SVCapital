@@ -1044,7 +1044,7 @@ function loadNotifications() {
   const pendingWithdrawal = transactions.find(t => t.type === 'withdrawal' && t.status === 'pending');
   if (pendingWithdrawal) {
     notifs.push({
-      icon: 'fa-money-bill-transfer', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#6366f1',
+      icon: 'fa-money-bill-transfer', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#656565',
       title: 'Withdrawal in progress',
       sub: `${Utils.rand(Math.abs(pendingWithdrawal.amount))} withdrawal is being processed — 1–2 business days.`,
       time: Utils.timeAgo(pendingWithdrawal.created_at || pendingWithdrawal.transaction_date),
@@ -1862,7 +1862,7 @@ function renderAllocationChart() {
   // creates orphan GPU compositor layers on Android WebView that cause content to blank.
   if (ctx.offsetParent === null) return;
 
-  const colors = ['#D4AF37', '#22c55e', '#656565', '#f97316', '#a855f7', '#ec4899', '#14b8a6'];
+  const colors = ['#D4AF37', '#22c55e', '#656565', '#f97316', '#a855f7', '#ec4899', '#656565'];
 
   const activeInvests = PORTAL.investments.filter(i => i.status === 'active');
   const allocation = {};
@@ -1905,7 +1905,7 @@ function renderAllocationChart() {
   list.innerHTML = labels.map((label, idx) => {
     const amt = values[idx];
     const pct = total > 0 ? ((amt / total) * 100).toFixed(1) : '0';
-    const color = colors[idx] || '#8ea3b8';
+    const color = colors[idx] || '#656565';
     return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
       <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
       <span style="flex:1;font-size:0.8rem;color:var(--text-primary,#1a1a1a)">${label}</span>
@@ -4707,12 +4707,12 @@ function getProductInfo(type) {
     solar_6yr:         { label:'Solar Investment (6yr)',   color:'#ea580c', bg:'#fff7ed' },
     solar_5yr:         { label:'Solar Investment (5yr)',   color:'#c2410c', bg:'#fff7ed' },
     solar:             { label:'Solar Investment',         color:'#ea580c', bg:'#ffedd5' },
-    short_term:        { label:'Short Term Investment',    color:'#656565', bg:'#dbeafe' },
+    short_term:        { label:'Short Term Investment',    color:'#656565', bg:'#656565' },
     delivery_bike:     { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
     delivery_bikes:    { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
     smme:              { label:'SMME Funding',             color:'#059669', bg:'#d1fae5' },
     smme_funding:      { label:'SMME Funding',             color:'#059669', bg:'#d1fae5' },
-    property:          { label:'Property Investment',      color:'#0891b2', bg:'#cffafe' },
+    property:          { label:'Property Investment',      color:'#656565', bg:'#cffafe' },
     fixed_term:        { label:'Fixed Term Investment',    color:'#7c3aed', bg:'#ede9fe' },
   };
   const hit = map[type?.toLowerCase?.()];
@@ -6186,7 +6186,7 @@ PAIAComplaints.IR@justice.gov.za (for PAIA complaints)</p>`,
   {
     id: 'pol_paia',
     icon: 'fa-folder-open',
-    color: '#0891b2',
+    color: '#656565',
     title: 'PAIA Manual',
     staticContent: `<p><em>Published in terms of Section 51 of the Promotion of Access to Information Act 2 of 2000 (PAIA) &nbsp;·&nbsp; Version 1.0 &nbsp;·&nbsp; June 2025</em></p>
 

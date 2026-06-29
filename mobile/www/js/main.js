@@ -562,7 +562,7 @@ function updateCalcChart(amount, totalReturns, product) {
       plugins: {
         legend: {
           labels: {
-            color: '#8ea3b8',
+            color: '#656565',
             font: { size: 11 },
             boxWidth: 12,
             boxHeight: 12,
@@ -571,7 +571,7 @@ function updateCalcChart(amount, totalReturns, product) {
         tooltip: {
           backgroundColor: 'rgba(13,17,23,0.95)',
           titleColor: '#f0f4f8',
-          bodyColor: '#8ea3b8',
+          bodyColor: '#656565',
           borderColor: 'rgba(212,175,55,0.3)',
           borderWidth: 1,
           callbacks: {
@@ -583,13 +583,13 @@ function updateCalcChart(amount, totalReturns, product) {
         x: {
           stacked: true,
           grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: { color: '#4a6080', font: { size: 10 } }
+          ticks: { color: '#656565', font: { size: 10 } }
         },
         y: {
           stacked: true,
           grid: { color: 'rgba(255,255,255,0.04)' },
           ticks: {
-            color: '#4a6080',
+            color: '#656565',
             font: { size: 10 },
             callback: (val) => 'R' + (val >= 1000 ? (val/1000).toFixed(0) + 'k' : val)
           }

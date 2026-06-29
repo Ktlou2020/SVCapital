@@ -88,7 +88,7 @@ const APP_ICONS = {
 };
 const APP_COLORS = {
   employee:'#7c5cfc', team:'#00d4aa', fund:'#f59e0b',
-  admin:'#e84393', ifa:'#06b6d4', portal:'#10b981', director:'#f59e0b'
+  admin:'#e84393', ifa:'#656565', portal:'#10b981', director:'#f59e0b'
 };
 
 const LEVEL_LABELS = { junior:'Junior', mid:'Mid-Level', senior:'Senior', lead:'Lead', executive:'Executive' };
