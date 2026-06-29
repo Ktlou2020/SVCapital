@@ -3228,6 +3228,53 @@ function renderMarketplace() {
 }
 
 /* ─── Factsheet viewer ───────────────────────────────────────────── */
+// Cache of the public products feed (factsheets, herd stats source, etc.)
+let _portalProductsCache = null;
+async function _getPortalProducts() {
+  if (_portalProductsCache) return _portalProductsCache;
+  try {
+    const r = await API._fetch('GET', 'products');
+    _portalProductsCache = r.data || [];
+  } catch (_) { _portalProductsCache = []; }
+  return _portalProductsCache;
+}
+
+// Live cattle herd status (from the fund-management herd data), shown on the
+// Cattle Investment product so investors can see the real herd behind it.
+let _cattleStatsCache = null;
+async function _getCattleStats() {
+  if (_cattleStatsCache) return _cattleStatsCache;
+  try { _cattleStatsCache = await API._fetch('GET', 'products/cattle-stats'); }
+  catch (_) { _cattleStatsCache = null; }
+  return _cattleStatsCache;
+}
+
+function _cattleHerdStatusHtml(s) {
+  if (!s || !s.total_purchased) return '';
+  const weight  = s.avg_current_weight || s.avg_entry_weight;
+  const genders = (s.by_gender || []).filter(g => g.count > 0).map(g => `${_esc(g.label)}: ${g.count}`).join(' · ');
+  const breeds  = (s.by_breed || []).filter(b => b.count > 0).slice(0, 4).map(b => _esc(b.label)).join(', ');
+  return `
+    <div style="background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.25);border-radius:12px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#b8902a;margin-bottom:8px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;font-size:0.84rem">
+        <div><span style="color:var(--text-muted)">Purchased to date</span><br><strong>${s.total_purchased.toLocaleString('en-ZA')} head</strong></div>
+        <div><span style="color:var(--text-muted)">Currently live</span><br><strong>${(s.live_count || 0).toLocaleString('en-ZA')} head</strong></div>
+        ${weight ? `<div><span style="color:var(--text-muted)">Average weight</span><br><strong>${weight} kg</strong></div>` : ''}
+        ${breeds ? `<div><span style="color:var(--text-muted)">Breeds</span><br><strong>${breeds}</strong></div>` : ''}
+      </div>
+      ${genders ? `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px">Gender split — ${genders}</div>` : ''}
+    </div>`;
+}
+
+async function _renderCattleHerdStatus(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted);padding:6px 0"><i class="fa-solid fa-spinner fa-spin"></i> Loading herd status…</div>`;
+  const s = await _getCattleStats();
+  el.innerHTML = _cattleHerdStatusHtml(s);
+}
+
 async function viewFactsheet(poolId, poolName) {
   const modal = document.getElementById('factsheetModal');
   const title = document.getElementById('fsModalTitle');
@@ -3239,9 +3286,25 @@ async function viewFactsheet(poolId, poolName) {
   Modal.open('factsheetModal');
 
   try {
-    const res = await API._fetch('GET', `factsheets?pool_id=${poolId}`);
+    const [res, products] = await Promise.all([
+      API._fetch('GET', `factsheets?pool_id=${poolId}`),
+      _getPortalProducts(),
+    ]);
     const sheets = res.data || [];
-    if (!sheets.length) {
+
+    // Also surface the product-level factsheet (managed in the admin Products area)
+    const pool = (PORTAL.pools || []).find(p => p.id === poolId);
+    const product = pool ? products.find(p => p.product_type === pool.product_type) : null;
+    const productSheet = product && product.factsheet_url ? {
+      file_url:    product.factsheet_url,
+      file_name:   product.factsheet_name || `${product.label} factsheet`,
+      created_at:  product.updated_at,
+      is_current:  true,
+      _product:    true,
+    } : null;
+
+    const all = [productSheet, ...sheets].filter(Boolean);
+    if (!all.length) {
       body.innerHTML = `<div class="empty-state" style="padding:32px">
         <i class="fa-solid fa-file-pdf" style="font-size:2rem;color:var(--border-dark)"></i>
         <div class="empty-state__title" style="margin-top:12px">No factsheet uploaded yet</div>
@@ -3250,13 +3313,13 @@ async function viewFactsheet(poolId, poolName) {
       return;
     }
     body.innerHTML = `
-      <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:16px">${sheets.length} factsheet${sheets.length > 1 ? 's' : ''} available — most recent first</p>
+      <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:16px">${all.length} document${all.length > 1 ? 's' : ''} available</p>
       <div style="display:flex;flex-direction:column;gap:10px">
-        ${sheets.map((s, i) => `
+        ${all.map(s => `
           <a href="${s.file_url}" target="_blank" rel="noopener" class="fs-row ${s.is_current ? 'fs-row--current' : ''}">
             <div class="fs-row__icon"><i class="fa-solid fa-file-pdf"></i></div>
             <div class="fs-row__info">
-              <div class="fs-row__name">${_esc(s.file_name)}${s.is_current ? ' <span class="fs-current-tag">Current</span>' : ''}</div>
+              <div class="fs-row__name">${_esc(s.file_name)}${s._product ? ' <span class="fs-current-tag">Product</span>' : (s.is_current ? ' <span class="fs-current-tag">Current</span>' : '')}</div>
               <div class="fs-row__meta">${s.version ? `v${_esc(s.version)} · ` : ''}${Utils.date(s.created_at)}${s.uploaded_by ? ` · ${_esc(s.uploaded_by)}` : ''}</div>
             </div>
             <i class="fa-solid fa-arrow-up-right-from-square fs-row__arrow"></i>
@@ -3356,6 +3419,8 @@ function openInvestModal(poolId) {
       </div>
     </div>
 
+    ${pool.product_type === 'cattle' ? '<div id="cattleHerdStatus"></div>' : ''}
+
     <!-- Wallet balance indicator (needs to cover the minimum + 1% platform fee) -->
     <div class="invest-wallet-indicator ${walletBal >= _minPlusFee(pool) ? 'invest-wallet-ok' : 'invest-wallet-low'}">
       <i class="fa-solid fa-wallet"></i>
@@ -3425,6 +3490,7 @@ function openInvestModal(poolId) {
   const invBtn = document.getElementById('investConfirmBtn');
   invBtn.onclick = () => _withBtn(invBtn, () => confirmInvestment(pool));
   Modal.open('investModal');
+  if (pool.product_type === 'cattle') _renderCattleHerdStatus('cattleHerdStatus');
 }
 
 function _updateInvestCalc(amt, rate, termMonths, minInvest) {
