@@ -52,11 +52,14 @@ router.get('/', async (req, res) => {
    number purchased to date, gender & breed breakdown, and average weight. */
 router.get('/cattle-stats', async (req, res) => {
   try {
-    // Daily weight-gain assumption powers the current-weight estimate.
+    // Daily weight-gain assumption + target sale weight power the weight journey.
     const { rows: setRows } = await pool.query(
-      `SELECT setting_value FROM cattle_nav_settings WHERE setting_key = 'avg_daily_weight_gain_kg' LIMIT 1`
+      `SELECT setting_key, setting_value FROM cattle_nav_settings
+       WHERE setting_key IN ('avg_daily_weight_gain_kg','target_sale_weight_kg')`
     );
-    const dailyGain = parseFloat(setRows[0]?.setting_value) || 1.2;
+    const settings = Object.fromEntries(setRows.map(r => [r.setting_key, r.setting_value]));
+    const dailyGain    = parseFloat(settings.avg_daily_weight_gain_kg) || 1.2;
+    const targetWeight = parseFloat(settings.target_sale_weight_kg) || 475;
 
     // Herd counts come primarily from the CYCLES the fund manager captures
     // (no_purchased / no_live / no_sold / mortalities). Individual animal rows
@@ -116,6 +119,7 @@ router.get('/cattle-stats', async (req, res) => {
       mortality_count,
       avg_entry_weight:   a.avg_entry_weight != null ? parseFloat(a.avg_entry_weight) : null,
       avg_current_weight: curRows[0]?.avg_current_weight != null ? parseFloat(curRows[0].avg_current_weight) : null,
+      target_weight:      targetWeight,
       by_gender: byGender.map(r => ({ label: r.label, count: parseInt(r.count) })),
       by_breed:  byBreed.map(r => ({ label: r.label, count: parseInt(r.count) })),
     });
@@ -136,6 +140,65 @@ router.get('/solar-stats', async (req, res) => {
   } catch (err) {
     console.error('[solar-stats] error:', err.message);
     res.json({ unavailable: true });
+  }
+});
+
+/* GET /api/products/solar-history — PUBLIC. Daily solar generation for the
+   current month (last ~30 days) for the 30-day chart. */
+router.get('/solar-history', async (req, res) => {
+  try {
+    const data = await foxess.getSolarHistory();
+    res.json(data);
+  } catch (err) {
+    console.error('[solar-history] error:', err.message);
+    res.json({ unavailable: true });
+  }
+});
+
+/* GET /api/products/track-record — PUBLIC. Per-product matured-pool performance
+   (actual return vs benchmark, count, total paid back) — the verifiable track
+   record. Pool-level only; no investor data. */
+router.get('/track-record', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT name, product_type, end_date, term_months,
+             COALESCE(actual_rate, 0)  AS actual_rate,
+             COALESCE(annual_rate, 0)  AS annual_rate,
+             COALESCE(raised_amount, 0) AS raised_amount
+      FROM investment_pools
+      WHERE status IN ('matured','paid_out') AND COALESCE(actual_rate, 0) > 0
+      ORDER BY end_date ASC
+    `);
+
+    const byType = {};
+    for (const p of rows) {
+      const t = p.product_type;
+      if (!byType[t]) byType[t] = { pools: [], total_paid_back: 0, sum_actual: 0, sum_benchmark: 0 };
+      const actual    = parseFloat(p.actual_rate) || 0;
+      const benchmark = parseFloat(p.annual_rate) || 0;
+      const raised    = parseFloat(p.raised_amount) || 0;
+      const term      = parseInt(p.term_months) || 12;
+      byType[t].pools.push({ name: p.name, ended: p.end_date, actual_rate: actual, benchmark_rate: benchmark });
+      byType[t].total_paid_back += raised * (1 + actual * (term / 12));
+      byType[t].sum_actual      += actual;
+      byType[t].sum_benchmark   += benchmark;
+    }
+
+    const data = {};
+    for (const [t, v] of Object.entries(byType)) {
+      const n = v.pools.length;
+      data[t] = {
+        matured_count:      n,
+        avg_actual_rate:    n ? v.sum_actual / n : 0,
+        avg_benchmark_rate: n ? v.sum_benchmark / n : 0,
+        total_paid_back:    Math.round(v.total_paid_back),
+        pools:              v.pools,
+      };
+    }
+    res.json({ data });
+  } catch (err) {
+    console.error('[track-record] error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

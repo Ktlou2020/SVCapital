@@ -101,4 +101,45 @@ async function getSolarStats() {
   return data;
 }
 
-module.exports = { getSolarStats };
+/* ─── Daily generation for the current month (cached) ─── */
+let _histCache = { at: 0, data: null };
+const HIST_CACHE_MS = 30 * 60 * 1000; // 30 minutes
+
+async function getSolarHistory() {
+  if (!API_KEY) throw new Error('FOXESS_API_KEY not configured');
+  if (_histCache.data && (Date.now() - _histCache.at) < HIST_CACHE_MS) return _histCache.data;
+
+  const listRes = await _post('/op/v0/device/list', { currentPage: 1, pageSize: 100 });
+  const devices = (listRes && (listRes.data || listRes.devices)) || [];
+
+  const now   = new Date();
+  const year  = now.getUTCFullYear();
+  const month = now.getUTCMonth() + 1;
+  const byDay = {};
+
+  for (const dev of devices) {
+    const sn = dev.deviceSN || dev.sn;
+    if (!sn) continue;
+    try {
+      // Daily generation report for the month
+      const rep = await _post('/op/v0/device/report', { sn, year, month, dimension: 'day', variables: ['generation'] });
+      const arr = Array.isArray(rep) ? rep : (rep && rep.datas) || [];
+      const gen = arr.find(x => x.variable === 'generation') || arr[0];
+      const values = (gen && (gen.values || gen.data)) || [];
+      values.forEach((v, i) => {
+        const day = i + 1;
+        const val = typeof v === 'object' ? (parseFloat(v.value) || 0) : (parseFloat(v) || 0);
+        byDay[day] = (byDay[day] || 0) + val;
+      });
+    } catch (_) { /* non-fatal per device */ }
+  }
+
+  const series = Object.keys(byDay).map(Number).sort((a, b) => a - b)
+    .map(d => ({ day: d, kwh: Math.round(byDay[d] * 10) / 10 }));
+
+  const data = { year, month, series, updated_at: new Date().toISOString() };
+  _histCache = { at: Date.now(), data };
+  return data;
+}
+
+module.exports = { getSolarStats, getSolarHistory };
