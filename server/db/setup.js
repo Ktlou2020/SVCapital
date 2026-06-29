@@ -361,6 +361,8 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investment_pools ADD COLUMN operational_fee_pct NUMERIC(8,4) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investment_pools ADD COLUMN operational_fee_frequency TEXT DEFAULT 'annual'; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investment_pools ADD COLUMN maturity_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Pool target type: 'amount' (raise to a goal amount) or 'date' (open until a closing date)
+  BEGIN ALTER TABLE investment_pools ADD COLUMN target_type TEXT DEFAULT 'amount'; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- EVA tracking on investments (20% of net-VAT management fee, new funds only)
   BEGIN ALTER TABLE investments ADD COLUMN is_reinvestment BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN eva_amount NUMERIC(12,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
