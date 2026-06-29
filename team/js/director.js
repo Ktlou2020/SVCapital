@@ -100,6 +100,7 @@ let _onboarding = [];
 let _courses    = [];
 let _payslips   = [];
 let _kpiScores  = [];
+let _leaveReqs  = [];
 let _editingEmp = null;
 let _selectedColor = '#7c5cfc';
 let _currentView   = 'overview';
@@ -174,18 +175,20 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadAll() {
-  const [emps, ob, courses, payslips, kpis] = await Promise.all([
+  const [emps, ob, courses, payslips, kpis, leave] = await Promise.all([
     fetchAll('employees'),
     fetchAll('employee_onboarding'),
     fetchAll('employee_courses'),
     fetchAll('payslips'),
     fetchAll('kpi_scores').catch(() => []),
+    fetchAll('leave_requests').catch(() => []),
   ]);
   _employees  = emps;
   _onboarding = ob;
   _courses    = courses;
   _payslips   = payslips;
   _kpiScores  = kpis;
+  _leaveReqs  = leave;
 
   if (!emps.length) {
     try {
@@ -209,6 +212,14 @@ async function loadAll() {
   const pending = _onboarding.filter(o => o.status === 'in_progress' || o.status === 'not_started');
   const badge = document.getElementById('pending-ob-badge');
   if (badge) { badge.textContent = pending.length; badge.style.display = pending.length ? '' : 'none'; }
+
+  _updatePendingLeaveBadge();
+}
+
+function _updatePendingLeaveBadge() {
+  const pendingLeave = _leaveReqs.filter(l => (l.status || 'pending') === 'pending').length;
+  const lb = document.getElementById('pending-leave-badge');
+  if (lb) { lb.textContent = pendingLeave; lb.style.display = pendingLeave ? '' : 'none'; }
 }
 
 /* ═══ NAVIGATION ═══════════════════════════════════════════════════ */
@@ -217,6 +228,7 @@ const PAGE_META = {
   employees:   { title:'All Employees',    sub:'Manage your full team roster' },
   create:      { title:'Add Employee',     sub:'Create a new employee and start their onboarding journey' },
   onboarding:  { title:'Onboarding',       sub:'Track new employee onboarding progress' },
+  leave:       { title:'Leave Requests',   sub:'Approve or decline employee leave' },
   access:      { title:'Access & Roles',   sub:'Role-based access control matrix' },
   courses:     { title:'Course Library',   sub:'All available training courses' },
   payslips:    { title:'Payslips',         sub:'Generate and manage employee payslips' },
@@ -256,6 +268,7 @@ function navTo(view, btn) {
     overview:    renderOverview,
     employees:   renderEmployees,
     onboarding:  renderOnboardingView,
+    leave:       renderLeave,
     access:      renderAccessMatrix,
     courses:     renderCourseLibrary,
     payslips:    renderPayslips,
@@ -263,6 +276,91 @@ function navTo(view, btn) {
   };
   if (renders[view]) renders[view]();
 }
+
+/* ═══ LEAVE REQUESTS ════════════════════════════════════════════════ */
+const LEAVE_STATUS_CHIP = {
+  pending:  'chip--onboard',
+  approved: 'chip--done',
+  rejected: 'chip--off',
+  cancelled:'chip--off',
+};
+
+function _leaveEmpName(empId) {
+  const e = _employees.find(x => x.id === empId);
+  return e ? `${e.first_name} ${e.last_name}` : (empId || '—');
+}
+
+function renderLeave() {
+  const host = document.getElementById('leaveList');
+  if (!host) return;
+  const q = (document.getElementById('leaveSearch')?.value || '').toLowerCase();
+
+  // Pending first, then most recent
+  const sorted = _leaveReqs.slice().sort((a, b) => {
+    const ap = (a.status || 'pending') === 'pending' ? 0 : 1;
+    const bp = (b.status || 'pending') === 'pending' ? 0 : 1;
+    if (ap !== bp) return ap - bp;
+    return new Date(b.created_at || b.start_date || 0) - new Date(a.created_at || a.start_date || 0);
+  });
+
+  const filtered = sorted.filter(l =>
+    !q || `${_leaveEmpName(l.employee_id)} ${l.leave_type || ''} ${l.reason || ''}`.toLowerCase().includes(q)
+  );
+
+  if (!filtered.length) {
+    host.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)"><i class="fa-solid fa-calendar-check" style="font-size:1.8rem;display:block;margin-bottom:10px;opacity:0.4"></i>No leave requests${q ? ' match your search' : ''}.</div>`;
+    return;
+  }
+
+  host.innerHTML = `
+    <div class="dir-table-wrap">
+      <table class="dir-table">
+        <thead><tr>
+          <th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Status</th><th>Action</th>
+        </tr></thead>
+        <tbody>
+          ${filtered.map(l => {
+            const status = l.status || 'pending';
+            const isPending = status === 'pending';
+            return `<tr>
+              <td style="font-weight:600;color:var(--text)">${_leaveEmpName(l.employee_id)}</td>
+              <td style="text-transform:capitalize">${(l.leave_type || '—').replace(/_/g, ' ')}</td>
+              <td>${fmtDate(l.start_date)}</td>
+              <td>${fmtDate(l.end_date)}</td>
+              <td>${l.days_requested || '—'}</td>
+              <td style="max-width:220px;font-size:0.78rem;color:var(--muted)">${l.reason ? l.reason.replace(/</g, '&lt;') : '—'}</td>
+              <td><span class="chip ${LEAVE_STATUS_CHIP[status] || 'chip--off'}" style="text-transform:capitalize">${status}</span></td>
+              <td>
+                ${isPending ? `
+                  <div style="display:flex;gap:6px">
+                    <button class="btn btn--primary btn--sm" onclick="approveLeave('${l.id}')"><i class="fa-solid fa-check"></i> Approve</button>
+                    <button class="btn btn--ghost btn--sm" onclick="declineLeave('${l.id}')"><i class="fa-solid fa-xmark"></i> Decline</button>
+                  </div>` : `<span style="font-size:0.72rem;color:var(--muted)">${l.approved_by ? 'by ' + l.approved_by : '—'}</span>`}
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+async function _setLeaveStatus(id, status, actionLabel) {
+  const reviewer = `${_session?.firstName || ''} ${_session?.lastName || ''}`.trim() || _session?.email || 'Director';
+  const res = await patch(`tables/leave_requests/${id}`, {
+    status,
+    approved_by: reviewer,
+    approved_at: new Date().toISOString(),
+  });
+  if (res && res.error) { showToast(res.error || `Could not ${actionLabel} leave`, 'error'); return; }
+  const idx = _leaveReqs.findIndex(l => l.id === id);
+  if (idx !== -1) { _leaveReqs[idx].status = status; _leaveReqs[idx].approved_by = reviewer; }
+  showToast(`Leave ${actionLabel}d`);
+  _updatePendingLeaveBadge();
+  renderLeave();
+}
+
+function approveLeave(id) { return _setLeaveStatus(id, 'approved', 'approve'); }
+function declineLeave(id) { return _setLeaveStatus(id, 'rejected', 'decline'); }
 
 /* ═══ OVERVIEW ══════════════════════════════════════════════════════ */
 function renderOverview() {

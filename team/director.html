@@ -100,6 +100,10 @@
           <i class="fa-solid fa-rocket"></i> Onboarding
           <span class="nav-badge" id="pending-ob-badge" style="display:none">0</span>
         </button>
+        <button class="dir-nav-btn" data-view="leave" onclick="navTo('leave',this)">
+          <i class="fa-solid fa-calendar-day"></i> Leave Requests
+          <span class="nav-badge" id="pending-leave-badge" style="display:none">0</span>
+        </button>
       </div>
       <div class="dir-nav-group">
         <div class="dir-nav-group-label">Platform</div>
@@ -393,6 +397,18 @@
           </div>
         </div>
         <div id="onboardingList"></div>
+      </div>
+
+      <!-- ── LEAVE REQUESTS ── -->
+      <div class="dir-view" id="view-leave">
+        <div class="dir-sec-head" style="margin-bottom:16px">
+          <div class="dir-sec-title">Leave Requests</div>
+          <div class="dir-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="leaveSearch" placeholder="Search employee…" oninput="renderLeave()"/>
+          </div>
+        </div>
+        <div id="leaveList"></div>
       </div>
 
       <!-- ── ACCESS & ROLES ── -->

@@ -39,6 +39,13 @@ const MONTH_NAMES = [
   'July','August','September','October','November','December',
 ];
 
+// Human-readable product name used in auto-generated pool names.
+const PRODUCT_LABELS = {
+  cattle:     'Cattle Investment',
+  short_term: 'Short Term Investment',
+  smme:       'SMME',
+};
+
 /* ── Core logic ───────────────────────────────────────────── */
 
 async function cycleExpiredPools() {
@@ -98,9 +105,11 @@ async function cycleExpiredPools() {
         closeDate = lastDayOfMonth(openDate.getFullYear(), openDate.getMonth());
       }
 
-      const closeLabel = `${MONTH_NAMES[closeDate.getMonth()]} ${closeDate.getFullYear()}`;
+      // Pool name = "Product name - Month and year of the closing date"
+      const closeLabel   = `${MONTH_NAMES[closeDate.getMonth()]} ${closeDate.getFullYear()}`;
+      const productLabel = PRODUCT_LABELS[p.product_type] || baseName(p.name);
       const newId   = `${p.id}-CYC-${Date.now()}`;
-      const newName = `${baseName(p.name)} (${closeLabel})`;
+      const newName = `${productLabel} - ${closeLabel}`;
 
       await client.query(
         `INSERT INTO investment_pools
