@@ -2058,15 +2058,13 @@ function renderPoolsGrid() {
         ${(() => {
           const fillClass = p.product_type.includes('solar') ? ' progress-fill--green' : p.product_type === 'short_term' ? ' progress-fill--blue' : '';
           if (Utils.poolIsDateTarget(p)) {
-            const dpct  = Utils.poolDateProgressPct(p);
+            // Date-targeted pools have no funding goal — show days to closure, no bar.
             const days  = Utils.daysRemaining(p.end_date);
             const left  = days === null ? '—' : (days === 0 ? 'Closed' : `${days} day${days === 1 ? '' : 's'} to closure`);
             return `
               <div class="pool-card__progress-label">
                 <span><i class="fa-solid fa-clock" style="margin-right:4px"></i>${left}</span>
-                <span>${dpct}% elapsed</span>
-              </div>
-              <div class="progress-bar"><div class="progress-fill${fillClass}" style="width:${dpct}%"></div></div>`;
+              </div>`;
           }
           return `
             <div class="pool-card__progress-label">
