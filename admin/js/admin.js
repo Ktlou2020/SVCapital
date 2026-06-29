@@ -246,7 +246,7 @@ function loadAdminNotifications(investors, transactions, tickets) {
   const pendingBank = investors.filter(i => i.bank_account_status === 'pending');
   if (pendingBank.length) {
     notifs.push({
-      icon: 'fa-building-columns', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#6366f1',
+      icon: 'fa-building-columns', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#656565',
       title: `${pendingBank.length} bank account${pendingBank.length === 1 ? '' : 's'} to verify`,
       sub: `${pendingBank.slice(0,2).map(i => `${_esc(i.first_name)} ${_esc(i.last_name)}`).join(', ')}${pendingBank.length > 2 ? ` +${pendingBank.length - 2} more` : ''}.`,
       action: "navigate('investors',document.querySelector('[data-view=investors]'));toggleAdminNotif()",
@@ -1079,7 +1079,7 @@ function renderInvestorStats() {
 }
 
 function _invAvatarColor(name) {
-  const p = ['#D4AF37','#656565','#22c55e','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#ef4444'];
+  const p = ['#D4AF37','#656565','#22c55e','#f59e0b','#8b5cf6','#656565','#ec4899','#ef4444'];
   let h = 0; for (const c of (name||'?')) h = (h<<5) - h + c.charCodeAt(0);
   return p[Math.abs(h) % p.length];
 }
@@ -2013,7 +2013,7 @@ function renderProductsGrid() {
       <div class="pool-card">
         <div class="pool-card__header">
           <div style="display:flex;align-items:center;gap:10px">
-            <div style="width:36px;height:36px;border-radius:10px;background:${p.color || '#8ea3b8'}22;color:${p.color || '#8ea3b8'};display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid ${p.icon || 'fa-box'}"></i></div>
+            <div style="width:36px;height:36px;border-radius:10px;background:${p.color || '#656565'}22;color:${p.color || '#656565'};display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid ${p.icon || 'fa-box'}"></i></div>
             <div>
               <div class="pool-card__name">${p.label || p.product_type}</div>
               <div class="pool-card__partner">${p.product_type}${p.partner_name ? ' · ' + p.partner_name : ''}</div>
@@ -3786,7 +3786,7 @@ function renderProvinceChart() {
   if (!ctx) return;
   const prov = {};
   STATE.investors.forEach(i => { prov[i.province] = (prov[i.province] || 0) + 1; });
-  const colors = ['#D4AF37', '#22c55e', '#656565', '#f97316', '#a855f7', '#ef4444', '#06b6d4', '#84cc16', '#f59e0b'];
+  const colors = ['#D4AF37', '#22c55e', '#656565', '#f97316', '#a855f7', '#ef4444', '#656565', '#84cc16', '#f59e0b'];
 
   if (STATE.charts.province) STATE.charts.province.destroy();
   STATE.charts.province = new Chart(ctx, {
@@ -3916,7 +3916,7 @@ function renderConversionFunnel() {
   const referred = referrerIds.size;
 
   const stages = [
-    { label: 'Signed Up',          count: total,         color: '#6366f1', icon: '✍️' },
+    { label: 'Signed Up',          count: total,         color: '#656565', icon: '✍️' },
     { label: 'FICA Submitted',      count: ficaSubmitted,  color: '#656565', icon: '📋' },
     { label: 'FICA Approved',       count: ficaApproved,   color: '#FF9B0C', icon: '✅' },
     { label: 'First Deposit',       count: deposited,      color: '#22c55e', icon: '💳' },
@@ -4016,7 +4016,7 @@ function renderConversionFunnel() {
       </div>
       <div style="background:rgba(99,102,241,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Avg 1st Invest</div>
-        <div style="font-size:1.05rem;font-weight:700;color:#6366f1">${avgFirstInv > 0 ? fmt(avgFirstInv) : '—'}</div>
+        <div style="font-size:1.05rem;font-weight:700;color:#656565">${avgFirstInv > 0 ? fmt(avgFirstInv) : '—'}</div>
         <div style="font-size:0.68rem;color:var(--text-muted)">per investor</div>
       </div>
       <div style="background:rgba(59,130,246,0.08);border-radius:8px;padding:10px 12px">
@@ -4071,7 +4071,7 @@ function renderSignupFriction(data, panel) {
   const maxSessions = Math.max(...step_funnel.map(s => s.sessions), 1);
 
   const stepNames = { 1: 'Personal Info', 2: 'Security', 3: 'Profile', 4: 'FICA Docs' };
-  const stepColors = { 1: '#6366f1', 2: '#656565', 3: '#FF9B0C', 4: '#22c55e' };
+  const stepColors = { 1: '#656565', 2: '#656565', 3: '#FF9B0C', 4: '#22c55e' };
 
   function fmtMs(ms) {
     if (!ms) return '—';
@@ -4152,7 +4152,7 @@ function renderSignupFriction(data, panel) {
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px">
       <div style="background:rgba(99,102,241,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Total Sessions</div>
-        <div style="font-size:1.3rem;font-weight:800;color:#6366f1">${total_sessions.toLocaleString()}</div>
+        <div style="font-size:1.3rem;font-weight:800;color:#656565">${total_sessions.toLocaleString()}</div>
         <div style="font-size:0.65rem;color:var(--text-muted)">signup page visits</div>
       </div>
       <div style="background:rgba(34,197,94,0.08);border-radius:8px;padding:10px 12px">
@@ -6604,7 +6604,7 @@ async function runMigration() {
           ['Pools',        counts.pools        ?? 0, 'layer-group',    '#656565'],
           ['Investments',  counts.investments  ?? 0, 'chart-line',     '#f59e0b'],
           ['Transactions', counts.transactions ?? 0, 'arrows-rotate',  '#8b5cf6'],
-          ['KYC Docs',     counts.kyc          ?? 0, 'id-card',        '#06b6d4'],
+          ['KYC Docs',     counts.kyc          ?? 0, 'id-card',        '#656565'],
         ].map(([label, count, icon, color]) => `
           <div style="background:var(--bg-secondary);border-radius:8px;padding:14px;text-align:center">
             <i class="fa-solid fa-${icon}" style="color:${color};font-size:1.2rem;margin-bottom:6px;display:block"></i>

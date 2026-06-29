@@ -1649,16 +1649,16 @@ function renderAuditTable() {
     return;
   }
 
-  const sevColors = { info:'#2dd4bf', warning:'#fb923c', critical:'#f87171' };
+  const sevColors = { info:'#656565', warning:'#fb923c', critical:'#f87171' };
   const sevIcons  = { info:'fa-circle-info', warning:'fa-triangle-exclamation', critical:'fa-circle-xmark' };
   const typeIcons = { fund_run:'fa-play-circle', solar_project:'fa-solar-panel', loan:'fa-hand-holding-dollar', cattle:'fa-cow', pool:'fa-layer-group', schedule:'fa-calendar-days', auth:'fa-key', system:'fa-robot' };
-  const actionColors = { create:'#74c69d', update:'#fbbf24', delete:'#f87171', status_change:'#656565', approve:'#74c69d', reject:'#f87171', export:'#a78bfa', login:'#2dd4bf', logout:'rgba(255,255,255,.4)', mark_paid:'#74c69d', calculate_returns:'#fbbf24' };
+  const actionColors = { create:'#74c69d', update:'#fbbf24', delete:'#f87171', status_change:'#656565', approve:'#74c69d', reject:'#f87171', export:'#a78bfa', login:'#656565', logout:'rgba(255,255,255,.4)', mark_paid:'#74c69d', calculate_returns:'#fbbf24' };
 
   el.innerHTML = data.map(e => {
     const ts   = e.event_at || e.created_at;
     const dtStr = ts ? new Date(ts).toLocaleString('en-ZA', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
     const sev  = e.severity || 'info';
-    const col  = sevColors[sev] || '#2dd4bf';
+    const col  = sevColors[sev] || '#656565';
     const aCol = actionColors[e.action] || 'rgba(255,255,255,.6)';
     const hasDetail = e.before_state || e.after_state;
     return `
@@ -2079,7 +2079,7 @@ function renderForecastView({ months, events, totalInflows, totalOutflows, total
       data: {
         labels: months.map(m => m.label),
         datasets: [
-          { label: 'Inflows', data: months.map(m => m.inflows), backgroundColor: 'rgba(45,212,191,.7)', borderColor:'#2dd4bf', borderWidth:1, borderRadius:4 },
+          { label: 'Inflows', data: months.map(m => m.inflows), backgroundColor: 'rgba(45,212,191,.7)', borderColor:'#656565', borderWidth:1, borderRadius:4 },
           { label: 'Outflows', data: months.map(m => m.outflows), backgroundColor: 'rgba(248,113,113,.7)', borderColor:'#f87171', borderWidth:1, borderRadius:4 },
           { label: 'Net', data: months.map(m => m.net), type:'line', borderColor:'#fbbf24', backgroundColor:'rgba(251,191,36,.1)', borderWidth:2, pointRadius:4, pointBackgroundColor:'#fbbf24', fill:false, tension:0.3, yAxisID:'y' }
         ]
@@ -3407,7 +3407,7 @@ async function printInvestorStatement(allocId) {
   .nav-row { display: flex; gap: 16px; margin: 14px 0; }
   .nav-pill { flex: 1; background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 8px; padding: 12px 14px; text-align: center; }
   .nav-pill.green { background: #f0fdf4; border-color: #86efac; }
-  .nav-pill.blue  { background: #eff6ff; border-color: #bfdbfe; }
+  .nav-pill.blue  { background: #eff6ff; border-color: #656565; }
   .nav-pill-label { font-size: 7.5pt; color: #9ca3af; text-transform: uppercase; margin-bottom: 4px; }
   .nav-pill-value { font-size: 14pt; font-weight: 800; }
   .nav-pill-value.gold  { color: #d97706; }
@@ -3731,7 +3731,7 @@ async function printTaxCertificate(allocId) {
       </tbody>
     </table>
 
-    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:10px 14px;margin:10px 0;font-size:8.5pt;color:#656565">
+    <div style="background:#eff6ff;border:1px solid #656565;border-radius:4px;padding:10px 14px;margin:10px 0;font-size:8.5pt;color:#656565">
       <strong>Note for taxpayers:</strong> The interest amount of <strong>R ${grossInterest.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong> (SARS Code 4201) must be declared in your annual income tax return (ITR12 / ITR14). 
       South African residents are entitled to an annual interest income exemption (R23,800 for persons under 65; R34,500 for persons 65 and older) in terms of Section 10(1)(i) of the Income Tax Act.
     </div>
@@ -4113,7 +4113,7 @@ function updateScenarios() {
         <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Mgmt Fee (15%)</span><span style="color:#f59e0b">${fmt.rand(mgmtFee)}</span></div>
         <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,.08);padding-top:7px"><span style="color:rgba(255,255,255,.7);font-weight:600">Net Return</span><span style="color:#4ade80;font-weight:700">${fmt.rand(netRet)}</span></div>
         <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">MOIC</span><span style="color:#c084fc;font-weight:600">${moic.toFixed(3)}x</span></div>
-        <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Ann. Return</span><span style="color:#2dd4bf;font-weight:600">${fmt.pct(ann)}</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Ann. Return</span><span style="color:#656565;font-weight:600">${fmt.pct(ann)}</span></div>
       </div>
     </div>`;
   }).join('');

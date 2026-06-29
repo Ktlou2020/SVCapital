@@ -451,9 +451,9 @@ const Utils = {
       smme:           { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#656565', badgeClass: 'badge--blue' },
       delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#f97316', badgeClass: 'badge--orange' },
       delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#f97316', badgeClass: 'badge--orange' },
-      other:          { label: 'Other',                   icon: 'fa-circle',      color: '#8ea3b8', badgeClass: 'badge--gray' },
+      other:          { label: 'Other',                   icon: 'fa-circle',      color: '#656565', badgeClass: 'badge--gray' },
     };
-    return map[type] || { label: type, icon: 'fa-circle', color: '#8ea3b8', badgeClass: 'badge--gray' };
+    return map[type] || { label: type, icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
   },
 
   /* Status badge HTML */

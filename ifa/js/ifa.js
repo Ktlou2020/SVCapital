@@ -451,7 +451,7 @@ function renderPortfolioChart() {
       .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
     return clientInvests || parseFloat(c.total_invested) || 0;
   });
-  const colors = ['#656565','#D4AF37','#22c55e','#f97316','#a855f7','#656565','#ef4444','#06b6d4'];
+  const colors = ['#656565','#D4AF37','#22c55e','#f97316','#a855f7','#656565','#ef4444','#656565'];
 
   if (STATE.charts.portfolio) STATE.charts.portfolio.destroy();
   if (!labels.length) return;

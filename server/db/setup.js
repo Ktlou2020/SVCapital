@@ -960,7 +960,7 @@ CREATE TABLE IF NOT EXISTS products (
   risk_profile        TEXT DEFAULT 'Medium',
   risk_color          TEXT DEFAULT '#f59e0b',
   icon                TEXT DEFAULT 'fa-circle',
-  color               TEXT DEFAULT '#8ea3b8',
+  color               TEXT DEFAULT '#656565',
   badge_class         TEXT DEFAULT 'badge--gray',
   partner_name        TEXT,
   factsheet_url       TEXT,                   -- base64 data URL or external link

@@ -531,7 +531,7 @@ function renderBreedChart(labels, data) {
   if (typeof Chart === 'undefined') return;
   if (S.charts.breed) S.charts.breed.destroy();
   if (!labels.length) { canvas.parentElement.innerHTML = '<div class="empty-state" style="padding:30px"><i class="fa-solid fa-chart-pie"></i><p>No breed data</p></div>'; return; }
-  const colors = ['#2d6a4f','#40916c','#74c69d','#e9c46a','#f4a261','#e63946','#2196F3','#9C27B0'];
+  const colors = ['#2d6a4f','#40916c','#74c69d','#e9c46a','#f4a261','#e63946','#656565','#9C27B0'];
   S.charts.breed = new Chart(canvas, {
     type: 'doughnut',
     data: { labels, datasets: [{ data, backgroundColor: colors.slice(0, labels.length), borderWidth: 2, borderColor: '#fff' }] },
