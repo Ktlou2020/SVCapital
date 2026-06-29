@@ -3198,15 +3198,11 @@ function renderMarketplace() {
         <!-- Funding / closure progress -->
         <div class="mpc2-progress">
           ${Utils.poolIsDateTarget(pool) ? (() => {
-            const dpct = Utils.poolDateProgressPct(pool);
+            // Date-targeted pools have no funding goal — show days to closure, no bar.
             const left = days === null ? '—' : (days === 0 ? 'Closed' : `${days} day${days === 1 ? '' : 's'} to closure`);
             return `
               <div class="mpc2-progress__labels">
                 <span><i class="fa-solid fa-clock" style="margin-right:4px"></i>${left}</span>
-                <span style="font-weight:700;color:${urgency ? '#ef4444' : pi.color}">${dpct}% elapsed</span>
-              </div>
-              <div class="mpc2-progress__track">
-                <div class="mpc2-progress__fill" style="width:${dpct}%;background:linear-gradient(90deg,${pi.color},${pi.color}aa)"></div>
               </div>`;
           })() : `
             <div class="mpc2-progress__labels">
