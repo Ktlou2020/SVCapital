@@ -310,6 +310,13 @@ const API = {
     create: (data)     => API.post('investments', data),
     update: (id, data) => API.patch('investments', id, data),
   },
+  products: {
+    list:   (opts)     => API.list('products', opts || {}),
+    get:    (id)       => API.getById('products', id),
+    create: (data)     => API.post('products', data),
+    update: (id, data) => API.patch('products', id, data),
+    delete: (id)       => API.delete('products', id),
+  },
   transactions: {
     list:   (opts)     => API.list('transactions', opts || {}),
     get:    (id)       => API.getById('transactions', id),

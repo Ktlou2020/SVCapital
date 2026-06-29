@@ -861,3 +861,83 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     window.scrollTo({ top, behavior: 'smooth' });
   });
 });
+
+/* ─── Live average returns (auto-calculated from matured pools) ───────────
+   Pulls the public products feed and overrides the displayed average return
+   on the product cards, the detail modal, and the calculator with the real
+   achieved average across each product's matured pools. Falls back silently
+   to the static copy when there is no matured-pool data yet. */
+async function _applyLiveProductAverages() {
+  let products = [];
+  try {
+    const r = await fetch('/api/products');
+    if (!r.ok) return;
+    const d = await r.json();
+    products = d.data || [];
+  } catch (_) { return; }
+  if (!products.length) return;
+
+  const avgByType = {}, prodByType = {};
+  products.forEach(p => {
+    prodByType[p.product_type] = p;
+    const a = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : null;
+    const c = parseInt(p.matured_pool_count) || 0;
+    if (a != null && !isNaN(a) && c > 0) avgByType[p.product_type] = a;
+  });
+
+  // Map each home-page product key → the product_type(s) it represents.
+  // `primary` is the single product whose admin-managed copy backs the modal.
+  const homeMap = {
+    cattle:   { types: ['cattle'], primary: 'cattle' },
+    solar:    { types: ['solar_7yr', 'solar_6yr', 'solar_5yr'], primary: 'solar_7yr' },
+    short:    { types: ['short_term', 'smme'], primary: 'short_term' },
+    delivery: { types: ['delivery_bike'], primary: 'delivery_bike' },
+  };
+
+  const fmtR = n => 'R' + Number(n || 0).toLocaleString('en-ZA');
+
+  const avgForHome = key => {
+    const vals = (homeMap[key].types || []).map(t => avgByType[t]).filter(v => v != null);
+    if (!vals.length) return null;
+    if (key === 'solar') return Math.max(...vals);           // headline shows best
+    return vals.reduce((s, v) => s + v, 0) / vals.length;
+  };
+
+  Object.keys(homeMap).forEach(key => {
+    const rate = avgForHome(key);
+    const prod = prodByType[homeMap[key].primary];
+
+    // 1) Average return (auto-calculated) — card + modal + calculator
+    if (rate != null) {
+      const pct = (rate * 100).toFixed(2) + '%';
+      const card = document.querySelector(`.product-card[data-product="${key}"]`);
+      const goldEl = card && card.querySelector('.stat__value--gold');
+      if (goldEl) goldEl.textContent = pct;
+      if (typeof MODAL_DATA !== 'undefined' && MODAL_DATA[key] && Array.isArray(MODAL_DATA[key].stats)) {
+        const st = MODAL_DATA[key].stats.find(s => /return/i.test(s.label));
+        if (st) st.val = pct + ' p.a.';
+      }
+      if (typeof PRODUCTS !== 'undefined' && PRODUCTS[key]) PRODUCTS[key].rate = rate;
+    }
+
+    // 2) Admin-managed product detail copy → "View Details" modal
+    if (prod && typeof MODAL_DATA !== 'undefined' && MODAL_DATA[key]) {
+      const m = MODAL_DATA[key];
+      if (prod.label)       m.eyebrow = prod.label;
+      if (prod.headline)    m.title   = prod.headline;
+      if (prod.description) m.desc    = prod.description;
+      if (prod.key_details) {
+        const pts = prod.key_details.split('\n').map(s => s.trim()).filter(Boolean);
+        if (pts.length) m.points = pts;
+      }
+      if (Array.isArray(m.stats)) {
+        const minSt  = m.stats.find(s => /min/i.test(s.label));
+        if (minSt && prod.min_investment != null)  minSt.val  = fmtR(prod.min_investment);
+        const termSt = m.stats.find(s => /term/i.test(s.label));
+        if (termSt && prod.term_months != null && key !== 'solar') termSt.val = `${prod.term_months} Months`;
+      }
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', _applyLiveProductAverages);
