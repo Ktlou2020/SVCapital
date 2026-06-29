@@ -506,6 +506,46 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     const validationErrors = validateBody(table, req.body, true);
     if (validationErrors.length) return res.status(400).json({ error: validationErrors.join('; ') });
 
+    // ── Investment affordability guard ──────────────────────────────────
+    // When a client invests, they must have enough wallet balance to cover the
+    // pool minimum AND the amount + 1% platform fee (this matches the wallet
+    // deduction applied by the investment hook below). Scoped to investor-role
+    // requests so admin/fund-manager bookkeeping flows are not affected.
+    if (table === 'investments' && req.user.role === 'investor') {
+      const amount = parseFloat(body.amount) || 0;
+      if (amount <= 0) return res.status(400).json({ error: 'Investment amount must be greater than zero.' });
+
+      if (body.pool_id) {
+        const { rows: pr } = await pool.query('SELECT min_investment FROM investment_pools WHERE id = $1', [body.pool_id]);
+        const minInv = parseFloat(pr[0]?.min_investment) || 0;
+        if (minInv && amount < minInv) {
+          return res.status(400).json({ error: `Minimum investment for this pool is R${minInv.toLocaleString('en-ZA')}.` });
+        }
+      }
+
+      const platformFee = Math.round(amount * 0.01 * 100) / 100;
+      const required    = amount + platformFee;
+
+      // Validate against the wallet the funds actually come from: the
+      // sub-account when one is specified, otherwise the main investor wallet.
+      let walletBal = 0, walletLabel = 'your wallet';
+      if (body.sub_account_id) {
+        const { rows: sa } = await pool.query('SELECT wallet_balance FROM sub_accounts WHERE id = $1', [body.sub_account_id]);
+        walletBal = parseFloat(sa[0]?.wallet_balance) || 0;
+        walletLabel = 'this sub-account';
+      } else {
+        const { rows: iv } = await pool.query('SELECT wallet_balance FROM investors WHERE id = $1', [body.investor_id]);
+        walletBal = parseFloat(iv[0]?.wallet_balance) || 0;
+      }
+      if (required - walletBal > 0.001) {
+        return res.status(400).json({
+          error: `Insufficient balance. This investment requires R${required.toLocaleString('en-ZA')} `
+               + `(R${amount.toLocaleString('en-ZA')} + R${platformFee.toLocaleString('en-ZA')} platform fee), `
+               + `but the available balance in ${walletLabel} is R${walletBal.toLocaleString('en-ZA')}.`,
+        });
+      }
+    }
+
     // Auto-generate ID if missing
     if (!body.id) {
       const prefixMap = {
@@ -691,23 +731,37 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
           const platformFee = Math.round(investAmt * 0.01 * 100) / 100;
           const totalDeduct = investAmt + platformFee;
 
-          // Atomically deduct amount + fee from wallet and update total_invested
-          await pool.query(
-            `UPDATE investors
-               SET wallet_balance  = GREATEST(0, wallet_balance - $1),
-                   total_invested  = COALESCE(total_invested, 0) + $2,
-                   updated_at      = NOW()
-             WHERE id = $3`,
-            [totalDeduct, investAmt, clean.investor_id]
-          );
+          // Atomically deduct amount + fee from the funding wallet and update
+          // total_invested. Sub-account investments draw from the sub-account's
+          // own wallet; otherwise the main investor wallet is used.
+          if (clean.sub_account_id) {
+            await pool.query(
+              `UPDATE sub_accounts
+                 SET wallet_balance = GREATEST(0, wallet_balance - $1),
+                     total_invested = COALESCE(total_invested, 0) + $2,
+                     updated_at     = NOW()
+               WHERE id = $3`,
+              [totalDeduct, investAmt, clean.sub_account_id]
+            );
+          } else {
+            await pool.query(
+              `UPDATE investors
+                 SET wallet_balance  = GREATEST(0, wallet_balance - $1),
+                     total_invested  = COALESCE(total_invested, 0) + $2,
+                     updated_at      = NOW()
+               WHERE id = $3`,
+              [totalDeduct, investAmt, clean.investor_id]
+            );
+          }
 
-          // Record the platform fee as a separate transaction
+          // Record the platform fee as a separate transaction (tagged to the
+          // sub-account when applicable so it appears in that account's activity)
           const feeId = `FEE-${clean.id}`;
           await pool.query(
-            `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
-             VALUES ($1, $2, 'fee', $3, 'completed', $4, '1% platform fee on investment', NOW(), NOW())
+            `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, transaction_date, created_at)
+             VALUES ($1, $2, $3, 'fee', $4, 'completed', $5, '1% platform fee on investment', NOW(), NOW())
              ON CONFLICT (id) DO NOTHING`,
-            [feeId, clean.investor_id, platformFee, feeId]
+            [feeId, clean.investor_id, clean.sub_account_id || null, platformFee, feeId]
           );
 
           // EVA calculation — only on new funds (not reinvestments)

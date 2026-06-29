@@ -3071,7 +3071,7 @@ function renderMarketplace() {
     const pct  = Utils.poolFillPct(pool);
     const days = Utils.daysRemaining(pool.end_date);
     const meta = _POOL_META[pool.product_type] || { blurb: '', risk: 'Medium', riskColor: '#f59e0b' };
-    const canInvest = walletBal >= pool.min_investment;
+    const canInvest = walletBal >= _minPlusFee(pool);
     const urgency   = days !== null && days <= 7;
 
     // Waitlist state
@@ -3123,7 +3123,7 @@ function renderMarketplace() {
     } else {
       ctaHtml = `<div class="pool-card__need-topup">
                    <i class="fa-solid fa-wallet"></i>
-                   <span>Need ${Utils.rand(pool.min_investment - walletBal)} more in wallet</span>
+                   <span>Need ${Utils.rand(Math.max(0, _minPlusFee(pool) - walletBal))} more in wallet (incl. 1% fee)</span>
                    <button class="btn btn--ghost btn--sm" onclick="navigate('wallet',document.querySelector('[data-view=wallet]'))">Top Up</button>
                  </div>`;
     }
@@ -3308,6 +3308,18 @@ async function joinWaitlist(poolId) {
   }
 }
 
+/* Platform fee charged on every investment (1% of the amount, on top of it). */
+const PLATFORM_FEE_RATE = 0.01;
+function _platformFee(amount) {
+  return Math.round((parseFloat(amount) || 0) * PLATFORM_FEE_RATE * 100) / 100;
+}
+/* Wallet needed to make the smallest allowed investment in a pool: the pool
+   minimum plus the platform fee charged on that minimum. */
+function _minPlusFee(pool) {
+  const min = parseFloat(pool.min_investment) || 0;
+  return min + _platformFee(min);
+}
+
 function openInvestModal(poolId) {
   const pool = PORTAL.pools.find(p => p.id === poolId);
   if (!pool) return;
@@ -3344,16 +3356,19 @@ function openInvestModal(poolId) {
       </div>
     </div>
 
-    <!-- Wallet balance indicator -->
-    <div class="invest-wallet-indicator ${walletBal >= pool.min_investment ? 'invest-wallet-ok' : 'invest-wallet-low'}">
+    <!-- Wallet balance indicator (needs to cover the minimum + 1% platform fee) -->
+    <div class="invest-wallet-indicator ${walletBal >= _minPlusFee(pool) ? 'invest-wallet-ok' : 'invest-wallet-low'}">
       <i class="fa-solid fa-wallet"></i>
       <span>Your wallet: <strong>${Utils.rand(walletBal)}</strong></span>
-      ${walletBal < pool.min_investment
+      ${walletBal < _minPlusFee(pool)
         ? `<button class="btn btn--ghost btn--sm" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))">
              <i class="fa-solid fa-plus"></i> Top Up
            </button>`
         : `<span class="invest-wallet-ok-badge"><i class="fa-solid fa-circle-check"></i> Sufficient</span>`}
     </div>
+    ${walletBal >= pool.min_investment && walletBal < _minPlusFee(pool)
+      ? `<div style="font-size:0.74rem;color:#ef4444;margin-top:6px"><i class="fa-solid fa-circle-info"></i> You need ${Utils.rand(_minPlusFee(pool))} to invest the minimum — that's ${Utils.rand(pool.min_investment)} plus the ${Utils.rand(_platformFee(pool.min_investment))} (1%) platform fee.</div>`
+      : ''}
 
     <!-- Quick-pick amount buttons -->
     <div class="form-group" style="margin-top:14px">
@@ -3422,7 +3437,7 @@ async function confirmInvestment(pool) {
 
   const _confSa = _pmSaId ? PORTAL.subAccounts.find(s => s.id === _pmSaId) : null;
   const wallet = _confSa ? (parseFloat(_confSa.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
-  const platformFee = Math.round(amount * 0.01 * 100) / 100;
+  const platformFee = _platformFee(amount);
   const totalDeducted = amount + platformFee;
   if (totalDeducted > wallet) { Toast.error(`Insufficient balance. This investment requires ${Utils.rand(totalDeducted)} (${Utils.rand(amount)} + ${Utils.rand(platformFee)} platform fee).`); return; }
 
@@ -3464,25 +3479,23 @@ async function confirmInvestment(pool) {
       reference:        `INVST-${Date.now()}`,
       description:      `Investment into ${pool.name}`,
       pool_id:          pool.id,
+      sub_account_id:   _pmSaId || undefined,
       transaction_date: new Date().toISOString(),
     });
 
     // Wallet deduction and total_invested update are handled atomically server-side
     // in the investment creation hook — do not also set wallet_balance here.
 
-    // For sub-account investments, update the local sub-account cache so the UI
-    // reflects the new wallet/invested balances without waiting for a full reload.
+    // Sub-account wallet deduction (amount + fee) and total_invested are handled
+    // atomically server-side in the investment hook — do NOT also PATCH the
+    // sub-account here (that would double-deduct). Optimistically update the
+    // local cache for instant UI; loadPortalData() below refreshes the truth.
     if (_pmSaId) {
       const saIdx = PORTAL.subAccounts.findIndex(s => s.id === _pmSaId);
       if (saIdx !== -1) {
         const sa = PORTAL.subAccounts[saIdx];
-        const newSaWallet   = Math.max(0, Math.round(((parseFloat(sa.wallet_balance) || 0) - amount) * 100) / 100);
-        const newSaInvested = Math.round(((parseFloat(sa.total_invested) || 0) + amount) * 100) / 100;
-        try {
-          await API._fetch('PATCH', `tables/sub_accounts/${_pmSaId}`, { wallet_balance: newSaWallet, total_invested: newSaInvested });
-          PORTAL.subAccounts[saIdx].wallet_balance = newSaWallet;
-          PORTAL.subAccounts[saIdx].total_invested  = newSaInvested;
-        } catch (saErr) { console.warn('Sub-account balance update failed:', saErr); }
+        PORTAL.subAccounts[saIdx].wallet_balance = Math.max(0, Math.round(((parseFloat(sa.wallet_balance) || 0) - totalDeducted) * 100) / 100);
+        PORTAL.subAccounts[saIdx].total_invested  = Math.round(((parseFloat(sa.total_invested) || 0) + amount) * 100) / 100;
       }
     }
 
