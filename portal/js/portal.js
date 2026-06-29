@@ -7796,7 +7796,7 @@ td:last-child{text-align:right;font-weight:600}
 <div class="wrap">
   <div class="hdr">
     <div>
-      <div class="logo"><img src="${window.location.origin}/assets/logo.svg" alt="SV Capital"></div>
+      <div class="logo"><img src="${window.location.origin}/assets/full-colour-logo-horizontal-white-text.png" alt="SV Capital"></div>
       <div style="font-size:0.75rem;color:#6b7280;margin-top:6px">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSCA Regulated</div>
     </div>
     <div class="cert-badge">
