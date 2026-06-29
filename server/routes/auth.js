@@ -481,7 +481,21 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
-/* ─── Shared helper ─── */
+/* ─── Shared helpers ─── */
+/* Elevate a base (title-derived) role using the apps granted to the person, so
+   per-individual app access also grants the role-gated API privileges. */
+function elevateRoleByApps(baseRole, appAccess) {
+  const apps = Array.isArray(appAccess) ? appAccess : [];
+  const RANK = { staff: 0, ifa: 1, fund_manager: 1, admin: 2, director: 3 };
+  let appRole = null;
+  if (apps.includes('director'))   appRole = 'director';
+  else if (apps.includes('admin')) appRole = 'admin';
+  else if (apps.includes('fund'))  appRole = 'fund_manager';
+  else if (apps.includes('ifa'))   appRole = 'ifa';
+  if (appRole && (RANK[appRole] || 0) > (RANK[baseRole] || 0)) return appRole;
+  return baseRole;
+}
+
 function empToJwtRole(role, level) {
   if (level === 'executive') return 'director';
   if (!role) return 'staff';
@@ -494,11 +508,14 @@ function empToJwtRole(role, level) {
 }
 
 async function issueStaffJwt(emp, res) {
-  const jwtRole = empToJwtRole(emp.role, emp.level);
   const { rows: userRows } = await pool.query(
     'SELECT id FROM users WHERE email = $1 LIMIT 1', [emp.email]
   );
   const apps = (Array.isArray(emp.app_access) && emp.app_access.length) ? emp.app_access : ['employee'];
+  // Role is derived from the title and elevated by the granted apps, so a person
+  // granted the Admin Console app receives the 'admin' privileges its role-gated
+  // APIs require (titles are just labels under per-individual access).
+  const jwtRole = elevateRoleByApps(empToJwtRole(emp.role, emp.level), apps);
   const token = jwt.sign({
     id:        userRows[0]?.id || emp.id,
     email:     emp.email,

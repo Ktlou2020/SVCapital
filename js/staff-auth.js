@@ -179,8 +179,10 @@
 
     // ── SSO bridge: write a compatible svc_user record so that api.js Auth
     //    helpers (Auth.isLoggedIn, Auth.getUser, Auth.getRole) see this session.
-    //    Maps employee role titles to JWT roles used by admin/ifa pages.
-    const jwtRole = _empRoleToJwtRole(employee.role, employee.level);
+    //    The role is derived from the title AND elevated by granted apps, so a
+    //    person granted the Admin Console app gets the 'admin' privileges the
+    //    admin app and its APIs require (titles are just labels now).
+    const jwtRole = _elevateRoleByApps(_empRoleToJwtRole(employee.role, employee.level), employee.app_access);
     const bridge = {
       id:        employee.id,
       email:     employee.email,
@@ -192,6 +194,21 @@
     localStorage.setItem('svc_user', JSON.stringify(bridge));
 
     return session;
+  }
+
+  /* Elevate a base (title-derived) role using the apps granted to the person.
+     Granting an app confers the privileges that app needs, so per-individual
+     access actually works end-to-end (page guards AND role-gated APIs). */
+  function _elevateRoleByApps(baseRole, appAccess) {
+    const apps = Array.isArray(appAccess) ? appAccess : [];
+    const RANK = { staff: 0, ifa: 1, fund_manager: 1, admin: 2, director: 3 };
+    let appRole = null;
+    if (apps.includes('director'))   appRole = 'director';
+    else if (apps.includes('admin')) appRole = 'admin';
+    else if (apps.includes('fund'))  appRole = 'fund_manager';
+    else if (apps.includes('ifa'))   appRole = 'ifa';
+    if (appRole && (RANK[appRole] || 0) > (RANK[baseRole] || 0)) return appRole;
+    return baseRole;
   }
 
   /* Map employee role/level strings → JWT role used by admin.js guards */
