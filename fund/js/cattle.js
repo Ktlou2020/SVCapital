@@ -1448,7 +1448,7 @@ function _renderCostTypeChart(costs) {
   const canvas = document.getElementById('costTypeChart');
   if (!canvas) return;
   if (S.charts.costType) S.charts.costType.destroy();
-  const TYPE_COLORS = { feed: '#fbbf24', vet: '#60a5fa', transport: '#a78bfa', labour: '#34d399', mortality: '#f87171', other: 'rgba(255,255,255,.35)' };
+  const TYPE_COLORS = { feed: '#fbbf24', vet: '#656565', transport: '#a78bfa', labour: '#34d399', mortality: '#f87171', other: 'rgba(255,255,255,.35)' };
   const types = {};
   costs.forEach(c => { const t = c.cost_type||'other'; types[t] = (types[t]||0) + (parseFloat(c.amount)||0); });
   const labels = Object.keys(types);
@@ -1485,9 +1485,9 @@ function renderCostTable(costs, cycleFilter, typeFilter) {
   if (typeFilter)  rows = rows.filter(c => c.cost_type === typeFilter);
   rows.sort((a,b) => (b.cost_date||'').localeCompare(a.cost_date||''));
   if (sub) sub.textContent = `${rows.length} entries · Total: ${fmt.zar(rows.reduce((s,c)=>s+(parseFloat(c.amount)||0),0))}`;
-  const TYPE_COLORS = { feed:'#fbbf24', vet:'#60a5fa', transport:'#a78bfa', labour:'#34d399', mortality:'#f87171', other:'rgba(255,255,255,.35)' };
+  const TYPE_COLORS = { feed:'#fbbf24', vet:'#656565', transport:'#a78bfa', labour:'#34d399', mortality:'#f87171', other:'rgba(255,255,255,.35)' };
   const statusBadge = s => {
-    const cfg = { paid:['#74c69d','#052e16'], pending:['#fbbf24','#1c1400'], approved:['#60a5fa','#0c1a2e'] };
+    const cfg = { paid:['#74c69d','#052e16'], pending:['#fbbf24','#1c1400'], approved:['#656565','#0c1a2e'] };
     const [bg,fg] = cfg[s] || ['rgba(255,255,255,.12)','rgba(255,255,255,.5)'];
     return `<span style="background:${bg};color:${fg};padding:2px 7px;border-radius:8px;font-size:11px;font-weight:700">${(s||'?').toUpperCase()}</span>`;
   };

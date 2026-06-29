@@ -18,7 +18,7 @@
   --green-bg: rgba(34,197,94,0.1);
   --red: #ef4444;
   --red-bg: rgba(239,68,68,0.1);
-  --blue: #3b82f6;
+  --blue: #656565;
   --blue-bg: rgba(59,130,246,0.1);
   --orange: #f97316;
   --orange-bg: rgba(249,115,22,0.1);
@@ -275,7 +275,7 @@ img { max-width: 100%; display: block; }
 
 .stat-card--gold::before { background: linear-gradient(90deg, var(--gold-dark), var(--gold)); }
 .stat-card--green::before { background: linear-gradient(90deg, #16a34a, var(--green)); }
-.stat-card--blue::before { background: linear-gradient(90deg, #1d4ed8, var(--blue)); }
+.stat-card--blue::before { background: linear-gradient(90deg, #656565, var(--blue)); }
 .stat-card--purple::before { background: linear-gradient(90deg, #7c3aed, var(--purple)); }
 .stat-card--orange::before { background: linear-gradient(90deg, #c2410c, var(--orange)); }
 
@@ -573,7 +573,7 @@ img { max-width: 100%; display: block; }
 .progress-bar { background: var(--dark-4); border-radius: 4px; height: 8px; overflow: hidden; }
 .progress-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--gold-dark), var(--gold)); transition: width 1s ease; }
 .progress-fill--green { background: linear-gradient(90deg, #16a34a, var(--green)); }
-.progress-fill--blue { background: linear-gradient(90deg, #1d4ed8, var(--blue)); }
+.progress-fill--blue { background: linear-gradient(90deg, #656565, var(--blue)); }
 .progress-fill--red { background: linear-gradient(90deg, #b91c1c, var(--red)); }
 
 /* ─── AVATAR ─── */

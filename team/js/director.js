@@ -1895,7 +1895,7 @@ function renderDeptChart() {
   });
   const labels = Object.keys(deptCounts);
   const values = Object.values(deptCounts);
-  const palette = ['#7c5cfc','#f59e0b','#10b981','#00d4aa','#60a5fa','#f87171','#a78bfa','#34d399'];
+  const palette = ['#7c5cfc','#f59e0b','#10b981','#00d4aa','#656565','#f87171','#a78bfa','#34d399'];
   _dirCharts.dept = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -1928,7 +1928,7 @@ function renderActivityFeed() {
   _onboarding.filter(o => o.status === 'in_progress').slice(0,2).forEach(ob => {
     const emp = _employees.find(e => e.id === ob.employee_id);
     const pct = ob.tasks_total > 0 ? Math.round((ob.tasks_completed||0)/ob.tasks_total*100) : 0;
-    if (emp) events.push({ icon:'fa-spinner', color:'#60a5fa', text:`<b>${emp.first_name} ${emp.last_name}</b> — onboarding ${pct}% complete`, date: ob.updated_at });
+    if (emp) events.push({ icon:'fa-spinner', color:'#656565', text:`<b>${emp.first_name} ${emp.last_name}</b> — onboarding ${pct}% complete`, date: ob.updated_at });
   });
   // Leave requests — pending highlighted, plus recently decided
   _leaveReqs.slice()
@@ -2035,7 +2035,7 @@ function renderPerformanceView() {
     });
     const dLabels = Object.keys(deptMap);
     const dAvgs = dLabels.map(d => deptMap[d].reduce((s,v)=>s+v,0)/deptMap[d].length);
-    const palette = ['#7c5cfc','#f59e0b','#10b981','#00d4aa','#60a5fa','#f87171','#a78bfa','#34d399'];
+    const palette = ['#7c5cfc','#f59e0b','#10b981','#00d4aa','#656565','#f87171','#a78bfa','#34d399'];
     _dirCharts.perfDept = new Chart(deptCtx, {
       type: 'bar',
       data: { labels: dLabels, datasets: [{ label:'Avg KPI %', data: dAvgs.map(v=>+v.toFixed(1)), backgroundColor: palette.slice(0,dLabels.length), borderRadius:5 }] },

@@ -119,7 +119,7 @@
 .stat-card--gold::after   { background: var(--gold); }
 .stat-card--green::after  { background: var(--green); }
 .stat-card--orange::after { background: var(--orange); }
-.stat-card--blue::after   { background: #3b82f6; }
+.stat-card--blue::after   { background: #656565; }
 
 .stat-card:hover {
   transform: translateY(-3px);

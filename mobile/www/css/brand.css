@@ -6,13 +6,13 @@
    BRAND COLORS (from CI Manual & SVG logo analysis):
    - Logo mark: Multi-color gradient petals (orange, purple, green, blue, yellow)
    - Primary Orange: #FF9B0C → #FF5229 (warm energy, primary CTA)
-   - Teal/Blue:      #2F8C9B / #0096FF  (trust, stability)
+   - Teal/Blue:      #656565 / #656565  (trust, stability)
    - Green:          #65ED00 / #7BCB5A  (growth, returns)
    - Purple:         #EDA5FF             (premium, sophistication)
    - Text:           #303030 (charcoal) / #6B6B6B (body)
    - Background:     #FFFFFF / #F7F8FA  (clean, professional)
    
-   BRAND VOICE: "Investments that make sense"
+   BRAND VOICE: "Venture Beyond the Ordinary"
    AESTHETIC: Light, modern, professional, vibrant but clean
    ═══════════════════════════════════════════════════════════════ */
 
@@ -25,9 +25,9 @@
   --brand-orange-pale:  rgba(255,130,21,0.08);
 
   /* ─── Brand Teal/Blue ─── */
-  --brand-teal:         #2F8C9B;
-  --brand-teal-dark:    #1E6E7A;
-  --brand-blue:         #0096FF;
+  --brand-teal:         #656565;
+  --brand-teal-dark:    #656565;
+  --brand-blue:         #656565;
   --brand-teal-pale:    rgba(47,140,155,0.08);
 
   /* ─── Brand Green ─── */
@@ -41,10 +41,10 @@
 
   /* ─── Brand Gradient (logo petals) ─── */
   --gradient-brand:     linear-gradient(135deg, #FF9B0C 0%, #FF6421 50%, #FF5229 100%);
-  --gradient-teal:      linear-gradient(135deg, #2F8C9B 0%, #0096FF 100%);
+  --gradient-teal:      linear-gradient(135deg, #656565 0%, #656565 100%);
   --gradient-hero:      linear-gradient(135deg, #1a3a4a 0%, #0d2535 100%);
   --gradient-warm:      linear-gradient(135deg, #FFE86A 0%, #FFB782 100%);
-  --gradient-vivid:     linear-gradient(135deg, #65ED00 0%, #0096FF 100%);
+  --gradient-vivid:     linear-gradient(135deg, #65ED00 0%, #656565 100%);
 
   /* ─── Text ─── */
   --text-primary:       #1a1a1a;
@@ -84,8 +84,8 @@
   --shadow-teal:        0 8px 32px rgba(47,140,155,0.20);
 
   /* ─── Typography ─── */
-  --font-sans:          'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-serif:         'DM Serif Display', 'Georgia', serif;
+  --font-sans:          'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-serif:         'Poppins', 'Georgia', serif;
 
   /* ─── Spacing / Radius ─── */
   --radius-xs:          4px;

@@ -103,7 +103,7 @@ body {
 
 /* Per-publication typographic treatment */
 .featured-logo-item:nth-child(1) { /* Moneyweb */
-  font-family: 'DM Serif Display', Georgia, serif;
+  font-family: 'Poppins', Georgia, serif;
   font-style: italic;
   font-size: 1.15rem;
   font-weight: 400;
@@ -128,7 +128,7 @@ body {
   letter-spacing: 0.05em;
 }
 .featured-logo-item:nth-child(5) { /* Daily Maverick */
-  font-family: 'DM Serif Display', Georgia, serif;
+  font-family: 'Poppins', Georgia, serif;
   font-style: italic;
   font-size: 1.05rem;
   font-weight: 400;
@@ -163,8 +163,8 @@ body {
 .product-card:hover::after { opacity: 1; }
 
 .product-card--cattle::after  { background: linear-gradient(90deg, #D4AF37, #FF9B0C); }
-.product-card--solar::after   { background: linear-gradient(90deg, #22c55e, #2F8C9B); }
-.product-card--short::after   { background: linear-gradient(90deg, #3b82f6, #2F8C9B); }
+.product-card--solar::after   { background: linear-gradient(90deg, #22c55e, #656565); }
+.product-card--short::after   { background: linear-gradient(90deg, #656565, #656565); }
 .product-card--delivery::after { background: linear-gradient(90deg, #f97316, #FF5229); }
 
 .product-card__icon {
@@ -284,7 +284,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: #1E6E7A;
+  color: #656565;
   background: rgba(47,140,155,0.09);
   border: 1px solid rgba(47,140,155,0.22);
   border-radius: 100px;
@@ -351,7 +351,7 @@ body {
   top: 8px;
   left: 20px;
   font-size: 5.5rem;
-  font-family: 'DM Serif Display', Georgia, serif;
+  font-family: 'Poppins', Georgia, serif;
   color: rgba(255,130,21,0.07);
   line-height: 1;
   pointer-events: none;

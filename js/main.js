@@ -65,7 +65,7 @@ const PRODUCTS = {
     termUnit: 'months',
     termYears: 5/12,
     icon: 'fa-bolt',
-    color: '#3b82f6',
+    color: '#656565',
     partner: 'MoolaLend',
     infoItems: [
       { label: 'Partner', value: 'MoolaLend Pty Ltd' },

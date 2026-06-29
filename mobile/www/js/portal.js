@@ -70,10 +70,10 @@ function _ensureTaskCompletionPanel() {
     <div class="panel" style="border:1px solid rgba(47,140,155,0.18);background:linear-gradient(135deg,rgba(47,140,155,0.05),rgba(255,155,12,0.04))">
       <div class="panel__header" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
         <div>
-          <span class="panel__title"><i class="fa-solid fa-list-check" style="color:#2F8C9B;margin-right:8px"></i>Action Centre</span>
+          <span class="panel__title"><i class="fa-solid fa-list-check" style="color:#656565;margin-right:8px"></i>Action Centre</span>
           <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px">See the next best action to unlock deposits, investing, withdrawals and statements.</div>
         </div>
-        <div id="taskCompletionMeta" style="margin-left:auto;font-size:0.74rem;font-weight:700;color:#2F8C9B"></div>
+        <div id="taskCompletionMeta" style="margin-left:auto;font-size:0.74rem;font-weight:700;color:#656565"></div>
       </div>
       <div class="panel__body" id="taskCompletionBody"></div>
     </div>`;
@@ -115,7 +115,7 @@ function _ensureSupportAssistUI() {
   if (panelBody && !document.getElementById('supportDraftMeta')) {
     const meta = document.createElement('div');
     meta.id = 'supportDraftMeta';
-    meta.style.cssText = 'margin-bottom:12px;padding:10px 12px;border-radius:10px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.16);font-size:0.76rem;font-weight:700;color:#2F8C9B';
+    meta.style.cssText = 'margin-bottom:12px;padding:10px 12px;border-radius:10px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.16);font-size:0.76rem;font-weight:700;color:#656565';
     meta.textContent = 'Drafts auto-save on this device so you can come back later.';
     panelBody.insertBefore(meta, panelBody.firstChild);
   }
@@ -271,11 +271,11 @@ function _persistSupportDraft() {
   _updateSupportCounter();
   if (!_supportDraftHasValue(data)) {
     _localRemove(_portalScopedKey(SUPPORT_DRAFT_KEY));
-    _setInlineMessage('supportDraftMeta', 'Drafts auto-save on this device so you can come back later.', '#2F8C9B');
+    _setInlineMessage('supportDraftMeta', 'Drafts auto-save on this device so you can come back later.', '#656565');
     return;
   }
   _localSet(_portalScopedKey(SUPPORT_DRAFT_KEY), JSON.stringify({ ...data, saved_at: Date.now() }));
-  _setInlineMessage('supportDraftMeta', 'Draft saved locally — you can safely leave and come back.', '#2F8C9B');
+  _setInlineMessage('supportDraftMeta', 'Draft saved locally — you can safely leave and come back.', '#656565');
 }
 function restoreSupportDraft() {
   _ensureSupportAssistUI();
@@ -348,7 +348,7 @@ function renderTaskCompletionPanel() {
   const ficaReady = (inv.fica_status || inv.kyc_status || inv.status || '').toLowerCase() === 'approved';
   const tasks = [
     { label: 'Complete FICA verification', done: ficaReady, tone: '#FF8215', action: 'openKycUploadModal()', cta: 'Upload documents' },
-    { label: 'Add a withdrawal bank account', done: bankReady, tone: '#2F8C9B', action: 'openBankDetailsModal()', cta: 'Add bank account' },
+    { label: 'Add a withdrawal bank account', done: bankReady, tone: '#656565', action: 'openBankDetailsModal()', cta: 'Add bank account' },
     { label: 'Fund your wallet', done: hasWallet, tone: '#22c55e', action: 'openTopUpModal()', cta: 'Top up wallet' },
     { label: 'Confirm your risk profile', done: riskReady, tone: '#a855f7', action: 'navigate(\'profile\', document.querySelector(\'[data-view=profile]\'))', cta: 'Review profile' },
     { label: 'Make your next investment', done: hasInvestments, tone: '#D4AF37', action: 'navigate(\'marketplace\', document.querySelector(\'[data-view=marketplace]\'))', cta: 'Browse pools' },
@@ -458,13 +458,7 @@ function renderWalletReadinessPanel() {
   let ctaAction = "openTopUpModal()";
   let accent = '#FF9B0C';
 
-  if (!ficaApproved) {
-    headline = 'Complete FICA/KYC first to unlock investing.';
-    subcopy = 'Once verified, you can fund your wallet and invest without hitting a dead-end later.';
-    ctaLabel = 'Complete FICA/KYC';
-    ctaAction = "navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()";
-    accent = '#2F8C9B';
-  } else if (affordable.length) {
+  if (affordable.length) {
     const best = affordable[0];
     headline = `You can already invest in ${affordable.length} open pool${affordable.length === 1 ? '' : 's'}.`;
     subcopy = best ? `${best.name} is the closest match for your current wallet balance.` : subcopy;
@@ -483,7 +477,7 @@ function renderWalletReadinessPanel() {
   panel.innerHTML = `
     <div class="panel__header" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span class="panel__title"><i class="fa-solid fa-bolt" style="color:${accent}"></i> Wallet Readiness</span>
-      <span style="margin-left:auto;font-size:0.72rem;font-weight:700;color:${accent};background:${accent}14;padding:4px 10px;border-radius:999px;border:1px solid ${accent}2f">${ficaApproved ? 'Investment ready checks' : 'Verification blocking progress'}</span>
+      <span style="margin-left:auto;font-size:0.72rem;font-weight:700;color:${accent};background:${accent}14;padding:4px 10px;border-radius:999px;border:1px solid ${accent}2f">${ficaApproved ? 'Investment ready checks' : 'FICA pending — withdrawals locked'}</span>
     </div>
     <div class="panel__body" style="display:flex;flex-direction:column;gap:14px">
       <div style="border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(255,255,255,0.98),rgba(255,155,12,0.05))">
@@ -502,8 +496,8 @@ function renderWalletReadinessPanel() {
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Verification</div>
-          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#2F8C9B'};margin-top:6px">${ficaApproved ? 'FICA/KYC approved' : 'FICA/KYC needed'}</div>
-          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.'}</div>
+          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#656565'};margin-top:6px">${ficaApproved ? 'FICA/KYC approved' : 'FICA/KYC pending'}</div>
+          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${ficaApproved ? (bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.') : 'You can invest and top up. Withdrawals unlock once FICA is approved.'}</div>
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Money in motion</div>
@@ -542,15 +536,9 @@ function renderMarketConversionPanel(pools) {
   let sub = 'We surface the next-best pools first so you can complete the journey with fewer dead-ends.';
   let action = "navigate('wallet', document.querySelector('[data-view=wallet]'))";
   let actionLabel = 'Review wallet';
-  let accent = '#2F8C9B';
+  let accent = '#656565';
 
-  if (!ficaApproved) {
-    title = 'Your first investment is blocked by pending FICA/KYC.';
-    sub = 'Complete verification before funding more or choosing an amount so your first investment can go through cleanly.';
-    action = "navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()";
-    actionLabel = 'Complete FICA/KYC';
-    accent = '#2F8C9B';
-  } else if (affordable.length) {
+  if (affordable.length) {
     title = `You can invest right now in ${affordable.length} open pool${affordable.length === 1 ? '' : 's'}.`;
     sub = 'Recommended pools below are ranked by affordability, urgency, and expected return so you can act quickly.';
     action = "openInvestModal('" + affordable[0].id + "')";
@@ -882,9 +870,10 @@ function _syncNotifDot() {
 }
 
 function markAllRead() {
-  document.querySelectorAll('#notifPanel .notif-item.unread').forEach(el => el.classList.remove('unread'));
+  const list = document.getElementById('notifList');
+  if (list) list.innerHTML = '<div style="padding:24px 18px;text-align:center;color:#999;font-size:0.82rem">You\'re all caught up!</div>';
   const dot = document.getElementById('notifDot');
-  if (dot) dot.classList.remove('has-unread');
+  if (dot) { dot.classList.remove('has-unread'); dot.textContent = ''; }
 }
 
 /* ─── Time-based greeting ─── */
@@ -918,7 +907,11 @@ function loadNotifications() {
   if (!list) return;
 
   const notifs = [];
-  const inv = PORTAL.investor;
+  const inv         = PORTAL.investor;
+  const investments = PORTAL.investments  || [];
+  const tickets     = PORTAL.tickets      || [];
+  const transactions= PORTAL.transactions || [];
+  const pools       = PORTAL.pools        || [];
 
   // 1. Low wallet balance
   if (inv && parseFloat(inv.wallet_balance) < 500) {
@@ -934,7 +927,7 @@ function loadNotifications() {
 
   // 2. Investments maturing within 60 days
   const now = new Date();
-  const soon = PORTAL.investments.filter(i => {
+  const soon = investments.filter(i => {
     if (i.status !== 'active') return false;
     const end = new Date(i.end_date || i.maturity_date);
     if (!end || isNaN(end)) return false;
@@ -1019,7 +1012,7 @@ function loadNotifications() {
   }
 
   // 5. Maturity overdue — investment has matured but no instruction yet
-  const overdue = PORTAL.investments.filter(i => {
+  const overdue = investments.filter(i => {
     if (i.status !== 'matured') return false;
     return !i.maturity_instruction;
   });
@@ -1035,10 +1028,10 @@ function loadNotifications() {
   }
 
   // 6. Support ticket responses — one notification per answered ticket
-  const answered = PORTAL.tickets.filter(t => t.admin_response && t.admin_response.trim());
+  const answered = tickets.filter(t => t.admin_response && t.admin_response.trim());
   answered.forEach(t => {
     notifs.push({
-      icon: 'fa-reply', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#2F8C9B',
+      icon: 'fa-reply', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#656565',
       title: 'Support reply received',
       sub: `"${t.subject}" — our team has responded.`,
       time: t.responded_at ? Utils.timeAgo(t.responded_at) : 'Recently',
@@ -1048,7 +1041,7 @@ function loadNotifications() {
   });
 
   // 7. Pending withdrawal submitted
-  const pendingWithdrawal = PORTAL.transactions.find(t => t.type === 'withdrawal' && t.status === 'pending');
+  const pendingWithdrawal = transactions.find(t => t.type === 'withdrawal' && t.status === 'pending');
   if (pendingWithdrawal) {
     notifs.push({
       icon: 'fa-money-bill-transfer', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#6366f1',
@@ -1061,14 +1054,14 @@ function loadNotifications() {
   }
 
   // 8. New pools opened in last 14 days
-  const newPools = PORTAL.pools.filter(p => {
+  const newPools = pools.filter(p => {
     if (p.status !== 'open') return false;
     return (now - new Date(p.created_at)) < 14 * 86400000;
   });
   if (newPools.length) {
     const np = newPools[0];
     notifs.push({
-      icon: 'fa-chart-line', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#2F8C9B',
+      icon: 'fa-chart-line', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#656565',
       title: 'New investment pool available',
       sub: `${np.name || np.pool_name} — ${Utils.pct(np.annual_rate || np.benchmark_rate)} p.a. over ${np.term_months} months.`,
       time: Utils.timeAgo(np.created_at),
@@ -1163,6 +1156,7 @@ function navigate(view, btnEl) {
     support: 'Support', referral: 'Refer & Earn', statement: 'Account Statement',
     quests: 'Earn Rewards', learn: 'Learning Hub', subaccounts: 'My Accounts',
     documents: 'Document Vault', policies: 'Platform Policies',
+    gifts: 'Send a Gift',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
 
@@ -1181,6 +1175,7 @@ function navigate(view, btnEl) {
     referral: loadReferralDashboard,
     documents: loadDocuments,
     policies: renderPoliciesView,
+    gifts: loadGiftsView,
     profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderKycStatusPanel(); },
   };
   if (loaders[view]) loaders[view]();
@@ -1232,6 +1227,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && _p
 window._stopPolling = function () { if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; } };
 
 document.addEventListener('DOMContentLoaded', async () => {
+  _preloadLogo(); // warm logo cache for PDF generation
   Toast.init();
   initDarkMode();
   initPortalFormUX();
@@ -1508,17 +1504,13 @@ function renderOverview(skipCharts) {
   const referralTotal = PORTAL.transactions
     .filter(t => t.type === 'referral_bonus' && t.status !== 'rejected')
     .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
-  const xpCash = PORTAL.quests
-    ? XP_LEVELS.filter(l => l.min > 0 && (PORTAL.quests.xp || 0) >= l.min).length * 50
-    : 0;
   const rewEl = document.getElementById('pov-rewards');
   if (rewEl) {
-    const totalRewards = referralTotal + xpCash;
-    if (totalRewards > 0) {
-      _animateNum(rewEl, totalRewards, 'R ', '', 900);
+    const xp = PORTAL.quests?.xp || 0;
+    const lvl = _getLevelForXP(xp);
+    if (referralTotal > 0) {
+      _animateNum(rewEl, referralTotal, 'R ', '', 900);
     } else {
-      const xp = PORTAL.quests?.xp || 0;
-      const lvl = _getLevelForXP(xp);
       rewEl.textContent = `${lvl.label} · ${xp} XP`;
     }
   }
@@ -1725,12 +1717,12 @@ function renderOverviewInvestments() {
 
 function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
-  const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date)).slice(0, 5);
-  const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red' };
+  const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0)).slice(0, 5);
+  const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
 
   if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No transactions yet</td></tr>'; return; }
 
-  const _txnIsPositive = t => !['withdrawal', 'fee', 'investment'].includes(t.type);
+  const _txnIsPositive = t => !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
   body.innerHTML = recent.map(t => {
     const pos = _txnIsPositive(t);
     return `<tr>
@@ -1870,7 +1862,7 @@ function renderAllocationChart() {
   // creates orphan GPU compositor layers on Android WebView that cause content to blank.
   if (ctx.offsetParent === null) return;
 
-  const colors = ['#D4AF37', '#22c55e', '#3b82f6', '#f97316', '#a855f7', '#ec4899', '#14b8a6'];
+  const colors = ['#D4AF37', '#22c55e', '#656565', '#f97316', '#a855f7', '#ec4899', '#14b8a6'];
 
   const activeInvests = PORTAL.investments.filter(i => i.status === 'active');
   const allocation = {};
@@ -2033,9 +2025,9 @@ function renderMyTxnTable() {
   const body = document.getElementById('myTxnBody');
   const filter = document.getElementById('myTxnTypeFilter').value;
   const items = filter ? PORTAL.transactions.filter(t => t.type === filter) : PORTAL.transactions;
-  const sorted = [...items].sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
+  const sorted = [...items].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0));
 
-  const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red' };
+  const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
 
   if (!sorted.length) {
     body.innerHTML = `<tr><td colspan="6" style="padding:0;border:none">
@@ -2050,7 +2042,7 @@ function renderMyTxnTable() {
     return;
   }
 
-  const _isPosTxn = t => !['withdrawal', 'fee', 'investment'].includes(t.type);
+  const _isPosTxn = t => !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
   body.innerHTML = sorted.map(t => {
     const pos = _isPosTxn(t);
     return `<tr>
@@ -2153,10 +2145,12 @@ async function loadWallet() {
 
   _loadAutoTopUpCard().catch(() => {});
   renderWalletReadinessPanel();
+  // Pre-render recurring tab if it's already visible (or will be on re-render)
+  if (document.getElementById('walletRecurringTab')?.style.display !== 'none') _renderRecurringTab();
 
   const activity = document.getElementById('walletActivity');
   const walletTxns = [...PORTAL.transactions]
-    .filter(t => ['deposit', 'return', 'payout', 'referral_bonus', 'withdrawal'].includes(t.type))
+    .filter(t => ['deposit', 'return', 'payout', 'referral_bonus', 'withdrawal', 'gift_sent', 'gift_received'].includes(t.type))
     .sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0))
     .slice(0, 8);
 
@@ -2174,7 +2168,7 @@ async function loadWallet() {
   }
 
   activity.innerHTML = walletTxns.map(t => {
-    const isOut = t.type === 'withdrawal';
+    const isOut = ['withdrawal', 'gift_sent'].includes(t.type);
     const colour = isOut ? '#ef4444' : '#22c55e';
     const sign   = isOut ? '−' : '+';
     const statusTag = t.status === 'pending' ? ' <span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:1px 6px;border-radius:4px;font-weight:600">Pending</span>' :
@@ -2207,22 +2201,28 @@ function _renderRecurringTab() {
   const listEl     = document.getElementById('recurringInvestmentsList');
   if (!statusCard || !listEl) return;
 
-  const pool     = (PORTAL.pools || []).find(p => p.id === inv?.recurring_pool_id);
-  const isActive = !!(inv?.recurring_enabled && inv?.recurring_amount);
+  const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar Energy 7yr', solar_6yr:'Solar Energy 6yr', solar_5yr:'Solar Energy 5yr', short_term:'Short Term', smme:'SMME Finance', delivery_bike:'Delivery Bike', other:'Other' };
+  const productType = inv?.recurring_product_type;
+  const isActive    = !!(inv?.recurring_enabled && inv?.recurring_amount && productType);
+  const day         = inv?.recurring_day || 1;
 
   const badge = document.getElementById('recurringActiveBadge');
   if (badge) badge.style.display = isActive ? 'inline-flex' : 'none';
 
   if (isActive) {
-    const today      = new Date();
-    const nextDate   = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-    const daysUntil  = Math.ceil((nextDate - today) / 86400000);
+    const today     = new Date();
+    const thisMonth = new Date(today.getFullYear(), today.getMonth(), day);
+    const nextRun   = thisMonth > today
+      ? thisMonth
+      : new Date(today.getFullYear(), today.getMonth() + 1, day);
+    const daysUntil = Math.ceil((nextRun - today) / 86400000);
+    const suffix    = day === 1 ? 'st' : day === 2 ? 'nd' : day === 3 ? 'rd' : 'th';
     statusCard.innerHTML = `
       <div class="wallet-card__label">Recurring Investment
         <span style="background:rgba(34,197,94,0.15);color:#22c55e;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:8px;vertical-align:middle">Active</span>
       </div>
       <div class="wallet-card__value" style="color:#ff9b0c">${Utils.rand(inv.recurring_amount)}<span style="font-size:0.85rem;font-weight:500;color:#6b7280;margin-left:4px">/ month</span></div>
-      <div class="wallet-card__sub"><i class="fa-solid fa-layer-group" style="margin-right:4px"></i>${pool ? pool.name : 'Selected pool'} &nbsp;·&nbsp; Next investment in <strong>${daysUntil} day${daysUntil !== 1 ? 's' : ''}</strong></div>
+      <div class="wallet-card__sub"><i class="fa-solid fa-layer-group" style="margin-right:4px"></i>${PRODUCT_LABELS[productType] || productType} &nbsp;·&nbsp; Every ${day}${suffix} of the month &nbsp;·&nbsp; Next in <strong>${daysUntil} day${daysUntil !== 1 ? 's' : ''}</strong></div>
       <div class="wallet-card__actions">
         <button class="btn btn--secondary" onclick="openRecurringModal()"><i class="fa-solid fa-pen"></i> Edit</button>
         <button class="btn btn--secondary" style="color:#ef4444;border-color:rgba(239,68,68,0.3)" onclick="_cancelRecurring()"><i class="fa-solid fa-xmark"></i> Cancel</button>
@@ -2237,8 +2237,9 @@ function _renderRecurringTab() {
       </div>`;
   }
 
-  const recurringInvs = pool
-    ? PORTAL.investments.filter(i => i.status === 'active' && i.pool_id === inv?.recurring_pool_id)
+  // Show active investments matching the selected product type
+  const recurringInvs = productType
+    ? PORTAL.investments.filter(i => i.status === 'active' && i.product_type === productType)
     : [];
 
   if (!recurringInvs.length) {
@@ -2273,12 +2274,14 @@ async function _cancelRecurring() {
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
   try {
     await API._fetch('PATCH', `tables/investors/${investorId}`, {
-      recurring_enabled: false, recurring_amount: null, recurring_pool_id: null,
+      recurring_enabled: false, recurring_amount: null,
+      recurring_product_type: null, recurring_day: null,
     });
     if (PORTAL.investor) {
-      PORTAL.investor.recurring_enabled = false;
-      PORTAL.investor.recurring_amount  = null;
-      PORTAL.investor.recurring_pool_id = null;
+      PORTAL.investor.recurring_enabled      = false;
+      PORTAL.investor.recurring_amount       = null;
+      PORTAL.investor.recurring_product_type = null;
+      PORTAL.investor.recurring_day          = null;
     }
     Toast.success('Recurring investment cancelled');
     _renderRecurringTab();
@@ -2525,10 +2528,10 @@ function _pmInvestorId() {
  * openTopUpModal(gateway?)
  * Call with no arg (generic) or 'paystack' / 'ozow' to pre-select.
  */
-function openTopUpModal(gateway) {
+function openTopUpModal(gateway, saId) {
   _pmAmount  = 0;
   _pmGateway = null;
-  _pmSaId    = null;
+  _pmSaId    = saId || null;
 
   SVC.track('svc_topup_modal_opened', { gateway: gateway || 'default' });
 
@@ -2546,7 +2549,7 @@ function openTopUpModal(gateway) {
   Modal.open('topUpModal');
 
   // If a gateway was passed, pre-fill and jump to step 2 after amount chip
-  if (gateway === 'paystack' || gateway === 'ozow') {
+  if (gateway === 'paystack') {
     _pmGateway = gateway;
   }
 }
@@ -2621,7 +2624,7 @@ function goToStep2() {
   // If a gateway was pre-selected from the wallet card, highlight it
   if (_pmGateway) {
     document.querySelectorAll('.pm-gateway-card').forEach(c => c.classList.remove('selected'));
-    const card = _pmEl(_pmGateway === 'paystack' ? 'gwPaystack' : _pmGateway === 'ozow' ? 'gwOzow' : 'gwEft');
+    const card = _pmEl(_pmGateway === 'paystack' ? 'gwPaystack' : 'gwEft');
     if (card) card.classList.add('selected');
   }
 
@@ -2641,7 +2644,7 @@ function goToStep1() {
 function selectGateway(gw) {
   _pmGateway = gw;
   document.querySelectorAll('.pm-gateway-card').forEach(c => c.classList.remove('selected'));
-  const map = { paystack: 'gwPaystack', ozow: 'gwOzow', eft: 'gwEft' };
+  const map = { paystack: 'gwPaystack', eft: 'gwEft' };
   const card = _pmEl(map[gw]);
   if (card) card.classList.add('selected');
   // Refresh fee strip whenever gateway changes
@@ -2654,8 +2657,7 @@ function proceedPayment() {
     return;
   }
   if (_pmGateway === 'paystack') launchPaystack();
-  else if (_pmGateway === 'ozow')    launchOzow();
-  else if (_pmGateway === 'eft')     showEftDetails();
+  else if (_pmGateway === 'eft') showEftDetails();
 }
 
 /* ── Paystack inline popup (v2 API) ─────────────── */
@@ -2683,15 +2685,17 @@ function launchPaystack() {
         currency: 'ZAR',
         ref:      `SVC-PS-${Date.now()}`,
         metadata: {
-          investor_id:   _pmInvestorId(),
-          investor_name: _pmInvestorName(),
-          wallet_credit: _pmAmount,
-          gateway_fee:   _pmFee(_pmAmount),
+          investor_id:    _pmInvestorId(),
+          investor_name:  _pmInvestorName(),
+          wallet_credit:  _pmAmount,
+          gateway_fee:    _pmFee(_pmAmount),
+          sub_account_id: _pmSaId || undefined,
           custom_fields: [
-            { display_name: 'Investor ID',    variable_name: 'investor_id',   value: _pmInvestorId() },
-            { display_name: 'Investor Name',  variable_name: 'investor_name', value: _pmInvestorName() },
-            { display_name: 'Wallet Credit',  variable_name: 'wallet_credit', value: `R${_pmAmount}` },
-            { display_name: 'Gateway Fee',    variable_name: 'gateway_fee',   value: `R${_pmFee(_pmAmount)}` },
+            { display_name: 'Investor ID',      variable_name: 'investor_id',    value: _pmInvestorId() },
+            { display_name: 'Investor Name',    variable_name: 'investor_name',  value: _pmInvestorName() },
+            { display_name: 'Wallet Credit',    variable_name: 'wallet_credit',  value: `R${_pmAmount}` },
+            { display_name: 'Gateway Fee',      variable_name: 'gateway_fee',    value: `R${_pmFee(_pmAmount)}` },
+            { display_name: 'Sub Account ID',   variable_name: 'sub_account_id', value: _pmSaId || '' },
           ]
         },
         onSuccess: async function(transaction) {
@@ -2706,13 +2710,23 @@ function launchPaystack() {
               reference:    transaction.reference,
               investorId:   _pmInvestorId(),
               walletCredit: _pmAmount,
+              subAccountId: _pmSaId || undefined,
             });
             if (result.error) throw new Error(result.error);
 
             // Update local cache so UI reflects the new balance immediately
-            if (!result.alreadyProcessed && PORTAL.investor) {
-              PORTAL.investor.wallet_balance = (parseFloat(PORTAL.investor.wallet_balance) || 0) + _pmAmount;
-              _refreshWalletUI(PORTAL.investor.wallet_balance);
+            if (!result.alreadyProcessed) {
+              if (_pmSaId) {
+                // Credit sub-account wallet locally
+                const saIdx = PORTAL.subAccounts.findIndex(s => s.id === _pmSaId);
+                if (saIdx !== -1) {
+                  PORTAL.subAccounts[saIdx].wallet_balance =
+                    Math.round(((parseFloat(PORTAL.subAccounts[saIdx].wallet_balance) || 0) + _pmAmount) * 100) / 100;
+                }
+              } else if (PORTAL.investor) {
+                PORTAL.investor.wallet_balance = (parseFloat(PORTAL.investor.wallet_balance) || 0) + _pmAmount;
+                _refreshWalletUI(PORTAL.investor.wallet_balance);
+              }
             }
 
             // If Paystack returned a reusable authorization, refresh the auto top-up card
@@ -2744,91 +2758,6 @@ function launchPaystack() {
       _pmSetStepLabel('Step 2 of 3 — Choose payment method');
     }
   }, 300);
-}
-
-/* ── Ozow redirect ──────────────────────────── */
-/**
- * Ozow uses a server-side hash; on the frontend we build the
- * payment URL and redirect the client. For test/sandbox mode we
- * simulate the redirect — in production replace with your real
- * Ozow site-code and server-generated hash.
- *
- * Ozow sandbox URL: https://pay.ozow.com/
- * Required params: SiteCode, CountryCode, CurrencyCode, Amount,
- *                  TransactionReference, BankReference, Customer,
- *                  CancelUrl, ErrorUrl, SuccessUrl, IsTest
- */
-async function launchOzow() {
-  _pmShowOnly('pmStep3Processing');
-  _pmSetProgress(100);
-  _pmSetStepLabel('Step 3 of 3 — Ozow');
-  _pmEl('pmProcessingTitle').textContent    = 'Preparing Ozow payment…';
-  _pmEl('pmProcessingSubtitle').textContent = 'Securing your session — please wait';
-
-  const ref          = `SVC-OZ-${Date.now()}`;
-  const totalCharged = _pmTotal(_pmAmount);
-  const baseUrl      = window.location.href.split('?')[0];
-  const successUrl   = `${baseUrl}?payment=success&ref=${ref}&gw=ozow`;
-  const cancelUrl    = `${baseUrl}?payment=cancelled&gw=ozow`;
-  const errorUrl     = `${baseUrl}?payment=error&gw=ozow`;
-  const amountFmt    = totalCharged.toFixed(2);
-
-  // Persist amount to sessionStorage so it survives the redirect
-  try {
-    sessionStorage.setItem('svc_ozow_amount', String(_pmAmount));
-    sessionStorage.setItem('svc_ozow_ref',    ref);
-    sessionStorage.setItem('svc_ozow_inv_id', _pmInvestorId());
-  } catch (_) { /* private-mode browsers may block sessionStorage */ }
-
-  try {
-    // Server generates the SHA-512 hash using OZOW_PRIVATE_KEY (never leaves server).
-    // Server also returns OZOW_SITE_CODE and isTest so the frontend doesn't need them hardcoded.
-    const hashRes = await API._fetch('POST', 'payments/ozow-hash', {
-      countryCode:    'ZA',
-      currencyCode:   'ZAR',
-      amount:         amountFmt,
-      transactionRef: ref,
-      bankRef:        _pmInvestorId(),
-      cancelUrl,
-      errorUrl,
-      successUrl,
-    });
-    const hash     = hashRes.hash;
-    const siteCode = hashRes.siteCode;
-    const isTest   = hashRes.isTest || 'false';
-    if (!hash || !siteCode) throw new Error('Invalid response from payment server');
-
-    // Pre-record a pending deposit (base amount — fee stays with gateway)
-    await _recordDeposit('ozow', ref, 'pending', false);
-
-    _pmEl('pmProcessingTitle').textContent    = 'Redirecting to Ozow…';
-    _pmEl('pmProcessingSubtitle').textContent = 'You will be taken to the Ozow secure payment page';
-
-    const ozowUrl = [
-      'https://pay.ozow.com/',
-      `?SiteCode=${encodeURIComponent(siteCode)}`,
-      `&CountryCode=ZA`,
-      `&CurrencyCode=ZAR`,
-      `&Amount=${amountFmt}`,
-      `&TransactionReference=${encodeURIComponent(ref)}`,
-      `&BankReference=${encodeURIComponent(_pmInvestorId())}`,
-      `&Customer=${encodeURIComponent(_pmInvestorName())}`,
-      `&CancelUrl=${encodeURIComponent(cancelUrl)}`,
-      `&ErrorUrl=${encodeURIComponent(errorUrl)}`,
-      `&SuccessUrl=${encodeURIComponent(successUrl)}`,
-      `&IsTest=${isTest}`,
-      `&HashCheck=${hash}`,
-    ].join('');
-
-    setTimeout(() => { window.location.href = ozowUrl; }, 800);
-  } catch (err) {
-    console.error('Ozow launch error:', err);
-    const msg = err.message?.includes('not configured') ? err.message : 'Could not initialise Ozow payment — please contact support.';
-    Toast.error(msg);
-    _pmShowOnly('pmStep2');
-    _pmSetProgress(66);
-    _pmSetStepLabel('Step 2 of 3 — Choose Payment Method');
-  }
 }
 
 /* ── EFT (manual) ───────────────────────────── */
@@ -2933,12 +2862,12 @@ async function _showDepositSuccess(gateway, reference) {
   _pmShowOnly('pmStep3Success');
   _pmSetProgress(100);
   _pmSetStepLabel('Complete');
-  const isGateway = gateway === 'paystack' || gateway === 'ozow';
+  const isGateway = gateway === 'paystack';
   const fee = isGateway ? _pmFee(_pmAmount) : 0;
   const fmtBase = `R${_pmAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   _pmEl('pmSuccessAmount').innerHTML =
     `<strong style="color:#22c55e">${fmtBase}</strong> successfully credited to your wallet` +
-    (fee > 0 ? `<br><span style="font-size:0.75rem;color:#6b7280">R${fee.toFixed(2)} gateway fee charged by ${gateway === 'paystack' ? 'Paystack' : 'Ozow'}</span>` : '');
+    (fee > 0 ? `<br><span style="font-size:0.75rem;color:#6b7280">R${fee.toFixed(2)} gateway fee charged by Paystack</span>` : '');
   _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
   showSuccessOverlay({ title: 'Payment Received!', subtitle: `${fmtBase} added to your wallet` });
   await loadPortalData();
@@ -2993,34 +2922,30 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
       });
     }
 
-    // 3. If completed, update the investor's wallet_balance in the DB.
-    //    Paystack deposits are now handled server-side via /api/payments/paystack/verify
-    //    (which uses an atomic SQL increment). Only run this client-side PATCH for
-    //    non-Paystack gateways (EFT, Ozow, admin top-ups) to avoid double-crediting.
-    if (status === 'completed' && PORTAL.investor && gateway !== 'paystack') {
-      const currentBalance = parseFloat(PORTAL.investor.wallet_balance) || 0;
-      const newBalance     = Math.round((currentBalance + _pmAmount) * 100) / 100;
-
-      try {
-        await API.investors.update(PORTAL.investor.id, { wallet_balance: newBalance });
-      } catch (dbErr) {
-        console.warn('wallet_balance PATCH failed:', dbErr.message);
-      }
-
-      PORTAL.investor.wallet_balance = newBalance;
-      _refreshWalletUI(newBalance);
-    }
-
-    // If this is a sub-account deposit, also update the sub-account wallet
-    if (status === 'completed' && _pmSaId) {
-      try {
+    // 3. If completed, update the correct wallet in the DB.
+    //    Paystack deposits are handled server-side via /api/payments/paystack/verify.
+    //    For EFT/other gateways, patch the appropriate wallet client-side.
+    if (status === 'completed' && gateway !== 'paystack') {
+      if (_pmSaId) {
+        // Sub-account deposit: credit sub-account wallet ONLY (not main investor wallet)
         const saIdx = PORTAL.subAccounts.findIndex(s => s.id === _pmSaId);
         if (saIdx !== -1) {
           const newSaBal = Math.round(((parseFloat(PORTAL.subAccounts[saIdx].wallet_balance) || 0) + _pmAmount) * 100) / 100;
-          await API._fetch('PATCH', `tables/sub_accounts/${_pmSaId}`, { wallet_balance: newSaBal });
-          PORTAL.subAccounts[saIdx].wallet_balance = newSaBal;
+          try {
+            await API._fetch('PATCH', `tables/sub_accounts/${_pmSaId}`, { wallet_balance: newSaBal });
+            PORTAL.subAccounts[saIdx].wallet_balance = newSaBal;
+          } catch (saErr) { console.warn('Sub-account wallet update failed:', saErr); }
         }
-      } catch (saErr) { console.warn('Sub-account wallet update failed:', saErr); }
+      } else if (PORTAL.investor) {
+        const newBalance = Math.round(((parseFloat(PORTAL.investor.wallet_balance) || 0) + _pmAmount) * 100) / 100;
+        try {
+          await API.investors.update(PORTAL.investor.id, { wallet_balance: newBalance });
+        } catch (dbErr) {
+          console.warn('wallet_balance PATCH failed:', dbErr.message);
+        }
+        PORTAL.investor.wallet_balance = newBalance;
+        _refreshWalletUI(newBalance);
+      }
     }
 
     if (showSuccess) {
@@ -3054,103 +2979,13 @@ function closePaymentModal() {
   }
 }
 
-/* ── handle Ozow return URL params ─────────── */
-(function checkOzowReturn() {
-  const params  = new URLSearchParams(window.location.search);
-  const payment = params.get('payment');
-  const ref     = params.get('ref');
-  const gw      = params.get('gw');
-
-  if (!payment) return;
-
-  // Clean URL immediately so refresh doesn't retrigger
-  window.history.replaceState({}, document.title, window.location.pathname);
-
-  if (payment === 'success' && gw === 'ozow' && ref) {
-
-    // ── Restore the deposit amount that was saved before redirect ──
-    let ozowAmount = 0;
-    try {
-      const stored = sessionStorage.getItem('svc_ozow_amount');
-      ozowAmount   = stored ? parseFloat(stored) : 0;
-      // Keep sessionStorage until we confirm we've handled it
-    } catch (_) { /* private-mode browsers */ }
-
-    // Wait for portal data to load before crediting the wallet
-    setTimeout(async () => {
-      try {
-        // Ensure portal data is ready
-        if (!PORTAL.investor) await loadPortalData();
-
-        const investorId = _pmInvestorId();
-
-        // 1. Find the matching pending transaction and mark it completed
-        const txnRes  = await API.transactions.list({ limit: 200 });
-        const allTxns = txnRes.data || [];
-        const match   = allTxns.find(t =>
-          t.reference === ref &&
-          (t.investor_id === investorId || t.investor_id === (sessionStorage.getItem('svc_ozow_inv_id') || investorId))
-        );
-        if (match) {
-          await API.transactions.update(match.id, { ...match, status: 'completed' });
-          // If the transaction has an amount recorded, use that as the canonical credit
-          if (!ozowAmount && match.amount > 0) ozowAmount = match.amount;
-        }
-
-        // 2. Credit wallet balance — use restored ozowAmount (or _pmAmount as fallback)
-        const creditAmount = ozowAmount || _pmAmount;
-        if (PORTAL.investor && creditAmount > 0) {
-          const currentBalance = parseFloat(PORTAL.investor.wallet_balance) || 0;
-          const newBalance     = Math.round((currentBalance + creditAmount) * 100) / 100;
-          try {
-            await API.investors.update(PORTAL.investor.id, { wallet_balance: newBalance });
-          } catch (_dbErr) {
-            // Retry with full record spread
-            await API.investors.update(PORTAL.investor.id, {
-              ...PORTAL.investor,
-              wallet_balance: newBalance,
-            });
-          }
-          // Update local cache so all UI elements show the new balance immediately
-          PORTAL.investor.wallet_balance = newBalance;
-          _refreshWalletUI(newBalance);
-
-          // Also record any outstanding fee transaction if it wasn't logged pre-redirect
-          // (only if the pre-record call failed before the redirect)
-        }
-
-        // Clean up sessionStorage
-        try {
-          sessionStorage.removeItem('svc_ozow_amount');
-          sessionStorage.removeItem('svc_ozow_ref');
-          sessionStorage.removeItem('svc_ozow_inv_id');
-        } catch (_) { /* ignore */ }
-
-      } catch (err) {
-        console.error('Ozow return handler error:', err);
-      }
-
-      Toast.success(`Ozow payment successful! R${ozowAmount ? ozowAmount.toLocaleString('en-ZA') : ''} has been credited to your wallet.`);
-      navigate('wallet', document.querySelector('[data-view=wallet]'));
-      loadPortalData().then(() => loadWallet());
-    }, 800);
-
-  } else if (payment === 'cancelled') {
-    Toast.info('Ozow payment was cancelled. No funds were deducted.');
-    navigate('wallet', document.querySelector('[data-view=wallet]'));
-    // Clear any stored Ozow session state
-    try { sessionStorage.removeItem('svc_ozow_amount'); sessionStorage.removeItem('svc_ozow_ref'); sessionStorage.removeItem('svc_ozow_inv_id'); } catch (_) { /* ignore */ }
-
-  } else if (payment === 'error') {
-    Toast.error('Ozow payment failed. Please try again or contact support.');
-    navigate('wallet', document.querySelector('[data-view=wallet]'));
-    try { sessionStorage.removeItem('svc_ozow_amount'); sessionStorage.removeItem('svc_ozow_ref'); sessionStorage.removeItem('svc_ozow_inv_id'); } catch (_) { /* ignore */ }
-  }
-})();
 
 /* ═══════════════════════════════════════════════
    MARKETPLACE
    ═══════════════════════════════════════════════ */
+let _mktProducts = [];
+let _selectedProductType = null;   // null = product grid; set = product detail
+
 async function loadMarketplace() {
   try {
     if (!PORTAL.pools.length) {
@@ -3161,6 +2996,8 @@ async function loadMarketplace() {
     console.warn('[marketplace] failed to fetch pools:', err);
     // Render with whatever is cached — show empty state rather than "Loading..."
   }
+  try { _mktProducts = await _getPortalProducts(); } catch (_) { _mktProducts = []; }
+  _selectedProductType = null;   // always land on the product grid
   try {
     renderMarketplace();
   } catch (err) {
@@ -3186,60 +3023,354 @@ const _POOL_META = {
   solar_7yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
   solar_6yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
   solar_5yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  cattle:        { blurb: 'Invests in livestock purchasing, management, and resale cycles.',    risk: 'Medium-High',  riskColor: '#ff9b0c' },
-  short_term:    { blurb: 'Short-duration bridging finance to vetted borrowers. High liquidity.', risk: 'Medium',    riskColor: '#f59e0b' },
+  cattle:        { blurb: 'Partner with Beefcor — SA\'s premier feedlot — and earn returns as your herd grows from 200kg to 500kg.', risk: 'Medium-High',  riskColor: '#ff9b0c' },
+  short_term:    { blurb: 'Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.', risk: 'Medium',    riskColor: '#f59e0b' },
   delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Low-Medium',   riskColor: '#22c55e' },
 };
 
-function renderMarketplace() {
-  const grid = document.getElementById('marketplaceGrid');
-  // Include waitlisted pools too so they appear in the marketplace
-  const visiblePools = PORTAL.pools.filter(p => p.status === 'open' || p.status === 'waitlist');
-  const filtered = PORTAL.marketFilter === 'all'
-    ? visiblePools
-    : visiblePools.filter(p => {
-        if (PORTAL.marketFilter === 'solar') return (p.product_type || '').includes('solar');
-        return p.product_type === PORTAL.marketFilter;
-      });
+// ── Product-first marketplace ────────────────────────────────────────────
+// "Browse Pools" is now "Products": investors pick a product, see its details
+// + factsheets + a chart, then the open pools under it, and invest from there.
 
-  // Update wallet strip
+function renderMarketplace() {
+  // Toggle the legacy category tab-bar — not used in the product-first flow
+  const tabBar = document.querySelector('#view-marketplace .tab-bar');
+  if (tabBar) tabBar.style.display = 'none';
+  const banner = document.querySelector('#view-marketplace .section-banner__title');
+  if (_selectedProductType) { if (banner) banner.textContent = 'Product Details'; renderProductDetailView(_selectedProductType); }
+  else { if (banner) banner.textContent = 'Investment Products'; renderProductsGrid(); }
+}
+
+// Count of open/waitlist pools for a product type
+function _openPoolsForProduct(type) {
+  return PORTAL.pools.filter(p => p.product_type === type && (p.status === 'open' || p.status === 'waitlist'));
+}
+
+function renderProductsGrid() {
+  const grid = document.getElementById('marketplaceGrid');
+  if (!grid) return;
   const strip = document.getElementById('mktWalletStrip');
   const walletBal = parseFloat(PORTAL.investor?.wallet_balance) || 0;
-  const ranked = _rankMarketPools(filtered, walletBal);
   if (strip) {
     strip.style.display = 'flex';
     const balEl = document.getElementById('mktWalletBal');
-    if (balEl) {
-      balEl.textContent = Utils.rand(walletBal);
-      balEl.style.color = walletBal >= 500 ? 'var(--green)' : 'var(--gold)';
-    }
+    if (balEl) { balEl.textContent = Utils.rand(walletBal); balEl.style.color = walletBal >= 500 ? 'var(--green)' : 'var(--gold)'; }
   }
 
-  renderMarketConversionPanel(ranked);
+  // All active products (details + factsheets browsable even with no open pool),
+  // sorted by sort order. Products with open pools rank first.
+  const products = (_mktProducts || []).filter(p => p.is_active).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  const shown = products
+    .map(p => ({ p, open: _openPoolsForProduct(p.product_type) }))
+    .sort((a, b) => (b.open.length > 0) - (a.open.length > 0));
 
-  if (!ranked.length) {
+  if (!shown.length) {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
-      <i class="fa-solid fa-layer-group"></i>
-      <div class="empty-state__title">No pools match this filter right now</div>
-      <div class="empty-state__sub">Switch category or join a waitlist so you do not lose momentum.</div>
-      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px">
-        <button class="btn btn--secondary btn--sm" onclick="filterMarket('all', document.querySelector('#view-marketplace .tab-btn'))"><i class="fa-solid fa-rotate"></i> Show all pools</button>
-        <button class="btn btn--primary btn--sm" onclick="navigate('support', document.querySelector('[data-view=support]'))"><i class="fa-solid fa-headset"></i> Ask a question</button>
-      </div>
+      <i class="fa-solid fa-box-open"></i>
+      <div class="empty-state__title">No products available yet</div>
+      <div class="empty-state__sub">New investment products are added regularly — check back soon or ask a question.</div>
+      <div style="margin-top:12px"><button class="btn btn--primary btn--sm" onclick="navigate('support', document.querySelector('[data-view=support]'))"><i class="fa-solid fa-headset"></i> Ask a question</button></div>
     </div>`;
     return;
   }
 
+  grid.innerHTML = shown.map(({ p, open }) => {
+    const pi = Utils.productInfo(p.product_type);
+    const color = p.color || pi.color;
+    const icon = p.icon || pi.icon;
+    const avg = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : null;
+    const rateLabel = avg != null ? `${(avg * 100).toFixed(2)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : '—');
+    const rateSub = avg != null ? 'avg return (matured)' : 'target return';
+    // soonest closing among the open pools
+    const days = open.map(o => Utils.daysRemaining(o.end_date)).filter(d => d !== null);
+    const soonest = days.length ? Math.min(...days) : null;
+    return `
+      <div class="market-pool-card mpc-v2" style="cursor:pointer" onclick="openProductDetail('${p.product_type}')">
+        <div class="mpc2-accent" style="background:linear-gradient(90deg,${color},${color}88)"></div>
+        <div class="mpc2-top">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+            <div class="mpc2-icon" style="background:${color}18;color:${color}"><i class="fa-solid ${icon}"></i></div>
+            <span class="mpc2-badge" style="background:${color}14;color:${color};border-color:${color}30">${open.length ? `${open.length} open pool${open.length === 1 ? '' : 's'}` : 'Details & factsheets'}</span>
+          </div>
+          <div style="margin-top:14px">
+            <div class="mpc2-title">${_esc(p.label)}</div>
+            <div class="mpc2-blurb">${_esc(p.headline || p.description || '')}</div>
+          </div>
+        </div>
+        <div class="mpc2-metrics">
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${rateLabel}</div>
+            <div class="mpc2-metric__lbl">${rateSub}</div>
+          </div>
+          <div class="mpc2-metric-sep"></div>
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(p.min_investment || 0)}</div>
+            <div class="mpc2-metric__lbl">minimum</div>
+          </div>
+          <div class="mpc2-metric-sep"></div>
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val">${p.term_months || '—'}<span style="font-size:1rem;opacity:0.7">mo</span></div>
+            <div class="mpc2-metric__lbl">term</div>
+          </div>
+        </div>
+        <div class="mpc2-pills">
+          ${soonest !== null ? `<div class="mpc2-pill${soonest <= 7 ? ' mpc2-pill--urgent' : ''}"><i class="fa-solid fa-clock"></i><span>Next pool closes in <strong>${soonest}d</strong></span></div>` : ''}
+          ${p.factsheet_url ? `<div class="mpc2-pill"><i class="fa-solid fa-file-pdf"></i><span>Factsheet</span></div>` : ''}
+        </div>
+        <div class="mpc2-footer">
+          <button class="btn btn--primary btn--full" onclick="event.stopPropagation();openProductDetail('${p.product_type}')">
+            <i class="fa-solid fa-arrow-right"></i> View product & pools
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function openProductDetail(type) {
+  _selectedProductType = type;
+  renderMarketplace();
+  const v = document.getElementById('view-marketplace');
+  if (v) v.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  SVC.track('select_item', { item_list_id: 'products', items: [{ item_id: type }] });
+}
+
+function backToProducts() {
+  _selectedProductType = null;
+  renderMarketplace();
+}
+
+async function renderProductDetailView(type) {
+  const grid = document.getElementById('marketplaceGrid');
+  if (!grid) return;
+  const product = (_mktProducts || []).find(p => p.product_type === type) || { product_type: type, label: Utils.productInfo(type).label };
+  const pi = Utils.productInfo(type);
+  const color = product.color || pi.color;
+  const icon = product.icon || pi.icon;
+  const open = _openPoolsForProduct(type);
+  const avg = product.avg_actual_rate != null ? parseFloat(product.avg_actual_rate) : null;
+  const projRate = avg != null ? avg : (product.benchmark_rate ? parseFloat(product.benchmark_rate) : (open[0] ? parseFloat(open[0].annual_rate) : 0.13));
+  const keyDetails = (product.key_details || '').split('\n').map(s => s.trim()).filter(Boolean);
+
+  // Live data panels: cattle herd status / solar telematics
+  const isSolar = (type || '').startsWith('solar');
+  const herdSlot = type === 'cattle'
+    ? '<div id="prodHerdStatus" style="margin-bottom:16px"></div>'
+    : (isSolar ? '<div id="prodSolarStatus" style="margin-bottom:16px"></div>' : '');
+
+  grid.innerHTML = `
+    <div style="grid-column:1/-1">
+      <button class="btn btn--ghost btn--sm" onclick="backToProducts()" style="margin-bottom:14px"><i class="fa-solid fa-arrow-left"></i> All products</button>
+
+      <div class="market-pool-card mpc-v2" style="cursor:default">
+        <div class="mpc2-accent" style="background:linear-gradient(90deg,${color},${color}88)"></div>
+        <div style="padding:4px 2px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+            <div class="mpc2-icon" style="background:${color}18;color:${color}"><i class="fa-solid ${icon}"></i></div>
+            <div>
+              <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${color}">${_esc(product.label || '')}</div>
+              <div class="mpc2-title" style="font-size:1.3rem">${_esc(product.headline || product.label || '')}</div>
+            </div>
+          </div>
+          ${product.description ? `<p style="font-size:0.9rem;color:var(--text-muted);line-height:1.6;margin-bottom:14px">${_esc(product.description)}</p>` : ''}
+
+          <div class="mpc2-metrics" style="margin-bottom:16px">
+            <div class="mpc2-metric">
+              <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(2) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : '—')}</div>
+              <div class="mpc2-metric__lbl">${avg != null ? 'avg return p.a.' : 'target return'}</div>
+            </div>
+            <div class="mpc2-metric-sep"></div>
+            <div class="mpc2-metric"><div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(product.min_investment || 0)}</div><div class="mpc2-metric__lbl">minimum</div></div>
+            <div class="mpc2-metric-sep"></div>
+            <div class="mpc2-metric"><div class="mpc2-metric__val">${product.term_months || '—'}<span style="font-size:1rem;opacity:0.7">mo</span></div><div class="mpc2-metric__lbl">term</div></div>
+            ${product.performance_fee_pct ? `<div class="mpc2-metric-sep"></div><div class="mpc2-metric"><div class="mpc2-metric__val" style="font-size:1.2rem">${(parseFloat(product.performance_fee_pct) * 100).toFixed(0)}%</div><div class="mpc2-metric__lbl">perf. fee</div></div>` : ''}
+          </div>
+
+          ${herdSlot}
+
+          ${keyDetails.length ? `<div style="margin-bottom:16px">
+            <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px">Key Details</div>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              ${keyDetails.map(d => `<div style="display:flex;gap:9px;font-size:0.86rem;color:var(--text)"><i class="fa-solid fa-arrow-right" style="color:${color};margin-top:3px;font-size:0.75rem"></i><span>${_esc(d)}</span></div>`).join('')}
+            </div>
+          </div>` : ''}
+
+          <div style="margin-bottom:6px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">Projected growth of ${Utils.rand(10000)} at ${(projRate * 100).toFixed(2)}% p.a.</div>
+          <div style="position:relative;height:180px;margin-bottom:6px"><canvas id="prodGrowthChart"></canvas></div>
+
+          ${isSolar ? '<div id="prodSolarHistory" style="margin-top:16px"></div>' : ''}
+          <div id="prodTrackRecord" style="margin-top:16px"></div>
+          <div id="prodFactsheets" style="margin-top:14px"></div>
+        </div>
+      </div>
+
+      <div style="font-size:0.95rem;font-weight:800;color:var(--text);margin:22px 0 12px"><i class="fa-solid fa-layer-group" style="color:${color};margin-right:6px"></i>Open pools — ${open.length}</div>
+      <div class="grid-3" id="productPoolsGrid"></div>
+    </div>`;
+
+  // Pools
+  const poolsGrid = document.getElementById('productPoolsGrid');
+  const walletBal = parseFloat(PORTAL.investor?.wallet_balance) || 0;
   const waitlist = PORTAL.waitlist || [];
   const investorId = PORTAL.investor?.id;
-  const ficaApproved = _isInvestorFicaApproved(PORTAL.investor);
+  const ranked = _rankMarketPools(open, walletBal);
+  if (poolsGrid) {
+    poolsGrid.innerHTML = ranked.length
+      ? ranked.map((pool, idx) => _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId)).join('')
+      : `<div class="empty-state" style="grid-column:1/-1"><i class="fa-solid fa-clock"></i><div class="empty-state__title">No open pools right now</div><div class="empty-state__sub">Pools for this product open regularly.</div></div>`;
+  }
 
-  grid.innerHTML = ranked.map((pool, idx) => {
+  // Live data panels
+  if (type === 'cattle') _renderCattleHerdStatus('prodHerdStatus');
+  if (isSolar) { _renderSolarStatus('prodSolarStatus'); _renderSolarHistory('prodSolarHistory', color); }
+
+  // Verifiable track record (matured pools: actual vs benchmark)
+  _renderProductTrackRecord(type, color);
+
+  // Growth projection chart
+  _renderProductGrowthChart(projRate, product.term_months || 12, color);
+
+  // Factsheets (product-level + all pool factsheets for this product)
+  _renderProductFactsheets(type, product);
+}
+
+// Compound-growth projection of R10,000 over the term
+let _prodGrowthChart = null;
+function _renderProductGrowthChart(rate, termMonths, color) {
+  const canvas = document.getElementById('prodGrowthChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  try { if (_prodGrowthChart) { _prodGrowthChart.destroy(); _prodGrowthChart = null; } } catch (_) {}
+  const months = Math.max(1, Math.min(120, parseInt(termMonths) || 12));
+  const labels = [], data = [];
+  for (let m = 0; m <= months; m++) { labels.push(m === 0 ? 'Start' : `M${m}`); data.push(Math.round(10000 * Math.pow(1 + rate, m / 12))); }
+  _prodGrowthChart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets: [{ data, borderColor: color, backgroundColor: color + '22', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => Utils.rand(c.parsed.y) } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 6, color: 'rgba(0,0,0,0.4)', font: { size: 9 } } },
+                y: { ticks: { callback: v => 'R' + (v / 1000).toFixed(0) + 'k', color: 'rgba(0,0,0,0.4)', font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } } },
+    },
+  });
+}
+
+// ── Track record: matured pools' achieved return vs benchmark ──
+let _trackRecordCache = null;
+async function _getTrackRecord() {
+  if (_trackRecordCache) return _trackRecordCache;
+  try { const r = await API._fetch('GET', 'products/track-record'); _trackRecordCache = r.data || {}; }
+  catch (_) { _trackRecordCache = {}; }
+  return _trackRecordCache;
+}
+
+let _trackChart = null;
+async function _renderProductTrackRecord(type, color) {
+  const el = document.getElementById('prodTrackRecord');
+  if (!el) return;
+  const data = await _getTrackRecord();
+  const isSolar = (type || '').startsWith('solar');
+  const keys = Object.keys(data).filter(k => isSolar ? k.startsWith('solar') : k === type);
+  let pools = [], paidBack = 0, sumA = 0, n = 0;
+  keys.forEach(k => {
+    const d = data[k];
+    pools = pools.concat(d.pools || []);
+    paidBack += d.total_paid_back || 0;
+    sumA += (d.avg_actual_rate || 0) * (d.matured_count || 0);
+    n += d.matured_count || 0;
+  });
+  if (!n) { el.innerHTML = ''; return; }
+  pools.sort((a, b) => new Date(a.ended) - new Date(b.ended));
+
+  el.innerHTML = `
+    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-chart-column" style="color:${color}"></i> Track record — delivered returns</div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px">
+      <div><div style="font-size:1.2rem;font-weight:800;color:var(--text)">${n}</div><div style="font-size:0.7rem;color:var(--text-muted)">pool${n === 1 ? '' : 's'} matured</div></div>
+      <div><div style="font-size:1.2rem;font-weight:800;color:${color}">${(sumA / n * 100).toFixed(2)}%</div><div style="font-size:0.7rem;color:var(--text-muted)">avg achieved p.a.</div></div>
+      <div><div style="font-size:1.2rem;font-weight:800;color:var(--text)">${Utils.rand(paidBack)}</div><div style="font-size:0.7rem;color:var(--text-muted)">paid back to investors</div></div>
+    </div>
+    <div style="position:relative;height:170px"><canvas id="prodTrackChart"></canvas></div>`;
+
+  const canvas = document.getElementById('prodTrackChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  try { if (_trackChart) { _trackChart.destroy(); _trackChart = null; } } catch (_) {}
+  _trackChart = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: pools.map(p => (p.name || '').slice(0, 18)),
+      datasets: [
+        { label: 'Achieved',  data: pools.map(p => +(p.actual_rate * 100).toFixed(2)),    backgroundColor: color },
+        { label: 'Benchmark', data: pools.map(p => +(p.benchmark_rate * 100).toFixed(2)), backgroundColor: 'rgba(0,0,0,0.15)' },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { boxWidth: 10, font: { size: 10 } } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y}%` } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8, font: { size: 9 }, color: 'rgba(0,0,0,0.4)' } },
+                y: { ticks: { callback: v => v + '%', font: { size: 9 }, color: 'rgba(0,0,0,0.4)' }, grid: { color: 'rgba(0,0,0,0.05)' } } },
+    },
+  });
+}
+
+// ── Solar: daily generation this month (FoxESS history) ──
+let _solarHistChart = null;
+async function _renderSolarHistory(containerId, color) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  let h;
+  try { h = await API._fetch('GET', 'products/solar-history'); } catch (_) { h = null; }
+  if (!h || h.unavailable || !h.series || !h.series.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-chart-column" style="color:${color}"></i> Daily generation this month</div>
+    <div style="position:relative;height:150px"><canvas id="prodSolarHistChart"></canvas></div>`;
+  const canvas = document.getElementById('prodSolarHistChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  try { if (_solarHistChart) { _solarHistChart.destroy(); _solarHistChart = null; } } catch (_) {}
+  _solarHistChart = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: { labels: h.series.map(d => d.day), datasets: [{ data: h.series.map(d => d.kwh), backgroundColor: color + 'cc' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y + ' kWh' } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10, font: { size: 9 }, color: 'rgba(0,0,0,0.4)' } },
+                y: { ticks: { callback: v => v + ' kWh', font: { size: 9 }, color: 'rgba(0,0,0,0.4)' }, grid: { color: 'rgba(0,0,0,0.05)' } } },
+    },
+  });
+}
+
+async function _renderProductFactsheets(type, product) {
+  const el = document.getElementById('prodFactsheets');
+  if (!el) return;
+  el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading factsheets…</div>`;
+  const poolIds = new Set(PORTAL.pools.filter(p => p.product_type === type).map(p => p.id));
+  let sheets = [];
+  try {
+    const res = await API._fetch('GET', 'factsheets');
+    sheets = (res.data || []).filter(s => poolIds.has(s.pool_id));
+  } catch (_) {}
+  const productSheet = product && product.factsheet_url ? {
+    file_url: product.factsheet_url, file_name: product.factsheet_name || `${product.label} factsheet`,
+    created_at: product.updated_at, _product: true,
+  } : null;
+  const all = [productSheet, ...sheets].filter(Boolean);
+  el.innerHTML = `
+    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i> Factsheets & documents</div>
+    ${all.length ? `<div style="display:flex;flex-direction:column;gap:8px">
+      ${all.map(s => `<a href="${s.file_url}" target="_blank" rel="noopener" class="fs-row ${s._product ? 'fs-row--current' : ''}">
+        <div class="fs-row__icon"><i class="fa-solid fa-file-pdf"></i></div>
+        <div class="fs-row__info"><div class="fs-row__name">${_esc(s.file_name)}${s._product ? ' <span class="fs-current-tag">Product</span>' : ''}</div>
+          <div class="fs-row__meta">${Utils.date(s.created_at)}</div></div>
+        <i class="fa-solid fa-arrow-up-right-from-square fs-row__arrow"></i>
+      </a>`).join('')}
+    </div>` : `<div style="font-size:0.82rem;color:var(--text-muted)">No factsheets uploaded yet for this product.</div>`}`;
+}
+
+// Single open-pool card (used inside the product detail view)
+function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
     const pi   = Utils.productInfo(pool.product_type);
     const pct  = Utils.poolFillPct(pool);
     const days = Utils.daysRemaining(pool.end_date);
     const meta = _POOL_META[pool.product_type] || { blurb: '', risk: 'Medium', riskColor: '#f59e0b' };
-    const canInvest = walletBal >= pool.min_investment;
+    const canInvest = walletBal >= _minPlusFee(pool);
     const urgency   = days !== null && days <= 7;
 
     // Waitlist state
@@ -3284,15 +3415,6 @@ function renderMarketplace() {
             </button>
           </div>`;
       }
-    } else if (!ficaApproved) {
-      ctaHtml = `<div style="display:flex;flex-direction:column;gap:6px;margin-top:2px">
-                   <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.18);border-radius:8px;font-size:0.78rem;color:#2F8C9B">
-                     <i class="fa-solid fa-shield-halved"></i> Complete FICA before your first investment
-                   </div>
-                   <button class="btn btn--secondary btn--full" onclick="navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()">
-                     <i class="fa-solid fa-upload"></i> Complete FICA
-                   </button>
-                 </div>`;
     } else if (canInvest) {
       ctaHtml = `<button class="btn btn--primary btn--full" onclick='openInvestModal(${JSON.stringify(pool.id)})'>
                    <i class="fa-solid fa-coins"></i> Invest Now
@@ -3300,68 +3422,276 @@ function renderMarketplace() {
     } else {
       ctaHtml = `<div class="pool-card__need-topup">
                    <i class="fa-solid fa-wallet"></i>
-                   <span>Need ${Utils.rand(pool.min_investment - walletBal)} more in wallet</span>
+                   <span>Need ${Utils.rand(Math.max(0, _minPlusFee(pool) - walletBal))} more in wallet (incl. 1% fee)</span>
                    <button class="btn btn--ghost btn--sm" onclick="navigate('wallet',document.querySelector('[data-view=wallet]'))">Top Up</button>
                  </div>`;
     }
 
     const highlighted = idx === 0 && pool.status === 'open';
 
+    // Factsheet link — loaded async into dataset on the card
+    const fsAttr = `data-pool-id="${pool.id}"`;
+
     return `
-      <div class="market-pool-card" style="${highlighted ? 'border-color:rgba(255,155,12,0.38);box-shadow:0 12px 28px rgba(255,155,12,0.12)' : ''}">
-        <div class="flex-between">
-          <div class="market-pool-card__icon" style="background:${pi.color}18;color:${pi.color}"><i class="fa-solid ${pi.icon}"></i></div>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
-            ${highlighted ? '<span style="font-size:0.65rem;font-weight:800;color:#FF8215;background:rgba(255,155,12,0.12);padding:3px 8px;border-radius:999px;border:1px solid rgba(255,155,12,0.2)">Best next step</span>' : ''}
-            <span class="pool-risk-badge" style="background:${meta.riskColor}18;color:${meta.riskColor}">${meta.risk} risk</span>
-            ${isWaitlisted
-              ? '<span class="badge badge--red" style="font-size:0.65rem"><i class="fa-solid fa-lock"></i> Pool Full</span>'
-              : (urgency ? '<span class="pool-urgency-badge"><i class="fa-solid fa-fire"></i> Closing soon</span>' : Utils.statusBadge(pool.status))
-            }
+      <div class="market-pool-card mpc-v2 ${highlighted ? 'mpc-v2--featured' : ''}" ${fsAttr}>
+        <!-- Card header accent strip -->
+        <div class="mpc2-accent" style="background:linear-gradient(90deg,${pi.color},${pi.color}88)"></div>
+
+        <div class="mpc2-top">
+          <!-- Icon + badges row -->
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+            <div class="mpc2-icon" style="background:${pi.color}18;color:${pi.color}">
+              <i class="fa-solid ${pi.icon}"></i>
+            </div>
+            <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+              ${highlighted ? `<span class="mpc2-badge mpc2-badge--featured"><i class="fa-solid fa-star" style="font-size:0.6rem"></i> Best Next Step</span>` : ''}
+              <span class="mpc2-badge" style="background:${meta.riskColor}14;color:${meta.riskColor};border-color:${meta.riskColor}30">${meta.risk} risk</span>
+              ${isWaitlisted
+                ? '<span class="mpc2-badge mpc2-badge--full"><i class="fa-solid fa-lock"></i> Pool Full</span>'
+                : (urgency ? '<span class="mpc2-badge mpc2-badge--urgent"><i class="fa-solid fa-fire"></i> Closing Soon</span>' : '')
+              }
+            </div>
+          </div>
+
+          <!-- Title + blurb -->
+          <div style="margin-top:14px">
+            <div class="mpc2-title">${pool.name}</div>
+            <div class="mpc2-blurb">${meta.blurb}</div>
           </div>
         </div>
 
-        <div>
-          <div class="market-pool-card__title">${pool.name}</div>
-          <div class="market-pool-card__blurb">${meta.blurb}</div>
-        </div>
-
-        <div class="pool-rate-row">
-          <div>
-            <div class="market-pool-card__rate">${Utils.pct(pool.annual_rate)}</div>
-            <div class="market-pool-card__rate-label">per annum</div>
+        <!-- Key metrics -->
+        <div class="mpc2-metrics">
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${pi.color},${pi.color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${Utils.pct(pool.annual_rate)}</div>
+            <div class="mpc2-metric__lbl">per annum</div>
           </div>
-          <div class="pool-rate-divider"></div>
-          <div>
-            <div class="market-pool-card__rate" style="font-size:1.4rem">${pool.term_months}mo</div>
-            <div class="market-pool-card__rate-label">fixed term</div>
+          <div class="mpc2-metric-sep"></div>
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val">${pool.term_months}<span style="font-size:1rem;opacity:0.7">mo</span></div>
+            <div class="mpc2-metric__lbl">fixed term</div>
           </div>
-          <div class="pool-rate-divider"></div>
-          <div>
-            <div class="market-pool-card__rate" style="font-size:1.4rem">${Utils.rand(pool.min_investment)}</div>
-            <div class="market-pool-card__rate-label">minimum</div>
+          <div class="mpc2-metric-sep"></div>
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(pool.min_investment)}</div>
+            <div class="mpc2-metric__lbl">minimum</div>
           </div>
         </div>
 
-        <div class="market-pool-stats">
-          <div class="mps"><span class="mps__label"><i class="fa-solid fa-users" style="font-size:0.65rem"></i> Investors</span><span class="mps__value">${pool.investor_count}</span></div>
-          <div class="mps"><span class="mps__label"><i class="fa-solid fa-clock" style="font-size:0.65rem"></i> Closes in</span><span class="mps__value" style="${urgency?'color:var(--gold)':''}">${days !== null ? days + 'd' : '—'}</span></div>
-          <div class="mps"><span class="mps__label"><i class="fa-solid fa-building-columns" style="font-size:0.65rem"></i> Partner</span><span class="mps__value" style="font-size:0.72rem">${pool.partner_name}</span></div>
+        <!-- Info pills -->
+        <div class="mpc2-pills">
+          <div class="mpc2-pill">
+            <i class="fa-solid fa-users"></i>
+            <span><strong>${pool.investor_count || 0}</strong> investor${pool.investor_count !== 1 ? 's' : ''}</span>
+          </div>
+          ${days !== null ? `<div class="mpc2-pill${urgency ? ' mpc2-pill--urgent' : ''}">
+            <i class="fa-solid fa-clock"></i>
+            <span>Closes in <strong>${days}d</strong></span>
+          </div>` : ''}
+          ${pool.partner_name ? `<div class="mpc2-pill">
+            <i class="fa-solid fa-handshake"></i>
+            <span><strong>${pool.partner_name}</strong></span>
+          </div>` : ''}
         </div>
 
-        <div>
-          <div class="pool-card__progress-label">
-            <span>${Utils.rand(pool.raised_amount)} raised</span>
-            <span>${pct}% funded</span>
-          </div>
-          <div class="progress-bar"><div class="progress-fill${(pool.product_type || '').includes('solar') ? ' progress-fill--green' : pool.product_type === 'short_term' ? ' progress-fill--blue' : ''}" style="width:${pct}%"></div></div>
+        <!-- Funding / closure progress -->
+        <div class="mpc2-progress">
+          ${Utils.poolIsDateTarget(pool) ? (() => {
+            // Date-targeted pools have no funding goal — show days to closure, no bar.
+            const left = days === null ? '—' : (days === 0 ? 'Closed' : `${days} day${days === 1 ? '' : 's'} to closure`);
+            return `
+              <div class="mpc2-progress__labels">
+                <span><i class="fa-solid fa-clock" style="margin-right:4px"></i>${left}</span>
+              </div>`;
+          })() : `
+            <div class="mpc2-progress__labels">
+              <span>${Utils.rand(pool.raised_amount)} raised</span>
+              <span style="font-weight:700;color:${pct >= 90 ? '#ef4444' : pct >= 60 ? '#f59e0b' : pi.color}">${pct}% funded</span>
+            </div>
+            <div class="mpc2-progress__track">
+              <div class="mpc2-progress__fill" style="width:${pct}%;background:linear-gradient(90deg,${pi.color},${pi.color}aa)"></div>
+            </div>`}
           ${capacityBarHtml}
         </div>
 
-        ${ctaHtml}
+        <!-- CTA + factsheet -->
+        <div class="mpc2-footer">
+          <div style="flex:1">${ctaHtml}</div>
+          <button class="mpc2-fs-btn" onclick="viewFactsheet('${pool.id}','${pool.name}')" title="View factsheet">
+            <i class="fa-solid fa-file-pdf"></i>
+          </button>
+        </div>
       </div>
     `;
-  }).join('');
+}
+
+/* ─── Factsheet viewer ───────────────────────────────────────────── */
+// Cache of the public products feed (factsheets, herd stats source, etc.)
+let _portalProductsCache = null;
+async function _getPortalProducts() {
+  if (_portalProductsCache) return _portalProductsCache;
+  try {
+    const r = await API._fetch('GET', 'products');
+    _portalProductsCache = r.data || [];
+  } catch (_) { _portalProductsCache = []; }
+  return _portalProductsCache;
+}
+
+// Live cattle herd status (from the fund-management herd data), shown on the
+// Cattle Investment product so investors can see the real herd behind it.
+let _cattleStatsCache = null;
+async function _getCattleStats() {
+  if (_cattleStatsCache) return _cattleStatsCache;
+  try { _cattleStatsCache = await API._fetch('GET', 'products/cattle-stats'); }
+  catch (_) { _cattleStatsCache = null; }
+  return _cattleStatsCache;
+}
+
+function _cattleHerdStatusHtml(s) {
+  if (!s || !s.total_purchased) return '';
+  const weight   = s.avg_current_weight || s.avg_entry_weight;
+  const genders  = (s.by_gender || []).filter(g => g.count > 0);
+  const breeds   = (s.by_breed  || []).filter(b => b.count > 0);
+  const totalG   = genders.reduce((a, g) => a + g.count, 0) || 1;
+  const chip = txt => `<span style="font-size:0.76rem;background:rgba(212,175,55,0.14);color:#8a6d1f;border-radius:20px;padding:3px 11px">${txt}</span>`;
+
+  // Weight journey: entry → current → target market weight
+  const entry = s.avg_entry_weight, current = s.avg_current_weight, target = s.target_weight || 475;
+  let weightBar = '';
+  if (entry && current && target && target > entry) {
+    const pct = Math.min(100, Math.max(0, Math.round((current - entry) / (target - entry) * 100)));
+    weightBar = `
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">
+          <span>Entry ${entry}kg</span><span style="color:#8a6d1f;font-weight:700">Now ~${current}kg</span><span>Target ${target}kg</span>
+        </div>
+        <div style="height:8px;border-radius:5px;background:rgba(0,0,0,0.08);overflow:hidden"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#D4AF37,#b8902a)"></div></div>
+        <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">${pct}% of the way to market weight</div>
+      </div>`;
+  }
+
+  // Survival / mortality
+  const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
+  const mortBlock = `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:var(--text)">${(100 - mortRate).toFixed(1)}%</strong>${s.mortality_count ? ` · ${s.mortality_count} mortalit${s.mortality_count === 1 ? 'y' : 'ies'} of ${s.total_purchased.toLocaleString('en-ZA')}` : ''}</div>`;
+
+  return `
+    <div style="background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#b8902a;margin-bottom:10px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.total_purchased.toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">purchased to date</div></div>
+        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.live_count || 0).toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">currently live</div></div>
+        ${weight ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${weight}<span style="font-size:0.78rem"> kg</span></div><div style="font-size:0.7rem;color:var(--text-muted)">average weight</div></div>` : ''}
+      </div>
+      ${weightBar}
+      ${genders.length ? `<div style="margin-bottom:${breeds.length ? '10px' : '0'}"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Gender</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${_esc(g.label)}: <strong>${g.count}</strong> (${Math.round(g.count / totalG * 100)}%)`)).join('')}</div></div>` : ''}
+      ${breeds.length ? `<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Breeds</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 8).map(b => chip(`${_esc(b.label)}: <strong>${b.count}</strong>`)).join('')}</div></div>` : ''}
+      ${mortBlock}
+    </div>`;
+}
+
+async function _renderCattleHerdStatus(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted);padding:6px 0"><i class="fa-solid fa-spinner fa-spin"></i> Loading herd status…</div>`;
+  const s = await _getCattleStats();
+  el.innerHTML = _cattleHerdStatusHtml(s);
+}
+
+// Live solar telematics (FoxESS/FoxCloud) — shared across all solar terms
+let _solarStatsCache = null;
+async function _getSolarStats() {
+  if (_solarStatsCache) return _solarStatsCache;
+  try { _solarStatsCache = await API._fetch('GET', 'products/solar-stats'); }
+  catch (_) { _solarStatsCache = null; }
+  return _solarStatsCache;
+}
+
+function _solarStatusHtml(s) {
+  if (!s || s.unavailable || (!s.total_kwh && !s.today_kwh && !s.current_power_kw)) return '';
+  const kwh = v => Number(v || 0).toLocaleString('en-ZA');
+  const total = s.total_kwh >= 1000 ? `${(s.total_kwh / 1000).toFixed(1)} MWh` : `${kwh(s.total_kwh)} kWh`;
+  const live = (s.current_power_kw || 0) > 0;
+  return `
+    <div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.28);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1f9d57;margin-bottom:10px">
+        <i class="fa-solid fa-solar-panel"></i> Live Solar Generation
+        ${live ? '<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:0.68rem;color:#22c55e;text-transform:none;letter-spacing:0"><span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;animation:pulse 1.5s infinite"></span> generating now</span>' : ''}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.current_power_kw || 0).toLocaleString('en-ZA')}<span style="font-size:0.78rem"> kW</span></div><div style="font-size:0.7rem;color:var(--text-muted)">generating now</div></div>
+        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${kwh(s.today_kwh)}<span style="font-size:0.78rem"> kWh</span></div><div style="font-size:0.7rem;color:var(--text-muted)">today</div></div>
+        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${kwh(s.month_kwh)}<span style="font-size:0.78rem"> kWh</span></div><div style="font-size:0.7rem;color:var(--text-muted)">this month</div></div>
+        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${total}</div><div style="font-size:0.7rem;color:var(--text-muted)">total generated</div></div>
+        ${s.co2_avoided_kg ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.co2_avoided_kg / 1000).toFixed(1)}<span style="font-size:0.78rem"> t</span></div><div style="font-size:0.7rem;color:var(--text-muted)">CO₂ avoided</div></div>` : ''}
+        ${s.device_count ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.device_count}</div><div style="font-size:0.7rem;color:var(--text-muted)">inverter${s.device_count === 1 ? '' : 's'}</div></div>` : ''}
+      </div>
+      <div style="font-size:0.68rem;color:var(--text-muted);margin-top:9px">Live data from FoxCloud${s.station_name ? ` · ${_esc(s.station_name)}` : ''}</div>
+    </div>`;
+}
+
+async function _renderSolarStatus(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted);padding:6px 0"><i class="fa-solid fa-spinner fa-spin"></i> Loading live solar data…</div>`;
+  const s = await _getSolarStats();
+  el.innerHTML = _solarStatusHtml(s);
+}
+
+async function viewFactsheet(poolId, poolName) {
+  const modal = document.getElementById('factsheetModal');
+  const title = document.getElementById('fsModalTitle');
+  const body  = document.getElementById('fsModalBody');
+  if (!modal || !body) return;
+
+  if (title) title.textContent = `${poolName} — Factsheets`;
+  body.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>`;
+  Modal.open('factsheetModal');
+
+  try {
+    const [res, products] = await Promise.all([
+      API._fetch('GET', `factsheets?pool_id=${poolId}`),
+      _getPortalProducts(),
+    ]);
+    const sheets = res.data || [];
+
+    // Also surface the product-level factsheet (managed in the admin Products area)
+    const pool = (PORTAL.pools || []).find(p => p.id === poolId);
+    const product = pool ? products.find(p => p.product_type === pool.product_type) : null;
+    const productSheet = product && product.factsheet_url ? {
+      file_url:    product.factsheet_url,
+      file_name:   product.factsheet_name || `${product.label} factsheet`,
+      created_at:  product.updated_at,
+      is_current:  true,
+      _product:    true,
+    } : null;
+
+    const all = [productSheet, ...sheets].filter(Boolean);
+    if (!all.length) {
+      body.innerHTML = `<div class="empty-state" style="padding:32px">
+        <i class="fa-solid fa-file-pdf" style="font-size:2rem;color:var(--border-dark)"></i>
+        <div class="empty-state__title" style="margin-top:12px">No factsheet uploaded yet</div>
+        <div class="empty-state__sub">Contact your investment manager for product documentation.</div>
+      </div>`;
+      return;
+    }
+    body.innerHTML = `
+      <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:16px">${all.length} document${all.length > 1 ? 's' : ''} available</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${all.map(s => `
+          <a href="${s.file_url}" target="_blank" rel="noopener" class="fs-row ${s.is_current ? 'fs-row--current' : ''}">
+            <div class="fs-row__icon"><i class="fa-solid fa-file-pdf"></i></div>
+            <div class="fs-row__info">
+              <div class="fs-row__name">${_esc(s.file_name)}${s._product ? ' <span class="fs-current-tag">Product</span>' : (s.is_current ? ' <span class="fs-current-tag">Current</span>' : '')}</div>
+              <div class="fs-row__meta">${s.version ? `v${_esc(s.version)} · ` : ''}${Utils.date(s.created_at)}${s.uploaded_by ? ` · ${_esc(s.uploaded_by)}` : ''}</div>
+            </div>
+            <i class="fa-solid fa-arrow-up-right-from-square fs-row__arrow"></i>
+          </a>`).join('')}
+      </div>`;
+  } catch (err) {
+    body.innerHTML = `<div style="color:var(--red);text-align:center;padding:24px">Failed to load factsheets. Please try again.</div>`;
+  }
 }
 
 /* ─── Waitlist ───────────────────────────────────────────────────── */
@@ -3405,20 +3735,27 @@ async function joinWaitlist(poolId) {
   }
 }
 
+/* Platform fee charged on every investment (1% of the amount, on top of it). */
+const PLATFORM_FEE_RATE = 0.01;
+function _platformFee(amount) {
+  return Math.round((parseFloat(amount) || 0) * PLATFORM_FEE_RATE * 100) / 100;
+}
+/* Wallet needed to make the smallest allowed investment in a pool: the pool
+   minimum plus the platform fee charged on that minimum. */
+function _minPlusFee(pool) {
+  const min = parseFloat(pool.min_investment) || 0;
+  return min + _platformFee(min);
+}
+
 function openInvestModal(poolId) {
   const pool = PORTAL.pools.find(p => p.id === poolId);
   if (!pool) return;
-  if (!_isInvestorFicaApproved(PORTAL.investor)) {
-    Toast.info('Complete FICA verification before making your first investment.');
-    navigate('profile', document.querySelector('[data-view=profile]'));
-    openKycUploadModal();
-    return;
-  }
 
   SVC.track('view_item', { items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type }] });
   SVC.track('select_item', { items: [{ item_id: pool.id, item_name: pool.name, item_category: pool.product_type }] });
 
-  const walletBal  = parseFloat(PORTAL.investor?.wallet_balance) || 0;
+  const _activeSa  = _pmSaId ? PORTAL.subAccounts.find(s => s.id === _pmSaId) : null;
+  const walletBal  = _activeSa ? (parseFloat(_activeSa.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
   const pi         = Utils.productInfo(pool.product_type);
   const meta       = _POOL_META[pool.product_type] || { risk: 'Medium', riskColor: '#f59e0b' };
   const maturityDt = new Date();
@@ -3428,6 +3765,7 @@ function openInvestModal(poolId) {
   document.getElementById('investModalTitle').textContent = `Invest in ${pool.name}`;
 
   document.getElementById('investModalBody').innerHTML = `
+    ${_activeSa ? `<div style="background:rgba(255,155,12,0.1);border:1px solid rgba(255,155,12,0.3);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:0.82rem;color:#ff9b0c;display:flex;align-items:center;gap:8px"><i class="fa-solid fa-wallet"></i><span>Investing from <strong>${_esc(_activeSa.name)}</strong> sub-account &mdash; available: <strong>${Utils.rand(walletBal)}</strong></span></div>` : ''}
     <!-- Pool summary card -->
     <div class="invest-modal-pool-card">
       <div class="invest-modal-pool-icon" style="background:${pi.color}20;color:${pi.color}">
@@ -3445,16 +3783,21 @@ function openInvestModal(poolId) {
       </div>
     </div>
 
-    <!-- Wallet balance indicator -->
-    <div class="invest-wallet-indicator ${walletBal >= pool.min_investment ? 'invest-wallet-ok' : 'invest-wallet-low'}">
+    ${pool.product_type === 'cattle' ? '<div id="cattleHerdStatus"></div>' : ''}
+
+    <!-- Wallet balance indicator (needs to cover the minimum + 1% platform fee) -->
+    <div class="invest-wallet-indicator ${walletBal >= _minPlusFee(pool) ? 'invest-wallet-ok' : 'invest-wallet-low'}">
       <i class="fa-solid fa-wallet"></i>
       <span>Your wallet: <strong>${Utils.rand(walletBal)}</strong></span>
-      ${walletBal < pool.min_investment
+      ${walletBal < _minPlusFee(pool)
         ? `<button class="btn btn--ghost btn--sm" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))">
              <i class="fa-solid fa-plus"></i> Top Up
            </button>`
         : `<span class="invest-wallet-ok-badge"><i class="fa-solid fa-circle-check"></i> Sufficient</span>`}
     </div>
+    ${walletBal >= pool.min_investment && walletBal < _minPlusFee(pool)
+      ? `<div style="font-size:0.74rem;color:#ef4444;margin-top:6px"><i class="fa-solid fa-circle-info"></i> You need ${Utils.rand(_minPlusFee(pool))} to invest the minimum — that's ${Utils.rand(pool.min_investment)} plus the ${Utils.rand(_platformFee(pool.min_investment))} (1%) platform fee.</div>`
+      : ''}
 
     <!-- Quick-pick amount buttons -->
     <div class="form-group" style="margin-top:14px">
@@ -3482,9 +3825,22 @@ function openInvestModal(poolId) {
       <div class="invest-calc-date" id="ic-maturity">Maturity date: <strong>${maturityStr}</strong></div>
     </div>
 
+    <!-- Wallet deduction breakdown (amount invested + platform fee) -->
+    <div id="investFeeBreakdown" style="margin-top:12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:10px 14px;font-size:0.84rem">
+      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--text-muted)">
+        <span>Amount invested</span><span id="ic-fee-amount" style="font-weight:600;color:#1a1a1a">—</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--text-muted)">
+        <span>Platform fee (1%)</span><span id="ic-fee-fee" style="font-weight:600;color:#1a1a1a">—</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:7px 0 1px;margin-top:5px;border-top:1px dashed rgba(0,0,0,0.12);font-weight:700">
+        <span>Total deducted from ${_activeSa ? 'sub-account' : 'wallet'}</span><span id="ic-fee-total" style="color:#1a1a1a">—</span>
+      </div>
+    </div>
+
     <!-- What happens next timeline -->
     <div class="invest-next-steps">
-      <div class="ins-step"><div class="ins-dot ins-dot--active"></div><div class="ins-label"><b>Now</b> — funds deducted from wallet</div></div>
+      <div class="ins-step"><div class="ins-dot ins-dot--active"></div><div class="ins-label"><b>Now</b> — funds deducted from ${_activeSa ? `<em>${_activeSa.name}</em> sub-account` : 'wallet'}</div></div>
       <div class="ins-step"><div class="ins-dot"></div><div class="ins-label"><b>Ongoing</b> — returns accrue daily</div></div>
       <div class="ins-step"><div class="ins-dot"></div><div class="ins-label"><b>${maturityStr}</b> — payout to your wallet</div></div>
     </div>
@@ -3498,37 +3854,44 @@ function openInvestModal(poolId) {
   const invBtn = document.getElementById('investConfirmBtn');
   invBtn.onclick = () => _withBtn(invBtn, () => confirmInvestment(pool));
   Modal.open('investModal');
+  if (pool.product_type === 'cattle') _renderCattleHerdStatus('cattleHerdStatus');
 }
 
 function _updateInvestCalc(amt, rate, termMonths, minInvest) {
   const preview = document.getElementById('investCalcPreview');
   if (!preview) return;
+  const feeAmtEl = document.getElementById('ic-fee-amount');
+  const feeFeeEl = document.getElementById('ic-fee-fee');
+  const feeTotEl = document.getElementById('ic-fee-total');
   if (amt >= minInvest) {
     const ret = amt * rate * (termMonths / 12);
     document.getElementById('ic-invested').textContent = Utils.rand(Math.round(amt));
     document.getElementById('ic-returns').textContent  = '+' + Utils.rand(Math.round(ret));
     document.getElementById('ic-total').textContent    = Utils.rand(Math.round(amt + ret));
     preview.classList.add('invest-calc-box--visible');
+    // Wallet deduction breakdown
+    const fee = _platformFee(amt);
+    if (feeAmtEl) feeAmtEl.textContent = Utils.rand(amt, 2);
+    if (feeFeeEl) feeFeeEl.textContent = Utils.rand(fee, 2);
+    if (feeTotEl) feeTotEl.textContent = Utils.rand(amt + fee, 2);
   } else {
     document.getElementById('ic-invested').textContent = '—';
     document.getElementById('ic-returns').textContent  = '—';
     document.getElementById('ic-total').textContent    = '—';
     preview.classList.remove('invest-calc-box--visible');
+    if (feeAmtEl) feeAmtEl.textContent = '—';
+    if (feeFeeEl) feeFeeEl.textContent = '—';
+    if (feeTotEl) feeTotEl.textContent = '—';
   }
 }
 
 async function confirmInvestment(pool) {
-  if (!_isInvestorFicaApproved(PORTAL.investor)) {
-    Toast.error('Your FICA verification must be approved before you can invest.');
-    navigate('profile', document.querySelector('[data-view=profile]'));
-    openKycUploadModal();
-    return;
-  }
   const amount = parseFloat(document.getElementById('investAmount').value);
   if (!amount || amount < pool.min_investment) { Toast.error(`Minimum investment is ${Utils.rand(pool.min_investment)}`); return; }
 
-  const wallet = parseFloat(PORTAL.investor?.wallet_balance) || 0;
-  const platformFee = Math.round(amount * 0.01 * 100) / 100;
+  const _confSa = _pmSaId ? PORTAL.subAccounts.find(s => s.id === _pmSaId) : null;
+  const wallet = _confSa ? (parseFloat(_confSa.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
+  const platformFee = _platformFee(amount);
   const totalDeducted = amount + platformFee;
   if (totalDeducted > wallet) { Toast.error(`Insufficient balance. This investment requires ${Utils.rand(totalDeducted)} (${Utils.rand(amount)} + ${Utils.rand(platformFee)} platform fee).`); return; }
 
@@ -3538,8 +3901,9 @@ async function confirmInvestment(pool) {
     maturityDate.setMonth(maturityDate.getMonth() + pool.term_months);
 
     // Create investment (server-side hook deducts wallet + fee atomically)
+    const investmentId = Utils.genId('INVST');
     await API.investments.create({
-      id: Utils.genId('INVST'),
+      id: investmentId,
       investor_id: DEMO_INVESTOR_ID,
       pool_id: pool.id,
       product_type: pool.product_type,
@@ -3569,11 +3933,25 @@ async function confirmInvestment(pool) {
       reference:        `INVST-${Date.now()}`,
       description:      `Investment into ${pool.name}`,
       pool_id:          pool.id,
+      sub_account_id:   _pmSaId || undefined,
       transaction_date: new Date().toISOString(),
     });
 
     // Wallet deduction and total_invested update are handled atomically server-side
     // in the investment creation hook — do not also set wallet_balance here.
+
+    // Sub-account wallet deduction (amount + fee) and total_invested are handled
+    // atomically server-side in the investment hook — do NOT also PATCH the
+    // sub-account here (that would double-deduct). Optimistically update the
+    // local cache for instant UI; loadPortalData() below refreshes the truth.
+    if (_pmSaId) {
+      const saIdx = PORTAL.subAccounts.findIndex(s => s.id === _pmSaId);
+      if (saIdx !== -1) {
+        const sa = PORTAL.subAccounts[saIdx];
+        PORTAL.subAccounts[saIdx].wallet_balance = Math.max(0, Math.round(((parseFloat(sa.wallet_balance) || 0) - totalDeducted) * 100) / 100);
+        PORTAL.subAccounts[saIdx].total_invested  = Math.round(((parseFloat(sa.total_invested) || 0) + amount) * 100) / 100;
+      }
+    }
 
     Toast.success(`Successfully invested ${Utils.rand(amount)} in ${pool.name}!`);
     Modal.close('investModal');
@@ -3583,6 +3961,7 @@ async function confirmInvestment(pool) {
     if (_pmSaId) {
       SVC.track('svc_subaccount_invested', { sub_account_id: _pmSaId, amount: amount });
     }
+    _pmSaId = null;  // clear after investment completes
 
     // Reload data
     await loadPortalData();
@@ -4047,33 +4426,8 @@ function buildStatementHTML(opts) {
   const memberSince = investor.date_joined ? fmtDate(investor.date_joined) : '20 Aug 2022';
   const ficaStatus = investor.fica_status || 'approved';
 
-  // SVG logo (inline base64-friendly reference)
-  const logoSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 106.921 106.921" width="54" height="54">
-    <defs>
-      <linearGradient id="sl1" x1="0.874" x2="0.11" y1="0.034" y2="0.986" gradientUnits="objectBoundingBox">
-        <stop offset="0" stop-color="#ff9b0c"/><stop offset="0.997" stop-color="#ff5229"/>
-      </linearGradient>
-      <linearGradient id="sl2" x1="0.5" x2="0.5" y1="0.027" y2="0.994" gradientUnits="objectBoundingBox">
-        <stop offset="0" stop-color="#eda5ff"/><stop offset="1" stop-color="#fec24f"/>
-      </linearGradient>
-      <linearGradient id="sl3" x2="1" y1="0.5" y2="0.5" gradientUnits="objectBoundingBox">
-        <stop offset="0" stop-color="#65ed00"/><stop offset="0.997" stop-color="#0096ff"/>
-      </linearGradient>
-      <linearGradient id="sl6" x1="0.131" x2="0.889" y1="0.029" y2="0.996" gradientUnits="objectBoundingBox">
-        <stop offset="0.003" stop-color="#ffe86a"/><stop offset="1" stop-color="#ffb782"/>
-      </linearGradient>
-      <linearGradient id="sl7" x1="0.049" x2="0.965" y1="0.044" y2="0.971" gradientUnits="objectBoundingBox">
-        <stop offset="0" stop-color="#ff9b0c"/><stop offset="0.997" stop-color="#ff5229"/>
-      </linearGradient>
-    </defs>
-    <g transform="translate(7,4)">
-      <path d="M47.268 21.928s-10.411-21.618-.073-41.726 33.975-24.223 33.975-24.223 10.41 21.619.073 41.727S47.268 21.928 47.268 21.928z" fill="url(#sl1)" opacity="0.85" transform="translate(-0.569 43.969)"/>
-      <path d="M41.394 17.261s20.658-15.612 20.658-40.011-20.658-40.011-20.658-40.011-20.657 15.612-20.657 40.011 20.657 40.011 20.657 40.011z" fill="url(#sl2)" opacity="0.85" transform="translate(5.99 48.73)"/>
-      <path d="M4.457 53.091a18.793 18.793 0 0 0 12.588 5.087 18.791 18.791 0 0 0 12.586-5.086 18.79 18.79 0 0 0-12.587-5.087A18.8 18.8 0 0 0 4.457 53.091z" fill="url(#sl3)" opacity="0.85" transform="translate(21.126 20.591)"/>
-      <path d="M34.864 21.928s10.411-21.618.074-41.726-33.975-24.223-33.975-24.223-10.411 21.619-.074 41.727 33.975 24.222 33.975 24.222z" fill="url(#sl6)" opacity="0.85" transform="translate(22.194 43.969)"/>
-      <path d="M32.301 28.28s2.935-21.1-11.262-35.3-35.3-11.261-35.3-11.261-2.935 21.1 11.262 35.3 35.3 11.261 35.3 11.261z" fill="url(#sl7)" opacity="0.85" transform="translate(24.945 36.806)"/>
-    </g>
-  </svg>`;
+  // Logo URL — absolute so it resolves correctly inside the statement div
+  const logoUrl = new URL('../assets/logo.png', window.location.href).href;
 
   let sections = '';
 
@@ -4087,7 +4441,7 @@ function buildStatementHTML(opts) {
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px">
           ${stmtKPIBox('Total Portfolio Value', fmtNum(totalValue), '#ff9b0c')}
-          ${stmtKPIBox('Capital Deployed', fmtNum(totalInvested), '#2F8C9B')}
+          ${stmtKPIBox('Capital Deployed', fmtNum(totalInvested), '#656565')}
           ${stmtKPIBox('Returns Earned', fmtNum(totalReturns), '#22C55E')}
           ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#A855F7')}
         </div>
@@ -4139,8 +4493,8 @@ function buildStatementHTML(opts) {
 
     sections += `
       <section style="margin-bottom:36px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #2F8C9B">
-          <div style="width:4px;height:22px;background:linear-gradient(180deg,#2F8C9B,#0096FF);border-radius:2px"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #656565">
+          <div style="width:4px;height:22px;background:linear-gradient(180deg,#656565,#656565);border-radius:2px"></div>
           <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Performance Analysis</h3>
         </div>
         <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea">
@@ -4172,7 +4526,7 @@ function buildStatementHTML(opts) {
       const info = getProductInfo(inv.product_type);
       const rate = ((Number(inv.expected_return_rate)||0)*100).toFixed(2);
       const maturity = inv.maturity_date ? fmtDate(inv.maturity_date) : '—';
-      const statusColor = inv.status === 'active' ? '#2F8C9B' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
+      const statusColor = inv.status === 'active' ? '#656565' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
       return `<tr style="border-bottom:1px solid #f0f0f0">
         <td style="padding:8px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${inv.id}</td>
         <td style="padding:8px 10px;font-size:11px;font-weight:600;color:#1a1a1a">${_esc(inv.pool_name) || '—'}</td>
@@ -4219,10 +4573,10 @@ function buildStatementHTML(opts) {
   // ─── TRANSACTION LEDGER ───
   if (incTransactions) {
     const txnRows = transactions.length > 0 ? transactions.map(t => {
-      const isPos = t.type !== 'withdrawal' && t.type !== 'fee' && t.type !== 'investment';
+      const isPos = !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
       const amt = isPos ? `+${fmtNum(Math.abs(t.amount))}` : `-${fmtNum(Math.abs(t.amount))}`;
       const amtColor = isPos ? '#22C55E' : '#EF4444';
-      const typeMap = {deposit:'Deposit',withdrawal:'Withdrawal',investment:'Investment',return:'Return',payout:'Payout',fee:'Fee',referral_bonus:'Referral Bonus'};
+      const typeMap = {deposit:'Deposit',withdrawal:'Withdrawal',investment:'Investment',return:'Return',payout:'Payout',fee:'Fee',referral_bonus:'Referral Bonus',gift_sent:'Gift Sent',gift_received:'Gift Received',reward:'XP Reward'};
       return `<tr style="border-bottom:1px solid #f0f0f0">
         <td style="padding:7px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${t.reference || '—'}</td>
         <td style="padding:7px 10px;font-size:11px;color:#1a1a1a">${typeMap[t.type] || t.type}</td>
@@ -4251,7 +4605,7 @@ function buildStatementHTML(opts) {
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
           ${stmtMiniBox('Total Deposits', fmtNum(totalDeposits), '#22C55E')}
-          ${stmtMiniBox('Total Invested', fmtNum(totalWithdrawals), '#2F8C9B')}
+          ${stmtMiniBox('Total Invested', fmtNum(totalWithdrawals), '#656565')}
           ${stmtMiniBox('Returns Received', fmtNum(totalReturnsTxn), '#ff9b0c')}
         </div>
         <div style="overflow-x:auto">
@@ -4274,12 +4628,12 @@ function buildStatementHTML(opts) {
 
   // ─── FULL DOCUMENT ───
   return `
-    <div id="stmtPrintArea" style="font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%">
+    <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%">
 
       <!-- Header Band -->
-      <div style="background:linear-gradient(135deg,#1a3a4a 0%,#0d2535 100%);padding:32px 40px;display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:16px">
-          ${logoSVG}
+      <div style="background:linear-gradient(135deg,#1a3a4a 0%,#0d2535 100%);padding:28px 40px;display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:14px">
+          <img src="${logoUrl}" alt="" style="height:52px;width:52px;object-fit:contain;display:block">
           <div>
             <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:0.06em;line-height:1">SV CAPITAL</div>
             <div style="font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:0.12em;margin-top:3px;font-weight:500">VENTURE BEYOND THE ORDINARY</div>
@@ -4353,7 +4707,7 @@ function getProductInfo(type) {
     solar_6yr:         { label:'Solar Investment (6yr)',   color:'#ea580c', bg:'#fff7ed' },
     solar_5yr:         { label:'Solar Investment (5yr)',   color:'#c2410c', bg:'#fff7ed' },
     solar:             { label:'Solar Investment',         color:'#ea580c', bg:'#ffedd5' },
-    short_term:        { label:'Short Term Investment',    color:'#2563eb', bg:'#dbeafe' },
+    short_term:        { label:'Short Term Investment',    color:'#656565', bg:'#dbeafe' },
     delivery_bike:     { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
     delivery_bikes:    { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
     smme:              { label:'SMME Funding',             color:'#059669', bg:'#d1fae5' },
@@ -4419,9 +4773,8 @@ function printStatement() {
 
 /* ── Sub-account deposit ─────────────────────── */
 function openSaDeposit(saId) {
-  _pmSaId = saId;
-  Modal.close('saDetailModal'); // close detail view if open
-  openTopUpModal();
+  Modal.close('saDetailModal');
+  openTopUpModal(null, saId);
 }
 
 /* ─── Profile ─── */
@@ -4478,7 +4831,7 @@ const XP_LEVELS = [
   { id: 'seed',       label: 'Seed',       min: 0,    icon: 'fa-seedling',         color: '#9ca3af' },
   { id: 'sprout',     label: 'Sprout',     min: 100,  icon: 'fa-leaf',             color: '#22c55e' },
   { id: 'grower',     label: 'Grower',     min: 300,  icon: 'fa-tree',             color: '#16a34a' },
-  { id: 'cultivator', label: 'Cultivator', min: 600,  icon: 'fa-spa',              color: '#2F8C9B' },
+  { id: 'cultivator', label: 'Cultivator', min: 600,  icon: 'fa-spa',              color: '#656565' },
   { id: 'harvester',  label: 'Harvester',  min: 1000, icon: 'fa-wheat-awn',        color: '#ff9b0c' },
   { id: 'pioneer',    label: 'Pioneer',    min: 1500, icon: 'fa-compass',          color: '#f59e0b' },
   { id: 'architect',  label: 'Architect',  min: 2500, icon: 'fa-building-columns', color: '#a855f7' },
@@ -4670,13 +5023,12 @@ function renderQuestView() {
     heroBar.style.background = lvl.color;
   }
   const heroTrackLabel = document.getElementById('questXpTrackLabel');
-  if (heroTrackLabel) heroTrackLabel.textContent = next ? `${(next.min - xp).toLocaleString('en-ZA')} XP to ${next.label} (+R50)` : 'Maximum level reached!';
+  if (heroTrackLabel) heroTrackLabel.textContent = next ? `${(next.min - xp).toLocaleString('en-ZA')} XP to ${next.label}` : 'Maximum level reached!';
 
-  // ── Rewards earned (levels passed × R50)
-  const levelsEarned = XP_LEVELS.filter(l => l.min > 0 && xp >= l.min).length;
-  const xpCashValue  = levelsEarned * 50;
-  const rewardsEl = document.getElementById('questRewardsEarned');
-  if (rewardsEl) rewardsEl.textContent = `R${xpCashValue}`;
+  // ── Quests completed count
+  const questsEl = document.getElementById('questRewardsEarned');
+  const completedCount = PORTAL.quests?.completed?.length || 0;
+  if (questsEl) questsEl.textContent = `${completedCount} Quest${completedCount !== 1 ? 's' : ''}`;
 
   // ── Rewards stats row ────────────────────────────────────────
   const referralBonuses = PORTAL.transactions
@@ -4692,9 +5044,9 @@ function renderQuestView() {
     const rwTot  = document.getElementById('rwStatTotal');
     if (rwXP)   rwXP.textContent   = xp.toLocaleString('en-ZA') + ' XP';
     if (rwLvl)  rwLvl.innerHTML    = `<i class="fa-solid ${lvl.icon}" style="margin-right:4px"></i>${lvl.label}`;
-    if (rwCash) rwCash.textContent = `R${xpCashValue}`;
+    if (rwCash) rwCash.textContent = completedCount;
     if (rwRef)  rwRef.textContent  = `R${referralBonuses.toFixed(2)}`;
-    if (rwTot)  rwTot.textContent  = `R${(xpCashValue + referralBonuses).toFixed(2)}`;
+    if (rwTot)  rwTot.textContent  = `${XP_LEVELS.filter(l => l.min > 0 && xp >= l.min).length} / ${XP_LEVELS.length - 1}`;
   }
 
   // ── Level track
@@ -4709,7 +5061,7 @@ function renderQuestView() {
             <i class="fa-solid ${l.icon}"></i>
           </div>
           <div class="level-step__name">${l.label}</div>
-          ${l.min > 0 ? `<div class="level-step__reward" style="color:${isCurrent||isDone?l.color:'#9ca3af'}">+R50</div>` : ''}
+          ${l.min > 0 ? `<div class="level-step__reward" style="color:${isCurrent||isDone?l.color:'#9ca3af'}">${l.min} XP</div>` : ''}
         </div>`;
     }).join('');
   }
@@ -4803,7 +5155,7 @@ function renderQuestView() {
     if (learnReady.length) {
       pendingGroups += `
         <div class="pending-group">
-          <div class="pending-group__label"><i class="fa-solid fa-graduation-cap" style="color:#2F8C9B"></i> Learning modules — earn XP & knowledge</div>
+          <div class="pending-group__label"><i class="fa-solid fa-graduation-cap" style="color:#656565"></i> Learning modules — earn XP & knowledge</div>
           <div class="quest-cards-grid">${learnReady.map(qst => _qCard(qst, 'learning')).join('')}</div>
         </div>`;
     }
@@ -4814,7 +5166,7 @@ function renderQuestView() {
           <div class="pending-section__title-row">
             <div>
               <div class="pending-section__title"><i class="fa-solid fa-list-check"></i> What to do next</div>
-              <div class="pending-section__sub">${totalPending} reward${totalPending !== 1 ? 's' : ''} waiting for you · <span style="color:var(--gold)">${pendingXP} XP available</span>${nextLvlXp > 0 ? ` · <span style="color:#22c55e">${nextLvlXp} XP to next level (+R50)</span>` : ''}</div>
+              <div class="pending-section__sub">${totalPending} quest${totalPending !== 1 ? 's' : ''} waiting for you · <span style="color:var(--gold)">${pendingXP} XP available</span>${nextLvlXp > 0 ? ` · <span style="color:#22c55e">${nextLvlXp} XP to next level</span>` : ''}</div>
             </div>
           </div>
         </div>
@@ -5016,12 +5368,7 @@ function _showLevelUpModal(result) {
   document.getElementById('levelupXP').textContent    = `${result.newXP.toLocaleString('en-ZA')} XP total`;
 
   const rewardEl = document.getElementById('levelupReward');
-  if (result.rewardGiven > 0) {
-    rewardEl.innerHTML = `<strong>R${result.rewardGiven}</strong> has been added to your wallet! 🎉`;
-    rewardEl.style.display = 'block';
-  } else {
-    rewardEl.style.display = 'none';
-  }
+  if (rewardEl) rewardEl.style.display = 'none';
 
   document.getElementById('levelUpModal').style.display = 'flex';
   _launchConfettiParticles();
@@ -5035,7 +5382,7 @@ function _launchConfettiParticles() {
   const container = document.getElementById('levelupConfetti');
   if (!container) return;
   container.innerHTML = '';
-  const colors = ['#ff9b0c', '#22c55e', '#2F8C9B', '#D4AF37', '#a855f7'];
+  const colors = ['#ff9b0c', '#22c55e', '#656565', '#D4AF37', '#a855f7'];
   for (let i = 0; i < 40; i++) {
     const p = document.createElement('span');
     p.style.cssText = `
@@ -5060,7 +5407,7 @@ const LEARN_MODULES = [
   {
     id: 'learn_what_is_svc', track: 'explorer', order: 1,
     title: 'What is SV Capital?', readTime: 5, xp: 50,
-    icon: 'fa-building-columns', color: '#2F8C9B',
+    icon: 'fa-building-columns', color: '#656565',
     keyPoints: [
       'SV Capital pools investor capital into tangible South African alternative assets',
       'Products include solar projects, cattle farming, short-term loans, and delivery bikes',
@@ -5274,7 +5621,7 @@ For larger portfolios (R500,000+), consider consulting an estate planner about s
 ];
 
 const LEARN_TRACKS = [
-  { id: 'explorer',   label: 'Explorer',   desc: 'New to investing — start here',        icon: 'fa-compass',          color: '#2F8C9B',  minInvested: 0 },
+  { id: 'explorer',   label: 'Explorer',   desc: 'New to investing — start here',        icon: 'fa-compass',          color: '#656565',  minInvested: 0 },
   { id: 'builder',    label: 'Builder',    desc: 'Growing your portfolio',                icon: 'fa-hammer',           color: '#22c55e',  minInvested: 5000 },
   { id: 'strategist', label: 'Strategist', desc: 'Advanced portfolio management',         icon: 'fa-chess-knight',     color: '#a855f7',  minInvested: 50000 },
 ];
@@ -5523,20 +5870,59 @@ const POLICY_SECTIONS = [
   {
     id: 'pol_terms',
     icon: 'fa-file-contract',
-    color: '#2F8C9B',
+    color: '#656565',
     title: 'Terms of Service',
     apiKey: 'terms',
-    staticContent: `<p>By accessing and using the SV Capital investor portal and mobile application, you agree to be bound by these Terms of Service.</p>
-<h4>1. Platform Use</h4>
-<p>The SV Capital platform is available exclusively to registered investors who have completed FICA/KYC verification. You may not share your login credentials with any third party.</p>
-<h4>2. Investment Risk</h4>
-<p>All investments carry risk. SV Capital investments are not guaranteed by the South African government, the Financial Sector Conduct Authority (FSCA), or any deposit insurance scheme. Past performance is not indicative of future results.</p>
-<h4>3. Eligibility</h4>
-<p>Investors must be natural persons or registered legal entities domiciled in South Africa. You must be 18 years or older to invest on your own behalf.</p>
-<h4>4. Fees</h4>
-<p>SV Capital charges no entry fees, exit fees, or monthly platform fees to investors. Revenue is derived from structuring fees charged at the project level, already factored into the quoted return rate.</p>
-<h4>5. Termination</h4>
-<p>SV Capital reserves the right to suspend or terminate any account found to be in breach of these terms, subject to repayment of outstanding capital and accrued returns.</p>`,
+    staticContent: `<p><em>Last updated: June 2025 &nbsp;·&nbsp; Version 1.0</em></p>
+<p>By registering for, accessing, or using the SV Capital investor portal, mobile application, or any associated services (collectively, the "Platform"), you agree to be legally bound by these Terms of Service. If you do not agree, do not use the Platform.</p>
+
+<h4>1. Definitions</h4>
+<p><strong>"SV Capital"</strong> means SV Capital (Pty) Ltd, a company registered in the Republic of South Africa, authorised as a Financial Services Provider under FSP licence number 52449.<br>
+<strong>"Investor"</strong> means any natural person or juristic entity that has registered an account on the Platform.<br>
+<strong>"Investment Pool"</strong> means a structured investment product offered through the Platform, including but not limited to cattle investment cycles, solar energy projects, and short-term business loan products.<br>
+<strong>"FICA"</strong> means the Financial Intelligence Centre Act 38 of 2001 and all regulations promulgated thereunder.<br>
+<strong>"Wallet"</strong> means the virtual account balance held in your investor profile on the Platform, representing funds available for investment.</p>
+
+<h4>2. Eligibility and Registration</h4>
+<p>To register and use the Platform, you must: (a) be a natural person of at least 18 years of age, or a duly authorised representative of a registered juristic entity; (b) be a South African citizen, permanent resident, or a foreign national with a valid passport, eligible to invest under applicable South African law; (c) complete the FICA/KYC identity verification process to the satisfaction of SV Capital; and (d) not be listed on any domestic or international sanctions, terrorist financing, or politically exposed persons lists.</p>
+<p>You may not create more than one individual investor account. Corporate entities may register a separate account distinct from personal accounts. Accounts created fraudulently, or by persons not meeting the above criteria, will be terminated without notice.</p>
+
+<h4>3. Account Security</h4>
+<p>You are solely responsible for maintaining the confidentiality of your login credentials. You must notify SV Capital immediately at <strong>support@svcapital.co.za</strong> if you become aware of any unauthorised access to your account. SV Capital will not be liable for any loss arising from your failure to maintain the security of your credentials. You agree not to share your account with any third party.</p>
+
+<h4>4. Investment Products and Services</h4>
+<p>The Platform provides access to alternative investment products. Each Investment Pool has specific terms including minimum investment amounts, fixed investment terms, target annual return rates, and maturity dates. Return rates are targets and are not guaranteed. SV Capital does not guarantee any specific return on investment.</p>
+<p>Once an investment is placed and confirmed, it is subject to the terms of the specific Investment Pool and may not be withdrawn before the maturity date without incurring an early exit penalty as specified in the Pool's terms. Maturity instructions must be submitted before the maturity date; failure to submit an instruction may result in automatic rollover at SV Capital's discretion.</p>
+
+<h4>5. Deposits and Withdrawals</h4>
+<p>Funds deposited to your Wallet are held in a designated trust or ring-fenced account and are not commingled with SV Capital's operating funds. Deposits are credited to your Wallet upon confirmation of receipt. Withdrawal requests are subject to: (a) verification of your bank account; (b) FICA compliance status; and (c) processing times of 1–5 business days. SV Capital reserves the right to perform enhanced due diligence before processing large withdrawals.</p>
+
+<h4>6. Fees and Charges</h4>
+<p>SV Capital charges no entry fees, exit fees, subscription fees, or management fees directly to investors. Revenue is derived from structuring and arrangement fees charged at the project/pool level, which are embedded in and already deducted from the quoted return rate presented to investors. Any third-party banking or payment processing charges incurred during deposits or withdrawals are for the investor's account.</p>
+
+<h4>7. Prohibited Activities</h4>
+<p>You agree not to: (a) use the Platform for any unlawful purpose, including money laundering, terrorist financing, or tax evasion; (b) attempt to gain unauthorised access to any part of the Platform or its underlying systems; (c) use automated tools, bots, or scripts to access or scrape the Platform; (d) misrepresent your identity or financial standing; (e) engage in any conduct that disrupts or interferes with the Platform's operation; or (f) resell or sub-license access to the Platform without SV Capital's prior written consent.</p>
+
+<h4>8. Intellectual Property</h4>
+<p>All content on the Platform, including software, text, graphics, logos, and data, is owned by or licensed to SV Capital and is protected by applicable intellectual property laws. You are granted a limited, non-exclusive, revocable licence to access and use the Platform for your personal investment purposes only. No licence to reproduce, distribute, or create derivative works is granted.</p>
+
+<h4>9. Limitation of Liability</h4>
+<p>To the fullest extent permitted by law, SV Capital, its directors, officers, employees, and agents shall not be liable for: (a) any indirect, incidental, special, consequential, or punitive damages; (b) loss of profits, revenue, data, or investment returns; (c) damages arising from your reliance on information provided on the Platform; or (d) system downtime, data loss, or security breaches not caused by SV Capital's gross negligence or wilful misconduct. SV Capital's total aggregate liability for any claim shall not exceed the total amount invested by you through the Platform in the 12 months preceding the claim.</p>
+
+<h4>10. Indemnification</h4>
+<p>You agree to indemnify and hold harmless SV Capital and its affiliates from any claims, losses, liabilities, costs, and expenses (including reasonable legal fees) arising from: (a) your use of the Platform; (b) your breach of these Terms; (c) your violation of any applicable law; or (d) any third-party claim arising from your actions on the Platform.</p>
+
+<h4>11. Amendments</h4>
+<p>SV Capital reserves the right to amend these Terms at any time. Material amendments will be communicated to registered investors via email and/or in-app notification at least 30 days before the effective date. Continued use of the Platform after the effective date constitutes acceptance of the amended Terms. If you do not accept the changes, you must cease using the Platform and request account closure.</p>
+
+<h4>12. Termination</h4>
+<p>SV Capital may suspend or terminate your account immediately if: (a) you breach these Terms; (b) we are required to do so by law or regulatory authority; (c) your FICA/KYC verification fails; or (d) we reasonably suspect fraudulent or criminal activity. Upon termination, any active investments will continue to their scheduled maturity, and remaining Wallet balances will be paid to your verified bank account within a reasonable period.</p>
+
+<h4>13. Governing Law and Dispute Resolution</h4>
+<p>These Terms are governed by the laws of the Republic of South Africa. Any dispute arising from these Terms shall first be submitted to mediation. If mediation fails, the dispute shall be referred to arbitration under the rules of the Arbitration Foundation of Southern Africa (AFSA), with proceedings conducted in English in South Africa. Nothing in this clause prevents either party from seeking urgent relief from a court of competent jurisdiction.</p>
+
+<h4>14. Contact</h4>
+<p><strong>SV Capital (Pty) Ltd</strong><br>Email: <strong>legal@svcapital.co.za</strong><br>Support: <strong>support@svcapital.co.za</strong><br>FSP No: 52449 — Regulated by the FSCA</p>`,
   },
   {
     id: 'pol_privacy',
@@ -5544,97 +5930,417 @@ const POLICY_SECTIONS = [
     color: '#22c55e',
     title: 'Privacy Policy',
     apiKey: 'privacy',
-    staticContent: `<p>SV Capital is committed to protecting your personal information in accordance with the Protection of Personal Information Act 4 of 2013 (POPIA).</p>
-<h4>1. Information We Collect</h4>
-<p>We collect your name, identity number, contact details, banking information, and investment activity for the purpose of providing investment services and complying with FICA obligations.</p>
-<h4>2. How We Use Your Information</h4>
-<p>Your personal information is used to manage your investment account, process transactions, comply with legal obligations, and communicate with you about your investments.</p>
-<h4>3. Information Sharing</h4>
-<p>We do not sell your personal information. We may share it with FICA-regulated third parties (e.g., identity verification providers) and regulatory bodies as required by law.</p>
-<h4>4. Data Security</h4>
-<p>We use industry-standard encryption and access controls to protect your data. All communication between the app and our servers is encrypted using TLS.</p>
-<h4>5. Your Rights</h4>
-<p>Under POPIA, you have the right to access, correct, or request deletion of your personal information. Contact our Information Officer at privacy@svcapital.co.za.</p>`,
+    staticContent: `<p><em>Last updated: June 2025 &nbsp;·&nbsp; Version 1.0</em></p>
+<p>SV Capital (Pty) Ltd ("SV Capital", "we", "us", "our") is committed to protecting your personal information and processing it lawfully, in compliance with the Protection of Personal Information Act 4 of 2013 ("POPIA") and all applicable South African data protection legislation.</p>
+
+<h4>1. Responsible Party</h4>
+<p><strong>SV Capital (Pty) Ltd</strong> is the Responsible Party for the personal information you provide. Our Information Officer is responsible for ensuring compliance with POPIA and may be contacted at <strong>privacy@svcapital.co.za</strong>.</p>
+
+<h4>2. Personal Information We Collect</h4>
+<p>We collect the following categories of personal information:</p>
+<ul>
+<li><strong>Identity Information:</strong> Full name, date of birth, South African ID number or passport number and expiry date, nationality, and a copy of your identity document.</li>
+<li><strong>Contact Information:</strong> Email address, mobile number, physical address, and province of residence.</li>
+<li><strong>Financial Information:</strong> Banking details (bank name, account number, account type, branch code), wallet balance, investment history, transaction records, and income/risk profile.</li>
+<li><strong>FICA/KYC Documentation:</strong> Proof of identity, proof of address, and any source-of-funds documentation required for regulatory compliance.</li>
+<li><strong>Device and Technical Information:</strong> IP address, browser type and version, operating system, session data, and usage patterns within the Platform.</li>
+<li><strong>Communication Records:</strong> Support ticket content, email correspondence, and in-app messages.</li>
+<li><strong>Referral Information:</strong> Where you were referred by another investor, their referral code is recorded.</li>
+</ul>
+
+<h4>3. Purposes of Processing</h4>
+<p>We process your personal information for the following purposes:</p>
+<ul>
+<li>Opening and managing your investor account;</li>
+<li>Processing investment transactions, deposits, and withdrawals;</li>
+<li>Complying with FICA, FAIS, POPIA, and all applicable financial services legislation;</li>
+<li>Verifying your identity and conducting risk assessments (KYC/AML);</li>
+<li>Communicating with you about your investments, account status, and platform updates;</li>
+<li>Generating investment certificates, account statements, and tax documentation (IT3b);</li>
+<li>Preventing, detecting, and investigating fraud, money laundering, and other unlawful activity;</li>
+<li>Improving the Platform and its features based on usage analytics;</li>
+<li>Responding to legal or regulatory requests, court orders, or governmental inquiries;</li>
+<li>Sending you transactional notifications and, with your consent, marketing communications.</li>
+</ul>
+
+<h4>4. Lawful Basis for Processing</h4>
+<p>We process your personal information on the following lawful grounds:</p>
+<ul>
+<li><strong>Contractual necessity:</strong> Processing required to fulfil our obligations to you as an investor;</li>
+<li><strong>Legal obligation:</strong> Processing required to comply with FICA, the Income Tax Act, FAIS, and POPIA;</li>
+<li><strong>Consent:</strong> For direct marketing and optional communications, where you have given explicit consent;</li>
+<li><strong>Legitimate interest:</strong> For fraud prevention, security monitoring, and platform improvement, where this does not override your rights.</li>
+</ul>
+
+<h4>5. Sharing of Personal Information</h4>
+<p>We do not sell, rent, or trade your personal information. We may share it with:</p>
+<ul>
+<li><strong>Identity verification providers:</strong> For FICA/KYC checks;</li>
+<li><strong>Payment processors:</strong> For processing deposits and withdrawals;</li>
+<li><strong>Regulatory bodies:</strong> FSCA, FIC, SARS, and other South African authorities as required by law;</li>
+<li><strong>Auditors and legal advisers:</strong> Under binding confidentiality obligations;</li>
+<li><strong>Cloud service providers:</strong> Who process data on our behalf under strict data processing agreements;</li>
+<li><strong>Law enforcement:</strong> Where legally compelled by court order or applicable legislation.</li>
+</ul>
+<p>All third parties are required to maintain the security of your information and to use it only for the purposes for which it was shared.</p>
+
+<h4>6. Cross-Border Transfers</h4>
+<p>Your personal information is primarily processed and stored within the Republic of South Africa. If any processing occurs outside South Africa, we ensure that the recipient country provides adequate protection and that appropriate safeguards (such as data processing agreements or binding corporate rules) are in place, as required by Section 72 of POPIA.</p>
+
+<h4>7. Retention of Personal Information</h4>
+<p>We retain your personal information only for as long as necessary to fulfil the purposes for which it was collected, or as required by law:</p>
+<ul>
+<li>FICA documentation and KYC records: minimum 5 years after account closure, as required by the Financial Intelligence Centre Act;</li>
+<li>Investment records and transaction history: minimum 5 years for tax purposes;</li>
+<li>Account information: retained while your account is active and for up to 7 years after closure;</li>
+<li>Audit logs and access records: 3 years;</li>
+<li>Support and complaint records: 3 years from resolution.</li>
+</ul>
+
+<h4>8. Security Measures</h4>
+<p>We implement appropriate technical and organisational security measures including: TLS encryption for all data in transit; AES-256 encryption for sensitive data at rest; role-based access controls limiting staff access to personal information; multi-factor authentication for admin systems; regular security audits and penetration testing; and incident response procedures. Despite these measures, no system is entirely secure. We will notify you of any security breach that poses a real risk of harm to you, in accordance with POPIA.</p>
+
+<h4>9. Cookies and Tracking</h4>
+<p>The Platform uses cookies and similar technologies for session management, security, and analytics. Strictly necessary cookies cannot be disabled as they are required for the Platform to function. Analytics cookies help us understand usage patterns and are collected in pseudonymised form. You may control cookie preferences via your browser settings; however, disabling certain cookies may affect Platform functionality.</p>
+
+<h4>10. Your Rights as a Data Subject</h4>
+<p>Under POPIA, you have the right to:</p>
+<ul>
+<li><strong>Access:</strong> Request a copy of the personal information we hold about you;</li>
+<li><strong>Correction:</strong> Request that inaccurate or incomplete information be corrected;</li>
+<li><strong>Deletion:</strong> Request deletion of your personal information, subject to our legal retention obligations;</li>
+<li><strong>Objection:</strong> Object to processing based on legitimate interests, including direct marketing;</li>
+<li><strong>Restriction:</strong> Request that processing be restricted in certain circumstances;</li>
+<li><strong>Complaint:</strong> Lodge a complaint with the Information Regulator of South Africa.</li>
+</ul>
+<p>To exercise any of these rights, contact our Information Officer at <strong>privacy@svcapital.co.za</strong>. We will respond within 30 days.</p>
+
+<h4>11. Direct Marketing</h4>
+<p>We may send you information about investment opportunities, platform features, and financial education content. You may opt out of marketing communications at any time by clicking "Unsubscribe" in any email, or by contacting <strong>privacy@svcapital.co.za</strong>. Transactional communications (such as investment confirmations and account statements) cannot be opted out of while your account is active.</p>
+
+<h4>12. Changes to This Policy</h4>
+<p>We may update this Privacy Policy from time to time. Material changes will be communicated via email or in-app notification before they take effect. Continued use of the Platform after the effective date constitutes acknowledgment of the updated Policy.</p>
+
+<h4>13. Contact</h4>
+<p><strong>Information Officer:</strong> privacy@svcapital.co.za<br>
+<strong>General:</strong> info@svcapital.co.za<br>
+<strong>Information Regulator (South Africa):</strong> inforeg.org.za &nbsp;·&nbsp; complaints.IR@justice.gov.za</p>`,
   },
   {
     id: 'pol_popia',
     icon: 'fa-lock',
     color: '#7c3aed',
     title: 'POPIA Notice',
-    staticContent: `<p>This notice is issued in compliance with Section 18 of the Protection of Personal Information Act 4 of 2013 (POPIA).</p>
-<h4>Responsible Party</h4>
-<p>SV Capital (Pty) Ltd, registered in the Republic of South Africa.</p>
-<h4>Information Officer</h4>
-<p>Our designated Information Officer can be reached at: <strong>privacy@svcapital.co.za</strong></p>
-<h4>Purpose of Processing</h4>
-<p>Your personal information is processed for: investor account management, FICA/KYC compliance, transaction processing, regulatory reporting, and investor communications.</p>
-<h4>Lawful Basis</h4>
-<p>Processing is carried out on the basis of contractual necessity, legal obligation (FICA, POPIA), and legitimate interests.</p>
-<h4>Retention Period</h4>
-<p>Investment records and FICA documentation are retained for a minimum of 5 years after account closure, as required by the Financial Intelligence Centre Act.</p>
-<h4>Complaints</h4>
-<p>If you believe your POPIA rights have been violated, you may lodge a complaint with the Information Regulator of South Africa at: <strong>inforeg.org.za</strong></p>`,
+    staticContent: `<p><em>Issued in compliance with Section 18 of the Protection of Personal Information Act 4 of 2013 (POPIA) &nbsp;·&nbsp; Version 1.0</em></p>
+
+<h4>1. Responsible Party</h4>
+<p><strong>SV Capital (Pty) Ltd</strong><br>
+Financial Services Provider · FSP No. 52449<br>
+Republic of South Africa<br>
+Email: <strong>info@svcapital.co.za</strong></p>
+
+<h4>2. Information Officer</h4>
+<p>The designated Information Officer (IO) responsible for ensuring SV Capital's compliance with POPIA may be contacted at: <strong>privacy@svcapital.co.za</strong>. The IO is registered with the Information Regulator of South Africa in accordance with Section 55 of POPIA.</p>
+
+<h4>3. Categories of Personal Information Processed</h4>
+<p>SV Capital processes the following categories of personal information:</p>
+<ul>
+<li><strong>Identifying information:</strong> Full legal name, date of birth, RSA ID number or passport details, photograph (where required for KYC);</li>
+<li><strong>Contact details:</strong> Email address, mobile number, physical and postal address;</li>
+<li><strong>Financial information:</strong> Bank account details, investment transactions, wallet balance, income level, risk profile;</li>
+<li><strong>FICA/KYC documentation:</strong> Certified copies of identity documents, proof of address, source-of-funds declarations;</li>
+<li><strong>Technical data:</strong> Device identifiers, IP addresses, browser information, usage logs;</li>
+<li><strong>Special categories:</strong> We do not intentionally collect special personal information as defined in Section 26 of POPIA (e.g., health, religious, or racial information).</li>
+</ul>
+
+<h4>4. Purposes of Processing</h4>
+<p>Your personal information is processed for the following specific, explicit, and legitimate purposes:</p>
+<ul>
+<li>Investor onboarding and account management;</li>
+<li>Identity verification and FICA/KYC compliance;</li>
+<li>Anti-money laundering (AML) and counter-terrorist financing (CTF) screening;</li>
+<li>Processing investment transactions and generating returns;</li>
+<li>Producing investment certificates, account statements, and IT3(b) tax certificates;</li>
+<li>Communicating investment performance, maturity notices, and regulatory updates;</li>
+<li>Complying with FSCA reporting obligations, SARS requirements, and FIC directives;</li>
+<li>Fraud prevention and platform security;</li>
+<li>Resolving complaints and support queries.</li>
+</ul>
+
+<h4>5. Lawful Grounds for Processing</h4>
+<p>Processing is carried out on the following grounds as contemplated in Section 11 of POPIA:</p>
+<ul>
+<li><strong>Consent (s.11(1)(a)):</strong> Where you have given specific, informed consent, including for direct marketing;</li>
+<li><strong>Contract (s.11(1)(b)):</strong> Where processing is necessary for the performance of our investment services agreement with you;</li>
+<li><strong>Legal obligation (s.11(1)(c)):</strong> Where we are required to process information to comply with FICA, FAIS, POPIA, and other applicable legislation;</li>
+<li><strong>Legitimate interest (s.11(1)(f)):</strong> For fraud prevention, security monitoring, and platform improvement, provided this does not override your rights and interests.</li>
+</ul>
+
+<h4>6. Sources of Personal Information</h4>
+<p>Personal information is collected directly from you during registration and throughout your use of the Platform. Additional information may be sourced from: identity verification bureaus (for FICA checks), credit bureaus (for risk assessment), payment processors (for banking verification), and public registers (e.g., CIPC for corporate investor verification).</p>
+
+<h4>7. Recipients of Personal Information</h4>
+<p>Your personal information may be shared with the following recipients:</p>
+<ul>
+<li>Identity and KYC verification service providers;</li>
+<li>Payment gateway providers and banks;</li>
+<li>The Financial Intelligence Centre (FIC), FSCA, SARS, and other regulatory bodies as required by law;</li>
+<li>Professional advisers (attorneys, auditors, compliance officers) under confidentiality obligations;</li>
+<li>Cloud infrastructure and data hosting providers under data processing agreements;</li>
+<li>Law enforcement agencies pursuant to valid legal process.</li>
+</ul>
+
+<h4>8. Cross-Border Transfers of Personal Information</h4>
+<p>In accordance with Section 72 of POPIA, personal information will only be transferred to a third party in a foreign country if: (a) the recipient is subject to a law, binding corporate rules, or binding agreement that provides an adequate level of protection substantially similar to POPIA; or (b) you have consented to the transfer. We will not transfer your information to jurisdictions that do not provide adequate protection without appropriate safeguards.</p>
+
+<h4>9. Retention Periods</h4>
+<table style="width:100%;border-collapse:collapse;font-size:0.87rem;margin-bottom:12px">
+<thead><tr style="background:rgba(0,0,0,0.05)"><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Category</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Retention Period</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Legal Basis</th></tr></thead>
+<tbody>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">FICA/KYC documentation</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">5 years after account closure</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">FIC Act s.23</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Investment and transaction records</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">5 years (tax purposes)</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Income Tax Act</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Account and profile data</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Duration of account + 7 years</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">FAIS Act</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Audit and access logs</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">3 years</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Legitimate interest</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Support and complaint records</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">3 years from resolution</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Legitimate interest</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Policy acceptance records</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Duration of account + 7 years</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Legal obligation / evidence</td></tr>
+</tbody>
+</table>
+
+<h4>10. Your Rights as a Data Subject</h4>
+<p>Sections 23–25 of POPIA afford you the following rights, which you may exercise by contacting our Information Officer:</p>
+<ul>
+<li><strong>Right of access (s.23):</strong> To request confirmation of whether we hold your personal information and to obtain a copy thereof;</li>
+<li><strong>Right to correction or deletion (s.24):</strong> To request that inaccurate, incomplete, or outdated information be corrected or destroyed;</li>
+<li><strong>Right to object (s.11(3)):</strong> To object to the processing of your personal information on the ground of legitimate interests or for direct marketing purposes;</li>
+<li><strong>Right to restriction:</strong> To request that processing be restricted in certain circumstances (e.g., while accuracy of data is disputed);</li>
+<li><strong>Right to complain:</strong> To lodge a complaint with the Information Regulator of South Africa.</li>
+</ul>
+<p>Requests will be responded to within 30 days. We may charge a reasonable fee for manifestly unfounded or excessive requests.</p>
+
+<h4>11. Objection to Direct Marketing</h4>
+<p>In terms of Section 69 of POPIA, you have the right to object, at any time, to your personal information being used for direct marketing purposes. To opt out, email <strong>privacy@svcapital.co.za</strong> or use the unsubscribe link in any marketing email.</p>
+
+<h4>12. Complaints to the Information Regulator</h4>
+<p>If you believe that SV Capital has infringed your rights under POPIA, you may lodge a complaint with:</p>
+<p><strong>The Information Regulator (South Africa)</strong><br>
+Website: <strong>inforeg.org.za</strong><br>
+Email: <strong>complaints.IR@justice.gov.za</strong><br>
+PAIAComplaints.IR@justice.gov.za (for PAIA complaints)</p>`,
   },
   {
     id: 'pol_risk',
     icon: 'fa-triangle-exclamation',
     color: '#d97706',
     title: 'Risk Disclaimer',
-    staticContent: `<p><strong>Important: Please read this disclaimer carefully before investing.</strong></p>
-<h4>General Risk Warning</h4>
-<p>All investments involve risk. The value of your investment can go down as well as up, and you may receive less than you invested. SV Capital investments are not deposits and are not covered by any government guarantee or deposit protection scheme.</p>
-<h4>Alternative Investment Risk</h4>
-<p>The products offered on this platform are alternative investments with specific risk characteristics including, but not limited to:</p>
-<ul>
-<li><strong>Liquidity Risk:</strong> Investments have fixed terms and cannot be redeemed early without penalty.</li>
-<li><strong>Operational Risk:</strong> The performance of underlying assets (cattle, solar installations, loans) may be affected by factors outside SV Capital's control.</li>
-<li><strong>Market Risk:</strong> Commodity prices (e.g., beef) may fluctuate, affecting returns on cattle products.</li>
-<li><strong>Credit Risk:</strong> Business loan borrowers may default, although loans are secured against collateral.</li>
-</ul>
-<h4>Suitability</h4>
-<p>These investments may not be suitable for all investors. Before investing, consider your investment objectives, financial situation, and risk tolerance. Consult a registered financial adviser if you are unsure.</p>
-<h4>No Advice</h4>
-<p>Nothing on this platform constitutes financial advice. SV Capital provides information only. Investment decisions are made solely by the investor.</p>`,
+    staticContent: `<p><em>Version 1.0 &nbsp;·&nbsp; Effective June 2025</em></p>
+<p><strong>Please read this Risk Disclaimer carefully before making any investment decision. By investing through the SV Capital Platform, you acknowledge that you have read, understood, and accepted the risks described herein.</strong></p>
+
+<h4>1. General Investment Risk Warning</h4>
+<p>All investments involve risk. The value of your investment, and any returns derived from it, may go down as well as up. You may receive back less than the amount you invested. Past performance of any Investment Pool or SV Capital's overall portfolio is not a reliable indicator of future performance. No investment return is guaranteed.</p>
+
+<h4>2. Not a Deposit</h4>
+<p>Investments made through SV Capital are not deposits and are not protected by any deposit insurance scheme, government guarantee, or scheme of arrangement under the Deposit Guarantee Scheme or any equivalent. Your invested capital is at risk.</p>
+
+<h4>3. Alternative Investment Risk</h4>
+<p>The products offered on this Platform are alternative investments — they differ significantly from listed equities, bonds, and traditional unit trusts. Alternative investments carry specific and heightened risks, including reduced regulatory oversight of underlying assets, less frequent valuation, and greater complexity. You should understand the nature of each Investment Pool before committing funds.</p>
+
+<h4>4. Liquidity Risk</h4>
+<p>Investment Pools have fixed terms. Once an investment is placed, your capital is locked in for the duration of the selected term. Early exit is not guaranteed and, where permitted, will attract an early exit penalty as specified in the Pool terms. You should only invest funds that you can afford to have unavailable for the full investment term. There is no secondary market for your investment interest.</p>
+
+<h4>5. Credit and Default Risk</h4>
+<p>For loan-based products, there is a risk that underlying borrowers may default on their obligations. While SV Capital structures loans with security and collateral where possible, the realisation of security may not fully recover your capital in all circumstances. SV Capital does not guarantee the creditworthiness of any borrower.</p>
+
+<h4>6. Commodity and Market Risk</h4>
+<p>Cattle investment products are subject to commodity risk. Live cattle prices are determined by market forces including supply and demand, feed costs, disease outbreaks, export restrictions, and consumer preferences. Adverse movements in beef prices may reduce or eliminate projected returns. SV Capital does not control commodity markets and cannot guarantee the price at which cattle will be sold.</p>
+
+<h4>7. Operational Risk (Cattle)</h4>
+<p>Cattle farming involves operational risks including, but not limited to: disease and mortality (including foot-and-mouth disease, anthrax, and other livestock diseases); drought and adverse weather affecting grazing and water availability; theft and security incidents; veterinary costs exceeding projections; and challenges in sourcing quality stock. Although SV Capital employs experienced farm managers and carries appropriate insurance where available, these risks cannot be entirely eliminated.</p>
+
+<h4>8. Renewable Energy and Solar Risk</h4>
+<p>Solar energy projects are subject to risks including: weather variability and reduced solar irradiance reducing output below projections; equipment failure or degradation; grid connectivity issues and load-shedding impacts; changes to government feed-in tariff or energy policy; counterparty risk of energy off-takers; and regulatory changes to the energy sector. Returns on solar projects are partly dependent on energy production volumes and prevailing energy tariffs.</p>
+
+<h4>9. Regulatory and Compliance Risk</h4>
+<p>The regulatory environment for alternative investments and financial technology in South Africa is evolving. Changes in legislation (including FICA, FAIS, or tax law), regulatory interpretation, or enforcement policy could affect SV Capital's ability to offer certain products or could impose additional compliance costs. SV Capital may be required to make changes to its products or operations in response to regulatory developments, which could affect investor returns.</p>
+
+<h4>10. Technology and Cybersecurity Risk</h4>
+<p>The Platform relies on technology infrastructure that may be subject to downtime, technical failures, data breaches, or cyberattacks. While SV Capital implements industry-standard security measures, no system is completely immune to security incidents. A technology failure could result in temporary inability to access your account or execute transactions. SV Capital maintains business continuity and disaster recovery plans to minimise the impact of such events.</p>
+
+<h4>11. Inflation Risk</h4>
+<p>The purchasing power of your returns may be eroded by inflation. If the rate of inflation exceeds the return rate of your investment, the real value of your returns will be negative even if the nominal return is positive.</p>
+
+<h4>12. Concentration Risk</h4>
+<p>Investing a significant portion of your total investable assets in any single Investment Pool or product type increases concentration risk. SV Capital recommends that you diversify your investments across different asset classes and Pool types to reduce the impact of any single investment's underperformance.</p>
+
+<h4>13. Suitability Warning</h4>
+<p>Alternative investments may not be suitable for all investors. These products are designed for investors who: understand the risks of illiquid, fixed-term investments; have an investment horizon that matches the product term; can afford to lose some or all of their invested capital; and have adequate financial resources for their day-to-day needs beyond the amounts invested. Before investing, carefully consider your investment objectives, risk tolerance, financial situation, and need for liquidity. If you are unsure, seek independent financial advice from a registered financial adviser authorised under FAIS.</p>
+
+<h4>14. No Financial Advice</h4>
+<p>Nothing on this Platform, including product descriptions, return rate projections, investment summaries, or communications from SV Capital staff (unless expressly provided by a registered financial adviser in terms of an advisory mandate), constitutes financial, investment, legal, or tax advice. Information is provided for general informational purposes only. Investment decisions are the sole responsibility of the investor.</p>
+
+<h4>15. Tax Considerations</h4>
+<p>Returns on investments may be subject to South African income tax, capital gains tax, or withholding tax depending on your tax status and the nature of the return. Interest income earned through the Platform must be declared in your annual tax return (ITR12). SV Capital issues IT3(b) certificates annually to assist with this. SV Capital does not provide tax advice; consult a registered tax practitioner for guidance specific to your circumstances.</p>
+
+<h4>16. Forward-Looking Statements</h4>
+<p>Any projected return rates, indicative timelines, or performance forecasts presented on this Platform are forward-looking statements based on current market conditions and assumptions. They do not constitute a guarantee or promise of future results. Actual outcomes may differ materially from projections.</p>`,
   },
   {
     id: 'pol_paia',
     icon: 'fa-folder-open',
     color: '#0891b2',
     title: 'PAIA Manual',
-    staticContent: `<p>This manual is published in terms of Section 51 of the Promotion of Access to Information Act 2 of 2000 (PAIA).</p>
-<h4>Company Details</h4>
-<p><strong>Company:</strong> SV Capital (Pty) Ltd<br>
-<strong>Registration No:</strong> Available on request<br>
-<strong>Physical Address:</strong> South Africa<br>
-<strong>Email:</strong> info@svcapital.co.za</p>
-<h4>Information Officer</h4>
-<p>Requests for access to records held by SV Capital must be directed to our Information Officer at: <strong>privacy@svcapital.co.za</strong></p>
-<h4>Records Available Without Request</h4>
-<p>The following records are automatically available to investors via the portal: account statements, transaction history, investment certificates, and FICA/KYC submission status.</p>
-<h4>How to Request Records</h4>
-<p>Submit a written request to our Information Officer including: your full name and identity number, a description of the record requested, and the reason for the request. We will respond within 30 days as required by PAIA.</p>
-<h4>Fees</h4>
-<p>A request fee of R35 applies per PAIA request (waived for personal information requests). Reproduction fees may apply for large records.</p>`,
+    staticContent: `<p><em>Published in terms of Section 51 of the Promotion of Access to Information Act 2 of 2000 (PAIA) &nbsp;·&nbsp; Version 1.0 &nbsp;·&nbsp; June 2025</em></p>
+
+<h4>1. Contact Details of SV Capital</h4>
+<p><strong>Legal Name:</strong> SV Capital (Pty) Ltd<br>
+<strong>Nature of Business:</strong> Alternative Investment Platform, licensed Financial Services Provider<br>
+<strong>FSP Number:</strong> 52449<br>
+<strong>Email:</strong> info@svcapital.co.za<br>
+<strong>PAIA Requests:</strong> privacy@svcapital.co.za<br>
+<strong>Registered Country:</strong> Republic of South Africa</p>
+
+<h4>2. Information Officer</h4>
+<p>The Information Officer is responsible for administering all PAIA requests on behalf of SV Capital.</p>
+<p><strong>Contact:</strong> privacy@svcapital.co.za<br>
+<strong>Postal:</strong> Marked "PAIA Request — Confidential" to the registered address of SV Capital (Pty) Ltd</p>
+<p>The Information Officer is registered with the Information Regulator of South Africa in accordance with POPIA s.55.</p>
+
+<h4>3. Guide on How to Access Information</h4>
+<p>The South African Human Rights Commission (SAHRC) has published a guide to assist persons who wish to access information held by private or public bodies. This guide is available on the SAHRC website at <strong>sahrc.org.za</strong>. SV Capital will, on request, provide a copy of or direct you to this guide.</p>
+
+<h4>4. Records Available Without Submitting a PAIA Request</h4>
+<p>The following records are automatically available to registered investors through the Platform without requiring a formal PAIA request:</p>
+<ul>
+<li>Your investor account profile and contact details;</li>
+<li>Account statements and transaction history;</li>
+<li>Investment certificates and confirmation documents;</li>
+<li>IT3(b) interest income certificates;</li>
+<li>FICA/KYC submission status and uploaded documentation (your own only);</li>
+<li>Support ticket history;</li>
+<li>Accepted policy documents and timestamps;</li>
+<li>Platform policies (Terms of Service, Privacy Policy, POPIA Notice, Risk Disclaimer, this PAIA Manual, and the Complaints Procedure).</li>
+</ul>
+
+<h4>5. Records Available on Request (Subject to PAIA)</h4>
+<p>The following categories of records may be made available on formal PAIA request, subject to the grounds for refusal set out in PAIA:</p>
+<ul>
+<li>Internal audit records relating to your account (where refusal grounds do not apply);</li>
+<li>Communications records between you and SV Capital staff;</li>
+<li>Records relating to a specific investment decision affecting your account;</li>
+<li>Any other record in which you have a personal interest.</li>
+</ul>
+<p>Records that do not pertain to you personally, or that are subject to grounds for refusal under PAIA (including records of third parties, commercially sensitive information, and legally privileged records), will not be disclosed without the consent of the affected party or a court order.</p>
+
+<h4>6. Grounds for Refusal</h4>
+<p>In terms of PAIA, SV Capital may refuse to grant access to records on the following grounds:</p>
+<ul>
+<li>Records containing personal information of third parties who have not consented to disclosure;</li>
+<li>Commercially sensitive information, including trade secrets, financial models, or proprietary investment strategies;</li>
+<li>Legally privileged communications (attorney-client privilege);</li>
+<li>Records that, if disclosed, could jeopardise a criminal investigation or legal proceedings;</li>
+<li>Records whose disclosure would be contrary to any binding agreement or court order.</li>
+</ul>
+
+<h4>7. How to Submit a PAIA Request</h4>
+<p>To request access to records held by SV Capital, you must:</p>
+<ol>
+<li>Complete Form C as prescribed by the Regulations under PAIA (available at <strong>justice.gov.za</strong>) or submit a written request containing the same information;</li>
+<li>Clearly identify the record(s) you wish to access;</li>
+<li>Provide a copy of your identity document;</li>
+<li>State the form in which you wish to receive the record (electronic copy, printed copy, or inspection);</li>
+<li>If requesting records about a third party, provide reasons and confirm you are authorised to do so;</li>
+<li>Submit the request to: <strong>privacy@svcapital.co.za</strong>, marked "PAIA Request".</li>
+</ol>
+
+<h4>8. Fees</h4>
+<table style="width:100%;border-collapse:collapse;font-size:0.87rem;margin-bottom:12px">
+<thead><tr style="background:rgba(0,0,0,0.05)"><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Fee Type</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Amount</th></tr></thead>
+<tbody>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Request fee (payable on submission)</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">R35.00</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Request for own personal information</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Waived</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Printed copies (A4 per page)</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">R1.10 per page</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Electronic copy (per megabyte)</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">R7.50 per MB</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Deposit (if reproduction fee exceeds R100)</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">1/3 of total fee upfront</td></tr>
+</tbody>
+</table>
+<p>Fees are prescribed in terms of the PAIA regulations and are subject to change by the Information Regulator.</p>
+
+<h4>9. Response Timeframes</h4>
+<p>SV Capital will respond to a PAIA request within <strong>30 days</strong> of receipt of a complete request and payment of the request fee. In complex cases, this period may be extended by a further 30 days with notice to the requester. If SV Capital fails to respond within the required period, this is deemed a refusal and may be appealed to the Information Regulator.</p>
+
+<h4>10. Internal Appeal and External Remedies</h4>
+<p>If your request is refused, you may:</p>
+<ul>
+<li>Lodge an internal appeal in writing to the Information Officer within 60 days of the refusal, setting out the grounds of appeal;</li>
+<li>Apply to the Information Regulator for a review of the refusal (at <strong>inforeg.org.za</strong>);</li>
+<li>Apply to a court of competent jurisdiction for appropriate relief.</li>
+</ul>
+
+<h4>11. Date of Compilation</h4>
+<p>This PAIA Manual was compiled in June 2025 and will be updated as required by law or as SV Capital's operations change. The current version is available on the Platform and will be provided free of charge upon request.</p>`,
   },
   {
     id: 'pol_complaints',
     icon: 'fa-comment-exclamation',
     color: '#ef4444',
     title: 'Complaints Procedure',
-    staticContent: `<p>SV Capital is committed to resolving investor complaints promptly and fairly.</p>
-<h4>Step 1: Log a Support Ticket</h4>
-<p>Contact us through the Support section of this portal. Describe your complaint clearly and include any relevant reference numbers or dates. We aim to respond within 2 business days.</p>
-<h4>Step 2: Escalation</h4>
-<p>If your complaint is not resolved within 10 business days, you may escalate it to our Compliance Officer at: <strong>compliance@svcapital.co.za</strong></p>
-<h4>Step 3: External Resolution</h4>
-<p>If SV Capital is unable to resolve your complaint to your satisfaction, you may refer the matter to:</p>
+    staticContent: `<p><em>Version 1.0 &nbsp;·&nbsp; Effective June 2025</em></p>
+<p>SV Capital (Pty) Ltd is committed to providing high-quality investment services and resolving all investor complaints promptly, fairly, and transparently. This procedure sets out how to lodge a complaint and what you can expect from us.</p>
+
+<h4>1. Scope</h4>
+<p>This Complaints Procedure applies to all complaints received from registered investors relating to: investment products offered on the Platform; account management and transactions; FICA/KYC processes; communications from SV Capital; data privacy and POPIA matters; and the conduct of SV Capital staff or representatives.</p>
+
+<h4>2. What Constitutes a Complaint</h4>
+<p>A complaint is any expression of dissatisfaction by an investor regarding SV Capital's products, services, conduct, or failure to act. Complaints are distinct from general queries (requests for information or assistance) and service requests (routine account actions). If in doubt, submit your concern as a complaint and SV Capital will categorise it appropriately.</p>
+
+<h4>3. How to Lodge a Complaint</h4>
+<p>You may lodge a complaint through any of the following channels:</p>
 <ul>
-<li><strong>FSCA:</strong> Financial Sector Conduct Authority — fsca.co.za</li>
-<li><strong>FAIS Ombud:</strong> For complaints related to financial advice — faisombud.co.za</li>
-<li><strong>Information Regulator:</strong> For POPIA/PAIA complaints — inforeg.org.za</li>
+<li><strong>In-Platform:</strong> Navigate to the Support section of this portal and submit a support ticket with category "Complaint";</li>
+<li><strong>Email:</strong> Send a written complaint to <strong>complaints@svcapital.co.za</strong>;</li>
+<li><strong>Compliance Officer:</strong> For escalated or serious complaints, email <strong>compliance@svcapital.co.za</strong>.</li>
 </ul>
-<h4>What We Will Do</h4>
-<p>We will acknowledge all complaints within 24 hours, investigate thoroughly, and provide a written response within 10 business days. Where a complaint is upheld, we will take corrective action promptly.</p>`,
+<p>When lodging a complaint, please include: your full name and investor ID; a clear description of the complaint and the events giving rise to it; the date(s) of the relevant events; any relevant reference numbers, transaction IDs, or correspondence; and the outcome or remedy you are seeking.</p>
+
+<h4>4. Acknowledgement</h4>
+<p>SV Capital will acknowledge all complaints within <strong>1 business day</strong> of receipt. The acknowledgement will confirm receipt, assign a complaint reference number, and provide the name and contact details of the person handling your complaint.</p>
+
+<h4>5. Investigation and Resolution (Stage 1)</h4>
+<p>Your complaint will be investigated by the relevant team within SV Capital. We aim to provide a full written response within <strong>5 business days</strong> of acknowledging the complaint. Where the complaint requires a more complex investigation, we will notify you of the extended timeline and provide weekly progress updates. In all cases, a final response will be provided within <strong>10 business days</strong> of acknowledgement, unless agreed otherwise with you in writing.</p>
+<p>The response will set out: a summary of your complaint as understood by SV Capital; the findings of our investigation; our decision (uphold, partially uphold, or reject) and the reasons therefor; any remedial action to be taken; and information about your escalation options if you are dissatisfied.</p>
+
+<h4>6. Escalation (Stage 2)</h4>
+<p>If you are not satisfied with the Stage 1 response, you may escalate your complaint to the Compliance Officer at <strong>compliance@svcapital.co.za</strong> within <strong>30 days</strong> of receiving the Stage 1 response. Your escalation should set out: the original complaint reference number; why you are dissatisfied with the Stage 1 response; and the outcome you are seeking. The Compliance Officer will conduct an independent review and provide a final internal response within <strong>10 business days</strong>.</p>
+
+<h4>7. External Dispute Resolution (Stage 3)</h4>
+<p>If SV Capital is unable to resolve your complaint to your satisfaction through our internal process, you may refer the matter to an appropriate external body:</p>
+<ul>
+<li><strong>Financial Sector Conduct Authority (FSCA):</strong> For complaints relating to market conduct, FAIS, and financial services regulation. Website: <strong>fsca.co.za</strong> &nbsp;·&nbsp; Tel: 0800 110 443</li>
+<li><strong>FAIS Ombud:</strong> For complaints relating to financial advice received from a financial adviser or intermediary. Website: <strong>faisombud.co.za</strong> &nbsp;·&nbsp; Tel: 012 762 5000</li>
+<li><strong>Information Regulator:</strong> For complaints specifically relating to POPIA or PAIA rights. Website: <strong>inforeg.org.za</strong> &nbsp;·&nbsp; Email: complaints.IR@justice.gov.za</li>
+<li><strong>National Consumer Commission (NCC):</strong> For complaints relating to consumer rights under the Consumer Protection Act. Website: <strong>thencc.org.za</strong></li>
+</ul>
+<p>You are not required to exhaust our internal procedure before referring a complaint to an external body, but we encourage you to do so as many matters can be resolved more efficiently through direct engagement.</p>
+
+<h4>8. Timeframe Summary</h4>
+<table style="width:100%;border-collapse:collapse;font-size:0.87rem;margin-bottom:12px">
+<thead><tr style="background:rgba(0,0,0,0.05)"><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Stage</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Action</th><th style="text-align:left;padding:7px 10px;border:1px solid rgba(0,0,0,0.1)">Timeframe</th></tr></thead>
+<tbody>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Receipt</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Acknowledgement issued</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">1 business day</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Stage 1</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Full written response</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">5–10 business days</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Stage 2</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Compliance Officer review</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">10 business days</td></tr>
+<tr><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">Stage 3</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">External referral</td><td style="padding:7px 10px;border:1px solid rgba(0,0,0,0.08)">As per regulator</td></tr>
+</tbody>
+</table>
+
+<h4>9. Record Keeping</h4>
+<p>SV Capital maintains a complaints register as required by the FSCA and FAIS. All complaints are recorded with their reference number, date received, nature of complaint, response provided, and resolution outcome. This register is available for inspection by the FSCA upon request. Complaints records are retained for 5 years.</p>
+
+<h4>10. Contact Details</h4>
+<p><strong>General Support:</strong> support@svcapital.co.za<br>
+<strong>Complaints:</strong> complaints@svcapital.co.za<br>
+<strong>Compliance Officer:</strong> compliance@svcapital.co.za<br>
+<strong>Information Officer (POPIA/PAIA):</strong> privacy@svcapital.co.za<br>
+<strong>Regulator:</strong> FSCA · FSP No. 52449 · fsca.co.za</p>`,
   },
 ];
 
@@ -5767,7 +6473,7 @@ const TOUR_STEPS = [
     position: 'right',
     icon: 'fa-trophy',
     title: 'Earn Rewards',
-    body: 'Complete quests and surveys to earn XP. Every time you level up, <strong>R50 is added to your wallet</strong>. There are 8 levels to reach.',
+    body: 'Complete quests and surveys to earn XP and climb through 8 levels — from Seed to Luminary. Unlock badges and show off your progress.',
   },
   {
     id: 'nav_learn',
@@ -5854,19 +6560,23 @@ function _endTour(completed) {
   localStorage.setItem('svc_tour_done', '1');
 
   if (completed) {
-    // Award tour XP
-    _postQuestComplete('complete_tour', { completed: true }).then(result => {
-      if (result && !result.error) {
-        Toast.success(`Tour complete! +${result.xpAwarded} XP earned`);
-        if (PORTAL.quests) {
-          PORTAL.quests.xp  = result.newXP;
-          PORTAL.quests.completedIds = [...(PORTAL.quests.completedIds || []), 'complete_tour'];
+    const alreadyClaimed = PORTAL.quests?.completedIds?.includes('complete_tour');
+    if (alreadyClaimed) {
+      Toast.info('Tour complete! XP already claimed — come back any time to revisit.');
+    } else {
+      _postQuestComplete('complete_tour', { completed: true }).then(result => {
+        if (result && !result.error) {
+          Toast.success(`Tour complete! +${result.xpAwarded} XP earned`);
+          if (PORTAL.quests) {
+            PORTAL.quests.xp  = result.newXP;
+            PORTAL.quests.completedIds = [...(PORTAL.quests.completedIds || []), 'complete_tour'];
+          }
+          if (result.leveledUp) _showLevelUpModal(result);
+          renderXPWidget();
+          _updateXPNavBadge();
         }
-        if (result.leveledUp) _showLevelUpModal(result);
-        renderXPWidget();
-        _updateXPNavBadge();
-      }
-    }).catch(() => {});
+      }).catch(() => {});
+    }
   }
 }
 
@@ -6071,7 +6781,7 @@ function goFundWallet() {
 const SA_TYPE_META = {
   business: {
     icon: 'fa-building',       label: 'Business',
-    color: '#2f8c9b',          bg: 'linear-gradient(135deg,#1a3d42 0%,#2f8c9b 100%)',
+    color: '#656565',          bg: 'linear-gradient(135deg,#1a3d42 0%,#656565 100%)',
     tagline: 'Invest through your registered company',
     ficaDocs: ['Company Registration Certificate (COR14.3 / COR15.1A)', 'Company Tax Clearance Certificate', 'CIPC CoR39 or similar', 'Authorised signatory ID (copy)'],
   },
@@ -6636,10 +7346,7 @@ function openSaInvest(saId) {
   if (sa.kyc_status !== 'approved') { Toast.warn('FICA documents must be approved before investing'); return; }
   if ((parseFloat(sa.wallet_balance) || 0) <= 0) { Toast.warn('Please deposit funds first'); return; }
 
-  // Reuse the main invest modal but tag it to the sub account
-  const pool = PORTAL.pools[0];
-  if (!pool) { Toast.warn('No investment products available'); return; }
-  // Navigate to marketplace so investor picks a pool
+  _pmSaId = saId;  // tag all investments made after this to the sub-account
   Modal.close('saDetailModal');
   Toast.info(`Investing from ${sa.name} — select a product below`);
   navigate('marketplace', document.querySelector('[data-view="marketplace"]'));
@@ -6774,6 +7481,8 @@ function openBankDetailsModal() {
     document.getElementById('bdAccountNumber').value  = inv.bank_account_number || '';
     document.getElementById('bdBranchCode').value     = inv.bank_branch_code || '';
   }
+  const proofEl = document.getElementById('bdProofFile');
+  if (proofEl) proofEl.value = '';
   Modal.open('bankDetailsModal');
 }
 
@@ -6783,14 +7492,27 @@ async function saveBankDetails() {
   const bank_account_holder  = document.getElementById('bdAccountHolder').value.trim();
   const bank_account_number  = document.getElementById('bdAccountNumber').value.trim();
   const bank_branch_code     = document.getElementById('bdBranchCode').value.trim();
+  const proofFile            = document.getElementById('bdProofFile')?.files?.[0] || null;
 
   if (!bank_name || !bank_account_holder || !bank_account_number || !bank_branch_code) {
     Toast.error('Please fill in all required fields'); return;
   }
+  if (!proofFile) {
+    Toast.error('Please attach a proof of bank account'); return;
+  }
 
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
+  const investorName = `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim();
   try {
-    const updated = await API._fetch('PATCH', `tables/investors/${investorId}`, {
+    // Read the proof of bank file as a base64 data URL so admin can view & approve it
+    const proofData = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = e => resolve(e.target.result);
+      reader.onerror = () => reject(new Error('Could not read file'));
+      reader.readAsDataURL(proofFile);
+    });
+
+    const bankPatch = {
       bank_name,
       bank_account_holder,
       bank_account_number,
@@ -6798,11 +7520,28 @@ async function saveBankDetails() {
       bank_account_type,
       bank_account_status: 'pending',
       bank_account_notes: null,
-    });
+    };
+    // Submitting bank proof puts FICA back into "in progress" unless already verified
+    if (PORTAL.investor && PORTAL.investor.kyc_status !== 'approved' && PORTAL.investor.fica_status !== 'approved') {
+      bankPatch.kyc_status = 'in_progress';
+      bankPatch.fica_status = 'in_progress';
+    }
+    const updated = await API._fetch('PATCH', `tables/investors/${investorId}`, bankPatch);
     if (PORTAL.investor) Object.assign(PORTAL.investor, updated);
 
+    // Submit the proof of bank as a KYC document for admin review.
+    // Once approved (with ID + Proof of Address), the investor becomes FICA-verified.
+    await API.kyc.create({
+      investor_id:   investorId,
+      investor_name: investorName || undefined,
+      doc_type:      'proof_of_bank',
+      status:        'pending',
+      file_name:     proofFile.name,
+      file_data:     proofData,
+      notes:         `Proof of bank account for ${bank_name} — submitted with banking details.`,
+    }).catch(e => console.warn('[bank details] proof upload failed:', e.message));
+
     // Create support ticket so admin can see and verify the bank details
-    const investorName = `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim();
     const maskedAccNum = bank_account_number.slice(-4).padStart(bank_account_number.length, '•');
     await API.post('support_tickets', {
       investor_id:    investorId,
@@ -6832,6 +7571,19 @@ function openWithdrawalModal() {
   const status   = inv?.bank_account_status;
   const pendingWithdrawal = (PORTAL.transactions || []).find(t => t.type === 'withdrawal' && t.status === 'pending');
   SVC.track('svc_withdrawal_modal_opened', { wallet_balance_bucket: _amtBucket(balance), has_bank_account: !!(inv?.bank_account_number) });
+
+  if (!_isInvestorFicaApproved(inv)) {
+    content.innerHTML = `
+      <div style="text-align:center;padding:20px 0">
+        <i class="fa-solid fa-shield-halved" style="font-size:2.5rem;color:#656565;margin-bottom:16px"></i>
+        <p style="font-size:0.9rem;font-weight:700;color:#1a1a1a;margin-bottom:8px">FICA verification required</p>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px">You need to complete FICA/KYC verification before you can withdraw funds. You can still top up your wallet and invest in the meantime.</p>
+        <button class="btn btn--primary" onclick="Modal.close('withdrawalModal');navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()"><i class="fa-solid fa-upload"></i> Complete FICA/KYC</button>
+      </div>`;
+    footer.style.display = 'none';
+    Modal.open('withdrawalModal');
+    return;
+  }
 
   if (!inv?.bank_account_number) {
     content.innerHTML = `
@@ -7012,19 +7764,18 @@ function generateTaxCertificate() {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:'Poppins',sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 @page{size:A4;margin:20mm}
 @media print{.no-print{display:none!important}}
-.no-print{position:fixed;top:0;left:0;right:0;background:#1a2235;padding:10px 24px;display:flex;justify-content:space-between;align-items:center;z-index:99}
+.no-print{position:fixed;top:0;left:0;right:0;background:#303030;padding:10px 24px;display:flex;justify-content:space-between;align-items:center;z-index:99}
 .no-print span{color:#fff;font-size:13px;font-weight:600}
 .no-print button{background:#FF9B0C;color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
 .wrap{max-width:700px;margin:60px auto 32px;padding:40px}
-.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #1a2235}
-.logo{font-size:1.6rem;font-weight:800;color:#1a2235;letter-spacing:-0.5px}
-.logo span{color:#FF9B0C}
-.cert-badge{background:#1a2235;color:#fff;padding:8px 16px;border-radius:6px;font-size:0.75rem;font-weight:700;text-align:right}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #303030}
+.logo img{height:48px;max-width:220px;object-fit:contain;display:block}
+.cert-badge{background:#303030;color:#fff;padding:8px 16px;border-radius:6px;font-size:0.75rem;font-weight:700;text-align:right}
 .cert-badge small{display:block;color:#9ca3af;font-size:0.65rem;font-weight:400}
-h1{font-size:1.25rem;font-weight:800;color:#1a2235;margin:0 0 4px}
+h1{font-size:1.25rem;font-weight:800;color:#303030;margin:0 0 4px}
 .subtitle{font-size:0.82rem;color:#6b7280;margin-bottom:28px}
 .interest-box{background:#f0fdf4;border:2px solid #22c55e;border-radius:12px;padding:24px 28px;margin-bottom:28px;text-align:center}
 .interest-lbl{font-size:0.8rem;color:#166534;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px}
@@ -7036,7 +7787,7 @@ td{padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151}
 td:last-child{text-align:right;font-weight:600}
 .footer{border-top:1px solid #e5e7eb;padding-top:18px;font-size:0.73rem;color:#6b7280;line-height:1.6}
 .footer strong{color:#374151}
-.stamp{display:inline-block;border:2px solid #1a2235;color:#1a2235;padding:6px 14px;border-radius:4px;font-size:0.72rem;font-weight:700;letter-spacing:0.12em;margin-top:16px;text-transform:uppercase}
+.stamp{display:inline-block;border:2px solid #303030;color:#303030;padding:6px 14px;border-radius:4px;font-size:0.72rem;font-weight:700;letter-spacing:0.12em;margin-top:16px;text-transform:uppercase}
 </style></head><body>
 <div class="no-print">
   <span>SV Capital — IT3(b) Tax Certificate ${taxYear}</span>
@@ -7045,8 +7796,8 @@ td:last-child{text-align:right;font-weight:600}
 <div class="wrap">
   <div class="hdr">
     <div>
-      <div class="logo">SV <span>Capital</span></div>
-      <div style="font-size:0.75rem;color:#6b7280;margin-top:4px">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSCA Regulated</div>
+      <div class="logo"><img src="${window.location.origin}/assets/logo.svg" alt="SV Capital"></div>
+      <div style="font-size:0.75rem;color:#6b7280;margin-top:6px">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSCA Regulated</div>
     </div>
     <div class="cert-badge">
       IT3(b) INTEREST INCOME CERTIFICATE
@@ -7590,6 +8341,11 @@ async function submitKycDocument() {
       file_data:     fileData,
       notes:         [notes, `File: ${_kycFile.name} (${(_kycFile.size / 1024).toFixed(1)} KB)`].filter(Boolean).join(' — '),
     });
+    // Reflect that documents are now being checked (unless already fully verified)
+    if (inv && inv.kyc_status !== 'approved' && inv.fica_status !== 'approved') {
+      await API._fetch('PATCH', `tables/investors/${inv.id}`, { kyc_status: 'in_progress', fica_status: 'in_progress' }).catch(() => {});
+      Object.assign(inv, { kyc_status: 'in_progress', fica_status: 'in_progress' });
+    }
     Toast.success('Document submitted! The compliance team will review it within 1–2 business days.');
     SVC.track('svc_kyc_uploaded', { doc_type: docType });
     Modal.close('kycUploadModal');
@@ -7617,11 +8373,12 @@ async function _renderKycStatusPanel() {
 
   const inv = PORTAL.investor;
   const overallStatus = inv.fica_status || inv.kyc_status || 'pending';
-  const statusColor = { approved: '#22c55e', rejected: '#ef4444', pending: '#f59e0b', submitted: '#3b82f6', not_started: '#9ca3af' };
+  const statusColor = { approved: '#22c55e', rejected: '#ef4444', pending: '#f59e0b', in_progress: '#656565', submitted: '#656565', not_started: '#9ca3af' };
   const color = statusColor[overallStatus] || '#9ca3af';
 
   const typeLabel = {
     id_document: 'SA ID / Passport', proof_of_address: 'Proof of Address',
+    proof_of_bank: 'Proof of Bank Account',
     selfie: 'Selfie / Liveness', tax_certificate: 'Tax Certificate', other: 'Other Document',
   };
 
@@ -7669,9 +8426,10 @@ async function _renderKycDocsList() {
   const overallStatus = inv.fica_status || inv.kyc_status || 'pending';
   const typeLabel = {
     id_document: 'SA ID / Passport', proof_of_address: 'Proof of Address',
+    proof_of_bank: 'Proof of Bank Account',
     selfie: 'Selfie / Liveness', tax_certificate: 'Tax Certificate', other: 'Other',
   };
-  const requiredTypes = ['id_document', 'proof_of_address'];
+  const requiredTypes = ['id_document', 'proof_of_address', 'proof_of_bank'];
   const submittedTypes = new Set(docs.map(d => d.doc_type));
   const missingRequired = requiredTypes.filter(t => !submittedTypes.has(t));
 
@@ -7742,6 +8500,233 @@ function _viewKycDoc(docId) {
       window.open(rawData, '_blank', 'noopener,noreferrer');
     }
   }).catch(() => Toast.error('Could not load document'));
+}
+
+/* ═══════════════════════════════════════════════════════
+   GIFT FEATURE
+═══════════════════════════════════════════════════════ */
+let _giftEmailDebounce = null;
+let _giftSentCache = [];
+let _giftReceivedCache = [];
+
+async function loadGiftsView() {
+  const inv = PORTAL.investor;
+  const balHint = document.getElementById('giftBalanceHint');
+  if (balHint && inv) balHint.textContent = `Your wallet balance: ${Utils.rand(inv.wallet_balance || 0)}`;
+  const fromEl = document.getElementById('previewFrom');
+  if (fromEl && inv) fromEl.textContent = `From: ${inv.first_name} ${inv.last_name}`;
+  updateGiftPreview();
+  await Promise.all([_loadSentGifts(), _loadReceivedGifts()]);
+}
+
+function setGiftAmount(amount) {
+  document.getElementById('giftAmount').value = amount;
+  document.querySelectorAll('.gift-preset').forEach(b => {
+    b.classList.toggle('active', parseInt(b.textContent.replace(/\D/g,'')) === amount);
+  });
+  updateGiftPreview();
+}
+
+function updateGiftPreview() {
+  const amt = parseFloat(document.getElementById('giftAmount')?.value) || 0;
+  const to  = document.getElementById('giftRecipientName')?.value?.trim()
+            || document.getElementById('giftRecipientEmail')?.value?.trim()?.split('@')[0]
+            || '—';
+  const msg = document.getElementById('giftMessage')?.value?.trim() || '';
+  const inv = PORTAL.investor;
+
+  const amtEl = document.getElementById('previewAmount');
+  const toEl  = document.getElementById('previewTo');
+  const msgEl = document.getElementById('previewMessage');
+  if (amtEl) amtEl.textContent = amt > 0 ? Utils.rand(amt) : 'R—';
+  if (toEl)  toEl.textContent  = `To: ${to}`;
+  if (msgEl) msgEl.textContent = msg ? `"${msg}"` : '';
+  if (document.getElementById('previewFrom') && inv) {
+    document.getElementById('previewFrom').textContent = `From: ${inv.first_name} ${inv.last_name}`;
+  }
+}
+
+function onGiftEmailInput() {
+  clearTimeout(_giftEmailDebounce);
+  updateGiftPreview();
+  const email = document.getElementById('giftRecipientEmail')?.value?.trim();
+  const statusEl = document.getElementById('giftRecipientStatus');
+  if (!statusEl) return;
+  if (!email || !email.includes('@')) { statusEl.textContent = ''; return; }
+  statusEl.textContent = '…';
+  statusEl.style.color = 'var(--text-muted)';
+  _giftEmailDebounce = setTimeout(async () => {
+    try {
+      const res = await API._fetch('GET', `gifts/check-recipient?email=${encodeURIComponent(email)}`);
+      if (res.exists) {
+        statusEl.textContent = `✓ ${res.name} is on SV Capital`;
+        statusEl.style.color = '#22c55e';
+        if (!document.getElementById('giftRecipientName').value) {
+          document.getElementById('giftRecipientName').value = res.name;
+          updateGiftPreview();
+        }
+      } else {
+        statusEl.textContent = '✉ Will receive an invite email';
+        statusEl.style.color = '#ff9b0c';
+      }
+    } catch (_) { statusEl.textContent = ''; }
+  }, 500);
+}
+
+async function sendGift() {
+  const btn   = document.getElementById('giftSendBtn');
+  const email = document.getElementById('giftRecipientEmail')?.value?.trim();
+  const name  = document.getElementById('giftRecipientName')?.value?.trim();
+  const amount= parseFloat(document.getElementById('giftAmount')?.value);
+  const msg   = document.getElementById('giftMessage')?.value?.trim();
+
+  if (!email || !email.includes('@')) { Toast.error('Please enter a valid recipient email'); return; }
+  if (!amount || amount < 50) { Toast.error('Minimum gift amount is R50'); return; }
+
+  const inv = PORTAL.investor;
+  const walletBal = parseFloat(inv?.wallet_balance) || 0;
+  if (walletBal < amount) {
+    Toast.error(`Insufficient balance — you have ${Utils.rand(walletBal)} available in your wallet`); return;
+  }
+
+  await _withBtn(btn, async () => {
+    try {
+      const res = await API._fetch('POST', 'gifts/send', { recipientEmail: email, recipientName: name, amount, message: msg });
+      if (res.success) {
+        Toast.success(res.recipientExists
+          ? `🎁 Gift sent! The funds have been added to their wallet.`
+          : `🎁 Gift sent! ${email} will receive an invitation to claim it.`);
+        // Reset form
+        document.getElementById('giftAmount').value = '';
+        document.getElementById('giftRecipientEmail').value = '';
+        document.getElementById('giftRecipientName').value = '';
+        document.getElementById('giftMessage').value = '';
+        document.getElementById('giftCharCount').textContent = '0/280';
+        document.getElementById('giftRecipientStatus').textContent = '';
+        document.querySelectorAll('.gift-preset').forEach(b => b.classList.remove('active'));
+        updateGiftPreview();
+        // Update local wallet balance immediately
+        if (inv) { inv.wallet_balance = Math.max(0, (parseFloat(inv.wallet_balance)||0) - amount); }
+        const balHint = document.getElementById('giftBalanceHint');
+        if (balHint && inv) balHint.textContent = `Your wallet balance: ${Utils.rand(inv.wallet_balance)}`;
+        // Refresh gift history and reload transactions in background
+        _launchGiftConfetti();
+        await _loadSentGifts();
+        loadPortalData().then(() => { renderOverviewTxns(); renderWallet(); }).catch(() => {});
+      }
+    } catch (e) {
+      Toast.error('Failed to send gift: ' + (e.message || 'unknown error'));
+    }
+  });
+}
+
+async function _loadSentGifts() {
+  try {
+    const res = await API._fetch('GET', 'gifts/my');
+    _giftSentCache = res.data || [];
+    _renderGiftHistory('sent');
+  } catch (_) {}
+}
+
+async function _loadReceivedGifts() {
+  try {
+    const res = await API._fetch('GET', 'gifts/received');
+    _giftReceivedCache = res.data || [];
+    _renderGiftHistory('received');
+  } catch (_) {}
+}
+
+function switchGiftTab(tab) {
+  document.getElementById('giftTabSent').classList.toggle('active', tab === 'sent');
+  document.getElementById('giftTabReceived').classList.toggle('active', tab === 'received');
+  document.getElementById('giftHistorySent').style.display     = tab === 'sent'     ? '' : 'none';
+  document.getElementById('giftHistoryReceived').style.display = tab === 'received' ? '' : 'none';
+}
+
+function _renderGiftHistory(type) {
+  const isSent = type === 'sent';
+  const data   = isSent ? _giftSentCache : _giftReceivedCache;
+  const listEl = document.getElementById(isSent ? 'giftSentList' : 'giftReceivedList');
+  const emptyEl= document.getElementById(isSent ? 'giftSentEmpty' : 'giftReceivedEmpty');
+  if (!listEl) return;
+
+  if (!data.length) {
+    if (emptyEl) emptyEl.style.display = 'flex';
+    listEl.innerHTML = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  const statusColors = { pending:'#ff9b0c', claimed:'#22c55e', expired:'#6b7280', cancelled:'#ef4444' };
+  const statusLabels = { pending:'Pending — awaiting claim', claimed:'Claimed', expired:'Expired', cancelled:'Cancelled' };
+
+  listEl.innerHTML = data.map(g => {
+    const iconBg = isSent ? 'rgba(255,155,12,0.12)' : 'rgba(34,197,94,0.12)';
+    const iconColor = isSent ? '#ff9b0c' : '#22c55e';
+    const personName = isSent
+      ? (g.r_first ? `${g.r_first} ${g.r_last}`.trim() : (g.recipient_name || g.recipient_email))
+      : (g.s_first ? `${g.s_first} ${g.s_last}`.trim() : 'SV Capital Gift');
+    const dateStr = Utils.date ? Utils.date(g.created_at) : new Date(g.created_at).toLocaleDateString('en-ZA');
+    const msgSnippet = g.message ? `"${g.message.slice(0,60)}${g.message.length > 60 ? '…' : ''}"` : '';
+    const cancelBtn = isSent && g.status === 'pending'
+      ? `<button class="gift-row__cancel" onclick="cancelGift('${g.id}')">Cancel & Refund</button>` : '';
+
+    return `<div class="gift-row">
+      <div class="gift-row__icon" style="background:${iconBg};color:${iconColor}">
+        <i class="fa-solid fa-${isSent ? 'paper-plane' : 'gift'}"></i>
+      </div>
+      <div class="gift-row__body">
+        <div class="gift-row__name">${_esc ? _esc(personName) : personName}</div>
+        <div class="gift-row__meta">${dateStr}${msgSnippet ? ` · ${msgSnippet}` : ''}</div>
+      </div>
+      <div class="gift-row__right">
+        <div class="gift-row__amount">${isSent ? '-' : '+'}${Utils.rand ? Utils.rand(g.amount) : 'R'+g.amount}</div>
+        <div class="gift-row__status" style="color:${statusColors[g.status]||'#888'}">${statusLabels[g.status]||g.status}</div>
+        ${cancelBtn}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function cancelGift(giftId) {
+  if (!await Confirm.ask('Cancel this gift?', { body: 'The gift amount will be refunded to your wallet.', confirmLabel: 'Cancel Gift' })) return;
+  try {
+    await API._fetch('DELETE', `gifts/${giftId}`);
+    Toast.success('Gift cancelled — funds refunded to your wallet');
+    const inv = PORTAL.investor;
+    const gift = _giftSentCache.find(g => g.id === giftId);
+    if (gift && inv) {
+      inv.wallet_balance = (parseFloat(inv.wallet_balance)||0) + parseFloat(gift.amount);
+      const balHint = document.getElementById('giftBalanceHint');
+      if (balHint) balHint.textContent = `Your wallet balance: ${Utils.rand(inv.wallet_balance)}`;
+    }
+    await _loadSentGifts();
+  } catch (e) {
+    Toast.error('Failed to cancel: ' + (e.message || 'unknown error'));
+  }
+}
+
+function _launchGiftConfetti() {
+  const colours = ['#ff9b0c','#ff5229','#D4AF37','#22c55e','#a855f7'];
+  for (let i = 0; i < 60; i++) {
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;top:${Math.random()*40}%;left:${Math.random()*100}%;
+      width:${6+Math.random()*6}px;height:${6+Math.random()*6}px;
+      background:${colours[Math.floor(Math.random()*colours.length)]};
+      border-radius:${Math.random()>.5?'50%':'2px'};
+      pointer-events:none;z-index:99999;opacity:1;
+      transform:rotate(${Math.random()*360}deg);
+      animation:giftConfettiFall ${1+Math.random()*1.5}s ease-out ${Math.random()*0.5}s forwards`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2500);
+  }
+}
+/* inject confetti keyframes once */
+if (!document.getElementById('giftConfettiStyle')) {
+  const s = document.createElement('style');
+  s.id = 'giftConfettiStyle';
+  s.textContent = `@keyframes giftConfettiFall{to{transform:translateY(80vh) rotate(720deg);opacity:0}}`;
+  document.head.appendChild(s);
 }
 
 function loadDocuments() {
@@ -7861,6 +8846,23 @@ function generateInvestmentCertificate(invId) {
   });
 }
 
+/* ── PDF: logo cache ── */
+let _cachedLogoDataUrl = null;
+async function _preloadLogo() {
+  try {
+    const url  = new URL('../assets/logo.png', window.location.href).href;
+    const resp = await fetch(url);
+    if (!resp.ok) return;
+    const blob = await resp.blob();
+    _cachedLogoDataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (_) {}
+}
+
 /* ── PDF helper: get jsPDF instance ── */
 function _getPDF(orientation = 'portrait') {
   // jsPDF 2.x UMD exposes window.jspdf.jsPDF; older builds use window.jsPDF
@@ -7877,22 +8879,25 @@ function _getPDF(orientation = 'portrait') {
 /* ── PDF: dark header bar ── */
 function _pdfHeader(doc, title, subtitle) {
   const W = doc.internal.pageSize.getWidth();
-  // Dark header
-  doc.setFillColor(26, 34, 53); // #1a2235
+  // Dark header band
+  doc.setFillColor(26, 34, 53); // #303030
   doc.rect(0, 0, W, 38, 'F');
   // Gold accent line
-  doc.setFillColor(255, 155, 12); // #FF9B0C
+  doc.setFillColor(255, 155, 12);
   doc.rect(0, 38, W, 2, 'F');
-  // "SV CAPITAL" text in gold
-  doc.setFontSize(18);
+  // Logo icon (square lotus mark) + brand name text
+  if (_cachedLogoDataUrl) {
+    doc.addImage(_cachedLogoDataUrl, 'PNG', 9, 7, 22, 22);
+  }
+  const textX = _cachedLogoDataUrl ? 34 : 14;
+  doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(255, 155, 12);
-  doc.text('SV Capital', 14, 17);
-  // Subtitle
-  doc.setFontSize(9);
+  doc.text('SV Capital', textX, 17);
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(156, 163, 175);
-  doc.text('SmartVest Financial Services · FSP #52449', 14, 24);
+  doc.text('SmartVest Financial Services · FSP #52449', textX, 24);
   // Document title (right aligned)
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
@@ -8194,7 +9199,7 @@ function downloadStatement() {
     doc.setTextColor(156, 163, 175);
     doc.text('No transactions in the last 90 days.', 14, y + 10);
   } else {
-    const typeMap = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus' };
+    const typeMap = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus', gift_sent: 'Gift Sent', gift_received: 'Gift Received', reward: 'XP Reward' };
     const tableHead = [['Date', 'Type', 'Description', 'Amount', 'Status']];
     const tableBody = txns.map(t => [
       Utils.date(t.transaction_date || t.created_at),
@@ -8564,7 +9569,7 @@ function renderMyTickets() {
           </div>
         </div>
         <div class="my-ticket-meta" style="font-size:0.74rem;color:var(--text-muted);margin-bottom:8px">${Utils.date(t.created_at)} &middot; ${(t.category || '').replace(/_/g, ' ')}</div>
-        ${hasAdminReply ? `<div style="font-size:0.78rem;color:#1a1a1a;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.2);border-radius:6px;padding:6px 10px;margin-bottom:8px"><strong style="color:#2F8C9B">Support:</strong> ${(t.admin_response || '').slice(0, 120)}${(t.admin_response || '').length > 120 ? '…' : ''}</div>` : ''}
+        ${hasAdminReply ? `<div style="font-size:0.78rem;color:#1a1a1a;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.2);border-radius:6px;padding:6px 10px;margin-bottom:8px"><strong style="color:#656565">Support:</strong> ${(t.admin_response || '').slice(0, 120)}${(t.admin_response || '').length > 120 ? '…' : ''}</div>` : ''}
         <button class="btn btn--ghost btn--sm" onclick="openTicketConversation('${t.id}')" style="font-size:0.78rem;padding:5px 12px">
           <i class="fa-solid fa-comment-dots"></i> View Conversation
         </button>
@@ -8706,40 +9711,25 @@ async function sendTicketReply() {
 function updateRecurringToggleStyle() {
   const toggle = document.getElementById('recurringEnabledToggle');
   const slider = document.getElementById('recurringToggleSlider');
-  if (slider) {
-    if (toggle && toggle.checked) {
-      slider.classList.add('recurring-toggle-on');
-    } else {
-      slider.classList.remove('recurring-toggle-on');
-    }
-  }
+  if (!slider) return;
+  const on = !!(toggle && toggle.checked);
+  slider.style.background = on ? '#ff9b0c' : '#ccc';
 }
 
 function openRecurringModal() {
-  // Populate pool selector
-  const sel = document.getElementById('recurringPoolSelect');
-  if (sel) {
-    sel.innerHTML = '<option value="">Select a pool…</option>' +
-      (PORTAL.pools || []).filter(p => p.status === 'open').map(p =>
-        `<option value="${p.id}">${p.name} — ${Utils.pct(p.annual_rate || p.benchmark_rate)} p.a.</option>`
-      ).join('');
-  }
-
-  // Load existing settings from investor
-  const inv = PORTAL.investor;
-  const toggle = document.getElementById('recurringEnabledToggle');
-  const amtEl  = document.getElementById('recurringAmount');
+  const inv     = PORTAL.investor;
+  const toggle  = document.getElementById('recurringEnabledToggle');
+  const amtEl   = document.getElementById('recurringAmount');
+  const prodSel = document.getElementById('recurringProductSelect');
+  const daySel  = document.getElementById('recurringDay');
 
   if (toggle) {
     toggle.checked = !!(inv && inv.recurring_enabled);
     updateRecurringToggleStyle();
   }
-  if (amtEl && inv && inv.recurring_amount) {
-    amtEl.value = inv.recurring_amount;
-  }
-  if (sel && inv && inv.recurring_pool_id) {
-    sel.value = inv.recurring_pool_id;
-  }
+  if (amtEl && inv?.recurring_amount)         amtEl.value   = inv.recurring_amount;
+  if (prodSel && inv?.recurring_product_type) prodSel.value = inv.recurring_product_type;
+  if (daySel  && inv?.recurring_day)          daySel.value  = inv.recurring_day;
 
   Modal.open('recurringModal');
 }
@@ -8747,47 +9737,49 @@ function openRecurringModal() {
 async function saveRecurringInvestment() {
   const toggle  = document.getElementById('recurringEnabledToggle');
   const amtEl   = document.getElementById('recurringAmount');
-  const poolSel = document.getElementById('recurringPoolSelect');
+  const prodSel = document.getElementById('recurringProductSelect');
+  const daySel  = document.getElementById('recurringDay');
 
-  const enabled  = !!(toggle && toggle.checked);
-  const amount   = parseFloat(amtEl?.value || 0);
-  const poolId   = poolSel?.value || null;
+  const enabled     = !!(toggle && toggle.checked);
+  const amount      = parseFloat(amtEl?.value || 0);
+  const productType = prodSel?.value || null;
+  const day         = parseInt(daySel?.value || 1, 10);
 
   if (enabled) {
     if (!amount || amount < 100) { Toast.error('Please enter a monthly amount of at least R100'); return; }
-    if (!poolId) { Toast.error('Please select an investment pool'); return; }
+    if (!productType) { Toast.error('Please select a product type'); return; }
+    if (!day || day < 1 || day > 28) { Toast.error('Please select a valid day (1–28)'); return; }
   }
 
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
   try {
     await API._fetch('PATCH', `tables/investors/${investorId}`, {
-      recurring_enabled: enabled,
-      recurring_amount:  enabled ? amount : null,
-      recurring_pool_id: enabled ? poolId : null,
+      recurring_enabled:      enabled,
+      recurring_amount:       enabled ? amount       : null,
+      recurring_product_type: enabled ? productType  : null,
+      recurring_day:          enabled ? day          : null,
     });
 
-    // Update local state
     if (PORTAL.investor) {
-      PORTAL.investor.recurring_enabled  = enabled;
-      PORTAL.investor.recurring_amount   = enabled ? amount : null;
-      PORTAL.investor.recurring_pool_id  = enabled ? poolId : null;
+      PORTAL.investor.recurring_enabled      = enabled;
+      PORTAL.investor.recurring_amount       = enabled ? amount      : null;
+      PORTAL.investor.recurring_product_type = enabled ? productType : null;
+      PORTAL.investor.recurring_day          = enabled ? day         : null;
     }
 
     Modal.close('recurringModal');
+    SVC.track('svc_recurring_investment_set', { enabled, product_type: productType, amount, day });
 
-    SVC.track('svc_recurring_investment_set', { enabled: enabled, pool_id: poolId, amount: amount });
-
+    const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar 7yr', solar_6yr:'Solar 6yr', solar_5yr:'Solar 5yr', short_term:'Short Term', smme:'SMME Finance', delivery_bike:'Delivery Bike', other:'Other' };
     if (enabled) {
-      const pool = (PORTAL.pools || []).find(p => p.id === poolId);
-      Toast.success(`Recurring investment of ${Utils.rand(amount)}/month set up${pool ? ' in ' + pool.name : ''}!`);
+      const suffix = day === 1 ? 'st' : day === 2 ? 'nd' : day === 3 ? 'rd' : 'th';
+      Toast.success(`Recurring ${Utils.rand(amount)}/month into ${PRODUCT_LABELS[productType] || productType} set for the ${day}${suffix} of each month`);
     } else {
       Toast.success('Recurring investment disabled.');
     }
 
     _renderRecurringStatusSummary();
-    // Refresh the recurring tab if it's currently visible
     if (document.getElementById('walletRecurringTab')?.style.display !== 'none') _renderRecurringTab();
-    // Update badge
     const badge = document.getElementById('recurringActiveBadge');
     if (badge) badge.style.display = enabled ? 'inline-flex' : 'none';
   } catch (e) {
@@ -8801,10 +9793,12 @@ function _renderRecurringStatusSummary() {
   const summaryEl = document.getElementById('recurringStatusSummary');
   if (!summaryEl) return;
 
-  if (inv && inv.recurring_enabled && inv.recurring_amount) {
-    const pool = (PORTAL.pools || []).find(p => p.id === inv.recurring_pool_id);
+  const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar 7yr', solar_6yr:'Solar 6yr', solar_5yr:'Solar 5yr', short_term:'Short Term', smme:'SMME Finance', delivery_bike:'Delivery Bike', other:'Other' };
+  if (inv && inv.recurring_enabled && inv.recurring_amount && inv.recurring_product_type) {
+    const day    = inv.recurring_day || 1;
+    const suffix = day === 1 ? 'st' : day === 2 ? 'nd' : day === 3 ? 'rd' : 'th';
     summaryEl.style.display = '';
-    summaryEl.innerHTML = `<i class="fa-solid fa-check-circle" style="color:#22c55e"></i> <strong>Active:</strong> ${Utils.rand(inv.recurring_amount)}/month into ${pool ? _esc(pool.name) : 'selected pool'}`;
+    summaryEl.innerHTML = `<i class="fa-solid fa-check-circle" style="color:#22c55e"></i> <strong>Active:</strong> ${Utils.rand(inv.recurring_amount)}/month into ${PRODUCT_LABELS[inv.recurring_product_type] || inv.recurring_product_type} on the ${day}${suffix}`;
   } else {
     summaryEl.style.display = 'none';
   }
@@ -9184,7 +10178,7 @@ function _renderAnalyticsAllocChart() {
   });
   const entries = Object.entries(byPool).sort((a, b) => b[1] - a[1]);
   const total   = entries.reduce((s, [, v]) => s + v, 0);
-  const COLORS  = ['#FF9B0C','#a855f7','#2F8C9B','#22c55e','#ef4444','#3b82f6','#f97316','#8b5cf6'];
+  const COLORS  = ['#FF9B0C','#a855f7','#656565','#22c55e','#ef4444','#656565','#f97316','#8b5cf6'];
 
   if (PORTAL.charts.analyticsAlloc) { PORTAL.charts.analyticsAlloc.destroy(); }
   PORTAL.charts.analyticsAlloc = new Chart(ctx, {
@@ -9219,7 +10213,7 @@ function _renderAnalyticsTimeline() {
     return;
   }
   const statusBadge = s => {
-    const map = { active:'#22c55e', paid_out:'#3b82f6', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316' };
+    const map = { active:'#22c55e', paid_out:'#656565', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316' };
     return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${String(s||'').replace('_',' ').toUpperCase()}</span>`;
   };
   const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';

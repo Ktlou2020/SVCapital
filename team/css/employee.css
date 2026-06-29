@@ -27,7 +27,7 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Poppins', system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   overflow: hidden;
@@ -114,7 +114,7 @@ html, body {
   padding: 0 11px;
   font-size: 0.82rem;
   font-weight: 500;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Poppins', system-ui, sans-serif;
   transition: background 0.15s, color 0.15s;
   flex-shrink: 0;
   text-align: left;
@@ -1674,7 +1674,7 @@ html, body {
 .level-num, .xp-num, .salary-val, .payslip-total,
 [class*="__value"],[class*="-value"],[class*="__val"],[class*="-val"],
 [class*="stat-num"],[class*="metric-num"] {
-  font-family: 'Poppins', 'Inter', system-ui, sans-serif !important;
+  font-family: 'Poppins', 'Poppins', system-ui, sans-serif !important;
 }
 
 /* ─── Scrollbar ─────────────────────────────────────────────────────── */

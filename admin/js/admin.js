@@ -284,7 +284,7 @@ function loadAdminNotifications(investors, transactions, tickets) {
   if (openTkts.length) {
     const urgent = openTkts.filter(t => t.priority === 'high' || t.priority === 'urgent');
     notifs.push({
-      icon: 'fa-headset', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#2F8C9B',
+      icon: 'fa-headset', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#656565',
       title: `${openTkts.length} open ticket${openTkts.length === 1 ? '' : 's'} awaiting reply`,
       sub: urgent.length
         ? `${urgent.length} high-priority — &ldquo;${_esc(urgent[0].subject)}&rdquo;`
@@ -842,7 +842,7 @@ function renderActivityFeed() {
     if (!ts) return;
     events.push({
       ts: new Date(ts),
-      icon: 'fa-user-plus', color: '#2F8C9B',
+      icon: 'fa-user-plus', color: '#656565',
       text: `<strong>${_esc(inv.first_name)} ${_esc(inv.last_name)}</strong> registered`,
       sub: inv.email || inv.id,
       view: 'investors',
@@ -1026,7 +1026,7 @@ function renderProductMixChart() {
 
   const labels = ['Cattle Investment', 'Solar Investment (7yr)', 'Solar Investment (6yr)', 'Solar Investment (5yr)', 'Short Term Investment', 'Delivery Bikes'];
   const data = Object.values(products);
-  const colors = ['#D4AF37', '#22c55e', '#4ade80', '#86efac', '#3b82f6', '#f97316'];
+  const colors = ['#D4AF37', '#22c55e', '#4ade80', '#86efac', '#656565', '#f97316'];
 
   if (STATE.charts.productMix) STATE.charts.productMix.destroy();
   STATE.charts.productMix = new Chart(ctx, {
@@ -1079,7 +1079,7 @@ function renderInvestorStats() {
 }
 
 function _invAvatarColor(name) {
-  const p = ['#D4AF37','#3b82f6','#22c55e','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#ef4444'];
+  const p = ['#D4AF37','#656565','#22c55e','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#ef4444'];
   let h = 0; for (const c of (name||'?')) h = (h<<5) - h + c.charCodeAt(0);
   return p[Math.abs(h) % p.length];
 }
@@ -1281,7 +1281,7 @@ async function viewInvestor(id) {
                 <div style="font-size:0.72rem;color:var(--text-muted)">Returns</div>
               </div>
               <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
-                <div style="font-size:1.05rem;font-weight:800;color:#3b82f6">${invsts.length} <span style="font-size:0.72rem;font-weight:400">(${activeInvCount} active)</span></div>
+                <div style="font-size:1.05rem;font-weight:800;color:#656565">${invsts.length} <span style="font-size:0.72rem;font-weight:400">(${activeInvCount} active)</span></div>
                 <div style="font-size:0.72rem;color:var(--text-muted)">Investments</div>
               </div>
             </div>
@@ -2355,7 +2355,7 @@ async function viewPoolInvestors(poolId) {
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
         ${[
           ['Total Raised',  Utils.rand(summary.total_invested), 'coins',      '#D4AF37'],
-          ['Investors',     summary.investor_count,             'users',      '#3b82f6'],
+          ['Investors',     summary.investor_count,             'users',      '#656565'],
           ['Active',        summary.active_count,               'chart-line', '#22c55e'],
           ['Matured',       summary.matured_count,              'flag-checkered','#8b5cf6'],
         ].map(([label, val, icon, color]) => `
@@ -3626,7 +3626,7 @@ function renderCohortChart() {
   if (STATE.charts.cohort) STATE.charts.cohort.destroy();
   STATE.charts.cohort = new Chart(ctx, {
     type: 'bar',
-    data: { labels: months, datasets: [{ label: 'New Investors', data: counts, backgroundColor: 'rgba(59,130,246,0.7)', borderColor: '#3b82f6', borderWidth: 1, borderRadius: 6 }] },
+    data: { labels: months, datasets: [{ label: 'New Investors', data: counts, backgroundColor: 'rgba(59,130,246,0.7)', borderColor: '#656565', borderWidth: 1, borderRadius: 6 }] },
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { labels: { color: '#7a92a8', font: { size: 11 } } } },
       scales: { x: { ticks: { color: '#3d5268' }, grid: { display: false } }, y: { ticks: { color: '#3d5268', stepSize: 1 }, grid: { color: 'rgba(0,0,0,0.05)' } } }
@@ -3681,13 +3681,13 @@ async function renderMobileActivity() {
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px">
       <div style="background:rgba(0,150,255,0.08);border:1px solid rgba(0,150,255,0.2);border-radius:10px;padding:14px 16px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <i class="fa-brands fa-apple" style="font-size:1.2rem;color:#0096ff"></i>
-          <span style="font-size:0.72rem;font-weight:700;color:#0096ff;text-transform:uppercase;letter-spacing:0.05em">iOS</span>
+          <i class="fa-brands fa-apple" style="font-size:1.2rem;color:#656565"></i>
+          <span style="font-size:0.72rem;font-weight:700;color:#656565;text-transform:uppercase;letter-spacing:0.05em">iOS</span>
         </div>
         <div style="font-size:1.6rem;font-weight:800;color:var(--text)">${iosEvents.length.toLocaleString()}</div>
         <div style="font-size:0.72rem;color:var(--text-muted)">events (30d)</div>
         <div style="margin-top:8px;height:4px;background:rgba(0,0,0,0.1);border-radius:2px">
-          <div style="height:100%;width:${pct(iosLogins)}%;background:#0096ff;border-radius:2px"></div>
+          <div style="height:100%;width:${pct(iosLogins)}%;background:#656565;border-radius:2px"></div>
         </div>
         <div style="font-size:0.68rem;color:var(--text-dim);margin-top:4px">${iosLogins} logins · ${pct(iosLogins)}% of total</div>
       </div>
@@ -3736,7 +3736,7 @@ async function renderMobileActivity() {
         ${recentMobile.map(e => {
           const isPlatformIos = (e.platform || e.device_type || e.user_agent || '').toLowerCase().includes('ios');
           const icon  = isPlatformIos ? 'fa-apple' : 'fa-android';
-          const color = isPlatformIos ? '#0096ff' : '#3ddc84';
+          const color = isPlatformIos ? '#656565' : '#3ddc84';
           const plat  = isPlatformIos ? 'iOS' : 'Android';
           return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
             <div style="width:28px;height:28px;border-radius:50%;background:rgba(${isPlatformIos?'0,150,255':'61,220,132'},0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -3764,7 +3764,7 @@ function renderProductVolChart() {
   STATE.investments.forEach(i => { vol[i.product_type] = (vol[i.product_type] || 0) + i.amount; });
   const labels = Object.keys(vol).map(k => Utils.productInfo(k).label);
   const data = Object.values(vol);
-  const colors = ['#D4AF37', '#22c55e', '#4ade80', '#86efac', '#3b82f6', '#f97316'];
+  const colors = ['#D4AF37', '#22c55e', '#4ade80', '#86efac', '#656565', '#f97316'];
 
   if (STATE.charts.productVol) STATE.charts.productVol.destroy();
   STATE.charts.productVol = new Chart(ctx, {
@@ -3786,7 +3786,7 @@ function renderProvinceChart() {
   if (!ctx) return;
   const prov = {};
   STATE.investors.forEach(i => { prov[i.province] = (prov[i.province] || 0) + 1; });
-  const colors = ['#D4AF37', '#22c55e', '#3b82f6', '#f97316', '#a855f7', '#ef4444', '#06b6d4', '#84cc16', '#f59e0b'];
+  const colors = ['#D4AF37', '#22c55e', '#656565', '#f97316', '#a855f7', '#ef4444', '#06b6d4', '#84cc16', '#f59e0b'];
 
   if (STATE.charts.province) STATE.charts.province.destroy();
   STATE.charts.province = new Chart(ctx, {
@@ -3917,7 +3917,7 @@ function renderConversionFunnel() {
 
   const stages = [
     { label: 'Signed Up',          count: total,         color: '#6366f1', icon: '✍️' },
-    { label: 'FICA Submitted',      count: ficaSubmitted,  color: '#3b82f6', icon: '📋' },
+    { label: 'FICA Submitted',      count: ficaSubmitted,  color: '#656565', icon: '📋' },
     { label: 'FICA Approved',       count: ficaApproved,   color: '#FF9B0C', icon: '✅' },
     { label: 'First Deposit',       count: deposited,      color: '#22c55e', icon: '💳' },
     { label: 'First Investment',    count: invested,       color: '#D4AF37', icon: '📈' },
@@ -4021,7 +4021,7 @@ function renderConversionFunnel() {
       </div>
       <div style="background:rgba(59,130,246,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Avg days to invest</div>
-        <div style="font-size:1.05rem;font-weight:700;color:#3b82f6">${avgDays !== null ? avgDays + 'd' : '—'}</div>
+        <div style="font-size:1.05rem;font-weight:700;color:#656565">${avgDays !== null ? avgDays + 'd' : '—'}</div>
         <div style="font-size:0.68rem;color:var(--text-muted)">signup → 1st investment</div>
       </div>
       <div style="background:rgba(249,115,22,0.08);border-radius:8px;padding:10px 12px">
@@ -4071,7 +4071,7 @@ function renderSignupFriction(data, panel) {
   const maxSessions = Math.max(...step_funnel.map(s => s.sessions), 1);
 
   const stepNames = { 1: 'Personal Info', 2: 'Security', 3: 'Profile', 4: 'FICA Docs' };
-  const stepColors = { 1: '#6366f1', 2: '#3b82f6', 3: '#FF9B0C', 4: '#22c55e' };
+  const stepColors = { 1: '#6366f1', 2: '#656565', 3: '#FF9B0C', 4: '#22c55e' };
 
   function fmtMs(ms) {
     if (!ms) return '—';
@@ -4127,7 +4127,7 @@ function renderSignupFriction(data, panel) {
   const totalDev = device_breakdown.reduce((s, d) => s + d.count, 0) || 1;
   const devHtml = device_breakdown.map(d => {
     const pct = Math.round(d.count / totalDev * 100);
-    const colors = { mobile: '#a855f7', desktop: '#3b82f6', tablet: '#22c55e' };
+    const colors = { mobile: '#a855f7', desktop: '#656565', tablet: '#22c55e' };
     const c = colors[d.device_type] || '#6b7280';
     return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
       <div style="width:62px;font-size:0.75rem;color:var(--text-muted);text-transform:capitalize">${d.device_type}</div>
@@ -4905,7 +4905,7 @@ function setupGlobalSearch() {
     if (investors.length) groups.push({ label: 'Investors', items: investors });
 
     const pools = STATE.pools.filter(p => (p.name||'').toLowerCase().includes(q) || (p.product_type||'').toLowerCase().includes(q)).slice(0, 4).map(p => ({
-      icon: 'fa-layer-group', color: '#3b82f6',
+      icon: 'fa-layer-group', color: '#656565',
       title: p.name,
       sub: `Pool · ${p.status} · ${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)} raised`,
       action: () => { input.value = ''; close(); navigate('pools', document.querySelector('[data-view=pools]')); setTimeout(() => viewPoolInvestors(p.id), 300); }
@@ -5408,11 +5408,11 @@ function _opsRenderMoney(s) {
     </div>`;
   el.innerHTML = `
     ${row('fa-chart-line', 'Total AUM (active investments)', _opsR(s.aum), '#22c55e')}
-    ${row('fa-wallet', 'Total wallet pool', _opsR(s.totalWalletBalance), '#3b82f6')}
+    ${row('fa-wallet', 'Total wallet pool', _opsR(s.totalWalletBalance), '#656565')}
     ${row('fa-arrow-down-to-arc', `Pending deposits (${s.pendingDeposits?.count ?? 0})`, _opsR(s.pendingDeposits?.value), '#22c55e', 'Awaiting admin approval')}
     ${row('fa-arrow-up-from-arc', `Pending withdrawals (${s.pendingWithdrawals?.count ?? 0})`, _opsR(s.pendingWithdrawals?.value), '#f59e0b', 'In payout queue')}
     ${row('fa-clock', `Pending investments (${s.pendingInvestments?.count ?? 0})`, _opsR(s.pendingInvestments?.value), '#a855f7', 'Awaiting allocation')}
-    ${row('fa-coins', 'Deposits this month', _opsR(s.monthDeposits?.value), '#3b82f6', `${s.monthDeposits?.count ?? 0} transactions`)}
+    ${row('fa-coins', 'Deposits this month', _opsR(s.monthDeposits?.value), '#656565', `${s.monthDeposits?.count ?? 0} transactions`)}
     ${row('fa-hand-holding-dollar', 'Returns distributed this month', _opsR(s.returnsDistributed), '#22c55e')}
     ${row('fa-bolt', 'Deposit velocity (7 days)', _opsR(s.investVol7d), '#FF9B0C')}
   `.replace(/<div[^>]*><\/div>$/, '');
@@ -5435,13 +5435,13 @@ function _opsRenderInvestorPulse(s) {
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
       ${tile('Total', inv.total, '#e8edf2')}
       ${tile('Active Investors', inv.active, '#22c55e')}
-      ${tile('FICA Approved', inv.ficaApproved, '#3b82f6')}
+      ${tile('FICA Approved', inv.ficaApproved, '#656565')}
       ${tile('FICA Pending', inv.ficaPending, '#f59e0b')}
       ${tile('New Today', inv.newToday, '#a855f7')}
       ${tile('New This Month', inv.newMonth, '#FF9B0C')}
     </div>
     <div style="display:flex;align-items:center;padding:10px 12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:10px;font-size:0.82rem;color:#e8edf2">
-      <i class="fa-solid fa-user-plus" style="color:#3b82f6;margin-right:8px"></i>
+      <i class="fa-solid fa-user-plus" style="color:#656565;margin-right:8px"></i>
       <strong>${inv.newWeek ?? '—'}</strong>&nbsp;new investors this week ${growthHtml}
     </div>
   `;
@@ -5455,7 +5455,7 @@ function _opsRenderFunnel(funnel) {
   el.innerHTML = stages.map((stage, i) => {
     const pct = Math.round((stage.count / max) * 100);
     const convPct = i > 0 ? Math.round((stage.count / stages[i-1].count) * 100) : 100;
-    const color = ['#3b82f6','#22c55e','#f59e0b','#a855f7','#FF9B0C'][i] || '#3b82f6';
+    const color = ['#656565','#22c55e','#f59e0b','#a855f7','#FF9B0C'][i] || '#656565';
     return `<div style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <span style="font-size:0.78rem;font-weight:700;color:#e8edf2">${stage.label}</span>
@@ -5476,7 +5476,7 @@ function _opsRenderAumByType(s) {
   if (!ctx || !s.aumByType?.length) return;
   if (_opsAumByTypeChart) { _opsAumByTypeChart.destroy(); _opsAumByTypeChart = null; }
   const typeLabel = { cattle: 'Cattle', solar: 'Solar', short_term: 'Short-Term', delivery: 'Delivery' };
-  const colors = ['#FF9B0C','#22c55e','#3b82f6','#a855f7','#f59e0b','#2F8C9B'];
+  const colors = ['#FF9B0C','#22c55e','#656565','#a855f7','#f59e0b','#656565'];
   const labels  = s.aumByType.map(r => typeLabel[r.type] || r.type);
   const data    = s.aumByType.map(r => r.volume);
   _opsAumByTypeChart = new Chart(ctx, {
@@ -5499,7 +5499,7 @@ function _opsRenderTopPools(s) {
   const el = document.getElementById('opsTopPools');
   if (!el || !s.topPools?.length) { if (el) el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.82rem">No pool data</div>'; return; }
   const maxVol = Math.max(...s.topPools.map(p => p.volume), 1);
-  const typeColor = { cattle: '#FF9B0C', solar: '#22c55e', short_term: '#3b82f6', delivery: '#a855f7' };
+  const typeColor = { cattle: '#FF9B0C', solar: '#22c55e', short_term: '#656565', delivery: '#a855f7' };
   el.innerHTML = s.topPools.map((p, i) => {
     const pct = Math.round((p.volume / maxVol) * 100);
     const color = typeColor[p.type] || '#9ca3af';
@@ -5577,7 +5577,7 @@ function _opsRenderComms(comms) {
     </div>`;
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
-      ${tile('fa-bell', 'Push Subscribers', (push.subscribers||0).toLocaleString(), '#3b82f6')}
+      ${tile('fa-bell', 'Push Subscribers', (push.subscribers||0).toLocaleString(), '#656565')}
       ${tile('fa-paper-plane', 'Pushes Sent (month)', push.sentThisMonth ?? 0, '#22c55e')}
       ${tile('fa-users', 'Push Recipients (month)', (push.recipientsThisMonth||0).toLocaleString(), '#a855f7')}
     </div>
@@ -5586,7 +5586,7 @@ function _opsRenderComms(comms) {
       <div style="display:flex;flex-direction:column;gap:6px">
         ${recent.map(n => `
           <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px">
-            <i class="fa-solid fa-bell" style="color:#3b82f6;font-size:0.8rem;flex-shrink:0"></i>
+            <i class="fa-solid fa-bell" style="color:#656565;font-size:0.8rem;flex-shrink:0"></i>
             <div style="flex:1;min-width:0">
               <div style="font-size:0.78rem;font-weight:700;color:#e8edf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.title || '(no title)'}</div>
               <div style="font-size:0.7rem;color:var(--text-muted)">${n.body ? n.body.slice(0,60)+'…' : ''}</div>
@@ -5602,7 +5602,7 @@ function _opsRenderComms(comms) {
 
 const _ACTION_COLOR = {
   'withdrawal.approved':'#22c55e', 'withdrawal.rejected':'#ef4444',
-  'investment.created':'#3b82f6', 'investment.approved':'#22c55e',
+  'investment.created':'#656565', 'investment.approved':'#22c55e',
   'kyc.approved':'#22c55e', 'kyc.rejected':'#ef4444',
   'investor.suspended':'#ef4444', 'broadcast.sent':'#a855f7',
   'deposit.approved':'#22c55e', 'deposit.rejected':'#ef4444',
@@ -6198,7 +6198,7 @@ function _buildTimelineEvents(inv, invsts, txns) {
 
   // 1. Account created
   if (inv.date_joined) {
-    events.push({ date: inv.date_joined, icon: 'fa-user-plus', color: '#3b82f6', text: 'Account created' });
+    events.push({ date: inv.date_joined, icon: 'fa-user-plus', color: '#656565', text: 'Account created' });
   }
 
   // 2. Transactions
@@ -6210,7 +6210,7 @@ function _buildTimelineEvents(inv, invsts, txns) {
       deposit:    { icon: 'fa-arrow-down',           color: '#22c55e', text: `Deposited ${amt}` },
       investment: { icon: 'fa-chart-line',            color: '#D4AF37', text: `Invested ${amt}${t.description ? ' in ' + t.description : ''}` },
       return:     { icon: 'fa-coins',                 color: '#22c55e', text: `Interest earned ${amt}` },
-      payout:     { icon: 'fa-arrow-up',              color: '#3b82f6', text: `Payout received ${amt}` },
+      payout:     { icon: 'fa-arrow-up',              color: '#656565', text: `Payout received ${amt}` },
       withdrawal: { icon: 'fa-arrow-up-from-bracket', color: '#f97316', text: `Withdrawal ${amt}${t.status ? ' (' + t.status + ')' : ''}` },
       adjustment: { icon: 'fa-sliders',               color: '#7a92a8', text: `Manual adjustment ${amt}` },
     };
@@ -6282,7 +6282,7 @@ function loadInvestorTimeline(inv, invsts, txns) {
   // Transactions
   txns.forEach(t => {
     const icons = { deposit: 'fa-wallet', withdrawal: 'fa-arrow-up-from-bracket', investment: 'fa-chart-line', return: 'fa-star', payout: 'fa-money-bill-transfer', fee: 'fa-receipt' };
-    const colors = { deposit: '#22c55e', withdrawal: '#ef4444', investment: '#D4AF37', return: '#3b82f6', payout: '#22c55e', fee: '#f59e0b' };
+    const colors = { deposit: '#22c55e', withdrawal: '#ef4444', investment: '#D4AF37', return: '#656565', payout: '#22c55e', fee: '#f59e0b' };
     events.push({
       date: new Date(t.transaction_date || t.created_at), icon: icons[t.type] || 'fa-arrows-rotate',
       color: colors[t.type] || '#888',
@@ -6601,7 +6601,7 @@ async function runMigration() {
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:12px">
         ${[
           ['Investors',    counts.investors    ?? 0, 'users',          '#22c55e'],
-          ['Pools',        counts.pools        ?? 0, 'layer-group',    '#3b82f6'],
+          ['Pools',        counts.pools        ?? 0, 'layer-group',    '#656565'],
           ['Investments',  counts.investments  ?? 0, 'chart-line',     '#f59e0b'],
           ['Transactions', counts.transactions ?? 0, 'arrows-rotate',  '#8b5cf6'],
           ['KYC Docs',     counts.kyc          ?? 0, 'id-card',        '#06b6d4'],
@@ -6672,7 +6672,7 @@ async function loadCompliance() {
       const isPast = daysLeft < 0;
       const isUrgent = daysLeft >= 0 && daysLeft <= 30;
       const isDone   = d.status === 'completed';
-      const color = isDone ? '#22c55e' : isPast ? '#ef4444' : isUrgent ? '#f59e0b' : '#3b82f6';
+      const color = isDone ? '#22c55e' : isPast ? '#ef4444' : isUrgent ? '#f59e0b' : '#656565';
       const label = isDone ? 'Done' : isPast ? 'Overdue' : isUrgent ? `${daysLeft}d left` : `${daysLeft}d`;
       const deleteBtn = !d._static ? `<button class="btn btn--danger btn--sm" style="margin-left:6px;padding:2px 8px;font-size:0.68rem" onclick='deleteComplianceItem(${JSON.stringify(d.id)})'><i class="fa-solid fa-trash"></i></button>` : '';
       const doneBtn   = !d._static && d.status !== 'completed' ? `<button class="btn btn--success btn--sm" style="margin-left:4px;padding:2px 8px;font-size:0.68rem" onclick='markComplianceDone(${JSON.stringify(d.id)})'><i class="fa-solid fa-check"></i></button>` : '';
@@ -6832,7 +6832,7 @@ function renderReconcTable() {
     </div>
     <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.15);border-radius:12px;padding:16px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#7a92a8;margin-bottom:6px">Total Invested</div>
-      <div style="font-size:1.35rem;font-weight:800;color:#60a5fa">${fmt(totalInv)}</div>
+      <div style="font-size:1.35rem;font-weight:800;color:#656565">${fmt(totalInv)}</div>
     </div>
     <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.15);border-radius:12px;padding:16px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#7a92a8;margin-bottom:6px">Total Wallets</div>
@@ -6864,7 +6864,7 @@ function renderReconcTable() {
     return `<tr>
       <td><div style="font-weight:600;font-size:0.83rem">${_esc(r.inv.first_name)} ${_esc(r.inv.last_name)}</div><div style="font-size:0.72rem;color:#7a92a8">${_esc(r.inv.email)||''}</div></td>
       <td style="color:#D4AF37;font-size:0.82rem;font-weight:600">${fmt(r.totalDeposited)}</td>
-      <td style="color:#60a5fa;font-size:0.82rem;font-weight:600">${fmt(r.totalInvested)}</td>
+      <td style="color:#656565;font-size:0.82rem;font-weight:600">${fmt(r.totalInvested)}</td>
       <td style="color:#22c55e;font-size:0.82rem;font-weight:600">${fmt(r.walletBalance)}</td>
       <td style="color:#9ca3af;font-size:0.82rem">${fmt(r.expectedWallet)}</td>
       <td style="font-size:0.82rem;font-weight:700;${varColor}">${r.variance >= 0 ? '+' : '-'}${fmt(r.variance)}</td>
@@ -6937,7 +6937,7 @@ async function loadAcceptedDocuments() {
       stats.innerHTML = [
         { label:'Total Acceptances', value: total,    color:'#ff9b0c' },
         { label:'Unique Investors',  value: uniqInv,  color:'#22c55e' },
-        { label:'Accepted Today',    value: today,    color:'#2F8C9B' },
+        { label:'Accepted Today',    value: today,    color:'#656565' },
         { label:'Document Types',    value: types.filter(t => _acdRows.some(d => d.document_type === t)).length, color:'#a855f7' },
       ].map(s => `
         <div class="stat-card">
@@ -6989,7 +6989,7 @@ function renderAcceptedDocsTable() {
     return;
   }
 
-  const docColor = { terms_of_service:'#2F8C9B', privacy_policy:'#22c55e', popia_notice:'#7c3aed', fica_consent:'#ff9b0c', risk_disclaimer:'#ef4444' };
+  const docColor = { terms_of_service:'#656565', privacy_policy:'#22c55e', popia_notice:'#7c3aed', fica_consent:'#ff9b0c', risk_disclaimer:'#ef4444' };
 
   tbody.innerHTML = rows.slice(0, 500).map(d => {
     const inv  = d.investor;

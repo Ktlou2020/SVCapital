@@ -329,7 +329,7 @@ function renderDashboard() {
     if (SOL.charts.type)    { SOL.charts.type.destroy();    delete SOL.charts.type; }
 
     const chartDefaults = {
-      plugins: { legend: { labels: { color:'rgba(255,255,255,.6)', font: { family:'Inter', size:11 } } } }
+      plugins: { legend: { labels: { color:'rgba(255,255,255,.6)', font: { family:'Poppins', size:11 } } } }
     };
 
     const capCtx = document.getElementById('solCapitalChart');

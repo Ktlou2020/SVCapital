@@ -24,7 +24,7 @@
   font-size: 14px;
 }
 
-html, body { height: 100%; background: var(--bg); font-family: 'Inter', sans-serif; color: var(--text); overflow-x: hidden; }
+html, body { height: 100%; background: var(--bg); font-family: 'Poppins', sans-serif; color: var(--text); overflow-x: hidden; }
 
 /* ── Background grid ── */
 body::before {

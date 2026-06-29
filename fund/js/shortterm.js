@@ -51,7 +51,7 @@ const STLToast = {
     const icons = { success:'fa-check-circle', error:'fa-exclamation-circle', info:'fa-info-circle' };
     const el = document.createElement('div');
     el.className = `stl-toast ${type}`;
-    el.innerHTML = `<i class="fa-solid ${icons[type]||icons.info}" style="color:${type==='error'?'#f87171':type==='success'?'#4ade80':'#60a5fa'}"></i><span>${msg}</span>`;
+    el.innerHTML = `<i class="fa-solid ${icons[type]||icons.info}" style="color:${type==='error'?'#f87171':type==='success'?'#4ade80':'#656565'}"></i><span>${msg}</span>`;
     c.appendChild(el);
     setTimeout(() => el.remove(), 3800);
   }
@@ -355,7 +355,7 @@ function renderSTLDashboard() {
                 <td><span class="stl-badge stl-badge-${l.status||'active'}">${(l.status||'active').replace('_',' ')}</span>${n.daysOverdue > 0 ? `<div class="stl-overdue-pill" style="margin-top:3px"><i class="fa-solid fa-clock"></i>${n.daysOverdue}d overdue</div>` : ''}</td>
                 <td class="num">${stlfmt.zar(n.principal)}</td>
                 <td class="num">${stlfmt.zar(n.totalRepayable)}</td>
-                <td class="num" style="color:${n.isFullyRepaid ? '#4ade80' : n.isOverdue ? '#f87171' : '#60a5fa'};font-weight:700">${n.isFullyRepaid ? '<span style="color:#4ade80">Repaid</span>' : stlfmt.zar(n.nav)}</td>
+                <td class="num" style="color:${n.isFullyRepaid ? '#4ade80' : n.isOverdue ? '#f87171' : '#656565'};font-weight:700">${n.isFullyRepaid ? '<span style="color:#4ade80">Repaid</span>' : stlfmt.zar(n.nav)}</td>
                 <td>${stlfmt.date(l.repayment_date)}${n.daysOverdue > 0 ? `<div style="font-size:11px;color:#f87171">+${n.daysOverdue} days</div>` : ''}</td>
               </tr>`;
             }).join('')}
@@ -370,7 +370,7 @@ function renderSTLDashboard() {
     if (STL.charts.month)  { STL.charts.month.destroy();  delete STL.charts.month; }
     if (STL.charts.status) { STL.charts.status.destroy(); delete STL.charts.status; }
 
-    const chartDefaults = { plugins: { legend: { labels: { color:'rgba(255,255,255,.6)', font:{ family:'Inter', size:11 } } } } };
+    const chartDefaults = { plugins: { legend: { labels: { color:'rgba(255,255,255,.6)', font:{ family:'Poppins', size:11 } } } } };
 
     const monthCtx = document.getElementById('stlMonthChart');
     if (monthCtx) {
@@ -475,10 +475,10 @@ function renderLoansTable(loans) {
                   ${n.daysOverdue > 0 ? `<div class="stl-overdue-pill" style="margin-top:3px"><i class="fa-solid fa-clock"></i> ${n.daysOverdue}d overdue</div>` : ''}
                 </td>
                 <td class="num">${stlfmt.zar(n.principal)}</td>
-                <td class="num" style="color:#60a5fa">${stlfmt.zar(n.fixedInterest || (n.principal * n.annualRate))}</td>
+                <td class="num" style="color:#656565">${stlfmt.zar(n.fixedInterest || (n.principal * n.annualRate))}</td>
                 <td class="num">${stlfmt.zar(n.totalRepayable)}</td>
                 <td class="num" style="color:${n.partialPaid > 0 ? '#fbbf24' : 'rgba(255,255,255,.4)'}">${n.partialPaid > 0 ? stlfmt.zar(n.partialPaid) : '—'}</td>
-                <td class="num" style="color:${n.isFullyRepaid ? '#4ade80' : n.isOverdue ? '#f87171' : '#60a5fa'};font-weight:700">
+                <td class="num" style="color:${n.isFullyRepaid ? '#4ade80' : n.isOverdue ? '#f87171' : '#656565'};font-weight:700">
                   ${n.isFullyRepaid ? '<span style="color:#4ade80"><i class="fa-solid fa-check"></i> Repaid</span>' : stlfmt.zar(n.nav)}
                 </td>
                 <td style="font-size:12px">${stlfmt.date(l.disbursement_date)}</td>
@@ -627,7 +627,7 @@ function renderReturnsView() {
       </div>
       <div class="stl-return-row">
         <span class="stl-return-row-label">Total Outstanding (Active Loans NAV)</span>
-        <span class="stl-return-row-val" style="color:#60a5fa">${stlfmt.zar(pNav.totalOutstanding)}</span>
+        <span class="stl-return-row-val" style="color:#656565">${stlfmt.zar(pNav.totalOutstanding)}</span>
       </div>
       <div class="stl-return-row">
         <span class="stl-return-row-label">Total Interest Earned (Accrued + Realised)</span>
@@ -676,8 +676,8 @@ function renderReturnsView() {
                 <td class="num">${stlfmt.zar(n.principal)}</td>
                 <td class="num">${n.annualRate > 0 ? stlfmt.pct(n.annualRate * 100) : stlfmt.zar(n.fixedInterest)}</td>
                 <td class="num">${n.daysElapsed}</td>
-                <td class="num" style="color:#60a5fa">+ ${stlfmt.zar(n.accruedInterest)}</td>
-                <td class="num" style="color:${n.isFullyRepaid ? '#4ade80' : n.isOverdue ? '#f87171' : '#60a5fa'};font-weight:700">
+                <td class="num" style="color:#656565">+ ${stlfmt.zar(n.accruedInterest)}</td>
+                <td class="num" style="color:${n.isFullyRepaid ? '#4ade80' : n.isOverdue ? '#f87171' : '#656565'};font-weight:700">
                   ${n.isFullyRepaid ? '<span style="color:#4ade80">Repaid ✓</span>' : stlfmt.zar(n.nav)}
                 </td>
                 <td class="num" style="color:${returnPct > 0 ? '#4ade80' : 'rgba(255,255,255,.4)'}">
@@ -919,7 +919,7 @@ function renderDocsPanel(docs, mode) {
           return `
           <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(255,255,255,.04);border-radius:10px;margin-bottom:8px;border:1px solid rgba(255,255,255,.07)">
             <div style="width:36px;height:36px;background:rgba(59,130,246,.1);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <i class="fa-solid ${icon}" style="color:#60a5fa;font-size:16px"></i>
+              <i class="fa-solid ${icon}" style="color:#656565;font-size:16px"></i>
             </div>
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.doc_name||'Document'}</div>

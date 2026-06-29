@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════
    SV CAPITAL — Home Page CI Override  (home-ci.css)
    Official Corporate Identity: White/light body · Orange #FF8215 primary
-   Teal #2F8C9B secondary · DM Serif Display headings
+   Teal #656565 secondary · DM Serif Display headings
    ═══════════════════════════════════════════════════════════════════ */
 
 /* ── CI Tokens ─────────────────────────────────────────────────── */
@@ -12,8 +12,8 @@
   --ci-orange-pale:   rgba(255,130,21,0.08);
   --ci-orange-border: rgba(255,130,21,0.28);
   --ci-orange-glow:   rgba(255,130,21,0.18);
-  --ci-teal:          #2F8C9B;
-  --ci-teal-dark:     #1E6E7A;
+  --ci-teal:          #656565;
+  --ci-teal-dark:     #656565;
   --ci-teal-pale:     rgba(47,140,155,0.09);
   --ci-green:         #22C55E;
   --ci-section-bg:    #F7F8FA;
@@ -196,7 +196,11 @@
   color: #fff !important;
 }
 
-/* Stats inside product card */
+/* Stats inside product card — light panel so dark text is readable */
+.product-card__stats {
+  background: rgba(255,255,255,0.92) !important;
+  border: 1px solid rgba(0,0,0,0.07) !important;
+}
 .stat__label { color: var(--ci-text-muted) !important; }
 .stat__value { color: var(--ci-text) !important; }
 .stat__value--gold { color: var(--ci-orange) !important; }
@@ -525,3 +529,16 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 .faq-section .section-sub {
   color: var(--ci-text-muted) !important;
 }
+
+/* ── Compare section: light background so dark text is readable ── */
+.compare-callout {
+  background: #fff !important;
+  border: 1.5px solid rgba(0,0,0,0.08) !important;
+}
+.compare-callout__text h3 { color: var(--ci-text) !important; }
+.compare-callout__text p  { color: var(--ci-text-muted) !important; }
+.compare-table th { color: var(--ci-text-muted) !important; }
+.compare-table td { color: var(--ci-text-body) !important; }
+.compare-table td:first-child { color: var(--ci-text) !important; }
+.compare-table th, .compare-table td { border-bottom-color: rgba(0,0,0,0.07) !important; }
+.compare-highlight strong { color: var(--ci-orange) !important; }

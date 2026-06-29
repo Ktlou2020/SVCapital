@@ -13,7 +13,7 @@
 
 /* ─── Admin welcome strip ─── */
 .admin-welcome-strip {
-  background: linear-gradient(135deg, #0d1b26 0%, #122030 50%, #0a1720 100%);
+  background: linear-gradient(135deg, #303030 0%, #122030 50%, #303030 100%);
   border-radius: 16px;
   padding: 20px 24px;
   margin-bottom: 22px;
@@ -78,11 +78,11 @@
 .stat-card:hover::after { opacity: 1; }
 
 .stat-card--orange::after { background: linear-gradient(90deg, #FF8215, #FF9B0C); }
-.stat-card--teal::after   { background: linear-gradient(90deg, #2F8C9B, #5ecfdc); }
+.stat-card--teal::after   { background: linear-gradient(90deg, #656565, #5ecfdc); }
 .stat-card--green::after  { background: linear-gradient(90deg, #22C55E, #4ade80); }
 .stat-card--gold::after   { background: linear-gradient(90deg, #D4AF37, #f5c842); }
 .stat-card--red::after    { background: linear-gradient(90deg, #ef4444, #f87171); }
-.stat-card--blue::after   { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+.stat-card--blue::after   { background: linear-gradient(90deg, #656565, #656565); }
 
 /* ─── Table enhancements ─── */
 .data-table tbody tr {

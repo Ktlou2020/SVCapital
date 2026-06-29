@@ -33,7 +33,7 @@
 .kpi--green::after   { background: linear-gradient(90deg, var(--green), #4ade80); }
 .kpi--orange::after  { background: linear-gradient(90deg, var(--orange), #ff9b0c); }
 .kpi--purple::after  { background: linear-gradient(90deg, var(--purple), #c084fc); }
-.kpi--blue::after    { background: linear-gradient(90deg, var(--blue), #60a5fa); }
+.kpi--blue::after    { background: linear-gradient(90deg, var(--blue), #656565); }
 .kpi--red::after     { background: linear-gradient(90deg, var(--red), #f87171); }
 
 /* ─── Dashboard hero banner ─── */

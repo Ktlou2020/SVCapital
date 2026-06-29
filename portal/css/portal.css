@@ -389,7 +389,7 @@
 
 /* Wallet card – CI teal */
 .wallet-card {
-  background: linear-gradient(135deg, #2F8C9B 0%, #1E6E7A 100%) !important;
+  background: linear-gradient(135deg, #656565 0%, #656565 100%) !important;
 }
 
 /* Referral step numbers – CI orange */
@@ -935,7 +935,7 @@ h1, h2, h3, h4, h5, h6, a, li, td, th, option {
 }
 .policies-header__icon {
   width: 48px; height: 48px; border-radius: 12px;
-  background: linear-gradient(135deg,#2F8C9B,#1a6b7a);
+  background: linear-gradient(135deg,#656565,#1a6b7a);
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-size: 1.25rem; flex-shrink: 0;
 }
