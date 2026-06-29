@@ -941,3 +941,41 @@ async function _applyLiveProductAverages() {
 }
 
 document.addEventListener('DOMContentLoaded', _applyLiveProductAverages);
+
+/* ─── Live cattle herd status on the Cattle Investment product ─────────────
+   Pulls aggregated herd data (purchased to date, breeds, average weight) from
+   the fund-management herd and surfaces it on the home page cattle card and
+   its "View Details" modal. */
+async function _applyCattleHerdStatus() {
+  let s;
+  try {
+    const r = await fetch('/api/products/cattle-stats');
+    if (!r.ok) return;
+    s = await r.json();
+  } catch (_) { return; }
+  if (!s || !s.total_purchased) return;
+
+  const num    = n => Number(n || 0).toLocaleString('en-ZA');
+  const weight = s.avg_current_weight || s.avg_entry_weight;
+  const breeds = (s.by_breed || []).filter(b => b.count > 0).slice(0, 4).map(b => b.label).join(', ');
+
+  const lines = [`Live herd: ${num(s.total_purchased)} cattle purchased to date (${num(s.live_count)} currently live)`];
+  if (weight) lines.push(`Average weight: ${weight} kg`);
+  if (breeds) lines.push(`Breeds in the herd: ${breeds}`);
+
+  // Prepend to the cattle "View Details" modal key points
+  if (typeof MODAL_DATA !== 'undefined' && MODAL_DATA.cattle && Array.isArray(MODAL_DATA.cattle.points)) {
+    MODAL_DATA.cattle.points = [...lines, ...MODAL_DATA.cattle.points];
+  }
+
+  // Add a live-herd line to the cattle product card
+  const detail = document.querySelector('.product-card[data-product="cattle"] .product-card__detail');
+  if (detail) {
+    const row = document.createElement('div');
+    row.className = 'detail-row';
+    row.innerHTML = `<i class="fa-solid fa-cow"></i><span>${num(s.total_purchased)} cattle to date${weight ? ` · avg ${weight}kg` : ''}</span>`;
+    detail.insertBefore(row, detail.firstChild);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', _applyCattleHerdStatus);
