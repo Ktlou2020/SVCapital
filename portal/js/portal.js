@@ -3457,19 +3457,23 @@ async function _getCattleStats() {
 
 function _cattleHerdStatusHtml(s) {
   if (!s || !s.total_purchased) return '';
-  const weight  = s.avg_current_weight || s.avg_entry_weight;
-  const genders = (s.by_gender || []).filter(g => g.count > 0).map(g => `${_esc(g.label)}: ${g.count}`).join(' · ');
-  const breeds  = (s.by_breed || []).filter(b => b.count > 0).slice(0, 4).map(b => _esc(b.label)).join(', ');
+  const weight   = s.avg_current_weight || s.avg_entry_weight;
+  const genders  = (s.by_gender || []).filter(g => g.count > 0);
+  const breeds   = (s.by_breed  || []).filter(b => b.count > 0);
+  const totalG   = genders.reduce((a, g) => a + g.count, 0) || 1;
+  const chip = txt => `<span style="font-size:0.76rem;background:rgba(212,175,55,0.14);color:#8a6d1f;border-radius:20px;padding:3px 11px">${txt}</span>`;
   return `
-    <div style="background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.25);border-radius:12px;padding:12px 14px;margin-bottom:14px">
-      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#b8902a;margin-bottom:8px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;font-size:0.84rem">
-        <div><span style="color:var(--text-muted)">Purchased to date</span><br><strong>${s.total_purchased.toLocaleString('en-ZA')} head</strong></div>
-        <div><span style="color:var(--text-muted)">Currently live</span><br><strong>${(s.live_count || 0).toLocaleString('en-ZA')} head</strong></div>
-        ${weight ? `<div><span style="color:var(--text-muted)">Average weight</span><br><strong>${weight} kg</strong></div>` : ''}
-        ${breeds ? `<div><span style="color:var(--text-muted)">Breeds</span><br><strong>${breeds}</strong></div>` : ''}
+    <div style="background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#b8902a;margin-bottom:10px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:${genders.length || breeds.length ? '12px' : '0'}">
+        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.total_purchased.toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">purchased to date</div></div>
+        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.live_count || 0).toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">currently live</div></div>
+        ${weight ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${weight}<span style="font-size:0.78rem"> kg</span></div><div style="font-size:0.7rem;color:var(--text-muted)">average weight</div></div>` : ''}
       </div>
-      ${genders ? `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px">Gender split — ${genders}</div>` : ''}
+      ${genders.length ? `<div style="margin-bottom:${breeds.length ? '10px' : '0'}"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Gender</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${_esc(g.label)}: <strong>${g.count}</strong> (${Math.round(g.count / totalG * 100)}%)`)).join('')}</div></div>` : ''}
+      ${breeds.length ? `<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Breeds</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 8).map(b => chip(`${_esc(b.label)}: <strong>${b.count}</strong>`)).join('')}</div></div>` : ''}
     </div>`;
 }
 

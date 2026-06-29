@@ -670,6 +670,7 @@ window.openModal = function(productKey) {
         </div>
       `).join('')}
     </div>
+    ${data.herdHtml || ''}
     <h4 style="color:var(--white); margin-bottom:12px; font-size:0.9rem; text-transform:uppercase; letter-spacing:0.08em;">Key Details</h4>
     <ul>
       ${data.points.map(p => `<li>${p}</li>`).join('')}
@@ -981,23 +982,36 @@ async function _applyCattleHerdStatus() {
   if (!s || !s.total_purchased) return;
 
   const num    = n => Number(n || 0).toLocaleString('en-ZA');
+  const esc    = x => String(x == null ? '' : x).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
   const weight = s.avg_current_weight || s.avg_entry_weight;
-  const breeds = (s.by_breed || []).filter(b => b.count > 0).slice(0, 4).map(b => b.label).join(', ');
 
-  const lines = [`Live herd: ${num(s.total_purchased)} cattle purchased to date (${num(s.live_count)} currently live)`];
-  if (weight) lines.push(`Average weight: ${weight} kg`);
-  if (breeds) lines.push(`Breeds in the herd: ${breeds}`);
-
-  // Prepend to the cattle "View Details" modal key points
-  if (typeof MODAL_DATA !== 'undefined' && MODAL_DATA.cattle && Array.isArray(MODAL_DATA.cattle.points)) {
-    MODAL_DATA.cattle.points = [...lines, ...MODAL_DATA.cattle.points];
+  // Rich "Live Herd Status" block injected into the cattle "View Details" modal
+  if (typeof MODAL_DATA !== 'undefined' && MODAL_DATA.cattle) {
+    const genders = (s.by_gender || []).filter(g => g.count > 0);
+    const breeds  = (s.by_breed  || []).filter(b => b.count > 0);
+    const totalG  = genders.reduce((a, g) => a + g.count, 0) || 1;
+    const chip = txt => `<span style="font-size:0.78rem;background:rgba(255,255,255,0.08);color:#fff;border-radius:20px;padding:3px 11px">${txt}</span>`;
+    MODAL_DATA.cattle.herdHtml = `
+      <div style="background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.28);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
+        <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#E0B43A;margin-bottom:12px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:${genders.length || breeds.length ? '14px' : '0'}">
+          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.total_purchased)}</div><div style="font-size:0.72rem;color:var(--text-dim)">purchased to date</div></div>
+          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.live_count)}</div><div style="font-size:0.72rem;color:var(--text-dim)">currently live</div></div>
+          ${weight ? `<div><div style="font-size:1.3rem;font-weight:800;color:#fff">${weight}<span style="font-size:0.85rem"> kg</span></div><div style="font-size:0.72rem;color:var(--text-dim)">average weight</div></div>` : ''}
+        </div>
+        ${genders.length ? `<div style="margin-bottom:${breeds.length ? '12px' : '0'}"><div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:6px">Gender</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${esc(g.label)}: <strong>${g.count}</strong> (${Math.round(g.count / totalG * 100)}%)`)).join('')}</div></div>` : ''}
+        ${breeds.length ? `<div><div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:6px">Breeds</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 8).map(b => chip(`${esc(b.label)}: <strong>${b.count}</strong>`)).join('')}</div></div>` : ''}
+      </div>`;
   }
 
-  // Add a live-herd line to the cattle product card
+  // Compact live-herd line on the cattle product card
   const detail = document.querySelector('.product-card[data-product="cattle"] .product-card__detail');
-  if (detail) {
+  if (detail && !detail.querySelector('[data-herd-row]')) {
     const row = document.createElement('div');
     row.className = 'detail-row';
+    row.setAttribute('data-herd-row', '1');
     row.innerHTML = `<i class="fa-solid fa-cow"></i><span>${num(s.total_purchased)} cattle to date${weight ? ` · avg ${weight}kg` : ''}</span>`;
     detail.insertBefore(row, detail.firstChild);
   }
