@@ -3197,6 +3197,8 @@ async function renderProductDetailView(type) {
           <div style="margin-bottom:6px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">Projected growth of ${Utils.rand(10000)} at ${(projRate * 100).toFixed(2)}% p.a.</div>
           <div style="position:relative;height:180px;margin-bottom:6px"><canvas id="prodGrowthChart"></canvas></div>
 
+          ${isSolar ? '<div id="prodSolarHistory" style="margin-top:16px"></div>' : ''}
+          <div id="prodTrackRecord" style="margin-top:16px"></div>
           <div id="prodFactsheets" style="margin-top:14px"></div>
         </div>
       </div>
@@ -3219,7 +3221,10 @@ async function renderProductDetailView(type) {
 
   // Live data panels
   if (type === 'cattle') _renderCattleHerdStatus('prodHerdStatus');
-  if (isSolar) _renderSolarStatus('prodSolarStatus');
+  if (isSolar) { _renderSolarStatus('prodSolarStatus'); _renderSolarHistory('prodSolarHistory', color); }
+
+  // Verifiable track record (matured pools: actual vs benchmark)
+  _renderProductTrackRecord(type, color);
 
   // Growth projection chart
   _renderProductGrowthChart(projRate, product.term_months || 12, color);
@@ -3245,6 +3250,89 @@ function _renderProductGrowthChart(rate, termMonths, color) {
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => Utils.rand(c.parsed.y) } } },
       scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 6, color: 'rgba(0,0,0,0.4)', font: { size: 9 } } },
                 y: { ticks: { callback: v => 'R' + (v / 1000).toFixed(0) + 'k', color: 'rgba(0,0,0,0.4)', font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } } },
+    },
+  });
+}
+
+// ── Track record: matured pools' achieved return vs benchmark ──
+let _trackRecordCache = null;
+async function _getTrackRecord() {
+  if (_trackRecordCache) return _trackRecordCache;
+  try { const r = await API._fetch('GET', 'products/track-record'); _trackRecordCache = r.data || {}; }
+  catch (_) { _trackRecordCache = {}; }
+  return _trackRecordCache;
+}
+
+let _trackChart = null;
+async function _renderProductTrackRecord(type, color) {
+  const el = document.getElementById('prodTrackRecord');
+  if (!el) return;
+  const data = await _getTrackRecord();
+  const isSolar = (type || '').startsWith('solar');
+  const keys = Object.keys(data).filter(k => isSolar ? k.startsWith('solar') : k === type);
+  let pools = [], paidBack = 0, sumA = 0, n = 0;
+  keys.forEach(k => {
+    const d = data[k];
+    pools = pools.concat(d.pools || []);
+    paidBack += d.total_paid_back || 0;
+    sumA += (d.avg_actual_rate || 0) * (d.matured_count || 0);
+    n += d.matured_count || 0;
+  });
+  if (!n) { el.innerHTML = ''; return; }
+  pools.sort((a, b) => new Date(a.ended) - new Date(b.ended));
+
+  el.innerHTML = `
+    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-chart-column" style="color:${color}"></i> Track record — delivered returns</div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px">
+      <div><div style="font-size:1.2rem;font-weight:800;color:var(--text)">${n}</div><div style="font-size:0.7rem;color:var(--text-muted)">pool${n === 1 ? '' : 's'} matured</div></div>
+      <div><div style="font-size:1.2rem;font-weight:800;color:${color}">${(sumA / n * 100).toFixed(2)}%</div><div style="font-size:0.7rem;color:var(--text-muted)">avg achieved p.a.</div></div>
+      <div><div style="font-size:1.2rem;font-weight:800;color:var(--text)">${Utils.rand(paidBack)}</div><div style="font-size:0.7rem;color:var(--text-muted)">paid back to investors</div></div>
+    </div>
+    <div style="position:relative;height:170px"><canvas id="prodTrackChart"></canvas></div>`;
+
+  const canvas = document.getElementById('prodTrackChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  try { if (_trackChart) { _trackChart.destroy(); _trackChart = null; } } catch (_) {}
+  _trackChart = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: pools.map(p => (p.name || '').slice(0, 18)),
+      datasets: [
+        { label: 'Achieved',  data: pools.map(p => +(p.actual_rate * 100).toFixed(2)),    backgroundColor: color },
+        { label: 'Benchmark', data: pools.map(p => +(p.benchmark_rate * 100).toFixed(2)), backgroundColor: 'rgba(0,0,0,0.15)' },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { boxWidth: 10, font: { size: 10 } } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y}%` } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8, font: { size: 9 }, color: 'rgba(0,0,0,0.4)' } },
+                y: { ticks: { callback: v => v + '%', font: { size: 9 }, color: 'rgba(0,0,0,0.4)' }, grid: { color: 'rgba(0,0,0,0.05)' } } },
+    },
+  });
+}
+
+// ── Solar: daily generation this month (FoxESS history) ──
+let _solarHistChart = null;
+async function _renderSolarHistory(containerId, color) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  let h;
+  try { h = await API._fetch('GET', 'products/solar-history'); } catch (_) { h = null; }
+  if (!h || h.unavailable || !h.series || !h.series.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-chart-column" style="color:${color}"></i> Daily generation this month</div>
+    <div style="position:relative;height:150px"><canvas id="prodSolarHistChart"></canvas></div>`;
+  const canvas = document.getElementById('prodSolarHistChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  try { if (_solarHistChart) { _solarHistChart.destroy(); _solarHistChart = null; } } catch (_) {}
+  _solarHistChart = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: { labels: h.series.map(d => d.day), datasets: [{ data: h.series.map(d => d.kwh), backgroundColor: color + 'cc' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y + ' kWh' } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10, font: { size: 9 }, color: 'rgba(0,0,0,0.4)' } },
+                y: { ticks: { callback: v => v + ' kWh', font: { size: 9 }, color: 'rgba(0,0,0,0.4)' }, grid: { color: 'rgba(0,0,0,0.05)' } } },
     },
   });
 }
@@ -3466,18 +3554,40 @@ function _cattleHerdStatusHtml(s) {
   const breeds   = (s.by_breed  || []).filter(b => b.count > 0);
   const totalG   = genders.reduce((a, g) => a + g.count, 0) || 1;
   const chip = txt => `<span style="font-size:0.76rem;background:rgba(212,175,55,0.14);color:#8a6d1f;border-radius:20px;padding:3px 11px">${txt}</span>`;
+
+  // Weight journey: entry → current → target market weight
+  const entry = s.avg_entry_weight, current = s.avg_current_weight, target = s.target_weight || 475;
+  let weightBar = '';
+  if (entry && current && target && target > entry) {
+    const pct = Math.min(100, Math.max(0, Math.round((current - entry) / (target - entry) * 100)));
+    weightBar = `
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">
+          <span>Entry ${entry}kg</span><span style="color:#8a6d1f;font-weight:700">Now ~${current}kg</span><span>Target ${target}kg</span>
+        </div>
+        <div style="height:8px;border-radius:5px;background:rgba(0,0,0,0.08);overflow:hidden"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#D4AF37,#b8902a)"></div></div>
+        <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">${pct}% of the way to market weight</div>
+      </div>`;
+  }
+
+  // Survival / mortality
+  const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
+  const mortBlock = `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:var(--text)">${(100 - mortRate).toFixed(1)}%</strong>${s.mortality_count ? ` · ${s.mortality_count} mortalit${s.mortality_count === 1 ? 'y' : 'ies'} of ${s.total_purchased.toLocaleString('en-ZA')}` : ''}</div>`;
+
   return `
     <div style="background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">
       <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#b8902a;margin-bottom:10px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:${genders.length || breeds.length ? '12px' : '0'}">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
         <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.total_purchased.toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">purchased to date</div></div>
         <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.live_count || 0).toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">currently live</div></div>
         ${weight ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${weight}<span style="font-size:0.78rem"> kg</span></div><div style="font-size:0.7rem;color:var(--text-muted)">average weight</div></div>` : ''}
       </div>
+      ${weightBar}
       ${genders.length ? `<div style="margin-bottom:${breeds.length ? '10px' : '0'}"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Gender</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${_esc(g.label)}: <strong>${g.count}</strong> (${Math.round(g.count / totalG * 100)}%)`)).join('')}</div></div>` : ''}
       ${breeds.length ? `<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Breeds</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 8).map(b => chip(`${_esc(b.label)}: <strong>${b.count}</strong>`)).join('')}</div></div>` : ''}
+      ${mortBlock}
     </div>`;
 }
 

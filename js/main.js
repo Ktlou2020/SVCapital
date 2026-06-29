@@ -671,6 +671,7 @@ window.openModal = function(productKey) {
       `).join('')}
     </div>
     ${data.herdHtml || ''}
+    ${data.trackHtml || ''}
     <h4 style="color:var(--white); margin-bottom:12px; font-size:0.9rem; text-transform:uppercase; letter-spacing:0.08em;">Key Details</h4>
     <ul>
       ${data.points.map(p => `<li>${p}</li>`).join('')}
@@ -991,18 +992,34 @@ async function _applyCattleHerdStatus() {
     const breeds  = (s.by_breed  || []).filter(b => b.count > 0);
     const totalG  = genders.reduce((a, g) => a + g.count, 0) || 1;
     const chip = txt => `<span style="font-size:0.78rem;background:rgba(255,255,255,0.08);color:#fff;border-radius:20px;padding:3px 11px">${txt}</span>`;
+
+    // Weight journey + survival
+    const entry = s.avg_entry_weight, current = s.avg_current_weight, target = s.target_weight || 475;
+    let weightBar = '';
+    if (entry && current && target && target > entry) {
+      const wp = Math.min(100, Math.max(0, Math.round((current - entry) / (target - entry) * 100)));
+      weightBar = `<div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--text-dim);margin-bottom:5px"><span>Entry ${entry}kg</span><span style="color:#E0B43A;font-weight:700">Now ~${current}kg</span><span>Target ${target}kg</span></div>
+        <div style="height:9px;border-radius:5px;background:rgba(255,255,255,0.08);overflow:hidden"><div style="height:100%;width:${wp}%;background:linear-gradient(90deg,#E0B43A,#b8902a)"></div></div>
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">${wp}% of the way to market weight</div></div>`;
+    }
+    const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
+    const mortLine = `<div style="font-size:0.76rem;color:var(--text-dim);margin-top:10px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:#fff">${(100 - mortRate).toFixed(1)}%</strong>${s.mortality_count ? ` · ${s.mortality_count} of ${num(s.total_purchased)}` : ''}</div>`;
+
     MODAL_DATA.cattle.herdHtml = `
       <div style="background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.28);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
         <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#E0B43A;margin-bottom:12px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:${genders.length || breeds.length ? '14px' : '0'}">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
           <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.total_purchased)}</div><div style="font-size:0.72rem;color:var(--text-dim)">purchased to date</div></div>
           <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.live_count)}</div><div style="font-size:0.72rem;color:var(--text-dim)">currently live</div></div>
           ${weight ? `<div><div style="font-size:1.3rem;font-weight:800;color:#fff">${weight}<span style="font-size:0.85rem"> kg</span></div><div style="font-size:0.72rem;color:var(--text-dim)">average weight</div></div>` : ''}
         </div>
+        ${weightBar}
         ${genders.length ? `<div style="margin-bottom:${breeds.length ? '12px' : '0'}"><div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:6px">Gender</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${esc(g.label)}: <strong>${g.count}</strong> (${Math.round(g.count / totalG * 100)}%)`)).join('')}</div></div>` : ''}
         ${breeds.length ? `<div><div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:6px">Breeds</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 8).map(b => chip(`${esc(b.label)}: <strong>${b.count}</strong>`)).join('')}</div></div>` : ''}
+        ${mortLine}
       </div>`;
   }
 
@@ -1018,6 +1035,58 @@ async function _applyCattleHerdStatus() {
 }
 
 document.addEventListener('DOMContentLoaded', _applyCattleHerdStatus);
+
+/* ─── Track record on the "View Details" modal (matured pools) ─────────────
+   Shows pools matured, average achieved return, total paid back, and a bar
+   per matured pool — the verifiable performance behind each product. */
+async function _applyTrackRecord() {
+  let data;
+  try {
+    const r = await fetch('/api/products/track-record');
+    if (!r.ok) return;
+    data = (await r.json()).data || {};
+  } catch (_) { return; }
+
+  const fam = { cattle: ['cattle'], solar: ['solar_7yr', 'solar_6yr', 'solar_5yr'], short: ['short_term', 'smme'], delivery: ['delivery_bike'] };
+  const rand = n => 'R' + Number(n || 0).toLocaleString('en-ZA');
+
+  Object.keys(fam).forEach(key => {
+    if (typeof MODAL_DATA === 'undefined' || !MODAL_DATA[key]) return;
+    let pools = [], paid = 0, sumA = 0, n = 0;
+    fam[key].forEach(t => {
+      const d = data[t]; if (!d) return;
+      pools = pools.concat(d.pools || []);
+      paid += d.total_paid_back || 0;
+      sumA += (d.avg_actual_rate || 0) * (d.matured_count || 0);
+      n += d.matured_count || 0;
+    });
+    if (!n) return;
+    pools.sort((a, b) => new Date(a.ended) - new Date(b.ended));
+    const maxRate = Math.max(...pools.map(p => Math.max(p.actual_rate, p.benchmark_rate)), 0.01);
+    const bars = pools.slice(-8).map(p => {
+      const aPct = Math.round(p.actual_rate / maxRate * 100);
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:0.72rem">
+        <span style="width:90px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(p.name || '').replace(/[<>&]/g, '')}</span>
+        <div style="flex:1;height:14px;background:rgba(255,255,255,0.06);border-radius:7px;position:relative"><div style="position:absolute;left:0;top:0;height:100%;width:${aPct}%;background:#ff9b0c;border-radius:7px"></div></div>
+        <span style="width:48px;text-align:right;color:#ff9b0c;font-weight:700">${(p.actual_rate * 100).toFixed(1)}%</span>
+      </div>`;
+    }).join('');
+
+    MODAL_DATA[key].trackHtml = `
+      <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
+        <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#ff9b0c;margin-bottom:12px"><i class="fa-solid fa-chart-column"></i> Track Record</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
+          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${n}</div><div style="font-size:0.72rem;color:var(--text-dim)">pool${n === 1 ? '' : 's'} matured</div></div>
+          <div><div style="font-size:1.3rem;font-weight:800;color:#ff9b0c">${(sumA / n * 100).toFixed(2)}%</div><div style="font-size:0.72rem;color:var(--text-dim)">avg achieved p.a.</div></div>
+          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${rand(paid)}</div><div style="font-size:0.72rem;color:var(--text-dim)">paid back</div></div>
+        </div>
+        ${bars}
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:6px">Each bar is the actual return achieved by a matured pool.</div>
+      </div>`;
+  });
+}
+
+document.addEventListener('DOMContentLoaded', _applyTrackRecord);
 
 /* ─── Live solar telematics (FoxESS / FoxCloud) on the Solar product ───────
    All three solar terms share one physical installation, so a single live
