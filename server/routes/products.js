@@ -58,13 +58,26 @@ router.get('/cattle-stats', async (req, res) => {
     );
     const dailyGain = parseFloat(setRows[0]?.setting_value) || 1.2;
 
-    const { rows: totals } = await pool.query(`
+    // Herd counts come primarily from the CYCLES the fund manager captures
+    // (no_purchased / no_live / no_sold / mortalities). Individual animal rows
+    // are optional and only power the gender/breed/weight breakdowns.
+    const { rows: cyc } = await pool.query(`
       SELECT
-        COUNT(*)                                                               AS total_purchased,
+        COALESCE(SUM(no_purchased), 0) AS purchased,
+        COALESCE(SUM(no_live),      0) AS live,
+        COALESCE(SUM(no_sold),      0) AS sold,
+        COALESCE(SUM(mortalities),  0) AS mortalities
+      FROM cattle_cycles
+      WHERE COALESCE(status,'active') <> 'cancelled'
+    `);
+
+    const { rows: ani } = await pool.query(`
+      SELECT
+        COUNT(*)                                                               AS animal_count,
         COUNT(*) FILTER (WHERE COALESCE(status,'active') NOT IN ('sold','mortality')
-                           AND NOT COALESCE(sold,false) AND NOT COALESCE(mortality,false)) AS live_count,
-        COUNT(*) FILTER (WHERE COALESCE(sold,false) OR status = 'sold')        AS sold_count,
-        COUNT(*) FILTER (WHERE COALESCE(mortality,false) OR status = 'mortality') AS mortality_count,
+                           AND NOT COALESCE(sold,false) AND NOT COALESCE(mortality,false)) AS animal_live,
+        COUNT(*) FILTER (WHERE COALESCE(sold,false) OR status = 'sold')        AS animal_sold,
+        COUNT(*) FILTER (WHERE COALESCE(mortality,false) OR status = 'mortality') AS animal_mortality,
         ROUND(AVG(entry_mass)::numeric, 1)                                     AS avg_entry_weight
       FROM cattle_animals
     `);
@@ -88,13 +101,20 @@ router.get('/cattle-stats', async (req, res) => {
         AND a.entry_mass IS NOT NULL
     `, [dailyGain]);
 
-    const t = totals[0] || {};
+    const c = cyc[0] || {}, a = ani[0] || {};
+    // Prefer cycle-level counts; fall back to animal counts when no cycles exist
+    const cyclePurchased = parseInt(c.purchased) || 0;
+    const total_purchased = cyclePurchased > 0 ? cyclePurchased : (parseInt(a.animal_count) || 0);
+    const live_count      = cyclePurchased > 0 ? (parseInt(c.live) || 0) : (parseInt(a.animal_live) || 0);
+    const sold_count      = cyclePurchased > 0 ? (parseInt(c.sold) || 0) : (parseInt(a.animal_sold) || 0);
+    const mortality_count = cyclePurchased > 0 ? (parseInt(c.mortalities) || 0) : (parseInt(a.animal_mortality) || 0);
+
     res.json({
-      total_purchased:    parseInt(t.total_purchased) || 0,
-      live_count:         parseInt(t.live_count) || 0,
-      sold_count:         parseInt(t.sold_count) || 0,
-      mortality_count:    parseInt(t.mortality_count) || 0,
-      avg_entry_weight:   t.avg_entry_weight != null ? parseFloat(t.avg_entry_weight) : null,
+      total_purchased,
+      live_count,
+      sold_count,
+      mortality_count,
+      avg_entry_weight:   a.avg_entry_weight != null ? parseFloat(a.avg_entry_weight) : null,
       avg_current_weight: curRows[0]?.avg_current_weight != null ? parseFloat(curRows[0].avg_current_weight) : null,
       by_gender: byGender.map(r => ({ label: r.label, count: parseInt(r.count) })),
       by_breed:  byBreed.map(r => ({ label: r.label, count: parseInt(r.count) })),

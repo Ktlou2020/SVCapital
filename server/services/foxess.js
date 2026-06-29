@@ -4,18 +4,17 @@
    Auth: signature = md5(`${path}\r\n${token}\r\n${timestamp}`)
    sent in the token/timestamp/signature headers.
 
-   The API key is read from FOXESS_API_KEY (recommended) and
-   falls back to the key supplied for the SV Capital solar site.
-   All three solar products (5/6/7-year) are the SAME physical
-   installation — just different investment terms — so a single
-   aggregate powers all of them.
+   The API key is read from the FOXESS_API_KEY environment variable
+   (set it in your deployment — do not commit it). All three solar
+   products (5/6/7-year) are the SAME physical installation — just
+   different investment terms — so a single aggregate powers all.
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
 const crypto = require('crypto');
 
 const BASE    = (process.env.FOXESS_API_BASE || 'https://www.foxesscloud.com').replace(/\/$/, '');
-const API_KEY = (process.env.FOXESS_API_KEY || '6cd9ec1d-950b-4759-8bc7-46e783ac9133').trim();
+const API_KEY = (process.env.FOXESS_API_KEY || '').trim();
 
 function _headers(path) {
   const timestamp = Date.now().toString();
@@ -52,6 +51,7 @@ let _cache = { at: 0, data: null };
 const CACHE_MS = 10 * 60 * 1000; // 10 minutes — well within FoxESS rate limits
 
 async function getSolarStats() {
+  if (!API_KEY) throw new Error('FOXESS_API_KEY not configured');
   if (_cache.data && (Date.now() - _cache.at) < CACHE_MS) return _cache.data;
 
   // 1) Devices on the account
