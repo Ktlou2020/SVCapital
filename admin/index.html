@@ -74,6 +74,9 @@
       </button>
 
       <div class="nav-section-label">Investments</div>
+      <button class="nav-item" data-view="products" onclick="navigate('products', this)">
+        <i class="fa-solid fa-box-open"></i> Products
+      </button>
       <button class="nav-item" data-view="pools" onclick="navigate('pools', this)">
         <i class="fa-solid fa-layer-group"></i> Investment Pools
       </button>
@@ -560,6 +563,24 @@
       <!-- ══════════════════════════════════
            VIEW: POOLS
       ══════════════════════════════════ -->
+      <!-- ══════════════════════════════════
+           VIEW: PRODUCTS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-products">
+        <div class="flex-between mb-16" style="flex-wrap:wrap;gap:10px">
+          <div>
+            <h2 style="font-size:1rem;font-weight:700;color:var(--white)">Products</h2>
+            <p style="font-size:0.75rem;color:var(--text-muted)">Manage investment products shown on pools and the home page. Average return is auto-calculated from matured pools.</p>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn--primary" onclick="openProductModal()"><i class="fa-solid fa-plus"></i> New Product</button>
+          </div>
+        </div>
+        <div class="grid-3" id="productsGrid">
+          <div class="text-center text-muted" style="grid-column:1/-1;padding:32px">Loading...</div>
+        </div>
+      </div>
+
       <div class="view" id="view-pools">
         <div class="flex-between mb-16" style="flex-wrap:wrap;gap:10px">
           <div>
@@ -1834,6 +1855,61 @@
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('addPoolModal')">Cancel</button>
       <button class="btn btn--primary" onclick="saveNewPool(this)"><i class="fa-solid fa-plus"></i> Create Pool</button>
+    </div>
+  </div>
+</div>
+
+<!-- Product Create / Edit Modal -->
+<div class="modal-overlay" id="productModal" onclick="if(event.target===this)Modal.close('productModal')">
+  <div class="modal modal--lg">
+    <div class="modal__header">
+      <span class="modal__title" id="productModalTitle">New Product</span>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('productModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="productId" />
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Product Key * <span style="color:var(--text-muted);font-weight:400">(used on pools, e.g. cattle)</span></label><input type="text" class="form-input" id="prodType" placeholder="cattle" /></div>
+        <div class="form-group"><label class="form-label">Product Name *</label><input type="text" class="form-input" id="prodLabel" placeholder="Cattle Investment" /></div>
+      </div>
+      <div class="form-group"><label class="form-label">Headline</label><input type="text" class="form-input" id="prodHeadline" placeholder="Grow with the herd." /></div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-input" id="prodDescription" rows="3" placeholder="Partner with Beefcor…"></textarea></div>
+      <div class="form-group"><label class="form-label">Key Details <span style="color:var(--text-muted);font-weight:400">(one per line)</span></label><textarea class="form-input" id="prodKeyDetails" rows="5" placeholder="Cattle enter feedlot at 200–230kg…&#10;Returns are determined by weight gain…"></textarea></div>
+      <div class="form-row form-row--3">
+        <div class="form-group"><label class="form-label">Minimum (R)</label><input type="number" class="form-input" id="prodMin" placeholder="500" /></div>
+        <div class="form-group"><label class="form-label">Term (months)</label><input type="number" class="form-input" id="prodTerm" placeholder="12" /></div>
+        <div class="form-group"><label class="form-label">Sort Order</label><input type="number" class="form-input" id="prodSort" placeholder="1" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Benchmark Rate (e.g. 0.13)</label><input type="number" class="form-input" id="prodBenchmark" step="0.0001" placeholder="0.13" /></div>
+        <div class="form-group"><label class="form-label">Performance Fee (e.g. 0.20 = 20%)</label><input type="number" class="form-input" id="prodPerfFee" step="0.0001" placeholder="0.20" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Partner Name</label><input type="text" class="form-input" id="prodPartner" placeholder="Beefcor" /></div>
+        <div class="form-group"><label class="form-label">Risk Profile</label><input type="text" class="form-input" id="prodRisk" placeholder="Medium-High" /></div>
+      </div>
+      <div class="form-row form-row--3">
+        <div class="form-group"><label class="form-label">Icon (Font Awesome)</label><input type="text" class="form-input" id="prodIcon" placeholder="fa-cow" /></div>
+        <div class="form-group"><label class="form-label">Colour</label><input type="text" class="form-input" id="prodColor" placeholder="#D4AF37" /></div>
+        <div class="form-group"><label class="form-label">Risk Colour</label><input type="text" class="form-input" id="prodRiskColor" placeholder="#ff9b0c" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Active</label>
+          <select class="form-select" id="prodActive"><option value="true">Yes — shown on pools</option><option value="false">No — hidden</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Show on Home Page</label>
+          <select class="form-select" id="prodHomepage"><option value="true">Yes</option><option value="false">No</option></select>
+        </div>
+      </div>
+      <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--border)">Average Return (auto-calculated)</div>
+      <div id="prodAvgReturnInfo" style="font-size:0.82rem;color:var(--text-muted)">—</div>
+      <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--border)">Factsheet</div>
+      <div id="prodFactsheetCurrent" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px"></div>
+      <div class="form-group"><label class="form-label">Upload Factsheet (PDF)</label><input type="file" class="form-input" id="prodFactsheetFile" accept="application/pdf,image/*" /></div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('productModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveProduct(this)"><i class="fa-solid fa-save"></i> Save Product</button>
     </div>
   </div>
 </div>

@@ -340,7 +340,7 @@ function navigate(view, btnEl) {
 
   const titles = {
     dashboard: 'Dashboard', investors: 'Investor Management', ifa: 'IFA Management', kyc: 'KYC / FICA',
-    pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
+    products: 'Products', pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
     transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
     auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications', aml: 'AML Compliance Review',
     migrate: 'Data Migration', compliance: 'Compliance Calendar', reconciliation: 'Financial Reconciliation',
@@ -356,6 +356,7 @@ function navigate(view, btnEl) {
     investors: loadInvestors,
     ifa: loadIFAs,
     kyc: loadKYC,
+    products: loadProducts,
     pools: loadPools,
     investments: loadInvestments,
     maturity: loadMaturity,
@@ -1965,6 +1966,228 @@ function _capacityBar(pool) {
   </div>`;
 }
 
+/* ═══════════════════════════════════════════════
+   PRODUCTS
+   ═══════════════════════════════════════════════ */
+
+// Average ACHIEVED return for a product = avg of actual_rate across all of its
+// pools that have matured or been paid out (those with a real achieved rate).
+function _productAvgReturn(productType) {
+  const matured = (STATE.pools || []).filter(p =>
+    p.product_type === productType &&
+    ['matured', 'paid_out'].includes(p.status) &&
+    (parseFloat(p.actual_rate) || 0) > 0
+  );
+  if (!matured.length) return null;
+  const sum = matured.reduce((s, p) => s + (parseFloat(p.actual_rate) || 0), 0);
+  return { rate: sum / matured.length, count: matured.length };
+}
+
+async function loadProducts() {
+  try {
+    // Pools power the auto-calculated average return
+    if (!STATE.pools || !STATE.pools.length) {
+      try { const pr = await API.pools.list({ limit: 200 }); STATE.pools = pr.data || []; } catch (_) {}
+    }
+    const res = await API.products.list({ limit: 200 });
+    STATE.products = (res.data || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    renderProductsGrid();
+  } catch (e) { Toast.error('Failed to load products'); }
+}
+
+function renderProductsGrid() {
+  const grid = document.getElementById('productsGrid');
+  if (!grid) return;
+  const products = STATE.products || [];
+  if (!products.length) {
+    grid.innerHTML = '<div class="text-center text-muted" style="grid-column:1/-1;padding:32px">No products yet. Click “New Product” to add one.</div>';
+    return;
+  }
+  grid.innerHTML = products.map(p => {
+    const avg = _productAvgReturn(p.product_type);
+    const avgLabel = avg
+      ? `${(avg.rate * 100).toFixed(2)}% p.a.`
+      : '<span style="color:var(--text-muted)">No matured pools yet</span>';
+    const avgSub = avg ? `avg of ${avg.count} matured pool${avg.count === 1 ? '' : 's'}` : 'awaiting maturity';
+    return `
+      <div class="pool-card">
+        <div class="pool-card__header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:36px;height:36px;border-radius:10px;background:${p.color || '#8ea3b8'}22;color:${p.color || '#8ea3b8'};display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid ${p.icon || 'fa-box'}"></i></div>
+            <div>
+              <div class="pool-card__name">${p.label || p.product_type}</div>
+              <div class="pool-card__partner">${p.product_type}${p.partner_name ? ' · ' + p.partner_name : ''}</div>
+            </div>
+          </div>
+          ${p.is_active ? '<span class="badge badge--green">Active</span>' : '<span class="badge badge--gray">Hidden</span>'}
+        </div>
+        <div class="pool-card__stats">
+          <div class="pool-stat"><span class="pool-stat__label">Avg Return</span><span class="pool-stat__value pool-stat__value--gold">${avgLabel}</span></div>
+          <div class="pool-stat"><span class="pool-stat__label">Minimum</span><span class="pool-stat__value">${Utils.rand(p.min_investment || 0)}</span></div>
+          <div class="pool-stat"><span class="pool-stat__label">Term</span><span class="pool-stat__value">${p.term_months || '—'}mo</span></div>
+        </div>
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:6px">${avgSub}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">
+          <i class="fa-solid ${p.factsheet_url ? 'fa-file-pdf' : 'fa-file-circle-xmark'}" style="color:${p.factsheet_url ? '#ef4444' : 'var(--text-muted)'}"></i>
+          ${p.factsheet_url ? (p.factsheet_name || 'Factsheet loaded') : 'No factsheet'}
+          ${p.display_on_homepage ? ' · <i class="fa-solid fa-house"></i> on home page' : ''}
+        </div>
+        <div class="pool-card__actions">
+          <button class="btn btn--secondary btn--sm flex-1" onclick='editProduct(${JSON.stringify(p.id)})'><i class="fa-solid fa-pen"></i> Edit</button>
+          ${p.factsheet_url ? `<button class="btn btn--secondary btn--sm" onclick='_viewProductFactsheet(${JSON.stringify(p.id)})' title="View factsheet"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>` : ''}
+          <button class="btn btn--secondary btn--sm" onclick='deleteProduct(${JSON.stringify(p.id)})' title="Delete"><i class="fa-solid fa-trash" style="color:#ef4444"></i></button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function _viewProductFactsheet(id) {
+  const p = (STATE.products || []).find(x => x.id === id);
+  if (!p || !p.factsheet_url) return;
+  const raw = p.factsheet_url;
+  if (raw.startsWith('http')) { window.open(raw, '_blank', 'noopener'); return; }
+  try {
+    const [header, b64] = raw.split(',');
+    const mime = header.match(/:(.*?);/)?.[1] || 'application/pdf';
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    window.open(url, '_blank', 'noopener');
+  } catch (_) { Toast.error('Could not open factsheet'); }
+}
+
+function openProductModal() {
+  document.getElementById('productModalTitle').textContent = 'New Product';
+  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodRisk','prodIcon','prodColor','prodRiskColor'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('prodActive').value = 'true';
+  document.getElementById('prodHomepage').value = 'true';
+  document.getElementById('prodType').removeAttribute('readonly');
+  const ff = document.getElementById('prodFactsheetFile'); if (ff) ff.value = '';
+  document.getElementById('prodFactsheetCurrent').textContent = '';
+  document.getElementById('prodAvgReturnInfo').textContent = 'Will calculate once pools of this product mature.';
+  Modal.open('productModal');
+}
+
+function editProduct(id) {
+  const p = (STATE.products || []).find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('productModalTitle').textContent = 'Edit Product';
+  document.getElementById('productId').value      = p.id;
+  document.getElementById('prodType').value        = p.product_type || '';
+  document.getElementById('prodType').setAttribute('readonly', 'readonly'); // key drives existing pools
+  document.getElementById('prodLabel').value       = p.label || '';
+  document.getElementById('prodHeadline').value    = p.headline || '';
+  document.getElementById('prodDescription').value = p.description || '';
+  document.getElementById('prodKeyDetails').value  = p.key_details || '';
+  document.getElementById('prodMin').value         = p.min_investment || '';
+  document.getElementById('prodTerm').value        = p.term_months || '';
+  document.getElementById('prodSort').value        = p.sort_order || 0;
+  document.getElementById('prodBenchmark').value   = p.benchmark_rate || '';
+  document.getElementById('prodPerfFee').value     = p.performance_fee_pct || '';
+  document.getElementById('prodPartner').value     = p.partner_name || '';
+  document.getElementById('prodRisk').value        = p.risk_profile || '';
+  document.getElementById('prodIcon').value        = p.icon || '';
+  document.getElementById('prodColor').value       = p.color || '';
+  document.getElementById('prodRiskColor').value   = p.risk_color || '';
+  document.getElementById('prodActive').value      = p.is_active ? 'true' : 'false';
+  document.getElementById('prodHomepage').value    = p.display_on_homepage ? 'true' : 'false';
+  const ff = document.getElementById('prodFactsheetFile'); if (ff) ff.value = '';
+  document.getElementById('prodFactsheetCurrent').innerHTML = p.factsheet_url
+    ? `Current: <strong>${p.factsheet_name || 'factsheet'}</strong> — uploading a new file replaces it.`
+    : 'No factsheet loaded yet.';
+  const avg = _productAvgReturn(p.product_type);
+  document.getElementById('prodAvgReturnInfo').innerHTML = avg
+    ? `<strong style="color:var(--gold)">${(avg.rate * 100).toFixed(2)}% p.a.</strong> — average achieved return across ${avg.count} matured pool${avg.count === 1 ? '' : 's'}. Updates automatically as more pools mature.`
+    : 'No matured pools for this product yet — the average return will appear automatically once pools mature.';
+  Modal.open('productModal');
+}
+
+async function saveProduct(btn) {
+  const productType = document.getElementById('prodType').value.trim().toLowerCase().replace(/\s+/g, '_');
+  const label = document.getElementById('prodLabel').value.trim();
+  if (!productType) { Toast.error('Product key is required'); return; }
+  if (!label) { Toast.error('Product name is required'); return; }
+
+  const num = id => { const v = document.getElementById(id).value; return v === '' ? null : (parseFloat(v) || 0); };
+  const id = document.getElementById('productId').value;
+  const payload = {
+    product_type:        productType,
+    label,
+    headline:            document.getElementById('prodHeadline').value.trim() || null,
+    description:         document.getElementById('prodDescription').value.trim() || null,
+    key_details:         document.getElementById('prodKeyDetails').value.trim() || null,
+    min_investment:      num('prodMin'),
+    term_months:         document.getElementById('prodTerm').value ? parseInt(document.getElementById('prodTerm').value) : null,
+    benchmark_rate:      num('prodBenchmark'),
+    performance_fee_pct: num('prodPerfFee'),
+    partner_name:        document.getElementById('prodPartner').value.trim() || null,
+    risk_profile:        document.getElementById('prodRisk').value.trim() || null,
+    icon:                document.getElementById('prodIcon').value.trim() || null,
+    color:               document.getElementById('prodColor').value.trim() || null,
+    risk_color:          document.getElementById('prodRiskColor').value.trim() || null,
+    is_active:           document.getElementById('prodActive').value === 'true',
+    display_on_homepage: document.getElementById('prodHomepage').value === 'true',
+    sort_order:          document.getElementById('prodSort').value ? parseInt(document.getElementById('prodSort').value) : 0,
+  };
+
+  await _withBtn(btn, async () => {
+    try {
+      // Read factsheet file (if a new one was chosen) into a base64 data URL
+      const file = document.getElementById('prodFactsheetFile')?.files?.[0];
+      if (file) {
+        payload.factsheet_url = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = e => resolve(e.target.result);
+          r.onerror = () => reject(new Error('Could not read file'));
+          r.readAsDataURL(file);
+        });
+        payload.factsheet_name = file.name;
+      }
+
+      if (id) {
+        await API.products.update(id, payload);
+        Toast.success('Product updated');
+      } else {
+        payload.id = `PROD-${productType.toUpperCase()}-${Date.now()}`;
+        await API.products.create(payload);
+        Toast.success('Product created');
+      }
+      Modal.close('productModal');
+      await loadProducts();
+      // Refresh pool product-type dropdowns so the new product is selectable
+      _populateProductTypeDropdowns();
+    } catch (e) {
+      Toast.error('Failed to save product: ' + (e.message || 'unknown error'));
+      console.error('[saveProduct]', e);
+    }
+  });
+}
+
+async function deleteProduct(id) {
+  const p = (STATE.products || []).find(x => x.id === id);
+  const name = p?.label || id;
+  if (!await Confirm.ask(`Delete product "${name}"?`, { body: 'Existing pools keep their product type, but it will no longer be selectable or shown on the home page.', confirmLabel: 'Delete', danger: true })) return;
+  try {
+    await API.products.delete(id);
+    Toast.success(`Product "${name}" deleted`);
+    await loadProducts();
+    _populateProductTypeDropdowns();
+  } catch (e) { Toast.error(e.message || 'Failed to delete product'); }
+}
+
+// Populate the New/Edit Pool product-type <select>s from the products catalogue
+function _populateProductTypeDropdowns() {
+  const products = (STATE.products || []).filter(p => p.is_active);
+  if (!products.length) return;
+  const opts = products.map(p => `<option value="${p.product_type}">${p.label}</option>`).join('');
+  ['newPoolType', 'editPoolType'].forEach(selId => {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = opts;
+    if (current && products.some(p => p.product_type === current)) sel.value = current;
+  });
+}
+
 let poolFilter = 'all';
 
 async function loadPools() {
@@ -1972,6 +2195,12 @@ async function loadPools() {
     const res = await API.pools.list({ limit: 100 });
     STATE.pools = res.data || [];
     renderPoolsGrid();
+    // Load products in the background so pool product-type dropdowns reflect them
+    if (!STATE.products || !STATE.products.length) {
+      API.products.list({ limit: 200 }).then(r => {
+        STATE.products = (r.data || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+      }).catch(() => {});
+    }
   } catch (e) { Toast.error('Failed to load pools'); }
 }
 
@@ -2376,7 +2605,14 @@ async function notifyWaitlist(poolId) {
   }
 }
 
-function openAddPoolModal() { _poolNameManual = false; _syncPoolTargetType('new'); Modal.open('addPoolModal'); }
+async function _ensureProductsForDropdowns() {
+  if (!STATE.products || !STATE.products.length) {
+    try { const r = await API.products.list({ limit: 200 }); STATE.products = (r.data || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)); } catch (_) {}
+  }
+  _populateProductTypeDropdowns();
+}
+
+function openAddPoolModal() { _poolNameManual = false; _syncPoolTargetType('new'); _ensureProductsForDropdowns(); Modal.open('addPoolModal'); }
 
 // Track whether admin has manually typed a pool name
 let _poolNameManual = false;
@@ -2514,6 +2750,13 @@ function editPool(id) {
   document.getElementById('editPoolId').value          = pool.id;
   document.getElementById('editPoolName').value        = pool.name || '';
   document.getElementById('editPoolStatus').value      = pool.status || 'open';
+  // Populate product-type options from the products catalogue, ensuring this
+  // pool's own type is selectable even if the product is now inactive/removed.
+  _populateProductTypeDropdowns();
+  const editTypeSel = document.getElementById('editPoolType');
+  if (pool.product_type && editTypeSel && !Array.from(editTypeSel.options).some(o => o.value === pool.product_type)) {
+    editTypeSel.insertAdjacentHTML('beforeend', `<option value="${pool.product_type}">${pool.product_type}</option>`);
+  }
   document.getElementById('editPoolType').value        = pool.product_type || 'cattle';
   document.getElementById('editPoolTargetType').value  = pool.target_type || 'amount';
   _syncPoolTargetType('edit');

@@ -119,6 +119,7 @@ const ALLOWED_TABLES = {
   international_waitlist:   'id',
   compliance_calendar:      'id',
   accepted_client_documents: 'id',
+  products:                 'id',
 };
 
 /* ─── Tables that require admin/director role for READ ─── */
@@ -142,6 +143,7 @@ const ADMIN_WRITE_TABLES = new Set([
   'employees', 'employee_courses',
   'payslips',
   'eva_periods', 'pulse_surveys', 'learning_paths',
+  'products',
 ]);
 
 /* ─── Columns that must never be set via the generic API ─── */

@@ -945,7 +945,126 @@ CREATE TABLE IF NOT EXISTS product_factsheets (
 );
 CREATE INDEX IF NOT EXISTS factsheets_pool_idx     ON product_factsheets(pool_id);
 CREATE INDEX IF NOT EXISTS factsheets_current_idx  ON product_factsheets(pool_id, is_current);
+
+CREATE TABLE IF NOT EXISTS products (
+  id                  TEXT PRIMARY KEY,
+  product_type        TEXT NOT NULL UNIQUE,   -- key used by investment_pools.product_type
+  label               TEXT NOT NULL,          -- e.g. "Cattle Investment"
+  headline            TEXT,                   -- e.g. "Grow with the herd."
+  description         TEXT,
+  key_details         TEXT,                   -- one bullet per line
+  min_investment      NUMERIC(18,2) DEFAULT 500,
+  term_months         INT DEFAULT 12,
+  benchmark_rate      NUMERIC(8,4) DEFAULT 0, -- e.g. 0.13 = 13% benchmark
+  performance_fee_pct NUMERIC(8,4) DEFAULT 0, -- e.g. 0.20 = 20% above benchmark
+  risk_profile        TEXT DEFAULT 'Medium',
+  risk_color          TEXT DEFAULT '#f59e0b',
+  icon                TEXT DEFAULT 'fa-circle',
+  color               TEXT DEFAULT '#8ea3b8',
+  badge_class         TEXT DEFAULT 'badge--gray',
+  partner_name        TEXT,
+  factsheet_url       TEXT,                   -- base64 data URL or external link
+  factsheet_name      TEXT,
+  is_active           BOOLEAN DEFAULT true,
+  display_on_homepage BOOLEAN DEFAULT true,
+  sort_order          INT DEFAULT 0,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS products_type_idx ON products(product_type);
 `;
+
+/* Default product catalogue — seeded once, then fully editable in the admin
+   console. Parameterised inserts avoid any apostrophe-escaping issues. */
+const DEFAULT_PRODUCTS = [
+  {
+    product_type: 'cattle', label: 'Cattle Investment', headline: 'Grow with the herd.',
+    description: "Partner with Beefcor, one of South Africa's most respected feedlots, and watch your returns grow alongside the cattle. Each investment pool funds a herd of cattle that enters at 200–230kg and is raised to 450–500kg before sale to an abattoir.",
+    key_details: [
+      'Cattle enter feedlot at 200–230kg and are raised to 450–500kg',
+      'Returns are determined by weight gain and market price per kilogram',
+      'Beefcor guarantees 99% cattle survival rate',
+      '9 consecutive years of delivering consistent returns',
+      "Supports South Africa's agricultural economy",
+      'Performance fee: 20% on returns above 13% benchmark',
+    ].join('\n'),
+    min_investment: 500, term_months: 12, benchmark_rate: 0.13, performance_fee_pct: 0.20,
+    risk_profile: 'Medium-High', risk_color: '#ff9b0c', icon: 'fa-cow', color: '#D4AF37',
+    badge_class: 'badge--gold', partner_name: 'Beefcor', sort_order: 1,
+  },
+  {
+    product_type: 'solar_7yr', label: 'Solar Investment (7yr)', headline: 'Power your returns.',
+    description: 'Fund solar energy installations for homes and businesses across South Africa and earn from clean, contracted energy generation over a 7-year term.',
+    key_details: ['Funds rooftop & commercial solar installations', 'Contracted energy offtake agreements', 'Supports SA energy independence'].join('\n'),
+    min_investment: 10000, term_months: 84, benchmark_rate: 0.13, performance_fee_pct: 0.20,
+    risk_profile: 'Medium', risk_color: '#f59e0b', icon: 'fa-solar-panel', color: '#22c55e',
+    badge_class: 'badge--green', sort_order: 2,
+  },
+  {
+    product_type: 'solar_6yr', label: 'Solar Investment (6yr)', headline: 'Power your returns.',
+    description: 'Fund solar energy installations across South Africa over a 6-year term.',
+    key_details: ['Funds rooftop & commercial solar installations', 'Contracted energy offtake agreements'].join('\n'),
+    min_investment: 10000, term_months: 72, benchmark_rate: 0.13, performance_fee_pct: 0.20,
+    risk_profile: 'Medium', risk_color: '#f59e0b', icon: 'fa-solar-panel', color: '#22c55e',
+    badge_class: 'badge--green', sort_order: 3,
+  },
+  {
+    product_type: 'solar_5yr', label: 'Solar Investment (5yr)', headline: 'Power your returns.',
+    description: 'Fund solar energy installations across South Africa over a 5-year term.',
+    key_details: ['Funds rooftop & commercial solar installations', 'Contracted energy offtake agreements'].join('\n'),
+    min_investment: 10000, term_months: 60, benchmark_rate: 0.13, performance_fee_pct: 0.20,
+    risk_profile: 'Medium', risk_color: '#f59e0b', icon: 'fa-solar-panel', color: '#22c55e',
+    badge_class: 'badge--green', sort_order: 4,
+  },
+  {
+    product_type: 'short_term', label: 'Short Term Investment', headline: 'Fast, focused growth.',
+    description: 'Fund South African SMMEs through asset finance. Capital is deployed into vetted businesses generating strong short-cycle returns.',
+    key_details: ['Capital deployed to vetted SMMEs', 'Short investment cycles', 'Asset-backed where possible'].join('\n'),
+    min_investment: 1000, term_months: 5, benchmark_rate: 0.13, performance_fee_pct: 0.20,
+    risk_profile: 'Medium', risk_color: '#f59e0b', icon: 'fa-bolt', color: '#3b82f6',
+    badge_class: 'badge--blue', sort_order: 5,
+  },
+  {
+    product_type: 'smme', label: 'SMME', headline: 'Back local business.',
+    description: 'Fund vetted small, medium and micro enterprises through short-cycle asset finance.',
+    key_details: ['Capital deployed to vetted SMMEs', 'Short investment cycles'].join('\n'),
+    min_investment: 1000, term_months: 1, benchmark_rate: 0.13, performance_fee_pct: 0.20,
+    risk_profile: 'Medium', risk_color: '#f59e0b', icon: 'fa-bolt', color: '#3b82f6',
+    badge_class: 'badge--blue', sort_order: 6,
+  },
+  {
+    product_type: 'delivery_bike', label: 'Delivery Bikes', headline: 'Steady wheels, steady returns.',
+    description: 'Fleet funding for delivery riders working with platforms like Mr D, Takealot and Uber Eats. Steady, predictable returns.',
+    key_details: ['Funds delivery motorcycle fleets', 'Predictable lease-based returns', 'Supports gig-economy riders'].join('\n'),
+    min_investment: 3100, term_months: 18, benchmark_rate: 0.13, performance_fee_pct: 0.20,
+    risk_profile: 'Low-Medium', risk_color: '#22c55e', icon: 'fa-motorcycle', color: '#f97316',
+    badge_class: 'badge--orange', sort_order: 7,
+  },
+];
+
+async function seedProducts() {
+  try {
+    for (const p of DEFAULT_PRODUCTS) {
+      await pool.query(
+        `INSERT INTO products
+           (id, product_type, label, headline, description, key_details,
+            min_investment, term_months, benchmark_rate, performance_fee_pct,
+            risk_profile, risk_color, icon, color, badge_class, partner_name, sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+         ON CONFLICT (product_type) DO NOTHING`,
+        [
+          `PROD-${p.product_type.toUpperCase()}`, p.product_type, p.label, p.headline,
+          p.description, p.key_details, p.min_investment, p.term_months, p.benchmark_rate,
+          p.performance_fee_pct, p.risk_profile, p.risk_color, p.icon, p.color,
+          p.badge_class, p.partner_name || null, p.sort_order,
+        ]
+      );
+    }
+    console.log('✅ Default products seeded.');
+  } catch (err) {
+    console.error('[seedProducts] error:', err.message);
+  }
+}
 
 async function autoSetup() {
   if (!process.env.DATABASE_URL) {
@@ -992,6 +1111,9 @@ async function autoSetup() {
       END $$
     `);
     console.log('✅ Investor FICA + gamification columns ready.');
+
+    // 1b2. Seed default products (idempotent — only inserts missing product types)
+    await seedProducts();
 
     // 1c. Performance indexes (each wrapped individually so one failure won't abort the rest)
     const indexes = [
