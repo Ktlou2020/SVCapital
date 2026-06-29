@@ -2055,11 +2055,26 @@ function renderPoolsGrid() {
           ${p.management_fee_pct > 0 ? `<div class="pool-stat"><span class="pool-stat__label">Mgt Fee</span><span class="pool-stat__value" style="color:#f59e0b">${(Number(p.management_fee_pct) * 100).toFixed(2)}% (${p.management_fee_frequency || 'once'})</span></div>` : ''}
         </div>
 
-        <div class="pool-card__progress-label">
-          <span>${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)} raised</span>
-          <span>${pct}% funded</span>
-        </div>
-        <div class="progress-bar"><div class="progress-fill${p.product_type.includes('solar') ? ' progress-fill--green' : p.product_type === 'short_term' ? ' progress-fill--blue' : ''}" style="width:${pct}%"></div></div>
+        ${(() => {
+          const fillClass = p.product_type.includes('solar') ? ' progress-fill--green' : p.product_type === 'short_term' ? ' progress-fill--blue' : '';
+          if (Utils.poolIsDateTarget(p)) {
+            const dpct  = Utils.poolDateProgressPct(p);
+            const days  = Utils.daysRemaining(p.end_date);
+            const left  = days === null ? '—' : (days === 0 ? 'Closed' : `${days} day${days === 1 ? '' : 's'} to closure`);
+            return `
+              <div class="pool-card__progress-label">
+                <span><i class="fa-solid fa-clock" style="margin-right:4px"></i>${left}</span>
+                <span>${dpct}% elapsed</span>
+              </div>
+              <div class="progress-bar"><div class="progress-fill${fillClass}" style="width:${dpct}%"></div></div>`;
+          }
+          return `
+            <div class="pool-card__progress-label">
+              <span>${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)} raised</span>
+              <span>${pct}% funded</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill${fillClass}" style="width:${pct}%"></div></div>`;
+        })()}
 
         <div style="margin-top:10px">${_capacityBar(p)}</div>
         ${waitlistCountHtml}
@@ -2363,7 +2378,7 @@ async function notifyWaitlist(poolId) {
   }
 }
 
-function openAddPoolModal() { _poolNameManual = false; Modal.open('addPoolModal'); }
+function openAddPoolModal() { _poolNameManual = false; _syncPoolTargetType('new'); Modal.open('addPoolModal'); }
 
 // Track whether admin has manually typed a pool name
 let _poolNameManual = false;
@@ -2399,6 +2414,16 @@ function _autoPoolName() {
   nameEl.value = parts.join(' - ');
 }
 
+/* Show/hide the Target Amount field depending on the chosen target type.
+   'amount' pools raise to a goal R amount; 'date' pools simply stay open
+   until their Close Date, so the amount goal is not applicable. */
+function _syncPoolTargetType(which) {
+  const sel  = document.getElementById(`${which}PoolTargetType`);
+  const wrap = document.getElementById(`${which}PoolTargetWrap`);
+  if (!sel || !wrap) return;
+  wrap.style.display = sel.value === 'date' ? 'none' : '';
+}
+
 function _autoCalcMaturityDate(openDateId, termId, closeDateId) {
   const openVal = document.getElementById(openDateId)?.value;
   const termVal = parseInt(document.getElementById(termId)?.value) || 0;
@@ -2421,6 +2446,7 @@ async function saveNewPool(btn) {
       await API.pools.create({
         id: `POOL-${type.toUpperCase().slice(0,3)}-${Date.now()}`,
         name, product_type: type,
+        target_type: document.getElementById('newPoolTargetType')?.value || 'amount',
         target_amount: target || 0, raised_amount: 0,
         min_investment: parseFloat(document.getElementById('newPoolMin').value) || 500,
         term_months: parseInt(document.getElementById('newPoolTerm').value) || 12,
@@ -2491,6 +2517,8 @@ function editPool(id) {
   document.getElementById('editPoolName').value        = pool.name || '';
   document.getElementById('editPoolStatus').value      = pool.status || 'open';
   document.getElementById('editPoolType').value        = pool.product_type || 'cattle';
+  document.getElementById('editPoolTargetType').value  = pool.target_type || 'amount';
+  _syncPoolTargetType('edit');
   document.getElementById('editPoolTerm').value        = pool.term_months || 12;
   document.getElementById('editPoolTarget').value      = pool.target_amount || 0;
   document.getElementById('editPoolRaised').value      = pool.raised_amount || 0;
@@ -2528,6 +2556,7 @@ async function saveEditPool(btn) {
     name:           document.getElementById('editPoolName').value.trim(),
     status:         document.getElementById('editPoolStatus').value,
     product_type:   document.getElementById('editPoolType').value,
+    target_type:    document.getElementById('editPoolTargetType')?.value || 'amount',
     term_months:    parseInt(document.getElementById('editPoolTerm').value) || 12,
     target_amount:  parseFloat(document.getElementById('editPoolTarget').value) || 0,
     raised_amount:  parseFloat(document.getElementById('editPoolRaised').value) || 0,

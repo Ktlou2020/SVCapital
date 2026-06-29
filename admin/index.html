@@ -1784,8 +1784,16 @@
           </select>
         </div>
       </div>
-      <div class="form-row form-row--3">
-        <div class="form-group"><label class="form-label">Target Amount (R) *</label><input type="number" class="form-input" id="newPoolTarget" placeholder="500000" /></div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Target Type *</label>
+          <select class="form-select" id="newPoolTargetType" onchange="_syncPoolTargetType('new')">
+            <option value="amount">Amount goal (raise to a target R amount)</option>
+            <option value="date">Closing date (open until the close date)</option>
+          </select>
+        </div>
+        <div class="form-group" id="newPoolTargetWrap"><label class="form-label">Target Amount (R) *</label><input type="number" class="form-input" id="newPoolTarget" placeholder="500000" /></div>
+      </div>
+      <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Min. Investment (R)</label><input type="number" class="form-input" id="newPoolMin" placeholder="500" /></div>
         <div class="form-group"><label class="form-label">Term (months)</label><input type="number" class="form-input" id="newPoolTerm" placeholder="12" onchange="_autoCalcMaturityDate('newPoolOpenDate','newPoolTerm','newPoolMaturityDate')" /></div>
       </div>
@@ -2034,8 +2042,16 @@
         </div>
         <div class="form-group"><label class="form-label">Term (months)</label><input type="number" class="form-input" id="editPoolTerm" onchange="_autoCalcMaturityDate('editPoolOpenDate','editPoolTerm','editPoolMaturityDate')" /></div>
       </div>
-      <div class="form-row form-row--3">
-        <div class="form-group"><label class="form-label">Target Amount (R)</label><input type="number" class="form-input" id="editPoolTarget" /></div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Target Type</label>
+          <select class="form-select" id="editPoolTargetType" onchange="_syncPoolTargetType('edit')">
+            <option value="amount">Amount goal (raise to a target R amount)</option>
+            <option value="date">Closing date (open until the close date)</option>
+          </select>
+        </div>
+        <div class="form-group" id="editPoolTargetWrap"><label class="form-label">Target Amount (R)</label><input type="number" class="form-input" id="editPoolTarget" /></div>
+      </div>
+      <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Raised Amount (R)</label><input type="number" class="form-input" id="editPoolRaised" /></div>
         <div class="form-group"><label class="form-label">Min. Investment (R)</label><input type="number" class="form-input" id="editPoolMin" /></div>
       </div>

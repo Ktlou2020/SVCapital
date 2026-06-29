@@ -3195,15 +3195,27 @@ function renderMarketplace() {
           </div>` : ''}
         </div>
 
-        <!-- Funding progress -->
+        <!-- Funding / closure progress -->
         <div class="mpc2-progress">
-          <div class="mpc2-progress__labels">
-            <span>${Utils.rand(pool.raised_amount)} raised</span>
-            <span style="font-weight:700;color:${pct >= 90 ? '#ef4444' : pct >= 60 ? '#f59e0b' : pi.color}">${pct}% funded</span>
-          </div>
-          <div class="mpc2-progress__track">
-            <div class="mpc2-progress__fill" style="width:${pct}%;background:linear-gradient(90deg,${pi.color},${pi.color}aa)"></div>
-          </div>
+          ${Utils.poolIsDateTarget(pool) ? (() => {
+            const dpct = Utils.poolDateProgressPct(pool);
+            const left = days === null ? '—' : (days === 0 ? 'Closed' : `${days} day${days === 1 ? '' : 's'} to closure`);
+            return `
+              <div class="mpc2-progress__labels">
+                <span><i class="fa-solid fa-clock" style="margin-right:4px"></i>${left}</span>
+                <span style="font-weight:700;color:${urgency ? '#ef4444' : pi.color}">${dpct}% elapsed</span>
+              </div>
+              <div class="mpc2-progress__track">
+                <div class="mpc2-progress__fill" style="width:${dpct}%;background:linear-gradient(90deg,${pi.color},${pi.color}aa)"></div>
+              </div>`;
+          })() : `
+            <div class="mpc2-progress__labels">
+              <span>${Utils.rand(pool.raised_amount)} raised</span>
+              <span style="font-weight:700;color:${pct >= 90 ? '#ef4444' : pct >= 60 ? '#f59e0b' : pi.color}">${pct}% funded</span>
+            </div>
+            <div class="mpc2-progress__track">
+              <div class="mpc2-progress__fill" style="width:${pct}%;background:linear-gradient(90deg,${pi.color},${pi.color}aa)"></div>
+            </div>`}
           ${capacityBarHtml}
         </div>
 
