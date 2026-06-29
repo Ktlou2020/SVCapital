@@ -189,12 +189,17 @@ const STRIP_COLS = {
   employees: ['pin_hash', 'id_number', 'login_attempts', 'login_locked_until'],
 };
 
-function stripSensitive(table, rows) {
+function stripSensitive(table, rows, ownEmpId) {
   const cols = STRIP_COLS[table];
   if (!cols) return rows;
   return rows.map(row => {
     const clean = { ...row };
-    cols.forEach(c => delete clean[c]);
+    cols.forEach(c => {
+      // An employee may see their OWN id_number (needed for their profile);
+      // it stays stripped for everyone else. pin_hash etc. are always stripped.
+      if (c === 'id_number' && table === 'employees' && ownEmpId && row.id === ownEmpId) return;
+      delete clean[c];
+    });
     return clean;
   });
 }
@@ -207,6 +212,32 @@ function validateTable(req, res, next) {
   req.tableKey = ALLOWED_TABLES[table];
   next();
 }
+
+/* ─── GET /api/tables/leave-calendar ───────────────────────────────
+   Shared team leave calendar: any authenticated staff member can see
+   EVERYONE's APPROVED leave (with names/colours) so the calendar is
+   visible to the whole team. Must be declared before the generic
+   /:table route so it isn't treated as a table name. */
+router.get('/leave-calendar', requireAuth, async (req, res) => {
+  if (!req.user.empId && !['admin', 'director', 'fund_manager'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Staff only.' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT lr.id, lr.employee_id, lr.leave_type, lr.start_date, lr.end_date,
+              lr.days_requested, lr.status,
+              e.first_name, e.last_name, e.avatar_color, e.avatar_initials
+       FROM leave_requests lr
+       JOIN employees e ON e.id = lr.employee_id
+       WHERE lr.status = 'approved'
+       ORDER BY lr.start_date`
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    console.error('[leave-calendar] error:', err.message);
+    res.status(500).json({ error: 'Could not load leave calendar.' });
+  }
+});
 
 /* ─── GET /api/tables/:table ─── */
 router.get('/:table', requireAuth, validateTable, async (req, res) => {
@@ -386,7 +417,7 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
       pool.query(countQuery, countParams),
     ]);
 
-    const rows  = stripSensitive(table, dataResult.rows);
+    const rows  = stripSensitive(table, dataResult.rows, req.user?.empId);
     const total = parseInt(countResult.rows[0].count);
 
     res.json({ data: rows, total, page, limit, pages: Math.ceil(total / limit) });
@@ -479,7 +510,7 @@ router.get('/:table/:id', requireAuth, validateTable, async (req, res) => {
       }
     }
 
-    const [clean] = stripSensitive(table, rows);
+    const [clean] = stripSensitive(table, rows, req.user?.empId);
     res.json(clean);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -594,7 +625,7 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       `INSERT INTO ${table} (${cols}) VALUES (${placeholders}) RETURNING *`,
       values
     );
-    const [clean] = stripSensitive(table, rows);
+    const [clean] = stripSensitive(table, rows, req.user?.empId);
     res.status(201).json(clean);
 
     /* ── Wallet credit hook ─────────────────────────────────────────────
@@ -883,7 +914,7 @@ router.put('/:table/:id', requireAuth, validateTable, async (req, res) => {
       values
     );
     if (!rows[0]) return res.status(404).json({ error: 'Record not found.' });
-    const [clean] = stripSensitive(table, rows);
+    const [clean] = stripSensitive(table, rows, req.user?.empId);
     res.json(clean);
   } catch (err) {
     console.error(`PUT /${req.params.table}/${req.params.id}:`, err.message);
@@ -945,7 +976,7 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
       values
     );
     if (!rows[0]) return res.status(404).json({ error: 'Record not found.' });
-    const [clean] = stripSensitive(table, rows);
+    const [clean] = stripSensitive(table, rows, req.user?.empId);
     res.json(clean);
 
     // ── Audit + Email hooks (fire-and-forget) ─────────────────────────────
