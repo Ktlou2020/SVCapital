@@ -2357,6 +2357,11 @@
           <input type="text" class="form-input" id="bdBranchCode" placeholder="e.g. 632005" />
         </div>
       </div>
+      <div class="form-group">
+        <label class="form-label">Proof of Bank Account <span style="color:#ef4444">*</span></label>
+        <input type="file" class="form-input" id="bdProofFile" accept="image/*,application/pdf" />
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:5px">Upload a bank confirmation letter or a stamped/official statement showing your name, account number and branch code. Our team will review and approve it before your bank account is verified.</div>
+      </div>
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('bankDetailsModal')">Cancel</button>
@@ -2784,6 +2789,7 @@
           <option value="">— Select document type —</option>
           <option value="id_document">South African ID / Passport</option>
           <option value="proof_of_address">Proof of Address (bank statement, utility bill)</option>
+          <option value="proof_of_bank">Proof of Bank Account (confirmation letter / statement)</option>
           <option value="selfie">Selfie / Liveness Photo</option>
           <option value="tax_certificate">Tax Certificate (IT3b)</option>
           <option value="other">Other Supporting Document</option>

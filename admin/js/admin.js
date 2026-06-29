@@ -1296,9 +1296,12 @@ async function viewInvestor(id) {
               <div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value">${bankBranch}</span></div>
               <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value"><span class="badge ${bCls[bStatus]}">${bLbl[bStatus]}</span></span></div>
             </div>
-            ${bStatus==='pending'?`<div style="display:flex;gap:8px;margin-top:10px">
-              <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
-              <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+            ${bStatus!=='none'?`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+              <button class="btn btn--secondary btn--sm" onclick='viewBankProof(${JSON.stringify(inv.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> View Proof of Bank</button>
+              ${bStatus==='pending'?`
+                <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
+                <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+              `:''}
             </div>`:''}
           </div>
         </div>
@@ -1428,11 +1431,27 @@ async function saveInvestorNotes(investorId) {
   } catch (e) { Toast.error('Failed to save notes'); }
 }
 
+/** Find an investor's outstanding (pending/under_review) proof-of-bank documents. */
+async function _pendingProofOfBankDocs(investorId) {
+  try {
+    const res = await API.kyc.list({ investor_id: investorId, limit: 200 });
+    return (res.data || []).filter(d => d.doc_type === 'proof_of_bank' && ['pending', 'under_review'].includes(d.status));
+  } catch (_) { return []; }
+}
+
 async function approveBankAccount(investorId, btn) {
   if (!await Confirm.ask('Approve bank account?', { body: 'This will enable withdrawals for this investor and send a confirmation.', confirmLabel: 'Approve' })) return;
   await _withBtn(btn, async () => {
     try {
       await API._fetch('PATCH', `tables/investors/${investorId}`, { bank_account_status: 'approved', bank_account_notes: null });
+      // Approving the bank account also approves the attached proof-of-bank document.
+      const reviewedBy = _getAdminName();
+      const proofs = await _pendingProofOfBankDocs(investorId);
+      for (const d of proofs) {
+        await API.kyc.update(d.id, { status: 'approved', reviewed_by: reviewedBy, reviewed_at: new Date().toISOString() });
+      }
+      // Recompute overall FICA — proof of bank is one of the three required documents.
+      await _recomputeInvestorFicaStatus(investorId);
       Toast.success('Bank account approved — investor can now request withdrawals');
       Modal.close('investorDetailModal');
       await loadInvestors();
@@ -1451,6 +1470,13 @@ async function rejectBankAccount(investorId) {
       bank_account_status: 'rejected',
       bank_account_notes:  reason || 'Bank account details could not be verified.',
     });
+    // Rejecting the bank account also rejects the attached proof-of-bank document.
+    const reviewedBy = _getAdminName();
+    const proofs = await _pendingProofOfBankDocs(investorId);
+    for (const d of proofs) {
+      await API.kyc.update(d.id, { status: 'rejected', notes: reason || 'Bank account details could not be verified.', reviewed_by: reviewedBy, reviewed_at: new Date().toISOString() });
+    }
+    await _recomputeInvestorFicaStatus(investorId);
     Toast.success('Bank account rejected');
     Modal.close('investorDetailModal');
     await loadInvestors();
@@ -1775,12 +1801,29 @@ function renderKYCTable() {
   `}).join('');
 }
 
+/** Fetch and open an investor's most recent proof-of-bank document (admin profile view). */
+async function viewBankProof(investorId) {
+  try {
+    const res = await API.kyc.list({ investor_id: investorId, limit: 200 });
+    const proofs = (res.data || [])
+      .filter(d => d.doc_type === 'proof_of_bank')
+      .sort((a, b) => new Date(b.submitted_at || b.created_at || 0) - new Date(a.submitted_at || a.created_at || 0));
+    if (!proofs.length) { Toast.error('No proof of bank account uploaded for this investor.'); return; }
+    _openDocumentData(proofs[0].file_data || proofs[0].attachment_data || proofs[0].file_url || '', proofs[0].file_name || 'Proof of Bank');
+  } catch (e) {
+    Toast.error('Could not load proof of bank: ' + (e.message || 'unknown error'));
+  }
+}
+
 function viewFicaDocument(kycId) {
   const doc = STATE.kyc.find(k => k.id === kycId);
   if (!doc) return;
+  _openDocumentData(doc.file_data || doc.attachment_data || doc.file_url || '', doc.file_name || 'Document');
+}
 
-  const rawData = doc.file_data || doc.attachment_data || doc.file_url || '';
-  const fileName = doc.file_name || 'Document';
+/** Open a base64 data URL / HTTP URL document in a new tab (with download fallback). */
+function _openDocumentData(rawData, fileName) {
+  fileName = fileName || 'Document';
   const isDataUrl = rawData.startsWith('data:');
   const isHttpUrl = rawData.startsWith('https://') || rawData.startsWith('http://');
 
@@ -1830,18 +1873,51 @@ function viewFicaDocument(kycId) {
   a.click();
 }
 
+// FICA/KYC is only fully verified once ALL of these document types are approved.
+const FICA_REQUIRED_DOCS = ['id_document', 'proof_of_address', 'proof_of_bank'];
+const FICA_DOC_LABELS = {
+  id_document: 'ID', proof_of_address: 'Proof of Address', proof_of_bank: 'Proof of Bank Details',
+};
+
+/**
+ * Recompute an investor's overall FICA/KYC status from their documents.
+ * Verified only when ID + Proof of Address + Proof of Bank Details are all approved.
+ * Otherwise the status is "in_progress" (documents check pending).
+ * Returns { verified, missing: [labels] }.
+ */
+async function _recomputeInvestorFicaStatus(investorId) {
+  if (!investorId) return { verified: false, missing: [] };
+  let docs = [];
+  try {
+    const res = await API.kyc.list({ investor_id: investorId, limit: 200 });
+    docs = res.data || [];
+  } catch (_) { return { verified: false, missing: [] }; }
+
+  const approvedTypes = new Set(docs.filter(d => d.status === 'approved').map(d => d.doc_type));
+  const missing = FICA_REQUIRED_DOCS.filter(t => !approvedTypes.has(t));
+  const verified = missing.length === 0;
+
+  if (verified) {
+    await API._fetch('PATCH', `tables/investors/${investorId}`, { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
+  } else {
+    await API._fetch('PATCH', `tables/investors/${investorId}`, { kyc_status: 'in_progress', fica_status: 'in_progress' });
+  }
+  return { verified, missing: missing.map(t => FICA_DOC_LABELS[t] || t) };
+}
+
 async function approveKyc(id, btn) {
   if (!await Confirm.ask('Approve KYC document?', { body: 'This will mark the document as verified.', confirmLabel: 'Approve' })) return;
   const reviewedBy = _getAdminName();
   await _withBtn(btn, async () => {
     try {
       await API.kyc.update(id, { status: 'approved', reviewed_by: reviewedBy, reviewed_at: new Date().toISOString() });
-      // Also update the investor's kyc_status so filters/badges reflect the change
+      // Recompute the investor's overall FICA status — verified only once
+      // ID, Proof of Address and Proof of Bank Details are all approved.
       const doc = STATE.kyc.find(k => k.id === id);
-      if (doc?.investor_id) {
-        await API._fetch('PATCH', `tables/investors/${doc.investor_id}`, { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
-      }
-      Toast.success('Document approved — investor is now KYC-verified');
+      const result = await _recomputeInvestorFicaStatus(doc?.investor_id);
+      Toast.success(result.verified
+        ? 'Document approved — investor is now FICA-verified'
+        : `Document approved — still needed: ${result.missing.join(', ')}`);
       await loadKYC();
     } catch (e) {
       Toast.error('Failed to approve document: ' + (e.message || 'unknown error'));
@@ -1857,6 +1933,9 @@ async function rejectKyc(id, btn) {
   await _withBtn(btn, async () => {
     try {
       await API.kyc.update(id, { status: 'rejected', notes: reason, reviewed_by: reviewedBy, reviewed_at: new Date().toISOString() });
+      // A rejected required document means the investor can no longer be verified.
+      const doc = STATE.kyc.find(k => k.id === id);
+      await _recomputeInvestorFicaStatus(doc?.investor_id);
       Toast.success('Document rejected');
       await loadKYC();
     } catch (e) {

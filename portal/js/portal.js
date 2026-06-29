@@ -7006,6 +7006,8 @@ function openBankDetailsModal() {
     document.getElementById('bdAccountNumber').value  = inv.bank_account_number || '';
     document.getElementById('bdBranchCode').value     = inv.bank_branch_code || '';
   }
+  const proofEl = document.getElementById('bdProofFile');
+  if (proofEl) proofEl.value = '';
   Modal.open('bankDetailsModal');
 }
 
@@ -7015,14 +7017,27 @@ async function saveBankDetails() {
   const bank_account_holder  = document.getElementById('bdAccountHolder').value.trim();
   const bank_account_number  = document.getElementById('bdAccountNumber').value.trim();
   const bank_branch_code     = document.getElementById('bdBranchCode').value.trim();
+  const proofFile            = document.getElementById('bdProofFile')?.files?.[0] || null;
 
   if (!bank_name || !bank_account_holder || !bank_account_number || !bank_branch_code) {
     Toast.error('Please fill in all required fields'); return;
   }
+  if (!proofFile) {
+    Toast.error('Please attach a proof of bank account'); return;
+  }
 
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
+  const investorName = `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim();
   try {
-    const updated = await API._fetch('PATCH', `tables/investors/${investorId}`, {
+    // Read the proof of bank file as a base64 data URL so admin can view & approve it
+    const proofData = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = e => resolve(e.target.result);
+      reader.onerror = () => reject(new Error('Could not read file'));
+      reader.readAsDataURL(proofFile);
+    });
+
+    const bankPatch = {
       bank_name,
       bank_account_holder,
       bank_account_number,
@@ -7030,11 +7045,28 @@ async function saveBankDetails() {
       bank_account_type,
       bank_account_status: 'pending',
       bank_account_notes: null,
-    });
+    };
+    // Submitting bank proof puts FICA back into "in progress" unless already verified
+    if (PORTAL.investor && PORTAL.investor.kyc_status !== 'approved' && PORTAL.investor.fica_status !== 'approved') {
+      bankPatch.kyc_status = 'in_progress';
+      bankPatch.fica_status = 'in_progress';
+    }
+    const updated = await API._fetch('PATCH', `tables/investors/${investorId}`, bankPatch);
     if (PORTAL.investor) Object.assign(PORTAL.investor, updated);
 
+    // Submit the proof of bank as a KYC document for admin review.
+    // Once approved (with ID + Proof of Address), the investor becomes FICA-verified.
+    await API.kyc.create({
+      investor_id:   investorId,
+      investor_name: investorName || undefined,
+      doc_type:      'proof_of_bank',
+      status:        'pending',
+      file_name:     proofFile.name,
+      file_data:     proofData,
+      notes:         `Proof of bank account for ${bank_name} — submitted with banking details.`,
+    }).catch(e => console.warn('[bank details] proof upload failed:', e.message));
+
     // Create support ticket so admin can see and verify the bank details
-    const investorName = `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim();
     const maskedAccNum = bank_account_number.slice(-4).padStart(bank_account_number.length, '•');
     await API.post('support_tickets', {
       investor_id:    investorId,
@@ -7834,6 +7866,11 @@ async function submitKycDocument() {
       file_data:     fileData,
       notes:         [notes, `File: ${_kycFile.name} (${(_kycFile.size / 1024).toFixed(1)} KB)`].filter(Boolean).join(' — '),
     });
+    // Reflect that documents are now being checked (unless already fully verified)
+    if (inv && inv.kyc_status !== 'approved' && inv.fica_status !== 'approved') {
+      await API._fetch('PATCH', `tables/investors/${inv.id}`, { kyc_status: 'in_progress', fica_status: 'in_progress' }).catch(() => {});
+      Object.assign(inv, { kyc_status: 'in_progress', fica_status: 'in_progress' });
+    }
     Toast.success('Document submitted! The compliance team will review it within 1–2 business days.');
     SVC.track('svc_kyc_uploaded', { doc_type: docType });
     Modal.close('kycUploadModal');
@@ -7861,11 +7898,12 @@ async function _renderKycStatusPanel() {
 
   const inv = PORTAL.investor;
   const overallStatus = inv.fica_status || inv.kyc_status || 'pending';
-  const statusColor = { approved: '#22c55e', rejected: '#ef4444', pending: '#f59e0b', submitted: '#3b82f6', not_started: '#9ca3af' };
+  const statusColor = { approved: '#22c55e', rejected: '#ef4444', pending: '#f59e0b', in_progress: '#3b82f6', submitted: '#3b82f6', not_started: '#9ca3af' };
   const color = statusColor[overallStatus] || '#9ca3af';
 
   const typeLabel = {
     id_document: 'SA ID / Passport', proof_of_address: 'Proof of Address',
+    proof_of_bank: 'Proof of Bank Account',
     selfie: 'Selfie / Liveness', tax_certificate: 'Tax Certificate', other: 'Other Document',
   };
 
@@ -7913,9 +7951,10 @@ async function _renderKycDocsList() {
   const overallStatus = inv.fica_status || inv.kyc_status || 'pending';
   const typeLabel = {
     id_document: 'SA ID / Passport', proof_of_address: 'Proof of Address',
+    proof_of_bank: 'Proof of Bank Account',
     selfie: 'Selfie / Liveness', tax_certificate: 'Tax Certificate', other: 'Other',
   };
-  const requiredTypes = ['id_document', 'proof_of_address'];
+  const requiredTypes = ['id_document', 'proof_of_address', 'proof_of_bank'];
   const submittedTypes = new Set(docs.map(d => d.doc_type));
   const missingRequired = requiredTypes.filter(t => !submittedTypes.has(t));
 
