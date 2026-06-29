@@ -93,7 +93,7 @@ router.get('/cattle-stats', async (req, res) => {
 
     // Estimated current average weight for live animals = entry + gain × days in cycle
     const { rows: curRows } = await pool.query(`
-      SELECT ROUND(AVG(a.entry_mass + $1 * GREATEST(0, (CURRENT_DATE - c.cycle_start_date::date)))::numeric, 1) AS avg_current_weight
+      SELECT ROUND(AVG(a.entry_mass + ($1::numeric) * GREATEST(0, (CURRENT_DATE - c.cycle_start_date::date)))::numeric, 1) AS avg_current_weight
       FROM cattle_animals a
       LEFT JOIN cattle_cycles c ON c.id = a.cycle_id
       WHERE COALESCE(a.status,'active') NOT IN ('sold','mortality')
