@@ -18,8 +18,10 @@ const API_KEY = (process.env.FOXESS_API_KEY || '').trim();
 
 function _headers(path) {
   const timestamp = Date.now().toString();
+  // FoxESS signs with the LITERAL 4-char separator \r\n (backslash-r-backslash-n),
+  // NOT an actual CRLF — hence the double backslashes below.
   const signature = crypto.createHash('md5')
-    .update(`${path}\r\n${API_KEY}\r\n${timestamp}`)
+    .update(`${path}\\r\\n${API_KEY}\\r\\n${timestamp}`)
     .digest('hex');
   return {
     'token':        API_KEY,
