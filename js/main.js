@@ -1018,3 +1018,54 @@ async function _applyCattleHerdStatus() {
 }
 
 document.addEventListener('DOMContentLoaded', _applyCattleHerdStatus);
+
+/* ─── Live solar telematics (FoxESS / FoxCloud) on the Solar product ───────
+   All three solar terms share one physical installation, so a single live
+   feed (generation now, today, this month, total, CO₂ avoided) is surfaced
+   on the home page solar card and its "View Details" modal. */
+async function _applySolarTelemetry() {
+  let s;
+  try {
+    const r = await fetch('/api/products/solar-stats');
+    if (!r.ok) return;
+    s = await r.json();
+  } catch (_) { return; }
+  if (!s || s.unavailable || (!s.total_kwh && !s.today_kwh && !s.current_power_kw)) return;
+
+  const kwh = v => Number(v || 0).toLocaleString('en-ZA');
+  const total = s.total_kwh >= 1000 ? `${(s.total_kwh / 1000).toFixed(1)} MWh` : `${kwh(s.total_kwh)} kWh`;
+  const live = (s.current_power_kw || 0) > 0;
+  const stat = (val, lbl) => `<div><div style="font-size:1.3rem;font-weight:800;color:#fff">${val}</div><div style="font-size:0.72rem;color:var(--text-dim)">${lbl}</div></div>`;
+
+  if (typeof MODAL_DATA !== 'undefined' && MODAL_DATA.solar) {
+    MODAL_DATA.solar.herdHtml = `
+      <div style="background:rgba(34,197,94,0.09);border:1px solid rgba(34,197,94,0.3);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#34d27f;margin-bottom:12px">
+          <i class="fa-solid fa-solar-panel"></i> Live Solar Generation
+          ${live ? '<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:0.7rem;color:#22c55e;text-transform:none;letter-spacing:0"><span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block"></span> generating now</span>' : ''}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          ${stat(`${(s.current_power_kw || 0).toLocaleString('en-ZA')}<span style="font-size:0.85rem"> kW</span>`, 'generating now')}
+          ${stat(`${kwh(s.today_kwh)}<span style="font-size:0.85rem"> kWh</span>`, 'today')}
+          ${stat(`${kwh(s.month_kwh)}<span style="font-size:0.85rem"> kWh</span>`, 'this month')}
+          ${stat(total, 'total generated')}
+          ${s.co2_avoided_kg ? stat(`${(s.co2_avoided_kg / 1000).toFixed(1)}<span style="font-size:0.85rem"> t</span>`, 'CO₂ avoided') : ''}
+          ${s.device_count ? stat(s.device_count, `inverter${s.device_count === 1 ? '' : 's'}`) : ''}
+        </div>
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:10px">Live data from FoxCloud${s.station_name ? ` · ${String(s.station_name).replace(/[<>&]/g, '')}` : ''}</div>
+      </div>`;
+  }
+
+  // Live-generation line on the solar product card
+  const card = document.querySelector('.product-card[data-product="solar"]');
+  const descEl = card && card.querySelector('.product-card__desc');
+  if (descEl && !card.querySelector('[data-solar-row]')) {
+    const row = document.createElement('div');
+    row.setAttribute('data-solar-row', '1');
+    row.style.cssText = 'display:inline-flex;align-items:center;gap:7px;margin-top:10px;padding:5px 12px;border-radius:999px;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#1f9d57;font-weight:700;font-size:0.78rem';
+    row.innerHTML = `<i class="fa-solid fa-solar-panel"></i> ${live ? `Generating ${(s.current_power_kw || 0).toLocaleString('en-ZA')} kW now` : `${total} generated to date`}`;
+    descEl.insertAdjacentElement('afterend', row);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', _applySolarTelemetry);

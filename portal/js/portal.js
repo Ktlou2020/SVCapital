@@ -3151,8 +3151,11 @@ async function renderProductDetailView(type) {
   const projRate = avg != null ? avg : (product.benchmark_rate ? parseFloat(product.benchmark_rate) : (open[0] ? parseFloat(open[0].annual_rate) : 0.13));
   const keyDetails = (product.key_details || '').split('\n').map(s => s.trim()).filter(Boolean);
 
-  // Cattle gets its live herd-status panel
-  const herdSlot = type === 'cattle' ? '<div id="prodHerdStatus" style="margin-bottom:16px"></div>' : '';
+  // Live data panels: cattle herd status / solar telematics
+  const isSolar = (type || '').startsWith('solar');
+  const herdSlot = type === 'cattle'
+    ? '<div id="prodHerdStatus" style="margin-bottom:16px"></div>'
+    : (isSolar ? '<div id="prodSolarStatus" style="margin-bottom:16px"></div>' : '');
 
   grid.innerHTML = `
     <div style="grid-column:1/-1">
@@ -3214,8 +3217,9 @@ async function renderProductDetailView(type) {
       : `<div class="empty-state" style="grid-column:1/-1"><i class="fa-solid fa-clock"></i><div class="empty-state__title">No open pools right now</div><div class="empty-state__sub">Pools for this product open regularly.</div></div>`;
   }
 
-  // Live herd status for cattle
+  // Live data panels
   if (type === 'cattle') _renderCattleHerdStatus('prodHerdStatus');
+  if (isSolar) _renderSolarStatus('prodSolarStatus');
 
   // Growth projection chart
   _renderProductGrowthChart(projRate, product.term_months || 12, color);
@@ -3483,6 +3487,46 @@ async function _renderCattleHerdStatus(containerId) {
   el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted);padding:6px 0"><i class="fa-solid fa-spinner fa-spin"></i> Loading herd status…</div>`;
   const s = await _getCattleStats();
   el.innerHTML = _cattleHerdStatusHtml(s);
+}
+
+// Live solar telematics (FoxESS/FoxCloud) — shared across all solar terms
+let _solarStatsCache = null;
+async function _getSolarStats() {
+  if (_solarStatsCache) return _solarStatsCache;
+  try { _solarStatsCache = await API._fetch('GET', 'products/solar-stats'); }
+  catch (_) { _solarStatsCache = null; }
+  return _solarStatsCache;
+}
+
+function _solarStatusHtml(s) {
+  if (!s || s.unavailable || (!s.total_kwh && !s.today_kwh && !s.current_power_kw)) return '';
+  const kwh = v => Number(v || 0).toLocaleString('en-ZA');
+  const total = s.total_kwh >= 1000 ? `${(s.total_kwh / 1000).toFixed(1)} MWh` : `${kwh(s.total_kwh)} kWh`;
+  const live = (s.current_power_kw || 0) > 0;
+  return `
+    <div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.28);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1f9d57;margin-bottom:10px">
+        <i class="fa-solid fa-solar-panel"></i> Live Solar Generation
+        ${live ? '<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:0.68rem;color:#22c55e;text-transform:none;letter-spacing:0"><span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;animation:pulse 1.5s infinite"></span> generating now</span>' : ''}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.current_power_kw || 0).toLocaleString('en-ZA')}<span style="font-size:0.78rem"> kW</span></div><div style="font-size:0.7rem;color:var(--text-muted)">generating now</div></div>
+        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${kwh(s.today_kwh)}<span style="font-size:0.78rem"> kWh</span></div><div style="font-size:0.7rem;color:var(--text-muted)">today</div></div>
+        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${kwh(s.month_kwh)}<span style="font-size:0.78rem"> kWh</span></div><div style="font-size:0.7rem;color:var(--text-muted)">this month</div></div>
+        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${total}</div><div style="font-size:0.7rem;color:var(--text-muted)">total generated</div></div>
+        ${s.co2_avoided_kg ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.co2_avoided_kg / 1000).toFixed(1)}<span style="font-size:0.78rem"> t</span></div><div style="font-size:0.7rem;color:var(--text-muted)">CO₂ avoided</div></div>` : ''}
+        ${s.device_count ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.device_count}</div><div style="font-size:0.7rem;color:var(--text-muted)">inverter${s.device_count === 1 ? '' : 's'}</div></div>` : ''}
+      </div>
+      <div style="font-size:0.68rem;color:var(--text-muted);margin-top:9px">Live data from FoxCloud${s.station_name ? ` · ${_esc(s.station_name)}` : ''}</div>
+    </div>`;
+}
+
+async function _renderSolarStatus(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted);padding:6px 0"><i class="fa-solid fa-spinner fa-spin"></i> Loading live solar data…</div>`;
+  const s = await _getSolarStats();
+  el.innerHTML = _solarStatusHtml(s);
 }
 
 async function viewFactsheet(poolId, poolName) {
