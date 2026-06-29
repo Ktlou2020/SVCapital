@@ -9,6 +9,7 @@
 
 const router = require('express').Router();
 const pool   = require('../db/pool');
+const foxess = require('../services/foxess');
 
 /* GET /api/products — PUBLIC. Active products with avg achieved return. */
 router.get('/', async (req, res) => {
@@ -101,6 +102,20 @@ router.get('/cattle-stats', async (req, res) => {
   } catch (err) {
     console.error('[cattle-stats] error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+/* GET /api/products/solar-stats — PUBLIC. Live solar telematics aggregated
+   from the FoxESS/FoxCloud installation (all solar terms share one site).
+   Returns { unavailable: true } gracefully if the feed can't be reached so
+   the UI simply hides the panel. */
+router.get('/solar-stats', async (req, res) => {
+  try {
+    const data = await foxess.getSolarStats();
+    res.json(data);
+  } catch (err) {
+    console.error('[solar-stats] error:', err.message);
+    res.json({ unavailable: true });
   }
 });
 
