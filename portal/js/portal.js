@@ -3396,6 +3396,19 @@ function openInvestModal(poolId) {
       <div class="invest-calc-date" id="ic-maturity">Maturity date: <strong>${maturityStr}</strong></div>
     </div>
 
+    <!-- Wallet deduction breakdown (amount invested + platform fee) -->
+    <div id="investFeeBreakdown" style="margin-top:12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:10px 14px;font-size:0.84rem">
+      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--text-muted)">
+        <span>Amount invested</span><span id="ic-fee-amount" style="font-weight:600;color:#1a1a1a">—</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--text-muted)">
+        <span>Platform fee (1%)</span><span id="ic-fee-fee" style="font-weight:600;color:#1a1a1a">—</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:7px 0 1px;margin-top:5px;border-top:1px dashed rgba(0,0,0,0.12);font-weight:700">
+        <span>Total deducted from ${_activeSa ? 'sub-account' : 'wallet'}</span><span id="ic-fee-total" style="color:#1a1a1a">—</span>
+      </div>
+    </div>
+
     <!-- What happens next timeline -->
     <div class="invest-next-steps">
       <div class="ins-step"><div class="ins-dot ins-dot--active"></div><div class="ins-label"><b>Now</b> — funds deducted from ${_activeSa ? `<em>${_activeSa.name}</em> sub-account` : 'wallet'}</div></div>
@@ -3417,17 +3430,28 @@ function openInvestModal(poolId) {
 function _updateInvestCalc(amt, rate, termMonths, minInvest) {
   const preview = document.getElementById('investCalcPreview');
   if (!preview) return;
+  const feeAmtEl = document.getElementById('ic-fee-amount');
+  const feeFeeEl = document.getElementById('ic-fee-fee');
+  const feeTotEl = document.getElementById('ic-fee-total');
   if (amt >= minInvest) {
     const ret = amt * rate * (termMonths / 12);
     document.getElementById('ic-invested').textContent = Utils.rand(Math.round(amt));
     document.getElementById('ic-returns').textContent  = '+' + Utils.rand(Math.round(ret));
     document.getElementById('ic-total').textContent    = Utils.rand(Math.round(amt + ret));
     preview.classList.add('invest-calc-box--visible');
+    // Wallet deduction breakdown
+    const fee = _platformFee(amt);
+    if (feeAmtEl) feeAmtEl.textContent = Utils.rand(amt, 2);
+    if (feeFeeEl) feeFeeEl.textContent = Utils.rand(fee, 2);
+    if (feeTotEl) feeTotEl.textContent = Utils.rand(amt + fee, 2);
   } else {
     document.getElementById('ic-invested').textContent = '—';
     document.getElementById('ic-returns').textContent  = '—';
     document.getElementById('ic-total').textContent    = '—';
     preview.classList.remove('invest-calc-box--visible');
+    if (feeAmtEl) feeAmtEl.textContent = '—';
+    if (feeFeeEl) feeFeeEl.textContent = '—';
+    if (feeTotEl) feeTotEl.textContent = '—';
   }
 }
 

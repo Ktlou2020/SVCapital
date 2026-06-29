@@ -243,13 +243,21 @@
 
   function getAllowedApps(session) {
     if (!session) return [];
-    // App access is allocated per individual (not per role). A configured
-    // employee carries an explicit app list; anyone unconfigured defaults to
-    // just their personal dashboard. 'employee' is always included so no one
-    // is fully locked out of their own dashboard.
-    const apps = Array.isArray(session.appAccess) && session.appAccess.length
-      ? session.appAccess.slice()
-      : ['employee'];
+    // App access is allocated PER INDIVIDUAL and is authoritative whenever it
+    // is present on the session (even an empty list — that means "only the
+    // personal dashboard"). When a session carries NO individual allocation
+    // (a legacy session from before this feature, or a person who has not been
+    // configured yet) we fall back to role-based defaults so no one — including
+    // admins/directors — is locked out.
+    if (Array.isArray(session.appAccess)) {
+      const apps = session.appAccess.slice();
+      if (!apps.includes('employee')) apps.push('employee');
+      return apps;
+    }
+    // Fallback: role/level based access.
+    if (session.level === 'executive') return EXECUTIVE_APPS.slice();
+    const matrix = _rbacCache || ROLE_PERMISSIONS;
+    const apps = (matrix[session.role] || ['employee']).slice();
     if (!apps.includes('employee')) apps.push('employee');
     return apps;
   }
@@ -294,13 +302,24 @@
               window.location.replace(LOGIN_URL());
               return false;
             }
-            // Staff JWT: enforce per-individual app access before granting access.
-            // The token carries an explicit `apps` list allocated to this person.
+            // Enforce app access. Staff PIN tokens carry an explicit per-individual
+            // `apps` list. Main-login tokens (users table) and legacy tokens carry
+            // only a role — fall back to role-based access for those so admins and
+            // directors signing in via the normal login are not locked out.
             const appKey = requiredAppKey || currentAppKey();
             if (appKey) {
-              const allowed = (Array.isArray(payload.apps) && payload.apps.length)
-                ? payload.apps.slice()
-                : ['employee'];
+              let allowed;
+              if (Array.isArray(payload.apps) && payload.apps.length) {
+                allowed = payload.apps.slice();
+              } else {
+                const JWT_ROLE_APPS = {
+                  director: EXECUTIVE_APPS,
+                  admin:    ['employee', 'team', 'fund', 'admin', 'accounting'],
+                  ifa:      ['employee', 'ifa'],
+                  staff:    ['employee'],
+                };
+                allowed = (JWT_ROLE_APPS[jwtRole] || ['employee']).slice();
+              }
               if (!allowed.includes('employee')) allowed.push('employee');
               if (!allowed.includes(appKey)) {
                 window.location.replace(HUB_URL() + '?denied=' + encodeURIComponent(appKey));
