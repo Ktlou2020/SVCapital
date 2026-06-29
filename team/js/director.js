@@ -428,7 +428,7 @@ function openEmpDetail(empId) {
   if (!e) return;
   const ob = _onboarding.find(o => o.employee_id === empId);
   const obPct = ob && ob.tasks_total > 0 ? Math.round((ob.tasks_completed||0)/ob.tasks_total*100) : 0;
-  const allowedApps = (e.level === 'executive' ? Object.keys(APP_NAMES) : (RBAC[e.role]||['employee']));
+  const allowedApps = (Array.isArray(e.app_access) && e.app_access.length) ? e.app_access : ['employee'];
 
   const docBadge = (url, label) => url
     ? `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:5px 12px;font-size:0.76rem;font-weight:600;color:#16a34a;text-decoration:none">
@@ -1414,24 +1414,43 @@ async function saveRBAC() {
   }
 }
 
+/* App access is allocated PER INDIVIDUAL. _accessDraft holds the in-progress
+   edits (empId → Set of editable app keys) until the director clicks Save. */
+let _accessDraft = {};
+const EDITABLE_APPS = Object.keys(APP_NAMES); // employee, team, fund, admin, ifa, portal, director
+
+/** The editable apps currently allocated to an employee (default: My Dashboard). */
+function _empEditableApps(e) {
+  const list = Array.isArray(e.app_access) && e.app_access.length ? e.app_access : ['employee'];
+  return EDITABLE_APPS.filter(k => list.includes(k));
+}
+
 function renderAccessMatrix() {
-  // Employee access list
   const q = (document.getElementById('accessSearch')?.value || '').toLowerCase();
   const filtered = _employees.filter(e =>
     !q || `${e.first_name} ${e.last_name} ${e.role} ${e.email}`.toLowerCase().includes(q)
   );
 
+  // Seed the draft for any employee not yet being edited
+  _employees.forEach(e => { if (!_accessDraft[e.id]) _accessDraft[e.id] = new Set(_empEditableApps(e)); });
+
   document.getElementById('empAccessList').innerHTML = `
-    <div class="dir-table-wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div style="font-size:0.82rem;color:var(--muted)">Tick the apps each employee may open, then click Save. Access is set per person — their role is just a label. <strong>My Dashboard</strong> is always available.</div>
+      <button id="accessSaveBtn" class="btn btn--primary btn--sm" onclick="saveIndividualAccess()" style="min-width:130px">
+        <i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>Save Changes
+      </button>
+    </div>
+    <div class="dir-table-wrap" style="overflow-x:auto">
       <table class="dir-table">
         <thead><tr>
           <th>Employee</th><th>Role</th><th>Level</th>
-          ${Object.keys(APP_NAMES).map(k=>`<th style="text-align:center;font-size:0.65rem"><i class="fa-solid ${APP_ICONS[k]}" style="color:${APP_COLORS[k]}"></i><br>${APP_NAMES[k].replace(' ','<br>')}</th>`).join('')}
+          ${EDITABLE_APPS.map(k=>`<th style="text-align:center;min-width:64px;font-size:0.65rem"><i class="fa-solid ${APP_ICONS[k]}" style="color:${APP_COLORS[k]}"></i><br>${APP_NAMES[k].replace(' ','<br>')}</th>`).join('')}
           <th>Edit</th>
         </tr></thead>
         <tbody>
           ${filtered.map(e => {
-            const apps = e.level === 'executive' ? Object.keys(APP_NAMES) : (RBAC[e.role] || []);
+            const draft = _accessDraft[e.id] || new Set(['employee']);
             return `<tr>
               <td>
                 <div style="display:flex;align-items:center;gap:8px">
@@ -1444,12 +1463,17 @@ function renderAccessMatrix() {
               </td>
               <td><span class="role-chip" style="font-size:0.72rem">${e.role||'—'}</span></td>
               <td style="font-size:0.75rem;color:var(--muted)">${LEVEL_LABELS[e.level]||e.level||'—'}</td>
-              ${Object.keys(APP_NAMES).map(k=>`
+              ${EDITABLE_APPS.map(k=>`
                 <td style="text-align:center">
-                  ${apps.includes(k)
-                    ? `<i class="fa-solid fa-circle-check" style="color:#10b981;font-size:0.85rem"></i>`
-                    : `<i class="fa-solid fa-circle-xmark" style="color:var(--border2);font-size:0.85rem"></i>`
-                  }
+                  <input type="checkbox"
+                    class="access-cb"
+                    data-emp="${e.id}"
+                    data-app="${k}"
+                    ${draft.has(k) ? 'checked' : ''}
+                    ${k === 'employee' ? 'disabled title="Always available"' : ''}
+                    onchange="onAccessToggle(this)"
+                    style="width:17px;height:17px;cursor:${k==='employee'?'not-allowed':'pointer'};accent-color:${APP_COLORS[k]}"
+                  >
                 </td>
               `).join('')}
               <td>
@@ -1464,52 +1488,51 @@ function renderAccessMatrix() {
     </div>
   `;
 
-  // RBAC matrix (editable)
-  const allApps = Object.keys(APP_NAMES);
-  document.getElementById('rbacMatrix').innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-      <div style="font-size:0.82rem;color:var(--muted)">Toggle checkboxes to change app access per role, then click Save.</div>
-      <button id="rbacSaveBtn" class="btn btn--primary btn--sm" onclick="saveRBAC()" style="min-width:130px">
-        <i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>Save Changes
-      </button>
-    </div>
-    <div class="dir-table-wrap" style="overflow-x:auto">
-      <table class="dir-table">
-        <thead>
-          <tr>
-            <th>Role</th>
-            ${allApps.map(k=>`<th style="text-align:center;min-width:68px"><i class="fa-solid ${APP_ICONS[k]}" style="color:${APP_COLORS[k]}"></i><br><span style="font-size:0.6rem">${APP_NAMES[k].replace(' ','<br>')}</span></th>`).join('')}
-          </tr>
-        </thead>
-        <tbody>
-          ${Object.entries(RBAC).map(([role,apps])=>`
-            <tr>
-              <td><span class="role-chip" style="font-size:0.76rem">${role}</span></td>
-              ${allApps.map(k=>`
-                <td style="text-align:center">
-                  <input type="checkbox"
-                    class="rbac-cb"
-                    data-role="${role.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}"
-                    data-app="${k}"
-                    ${apps.includes(k) ? 'checked' : ''}
-                    onchange="onRbacToggle(this)"
-                    style="width:17px;height:17px;cursor:pointer;accent-color:${APP_COLORS[k]}"
-                  >
-                </td>
-              `).join('')}
-            </tr>
-          `).join('')}
-          <tr style="background:rgba(245,158,11,0.04);border-top:2px solid rgba(245,158,11,0.2)">
-            <td>
-              <span class="chip chip--onboard">Executive level</span>
-              <div style="font-size:0.68rem;color:var(--muted);margin-top:3px">Overrides role</div>
-            </td>
-            ${allApps.map(()=>`<td style="text-align:center"><i class="fa-solid fa-circle-check" style="color:var(--gold);font-size:0.95rem"></i></td>`).join('')}
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  `;
+  const matrixEl = document.getElementById('rbacMatrix');
+  if (matrixEl) matrixEl.innerHTML = '';
+}
+
+function onAccessToggle(cb) {
+  const empId = cb.dataset.emp;
+  const app   = cb.dataset.app;
+  if (!_accessDraft[empId]) _accessDraft[empId] = new Set(['employee']);
+  if (cb.checked) _accessDraft[empId].add(app);
+  else            _accessDraft[empId].delete(app);
+}
+
+async function saveIndividualAccess() {
+  const btn = document.getElementById('accessSaveBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Saving…'; }
+  let saved = 0, failed = 0;
+  try {
+    for (const e of _employees) {
+      const draft = _accessDraft[e.id];
+      if (!draft) continue;
+      // Editable apps the director ticked (My Dashboard is always granted)…
+      const editable = EDITABLE_APPS.filter(k => draft.has(k));
+      if (!editable.includes('employee')) editable.push('employee');
+      // …plus any apps not shown in this editor (e.g. accounting) are preserved.
+      const preserved = (Array.isArray(e.app_access) ? e.app_access : []).filter(a => !EDITABLE_APPS.includes(a));
+      const next = Array.from(new Set([...editable, ...preserved]));
+
+      const current = Array.isArray(e.app_access) ? e.app_access.slice() : null;
+      // Skip if unchanged
+      if (current && current.length === next.length && next.every(a => current.includes(a))) continue;
+
+      try {
+        const res = await patch(`tables/employees/${e.id}`, { app_access: next });
+        if (res && res.error) throw new Error(res.error);
+        e.app_access = next;        // keep local state in sync
+        saved++;
+      } catch (_) { failed++; }
+    }
+    if (failed) showToast(`Saved ${saved}, ${failed} failed`, 'error');
+    else if (saved) showToast(`App access updated for ${saved} employee${saved!==1?'s':''}`);
+    else showToast('No changes to save');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>Save Changes'; }
+    renderAccessMatrix();
+  }
 }
 
 /* ═══ COURSE LIBRARY ════════════════════════════════════════════════ */
@@ -1602,7 +1625,7 @@ const DIR_HELP = {
       { heading: 'Employee Detail Modal', icon: 'fa-id-card', color: '#f59e0b',
         text: 'Opens when you click View. Shows: personal info, XP, EVA weight, base salary, onboarding progress, and a full list of the apps this employee has access to based on their role and level.' },
       { heading: 'Edit Employee', icon: 'fa-pen', color: '#e84393',
-        text: 'Allows updating name, email, phone, role, department, level, EVA weight, salary, start date, and bio. Changing role or level will automatically update their RBAC app access.' },
+        text: 'Allows updating name, email, phone, role, department, level, EVA weight, salary, start date, and bio. App access is set per individual in the Access tab — changing role or level no longer changes their app access.' },
       { heading: 'Activate / Deactivate', icon: 'fa-toggle-on', color: '#ef4444',
         text: 'Inactive employees cannot log in to any staff portal. Use this to offboard employees without deleting their data. Reactivation restores all access immediately.' },
     ]
@@ -1615,7 +1638,7 @@ const DIR_HELP = {
       { heading: 'Personal Information', icon: 'fa-id-card', color: '#7c5cfc',
         text: 'First name, last name, and work email are required. Phone, date of birth, and SA ID number are optional but important — the SA ID last 4 digits become the employee\'s default login PIN.' },
       { heading: 'Role & Position', icon: 'fa-briefcase', color: '#00d4aa',
-        text: 'Role determines which apps the employee can access (see RBAC matrix). Level determines seniority tier. EVA Weight (0.5×–2.0×) scales their variable bonus allocation.' },
+        text: 'Role is a job title/label and Level determines seniority tier. App access is granted per individual in the Access tab (not by role). EVA Weight (0.5×–2.0×) scales their variable bonus allocation.' },
       { heading: 'Live Preview Card', icon: 'fa-eye', color: '#f59e0b',
         text: 'The right panel updates in real time as you type — showing the employee\'s avatar initials, name, role, department, and colour. The 3 auto-enrolled onboarding courses are also shown.' },
       { heading: 'Onboarding Settings', icon: 'fa-rocket', color: '#e84393',
@@ -1644,14 +1667,14 @@ const DIR_HELP = {
   access: {
     title: 'Access & Roles',
     icon:  'fa-key',
-    intro: 'The full RBAC (Role-Based Access Control) matrix showing every role\'s app permissions — and how executive level overrides all role restrictions.',
+    intro: 'Per-individual app access. Each employee has their own list of apps they may open — tick the apps per person and Save. Role is just a label and no longer controls access.',
     sections: [
-      { heading: 'Reading the Matrix', icon: 'fa-table', color: '#7c5cfc',
-        text: 'Rows = roles. Columns = apps. Green ✓ = access granted. Grey ✗ = no access. The gold "Executive level" row at the bottom shows that executive-level employees always get all 7 apps regardless of their role.' },
+      { heading: 'Reading the Grid', icon: 'fa-table', color: '#7c5cfc',
+        text: 'Rows = individual employees. Columns = apps. Tick a box to grant that person that app, then click Save Changes. My Dashboard is always available and cannot be removed.' },
       { heading: '7 App Keys', icon: 'fa-grid-2', color: '#00d4aa',
         text: 'My Dashboard (employee), Team Dashboard (team), Fund Operations (fund), Admin Console (admin), IFA Portal (ifa), Investor Portal (portal), Director Panel (director). Access is enforced on page load by StaffAuth.guard().' },
       { heading: 'Changing Access', icon: 'fa-sliders', color: '#f59e0b',
-        text: 'To change an employee\'s access, update their Role or Level in the All Employees view. Access updates immediately on their next login. No separate permission management is needed.' },
+        text: 'Tick/untick the apps for each employee in this Access tab and click Save. Changes take effect on the employee\'s next login. New employees start with only My Dashboard until you grant more.' },
       { heading: 'Director Panel Access', icon: 'fa-crown', color: '#e84393',
         text: 'Only CEO role and executive-level employees can access the Director Panel. This is enforced by StaffAuth.isDirector() which checks role === "CEO" OR level === "executive".' },
     ]

@@ -167,6 +167,7 @@
       lastName:       employee.last_name,
       role:           employee.role,
       level:          employee.level,
+      appAccess:      Array.isArray(employee.app_access) ? employee.app_access.slice() : null,
       department:     employee.department || '',
       avatarInitials: employee.avatar_initials || (employee.first_name[0] + employee.last_name[0]).toUpperCase(),
       avatarColor:    employee.avatar_color || '#7c5cfc',
@@ -242,11 +243,15 @@
 
   function getAllowedApps(session) {
     if (!session) return [];
-    // Executive level gets everything regardless of role title
-    if (session.level === 'executive') return EXECUTIVE_APPS.slice();
-    const matrix = _rbacCache || ROLE_PERMISSIONS;
-    const perms = matrix[session.role] || ['employee'];
-    return perms.slice();
+    // App access is allocated per individual (not per role). A configured
+    // employee carries an explicit app list; anyone unconfigured defaults to
+    // just their personal dashboard. 'employee' is always included so no one
+    // is fully locked out of their own dashboard.
+    const apps = Array.isArray(session.appAccess) && session.appAccess.length
+      ? session.appAccess.slice()
+      : ['employee'];
+    if (!apps.includes('employee')) apps.push('employee');
+    return apps;
   }
 
   function canAccess(session, appKey) {
@@ -289,16 +294,14 @@
               window.location.replace(LOGIN_URL());
               return false;
             }
-            // Staff JWT: enforce RBAC based on JWT role before granting access
+            // Staff JWT: enforce per-individual app access before granting access.
+            // The token carries an explicit `apps` list allocated to this person.
             const appKey = requiredAppKey || currentAppKey();
             if (appKey) {
-              const JWT_ROLE_APPS = {
-                director: EXECUTIVE_APPS,
-                admin:    ['employee', 'team', 'fund', 'admin', 'accounting'],
-                ifa:      ['employee', 'ifa'],
-                staff:    ['employee'],
-              };
-              const allowed = JWT_ROLE_APPS[jwtRole] || ['employee'];
+              const allowed = (Array.isArray(payload.apps) && payload.apps.length)
+                ? payload.apps.slice()
+                : ['employee'];
+              if (!allowed.includes('employee')) allowed.push('employee');
               if (!allowed.includes(appKey)) {
                 window.location.replace(HUB_URL() + '?denied=' + encodeURIComponent(appKey));
                 return false;

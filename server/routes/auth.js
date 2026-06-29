@@ -498,6 +498,7 @@ async function issueStaffJwt(emp, res) {
   const { rows: userRows } = await pool.query(
     'SELECT id FROM users WHERE email = $1 LIMIT 1', [emp.email]
   );
+  const apps = (Array.isArray(emp.app_access) && emp.app_access.length) ? emp.app_access : ['employee'];
   const token = jwt.sign({
     id:        userRows[0]?.id || emp.id,
     email:     emp.email,
@@ -505,6 +506,7 @@ async function issueStaffJwt(emp, res) {
     firstName: emp.first_name,
     lastName:  emp.last_name,
     empId:     emp.id,
+    apps,
   }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
   res.cookie('svc_token', token, {
     httpOnly: true, secure: IS_PROD,
@@ -531,7 +533,7 @@ router.post('/staff-lookup', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT id, first_name, last_name, email, role, level, department,
               status, avatar_initials, avatar_color, xp_points,
-              pin_set, login_locked_until
+              app_access, pin_set, login_locked_until
        FROM employees
        WHERE email = $1 AND status = 'active'
        LIMIT 1`,
@@ -571,7 +573,7 @@ router.post('/staff-token', async (req, res) => {
 
     const { rows } = await pool.query(
       `SELECT id, first_name, last_name, email, role, level, department,
-              status, avatar_initials, avatar_color, xp_points,
+              status, avatar_initials, avatar_color, xp_points, app_access,
               id_number, pin_hash, pin_set, login_attempts, login_locked_until
        FROM employees WHERE email = $1 AND status = 'active' LIMIT 1`,
       [email.toLowerCase().trim()]

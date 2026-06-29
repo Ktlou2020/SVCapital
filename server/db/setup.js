@@ -292,6 +292,8 @@ DO $$ BEGIN
   -- Documents & employee number
   BEGIN ALTER TABLE employees ADD COLUMN proof_of_id_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE employees ADD COLUMN employee_number TEXT UNIQUE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Per-individual app access (replaces role-based RBAC for staff app access)
+  BEGIN ALTER TABLE employees ADD COLUMN app_access TEXT[]; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investment_pools ADD COLUMN partner_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investment_pools ADD COLUMN actual_rate NUMERIC(8,4) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN pool_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -365,6 +367,25 @@ DO $$ BEGIN
   -- System-generated tickets (AML checks etc — hidden from client view)
   BEGIN ALTER TABLE support_tickets ADD COLUMN is_system BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
+
+-- One-time backfill: seed each EXISTING employee's individual app access from
+-- their role/level so nobody loses access when access becomes per-individual.
+-- Guarded by NOT EXISTS so it runs ONLY while the whole table is unseeded (the
+-- initial migration). Once any employee has app_access set, this never runs
+-- again — so employees added later keep app_access = NULL and are treated as
+-- ['employee'] (My Dashboard only) until a director grants them more.
+UPDATE employees SET app_access = CASE
+  WHEN level = 'executive'                                   THEN ARRAY['employee','team','fund','admin','ifa','portal','director','accounting']
+  WHEN role IN ('CEO','COO')                                 THEN ARRAY['employee','team','fund','admin','ifa','portal','director']
+  WHEN role IN ('Operations Manager','Finance Manager','Tech Lead') THEN ARRAY['employee','team','fund','admin']
+  WHEN role = 'Investment Analyst'                           THEN ARRAY['employee','team','fund']
+  WHEN role IN ('Compliance Officer','Internal Audit')       THEN ARRAY['employee','admin']
+  WHEN role = 'Client Relations'                             THEN ARRAY['employee','portal']
+  WHEN role = 'Admin'                                        THEN ARRAY['employee','admin','accounting']
+  ELSE ARRAY['employee']
+END
+WHERE app_access IS NULL
+  AND NOT EXISTS (SELECT 1 FROM employees WHERE app_access IS NOT NULL);
 
 CREATE TABLE IF NOT EXISTS compliance_calendar (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
