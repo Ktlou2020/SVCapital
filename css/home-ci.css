@@ -54,7 +54,7 @@
 
 /* Logo */
 .nav-logo { gap: 10px; }
-.nav-logo-img { display:block; width:36px; height:36px; border-radius:8px; }
+.nav-logo-img { display:block; height:46px; width:auto; }
 .logo-sv { color: var(--ci-orange) !important; font-weight: 900; }
 .logo-capital { color: var(--ci-text) !important; }
 .navbar:not(.scrolled) .logo-capital { color: #fff !important; }
