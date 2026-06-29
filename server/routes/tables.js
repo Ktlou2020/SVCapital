@@ -683,6 +683,43 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
             });
           }
         }
+
+        // New leave request → email all directors + log to the activity feed
+        if (table === 'leave_requests' && created.employee_id) {
+          const { rows: empRows } = await pool.query(
+            'SELECT first_name, last_name FROM employees WHERE id = $1', [created.employee_id]
+          );
+          const emp = empRows[0] || {};
+          const employeeName = `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || created.employee_id;
+
+          // Email every director/admin
+          const { rows: directors } = await pool.query(
+            "SELECT email, first_name, last_name FROM users WHERE role IN ('director','admin') AND email IS NOT NULL AND is_active = true"
+          );
+          for (const d of directors) {
+            await emailService.sendLeaveRequestSubmitted(d, {
+              employeeName,
+              leaveType: created.leave_type,
+              startDate: created.start_date,
+              endDate:   created.end_date,
+              days:      created.days_requested,
+              reason:    created.reason,
+            });
+          }
+
+          // Activity feed entry (shows under the employee's recent activity)
+          await pool.query(
+            `INSERT INTO activity_feed (id, employee_id, type, title, body, icon, color, is_public, created_at)
+             VALUES ($1,$2,'leave_submitted',$3,$4,'fa-calendar-day','#f59e0b',false,NOW())
+             ON CONFLICT (id) DO NOTHING`,
+            [
+              `ACT-LVREQ-${created.id}`,
+              created.employee_id,
+              `Leave requested — ${(created.leave_type || 'leave').replace(/_/g, ' ')}`,
+              `${created.days_requested || ''} day(s) · awaiting director approval`,
+            ]
+          );
+        }
       } catch (hookErr) {
         console.error('[email hook POST] error:', hookErr.message);
       }
@@ -972,6 +1009,39 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
               priority:     updated.priority || 'normal',
             });
           }
+        }
+
+        // Leave request decided → email the staff member + log to activity feed
+        if (table === 'leave_requests' && (body.status === 'approved' || body.status === 'rejected') && updated.employee_id) {
+          const { rows: empRows } = await pool.query(
+            'SELECT first_name, last_name, email FROM employees WHERE id = $1', [updated.employee_id]
+          );
+          const emp = empRows[0];
+          if (emp && emp.email) {
+            await emailService.sendLeaveOutcome(emp, {
+              status:    body.status,
+              leaveType: updated.leave_type,
+              startDate: updated.start_date,
+              endDate:   updated.end_date,
+              days:      updated.days_requested,
+              reviewedBy: updated.approved_by || (actor.firstName ? `${actor.firstName} ${actor.lastName || ''}`.trim() : null),
+            });
+          }
+          const approved = body.status === 'approved';
+          await pool.query(
+            `INSERT INTO activity_feed (id, employee_id, type, title, body, icon, color, is_public, created_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,false,NOW())
+             ON CONFLICT (id) DO NOTHING`,
+            [
+              `ACT-LVOUT-${updated.id}`,
+              updated.employee_id,
+              approved ? 'leave_approved' : 'leave_rejected',
+              `Leave ${approved ? 'approved' : 'declined'} — ${(updated.leave_type || 'leave').replace(/_/g, ' ')}`,
+              `${updated.days_requested || ''} day(s) · ${updated.start_date || ''} – ${updated.end_date || ''}`,
+              approved ? 'fa-calendar-check' : 'fa-calendar-xmark',
+              approved ? '#22c55e' : '#ef4444',
+            ]
+          );
         }
 
         // Support ticket response → email investor

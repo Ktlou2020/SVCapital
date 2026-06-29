@@ -664,8 +664,60 @@ function sendGiftInvite(to, { senderName, amount, message, recipientName, signup
   });
 }
 
+/* ── Leave request submitted → notify a director ──────────── */
+function sendLeaveRequestSubmitted(director, { employeeName, leaveType, startDate, endDate, days, reason }) {
+  const name = director.first_name || 'Director';
+  const type = (leaveType || 'leave').replace(/_/g, ' ');
+  return _send({
+    to: director.email,
+    subject: `Leave request from ${employeeName} — awaiting your review`,
+    html: _wrap(`
+      <h2>New Leave Request 🗓️</h2>
+      <p>Hi ${name}, <strong>${employeeName}</strong> has submitted a leave request that needs your review.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Employee</span><span class="val">${employeeName}</span></div>
+        <div class="row"><span class="lbl">Type</span><span class="val" style="text-transform:capitalize">${type}</span></div>
+        <div class="row"><span class="lbl">From</span><span class="val">${_date(startDate)}</span></div>
+        <div class="row"><span class="lbl">To</span><span class="val">${_date(endDate)}</span></div>
+        <div class="row"><span class="lbl">Days</span><span class="val">${days || '—'}</span></div>
+        ${reason ? `<div class="row"><span class="lbl">Reason</span><span class="val">${reason}</span></div>` : ''}
+        <div class="row"><span class="lbl">Status</span><span class="val gold">Pending</span></div>
+      </div>
+      <p>Review and approve or decline this request in the Director Panel.</p>
+      <a href="${BASE_URL}/team/director.html" class="btn">Review Leave Requests →</a>
+    `),
+    text: `${employeeName} submitted a ${type} leave request (${_date(startDate)} – ${_date(endDate)}, ${days} day(s)). Review it in the Director Panel: ${BASE_URL}/team/director.html`,
+  });
+}
+
+/* ── Leave request outcome → notify the staff member ──────── */
+function sendLeaveOutcome(employee, { status, leaveType, startDate, endDate, days, reviewedBy }) {
+  const name = employee.first_name || 'there';
+  const type = (leaveType || 'leave').replace(/_/g, ' ');
+  const approved = status === 'approved';
+  return _send({
+    to: employee.email,
+    subject: `Your leave request was ${approved ? 'approved' : 'declined'}`,
+    html: _wrap(`
+      <h2>Leave ${approved ? 'Approved ✅' : 'Declined'}</h2>
+      <p>Hi ${name}, your ${type} leave request has been <strong>${approved ? 'approved' : 'declined'}</strong>${reviewedBy ? ` by ${reviewedBy}` : ''}.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Type</span><span class="val" style="text-transform:capitalize">${type}</span></div>
+        <div class="row"><span class="lbl">From</span><span class="val">${_date(startDate)}</span></div>
+        <div class="row"><span class="lbl">To</span><span class="val">${_date(endDate)}</span></div>
+        <div class="row"><span class="lbl">Days</span><span class="val">${days || '—'}</span></div>
+        <div class="row"><span class="lbl">Outcome</span><span class="val ${approved ? 'green' : ''}">${approved ? 'Approved' : 'Declined'}</span></div>
+      </div>
+      <a href="${BASE_URL}/team/employee.html" class="btn">Open My Dashboard →</a>
+    `),
+    text: `Your ${type} leave request (${_date(startDate)} – ${_date(endDate)}) was ${approved ? 'approved' : 'declined'}${reviewedBy ? ` by ${reviewedBy}` : ''}.`,
+  });
+}
+
 module.exports = {
   sendWelcome,
+  sendLeaveRequestSubmitted,
+  sendLeaveOutcome,
   sendDepositConfirmed,
   sendInvestmentCreated,
   sendMaturityAlert,
