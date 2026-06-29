@@ -23,7 +23,7 @@ async function _sendEmail(to, subject, message) {
   try {
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;padding:32px">
 <div style="max-width:580px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
-  <div style="background:linear-gradient(135deg,#1a2235,#253352);padding:28px 36px;text-align:center">
+  <div style="background:linear-gradient(135deg,#303030,#303030);padding:28px 36px;text-align:center">
     <div style="font-size:1.4rem;font-weight:800;color:#ff9b0c">SV <span style="color:#fff">Capital</span></div>
   </div>
   <div style="padding:36px">

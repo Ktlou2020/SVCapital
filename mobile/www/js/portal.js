@@ -70,10 +70,10 @@ function _ensureTaskCompletionPanel() {
     <div class="panel" style="border:1px solid rgba(47,140,155,0.18);background:linear-gradient(135deg,rgba(47,140,155,0.05),rgba(255,155,12,0.04))">
       <div class="panel__header" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
         <div>
-          <span class="panel__title"><i class="fa-solid fa-list-check" style="color:#2F8C9B;margin-right:8px"></i>Action Centre</span>
+          <span class="panel__title"><i class="fa-solid fa-list-check" style="color:#656565;margin-right:8px"></i>Action Centre</span>
           <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px">See the next best action to unlock deposits, investing, withdrawals and statements.</div>
         </div>
-        <div id="taskCompletionMeta" style="margin-left:auto;font-size:0.74rem;font-weight:700;color:#2F8C9B"></div>
+        <div id="taskCompletionMeta" style="margin-left:auto;font-size:0.74rem;font-weight:700;color:#656565"></div>
       </div>
       <div class="panel__body" id="taskCompletionBody"></div>
     </div>`;
@@ -115,7 +115,7 @@ function _ensureSupportAssistUI() {
   if (panelBody && !document.getElementById('supportDraftMeta')) {
     const meta = document.createElement('div');
     meta.id = 'supportDraftMeta';
-    meta.style.cssText = 'margin-bottom:12px;padding:10px 12px;border-radius:10px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.16);font-size:0.76rem;font-weight:700;color:#2F8C9B';
+    meta.style.cssText = 'margin-bottom:12px;padding:10px 12px;border-radius:10px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.16);font-size:0.76rem;font-weight:700;color:#656565';
     meta.textContent = 'Drafts auto-save on this device so you can come back later.';
     panelBody.insertBefore(meta, panelBody.firstChild);
   }
@@ -271,11 +271,11 @@ function _persistSupportDraft() {
   _updateSupportCounter();
   if (!_supportDraftHasValue(data)) {
     _localRemove(_portalScopedKey(SUPPORT_DRAFT_KEY));
-    _setInlineMessage('supportDraftMeta', 'Drafts auto-save on this device so you can come back later.', '#2F8C9B');
+    _setInlineMessage('supportDraftMeta', 'Drafts auto-save on this device so you can come back later.', '#656565');
     return;
   }
   _localSet(_portalScopedKey(SUPPORT_DRAFT_KEY), JSON.stringify({ ...data, saved_at: Date.now() }));
-  _setInlineMessage('supportDraftMeta', 'Draft saved locally — you can safely leave and come back.', '#2F8C9B');
+  _setInlineMessage('supportDraftMeta', 'Draft saved locally — you can safely leave and come back.', '#656565');
 }
 function restoreSupportDraft() {
   _ensureSupportAssistUI();
@@ -348,7 +348,7 @@ function renderTaskCompletionPanel() {
   const ficaReady = (inv.fica_status || inv.kyc_status || inv.status || '').toLowerCase() === 'approved';
   const tasks = [
     { label: 'Complete FICA verification', done: ficaReady, tone: '#FF8215', action: 'openKycUploadModal()', cta: 'Upload documents' },
-    { label: 'Add a withdrawal bank account', done: bankReady, tone: '#2F8C9B', action: 'openBankDetailsModal()', cta: 'Add bank account' },
+    { label: 'Add a withdrawal bank account', done: bankReady, tone: '#656565', action: 'openBankDetailsModal()', cta: 'Add bank account' },
     { label: 'Fund your wallet', done: hasWallet, tone: '#22c55e', action: 'openTopUpModal()', cta: 'Top up wallet' },
     { label: 'Confirm your risk profile', done: riskReady, tone: '#a855f7', action: 'navigate(\'profile\', document.querySelector(\'[data-view=profile]\'))', cta: 'Review profile' },
     { label: 'Make your next investment', done: hasInvestments, tone: '#D4AF37', action: 'navigate(\'marketplace\', document.querySelector(\'[data-view=marketplace]\'))', cta: 'Browse pools' },
@@ -496,7 +496,7 @@ function renderWalletReadinessPanel() {
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Verification</div>
-          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#2F8C9B'};margin-top:6px">${ficaApproved ? 'FICA/KYC approved' : 'FICA/KYC pending'}</div>
+          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#656565'};margin-top:6px">${ficaApproved ? 'FICA/KYC approved' : 'FICA/KYC pending'}</div>
           <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${ficaApproved ? (bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.') : 'You can invest and top up. Withdrawals unlock once FICA is approved.'}</div>
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
@@ -536,7 +536,7 @@ function renderMarketConversionPanel(pools) {
   let sub = 'We surface the next-best pools first so you can complete the journey with fewer dead-ends.';
   let action = "navigate('wallet', document.querySelector('[data-view=wallet]'))";
   let actionLabel = 'Review wallet';
-  let accent = '#2F8C9B';
+  let accent = '#656565';
 
   if (affordable.length) {
     title = `You can invest right now in ${affordable.length} open pool${affordable.length === 1 ? '' : 's'}.`;
@@ -1031,7 +1031,7 @@ function loadNotifications() {
   const answered = tickets.filter(t => t.admin_response && t.admin_response.trim());
   answered.forEach(t => {
     notifs.push({
-      icon: 'fa-reply', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#2F8C9B',
+      icon: 'fa-reply', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#656565',
       title: 'Support reply received',
       sub: `"${t.subject}" — our team has responded.`,
       time: t.responded_at ? Utils.timeAgo(t.responded_at) : 'Recently',
@@ -1061,7 +1061,7 @@ function loadNotifications() {
   if (newPools.length) {
     const np = newPools[0];
     notifs.push({
-      icon: 'fa-chart-line', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#2F8C9B',
+      icon: 'fa-chart-line', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#656565',
       title: 'New investment pool available',
       sub: `${np.name || np.pool_name} — ${Utils.pct(np.annual_rate || np.benchmark_rate)} p.a. over ${np.term_months} months.`,
       time: Utils.timeAgo(np.created_at),
@@ -1862,7 +1862,7 @@ function renderAllocationChart() {
   // creates orphan GPU compositor layers on Android WebView that cause content to blank.
   if (ctx.offsetParent === null) return;
 
-  const colors = ['#D4AF37', '#22c55e', '#3b82f6', '#f97316', '#a855f7', '#ec4899', '#14b8a6'];
+  const colors = ['#D4AF37', '#22c55e', '#656565', '#f97316', '#a855f7', '#ec4899', '#14b8a6'];
 
   const activeInvests = PORTAL.investments.filter(i => i.status === 'active');
   const allocation = {};
@@ -4441,7 +4441,7 @@ function buildStatementHTML(opts) {
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px">
           ${stmtKPIBox('Total Portfolio Value', fmtNum(totalValue), '#ff9b0c')}
-          ${stmtKPIBox('Capital Deployed', fmtNum(totalInvested), '#2F8C9B')}
+          ${stmtKPIBox('Capital Deployed', fmtNum(totalInvested), '#656565')}
           ${stmtKPIBox('Returns Earned', fmtNum(totalReturns), '#22C55E')}
           ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#A855F7')}
         </div>
@@ -4493,8 +4493,8 @@ function buildStatementHTML(opts) {
 
     sections += `
       <section style="margin-bottom:36px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #2F8C9B">
-          <div style="width:4px;height:22px;background:linear-gradient(180deg,#2F8C9B,#0096FF);border-radius:2px"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #656565">
+          <div style="width:4px;height:22px;background:linear-gradient(180deg,#656565,#656565);border-radius:2px"></div>
           <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Performance Analysis</h3>
         </div>
         <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea">
@@ -4526,7 +4526,7 @@ function buildStatementHTML(opts) {
       const info = getProductInfo(inv.product_type);
       const rate = ((Number(inv.expected_return_rate)||0)*100).toFixed(2);
       const maturity = inv.maturity_date ? fmtDate(inv.maturity_date) : '—';
-      const statusColor = inv.status === 'active' ? '#2F8C9B' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
+      const statusColor = inv.status === 'active' ? '#656565' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
       return `<tr style="border-bottom:1px solid #f0f0f0">
         <td style="padding:8px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${inv.id}</td>
         <td style="padding:8px 10px;font-size:11px;font-weight:600;color:#1a1a1a">${_esc(inv.pool_name) || '—'}</td>
@@ -4605,7 +4605,7 @@ function buildStatementHTML(opts) {
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
           ${stmtMiniBox('Total Deposits', fmtNum(totalDeposits), '#22C55E')}
-          ${stmtMiniBox('Total Invested', fmtNum(totalWithdrawals), '#2F8C9B')}
+          ${stmtMiniBox('Total Invested', fmtNum(totalWithdrawals), '#656565')}
           ${stmtMiniBox('Returns Received', fmtNum(totalReturnsTxn), '#ff9b0c')}
         </div>
         <div style="overflow-x:auto">
@@ -4628,7 +4628,7 @@ function buildStatementHTML(opts) {
 
   // ─── FULL DOCUMENT ───
   return `
-    <div id="stmtPrintArea" style="font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%">
+    <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%">
 
       <!-- Header Band -->
       <div style="background:linear-gradient(135deg,#1a3a4a 0%,#0d2535 100%);padding:28px 40px;display:flex;align-items:center;justify-content:space-between">
@@ -4707,7 +4707,7 @@ function getProductInfo(type) {
     solar_6yr:         { label:'Solar Investment (6yr)',   color:'#ea580c', bg:'#fff7ed' },
     solar_5yr:         { label:'Solar Investment (5yr)',   color:'#c2410c', bg:'#fff7ed' },
     solar:             { label:'Solar Investment',         color:'#ea580c', bg:'#ffedd5' },
-    short_term:        { label:'Short Term Investment',    color:'#2563eb', bg:'#dbeafe' },
+    short_term:        { label:'Short Term Investment',    color:'#656565', bg:'#dbeafe' },
     delivery_bike:     { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
     delivery_bikes:    { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
     smme:              { label:'SMME Funding',             color:'#059669', bg:'#d1fae5' },
@@ -4831,7 +4831,7 @@ const XP_LEVELS = [
   { id: 'seed',       label: 'Seed',       min: 0,    icon: 'fa-seedling',         color: '#9ca3af' },
   { id: 'sprout',     label: 'Sprout',     min: 100,  icon: 'fa-leaf',             color: '#22c55e' },
   { id: 'grower',     label: 'Grower',     min: 300,  icon: 'fa-tree',             color: '#16a34a' },
-  { id: 'cultivator', label: 'Cultivator', min: 600,  icon: 'fa-spa',              color: '#2F8C9B' },
+  { id: 'cultivator', label: 'Cultivator', min: 600,  icon: 'fa-spa',              color: '#656565' },
   { id: 'harvester',  label: 'Harvester',  min: 1000, icon: 'fa-wheat-awn',        color: '#ff9b0c' },
   { id: 'pioneer',    label: 'Pioneer',    min: 1500, icon: 'fa-compass',          color: '#f59e0b' },
   { id: 'architect',  label: 'Architect',  min: 2500, icon: 'fa-building-columns', color: '#a855f7' },
@@ -5155,7 +5155,7 @@ function renderQuestView() {
     if (learnReady.length) {
       pendingGroups += `
         <div class="pending-group">
-          <div class="pending-group__label"><i class="fa-solid fa-graduation-cap" style="color:#2F8C9B"></i> Learning modules — earn XP & knowledge</div>
+          <div class="pending-group__label"><i class="fa-solid fa-graduation-cap" style="color:#656565"></i> Learning modules — earn XP & knowledge</div>
           <div class="quest-cards-grid">${learnReady.map(qst => _qCard(qst, 'learning')).join('')}</div>
         </div>`;
     }
@@ -5382,7 +5382,7 @@ function _launchConfettiParticles() {
   const container = document.getElementById('levelupConfetti');
   if (!container) return;
   container.innerHTML = '';
-  const colors = ['#ff9b0c', '#22c55e', '#2F8C9B', '#D4AF37', '#a855f7'];
+  const colors = ['#ff9b0c', '#22c55e', '#656565', '#D4AF37', '#a855f7'];
   for (let i = 0; i < 40; i++) {
     const p = document.createElement('span');
     p.style.cssText = `
@@ -5407,7 +5407,7 @@ const LEARN_MODULES = [
   {
     id: 'learn_what_is_svc', track: 'explorer', order: 1,
     title: 'What is SV Capital?', readTime: 5, xp: 50,
-    icon: 'fa-building-columns', color: '#2F8C9B',
+    icon: 'fa-building-columns', color: '#656565',
     keyPoints: [
       'SV Capital pools investor capital into tangible South African alternative assets',
       'Products include solar projects, cattle farming, short-term loans, and delivery bikes',
@@ -5621,7 +5621,7 @@ For larger portfolios (R500,000+), consider consulting an estate planner about s
 ];
 
 const LEARN_TRACKS = [
-  { id: 'explorer',   label: 'Explorer',   desc: 'New to investing — start here',        icon: 'fa-compass',          color: '#2F8C9B',  minInvested: 0 },
+  { id: 'explorer',   label: 'Explorer',   desc: 'New to investing — start here',        icon: 'fa-compass',          color: '#656565',  minInvested: 0 },
   { id: 'builder',    label: 'Builder',    desc: 'Growing your portfolio',                icon: 'fa-hammer',           color: '#22c55e',  minInvested: 5000 },
   { id: 'strategist', label: 'Strategist', desc: 'Advanced portfolio management',         icon: 'fa-chess-knight',     color: '#a855f7',  minInvested: 50000 },
 ];
@@ -5870,7 +5870,7 @@ const POLICY_SECTIONS = [
   {
     id: 'pol_terms',
     icon: 'fa-file-contract',
-    color: '#2F8C9B',
+    color: '#656565',
     title: 'Terms of Service',
     apiKey: 'terms',
     staticContent: `<p><em>Last updated: June 2025 &nbsp;·&nbsp; Version 1.0</em></p>
@@ -6781,7 +6781,7 @@ function goFundWallet() {
 const SA_TYPE_META = {
   business: {
     icon: 'fa-building',       label: 'Business',
-    color: '#2f8c9b',          bg: 'linear-gradient(135deg,#1a3d42 0%,#2f8c9b 100%)',
+    color: '#656565',          bg: 'linear-gradient(135deg,#1a3d42 0%,#656565 100%)',
     tagline: 'Invest through your registered company',
     ficaDocs: ['Company Registration Certificate (COR14.3 / COR15.1A)', 'Company Tax Clearance Certificate', 'CIPC CoR39 or similar', 'Authorised signatory ID (copy)'],
   },
@@ -7575,7 +7575,7 @@ function openWithdrawalModal() {
   if (!_isInvestorFicaApproved(inv)) {
     content.innerHTML = `
       <div style="text-align:center;padding:20px 0">
-        <i class="fa-solid fa-shield-halved" style="font-size:2.5rem;color:#2F8C9B;margin-bottom:16px"></i>
+        <i class="fa-solid fa-shield-halved" style="font-size:2.5rem;color:#656565;margin-bottom:16px"></i>
         <p style="font-size:0.9rem;font-weight:700;color:#1a1a1a;margin-bottom:8px">FICA verification required</p>
         <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px">You need to complete FICA/KYC verification before you can withdraw funds. You can still top up your wallet and invest in the meantime.</p>
         <button class="btn btn--primary" onclick="Modal.close('withdrawalModal');navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()"><i class="fa-solid fa-upload"></i> Complete FICA/KYC</button>
@@ -7764,18 +7764,18 @@ function generateTaxCertificate() {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:'Poppins',sans-serif;background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 @page{size:A4;margin:20mm}
 @media print{.no-print{display:none!important}}
-.no-print{position:fixed;top:0;left:0;right:0;background:#1a2235;padding:10px 24px;display:flex;justify-content:space-between;align-items:center;z-index:99}
+.no-print{position:fixed;top:0;left:0;right:0;background:#303030;padding:10px 24px;display:flex;justify-content:space-between;align-items:center;z-index:99}
 .no-print span{color:#fff;font-size:13px;font-weight:600}
 .no-print button{background:#FF9B0C;color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
 .wrap{max-width:700px;margin:60px auto 32px;padding:40px}
-.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #1a2235}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #303030}
 .logo img{height:48px;max-width:220px;object-fit:contain;display:block}
-.cert-badge{background:#1a2235;color:#fff;padding:8px 16px;border-radius:6px;font-size:0.75rem;font-weight:700;text-align:right}
+.cert-badge{background:#303030;color:#fff;padding:8px 16px;border-radius:6px;font-size:0.75rem;font-weight:700;text-align:right}
 .cert-badge small{display:block;color:#9ca3af;font-size:0.65rem;font-weight:400}
-h1{font-size:1.25rem;font-weight:800;color:#1a2235;margin:0 0 4px}
+h1{font-size:1.25rem;font-weight:800;color:#303030;margin:0 0 4px}
 .subtitle{font-size:0.82rem;color:#6b7280;margin-bottom:28px}
 .interest-box{background:#f0fdf4;border:2px solid #22c55e;border-radius:12px;padding:24px 28px;margin-bottom:28px;text-align:center}
 .interest-lbl{font-size:0.8rem;color:#166534;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px}
@@ -7787,7 +7787,7 @@ td{padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151}
 td:last-child{text-align:right;font-weight:600}
 .footer{border-top:1px solid #e5e7eb;padding-top:18px;font-size:0.73rem;color:#6b7280;line-height:1.6}
 .footer strong{color:#374151}
-.stamp{display:inline-block;border:2px solid #1a2235;color:#1a2235;padding:6px 14px;border-radius:4px;font-size:0.72rem;font-weight:700;letter-spacing:0.12em;margin-top:16px;text-transform:uppercase}
+.stamp{display:inline-block;border:2px solid #303030;color:#303030;padding:6px 14px;border-radius:4px;font-size:0.72rem;font-weight:700;letter-spacing:0.12em;margin-top:16px;text-transform:uppercase}
 </style></head><body>
 <div class="no-print">
   <span>SV Capital — IT3(b) Tax Certificate ${taxYear}</span>
@@ -8373,7 +8373,7 @@ async function _renderKycStatusPanel() {
 
   const inv = PORTAL.investor;
   const overallStatus = inv.fica_status || inv.kyc_status || 'pending';
-  const statusColor = { approved: '#22c55e', rejected: '#ef4444', pending: '#f59e0b', in_progress: '#3b82f6', submitted: '#3b82f6', not_started: '#9ca3af' };
+  const statusColor = { approved: '#22c55e', rejected: '#ef4444', pending: '#f59e0b', in_progress: '#656565', submitted: '#656565', not_started: '#9ca3af' };
   const color = statusColor[overallStatus] || '#9ca3af';
 
   const typeLabel = {
@@ -8880,7 +8880,7 @@ function _getPDF(orientation = 'portrait') {
 function _pdfHeader(doc, title, subtitle) {
   const W = doc.internal.pageSize.getWidth();
   // Dark header band
-  doc.setFillColor(26, 34, 53); // #1a2235
+  doc.setFillColor(26, 34, 53); // #303030
   doc.rect(0, 0, W, 38, 'F');
   // Gold accent line
   doc.setFillColor(255, 155, 12);
@@ -9569,7 +9569,7 @@ function renderMyTickets() {
           </div>
         </div>
         <div class="my-ticket-meta" style="font-size:0.74rem;color:var(--text-muted);margin-bottom:8px">${Utils.date(t.created_at)} &middot; ${(t.category || '').replace(/_/g, ' ')}</div>
-        ${hasAdminReply ? `<div style="font-size:0.78rem;color:#1a1a1a;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.2);border-radius:6px;padding:6px 10px;margin-bottom:8px"><strong style="color:#2F8C9B">Support:</strong> ${(t.admin_response || '').slice(0, 120)}${(t.admin_response || '').length > 120 ? '…' : ''}</div>` : ''}
+        ${hasAdminReply ? `<div style="font-size:0.78rem;color:#1a1a1a;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.2);border-radius:6px;padding:6px 10px;margin-bottom:8px"><strong style="color:#656565">Support:</strong> ${(t.admin_response || '').slice(0, 120)}${(t.admin_response || '').length > 120 ? '…' : ''}</div>` : ''}
         <button class="btn btn--ghost btn--sm" onclick="openTicketConversation('${t.id}')" style="font-size:0.78rem;padding:5px 12px">
           <i class="fa-solid fa-comment-dots"></i> View Conversation
         </button>
@@ -10178,7 +10178,7 @@ function _renderAnalyticsAllocChart() {
   });
   const entries = Object.entries(byPool).sort((a, b) => b[1] - a[1]);
   const total   = entries.reduce((s, [, v]) => s + v, 0);
-  const COLORS  = ['#FF9B0C','#a855f7','#2F8C9B','#22c55e','#ef4444','#3b82f6','#f97316','#8b5cf6'];
+  const COLORS  = ['#FF9B0C','#a855f7','#656565','#22c55e','#ef4444','#656565','#f97316','#8b5cf6'];
 
   if (PORTAL.charts.analyticsAlloc) { PORTAL.charts.analyticsAlloc.destroy(); }
   PORTAL.charts.analyticsAlloc = new Chart(ctx, {
@@ -10213,7 +10213,7 @@ function _renderAnalyticsTimeline() {
     return;
   }
   const statusBadge = s => {
-    const map = { active:'#22c55e', paid_out:'#3b82f6', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316' };
+    const map = { active:'#22c55e', paid_out:'#656565', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316' };
     return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${String(s||'').replace('_',' ').toUpperCase()}</span>`;
   };
   const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';

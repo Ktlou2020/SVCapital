@@ -415,7 +415,7 @@ function renderPendingActionsWidget() {
 
   const actions = [
     { icon: 'fa-id-card',        color: '#f97316', label: 'Clients pending FICA',              count: pendingFica,  view: 'clients' },
-    { icon: 'fa-headset',        color: '#3b82f6', label: 'Open support tickets',              count: openTickets,  view: 'support' },
+    { icon: 'fa-headset',        color: '#656565', label: 'Open support tickets',              count: openTickets,  view: 'support' },
     { icon: 'fa-hourglass-end',  color: '#a855f7', label: 'Investments maturing in 30 days',  count: maturingSoon, view: 'investments' }
   ].filter(a => a.count > 0);
 
@@ -451,7 +451,7 @@ function renderPortfolioChart() {
       .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
     return clientInvests || parseFloat(c.total_invested) || 0;
   });
-  const colors = ['#2F8C9B','#D4AF37','#22c55e','#f97316','#a855f7','#3b82f6','#ef4444','#06b6d4'];
+  const colors = ['#656565','#D4AF37','#22c55e','#f97316','#a855f7','#656565','#ef4444','#06b6d4'];
 
   if (STATE.charts.portfolio) STATE.charts.portfolio.destroy();
   if (!labels.length) return;
@@ -729,7 +729,7 @@ function renderReferralOverview() {
         <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">Pending FICA</div>
       </div>
       <div style="text-align:center;background:#eff6ff;border:1px solid rgba(59,130,246,0.2);border-radius:var(--radius);padding:16px">
-        <div style="font-size:1.6rem;font-weight:800;color:#3b82f6">${ficaSubmitted}</div>
+        <div style="font-size:1.6rem;font-weight:800;color:#656565">${ficaSubmitted}</div>
         <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">FICA Submitted</div>
       </div>
       <div style="text-align:center;background:#fefce8;border:1px solid rgba(212,175,55,0.2);border-radius:var(--radius);padding:16px">

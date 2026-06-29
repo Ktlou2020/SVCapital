@@ -17,7 +17,7 @@
   --gold-glow: rgba(212,175,55,0.18);
   --green: #22c55e;
   --green-dark: #166534;
-  --blue: #3b82f6;
+  --blue: #656565;
   --orange: #f97316;
   --red: #ef4444;
   --white: #ffffff;
@@ -37,8 +37,8 @@
   --shadow-lg: 0 20px 60px rgba(0,0,0,0.5);
   --shadow-gold: 0 0 30px rgba(212,175,55,0.2);
   --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-body: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Poppins', Georgia, serif;
 }
 
 /* ─── Reset & Base ─── */
@@ -355,7 +355,7 @@ section { position: relative; padding: 100px 0; }
 .orb-2 {
   width: 500px;
   height: 500px;
-  background: radial-gradient(circle, #3b82f6 0%, transparent 70%);
+  background: radial-gradient(circle, #656565 0%, transparent 70%);
   bottom: -100px;
   left: -150px;
   opacity: 0.1;
@@ -1498,7 +1498,7 @@ section { position: relative; padding: 100px 0; }
    IMPACT
    ═══════════════════════════════════════════════ */
 .impact {
-  background: linear-gradient(135deg, #0a1628 0%, var(--dark-3) 50%, #0a1628 100%);
+  background: linear-gradient(135deg, #303030 0%, var(--dark-3) 50%, #303030 100%);
   overflow: hidden;
 }
 
@@ -1905,7 +1905,7 @@ section { position: relative; padding: 100px 0; }
    FINAL CTA
    ═══════════════════════════════════════════════ */
 .final-cta {
-  background: linear-gradient(135deg, #0d1117 0%, #0a1a2e 50%, #0d1117 100%);
+  background: linear-gradient(135deg, #0d1117 0%, #303030 50%, #0d1117 100%);
   text-align: center;
   overflow: hidden;
   padding: 120px 0;

@@ -17,7 +17,7 @@
       --orange-dark:   #E56200;
       --orange-light:  #FF9B0C;
       --orange-pale:   rgba(255,130,21,0.08);
-      --teal:          #2F8C9B;
+      --teal:          #656565;
       --green:         #22C55E;
       --red:           #EF4444;
       --text-h:        #1a1a1a;
@@ -33,7 +33,7 @@
       --radius:        12px;
       --radius-lg:     18px;
       --font:          'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
-      --serif:         'DM Serif Display', Georgia, serif;
+      --serif:         'Poppins', Georgia, serif;
     }
 
     /* Desktop: full-height split layout */
@@ -663,7 +663,7 @@
       padding: 2px 7px; border-radius: 20px; font-size: 0.66rem; font-weight: 700;
     }
     .id-chip--orange { background: rgba(255,130,21,0.12); border: 1px solid rgba(255,130,21,0.25); color: #c96000; }
-    .id-chip--teal   { background: rgba(47,140,155,0.12); border: 1px solid rgba(47,140,155,0.25); color: #2F8C9B; }
+    .id-chip--teal   { background: rgba(47,140,155,0.12); border: 1px solid rgba(47,140,155,0.25); color: #656565; }
     .id-chip--purple { background: rgba(168,85,247,0.10); border: 1px solid rgba(168,85,247,0.25); color: #7c3aed; }
 
     /* ─── Step slide transitions ─── */
@@ -892,7 +892,7 @@
       </div>
       <div class="benefit-item">
         <div class="benefit-icon" style="background:rgba(47,140,155,0.12)">
-          <i class="fa-solid fa-bolt" style="color:#2F8C9B"></i>
+          <i class="fa-solid fa-bolt" style="color:#656565"></i>
         </div>
         <div class="benefit-text"><strong>Same-day funding</strong> via Paystack or Ozow</div>
       </div>
@@ -1486,7 +1486,7 @@
           <i class="fa-solid fa-shield-halved" style="color:#22c55e"></i> FSCA Regulated
         </div>
         <div style="display:flex;align-items:center;gap:6px;font-size:0.71rem;color:var(--text-dim)">
-          <i class="fa-solid fa-lock" style="color:#2F8C9B"></i> 256-bit SSL Encrypted
+          <i class="fa-solid fa-lock" style="color:#656565"></i> 256-bit SSL Encrypted
         </div>
         <div style="display:flex;align-items:center;gap:6px;font-size:0.71rem;color:var(--text-dim)">
           <i class="fa-solid fa-eye-slash" style="color:#a855f7"></i> POPIA Compliant
@@ -1540,7 +1540,7 @@
       <!-- Proof of Address -->
       <div class="fica-upload-card" id="card-address">
         <input type="file" id="fileAddress" accept="image/*,.pdf" style="display:none" />
-        <i class="fica-upload-card__icon fa-solid fa-house" style="color:#2F8C9B"></i>
+        <i class="fica-upload-card__icon fa-solid fa-house" style="color:#656565"></i>
         <div class="fica-upload-card__title">Proof of Address</div>
         <div class="fica-upload-card__sub">Bank statement, utility bill or municipal account — not older than 3 months.</div>
         <div class="fica-upload-card__accepted">Accepted: JPG, PNG, PDF — Max 10MB</div>
@@ -1595,7 +1595,7 @@
         <!-- Bank Account -->
         <div class="fica-upload-card" id="card-bank" style="padding:16px 12px">
           <input type="file" id="fileBank" accept="image/*,.pdf" style="display:none" />
-          <i class="fica-upload-card__icon fa-solid fa-building-columns" style="color:#3b82f6;font-size:1.3rem"></i>
+          <i class="fica-upload-card__icon fa-solid fa-building-columns" style="color:#656565;font-size:1.3rem"></i>
           <div class="fica-upload-card__title" style="font-size:0.78rem">Bank Account Proof</div>
           <div class="fica-upload-card__sub" style="font-size:0.68rem">Bank statement with your name and account number visible.</div>
           <button type="button" class="fica-upload-btn" id="uploadBtn-bank" style="font-size:0.72rem;padding:6px 12px">
@@ -2601,7 +2601,7 @@ function launchConfetti() {
   canvas.width  = window.innerWidth;
   canvas.height = window.innerHeight;
 
-  const colors = ['#FF8215','#FF9B0C','#22C55E','#2F8C9B','#a855f7','#f59e0b'];
+  const colors = ['#FF8215','#FF9B0C','#22C55E','#656565','#a855f7','#f59e0b'];
   const pieces = Array.from({ length: 90 }, () => ({
     x: Math.random() * canvas.width,
     y: -Math.random() * 200 - 20,

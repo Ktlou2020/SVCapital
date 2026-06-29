@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════
    SV CAPITAL — Home Page CI Override  (home-ci.css)
    Official Corporate Identity: White/light body · Orange #FF8215 primary
-   Teal #2F8C9B secondary · DM Serif Display headings
+   Teal #656565 secondary · DM Serif Display headings
    ═══════════════════════════════════════════════════════════════════ */
 
 /* ── CI Tokens ─────────────────────────────────────────────────── */
@@ -12,8 +12,8 @@
   --ci-orange-pale:   rgba(255,130,21,0.08);
   --ci-orange-border: rgba(255,130,21,0.28);
   --ci-orange-glow:   rgba(255,130,21,0.18);
-  --ci-teal:          #2F8C9B;
-  --ci-teal-dark:     #1E6E7A;
+  --ci-teal:          #656565;
+  --ci-teal-dark:     #656565;
   --ci-teal-pale:     rgba(47,140,155,0.09);
   --ci-green:         #22C55E;
   --ci-section-bg:    #F7F8FA;

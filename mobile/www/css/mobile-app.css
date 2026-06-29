@@ -556,7 +556,7 @@ input, textarea, [contenteditable] {
 .igs-text span { font-size: 0.62rem !important; }
 /* Dark mode: fix hardcoded #1a1a1a text inside the strip */
 body.dark-mode .igs-text b { color: #e2e8f0 !important; }
-body.dark-mode .igs-step--active .igs-text b { color: #2F8C9B !important; }
+body.dark-mode .igs-step--active .igs-text b { color: #656565 !important; }
 
 /* ─────────────────────────────────────────────────────────────
    15. Buttons
@@ -828,10 +828,10 @@ body.dark-mode {
   --text:        #e2e8f0 !important;
   --text-muted:  #9ca3af !important;
   --text-dim:    #6b7280 !important;
-  --surface:     #1a2235 !important;
+  --surface:     #303030 !important;
   --bg:          #0d1117 !important;
   --border:      rgba(255,255,255,0.07) !important;
-  --card-bg:     #1a2235 !important;
+  --card-bg:     #303030 !important;
   --dark-3:      #1f2937 !important;
   color: #e2e8f0 !important;
 }
@@ -1147,7 +1147,7 @@ input[type="file"] { font-size: 16px !important; }
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: linear-gradient(135deg,#2F8C9B,#1a6b7a);
+  background: linear-gradient(135deg,#656565,#1a6b7a);
   display: flex;
   align-items: center;
   justify-content: center;

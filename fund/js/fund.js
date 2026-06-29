@@ -384,7 +384,7 @@ function renderRunTypeChart() {
   const types = {};
   S.runs.forEach(r => { const t=r.product_type||'other'; types[t]=(types[t]||0)+1; });
   if (!Object.keys(types).length) return;
-  const colors = { cattle:'#D4AF37', solar_7yr:'#22c55e', solar_6yr:'#16a34a', solar_5yr:'#15803d', short_term:'#3b82f6', delivery_bike:'#a855f7', other:'#94a3b8' };
+  const colors = { cattle:'#D4AF37', solar_7yr:'#22c55e', solar_6yr:'#16a34a', solar_5yr:'#15803d', short_term:'#656565', delivery_bike:'#a855f7', other:'#94a3b8' };
   if (S.charts.runType) S.charts.runType.destroy();
   S.charts.runType = new Chart(ctx, {
     type: 'doughnut',
@@ -489,7 +489,7 @@ function renderPortfolioComposition() {
   const segments = [
     {label:'Cattle Finance', val:cattleDep, color:'#74c69d', icon:'fa-cow', active:(S.cattle||[]).filter(c=>['active','in_progress'].includes(c.status)).length},
     {label:'Solar Finance',  val:solarDep,  color:'#f59e0b', icon:'fa-solar-panel', active:(S.solar||[]).filter(p=>p.status==='active').length},
-    {label:'Short-Term Loans',val:loansDep, color:'#60a5fa', icon:'fa-hand-holding-dollar', active:(S.loans||[]).filter(l=>l.status==='active').length},
+    {label:'Short-Term Loans',val:loansDep, color:'#656565', icon:'fa-hand-holding-dollar', active:(S.loans||[]).filter(l=>l.status==='active').length},
     {label:'Fund Runs',      val:runsDep,   color:'#c084fc', icon:'fa-play-circle', active:(S.runs||[]).filter(r=>r.status==='in_progress').length},
   ].filter(s=>s.val>0);
 
@@ -621,10 +621,10 @@ function renderLiveProductCards() {
       activeSolar.length>0?'ACTIVE':'IDLE',activeSolar.length>0?'#f59e0b':'rgba(255,255,255,.3)',
       stat('Active Projects',activeSolar.length,'#f59e0b')+stat('Return Range','13.5–21.4%')+stat('Deployed',solarDep>0?fmt.rand(solarDep):'—','#D4AF37')+stat('Max Term','7 Years'),
       'View Solar Dashboard','#f59e0b')}
-    ${card('shortterm.html','linear-gradient(135deg,#0d1832,#0a1428)','#60a5fa','fa-hand-holding-dollar','🏢','SMME Short-Term Loans','Business asset finance · 5-month cycles',
-      overdueLoans.length>0?overdueLoans.length+' OVERDUE':activeLoans.length>0?'ACTIVE':'IDLE',overdueLoans.length>0?'#f87171':activeLoans.length>0?'#60a5fa':'rgba(255,255,255,.3)',
-      stat('Active Loans',activeLoans.length,'#60a5fa')+stat('Overdue',overdueLoans.length,overdueLoans.length>0?'#f87171':'rgba(255,255,255,.3)')+stat('Deployed',loansDep>0?fmt.rand(loansDep):'—','#D4AF37')+stat('Target Return','13.92%','#60a5fa'),
-      'View Loan Dashboard','#60a5fa')}
+    ${card('shortterm.html','linear-gradient(135deg,#0d1832,#0a1428)','#656565','fa-hand-holding-dollar','🏢','SMME Short-Term Loans','Business asset finance · 5-month cycles',
+      overdueLoans.length>0?overdueLoans.length+' OVERDUE':activeLoans.length>0?'ACTIVE':'IDLE',overdueLoans.length>0?'#f87171':activeLoans.length>0?'#656565':'rgba(255,255,255,.3)',
+      stat('Active Loans',activeLoans.length,'#656565')+stat('Overdue',overdueLoans.length,overdueLoans.length>0?'#f87171':'rgba(255,255,255,.3)')+stat('Deployed',loansDep>0?fmt.rand(loansDep):'—','#D4AF37')+stat('Target Return','13.92%','#656565'),
+      'View Loan Dashboard','#656565')}
   </div>`;
 }
 
@@ -1274,7 +1274,7 @@ function renderPoolsOverview() {
     if (!items.length) return `<span style="color:rgba(255,255,255,.25);font-size:0.72rem">None linked</span>`;
     return items.map(it => {
       const label = it.batch_name || it.project_name || it.business_name || it.loan_ref || it.id;
-      const color = type === 'cattle' ? '#74c69d' : type.startsWith('solar') ? '#f59e0b' : '#60a5fa';
+      const color = type === 'cattle' ? '#74c69d' : type.startsWith('solar') ? '#f59e0b' : '#656565';
       return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;font-weight:700;background:${color}18;color:${color};padding:2px 8px;border-radius:20px;margin:1px">${label}</span>`;
     }).join('');
   };
@@ -1336,7 +1336,7 @@ function openLinkProductModal(poolId) {
 
   const linked   = products.filter(p => p.pool_id === poolId);
   const available = products.filter(p => !p.pool_id);
-  const color = type === 'cattle' ? '#74c69d' : type.startsWith('solar') ? '#f59e0b' : '#60a5fa';
+  const color = type === 'cattle' ? '#74c69d' : type.startsWith('solar') ? '#f59e0b' : '#656565';
 
   const pLabel = it => it[nameField] || it.loan_ref || it.id;
   const pSub   = it => [it.status, it.purchase_value ? fmt.rand(it.purchase_value) : it.capital_deployed ? fmt.rand(it.capital_deployed) : it.amount_disbursed ? fmt.rand(it.amount_disbursed) : null].filter(Boolean).join(' · ');
@@ -1652,7 +1652,7 @@ function renderAuditTable() {
   const sevColors = { info:'#2dd4bf', warning:'#fb923c', critical:'#f87171' };
   const sevIcons  = { info:'fa-circle-info', warning:'fa-triangle-exclamation', critical:'fa-circle-xmark' };
   const typeIcons = { fund_run:'fa-play-circle', solar_project:'fa-solar-panel', loan:'fa-hand-holding-dollar', cattle:'fa-cow', pool:'fa-layer-group', schedule:'fa-calendar-days', auth:'fa-key', system:'fa-robot' };
-  const actionColors = { create:'#74c69d', update:'#fbbf24', delete:'#f87171', status_change:'#60a5fa', approve:'#74c69d', reject:'#f87171', export:'#a78bfa', login:'#2dd4bf', logout:'rgba(255,255,255,.4)', mark_paid:'#74c69d', calculate_returns:'#fbbf24' };
+  const actionColors = { create:'#74c69d', update:'#fbbf24', delete:'#f87171', status_change:'#656565', approve:'#74c69d', reject:'#f87171', export:'#a78bfa', login:'#2dd4bf', logout:'rgba(255,255,255,.4)', mark_paid:'#74c69d', calculate_returns:'#fbbf24' };
 
   el.innerHTML = data.map(e => {
     const ts   = e.event_at || e.created_at;
@@ -1786,7 +1786,7 @@ function renderAllocationsView() {
   }
 
   const statusColors  = { active:'badge--green', committed:'badge--blue', matured:'badge--purple', defaulted:'badge--red', cancelled:'badge--gray' };
-  const productColors = { cattle:'#74c69d', solar_7yr:'#f59e0b', solar_6yr:'#fbbf24', solar_5yr:'#fcd34d', short_term:'#60a5fa', fund_run:'#a78bfa' };
+  const productColors = { cattle:'#74c69d', solar_7yr:'#f59e0b', solar_6yr:'#fbbf24', solar_5yr:'#fcd34d', short_term:'#656565', fund_run:'#a78bfa' };
   const productIcons  = { cattle:'fa-cow', solar_7yr:'fa-solar-panel', solar_6yr:'fa-solar-panel', solar_5yr:'fa-solar-panel', short_term:'fa-hand-holding-dollar', fund_run:'fa-play-circle' };
 
   el.innerHTML = data.map(a => {
@@ -1844,7 +1844,7 @@ function renderAllocByInvestor() {
     const totalExp  = inv.items.reduce((s,x) => s+(parseFloat(x.expected_payout)||0), 0);
     const activeCount = inv.items.filter(x => x.status==='active').length;
     const products = [...new Set(inv.items.map(x => x.product_type))];
-    const productColors = { cattle:'#74c69d', solar_7yr:'#f59e0b', solar_6yr:'#fbbf24', solar_5yr:'#fcd34d', short_term:'#60a5fa', fund_run:'#a78bfa' };
+    const productColors = { cattle:'#74c69d', solar_7yr:'#f59e0b', solar_6yr:'#fbbf24', solar_5yr:'#fcd34d', short_term:'#656565', fund_run:'#a78bfa' };
     return `
     <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
       <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--teal));display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;flex-shrink:0">${fmt.initials(inv.name)}</div>
@@ -1885,7 +1885,7 @@ function viewAllocDetail(allocId) {
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
         <div style="background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">CAPITAL</div><div style="font-size:18px;font-weight:800;color:#D4AF37">${fmt.rand(a.capital_paid||0)}</div></div>
         <div style="background:rgba(116,198,157,.08);border:1px solid rgba(116,198,157,.2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">LIVE NAV</div><div style="font-size:18px;font-weight:800;color:#74c69d">${fmt.rand(navNow)}</div><div style="font-size:10px;color:#74c69d">+${fmt.rand(gain)}</div></div>
-        <div style="background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">EXPECTED</div><div style="font-size:18px;font-weight:800;color:#60a5fa">${fmt.rand(a.expected_payout||0)}</div></div>
+        <div style="background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">EXPECTED</div><div style="font-size:18px;font-weight:800;color:#656565">${fmt.rand(a.expected_payout||0)}</div></div>
       </div>
       ${a.notes ? `<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px;font-size:12px;color:rgba(255,255,255,.6);line-height:1.5;margin-bottom:14px"><strong style="color:rgba(255,255,255,.7)">Notes:</strong> ${a.notes}</div>` : ''}
       <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid rgba(255,255,255,.07)">
@@ -1894,7 +1894,7 @@ function viewAllocDetail(allocId) {
           <i class="fa-solid fa-file-invoice"></i> Investor Statement
         </button>
         <button onclick="printTaxCertificate('${a.id}')"
-                style="background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.25);color:#60a5fa;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
+                style="background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.25);color:#656565;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
           <i class="fa-solid fa-certificate"></i> IT3(b) Tax Cert
         </button>
       </div>
@@ -2011,7 +2011,7 @@ function buildForecast({ schedules, solar, loans, cattle, runs, pools, allocs })
     if (!b) return;
     const amount = parseFloat(l.total_repayable) || 0;
     b.inflows += amount;
-    b.items.push({ type:'inflow', label:`Loan Repayment: ${l.business_name}`, amount, product:'short_term', date: l.repayment_date, icon:'fa-hand-holding-dollar', color:'#60a5fa' });
+    b.items.push({ type:'inflow', label:`Loan Repayment: ${l.business_name}`, amount, product:'short_term', date: l.repayment_date, icon:'fa-hand-holding-dollar', color:'#656565' });
     events.push({ bucket: b.key, direction:'inflow', label:`Loan Repayment: ${l.business_name||l.loan_ref}`, amount, product:'short_term', date: l.repayment_date });
   });
 
@@ -2375,7 +2375,7 @@ const AIAdvisor = {
     suggestions.push({
       product: 'loans',
       icon: 'fa-hand-holding-dollar',
-      color: '#60a5fa',
+      color: '#656565',
       title: 'Short-Term Business Loans',
       amount: loanAlloc,
       score: loanScore,
@@ -2499,12 +2499,12 @@ function renderIntelligenceView(ctx) {
         </div>
         <div style="background:rgba(255,255,255,.07);border-radius:8px;height:12px;overflow:hidden;display:flex">
           <div style="width:${Math.min(ctx.solarDeployed/ctx.totalRaised*100,100).toFixed(1)}%;background:#f59e0b;transition:width .5s" title="Solar"></div>
-          <div style="width:${Math.min(ctx.loansDeployed/ctx.totalRaised*100,100).toFixed(1)}%;background:#60a5fa;transition:width .5s" title="Loans"></div>
+          <div style="width:${Math.min(ctx.loansDeployed/ctx.totalRaised*100,100).toFixed(1)}%;background:#656565;transition:width .5s" title="Loans"></div>
           <div style="width:${Math.min(ctx.cattleDeployed/ctx.totalRaised*100,100).toFixed(1)}%;background:#74c69d;transition:width .5s" title="Cattle"></div>
         </div>
         <div style="display:flex;gap:16px;font-size:11px;color:rgba(255,255,255,.4);margin-top:6px">
           <span><span style="display:inline-block;width:10px;height:10px;background:#f59e0b;border-radius:2px;margin-right:4px"></span>Solar</span>
-          <span><span style="display:inline-block;width:10px;height:10px;background:#60a5fa;border-radius:2px;margin-right:4px"></span>Loans</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#656565;border-radius:2px;margin-right:4px"></span>Loans</span>
           <span><span style="display:inline-block;width:10px;height:10px;background:#74c69d;border-radius:2px;margin-right:4px"></span>Cattle</span>
           <span><span style="display:inline-block;width:10px;height:10px;background:rgba(255,255,255,.1);border-radius:2px;margin-right:4px"></span>Available</span>
         </div>
@@ -2708,7 +2708,7 @@ function _renderFeeTypeChart(fees) {
   fees.forEach(f => { const t = f.fee_type || 'Other'; types[t] = (types[t]||0) + (parseFloat(f.fee_amount)||0); });
   const labels = Object.keys(types);
   const data   = labels.map(k => types[k]);
-  const COLORS  = ['#D4AF37','#74c69d','#60a5fa','#fb923c','#c084fc','#f472b6'];
+  const COLORS  = ['#D4AF37','#74c69d','#656565','#fb923c','#c084fc','#f472b6'];
 
   S.charts.feeType = new Chart(canvas, {
     type: 'doughnut',
@@ -2735,7 +2735,7 @@ function _renderFeeProductChart(fees) {
   fees.forEach(f => { const p = f.product_type || 'Unknown'; prods[p] = (prods[p]||0) + (parseFloat(f.fee_amount)||0); });
   const labels = Object.keys(prods);
   const data   = labels.map(k => prods[k]);
-  const COLORS  = ['#60a5fa','#34d399','#fbbf24','#f87171','#a78bfa'];
+  const COLORS  = ['#656565','#34d399','#fbbf24','#f87171','#a78bfa'];
 
   S.charts.feeProd = new Chart(canvas, {
     type: 'doughnut',
@@ -2814,7 +2814,7 @@ function renderFeeLedgerTable(fees, typeFilter, statusFilter) {
   if (sub) sub.textContent = `${rows.length} entries · Total: ${fmt.rand(rows.reduce((s,f)=>s+(parseFloat(f.fee_amount)||0),0))}`;
 
   const statusBadge = s => {
-    const cfg = { received: ['#74c69d','#052e16'], accrued: ['#fbbf24','#1c1400'], invoiced: ['#60a5fa','#0c1a2e'], waived: ['rgba(255,255,255,.3)','rgba(0,0,0,.4)'] };
+    const cfg = { received: ['#74c69d','#052e16'], accrued: ['#fbbf24','#1c1400'], invoiced: ['#656565','#0c1a2e'], waived: ['rgba(255,255,255,.3)','rgba(0,0,0,.4)'] };
     const [bg, fg] = cfg[s] || ['rgba(255,255,255,.15)','rgba(255,255,255,.6)'];
     return `<span style="background:${bg};color:${fg};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">${(s||'').toUpperCase()}</span>`;
   };
@@ -2955,7 +2955,7 @@ function _renderConcentrationChart({ solarAUM, loansAUM, cattleAUM }) {
       labels: ['Solar', 'Short-Term Loans', 'Cattle'],
       datasets: [{
         data: [solarAUM, loansAUM, cattleAUM],
-        backgroundColor: ['#D4AF37','#60a5fa','#34d399'],
+        backgroundColor: ['#D4AF37','#656565','#34d399'],
         borderWidth: 2, borderColor: '#1a1a2e'
       }]
     },
@@ -3014,7 +3014,7 @@ function renderConcentrationTable({ solarAUM, loansAUM, cattleAUM, totalAUM }) {
   if (!tbody) return;
   const rows = [
     { product:'Solar Projects',     aum: solarAUM,  color:'#D4AF37' },
-    { product:'Short-Term Loans',   aum: loansAUM,  color:'#60a5fa' },
+    { product:'Short-Term Loans',   aum: loansAUM,  color:'#656565' },
     { product:'Cattle / Livestock', aum: cattleAUM, color:'#34d399' }
   ];
   tbody.innerHTML = rows.map(r => {
@@ -3191,7 +3191,7 @@ function renderNotifications(notifs, catFilter, sevFilter) {
   const sevConfig = {
     critical: { color:'#f87171', bg:'rgba(248,113,113,.1)', border:'rgba(248,113,113,.3)', icon:'fa-circle-xmark' },
     warning:  { color:'#fbbf24', bg:'rgba(251,191,36,.1)',  border:'rgba(251,191,36,.3)',  icon:'fa-triangle-exclamation' },
-    info:     { color:'#60a5fa', bg:'rgba(96,165,250,.1)',  border:'rgba(96,165,250,.25)', icon:'fa-circle-info' },
+    info:     { color:'#656565', bg:'rgba(96,165,250,.1)',  border:'rgba(96,165,250,.25)', icon:'fa-circle-info' },
     success:  { color:'#74c69d', bg:'rgba(116,198,157,.1)', border:'rgba(116,198,157,.25)',icon:'fa-circle-check' }
   };
 
@@ -3412,7 +3412,7 @@ async function printInvestorStatement(allocId) {
   .nav-pill-value { font-size: 14pt; font-weight: 800; }
   .nav-pill-value.gold  { color: #d97706; }
   .nav-pill-value.green { color: #059669; }
-  .nav-pill-value.blue  { color: #2563eb; }
+  .nav-pill-value.blue  { color: #656565; }
 
   /* Disclaimer */
   .disclaimer { background: #fafafa; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px; margin-top: 28px; }
@@ -3731,7 +3731,7 @@ async function printTaxCertificate(allocId) {
       </tbody>
     </table>
 
-    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:10px 14px;margin:10px 0;font-size:8.5pt;color:#1e40af">
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:10px 14px;margin:10px 0;font-size:8.5pt;color:#656565">
       <strong>Note for taxpayers:</strong> The interest amount of <strong>R ${grossInterest.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong> (SARS Code 4201) must be declared in your annual income tax return (ITR12 / ITR14). 
       South African residents are entitled to an annual interest income exemption (R23,800 for persons under 65; R34,500 for persons 65 and older) in terms of Section 10(1)(i) of the Income Tax Act.
     </div>
@@ -3788,7 +3788,7 @@ function renderEventTicker() {
     events.push({ icon:'fa-play-circle', color:'#f59e0b', text:`<b>${r.run_name}</b> is in progress — ${fmt.rand(r.capital_deployed)} deployed` });
   });
   S.schedules.filter(s => s.status === 'processing').forEach(s => {
-    events.push({ icon:'fa-circle-dot', color:'#60a5fa', text:`Payout processing: <b>${s.investor_name||'Investor'}</b> — ${fmt.rand(s.payout_amount||0)}` });
+    events.push({ icon:'fa-circle-dot', color:'#656565', text:`Payout processing: <b>${s.investor_name||'Investor'}</b> — ${fmt.rand(s.payout_amount||0)}` });
   });
   S.runs.filter(r => r.status === 'completed').slice(0,3).forEach(r => {
     events.push({ icon:'fa-circle-check', color:'#4ade80', text:`Run completed: <b>${r.run_name}</b> — net return ${fmt.rand(r.total_return_net||0)}` });

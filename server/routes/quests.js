@@ -35,7 +35,7 @@ const QUESTS = [
   // Profile & Compliance — data collection surveys
   {
     id: 'complete_profile', title: 'Complete Your Profile',
-    category: 'profile', xp: 75, icon: 'fa-user-check', color: '#2F8C9B',
+    category: 'profile', xp: 75, icon: 'fa-user-check', color: '#656565',
     description: 'Add your occupation, employer, and full residential address.',
     type: 'survey',
     questions: [
@@ -127,17 +127,17 @@ const QUESTS = [
     ],
   },
   // Investment Milestones — auto-detected from investor data
-  { id: 'complete_tour',  title: 'Take the Platform Tour',    category: 'milestone', xp: 100, icon: 'fa-map',               color: '#2F8C9B', description: 'Complete the guided portal tour to learn your way around.' },
-  { id: 'first_topup',    title: 'First Wallet Top-up',       category: 'milestone', xp: 50,  icon: 'fa-wallet',            color: '#2F8C9B', description: 'Fund your wallet for the first time.' },
+  { id: 'complete_tour',  title: 'Take the Platform Tour',    category: 'milestone', xp: 100, icon: 'fa-map',               color: '#656565', description: 'Complete the guided portal tour to learn your way around.' },
+  { id: 'first_topup',    title: 'First Wallet Top-up',       category: 'milestone', xp: 50,  icon: 'fa-wallet',            color: '#656565', description: 'Fund your wallet for the first time.' },
   { id: 'first_investment', title: 'First Investment',        category: 'milestone', xp: 100, icon: 'fa-chart-line-up',     color: '#22c55e', description: 'Make your very first investment with SV Capital.' },
   { id: 'diversify',      title: 'Diversify Your Portfolio',  category: 'milestone', xp: 150, icon: 'fa-chart-pie',         color: '#FF8215', description: 'Invest across 2 or more different product types.' },
   { id: 'milestone_10k',  title: 'R10,000 Invested',          category: 'milestone', xp: 100, icon: 'fa-money-bill-trend-up', color: '#22c55e', description: 'Reach R10,000 in total investments.' },
   { id: 'milestone_50k',  title: 'R50,000 Invested',          category: 'milestone', xp: 150, icon: 'fa-gem',               color: '#a855f7', description: 'Join the R50k investment club.' },
   { id: 'milestone_100k', title: 'R100,000 Invested',         category: 'milestone', xp: 200, icon: 'fa-crown',             color: '#D4AF37', description: 'Reach R100,000 in total investments.' },
   { id: 'set_maturity',   title: 'Set Maturity Instructions', category: 'milestone', xp: 75,  icon: 'fa-hourglass-end',     color: '#f59e0b', description: 'Configure what happens when your investment matures.' },
-  { id: 'first_referral', title: 'Refer Your First Friend',   category: 'milestone', xp: 100, icon: 'fa-share-nodes',       color: '#2F8C9B', description: 'Get someone to join SV Capital via your referral link.' },
+  { id: 'first_referral', title: 'Refer Your First Friend',   category: 'milestone', xp: 100, icon: 'fa-share-nodes',       color: '#656565', description: 'Get someone to join SV Capital via your referral link.' },
   // Learning Modules — marked complete by investor
-  { id: 'learn_what_is_svc',      title: 'What is SV Capital?',       category: 'learning', xp: 50, icon: 'fa-building-columns', color: '#2F8C9B' },
+  { id: 'learn_what_is_svc',      title: 'What is SV Capital?',       category: 'learning', xp: 50, icon: 'fa-building-columns', color: '#656565' },
   { id: 'learn_how_returns',      title: 'How Your Returns Work',      category: 'learning', xp: 50, icon: 'fa-percent',          color: '#22c55e' },
   { id: 'learn_solar',            title: 'Solar Energy Investing',     category: 'learning', xp: 50, icon: 'fa-solar-panel',      color: '#f59e0b' },
   { id: 'learn_cattle',           title: 'Cattle & Short-term Loans',  category: 'learning', xp: 50, icon: 'fa-cow',              color: '#a855f7' },

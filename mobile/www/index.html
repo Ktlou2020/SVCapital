@@ -32,7 +32,7 @@
   <style>
     #topUpModal.modal-overlay { background: rgba(0,0,0,0.82) !important; }
     #paymentModalBox {
-      background: #1a2235 !important;
+      background: #303030 !important;
       border: 1px solid rgba(255,155,12,0.25) !important;
       box-shadow: 0 24px 64px rgba(0,0,0,0.55) !important;
       color: var(--white, #f0f4ff) !important;
@@ -452,7 +452,7 @@
                 </div>
                 <div class="perf-row">
                   <div class="perf-row__label">
-                    <i style="background:rgba(47,140,155,0.1);color:#2F8C9B"><i class="fa-solid fa-percent fa-sm"></i></i>
+                    <i style="background:rgba(47,140,155,0.1);color:#656565"><i class="fa-solid fa-percent fa-sm"></i></i>
                     Effective Rate
                   </div>
                   <span class="perf-row__value positive" id="perf-rate">—</span>
@@ -1241,7 +1241,7 @@
         <!-- Section 3: Account Statement -->
         <div class="panel">
           <div class="panel__header">
-            <span class="panel__title"><i class="fa-solid fa-file-arrow-down" style="color:#2F8C9B"></i> Account Statement</span>
+            <span class="panel__title"><i class="fa-solid fa-file-arrow-down" style="color:#656565"></i> Account Statement</span>
           </div>
           <div class="panel__body">
             <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px">Download a full 90-day account statement showing all transactions, investments, and portfolio summary.</p>
@@ -1358,7 +1358,7 @@
             <!-- FSCA badge -->
             <div style="background:rgba(47,140,155,0.06);border:1px solid rgba(47,140,155,0.20);border-radius:12px;padding:16px;display:flex;gap:12px;align-items:flex-start">
               <div style="width:34px;height:34px;background:rgba(47,140,155,0.12);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                <i class="fa-solid fa-shield-halved" style="color:#2F8C9B;font-size:0.95rem"></i>
+                <i class="fa-solid fa-shield-halved" style="color:#656565;font-size:0.95rem"></i>
               </div>
               <div>
                 <div style="font-size:0.82rem;font-weight:800;color:#1a1a1a;margin-bottom:3px">FSCA Regulated</div>
@@ -1540,7 +1540,7 @@
         <div id="subacctsEmpty">
           <div class="sa-empty-intro">You don't have any sub-accounts yet. Choose a type to get started:</div>
           <div class="sa-type-showcase">
-            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#2f8c9b;--tile-bg:linear-gradient(135deg,#1a3d42,#2f8c9b)">
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#656565;--tile-bg:linear-gradient(135deg,#1a3d42,#656565)">
               <i class="fa-solid fa-building sa-type-tile__icon"></i>
               <div class="sa-type-tile__label">Business</div>
               <div class="sa-type-tile__desc">Invest through your registered company</div>
@@ -1913,8 +1913,8 @@
 
       <!-- Email proof of payment option -->
       <div style="background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.25);border-radius:10px;padding:12px 14px;font-size:0.75rem;color:#9ca3af;display:flex;gap:8px;align-items:flex-start;margin-bottom:16px">
-        <i class="fa-solid fa-envelope" style="color:#4AACBB;margin-top:2px;flex-shrink:0"></i>
-        <span>Email your proof of payment to <a href="mailto:enquiry@svcapital.co.za" style="color:#4AACBB;font-weight:700;text-decoration:underline">enquiry@svcapital.co.za</a> — include your Investor ID in the subject line for faster processing.</span>
+        <i class="fa-solid fa-envelope" style="color:#656565;margin-top:2px;flex-shrink:0"></i>
+        <span>Email your proof of payment to <a href="mailto:enquiry@svcapital.co.za" style="color:#656565;font-weight:700;text-decoration:underline">enquiry@svcapital.co.za</a> — include your Investor ID in the subject line for faster processing.</span>
       </div>
 
       <!-- Proof of payment upload -->
@@ -2154,7 +2154,7 @@
       <div class="sa-step-title">What type of account do you need?</div>
       <div class="sa-type-grid">
         <button class="sa-type-btn" data-type="business" onclick="saSelectType('business')">
-          <i class="fa-solid fa-building" style="color:#2f8c9b"></i>
+          <i class="fa-solid fa-building" style="color:#656565"></i>
           <strong>Business</strong>
           <span>Invest through your registered company or CC</span>
         </button>
@@ -2606,17 +2606,17 @@
           </div>
           <div>
             <div style="font-size:0.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Total Payout at Maturity</div>
-            <div id="calcTotal" style="font-size:1.55rem;font-weight:800;color:#1a2235">—</div>
+            <div id="calcTotal" style="font-size:1.55rem;font-weight:800;color:#303030">—</div>
           </div>
         </div>
         <!-- Capital vs Interest visual bar -->
         <div style="margin-top:4px">
           <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#6b7280;margin-bottom:4px">
-            <span><span style="display:inline-block;width:10px;height:10px;background:#1a2235;border-radius:2px;margin-right:4px"></span>Capital</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#303030;border-radius:2px;margin-right:4px"></span>Capital</span>
             <span><span style="display:inline-block;width:10px;height:10px;background:#FF9B0C;border-radius:2px;margin-right:4px"></span>Interest</span>
           </div>
           <div style="height:10px;border-radius:6px;overflow:hidden;background:#e5e7eb;display:flex">
-            <div id="calcBarCapital" style="background:#1a2235;transition:width 0.4s ease;height:100%"></div>
+            <div id="calcBarCapital" style="background:#303030;transition:width 0.4s ease;height:100%"></div>
             <div id="calcBarInterest" style="background:#FF9B0C;transition:width 0.4s ease;height:100%"></div>
           </div>
         </div>
@@ -2850,7 +2850,7 @@
 
 <!-- ══ COMMAND PALETTE ══ -->
 <div id="portalCmdOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10000;align-items:flex-start;justify-content:center;padding-top:80px" onclick="if(event.target===this)closePortalCmd()">
-  <div style="background:#1a2235;border:1px solid rgba(255,155,12,0.25);border-radius:16px;width:100%;max-width:560px;box-shadow:0 24px 64px rgba(0,0,0,0.55);overflow:hidden">
+  <div style="background:#303030;border:1px solid rgba(255,155,12,0.25);border-radius:16px;width:100%;max-width:560px;box-shadow:0 24px 64px rgba(0,0,0,0.55);overflow:hidden">
     <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.07)">
       <i class="fa-solid fa-magnifying-glass" style="color:rgba(255,255,255,0.4);font-size:0.9rem"></i>
       <input id="portalCmdInput" type="text" placeholder="Search views and actions…" autocomplete="off"

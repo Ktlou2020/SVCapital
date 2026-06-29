@@ -1021,7 +1021,7 @@ const DEFAULT_PRODUCTS = [
     description: 'Fund South African SMMEs through asset finance. Capital is deployed into vetted businesses generating strong short-cycle returns.',
     key_details: ['Capital deployed to vetted SMMEs', 'Short investment cycles', 'Asset-backed where possible'].join('\n'),
     min_investment: 1000, term_months: 5, benchmark_rate: 0.13, performance_fee_pct: 0.20,
-    risk_profile: 'Medium', risk_color: '#f59e0b', icon: 'fa-bolt', color: '#3b82f6',
+    risk_profile: 'Medium', risk_color: '#f59e0b', icon: 'fa-bolt', color: '#656565',
     badge_class: 'badge--blue', sort_order: 5,
   },
   {
@@ -1029,7 +1029,7 @@ const DEFAULT_PRODUCTS = [
     description: 'Fund vetted small, medium and micro enterprises through short-cycle asset finance.',
     key_details: ['Capital deployed to vetted SMMEs', 'Short investment cycles'].join('\n'),
     min_investment: 1000, term_months: 1, benchmark_rate: 0.13, performance_fee_pct: 0.20,
-    risk_profile: 'Medium', risk_color: '#f59e0b', icon: 'fa-bolt', color: '#3b82f6',
+    risk_profile: 'Medium', risk_color: '#f59e0b', icon: 'fa-bolt', color: '#656565',
     badge_class: 'badge--blue', sort_order: 6,
   },
   {

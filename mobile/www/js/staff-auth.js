@@ -421,7 +421,7 @@
           bottom: 20px;
           right: 20px;
           z-index: 9000;
-          font-family: 'Inter', -apple-system, sans-serif;
+          font-family: 'Poppins', -apple-system, sans-serif;
           font-size: 0.78rem;
           user-select: none;
         }

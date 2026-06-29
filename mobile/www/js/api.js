@@ -15,7 +15,7 @@ function _showSessionExpiredOverlay() {
   el.id = '_svcSessionExpired';
   el.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;padding:32px;box-sizing:border-box';
   el.innerHTML = `
-    <div style="background:#1a2235;border-radius:20px;padding:32px 24px;text-align:center;max-width:320px;width:100%">
+    <div style="background:#303030;border-radius:20px;padding:32px 24px;text-align:center;max-width:320px;width:100%">
       <div style="font-size:2.5rem;margin-bottom:16px">🔒</div>
       <div style="color:#fff;font-weight:800;font-size:1.1rem;margin-bottom:8px">Session Expired</div>
       <div style="color:#9ca3af;font-size:0.85rem;line-height:1.6;margin-bottom:24px">Your session has expired. Please log in again to continue.</div>
@@ -485,8 +485,8 @@ const Utils = {
       solar_7yr:      { label: 'Solar Investment (7yr)',  icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
       solar_6yr:      { label: 'Solar Investment (6yr)',  icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
       solar_5yr:      { label: 'Solar Investment (5yr)',  icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
-      short_term:     { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#3b82f6', badgeClass: 'badge--blue' },
-      smme:           { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#3b82f6', badgeClass: 'badge--blue' },
+      short_term:     { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#656565', badgeClass: 'badge--blue' },
+      smme:           { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#656565', badgeClass: 'badge--blue' },
       delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#f97316', badgeClass: 'badge--orange' },
       delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#f97316', badgeClass: 'badge--orange' },
       other:          { label: 'Other',                   icon: 'fa-circle',      color: '#8ea3b8', badgeClass: 'badge--gray' },

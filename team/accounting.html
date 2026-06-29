@@ -22,7 +22,7 @@
       --muted2: #9ca3af; --red: #ef4444; --green: #22c55e; --amber: #f59e0b;
       --indigo: #6366f1; --sidebar-w: 220px; --orange: #f97316; --text-muted: #6b7280;
     }
-    html, body { height: 100%; background: var(--bg); font-family: 'Inter', sans-serif; color: var(--text); overflow: hidden; }
+    html, body { height: 100%; background: var(--bg); font-family: 'Poppins', sans-serif; color: var(--text); overflow: hidden; }
     #acct-loader {
       position: fixed; inset: 0; background: var(--bg);
       display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; z-index: 9999;
@@ -971,7 +971,7 @@ function renderBusinesses() {
             ${b.isFSP    ? `<span style="margin-left:4px;background:rgba(249,115,22,0.12);color:var(--orange);border:1px solid rgba(249,115,22,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">Platform Fee</span>` : ''}
             ${b.isHolding? `<span style="margin-left:8px;background:rgba(212,175,55,0.15);color:#D4AF37;border:1px solid rgba(212,175,55,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">Holding Co.</span>` : ''}
             ${b.isHolding? `<span style="margin-left:4px;background:rgba(34,197,94,0.1);color:var(--green);border:1px solid rgba(34,197,94,0.25);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">Raising + Perf Fees</span>` : ''}
-            ${b.parentEntity && !b.isFSP && !b.isHolding ? `<span style="margin-left:8px;background:rgba(96,165,250,0.12);color:#60a5fa;border:1px solid rgba(96,165,250,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">SPV</span>` : ''}
+            ${b.parentEntity && !b.isFSP && !b.isHolding ? `<span style="margin-left:8px;background:rgba(96,165,250,0.12);color:#656565;border:1px solid rgba(96,165,250,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">SPV</span>` : ''}
             ${b.productType? `<span style="margin-left:4px;background:rgba(255,255,255,0.05);color:var(--muted2);border:1px solid var(--border);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">${b.productType}</span>` : ''}
           </td>
           <td>${b.registrationNumber||'—'}</td>

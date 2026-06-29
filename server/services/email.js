@@ -19,20 +19,20 @@ function _wrap(body) {
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#222}
 .shell{max-width:580px;margin:32px auto;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 6px 32px rgba(0,0,0,.10)}
-.hdr{background:linear-gradient(135deg,#1a2235 0%,#253352 100%);padding:30px 40px;text-align:center}
+.hdr{background:linear-gradient(135deg,#303030 0%,#303030 100%);padding:30px 40px;text-align:center}
 .logo{display:flex;align-items:center;justify-content:center;gap:12px}
 .logo img{height:48px;width:48px;object-fit:contain;display:block;flex-shrink:0}
 .logo-text{font-size:1.55rem;font-weight:800;letter-spacing:-0.5px;color:#ff9b0c}
 .logo-text em{color:#fff;font-style:normal}
 .bdy{padding:38px 40px}
-h2{font-size:1.2rem;font-weight:700;color:#1a2235;margin-bottom:14px}
+h2{font-size:1.2rem;font-weight:700;color:#303030;margin-bottom:14px}
 p{font-size:0.93rem;color:#444;line-height:1.65;margin-bottom:14px}
 .big{font-size:2.1rem;font-weight:800;color:#ff9b0c;display:block;margin:10px 0 18px}
 .box{background:#f7f9fc;border-radius:12px;padding:18px 22px;margin:18px 0}
 .row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #eee;font-size:0.87rem}
 .row:last-child{border-bottom:none}
 .lbl{color:#888}
-.val{font-weight:600;color:#1a2235;text-align:right}
+.val{font-weight:600;color:#303030;text-align:right}
 .btn{display:inline-block;background:#ff9b0c;color:#fff!important;text-decoration:none!important;padding:13px 30px;border-radius:10px;font-weight:700;font-size:0.94rem;margin:10px 0}
 .green{color:#22c55e}
 .gold{color:#ff9b0c}
