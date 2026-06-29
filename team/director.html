@@ -21,19 +21,23 @@
     document.addEventListener('DOMContentLoaded', () => {
       const s = StaffAuth.getSession();
       if (s) {
-        // staffSession present — use the shared isDirector() check
-        if (!StaffAuth.isDirector(s)) {
+        // Director Panel access is granted per individual (the 'director' app),
+        // OR via the legacy director-level check (executive/CEO) so no current
+        // director loses access.
+        if (!StaffAuth.canAccess(s, 'director') && !StaffAuth.isDirector(s)) {
           window.location.replace('hub.html?denied=director');
         }
         return; // authorised — let director.js take over
       }
-      // No staffSession — accept a valid svc_token JWT with a qualifying role
+      // No staffSession — accept a valid svc_token JWT that carries the director
+      // app in its per-individual access list (or a qualifying legacy role).
       try {
         const tok = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
         if (tok) {
           const payload = JSON.parse(atob(tok.split('.')[1]));
+          const hasDirectorApp = payload && Array.isArray(payload.apps) && payload.apps.includes('director');
           if (payload && payload.exp * 1000 > Date.now() &&
-              (payload.role === 'director' || payload.role === 'admin')) {
+              (hasDirectorApp || payload.role === 'director' || payload.role === 'admin')) {
             return; // Valid JWT — allow access; director.js will build synthetic session
           }
         }
@@ -394,17 +398,14 @@
       <!-- ── ACCESS & ROLES ── -->
       <div class="dir-view" id="view-access">
         <div class="dir-sec-head" style="margin-bottom:16px">
-          <div class="dir-sec-title">Employee Access</div>
+          <div class="dir-sec-title">Employee App Access</div>
           <div class="dir-search">
             <i class="fa-solid fa-magnifying-glass"></i>
             <input type="text" id="accessSearch" placeholder="Search employees…" oninput="renderAccessMatrix()"/>
           </div>
         </div>
         <div id="empAccessList"></div>
-        <div style="margin-top:28px">
-          <div class="dir-sec-head"><div class="dir-sec-title">Access Matrix by Role</div></div>
-          <div id="rbacMatrix"></div>
-        </div>
+        <div id="rbacMatrix"></div>
       </div>
 
       <!-- ── COURSE LIBRARY ── -->
