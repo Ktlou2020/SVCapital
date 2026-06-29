@@ -506,6 +506,36 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     const validationErrors = validateBody(table, req.body, true);
     if (validationErrors.length) return res.status(400).json({ error: validationErrors.join('; ') });
 
+    // ── Investment affordability guard ──────────────────────────────────
+    // When a client invests, they must have enough wallet balance to cover the
+    // pool minimum AND the amount + 1% platform fee (this matches the wallet
+    // deduction applied by the investment hook below). Scoped to investor-role
+    // requests so admin/fund-manager bookkeeping flows are not affected.
+    if (table === 'investments' && req.user.role === 'investor') {
+      const amount = parseFloat(body.amount) || 0;
+      if (amount <= 0) return res.status(400).json({ error: 'Investment amount must be greater than zero.' });
+
+      if (body.pool_id) {
+        const { rows: pr } = await pool.query('SELECT min_investment FROM investment_pools WHERE id = $1', [body.pool_id]);
+        const minInv = parseFloat(pr[0]?.min_investment) || 0;
+        if (minInv && amount < minInv) {
+          return res.status(400).json({ error: `Minimum investment for this pool is R${minInv.toLocaleString('en-ZA')}.` });
+        }
+      }
+
+      const platformFee = Math.round(amount * 0.01 * 100) / 100;
+      const required    = amount + platformFee;
+      const { rows: iv } = await pool.query('SELECT wallet_balance FROM investors WHERE id = $1', [body.investor_id]);
+      const walletBal = parseFloat(iv[0]?.wallet_balance) || 0;
+      if (required - walletBal > 0.001) {
+        return res.status(400).json({
+          error: `Insufficient balance. This investment requires R${required.toLocaleString('en-ZA')} `
+               + `(R${amount.toLocaleString('en-ZA')} + R${platformFee.toLocaleString('en-ZA')} platform fee), `
+               + `but your available balance is R${walletBal.toLocaleString('en-ZA')}.`,
+        });
+      }
+    }
+
     // Auto-generate ID if missing
     if (!body.id) {
       const prefixMap = {
