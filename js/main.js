@@ -938,6 +938,31 @@ async function _applyLiveProductAverages() {
       }
     }
   });
+
+  // Next pool closing — soonest open-pool closing date across all products
+  _showNextPoolClosing(products);
+}
+
+function _showNextPoolClosing(products) {
+  let soonest = null, soonestProduct = null;
+  (products || []).forEach(p => {
+    if (!p.next_closing_date) return;
+    const d = new Date(p.next_closing_date);
+    if (isNaN(d)) return;
+    if (!soonest || d < soonest) { soonest = d; soonestProduct = p; }
+  });
+  if (!soonest) return;
+
+  const days = Math.max(0, Math.ceil((soonest - Date.now()) / 86400000));
+  const dateStr = soonest.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
+  const header = document.querySelector('#products .section-header');
+  if (!header || document.getElementById('nextPoolClosing')) return;
+
+  const el = document.createElement('div');
+  el.id = 'nextPoolClosing';
+  el.style.cssText = 'display:inline-flex;align-items:center;gap:10px;margin-top:16px;padding:9px 18px;border-radius:999px;background:rgba(255,155,12,0.12);border:1px solid rgba(255,155,12,0.3);color:#b8702a;font-weight:700;font-size:0.86rem';
+  el.innerHTML = `<i class="fa-solid fa-clock"></i> Next pool closes ${dateStr}${days <= 60 ? ` — <span style="color:#e0571a">${days} day${days === 1 ? '' : 's'} left</span>` : ''}${soonestProduct && soonestProduct.label ? ` · ${soonestProduct.label}` : ''}`;
+  header.appendChild(el);
 }
 
 document.addEventListener('DOMContentLoaded', _applyLiveProductAverages);

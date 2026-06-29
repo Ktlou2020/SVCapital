@@ -2983,6 +2983,9 @@ function closePaymentModal() {
 /* ═══════════════════════════════════════════════
    MARKETPLACE
    ═══════════════════════════════════════════════ */
+let _mktProducts = [];
+let _selectedProductType = null;   // null = product grid; set = product detail
+
 async function loadMarketplace() {
   try {
     if (!PORTAL.pools.length) {
@@ -2993,6 +2996,8 @@ async function loadMarketplace() {
     console.warn('[marketplace] failed to fetch pools:', err);
     // Render with whatever is cached — show empty state rather than "Loading..."
   }
+  try { _mktProducts = await _getPortalProducts(); } catch (_) { _mktProducts = []; }
+  _selectedProductType = null;   // always land on the product grid
   try {
     renderMarketplace();
   } catch (err) {
@@ -3023,50 +3028,252 @@ const _POOL_META = {
   delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Low-Medium',   riskColor: '#22c55e' },
 };
 
-function renderMarketplace() {
-  const grid = document.getElementById('marketplaceGrid');
-  // Include waitlisted pools too so they appear in the marketplace
-  const visiblePools = PORTAL.pools.filter(p => p.status === 'open' || p.status === 'waitlist');
-  const filtered = PORTAL.marketFilter === 'all'
-    ? visiblePools
-    : visiblePools.filter(p => {
-        if (PORTAL.marketFilter === 'solar') return (p.product_type || '').includes('solar');
-        return p.product_type === PORTAL.marketFilter;
-      });
+// ── Product-first marketplace ────────────────────────────────────────────
+// "Browse Pools" is now "Products": investors pick a product, see its details
+// + factsheets + a chart, then the open pools under it, and invest from there.
 
-  // Update wallet strip
+function renderMarketplace() {
+  // Toggle the legacy category tab-bar — not used in the product-first flow
+  const tabBar = document.querySelector('#view-marketplace .tab-bar');
+  if (tabBar) tabBar.style.display = 'none';
+  const banner = document.querySelector('#view-marketplace .section-banner__title');
+  if (_selectedProductType) { if (banner) banner.textContent = 'Product Details'; renderProductDetailView(_selectedProductType); }
+  else { if (banner) banner.textContent = 'Investment Products'; renderProductsGrid(); }
+}
+
+// Count of open/waitlist pools for a product type
+function _openPoolsForProduct(type) {
+  return PORTAL.pools.filter(p => p.product_type === type && (p.status === 'open' || p.status === 'waitlist'));
+}
+
+function renderProductsGrid() {
+  const grid = document.getElementById('marketplaceGrid');
+  if (!grid) return;
   const strip = document.getElementById('mktWalletStrip');
   const walletBal = parseFloat(PORTAL.investor?.wallet_balance) || 0;
-  const ranked = _rankMarketPools(filtered, walletBal);
   if (strip) {
     strip.style.display = 'flex';
     const balEl = document.getElementById('mktWalletBal');
-    if (balEl) {
-      balEl.textContent = Utils.rand(walletBal);
-      balEl.style.color = walletBal >= 500 ? 'var(--green)' : 'var(--gold)';
-    }
+    if (balEl) { balEl.textContent = Utils.rand(walletBal); balEl.style.color = walletBal >= 500 ? 'var(--green)' : 'var(--gold)'; }
   }
 
-  renderMarketConversionPanel(ranked);
+  // All active products (details + factsheets browsable even with no open pool),
+  // sorted by sort order. Products with open pools rank first.
+  const products = (_mktProducts || []).filter(p => p.is_active).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  const shown = products
+    .map(p => ({ p, open: _openPoolsForProduct(p.product_type) }))
+    .sort((a, b) => (b.open.length > 0) - (a.open.length > 0));
 
-  if (!ranked.length) {
+  if (!shown.length) {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
-      <i class="fa-solid fa-layer-group"></i>
-      <div class="empty-state__title">No pools match this filter right now</div>
-      <div class="empty-state__sub">Switch category or join a waitlist so you do not lose momentum.</div>
-      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px">
-        <button class="btn btn--secondary btn--sm" onclick="filterMarket('all', document.querySelector('#view-marketplace .tab-btn'))"><i class="fa-solid fa-rotate"></i> Show all pools</button>
-        <button class="btn btn--primary btn--sm" onclick="navigate('support', document.querySelector('[data-view=support]'))"><i class="fa-solid fa-headset"></i> Ask a question</button>
-      </div>
+      <i class="fa-solid fa-box-open"></i>
+      <div class="empty-state__title">No products available yet</div>
+      <div class="empty-state__sub">New investment products are added regularly — check back soon or ask a question.</div>
+      <div style="margin-top:12px"><button class="btn btn--primary btn--sm" onclick="navigate('support', document.querySelector('[data-view=support]'))"><i class="fa-solid fa-headset"></i> Ask a question</button></div>
     </div>`;
     return;
   }
 
+  grid.innerHTML = shown.map(({ p, open }) => {
+    const pi = Utils.productInfo(p.product_type);
+    const color = p.color || pi.color;
+    const icon = p.icon || pi.icon;
+    const avg = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : null;
+    const rateLabel = avg != null ? `${(avg * 100).toFixed(2)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : '—');
+    const rateSub = avg != null ? 'avg return (matured)' : 'target return';
+    // soonest closing among the open pools
+    const days = open.map(o => Utils.daysRemaining(o.end_date)).filter(d => d !== null);
+    const soonest = days.length ? Math.min(...days) : null;
+    return `
+      <div class="market-pool-card mpc-v2" style="cursor:pointer" onclick="openProductDetail('${p.product_type}')">
+        <div class="mpc2-accent" style="background:linear-gradient(90deg,${color},${color}88)"></div>
+        <div class="mpc2-top">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+            <div class="mpc2-icon" style="background:${color}18;color:${color}"><i class="fa-solid ${icon}"></i></div>
+            <span class="mpc2-badge" style="background:${color}14;color:${color};border-color:${color}30">${open.length ? `${open.length} open pool${open.length === 1 ? '' : 's'}` : 'Details & factsheets'}</span>
+          </div>
+          <div style="margin-top:14px">
+            <div class="mpc2-title">${_esc(p.label)}</div>
+            <div class="mpc2-blurb">${_esc(p.headline || p.description || '')}</div>
+          </div>
+        </div>
+        <div class="mpc2-metrics">
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${rateLabel}</div>
+            <div class="mpc2-metric__lbl">${rateSub}</div>
+          </div>
+          <div class="mpc2-metric-sep"></div>
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(p.min_investment || 0)}</div>
+            <div class="mpc2-metric__lbl">minimum</div>
+          </div>
+          <div class="mpc2-metric-sep"></div>
+          <div class="mpc2-metric">
+            <div class="mpc2-metric__val">${p.term_months || '—'}<span style="font-size:1rem;opacity:0.7">mo</span></div>
+            <div class="mpc2-metric__lbl">term</div>
+          </div>
+        </div>
+        <div class="mpc2-pills">
+          ${soonest !== null ? `<div class="mpc2-pill${soonest <= 7 ? ' mpc2-pill--urgent' : ''}"><i class="fa-solid fa-clock"></i><span>Next pool closes in <strong>${soonest}d</strong></span></div>` : ''}
+          ${p.factsheet_url ? `<div class="mpc2-pill"><i class="fa-solid fa-file-pdf"></i><span>Factsheet</span></div>` : ''}
+        </div>
+        <div class="mpc2-footer">
+          <button class="btn btn--primary btn--full" onclick="event.stopPropagation();openProductDetail('${p.product_type}')">
+            <i class="fa-solid fa-arrow-right"></i> View product & pools
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function openProductDetail(type) {
+  _selectedProductType = type;
+  renderMarketplace();
+  const v = document.getElementById('view-marketplace');
+  if (v) v.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  SVC.track('select_item', { item_list_id: 'products', items: [{ item_id: type }] });
+}
+
+function backToProducts() {
+  _selectedProductType = null;
+  renderMarketplace();
+}
+
+async function renderProductDetailView(type) {
+  const grid = document.getElementById('marketplaceGrid');
+  if (!grid) return;
+  const product = (_mktProducts || []).find(p => p.product_type === type) || { product_type: type, label: Utils.productInfo(type).label };
+  const pi = Utils.productInfo(type);
+  const color = product.color || pi.color;
+  const icon = product.icon || pi.icon;
+  const open = _openPoolsForProduct(type);
+  const avg = product.avg_actual_rate != null ? parseFloat(product.avg_actual_rate) : null;
+  const projRate = avg != null ? avg : (product.benchmark_rate ? parseFloat(product.benchmark_rate) : (open[0] ? parseFloat(open[0].annual_rate) : 0.13));
+  const keyDetails = (product.key_details || '').split('\n').map(s => s.trim()).filter(Boolean);
+
+  // Cattle gets its live herd-status panel
+  const herdSlot = type === 'cattle' ? '<div id="prodHerdStatus" style="margin-bottom:16px"></div>' : '';
+
+  grid.innerHTML = `
+    <div style="grid-column:1/-1">
+      <button class="btn btn--ghost btn--sm" onclick="backToProducts()" style="margin-bottom:14px"><i class="fa-solid fa-arrow-left"></i> All products</button>
+
+      <div class="market-pool-card mpc-v2" style="cursor:default">
+        <div class="mpc2-accent" style="background:linear-gradient(90deg,${color},${color}88)"></div>
+        <div style="padding:4px 2px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+            <div class="mpc2-icon" style="background:${color}18;color:${color}"><i class="fa-solid ${icon}"></i></div>
+            <div>
+              <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${color}">${_esc(product.label || '')}</div>
+              <div class="mpc2-title" style="font-size:1.3rem">${_esc(product.headline || product.label || '')}</div>
+            </div>
+          </div>
+          ${product.description ? `<p style="font-size:0.9rem;color:var(--text-muted);line-height:1.6;margin-bottom:14px">${_esc(product.description)}</p>` : ''}
+
+          <div class="mpc2-metrics" style="margin-bottom:16px">
+            <div class="mpc2-metric">
+              <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(2) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : '—')}</div>
+              <div class="mpc2-metric__lbl">${avg != null ? 'avg return p.a.' : 'target return'}</div>
+            </div>
+            <div class="mpc2-metric-sep"></div>
+            <div class="mpc2-metric"><div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(product.min_investment || 0)}</div><div class="mpc2-metric__lbl">minimum</div></div>
+            <div class="mpc2-metric-sep"></div>
+            <div class="mpc2-metric"><div class="mpc2-metric__val">${product.term_months || '—'}<span style="font-size:1rem;opacity:0.7">mo</span></div><div class="mpc2-metric__lbl">term</div></div>
+            ${product.performance_fee_pct ? `<div class="mpc2-metric-sep"></div><div class="mpc2-metric"><div class="mpc2-metric__val" style="font-size:1.2rem">${(parseFloat(product.performance_fee_pct) * 100).toFixed(0)}%</div><div class="mpc2-metric__lbl">perf. fee</div></div>` : ''}
+          </div>
+
+          ${herdSlot}
+
+          ${keyDetails.length ? `<div style="margin-bottom:16px">
+            <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px">Key Details</div>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              ${keyDetails.map(d => `<div style="display:flex;gap:9px;font-size:0.86rem;color:var(--text)"><i class="fa-solid fa-arrow-right" style="color:${color};margin-top:3px;font-size:0.75rem"></i><span>${_esc(d)}</span></div>`).join('')}
+            </div>
+          </div>` : ''}
+
+          <div style="margin-bottom:6px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">Projected growth of ${Utils.rand(10000)} at ${(projRate * 100).toFixed(2)}% p.a.</div>
+          <div style="position:relative;height:180px;margin-bottom:6px"><canvas id="prodGrowthChart"></canvas></div>
+
+          <div id="prodFactsheets" style="margin-top:14px"></div>
+        </div>
+      </div>
+
+      <div style="font-size:0.95rem;font-weight:800;color:var(--text);margin:22px 0 12px"><i class="fa-solid fa-layer-group" style="color:${color};margin-right:6px"></i>Open pools — ${open.length}</div>
+      <div class="grid-3" id="productPoolsGrid"></div>
+    </div>`;
+
+  // Pools
+  const poolsGrid = document.getElementById('productPoolsGrid');
+  const walletBal = parseFloat(PORTAL.investor?.wallet_balance) || 0;
   const waitlist = PORTAL.waitlist || [];
   const investorId = PORTAL.investor?.id;
-  const ficaApproved = _isInvestorFicaApproved(PORTAL.investor);
+  const ranked = _rankMarketPools(open, walletBal);
+  if (poolsGrid) {
+    poolsGrid.innerHTML = ranked.length
+      ? ranked.map((pool, idx) => _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId)).join('')
+      : `<div class="empty-state" style="grid-column:1/-1"><i class="fa-solid fa-clock"></i><div class="empty-state__title">No open pools right now</div><div class="empty-state__sub">Pools for this product open regularly.</div></div>`;
+  }
 
-  grid.innerHTML = ranked.map((pool, idx) => {
+  // Live herd status for cattle
+  if (type === 'cattle') _renderCattleHerdStatus('prodHerdStatus');
+
+  // Growth projection chart
+  _renderProductGrowthChart(projRate, product.term_months || 12, color);
+
+  // Factsheets (product-level + all pool factsheets for this product)
+  _renderProductFactsheets(type, product);
+}
+
+// Compound-growth projection of R10,000 over the term
+let _prodGrowthChart = null;
+function _renderProductGrowthChart(rate, termMonths, color) {
+  const canvas = document.getElementById('prodGrowthChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  try { if (_prodGrowthChart) { _prodGrowthChart.destroy(); _prodGrowthChart = null; } } catch (_) {}
+  const months = Math.max(1, Math.min(120, parseInt(termMonths) || 12));
+  const labels = [], data = [];
+  for (let m = 0; m <= months; m++) { labels.push(m === 0 ? 'Start' : `M${m}`); data.push(Math.round(10000 * Math.pow(1 + rate, m / 12))); }
+  _prodGrowthChart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets: [{ data, borderColor: color, backgroundColor: color + '22', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => Utils.rand(c.parsed.y) } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 6, color: 'rgba(0,0,0,0.4)', font: { size: 9 } } },
+                y: { ticks: { callback: v => 'R' + (v / 1000).toFixed(0) + 'k', color: 'rgba(0,0,0,0.4)', font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } } },
+    },
+  });
+}
+
+async function _renderProductFactsheets(type, product) {
+  const el = document.getElementById('prodFactsheets');
+  if (!el) return;
+  el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading factsheets…</div>`;
+  const poolIds = new Set(PORTAL.pools.filter(p => p.product_type === type).map(p => p.id));
+  let sheets = [];
+  try {
+    const res = await API._fetch('GET', 'factsheets');
+    sheets = (res.data || []).filter(s => poolIds.has(s.pool_id));
+  } catch (_) {}
+  const productSheet = product && product.factsheet_url ? {
+    file_url: product.factsheet_url, file_name: product.factsheet_name || `${product.label} factsheet`,
+    created_at: product.updated_at, _product: true,
+  } : null;
+  const all = [productSheet, ...sheets].filter(Boolean);
+  el.innerHTML = `
+    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i> Factsheets & documents</div>
+    ${all.length ? `<div style="display:flex;flex-direction:column;gap:8px">
+      ${all.map(s => `<a href="${s.file_url}" target="_blank" rel="noopener" class="fs-row ${s._product ? 'fs-row--current' : ''}">
+        <div class="fs-row__icon"><i class="fa-solid fa-file-pdf"></i></div>
+        <div class="fs-row__info"><div class="fs-row__name">${_esc(s.file_name)}${s._product ? ' <span class="fs-current-tag">Product</span>' : ''}</div>
+          <div class="fs-row__meta">${Utils.date(s.created_at)}</div></div>
+        <i class="fa-solid fa-arrow-up-right-from-square fs-row__arrow"></i>
+      </a>`).join('')}
+    </div>` : `<div style="font-size:0.82rem;color:var(--text-muted)">No factsheets uploaded yet for this product.</div>`}`;
+}
+
+// Single open-pool card (used inside the product detail view)
+function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
     const pi   = Utils.productInfo(pool.product_type);
     const pct  = Utils.poolFillPct(pool);
     const days = Utils.daysRemaining(pool.end_date);
@@ -3224,7 +3431,6 @@ function renderMarketplace() {
         </div>
       </div>
     `;
-  }).join('');
 }
 
 /* ─── Factsheet viewer ───────────────────────────────────────────── */

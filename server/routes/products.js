@@ -25,7 +25,16 @@ router.get('/', async (req, res) => {
            FROM investment_pools ip2
           WHERE ip2.product_type = p.product_type
             AND ip2.status IN ('matured','paid_out')
-            AND COALESCE(ip2.actual_rate, 0) > 0)         AS matured_pool_count
+            AND COALESCE(ip2.actual_rate, 0) > 0)         AS matured_pool_count,
+        (SELECT MIN(ip3.end_date)
+           FROM investment_pools ip3
+          WHERE ip3.product_type = p.product_type
+            AND ip3.status IN ('open','filling','active')
+            AND ip3.end_date >= CURRENT_DATE)             AS next_closing_date,
+        (SELECT COUNT(*)
+           FROM investment_pools ip4
+          WHERE ip4.product_type = p.product_type
+            AND ip4.status IN ('open','filling','active')) AS open_pool_count
       FROM products p
       ${includeInactive ? '' : 'WHERE p.is_active = true'}
       ORDER BY p.sort_order, p.label
