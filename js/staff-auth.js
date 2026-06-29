@@ -63,7 +63,7 @@
     'Client Relations':     ['employee', 'portal'],
     'Marketing':            ['employee'],
     'Junior Analyst':       ['employee'],
-    'Admin':                ['employee'],
+    'Admin':                ['employee', 'admin', 'accounting'],
   };
 
   /* Level-based elevation (overrides role if level is executive) */
