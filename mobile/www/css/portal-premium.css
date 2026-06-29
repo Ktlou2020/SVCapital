@@ -1285,6 +1285,23 @@ body.dark-mode .learn-expand-btn      { background: rgba(255,255,255,0.06) !impo
 body.dark-mode .notif-item { border-color: rgba(255,255,255,0.06) !important; color: #c8d0dc !important; }
 body.dark-mode .notif-title { color: #e2e8f0 !important; }
 body.dark-mode .notif-sub   { color: #6b7280 !important; }
+body.dark-mode #notifPanel {
+  background: rgba(16,21,31,0.98) !important;
+  border-color: rgba(255,255,255,0.08) !important;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(212,175,55,0.06) !important;
+  backdrop-filter: blur(20px) !important;
+}
+body.dark-mode #notifPanelHeader {
+  border-bottom-color: rgba(255,255,255,0.07) !important;
+}
+body.dark-mode #notifPanelTitle { color: #e2e8f0 !important; }
+body.dark-mode #notifPanelFooter {
+  border-top-color: rgba(255,255,255,0.07) !important;
+}
+body.dark-mode #notifEmpty { color: #6b7280 !important; }
+body.dark-mode .notif-item:hover { background: rgba(255,155,12,0.05) !important; }
+body.dark-mode .notif-item.unread { border-left: 2px solid #ff9b0c; }
+body.dark-mode .notif-dot { border-color: rgba(16,21,31,0.8) !important; }
 body.dark-mode .xp-progress-next { color: #6b7280 !important; }
 body.dark-mode .xp-progress-right { color: #e2e8f0 !important; }
 body.dark-mode .learn-header__title { color: #e2e8f0 !important; }
@@ -2630,14 +2647,14 @@ body.dark-mode .tab-btn.active { color: #ff9b0c !important; }
 .sa-kyc-badge--pending{ background:rgba(251,191,36,0.2);color:#fbbf24; }
 .sa-kyc-badge--missing{ background:rgba(239,68,68,0.18);color:#f87171; }
 
-.sa-card__body  { padding:14px 18px; }
-.sa-card__name  { font-size:1rem;font-weight:800;color:var(--white);margin-bottom:12px; }
+.sa-card__body  { padding:16px 18px;border-top:1px solid rgba(255,255,255,0.07);color:#fff; }
+.sa-card__name  { font-size:1rem;font-weight:800;color:#fff;margin-bottom:12px;letter-spacing:-0.01em; }
 .sa-card__stats { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px; }
-.sa-stat        { background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px; }
-.sa-stat__label { font-size:0.65rem;text-transform:uppercase;color:rgba(255,255,255,0.8);letter-spacing:.4px; }
-.sa-stat__value { font-size:0.95rem;font-weight:800;color:var(--white);margin-top:2px; }
+.sa-stat        { background:rgba(255,255,255,0.07);border-radius:8px;padding:10px 12px;border:1px solid rgba(255,255,255,0.06); }
+.sa-stat__label { font-size:0.65rem;text-transform:uppercase;color:rgba(255,255,255,0.65);letter-spacing:.5px;font-weight:600; }
+.sa-stat__value { font-size:0.95rem;font-weight:800;color:#fff;margin-top:3px; }
 
-.sa-card__actions { padding:10px 18px 16px;display:flex;gap:8px;flex-wrap:wrap; }
+.sa-card__actions { padding:10px 18px 16px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid rgba(255,255,255,0.06); }
 
 /* ── Goal bar ── */
 .sa-goal-bar       { margin-top:6px; }
@@ -2956,3 +2973,194 @@ body.dark-mode input, body.dark-mode select, body.dark-mode textarea {
   border-color: rgba(255,255,255,0.1) !important;
 }
 body.dark-mode input::placeholder { color: #4b5563 !important; }
+
+/* ═══════════════════════════════════════
+   GIFT FEATURE
+═══════════════════════════════════════ */
+.gift-compose-wrap { display:flex;gap:28px;margin-bottom:32px;align-items:flex-start;flex-wrap:wrap; }
+.gift-form-panel   { flex:1;min-width:280px;background:var(--panel);border-radius:18px;padding:28px;border:1px solid var(--border); }
+.gift-preview-panel{ flex:0 0 300px;display:flex;flex-direction:column;align-items:center;gap:12px; }
+.gift-form-header  { display:flex;align-items:center;gap:14px;margin-bottom:24px; }
+.gift-form-icon    { width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#ff5229,#ff9b0c);display:flex;align-items:center;justify-content:center;font-size:1.4rem;color:#fff;flex-shrink:0; }
+.gift-form-title   { font-size:1.1rem;font-weight:800;color:var(--white); }
+.gift-form-sub     { font-size:0.78rem;color:var(--text-muted);margin-top:2px; }
+.gift-field-group  { margin-bottom:20px; }
+.gift-label        { display:block;font-size:0.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px; }
+.gift-presets      { display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px; }
+.gift-preset       { padding:5px 13px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--text);font-size:0.78rem;font-weight:600;cursor:pointer;transition:all .15s; }
+.gift-preset:hover,.gift-preset.active { background:var(--gold);border-color:var(--gold);color:#000; }
+.gift-input-row    { display:flex;align-items:center;gap:8px; }
+.gift-currency     { font-size:1.1rem;font-weight:700;color:var(--gold); }
+.gift-input        { width:100%;padding:10px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--input-bg,rgba(255,255,255,0.04));color:var(--text);font-size:0.93rem;outline:none;transition:border-color .15s; }
+.gift-input:focus  { border-color:var(--gold); }
+.gift-textarea     { width:100%;padding:10px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--input-bg,rgba(255,255,255,0.04));color:var(--text);font-size:0.88rem;resize:vertical;outline:none;transition:border-color .15s;font-family:inherit; }
+.gift-textarea:focus { border-color:var(--gold); }
+.gift-hint         { font-size:0.74rem;color:var(--text-muted);margin-top:5px; }
+.gift-send-btn     { width:100%;padding:14px;font-size:1rem;border-radius:12px;margin-top:4px; }
+.gift-recipient-status { position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:0.78rem;font-weight:600; }
+
+/* Gift card preview */
+.gift-card-label   { font-size:0.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);font-weight:600;margin-bottom:6px; }
+.gift-card         { width:280px;min-height:380px;border-radius:22px;background:linear-gradient(145deg,#1a1a2e 0%,#16213e 40%,#0f3460 70%,#533483 100%);padding:28px 24px 24px;position:relative;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08);display:flex;flex-direction:column;gap:12px; }
+.gift-card::before { content:'';position:absolute;top:-40px;right:-40px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,rgba(255,155,12,.25) 0%,transparent 70%);pointer-events:none; }
+.gift-card::after  { content:'';position:absolute;bottom:-30px;left:-30px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(83,52,131,.4) 0%,transparent 70%);pointer-events:none; }
+.gift-card__ribbon { position:absolute;top:0;right:32px;display:flex;flex-direction:column;align-items:center;gap:0; }
+.gift-card__ribbon-h { width:44px;height:10px;background:linear-gradient(135deg,#ff5229,#ff9b0c);border-radius:0 0 4px 4px; }
+.gift-card__ribbon-v { width:10px;height:30px;background:linear-gradient(180deg,#ff9b0c,#ff5229);border-radius:0 0 4px 4px; }
+.gift-card__bow    { position:absolute;top:6px;font-size:1.3rem;color:#ff9b0c;filter:drop-shadow(0 2px 4px rgba(255,155,12,.5)); }
+.gift-card__logo   { display:flex;align-items:center;gap:8px;color:#fff;font-size:0.85rem;font-weight:700;letter-spacing:.02em;position:relative;z-index:1; }
+.gift-card__amount { font-size:2.4rem;font-weight:900;color:#fff;letter-spacing:-1px;line-height:1;position:relative;z-index:1;text-shadow:0 2px 12px rgba(255,155,12,.4); }
+.gift-card__label-row { font-size:0.7rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.5);position:relative;z-index:1; }
+.gift-card__to     { font-size:0.88rem;color:rgba(255,255,255,.9);font-weight:600;position:relative;z-index:1; }
+.gift-card__message{ font-size:0.8rem;color:rgba(255,255,255,.7);font-style:italic;line-height:1.5;position:relative;z-index:1;word-break:break-word;flex:1; }
+.gift-card__from   { font-size:0.8rem;color:rgba(255,255,255,.6);position:relative;z-index:1; }
+.gift-card__footer { font-size:0.65rem;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.25);position:relative;z-index:1;border-top:1px solid rgba(255,255,255,.08);padding-top:10px;margin-top:4px; }
+
+/* Gift history */
+.gift-history-tabs { display:flex;gap:8px;margin-bottom:16px; }
+.gift-tab          { padding:8px 20px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--text-muted);font-size:0.83rem;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:7px; }
+.gift-tab.active   { background:var(--gold);border-color:var(--gold);color:#000; }
+.gift-history-panel{ background:var(--panel);border-radius:16px;border:1px solid var(--border);overflow:hidden; }
+.gift-history-empty{ padding:40px 24px;text-align:center;color:var(--text-muted);font-size:0.85rem;display:flex;flex-direction:column;align-items:center;gap:8px; }
+.gift-row          { display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid var(--border);transition:background .12s; }
+.gift-row:last-child { border-bottom:none; }
+.gift-row:hover    { background:rgba(255,155,12,.04); }
+.gift-row__icon    { width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0; }
+.gift-row__body    { flex:1;min-width:0; }
+.gift-row__name    { font-size:0.88rem;font-weight:700;color:var(--white); }
+.gift-row__meta    { font-size:0.75rem;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.gift-row__right   { text-align:right;flex-shrink:0; }
+.gift-row__amount  { font-size:0.95rem;font-weight:800;color:var(--gold); }
+.gift-row__status  { font-size:0.7rem;margin-top:3px; }
+.gift-row__cancel  { background:none;border:1px solid var(--border);color:var(--text-muted);font-size:0.7rem;padding:3px 9px;border-radius:6px;cursor:pointer;transition:all .12s; }
+.gift-row__cancel:hover { border-color:#ef4444;color:#ef4444; }
+
+@media(max-width:700px){
+  .gift-compose-wrap { flex-direction:column; }
+  .gift-preview-panel { width:100%;flex:none; }
+  .gift-card { width:100%; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MARKETPLACE v2 — Premium Pool Cards
+══════════════════════════════════════════════════════════════ */
+.mpc-v2 {
+  position:relative;
+  background:#fff;
+  border:1px solid rgba(0,0,0,0.07);
+  border-radius:20px;
+  overflow:hidden;
+  box-shadow:0 2px 16px rgba(0,0,0,0.05);
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  padding:0 !important;
+  transition:all 0.3s cubic-bezier(0.22,1,0.36,1);
+}
+.mpc-v2:hover {
+  transform:translateY(-5px);
+  box-shadow:0 20px 50px rgba(0,0,0,0.12);
+  border-color:rgba(255,155,12,0.2);
+}
+.mpc-v2--featured {
+  border-color:rgba(255,155,12,0.35) !important;
+  box-shadow:0 8px 36px rgba(255,155,12,0.14) !important;
+}
+.mpc2-accent { height:4px;width:100%; }
+.mpc2-top    { padding:18px 20px 0; }
+.mpc2-icon {
+  width:48px;height:48px;border-radius:14px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.35rem;flex-shrink:0;
+}
+.mpc2-badge {
+  font-size:0.62rem;font-weight:800;padding:3px 9px;border-radius:999px;
+  border:1px solid transparent;letter-spacing:0.03em;white-space:nowrap;
+}
+.mpc2-badge--featured { background:rgba(255,155,12,0.12);color:#d97706;border-color:rgba(255,155,12,0.28); }
+.mpc2-badge--urgent   { background:rgba(239,68,68,0.1);color:#dc2626;border-color:rgba(239,68,68,0.22); }
+.mpc2-badge--full     { background:rgba(99,102,241,0.1);color:#6366f1;border-color:rgba(99,102,241,0.22); }
+.mpc2-title { font-size:1.05rem;font-weight:800;color:#111827;letter-spacing:-0.018em;margin-bottom:4px; }
+.mpc2-blurb { font-size:0.72rem;color:#9ca3af;line-height:1.55;margin-bottom:0; }
+
+.mpc2-metrics {
+  display:flex;align-items:stretch;margin:16px 20px 0;
+  background:#f8f9fb;border-radius:14px;overflow:hidden;
+}
+.mpc2-metric    { flex:1;text-align:center;padding:14px 8px; }
+.mpc2-metric-sep{ width:1px;background:rgba(0,0,0,0.06);flex-shrink:0;margin:12px 0; }
+.mpc2-metric__val {
+  font-family:'Poppins','DM Serif Display',Georgia,serif;
+  font-size:1.55rem;font-weight:800;line-height:1;letter-spacing:-0.03em;color:#111827;
+}
+.mpc2-metric__lbl { font-size:0.62rem;color:#9ca3af;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-top:4px; }
+
+.mpc2-pills { display:flex;flex-wrap:wrap;gap:6px;padding:12px 20px 0; }
+.mpc2-pill {
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:0.72rem;font-weight:600;color:#374151;
+  background:#f3f4f6;border-radius:99px;padding:4px 10px;
+  border:1px solid rgba(0,0,0,0.06);
+}
+.mpc2-pill i { font-size:0.65rem;color:#9ca3af; }
+.mpc2-pill--urgent { background:rgba(239,68,68,0.08);color:#dc2626;border-color:rgba(239,68,68,0.18); }
+.mpc2-pill--urgent i { color:#dc2626; }
+
+.mpc2-progress { padding:12px 20px 0; }
+.mpc2-progress__labels { display:flex;justify-content:space-between;font-size:0.68rem;color:#9ca3af;margin-bottom:6px; }
+.mpc2-progress__track  { height:6px;border-radius:3px;background:rgba(0,0,0,0.07);overflow:hidden; }
+.mpc2-progress__fill   { height:100%;border-radius:3px;transition:width 0.5s cubic-bezier(0.22,1,0.36,1); }
+
+.mpc2-footer { display:flex;align-items:center;gap:8px;padding:14px 20px 20px; }
+.mpc2-fs-btn {
+  flex-shrink:0;width:40px;height:40px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);
+  background:#f8f9fb;color:#6b7280;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:1rem;transition:all 0.2s;
+}
+.mpc2-fs-btn:hover { background:#ef4444;color:#fff;border-color:#ef4444; }
+
+/* ─── Factsheet row styles ── */
+.fs-row {
+  display:flex;align-items:center;gap:12px;padding:12px 14px;
+  border:1px solid rgba(0,0,0,0.07);border-radius:12px;
+  text-decoration:none;color:inherit;transition:all 0.18s;background:#fff;
+}
+.fs-row:hover { border-color:rgba(239,68,68,0.35);background:rgba(239,68,68,0.03);transform:translateY(-1px); }
+.fs-row--current { border-color:rgba(34,197,94,0.3);background:rgba(34,197,94,0.03); }
+.fs-row__icon { width:38px;height:38px;border-radius:9px;background:rgba(239,68,68,0.1);color:#ef4444;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0; }
+.fs-row__info { flex:1;min-width:0; }
+.fs-row__name { font-size:0.83rem;font-weight:700;color:#111827;display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
+.fs-row__meta { font-size:0.68rem;color:#9ca3af;margin-top:2px; }
+.fs-row__arrow { font-size:0.8rem;color:#d1d5db;flex-shrink:0; }
+.fs-current-tag { font-size:0.6rem;font-weight:800;background:rgba(34,197,94,0.15);color:#16a34a;padding:1px 6px;border-radius:99px;border:1px solid rgba(34,197,94,0.25); }
+
+/* ─── Dark mode overrides for v2 cards ── */
+body.dark-mode .mpc-v2 { background:#1a2235 !important;border-color:rgba(255,255,255,0.07) !important; }
+body.dark-mode .mpc2-metrics { background:rgba(255,255,255,0.04) !important; }
+body.dark-mode .mpc2-metric-sep { background:rgba(255,255,255,0.07) !important; }
+body.dark-mode .mpc2-metric__val { color:#f3f4f6 !important; }
+body.dark-mode .mpc2-title { color:#f3f4f6 !important; }
+body.dark-mode .mpc2-pill { background:rgba(255,255,255,0.07) !important;color:#d1d5db !important;border-color:rgba(255,255,255,0.08) !important; }
+body.dark-mode .mpc2-fs-btn { background:rgba(255,255,255,0.06) !important;border-color:rgba(255,255,255,0.09) !important;color:#9ca3af !important; }
+body.dark-mode .mpc2-progress__track { background:rgba(255,255,255,0.1) !important; }
+body.dark-mode .fs-row { background:#1e2736 !important;border-color:rgba(255,255,255,0.08) !important;color:#e2e8f0 !important; }
+body.dark-mode .fs-row__name { color:#f3f4f6 !important; }
+
+/* ══════════════════════════════════════════════════════════════
+   POPPINS FOR ALL NUMERIC/METRIC DISPLAYS — platform-wide
+══════════════════════════════════════════════════════════════ */
+.wallet-card__value,
+.stat-value,
+.kpi-val,
+.stat-big,
+.inv-stat__val,
+.perf-stat-val,
+.chart-kpi,
+.level-xp-num,
+.pov-stat-val,
+.return-val,
+.mc-val,
+.reward-amount,
+[class*="__value"],[class*="-value"],[class*="__val"],[class*="-val"] {
+  font-family:'Poppins',system-ui,sans-serif !important;
+}

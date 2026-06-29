@@ -670,6 +670,8 @@ window.openModal = function(productKey) {
         </div>
       `).join('')}
     </div>
+    ${data.herdHtml || ''}
+    ${data.trackHtml || ''}
     <h4 style="color:var(--white); margin-bottom:12px; font-size:0.9rem; text-transform:uppercase; letter-spacing:0.08em;">Key Details</h4>
     <ul>
       ${data.points.map(p => `<li>${p}</li>`).join('')}
@@ -861,3 +863,278 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     window.scrollTo({ top, behavior: 'smooth' });
   });
 });
+
+/* ─── Live average returns (auto-calculated from matured pools) ───────────
+   Pulls the public products feed and overrides the displayed average return
+   on the product cards, the detail modal, and the calculator with the real
+   achieved average across each product's matured pools. Falls back silently
+   to the static copy when there is no matured-pool data yet. */
+async function _applyLiveProductAverages() {
+  let products = [];
+  try {
+    const r = await fetch('/api/products');
+    if (!r.ok) return;
+    const d = await r.json();
+    products = d.data || [];
+  } catch (_) { return; }
+  if (!products.length) return;
+
+  const avgByType = {}, prodByType = {};
+  products.forEach(p => {
+    prodByType[p.product_type] = p;
+    const a = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : null;
+    const c = parseInt(p.matured_pool_count) || 0;
+    if (a != null && !isNaN(a) && c > 0) avgByType[p.product_type] = a;
+  });
+
+  // Map each home-page product key → the product_type(s) it represents.
+  // `primary` is the single product whose admin-managed copy backs the modal.
+  const homeMap = {
+    cattle:   { types: ['cattle'], primary: 'cattle' },
+    solar:    { types: ['solar_7yr', 'solar_6yr', 'solar_5yr'], primary: 'solar_7yr' },
+    short:    { types: ['short_term', 'smme'], primary: 'short_term' },
+    delivery: { types: ['delivery_bike'], primary: 'delivery_bike' },
+  };
+
+  const fmtR = n => 'R' + Number(n || 0).toLocaleString('en-ZA');
+
+  const avgForHome = key => {
+    const vals = (homeMap[key].types || []).map(t => avgByType[t]).filter(v => v != null);
+    if (!vals.length) return null;
+    if (key === 'solar') return Math.max(...vals);           // headline shows best
+    return vals.reduce((s, v) => s + v, 0) / vals.length;
+  };
+
+  Object.keys(homeMap).forEach(key => {
+    const rate = avgForHome(key);
+    const prod = prodByType[homeMap[key].primary];
+
+    // 1) Average return (auto-calculated) — card + modal + calculator
+    if (rate != null) {
+      const pct = (rate * 100).toFixed(2) + '%';
+      const card = document.querySelector(`.product-card[data-product="${key}"]`);
+      const goldEl = card && card.querySelector('.stat__value--gold');
+      if (goldEl) goldEl.textContent = pct;
+      if (typeof MODAL_DATA !== 'undefined' && MODAL_DATA[key] && Array.isArray(MODAL_DATA[key].stats)) {
+        const st = MODAL_DATA[key].stats.find(s => /return/i.test(s.label));
+        if (st) st.val = pct + ' p.a.';
+      }
+      if (typeof PRODUCTS !== 'undefined' && PRODUCTS[key]) PRODUCTS[key].rate = rate;
+    }
+
+    // 2) Admin-managed product detail copy → "View Details" modal
+    if (prod && typeof MODAL_DATA !== 'undefined' && MODAL_DATA[key]) {
+      const m = MODAL_DATA[key];
+      if (prod.label)       m.eyebrow = prod.label;
+      if (prod.headline)    m.title   = prod.headline;
+      if (prod.description) m.desc    = prod.description;
+      if (prod.key_details) {
+        const pts = prod.key_details.split('\n').map(s => s.trim()).filter(Boolean);
+        if (pts.length) m.points = pts;
+      }
+      if (Array.isArray(m.stats)) {
+        const minSt  = m.stats.find(s => /min/i.test(s.label));
+        if (minSt && prod.min_investment != null)  minSt.val  = fmtR(prod.min_investment);
+        const termSt = m.stats.find(s => /term/i.test(s.label));
+        if (termSt && prod.term_months != null && key !== 'solar') termSt.val = `${prod.term_months} Months`;
+      }
+    }
+  });
+
+  // Next pool closing — soonest open-pool closing date across all products
+  _showNextPoolClosing(products);
+}
+
+function _showNextPoolClosing(products) {
+  let soonest = null, soonestProduct = null;
+  (products || []).forEach(p => {
+    if (!p.next_closing_date) return;
+    const d = new Date(p.next_closing_date);
+    if (isNaN(d)) return;
+    if (!soonest || d < soonest) { soonest = d; soonestProduct = p; }
+  });
+  if (!soonest) return;
+
+  const days = Math.max(0, Math.ceil((soonest - Date.now()) / 86400000));
+  const dateStr = soonest.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
+  const header = document.querySelector('#products .section-header');
+  if (!header || document.getElementById('nextPoolClosing')) return;
+
+  const el = document.createElement('div');
+  el.id = 'nextPoolClosing';
+  el.style.cssText = 'display:inline-flex;align-items:center;gap:10px;margin-top:16px;padding:9px 18px;border-radius:999px;background:rgba(255,155,12,0.12);border:1px solid rgba(255,155,12,0.3);color:#b8702a;font-weight:700;font-size:0.86rem';
+  el.innerHTML = `<i class="fa-solid fa-clock"></i> Next pool closes ${dateStr}${days <= 60 ? ` — <span style="color:#e0571a">${days} day${days === 1 ? '' : 's'} left</span>` : ''}${soonestProduct && soonestProduct.label ? ` · ${soonestProduct.label}` : ''}`;
+  header.appendChild(el);
+}
+
+document.addEventListener('DOMContentLoaded', _applyLiveProductAverages);
+
+/* ─── Live cattle herd status on the Cattle Investment product ─────────────
+   Pulls aggregated herd data (purchased to date, breeds, average weight) from
+   the fund-management herd and surfaces it on the home page cattle card and
+   its "View Details" modal. */
+async function _applyCattleHerdStatus() {
+  let s;
+  try {
+    const r = await fetch('/api/products/cattle-stats');
+    if (!r.ok) return;
+    s = await r.json();
+  } catch (_) { return; }
+  if (!s || !s.total_purchased) return;
+
+  const num    = n => Number(n || 0).toLocaleString('en-ZA');
+  const esc    = x => String(x == null ? '' : x).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  const weight = s.avg_current_weight || s.avg_entry_weight;
+
+  // Rich "Live Herd Status" block injected into the cattle "View Details" modal
+  if (typeof MODAL_DATA !== 'undefined' && MODAL_DATA.cattle) {
+    const genders = (s.by_gender || []).filter(g => g.count > 0);
+    const breeds  = (s.by_breed  || []).filter(b => b.count > 0);
+    const totalG  = genders.reduce((a, g) => a + g.count, 0) || 1;
+    const chip = txt => `<span style="font-size:0.78rem;background:rgba(255,255,255,0.08);color:#fff;border-radius:20px;padding:3px 11px">${txt}</span>`;
+
+    // Weight journey + survival
+    const entry = s.avg_entry_weight, current = s.avg_current_weight, target = s.target_weight || 475;
+    let weightBar = '';
+    if (entry && current && target && target > entry) {
+      const wp = Math.min(100, Math.max(0, Math.round((current - entry) / (target - entry) * 100)));
+      weightBar = `<div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--text-dim);margin-bottom:5px"><span>Entry ${entry}kg</span><span style="color:#E0B43A;font-weight:700">Now ~${current}kg</span><span>Target ${target}kg</span></div>
+        <div style="height:9px;border-radius:5px;background:rgba(255,255,255,0.08);overflow:hidden"><div style="height:100%;width:${wp}%;background:linear-gradient(90deg,#E0B43A,#b8902a)"></div></div>
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">${wp}% of the way to market weight</div></div>`;
+    }
+    const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
+    const mortLine = `<div style="font-size:0.76rem;color:var(--text-dim);margin-top:10px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:#fff">${(100 - mortRate).toFixed(1)}%</strong>${s.mortality_count ? ` · ${s.mortality_count} of ${num(s.total_purchased)}` : ''}</div>`;
+
+    MODAL_DATA.cattle.herdHtml = `
+      <div style="background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.28);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
+        <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#E0B43A;margin-bottom:12px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
+          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.total_purchased)}</div><div style="font-size:0.72rem;color:var(--text-dim)">purchased to date</div></div>
+          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.live_count)}</div><div style="font-size:0.72rem;color:var(--text-dim)">currently live</div></div>
+          ${weight ? `<div><div style="font-size:1.3rem;font-weight:800;color:#fff">${weight}<span style="font-size:0.85rem"> kg</span></div><div style="font-size:0.72rem;color:var(--text-dim)">average weight</div></div>` : ''}
+        </div>
+        ${weightBar}
+        ${genders.length ? `<div style="margin-bottom:${breeds.length ? '12px' : '0'}"><div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:6px">Gender</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${esc(g.label)}: <strong>${g.count}</strong> (${Math.round(g.count / totalG * 100)}%)`)).join('')}</div></div>` : ''}
+        ${breeds.length ? `<div><div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:6px">Breeds</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 8).map(b => chip(`${esc(b.label)}: <strong>${b.count}</strong>`)).join('')}</div></div>` : ''}
+        ${mortLine}
+      </div>`;
+  }
+
+  // Compact live-herd line on the cattle product card
+  const detail = document.querySelector('.product-card[data-product="cattle"] .product-card__detail');
+  if (detail && !detail.querySelector('[data-herd-row]')) {
+    const row = document.createElement('div');
+    row.className = 'detail-row';
+    row.setAttribute('data-herd-row', '1');
+    row.innerHTML = `<i class="fa-solid fa-cow"></i><span>${num(s.total_purchased)} cattle to date${weight ? ` · avg ${weight}kg` : ''}</span>`;
+    detail.insertBefore(row, detail.firstChild);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', _applyCattleHerdStatus);
+
+/* ─── Track record on the "View Details" modal (matured pools) ─────────────
+   Shows pools matured, average achieved return, total paid back, and a bar
+   per matured pool — the verifiable performance behind each product. */
+async function _applyTrackRecord() {
+  let data;
+  try {
+    const r = await fetch('/api/products/track-record');
+    if (!r.ok) return;
+    data = (await r.json()).data || {};
+  } catch (_) { return; }
+
+  const fam = { cattle: ['cattle'], solar: ['solar_7yr', 'solar_6yr', 'solar_5yr'], short: ['short_term', 'smme'], delivery: ['delivery_bike'] };
+  const rand = n => 'R' + Number(n || 0).toLocaleString('en-ZA');
+
+  Object.keys(fam).forEach(key => {
+    if (typeof MODAL_DATA === 'undefined' || !MODAL_DATA[key]) return;
+    let pools = [], paid = 0, sumA = 0, n = 0;
+    fam[key].forEach(t => {
+      const d = data[t]; if (!d) return;
+      pools = pools.concat(d.pools || []);
+      paid += d.total_paid_back || 0;
+      sumA += (d.avg_actual_rate || 0) * (d.matured_count || 0);
+      n += d.matured_count || 0;
+    });
+    if (!n) return;
+    pools.sort((a, b) => new Date(a.ended) - new Date(b.ended));
+    const maxRate = Math.max(...pools.map(p => Math.max(p.actual_rate, p.benchmark_rate)), 0.01);
+    const bars = pools.slice(-8).map(p => {
+      const aPct = Math.round(p.actual_rate / maxRate * 100);
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:0.72rem">
+        <span style="width:90px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(p.name || '').replace(/[<>&]/g, '')}</span>
+        <div style="flex:1;height:14px;background:rgba(255,255,255,0.06);border-radius:7px;position:relative"><div style="position:absolute;left:0;top:0;height:100%;width:${aPct}%;background:#ff9b0c;border-radius:7px"></div></div>
+        <span style="width:48px;text-align:right;color:#ff9b0c;font-weight:700">${(p.actual_rate * 100).toFixed(1)}%</span>
+      </div>`;
+    }).join('');
+
+    MODAL_DATA[key].trackHtml = `
+      <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
+        <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#ff9b0c;margin-bottom:12px"><i class="fa-solid fa-chart-column"></i> Track Record</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
+          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${n}</div><div style="font-size:0.72rem;color:var(--text-dim)">pool${n === 1 ? '' : 's'} matured</div></div>
+          <div><div style="font-size:1.3rem;font-weight:800;color:#ff9b0c">${(sumA / n * 100).toFixed(2)}%</div><div style="font-size:0.72rem;color:var(--text-dim)">avg achieved p.a.</div></div>
+          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${rand(paid)}</div><div style="font-size:0.72rem;color:var(--text-dim)">paid back</div></div>
+        </div>
+        ${bars}
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:6px">Each bar is the actual return achieved by a matured pool.</div>
+      </div>`;
+  });
+}
+
+document.addEventListener('DOMContentLoaded', _applyTrackRecord);
+
+/* ─── Live solar telematics (FoxESS / FoxCloud) on the Solar product ───────
+   All three solar terms share one physical installation, so a single live
+   feed (generation now, today, this month, total, CO₂ avoided) is surfaced
+   on the home page solar card and its "View Details" modal. */
+async function _applySolarTelemetry() {
+  let s;
+  try {
+    const r = await fetch('/api/products/solar-stats');
+    if (!r.ok) return;
+    s = await r.json();
+  } catch (_) { return; }
+  if (!s || s.unavailable || (!s.total_kwh && !s.today_kwh && !s.current_power_kw)) return;
+
+  const kwh = v => Number(v || 0).toLocaleString('en-ZA');
+  const total = s.total_kwh >= 1000 ? `${(s.total_kwh / 1000).toFixed(1)} MWh` : `${kwh(s.total_kwh)} kWh`;
+  const live = (s.current_power_kw || 0) > 0;
+  const stat = (val, lbl) => `<div><div style="font-size:1.3rem;font-weight:800;color:#fff">${val}</div><div style="font-size:0.72rem;color:var(--text-dim)">${lbl}</div></div>`;
+
+  if (typeof MODAL_DATA !== 'undefined' && MODAL_DATA.solar) {
+    MODAL_DATA.solar.herdHtml = `
+      <div style="background:rgba(34,197,94,0.09);border:1px solid rgba(34,197,94,0.3);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#34d27f;margin-bottom:12px">
+          <i class="fa-solid fa-solar-panel"></i> Live Solar Generation
+          ${live ? '<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:0.7rem;color:#22c55e;text-transform:none;letter-spacing:0"><span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block"></span> generating now</span>' : ''}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          ${stat(`${(s.current_power_kw || 0).toLocaleString('en-ZA')}<span style="font-size:0.85rem"> kW</span>`, 'generating now')}
+          ${stat(`${kwh(s.today_kwh)}<span style="font-size:0.85rem"> kWh</span>`, 'today')}
+          ${stat(`${kwh(s.month_kwh)}<span style="font-size:0.85rem"> kWh</span>`, 'this month')}
+          ${stat(total, 'total generated')}
+          ${s.co2_avoided_kg ? stat(`${(s.co2_avoided_kg / 1000).toFixed(1)}<span style="font-size:0.85rem"> t</span>`, 'CO₂ avoided') : ''}
+          ${s.device_count ? stat(s.device_count, `inverter${s.device_count === 1 ? '' : 's'}`) : ''}
+        </div>
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:10px">Live data from FoxCloud${s.station_name ? ` · ${String(s.station_name).replace(/[<>&]/g, '')}` : ''}</div>
+      </div>`;
+  }
+
+  // Live-generation line on the solar product card
+  const card = document.querySelector('.product-card[data-product="solar"]');
+  const descEl = card && card.querySelector('.product-card__desc');
+  if (descEl && !card.querySelector('[data-solar-row]')) {
+    const row = document.createElement('div');
+    row.setAttribute('data-solar-row', '1');
+    row.style.cssText = 'display:inline-flex;align-items:center;gap:7px;margin-top:10px;padding:5px 12px;border-radius:999px;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#1f9d57;font-weight:700;font-size:0.78rem';
+    row.innerHTML = `<i class="fa-solid fa-solar-panel"></i> ${live ? `Generating ${(s.current_power_kw || 0).toLocaleString('en-ZA')} kW now` : `${total} generated to date`}`;
+    descEl.insertAdjacentElement('afterend', row);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', _applySolarTelemetry);

@@ -63,7 +63,7 @@
     'Client Relations':     ['employee', 'portal'],
     'Marketing':            ['employee'],
     'Junior Analyst':       ['employee'],
-    'Admin':                ['employee'],
+    'Admin':                ['employee', 'admin', 'accounting'],
   };
 
   /* Level-based elevation (overrides role if level is executive) */
@@ -167,6 +167,7 @@
       lastName:       employee.last_name,
       role:           employee.role,
       level:          employee.level,
+      appAccess:      Array.isArray(employee.app_access) ? employee.app_access.slice() : null,
       department:     employee.department || '',
       avatarInitials: employee.avatar_initials || (employee.first_name[0] + employee.last_name[0]).toUpperCase(),
       avatarColor:    employee.avatar_color || '#7c5cfc',
@@ -178,8 +179,10 @@
 
     // ── SSO bridge: write a compatible svc_user record so that api.js Auth
     //    helpers (Auth.isLoggedIn, Auth.getUser, Auth.getRole) see this session.
-    //    Maps employee role titles to JWT roles used by admin/ifa pages.
-    const jwtRole = _empRoleToJwtRole(employee.role, employee.level);
+    //    The role is derived from the title AND elevated by granted apps, so a
+    //    person granted the Admin Console app gets the 'admin' privileges the
+    //    admin app and its APIs require (titles are just labels now).
+    const jwtRole = _elevateRoleByApps(_empRoleToJwtRole(employee.role, employee.level), employee.app_access);
     const bridge = {
       id:        employee.id,
       email:     employee.email,
@@ -191,6 +194,21 @@
     localStorage.setItem('svc_user', JSON.stringify(bridge));
 
     return session;
+  }
+
+  /* Elevate a base (title-derived) role using the apps granted to the person.
+     Granting an app confers the privileges that app needs, so per-individual
+     access actually works end-to-end (page guards AND role-gated APIs). */
+  function _elevateRoleByApps(baseRole, appAccess) {
+    const apps = Array.isArray(appAccess) ? appAccess : [];
+    const RANK = { staff: 0, ifa: 1, fund_manager: 1, admin: 2, director: 3 };
+    let appRole = null;
+    if (apps.includes('director'))   appRole = 'director';
+    else if (apps.includes('admin')) appRole = 'admin';
+    else if (apps.includes('fund'))  appRole = 'fund_manager';
+    else if (apps.includes('ifa'))   appRole = 'ifa';
+    if (appRole && (RANK[appRole] || 0) > (RANK[baseRole] || 0)) return appRole;
+    return baseRole;
   }
 
   /* Map employee role/level strings → JWT role used by admin.js guards */
@@ -242,11 +260,23 @@
 
   function getAllowedApps(session) {
     if (!session) return [];
-    // Executive level gets everything regardless of role title
+    // App access is allocated PER INDIVIDUAL and is authoritative whenever it
+    // is present on the session (even an empty list — that means "only the
+    // personal dashboard"). When a session carries NO individual allocation
+    // (a legacy session from before this feature, or a person who has not been
+    // configured yet) we fall back to role-based defaults so no one — including
+    // admins/directors — is locked out.
+    if (Array.isArray(session.appAccess)) {
+      const apps = session.appAccess.slice();
+      if (!apps.includes('employee')) apps.push('employee');
+      return apps;
+    }
+    // Fallback: role/level based access.
     if (session.level === 'executive') return EXECUTIVE_APPS.slice();
     const matrix = _rbacCache || ROLE_PERMISSIONS;
-    const perms = matrix[session.role] || ['employee'];
-    return perms.slice();
+    const apps = (matrix[session.role] || ['employee']).slice();
+    if (!apps.includes('employee')) apps.push('employee');
+    return apps;
   }
 
   function canAccess(session, appKey) {
@@ -276,16 +306,43 @@
   function guard(requiredAppKey) {
     const session = getSession();
 
-    // ── JWT bypass: if a valid svc_token JWT exists, allow access ──
-    // This lets users logged in via /login.html (JWT auth) access staff pages
-    // without needing a separate staffSession.
     if (!session) {
       try {
         const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
         if (jwt) {
           const payload = JSON.parse(atob(jwt.split('.')[1]));
           if (payload && payload.exp * 1000 > Date.now()) {
-            // Valid JWT present — allow access, skip staffSession check
+            const jwtRole = payload.role || '';
+            // Investors have no staff access — send them to the staff login
+            if (!jwtRole || jwtRole === 'investor') {
+              sessionStorage.setItem('staffLoginRedirect', window.location.pathname);
+              window.location.replace(LOGIN_URL());
+              return false;
+            }
+            // Enforce app access. Staff PIN tokens carry an explicit per-individual
+            // `apps` list. Main-login tokens (users table) and legacy tokens carry
+            // only a role — fall back to role-based access for those so admins and
+            // directors signing in via the normal login are not locked out.
+            const appKey = requiredAppKey || currentAppKey();
+            if (appKey) {
+              let allowed;
+              if (Array.isArray(payload.apps) && payload.apps.length) {
+                allowed = payload.apps.slice();
+              } else {
+                const JWT_ROLE_APPS = {
+                  director: EXECUTIVE_APPS,
+                  admin:    ['employee', 'team', 'fund', 'admin', 'accounting'],
+                  ifa:      ['employee', 'ifa'],
+                  staff:    ['employee'],
+                };
+                allowed = (JWT_ROLE_APPS[jwtRole] || ['employee']).slice();
+              }
+              if (!allowed.includes('employee')) allowed.push('employee');
+              if (!allowed.includes(appKey)) {
+                window.location.replace(HUB_URL() + '?denied=' + encodeURIComponent(appKey));
+                return false;
+              }
+            }
             return true;
           }
         }

@@ -348,6 +348,13 @@ const API = {
     create: (data)     => API.post('investments', data),
     update: (id, data) => API.patch('investments', id, data),
   },
+  products: {
+    list:   (opts)     => API.list('products', opts || {}),
+    get:    (id)       => API.getById('products', id),
+    create: (data)     => API.post('products', data),
+    update: (id, data) => API.patch('products', id, data),
+    delete: (id)       => API.delete('products', id),
+  },
   transactions: {
     list:   (opts)     => API.list('transactions', opts || {}),
     get:    (id)       => API.getById('transactions', id),
@@ -562,6 +569,23 @@ const Utils = {
     if (!dateStr) return null;
     const diff = new Date(dateStr) - Date.now();
     return Math.max(0, Math.ceil(diff / 86400000));
+  },
+
+  /* Is this pool targeting a closing DATE rather than a goal AMOUNT? */
+  poolIsDateTarget(pool) {
+    return (pool && pool.target_type) === 'date';
+  },
+
+  /* Date-target fill — fraction of the open→close window that has elapsed (0–100). */
+  poolDateProgressPct(pool) {
+    const end   = pool && pool.end_date ? new Date(pool.end_date).getTime() : null;
+    if (!end) return 0;
+    const now   = Date.now();
+    const start = pool.start_date ? new Date(pool.start_date).getTime() : null;
+    if (!start || start >= end) return now >= end ? 100 : 0;
+    if (now <= start) return 0;
+    if (now >= end)   return 100;
+    return Math.min(100, Math.max(0, Math.round((now - start) / (end - start) * 100)));
   }
 };
 
