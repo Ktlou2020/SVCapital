@@ -2248,7 +2248,7 @@ function renderPoolsGrid() {
     const canSetWaitlist = ['open', 'filling', 'active'].includes(p.status);
     const pid = p.id; // alias for readability inside template
     const manageDropdown = `
-      <div style="position:relative;display:inline-block" class="pool-manage-wrap">
+      <div style="position:relative;display:inline-block;z-index:10" class="pool-manage-wrap">
         <button class="btn btn--secondary btn--sm" onclick="togglePoolManageMenu(event,'pool-menu-${pid}')">
           <i class="fa-solid fa-ellipsis-vertical"></i> Manage
         </button>
@@ -2453,7 +2453,7 @@ function togglePoolManageMenu(evt, menuId) {
           document.removeEventListener('click', closeMenu);
         }
       });
-    }, 10);
+    }, 200);
   }
 }
 
