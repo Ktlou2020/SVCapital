@@ -2213,7 +2213,9 @@ function filterPools(status, btn) {
 
 function renderPoolsGrid() {
   const grid = document.getElementById('poolsGrid');
-  const pools = poolFilter === 'all' ? STATE.pools : STATE.pools.filter(p => p.status === poolFilter);
+  const pools = poolFilter === 'all'
+    ? STATE.pools
+    : STATE.pools.filter(p => p.status === poolFilter || (poolFilter === 'active' && p.status === 'filling'));
 
   // Augment pools with live aggregates from STATE.investments
   if (STATE.investments.length) {
@@ -2724,9 +2726,9 @@ async function saveNewPool(btn) {
         maturity_date: document.getElementById('newPoolMaturityDate').value ? new Date(document.getElementById('newPoolMaturityDate').value).toISOString() : '',
         status: 'open', investor_count: 0,
         max_capacity,
-        management_fee_pct:       parseFloat(document.getElementById('newPoolMgtFeePct')?.value) || 0,
+        management_fee_pct:       (parseFloat(document.getElementById('newPoolMgtFeePct')?.value) || 0) / 100,
         management_fee_frequency: document.getElementById('newPoolMgtFeeFreq')?.value || 'once',
-        operational_fee_pct:      parseFloat(document.getElementById('newPoolOpFeePct')?.value) || 0,
+        operational_fee_pct:      (parseFloat(document.getElementById('newPoolOpFeePct')?.value) || 0) / 100,
         operational_fee_frequency: document.getElementById('newPoolOpFeeFreq')?.value || 'annual',
       });
       Toast.success('Pool created');
@@ -2778,7 +2780,11 @@ async function deletePool(id) {
 
 function editPool(id) {
   const pool = STATE.pools.find(p => p.id === id);
-  if (!pool) return;
+  if (!pool) {
+    Toast.error('Pool data not loaded — please refresh the page.');
+    loadPools();
+    return;
+  }
 
   document.getElementById('editPoolId').value          = pool.id;
   document.getElementById('editPoolName').value        = pool.name || '';
@@ -2808,11 +2814,11 @@ function editPool(id) {
   document.getElementById('editPoolMaturityDate').value = toDateVal(pool.maturity_date);
   document.getElementById('editPoolMaxCapacity').value = pool.max_capacity || '';
   const mgtFeeEl = document.getElementById('editPoolMgtFeePct');
-  if (mgtFeeEl) mgtFeeEl.value = pool.management_fee_pct || 0;
+  if (mgtFeeEl) mgtFeeEl.value = pool.management_fee_pct ? (Number(pool.management_fee_pct) * 100).toFixed(4).replace(/\.?0+$/, '') : 0;
   const mgtFeeFreqEl = document.getElementById('editPoolMgtFeeFreq');
   if (mgtFeeFreqEl) mgtFeeFreqEl.value = pool.management_fee_frequency || 'once';
   const opFeeEl = document.getElementById('editPoolOpFeePct');
-  if (opFeeEl) opFeeEl.value = pool.operational_fee_pct || 0;
+  if (opFeeEl) opFeeEl.value = pool.operational_fee_pct ? (Number(pool.operational_fee_pct) * 100).toFixed(4).replace(/\.?0+$/, '') : 0;
   const opFeeFreqEl = document.getElementById('editPoolOpFeeFreq');
   if (opFeeFreqEl) opFeeFreqEl.value = pool.operational_fee_frequency || 'annual';
 
@@ -2843,9 +2849,9 @@ async function saveEditPool(btn) {
     end_date:       toISO(document.getElementById('editPoolCloseDate').value),
     maturity_date:  toISO(document.getElementById('editPoolMaturityDate').value),
     max_capacity:   maxCapVal2 ? (parseFloat(maxCapVal2) || null) : null,
-    management_fee_pct:        parseFloat(document.getElementById('editPoolMgtFeePct')?.value) || 0,
+    management_fee_pct:        (parseFloat(document.getElementById('editPoolMgtFeePct')?.value) || 0) / 100,
     management_fee_frequency:  document.getElementById('editPoolMgtFeeFreq')?.value || 'once',
-    operational_fee_pct:       parseFloat(document.getElementById('editPoolOpFeePct')?.value) || 0,
+    operational_fee_pct:       (parseFloat(document.getElementById('editPoolOpFeePct')?.value) || 0) / 100,
     operational_fee_frequency: document.getElementById('editPoolOpFeeFreq')?.value || 'annual',
   };
 
