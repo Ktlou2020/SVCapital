@@ -9754,9 +9754,21 @@ function openRecurringModal() {
     toggle.checked = !!(inv && inv.recurring_enabled);
     updateRecurringToggleStyle();
   }
-  if (amtEl && inv?.recurring_amount)         amtEl.value   = inv.recurring_amount;
-  if (prodSel && inv?.recurring_product_type) prodSel.value = inv.recurring_product_type;
-  if (daySel  && inv?.recurring_day)          daySel.value  = inv.recurring_day;
+  if (amtEl && inv?.recurring_amount) amtEl.value = inv.recurring_amount;
+  if (daySel && inv?.recurring_day)   daySel.value = inv.recurring_day;
+
+  // Populate product types from pools that currently have an open pool
+  if (prodSel) {
+    const openProductTypes = [...new Set(
+      (PORTAL.pools || [])
+        .filter(p => p.status === 'open')
+        .map(p => p.product_type)
+        .filter(Boolean)
+    )];
+    prodSel.innerHTML = '<option value="">Select a product…</option>' +
+      openProductTypes.map(pt => `<option value="${pt}">${Utils.productInfo(pt).label || pt}</option>`).join('');
+    if (inv?.recurring_product_type) prodSel.value = inv.recurring_product_type;
+  }
 
   Modal.open('recurringModal');
 }
