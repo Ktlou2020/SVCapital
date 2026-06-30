@@ -714,6 +714,23 @@ function sendLeaveOutcome(employee, { status, leaveType, startDate, endDate, day
   });
 }
 
+/* ── Generic alert (used by cron jobs) ───────────────────── */
+function sendAlert(investor, { subject, message }) {
+  const { email, first_name } = investor;
+  if (!email) return Promise.resolve();
+  return _send({
+    to: email,
+    subject,
+    html: _wrap(`
+      <h2>${subject}</h2>
+      <p>Hi ${first_name || 'there'},</p>
+      <p>${message.replace(/\n/g, '<br>')}</p>
+      <a href="${BASE_URL}/portal/" class="btn">Go to Portal →</a>
+    `),
+    text: `Hi ${first_name || 'there'},\n\n${message}\n\nLog in: ${BASE_URL}/portal/`,
+  });
+}
+
 module.exports = {
   sendWelcome,
   sendLeaveRequestSubmitted,
@@ -738,4 +755,5 @@ module.exports = {
   sendFicaResubmitReminder,
   sendGiftReceived,
   sendGiftInvite,
+  sendAlert,
 };

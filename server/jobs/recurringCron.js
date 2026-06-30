@@ -48,16 +48,12 @@ async function runRecurringInvestments() {
       const amount      = parseFloat(investor.recurring_amount);
       const balance     = parseFloat(investor.wallet_balance);
       const productType = investor.recurring_product_type;
-
-      if (balance < amount) {
-        console.log(`[recurringCron] Skipping ${investor.id} — insufficient funds (have: ${balance}, need: ${amount})`);
-        skipped++;
-        continue;
-      }
+      const platformFee = Math.round(amount * 0.01 * 100) / 100;
+      const totalDeduct = Math.round((amount + platformFee) * 100) / 100;
 
       // Find the first open pool for this product type
       const { rows: [pool_row] } = await pool.query(
-        `SELECT id, name, annual_rate, term_months, product_type
+        `SELECT id, name, annual_rate, term_months, product_type, min_investment
          FROM investment_pools
          WHERE product_type = $1
            AND status = 'open'
@@ -67,6 +63,46 @@ async function runRecurringInvestments() {
       );
       if (!pool_row) {
         console.log(`[recurringCron] Skipping ${investor.id} — no open pool for product type '${productType}'`);
+        pushService.sendPushToInvestor(investor.id, {
+          title: 'Recurring Investment Skipped',
+          body:  `No open pool is available for your chosen product this month. We'll try again next month.`,
+          url:   '/portal/',
+        }).catch(() => {});
+        emailService.sendAlert(investor, {
+          subject: 'Recurring Investment Skipped — No Open Pool',
+          message: `Your recurring investment of R${amount.toLocaleString('en-ZA')} was skipped this month because no open pool is currently available for your chosen product type. We will attempt again next month.`,
+        }).catch(() => {});
+        skipped++;
+        continue;
+      }
+
+      const minInvest = parseFloat(pool_row.min_investment) || 0;
+      if (amount < minInvest) {
+        console.log(`[recurringCron] Skipping ${investor.id} — amount R${amount} below pool minimum R${minInvest}`);
+        pushService.sendPushToInvestor(investor.id, {
+          title: 'Recurring Investment Skipped',
+          body:  `Your recurring amount of R${amount.toLocaleString('en-ZA')} is below the minimum of R${minInvest.toLocaleString('en-ZA')} for this product. Please update your settings.`,
+          url:   '/portal/',
+        }).catch(() => {});
+        emailService.sendAlert(investor, {
+          subject: 'Recurring Investment Skipped — Below Minimum',
+          message: `Your recurring investment of R${amount.toLocaleString('en-ZA')} could not be processed because it is below the pool minimum of R${minInvest.toLocaleString('en-ZA')}. Please log in and update your recurring investment amount.`,
+        }).catch(() => {});
+        skipped++;
+        continue;
+      }
+
+      if (balance < totalDeduct) {
+        console.log(`[recurringCron] Skipping ${investor.id} — insufficient funds (have: ${balance}, need: ${totalDeduct} incl. fee)`);
+        pushService.sendPushToInvestor(investor.id, {
+          title: 'Recurring Investment Failed',
+          body:  `Insufficient wallet balance. You need R${totalDeduct.toLocaleString('en-ZA')} (R${amount.toLocaleString('en-ZA')} + R${platformFee.toLocaleString('en-ZA')} fee) but have R${balance.toLocaleString('en-ZA')}. Please top up your wallet.`,
+          url:   '/portal/',
+        }).catch(() => {});
+        emailService.sendAlert(investor, {
+          subject: 'Recurring Investment Failed — Insufficient Funds',
+          message: `Your recurring investment of R${amount.toLocaleString('en-ZA')} could not be processed. Your wallet balance (R${balance.toLocaleString('en-ZA')}) is below the required R${totalDeduct.toLocaleString('en-ZA')} (investment + 1% platform fee). Please top up your wallet to ensure next month's investment goes through.`,
+        }).catch(() => {});
         skipped++;
         continue;
       }
@@ -80,10 +116,10 @@ async function runRecurringInvestments() {
       const investmentId   = 'INV-RC-' + Date.now() + '-' + investor.id.replace(/[^A-Z0-9]/g, '');
       const txRef          = 'RC-' + Date.now();
 
-      // Deduct wallet with floor safety
+      // Deduct investment amount + 1% platform fee from wallet atomically
       const { rowCount } = await pool.query(
         'UPDATE investors SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2 AND wallet_balance >= $1',
-        [amount, investor.id]
+        [totalDeduct, investor.id]
       );
       if (!rowCount) {
         console.log(`[recurringCron] Skipping ${investor.id} — balance check failed at deduction`);
@@ -94,8 +130,8 @@ async function runRecurringInvestments() {
       await pool.query(
         `INSERT INTO investments
            (id, investor_id, pool_id, pool_name, amount, status, start_date, end_date,
-            annual_rate, term_months, expected_return, actual_return, product_type, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,'active',$6,$7,$8,$9,$10,0,$11,NOW(),NOW())`,
+            annual_rate, term_months, expected_return, actual_return, product_type, is_reinvestment, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,'active',$6,$7,$8,$9,$10,0,$11,false,NOW(),NOW())`,
         [
           investmentId, investor.id, pool_row.id, pool_row.name,
           amount,
@@ -105,11 +141,20 @@ async function runRecurringInvestments() {
         ]
       );
 
+      // Investment transaction
       await pool.query(
         `INSERT INTO transactions
            (id, investor_id, type, amount, status, reference, description, transaction_date, investment_id, pool_id, created_at, updated_at)
          VALUES (gen_random_uuid(),$1,'investment',$2,'completed',$3,$4,NOW(),$5,$6,NOW(),NOW())`,
         [investor.id, amount, txRef, `Recurring investment — ${pool_row.name}`, investmentId, pool_row.id]
+      );
+
+      // Platform fee transaction
+      await pool.query(
+        `INSERT INTO transactions
+           (id, investor_id, type, amount, status, reference, description, transaction_date, investment_id, pool_id, created_at, updated_at)
+         VALUES (gen_random_uuid(),$1,'fee',$2,'completed',$3,$4,NOW(),$5,$6,NOW(),NOW())`,
+        [investor.id, platformFee, txRef + '-FEE', `Platform fee — ${pool_row.name}`, investmentId, pool_row.id]
       );
 
       await pool.query(
@@ -122,7 +167,13 @@ async function runRecurringInvestments() {
         endDate:  endDate.toISOString(),
       }).catch(err => console.error('[email] sendInvestmentCreated (recurring) failed:', err.message)));
 
-      console.log(`[recurringCron] R${amount} into pool ${pool_row.id} (${productType}) for investor ${investor.id}`);
+      pushService.sendPushToInvestor(investor.id, {
+        title: 'Recurring Investment Placed',
+        body:  `R${amount.toLocaleString('en-ZA')} invested into ${pool_row.name}. Matures in ${termMonths} months.`,
+        url:   '/portal/',
+      }).catch(() => {});
+
+      console.log(`[recurringCron] R${amount} (+R${platformFee} fee) into pool ${pool_row.id} (${productType}) for investor ${investor.id}`);
       processed++;
 
     } catch (err) {

@@ -3083,11 +3083,11 @@ async function loadMaturity() {
     const [matRes, invRes, investRes] = await Promise.all([
       API.maturityInstructions.list({ limit: 1000 }),
       STATE.investors.length  ? Promise.resolve({ data: STATE.investors  }) : API.investors.list({ limit: 5000 }),
-      STATE.investments.length ? Promise.resolve({ data: STATE.investments }) : API.investments.list({ limit: 5000 })
+      API.investments.list({ limit: 5000 })  // always fresh — maturity_instruction may have changed
     ]);
 
-    if (!STATE.investors.length)   STATE.investors   = invRes.data   || [];
-    if (!STATE.investments.length) STATE.investments = investRes.data || [];
+    if (!STATE.investors.length) STATE.investors = invRes.data || [];
+    STATE.investments = investRes.data || [];
 
     const matRecords = matRes.data || [];
 
