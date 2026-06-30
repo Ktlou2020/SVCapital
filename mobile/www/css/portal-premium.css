@@ -2645,7 +2645,7 @@ body.dark-mode .tab-btn.active { color: #ff9b0c !important; }
 .sa-kyc-badge        { font-size:0.65rem;font-weight:700;padding:3px 8px;border-radius:12px;display:inline-flex;align-items:center;gap:4px; }
 .sa-kyc-badge--ok    { background:rgba(34,197,94,0.2);color:#22c55e; }
 .sa-kyc-badge--pending{ background:rgba(251,191,36,0.2);color:#fbbf24; }
-.sa-kyc-badge--missing{ background:rgba(239,68,68,0.18);color:#f87171; }
+.sa-kyc-badge--missing{ background:rgba(239,68,68,0.18);color:#fff; }
 
 .sa-card__body  { padding:16px 18px;border-top:1px solid rgba(255,255,255,0.07);color:#fff; }
 .sa-card__name  { font-size:1rem;font-weight:800;color:#fff;margin-bottom:12px;letter-spacing:-0.01em; }

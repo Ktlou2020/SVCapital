@@ -6959,7 +6959,7 @@ function _saCard(sa) {
     </div>
     <div class="sa-card__actions">
       <button class="btn btn--sm btn--primary" onclick="openSaDeposit('${sa.id}')"><i class="fa-solid fa-wallet"></i> Deposit</button>
-      <button class="btn btn--sm btn--secondary" onclick="openSaInvest('${sa.id}')" ${sa.kyc_status !== 'approved' ? 'disabled title="FICA required before investing"' : ''}><i class="fa-solid fa-chart-line"></i> Invest</button>
+      <button class="btn btn--sm btn--secondary" onclick="openSaInvest('${sa.id}')"><i class="fa-solid fa-chart-line"></i> Invest</button>
       <button class="btn btn--sm btn--secondary" onclick="openSaDetail('${sa.id}')"><i class="fa-solid fa-${isMinor ? 'star' : 'eye'}"></i> ${isMinor ? 'Hub' : 'Details'}</button>
     </div>
   </div>`;
@@ -7235,7 +7235,7 @@ function _saNormalDetail(sa, meta) {
 
     <div style="display:flex;gap:8px;margin:16px 0">
       <button class="btn btn--primary btn--sm" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')"><i class="fa-solid fa-wallet"></i> Deposit</button>
-      <button class="btn btn--secondary btn--sm" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')" ${sa.kyc_status !== 'approved' ? 'disabled title="FICA approval required"' : ''}><i class="fa-solid fa-chart-line"></i> Invest</button>
+      <button class="btn btn--secondary btn--sm" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-chart-line"></i> Invest</button>
     </div>
 
     <div class="sa-section-title"><i class="fa-solid fa-id-card"></i> FICA Documents Required</div>
@@ -7307,7 +7307,7 @@ function _saMinorHub(sa) {
     <!-- Actions -->
     <div class="minor-actions">
       <button class="minor-btn minor-btn--deposit" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')"><i class="fa-solid fa-piggy-bank"></i><span>Add to Jar</span></button>
-      <button class="minor-btn minor-btn--invest" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')" ${sa.kyc_status !== 'approved' ? 'disabled' : ''}><i class="fa-solid fa-seedling"></i><span>Invest</span></button>
+      <button class="minor-btn minor-btn--invest" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-seedling"></i><span>Invest</span></button>
       <button class="minor-btn minor-btn--fica" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-id-card"></i><span>FICA Docs</span></button>
     </div>
 
@@ -7390,7 +7390,6 @@ async function confirmSaDeposit() {
 function openSaInvest(saId) {
   const sa = PORTAL.subAccounts.find(a => a.id === saId);
   if (!sa) return;
-  if (sa.kyc_status !== 'approved') { Toast.warn('FICA documents must be approved before investing'); return; }
   if ((parseFloat(sa.wallet_balance) || 0) <= 0) { Toast.warn('Please deposit funds first'); return; }
 
   _pmSaId = saId;  // tag all investments made after this to the sub-account
