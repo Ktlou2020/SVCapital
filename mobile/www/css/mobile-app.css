@@ -1258,3 +1258,293 @@ input[type="file"] { font-size: 16px !important; }
   font-weight: 700;
   color: #1a1a1a;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Section 29 — World-class view redesign (all remaining views)
+   CI palette: orange #ff9b0c→#ff5229, dark #1a1a1a/#303030,
+   bg #F4F5F7, cards #fff, green #22c55e, muted #6b7280.
+   Loaded last → !important throughout.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* NOTE: grid containers (.grid-3 etc.) are intentionally forced to
+   display:block with block children in Section 3 above — do NOT
+   re-enable CSS grid here (Android WebView compositor bug). Cards
+   below are styled to look good as full-width stacked blocks. */
+
+/* ── Shared: empty states ─────────────────────────────────────── */
+.empty-state {
+  background: #fff !important;
+  border-radius: 16px !important;
+  padding: 36px 20px !important;
+  text-align: center !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+}
+.empty-state__title { font-size: 1rem !important; font-weight: 800 !important; color: #1a1a1a !important; margin-top: 6px !important; }
+.empty-state__sub   { font-size: 0.82rem !important; color: #6b7280 !important; line-height: 1.5 !important; margin-top: 4px !important; }
+
+/* ═══ WALLET — hero balance card (dark gradient, gold accent) ═══ */
+.wallet-card {
+  background: linear-gradient(135deg,#1a1a1a 0%,#303030 100%) !important;
+  border: none !important;
+  border-radius: 20px !important;
+  padding: 22px 20px !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+.wallet-card::before {
+  background: radial-gradient(circle, rgba(255,155,12,0.22), transparent 70%) !important;
+}
+.wallet-card__label { color: rgba(255,255,255,0.6) !important; font-size: 0.68rem !important; letter-spacing: 0.12em !important; }
+.wallet-card__value {
+  font-size: 2.5rem !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.03em !important;
+  -webkit-text-fill-color: #fff !important;
+  background: none !important; -webkit-background-clip: unset !important; background-clip: unset !important;
+  color: #fff !important;
+}
+.wallet-card__sub { color: rgba(255,255,255,0.55) !important; font-size: 0.74rem !important; }
+.wallet-card__actions { flex-wrap: wrap !important; gap: 8px !important; margin-top: 18px !important; }
+.wallet-card__actions .btn { flex: 1 1 auto !important; min-width: 0 !important; font-size: 0.78rem !important; padding: 10px 12px !important; }
+
+/* Wallet info / EFT list rows */
+.info-row { padding: 9px 0 !important; }
+.info-row__label { font-size: 0.74rem !important; color: #6b7280 !important; }
+.info-row__value { font-size: 0.82rem !important; font-weight: 700 !important; color: #1a1a1a !important; }
+
+/* ═══ MARKETPLACE — product / pool cards (mpc2) ═══ */
+.market-pool-card, .mpc-v2 {
+  background: #fff !important;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+.mpc2-accent { height: 5px !important; border-radius: 4px !important; margin: -2px -2px 12px !important; }
+.mpc2-icon {
+  width: 46px !important; height: 46px !important;
+  border-radius: 13px !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  font-size: 1.2rem !important; flex-shrink: 0 !important;
+}
+.mpc2-title { font-size: 1.05rem !important; font-weight: 900 !important; color: #1a1a1a !important; letter-spacing: -0.02em !important; line-height: 1.2 !important; }
+.mpc2-blurb { font-size: 0.84rem !important; color: #6b7280 !important; line-height: 1.55 !important; }
+.mpc2-metrics {
+  display: flex !important; align-items: stretch !important;
+  background: #F4F5F7 !important;
+  border-radius: 14px !important;
+  padding: 12px 6px !important;
+}
+.mpc2-metric { flex: 1 !important; text-align: center !important; min-width: 0 !important; }
+.mpc2-metric__val { font-size: 1.3rem !important; font-weight: 900 !important; color: #1a1a1a !important; letter-spacing: -0.02em !important; }
+.mpc2-metric__lbl { font-size: 0.6rem !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; color: #9ca3af !important; margin-top: 2px !important; }
+.mpc2-metric-sep { width: 1px !important; background: rgba(0,0,0,0.08) !important; margin: 4px 0 !important; }
+.mpc2-pills { display: flex !important; flex-wrap: wrap !important; gap: 6px !important; }
+.mpc2-pill {
+  font-size: 0.68rem !important; font-weight: 700 !important;
+  padding: 4px 10px !important; border-radius: 100px !important;
+  background: #F4F5F7 !important; color: #374151 !important;
+}
+.mpc2-badge {
+  font-size: 0.62rem !important; font-weight: 800 !important;
+  text-transform: uppercase !important; letter-spacing: 0.04em !important;
+  padding: 3px 9px !important; border-radius: 100px !important;
+}
+.mpc2-badge--featured { background: rgba(255,155,12,0.14) !important; color: #ff7a0c !important; }
+.mpc2-badge--urgent   { background: rgba(239,68,68,0.12) !important; color: #ef4444 !important; }
+.mpc2-badge--full     { background: rgba(107,114,128,0.14) !important; color: #6b7280 !important; }
+.mpc2-progress__track { height: 7px !important; border-radius: 100px !important; background: #eceef1 !important; overflow: hidden !important; }
+.mpc2-progress__fill  { height: 100% !important; border-radius: 100px !important; background: linear-gradient(90deg,#ff9b0c,#ff5229) !important; }
+.mpc2-progress__labels { font-size: 0.68rem !important; color: #6b7280 !important; }
+.mpc2-footer { margin-top: 12px !important; }
+.mpc2-fs-btn { border-radius: 10px !important; font-size: 0.76rem !important; }
+
+/* Invest guide strip (steps) */
+.invest-guide-strip {
+  display: flex !important; align-items: center !important;
+  overflow-x: auto !important; gap: 4px !important;
+  background: #fff !important; border-radius: 16px !important;
+  padding: 12px !important; box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+}
+.igs-step { display: flex !important; flex-direction: column !important; align-items: center !important; flex: 0 0 auto !important; min-width: 84px !important; text-align: center !important; gap: 3px !important; }
+.igs-num { width: 22px !important; height: 22px !important; border-radius: 50% !important; background: #F4F5F7 !important; color: #9ca3af !important; font-size: 0.72rem !important; font-weight: 800 !important; display: flex !important; align-items: center !important; justify-content: center !important; }
+.igs-step--active .igs-num { background: linear-gradient(135deg,#ff9b0c,#ff5229) !important; color: #fff !important; }
+.igs-icon { font-size: 0.95rem !important; color: #6b7280 !important; }
+.igs-step--active .igs-icon { color: #ff7a0c !important; }
+.igs-text b { font-size: 0.72rem !important; color: #1a1a1a !important; display: block !important; }
+.igs-text span { font-size: 0.62rem !important; color: #9ca3af !important; line-height: 1.2 !important; }
+.igs-arrow { color: #d1d5db !important; font-size: 0.7rem !important; flex: 0 0 auto !important; }
+
+/* Marketplace wallet strip */
+.mkt-wallet-strip {
+  display: flex !important; align-items: center !important; gap: 10px !important;
+  background: #fff !important; border-radius: 14px !important; padding: 12px 14px !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important; font-size: 0.82rem !important; color: #374151 !important;
+}
+.mkt-wallet-strip i { color: #ff9b0c !important; }
+.mkt-wallet-strip button { margin-left: auto !important; }
+
+/* Risk banner */
+.risk-banner {
+  display: flex !important; gap: 12px !important; align-items: flex-start !important;
+  background: #fff7ed !important; border: 1px solid #fed7aa !important;
+  border-radius: 14px !important; padding: 14px 16px !important;
+}
+.risk-banner i { color: #ff7a0c !important; font-size: 1.1rem !important; margin-top: 2px !important; }
+.risk-banner p { font-size: 0.76rem !important; color: #7c5a2e !important; line-height: 1.5 !important; margin: 0 !important; }
+
+/* ═══ MY INVESTMENTS — cards ═══ */
+.my-inv-card {
+  background: #fff !important;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+  border-radius: 18px !important;
+  padding: 16px !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+}
+.my-inv-card--paidout { opacity: 0.92 !important; }
+.my-inv-card__header { display: flex !important; align-items: flex-start !important; gap: 8px !important; flex-wrap: wrap !important; margin-bottom: 12px !important; }
+.my-inv-card__name { font-size: 0.98rem !important; font-weight: 800 !important; color: #1a1a1a !important; letter-spacing: -0.01em !important; }
+.my-inv-card__partner { font-size: 0.68rem !important; color: #9ca3af !important; }
+.my-inv-card__stats { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; margin: 12px 0 !important; }
+.mic-stat { background: #F4F5F7 !important; border-radius: 12px !important; padding: 10px 12px !important; }
+.mic-stat__label { font-size: 0.62rem !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; color: #9ca3af !important; display: block !important; }
+.mic-stat__value { font-size: 1.02rem !important; font-weight: 800 !important; color: #1a1a1a !important; }
+.mic-stat__value--gold { color: #ff7a0c !important; }
+.my-inv-progress__label { font-size: 0.7rem !important; color: #6b7280 !important; display: flex !important; justify-content: space-between !important; margin-bottom: 5px !important; }
+.progress-bar { height: 8px !important; border-radius: 100px !important; background: #eceef1 !important; overflow: hidden !important; }
+.progress-fill { height: 100% !important; border-radius: 100px !important; background: linear-gradient(90deg,#ff9b0c,#ff5229) !important; }
+
+/* Status badge (Utils.statusBadge) */
+.badge { font-size: 0.62rem !important; font-weight: 800 !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; padding: 4px 10px !important; border-radius: 100px !important; }
+.badge--green { background: rgba(34,197,94,0.14) !important; color: #16a34a !important; }
+.badge--gray  { background: rgba(107,114,128,0.14) !important; color: #6b7280 !important; }
+
+/* ═══ MATURITY — cards ═══ */
+.maturity-card {
+  background: #fff !important;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+  border-radius: 18px !important;
+  padding: 16px !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+}
+.maturity-card__name { font-size: 0.98rem !important; font-weight: 800 !important; color: #1a1a1a !important; }
+.maturity-card__info { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+.maturity-card__detail { font-size: 0.78rem !important; color: #6b7280 !important; }
+.maturity-card__payout { background: #f0fdf4 !important; border-radius: 12px !important; padding: 12px !important; text-align: center !important; }
+.maturity-card__payout-label { font-size: 0.64rem !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; color: #16a34a !important; }
+.maturity-card__payout-value { font-size: 1.3rem !important; font-weight: 900 !important; color: #16a34a !important; letter-spacing: -0.02em !important; }
+
+/* ═══ SUPPORT — ticket cards ═══ */
+.my-ticket-item {
+  background: #fff !important;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+  border-radius: 14px !important;
+  padding: 14px 16px !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+  margin-bottom: 10px !important;
+}
+.my-ticket-header { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 8px !important; margin-bottom: 4px !important; }
+.my-ticket-subject { font-size: 0.92rem !important; font-weight: 800 !important; color: #1a1a1a !important; }
+.my-ticket-meta { font-size: 0.72rem !important; color: #9ca3af !important; }
+
+/* ═══ QUESTS / XP — level badge, category, quest cards ═══ */
+.quest-cards-grid { display: grid !important; grid-template-columns: 1fr !important; gap: 10px !important; }
+.quest-category {
+  background: #fff !important; border-radius: 18px !important;
+  padding: 16px !important; box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+  margin-bottom: 14px !important;
+}
+.quest-category__header { display: flex !important; align-items: center !important; gap: 12px !important; margin-bottom: 12px !important; }
+.quest-category__icon-wrap { width: 44px !important; height: 44px !important; border-radius: 13px !important; display: flex !important; align-items: center !important; justify-content: center !important; background: linear-gradient(135deg,#ff9b0c,#ff5229) !important; color: #fff !important; font-size: 1.1rem !important; flex-shrink: 0 !important; }
+.quest-category__title { font-size: 1rem !important; font-weight: 900 !important; color: #1a1a1a !important; }
+.quest-category__sub { font-size: 0.74rem !important; color: #6b7280 !important; }
+.quest-category__count { font-size: 0.74rem !important; font-weight: 800 !important; color: #ff7a0c !important; }
+.quest-cat-bar { height: 7px !important; border-radius: 100px !important; background: #eceef1 !important; overflow: hidden !important; }
+.quest-cat-bar__fill { height: 100% !important; border-radius: 100px !important; background: linear-gradient(90deg,#ff9b0c,#ff5229) !important; }
+
+.quest-card {
+  background: #F4F5F7 !important;
+  border: 1px solid rgba(0,0,0,0.05) !important;
+  border-radius: 14px !important;
+  padding: 14px !important;
+  display: flex !important; align-items: center !important; gap: 12px !important;
+}
+.quest-card__icon { width: 40px !important; height: 40px !important; border-radius: 12px !important; background: #fff !important; display: flex !important; align-items: center !important; justify-content: center !important; font-size: 1rem !important; color: #ff7a0c !important; flex-shrink: 0 !important; box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important; }
+.quest-card__body { flex: 1 !important; min-width: 0 !important; }
+.quest-card__title { font-size: 0.88rem !important; font-weight: 800 !important; color: #1a1a1a !important; }
+.quest-card__desc { font-size: 0.74rem !important; color: #6b7280 !important; line-height: 1.4 !important; }
+.quest-card__right { text-align: right !important; flex-shrink: 0 !important; }
+.quest-card__xp { font-size: 0.92rem !important; font-weight: 900 !important; color: #ff7a0c !important; }
+.quest-card__locked { opacity: 0.55 !important; }
+.quest-card__done-badge { font-size: 0.64rem !important; font-weight: 800 !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; color: #16a34a !important; background: rgba(34,197,94,0.14) !important; padding: 3px 9px !important; border-radius: 100px !important; }
+.quest-claim-btn { background: linear-gradient(135deg,#ff9b0c,#ff5229) !important; color: #fff !important; border: none !important; border-radius: 10px !important; font-size: 0.76rem !important; font-weight: 800 !important; padding: 7px 14px !important; }
+.survey-modal-xp, .quest-card__xp { letter-spacing: -0.01em !important; }
+
+/* ═══ NOTIFICATIONS — list items ═══ */
+.notif-icon { width: 40px !important; height: 40px !important; border-radius: 12px !important; display: flex !important; align-items: center !important; justify-content: center !important; flex-shrink: 0 !important; background: rgba(255,155,12,0.12) !important; color: #ff7a0c !important; font-size: 1rem !important; }
+.notif-body { flex: 1 !important; min-width: 0 !important; }
+.notif-title { font-size: 0.86rem !important; font-weight: 800 !important; color: #1a1a1a !important; }
+.notif-sub { font-size: 0.76rem !important; color: #6b7280 !important; line-height: 1.45 !important; }
+.notif-time { font-size: 0.68rem !important; color: #9ca3af !important; }
+
+/* ═══ GIFTS — rows ═══ */
+.gift-row {
+  display: flex !important; align-items: center !important; gap: 12px !important;
+  background: #fff !important; border: 1px solid rgba(0,0,0,0.06) !important;
+  border-radius: 14px !important; padding: 14px !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important; margin-bottom: 10px !important;
+}
+.gift-row__icon { width: 42px !important; height: 42px !important; border-radius: 12px !important; display: flex !important; align-items: center !important; justify-content: center !important; background: linear-gradient(135deg,#ff9b0c,#ff5229) !important; color: #fff !important; font-size: 1.1rem !important; flex-shrink: 0 !important; }
+.gift-row__body { flex: 1 !important; min-width: 0 !important; }
+.gift-row__name { font-size: 0.88rem !important; font-weight: 800 !important; color: #1a1a1a !important; }
+.gift-row__meta { font-size: 0.72rem !important; color: #9ca3af !important; }
+.gift-row__right { text-align: right !important; flex-shrink: 0 !important; }
+.gift-row__amount { font-size: 1rem !important; font-weight: 900 !important; color: #16a34a !important; letter-spacing: -0.02em !important; }
+.gift-row__status { font-size: 0.66rem !important; font-weight: 800 !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; }
+.gift-row__cancel { font-size: 0.72rem !important; color: #ef4444 !important; }
+
+/* ═══ TRANSACTIONS / DATA TABLES — readable on mobile ═══ */
+.table-card {
+  background: #fff !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+  border: 1px solid rgba(0,0,0,0.05) !important;
+}
+.table-card__header { padding: 16px !important; border-bottom: 1px solid rgba(0,0,0,0.05) !important; }
+.table-card__title { font-size: 0.98rem !important; font-weight: 800 !important; color: #1a1a1a !important; }
+.table-card__sub { font-size: 0.74rem !important; color: #9ca3af !important; }
+.tbl-filter { border-radius: 10px !important; border: 1px solid rgba(0,0,0,0.1) !important; font-size: 0.78rem !important; padding: 7px 10px !important; background: #F4F5F7 !important; }
+.data-table th { text-transform: uppercase !important; letter-spacing: 0.04em !important; color: #9ca3af !important; font-weight: 700 !important; white-space: nowrap !important; }
+.data-table td { color: #374151 !important; white-space: nowrap !important; }
+
+/* ═══ PROFILE — panels, forms, avatar ═══ */
+.panel {
+  background: #fff !important;
+  border: 1px solid rgba(0,0,0,0.05) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+}
+.panel__header { padding: 16px !important; border-bottom: 1px solid rgba(0,0,0,0.05) !important; display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 8px !important; }
+.panel__title { font-size: 0.98rem !important; font-weight: 800 !important; color: #1a1a1a !important; }
+.panel__body { padding: 16px !important; }
+.form-label { font-size: 0.74rem !important; font-weight: 700 !important; color: #6b7280 !important; }
+.form-input, .form-select {
+  border-radius: 12px !important; border: 1.5px solid rgba(0,0,0,0.1) !important;
+  font-size: 0.88rem !important; padding: 11px 13px !important; background: #fff !important;
+}
+.form-input:focus, .form-select:focus { border-color: #ff9b0c !important; box-shadow: 0 0 0 3px rgba(255,155,12,0.12) !important; }
+.form-row--2 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+
+/* ═══ Buttons — CI gradient primary, clean secondary ═══ */
+.btn--primary {
+  background: linear-gradient(135deg,#ff9b0c,#ff5229) !important;
+  color: #fff !important; border: none !important;
+  border-radius: 12px !important; font-weight: 800 !important;
+  box-shadow: 0 4px 14px rgba(255,82,41,0.25) !important;
+}
+.btn--secondary {
+  background: #fff !important; color: #1a1a1a !important;
+  border: 1.5px solid rgba(0,0,0,0.1) !important; border-radius: 12px !important; font-weight: 700 !important;
+}
+.btn--full { width: 100% !important; }
+.btn--ghost { background: transparent !important; border: none !important; color: #6b7280 !important; }
