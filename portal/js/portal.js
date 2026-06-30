@@ -2399,7 +2399,11 @@ function openAutoTopUpModal() {
   const settings = _autoTopUpSettings || {};
   const el = id => document.getElementById(id);
   if (!el('autoTopUpModal')) return;
-  if (el('atuEnabled'))  el('atuEnabled').checked = !!settings.auto_topup_enabled;
+  const isEnabled = !!settings.auto_topup_enabled;
+  if (el('atuEnabled'))  el('atuEnabled').checked = isEnabled;
+  // Sync the custom toggle span colour to match the checkbox state
+  const toggleSpan = el('autoTopUpModal').querySelector('label span');
+  if (toggleSpan) toggleSpan.style.background = isEnabled ? '#ff9b0c' : '#ccc';
   if (el('atuAmount'))   el('atuAmount').value    = settings.auto_topup_amount || '';
   if (el('atuDay'))      el('atuDay').value       = settings.auto_topup_day || 1;
   Modal.open('autoTopUpModal');
