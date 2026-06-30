@@ -4657,17 +4657,21 @@ function buildStatementHTML(opts) {
       </section>`;
   }
 
+  const logoOutlineUrl = new URL('../assets/logo-outline.png', window.location.href).href;
   // ─── FULL DOCUMENT ───
   return `
-    <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%">
+    <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%;position:relative">
+
+      <!-- Watermark -->
+      <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:0;opacity:0.04;width:480px;height:480px;background:url('${logoOutlineUrl}') center/contain no-repeat;print-color-adjust:exact;-webkit-print-color-adjust:exact"></div>
 
       <!-- Header Band -->
-      <div style="background:linear-gradient(135deg,#1a3a4a 0%,#0d2535 100%);padding:28px 40px;display:flex;align-items:center;justify-content:space-between">
+      <div style="background:#303030;padding:28px 40px;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1">
         <div style="display:flex;align-items:center;gap:14px">
           <img src="${logoUrl}" alt="" style="height:52px;width:52px;object-fit:contain;display:block">
           <div>
             <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:0.06em;line-height:1">SV CAPITAL</div>
-            <div style="font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:0.12em;margin-top:3px;font-weight:500">VENTURE BEYOND THE ORDINARY</div>
+            <div style="font-size:10px;color:rgba(255,155,12,0.75);letter-spacing:0.12em;margin-top:3px;font-weight:600">VENTURE BEYOND THE ORDINARY</div>
           </div>
         </div>
         <div style="text-align:right">
@@ -4696,14 +4700,18 @@ function buildStatementHTML(opts) {
       </div>
 
       <!-- Footer -->
-      <div style="background:#F7F8FA;border-top:1px solid rgba(0,0,0,0.07);padding:20px 40px;display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <div style="font-size:10px;font-weight:700;color:#1a1a1a;margin-bottom:3px">SmartVest Financial Services (Pty) Ltd</div>
-          <div style="font-size:9px;color:#9ca3af">Authorised Financial Services Provider · FSP License #52449 · Regulated by the FSCA</div>
+      <div style="background:#F7F8FA;border-top:3px solid #ff9b0c;padding:20px 40px;position:relative;z-index:1">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:#1a1a1a;margin-bottom:3px">SV Capital (Pty) Ltd</div>
+            <div style="font-size:9px;color:#9ca3af">enquiry@svcapital.co.za · www.svcapital.co.za</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:9px;color:#c1c7d0">This statement is computer generated and does not require a signature.</div>
+          </div>
         </div>
-        <div style="text-align:right">
-          <div style="font-size:9px;color:#9ca3af">enquiry@svcapital.co.za · www.svcapital.co.za</div>
-          <div style="font-size:9px;color:#c1c7d0;margin-top:2px">This statement is computer generated and does not require a signature.</div>
+        <div style="font-size:7.5px;color:#b0b8c4;border-top:1px solid rgba(0,0,0,0.06);padding-top:8px;line-height:1.5">
+          IMPORTANT NOTICE: This investment is not a regulated financial product under the Financial Sector Conduct Authority (FSCA) and is not covered by the Financial Advisory and Intermediary Services Act (FAIS) or the Collective Investment Schemes Control Act (CISCA). This investment is managed solely by SV Capital (Pty) Ltd. Capital is at risk and returns are not guaranteed.
         </div>
       </div>
 
@@ -8878,18 +8886,22 @@ function generateInvestmentCertificate(invId) {
 
 /* ── PDF: logo cache ── */
 let _cachedLogoDataUrl = null;
+let _cachedLogoOutlineDataUrl = null;
 async function _preloadLogo() {
   try {
-    const url  = new URL('../assets/logo.png', window.location.href).href;
-    const resp = await fetch(url);
-    if (!resp.ok) return;
-    const blob = await resp.blob();
-    _cachedLogoDataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    const toDataUrl = async (url) => {
+      const resp = await fetch(url);
+      if (!resp.ok) return null;
+      const blob = await resp.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    };
+    _cachedLogoDataUrl        = await toDataUrl(new URL('../assets/logo.png',         window.location.href).href);
+    _cachedLogoOutlineDataUrl = await toDataUrl(new URL('../assets/logo-outline.png', window.location.href).href);
   } catch (_) {}
 }
 
@@ -8906,11 +8918,25 @@ function _getPDF(orientation = 'portrait') {
   return new lib({ orientation, unit: 'mm', format: 'a4' });
 }
 
+/* ── PDF: watermark (centred logo outline at low opacity) ── */
+function _pdfWatermark(doc) {
+  if (!_cachedLogoOutlineDataUrl) return;
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const size = 100; // mm
+  doc.saveGraphicsState?.();
+  // jsPDF doesn't support native opacity for images; draw at reduced opacity via GState if available
+  try { doc.setGState(new doc.GState({ opacity: 0.05 })); } catch (_) {}
+  doc.addImage(_cachedLogoOutlineDataUrl, 'PNG', (W - size) / 2, (H - size) / 2, size, size);
+  try { doc.setGState(new doc.GState({ opacity: 1 })); } catch (_) {}
+  doc.restoreGraphicsState?.();
+}
+
 /* ── PDF: dark header bar ── */
 function _pdfHeader(doc, title, subtitle) {
   const W = doc.internal.pageSize.getWidth();
   // Dark header band
-  doc.setFillColor(10, 17, 40); // deep navy matching portal CI
+  doc.setFillColor(48, 48, 48); // #303030
   doc.rect(0, 0, W, 38, 'F');
   // Gold accent line
   doc.setFillColor(255, 155, 12);
@@ -8985,6 +9011,7 @@ function downloadCertificate(investmentId) {
 
   // Header
   let y = _pdfHeader(doc, 'INVESTMENT CERTIFICATE', `#${inv.id}`);
+  _pdfWatermark(doc);
 
   // Certificate badge area
   y += 6;
@@ -9189,6 +9216,7 @@ function downloadStatement() {
 
   // Header
   let y = _pdfHeader(doc, 'ACCOUNT STATEMENT', periodLabel);
+  _pdfWatermark(doc);
   y += 6;
 
   // Investor info
@@ -9206,7 +9234,7 @@ function downloadStatement() {
   const stats = [
     ['Portfolio Value', Utils.rand(portfolioVal), [255, 155, 12]],
     ['Wallet Balance',  Utils.rand(walletBal),    [47, 140, 155]],
-    ['Total Invested',  Utils.rand(totalInvested), [26, 34, 53]],
+    ['Total Invested',  Utils.rand(totalInvested), [48, 48, 48]],
     ['Returns Earned',  Utils.rand(totalReturns),  [34, 197, 94]],
   ];
   const boxW = (W - 28 - 9) / 4;
@@ -9246,7 +9274,7 @@ function downloadStatement() {
         body: tableBody,
         startY: y,
         margin: { left: 14, right: 14 },
-        headStyles: { fillColor: [26, 34, 53], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+        headStyles: { fillColor: [48, 48, 48], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
         bodyStyles: { fontSize: 8, textColor: [26, 26, 26] },
         alternateRowStyles: { fillColor: [247, 248, 250] },
         columnStyles: {
