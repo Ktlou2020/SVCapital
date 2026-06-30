@@ -4666,7 +4666,7 @@ function buildStatementHTML(opts) {
       <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:0;opacity:0.04;width:480px;height:480px;background:url('${logoOutlineUrl}') center/contain no-repeat;print-color-adjust:exact;-webkit-print-color-adjust:exact"></div>
 
       <!-- Header Band -->
-      <div style="background:#0a1128;padding:28px 40px;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1">
+      <div style="background:#303030;padding:28px 40px;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1">
         <div style="display:flex;align-items:center;gap:14px">
           <img src="${logoUrl}" alt="" style="height:52px;width:52px;object-fit:contain;display:block">
           <div>
@@ -8936,7 +8936,7 @@ function _pdfWatermark(doc) {
 function _pdfHeader(doc, title, subtitle) {
   const W = doc.internal.pageSize.getWidth();
   // Dark header band
-  doc.setFillColor(10, 17, 40); // deep navy matching portal CI
+  doc.setFillColor(48, 48, 48); // #303030
   doc.rect(0, 0, W, 38, 'F');
   // Gold accent line
   doc.setFillColor(255, 155, 12);
@@ -9234,7 +9234,7 @@ function downloadStatement() {
   const stats = [
     ['Portfolio Value', Utils.rand(portfolioVal), [255, 155, 12]],
     ['Wallet Balance',  Utils.rand(walletBal),    [47, 140, 155]],
-    ['Total Invested',  Utils.rand(totalInvested), [26, 34, 53]],
+    ['Total Invested',  Utils.rand(totalInvested), [48, 48, 48]],
     ['Returns Earned',  Utils.rand(totalReturns),  [34, 197, 94]],
   ];
   const boxW = (W - 28 - 9) / 4;
@@ -9274,7 +9274,7 @@ function downloadStatement() {
         body: tableBody,
         startY: y,
         margin: { left: 14, right: 14 },
-        headStyles: { fillColor: [26, 34, 53], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+        headStyles: { fillColor: [48, 48, 48], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
         bodyStyles: { fontSize: 8, textColor: [26, 26, 26] },
         alternateRowStyles: { fillColor: [247, 248, 250] },
         columnStyles: {
