@@ -4162,21 +4162,6 @@ async function submitMaturityInstruction(inv) {
   if (type === 'reinvest' && !reinvestPoolId) { Toast.error('Please select a pool to reinvest into, or choose another instruction type'); return; }
 
   try {
-    await API.maturityInstructions.create({
-      id: Utils.genId('MAT'),
-      investment_id: inv.id,
-      investor_id: DEMO_INVESTOR_ID,
-      investor_name: `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
-      pool_name: inv.pool_name,
-      instruction: type,
-      instruction_type: type,
-      custom_payout_amount: customAmt || 0,
-      reinvest_pool_id: reinvestPoolId,
-      status: 'submitted',
-      submitted_date: new Date().toISOString(),
-      total_payout: inv.amount + (inv.actual_return_amount || inv.expected_return_amount)
-    });
-
     await API.investments.update(inv.id, { maturity_instruction: type });
 
     Toast.success('Maturity instruction saved successfully!');
@@ -9769,9 +9754,21 @@ function openRecurringModal() {
     toggle.checked = !!(inv && inv.recurring_enabled);
     updateRecurringToggleStyle();
   }
-  if (amtEl && inv?.recurring_amount)         amtEl.value   = inv.recurring_amount;
-  if (prodSel && inv?.recurring_product_type) prodSel.value = inv.recurring_product_type;
-  if (daySel  && inv?.recurring_day)          daySel.value  = inv.recurring_day;
+  if (amtEl && inv?.recurring_amount) amtEl.value = inv.recurring_amount;
+  if (daySel && inv?.recurring_day)   daySel.value = inv.recurring_day;
+
+  // Populate product types from pools that currently have an open pool
+  if (prodSel) {
+    const openProductTypes = [...new Set(
+      (PORTAL.pools || [])
+        .filter(p => p.status === 'open')
+        .map(p => p.product_type)
+        .filter(Boolean)
+    )];
+    prodSel.innerHTML = '<option value="">Select a product…</option>' +
+      openProductTypes.map(pt => `<option value="${pt}">${Utils.productInfo(pt).label || pt}</option>`).join('');
+    if (inv?.recurring_product_type) prodSel.value = inv.recurring_product_type;
+  }
 
   Modal.open('recurringModal');
 }
