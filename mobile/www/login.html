@@ -336,6 +336,9 @@
       font-family: var(--font);
       transition: all var(--ease);
       outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      box-sizing: border-box;
     }
 
     .form-input:focus {
@@ -349,7 +352,7 @@
     }
 
     .form-input-wrap .form-input {
-      padding-left: 48px;
+      padding-left: 48px !important;
     }
 
     .form-input-icon {
