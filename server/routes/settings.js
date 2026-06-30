@@ -59,4 +59,35 @@ router.put('/rbac', requireAuth, requireRole('admin', 'director'), async (req, r
   }
 });
 
+/* GET /api/settings/eva-rate — authenticated staff */
+router.get('/eva-rate', requireAuth, async (req, res) => {
+  try {
+    const row = await db.query("SELECT value FROM platform_settings WHERE key = 'eva_rate'");
+    const rate = row.rows[0] ? parseFloat(row.rows[0].value) : 0.15;
+    res.json({ eva_rate: rate });
+  } catch (_) {
+    res.json({ eva_rate: 0.15 });
+  }
+});
+
+/* PUT /api/settings/eva-rate — director/admin only */
+router.put('/eva-rate', requireAuth, requireRole('admin', 'director'), async (req, res) => {
+  const { eva_rate } = req.body;
+  const rate = parseFloat(eva_rate);
+  if (isNaN(rate) || rate < 0 || rate > 1) {
+    return res.status(400).json({ error: 'eva_rate must be a decimal between 0 and 1 (e.g. 0.15 for 15%)' });
+  }
+  try {
+    await db.query(
+      `INSERT INTO platform_settings (key, value, description, updated_at)
+       VALUES ('eva_rate', $1, 'EVA rate — % of net-VAT upfront fee allocated to the referring employee', NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [rate.toString()]
+    );
+    res.json({ ok: true, eva_rate: rate });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to save EVA rate' });
+  }
+});
+
 module.exports = router;
