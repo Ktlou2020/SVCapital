@@ -9788,6 +9788,22 @@ async function saveRecurringInvestment() {
     if (!amount || amount < 100) { Toast.error('Please enter a monthly amount of at least R100'); return; }
     if (!productType) { Toast.error('Please select a product type'); return; }
     if (!day || day < 1 || day > 28) { Toast.error('Please select a valid day (1–28)'); return; }
+
+    // Validate against the open pool's minimum investment
+    const openPool = (PORTAL.pools || []).find(p => p.status === 'open' && p.product_type === productType);
+    if (openPool) {
+      const minInvest = parseFloat(openPool.min_investment) || 0;
+      if (amount < minInvest) {
+        Toast.error(`Minimum investment for this product is ${Utils.rand(minInvest)}`);
+        return;
+      }
+      const platformFee = Math.round(amount * 0.01 * 100) / 100;
+      const totalRequired = amount + platformFee;
+      const walletBal = parseFloat(PORTAL.investor?.wallet_balance) || 0;
+      if (walletBal < totalRequired) {
+        Toast.warn(`Note: your wallet (${Utils.rand(walletBal)}) will need at least ${Utils.rand(totalRequired)} on the chosen day (${Utils.rand(amount)} + ${Utils.rand(platformFee)} platform fee).`);
+      }
+    }
   }
 
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
