@@ -292,6 +292,9 @@
       color: var(--text-h); background: var(--bg-white);
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
+      -webkit-appearance: none;
+      appearance: none;
+      box-sizing: border-box;
     }
     .form-input:focus {
       border-color: var(--orange);
@@ -323,7 +326,7 @@
     }
 
     .input-icon-wrap { position: relative; }
-    .input-icon-wrap .form-input { padding-left: 48px; }
+    .input-icon-wrap .form-input { padding-left: 48px !important; }
     .input-icon-wrap .icon {
       position: absolute; left: 16px; top: 50%;
       transform: translateY(-50%);
