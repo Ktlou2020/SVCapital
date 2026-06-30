@@ -4162,21 +4162,6 @@ async function submitMaturityInstruction(inv) {
   if (type === 'reinvest' && !reinvestPoolId) { Toast.error('Please select a pool to reinvest into, or choose another instruction type'); return; }
 
   try {
-    await API.maturityInstructions.create({
-      id: Utils.genId('MAT'),
-      investment_id: inv.id,
-      investor_id: DEMO_INVESTOR_ID,
-      investor_name: `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
-      pool_name: inv.pool_name,
-      instruction: type,
-      instruction_type: type,
-      custom_payout_amount: customAmt || 0,
-      reinvest_pool_id: reinvestPoolId,
-      status: 'submitted',
-      submitted_date: new Date().toISOString(),
-      total_payout: inv.amount + (inv.actual_return_amount || inv.expected_return_amount)
-    });
-
     await API.investments.update(inv.id, { maturity_instruction: type });
 
     Toast.success('Maturity instruction saved successfully!');
