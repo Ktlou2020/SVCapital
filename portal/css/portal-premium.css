@@ -2553,8 +2553,8 @@ h1, h2, h3, .section-banner__title, .modal__title, .welcome-name, .panel__title,
 .welcome-greeting { color: #ff9b0c !important; }
 
 /* ─── CI blue (#656565) for ghost/teal buttons ─── */
-.btn--ghost { color: #656565 !important; border-color: rgba(0,150,255,0.22) !important; }
-.btn--ghost:hover { background: rgba(0,150,255,0.06) !important; }
+.btn--ghost { color: #656565 !important; border-color: rgba(101,101,101,0.22) !important; }
+.btn--ghost:hover { background: rgba(101,101,101,0.06) !important; }
 
 /* ─── CI text colors ─── */
 .topbar__title { color: #303030 !important; }

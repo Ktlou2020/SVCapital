@@ -3679,7 +3679,7 @@ async function renderMobileActivity() {
 
   panel.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px">
-      <div style="background:rgba(0,150,255,0.08);border:1px solid rgba(0,150,255,0.2);border-radius:10px;padding:14px 16px">
+      <div style="background:rgba(101,101,101,0.08);border:1px solid rgba(0,150,255,0.2);border-radius:10px;padding:14px 16px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <i class="fa-brands fa-apple" style="font-size:1.2rem;color:#656565"></i>
           <span style="font-size:0.72rem;font-weight:700;color:#656565;text-transform:uppercase;letter-spacing:0.05em">iOS</span>
