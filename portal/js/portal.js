@@ -3807,14 +3807,16 @@ function openInvestModal(poolId) {
     <div class="form-group" style="margin-top:14px">
       <label class="form-label">How much would you like to invest?</label>
       <div class="invest-quickpick mb-8">
-        ${[pool.min_investment, 5000, 10000, 25000].filter(v => v <= walletBal || v === pool.min_investment).map(v =>
-          `<button class="invest-qp-btn" onclick="document.getElementById('investAmount').value=${v};_updateInvestCalc(${v},${pool.annual_rate},${pool.term_months},${pool.min_investment})">${Utils.rand(v)}</button>`
+        ${[pool.min_investment, 5000, 10000, 25000].filter(v => (v + _platformFee(v)) <= walletBal || v === pool.min_investment).map(v =>
+          `<button class="invest-qp-btn" onclick="document.getElementById('investAmount').value=${v};_updateInvestCalc(${v},${pool.annual_rate},${pool.term_months},${pool.min_investment},${walletBal})">${Utils.rand(v)}</button>`
         ).join('')}
       </div>
       <input type="number" class="form-input" id="investAmount"
         placeholder="Enter amount (min ${Utils.rand(pool.min_investment)})"
-        min="${pool.min_investment}" max="${walletBal}" oninput="_updateInvestCalc(parseFloat(this.value)||0,${pool.annual_rate},${pool.term_months},${pool.min_investment})" />
+        min="${pool.min_investment}" max="${Math.floor(walletBal / (1 + PLATFORM_FEE_RATE))}"
+        oninput="_updateInvestCalc(parseFloat(this.value)||0,${pool.annual_rate},${pool.term_months},${pool.min_investment},${walletBal})" />
     </div>
+    <div id="investInsufficientBanner" style="display:none"></div>
 
     <!-- Live return calculator -->
     <div id="investCalcPreview" class="invest-calc-box">
@@ -3861,31 +3863,71 @@ function openInvestModal(poolId) {
   if (pool.product_type === 'cattle') _renderCattleHerdStatus('cattleHerdStatus');
 }
 
-function _updateInvestCalc(amt, rate, termMonths, minInvest) {
-  const preview = document.getElementById('investCalcPreview');
+function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
+  const preview  = document.getElementById('investCalcPreview');
+  const banner   = document.getElementById('investInsufficientBanner');
+  const confirmBtn = document.getElementById('investConfirmBtn');
   if (!preview) return;
   const feeAmtEl = document.getElementById('ic-fee-amount');
   const feeFeeEl = document.getElementById('ic-fee-fee');
   const feeTotEl = document.getElementById('ic-fee-total');
+
+  const fee        = _platformFee(amt);
+  const totalNeeded = amt + fee;
+  // Max the investor can invest fee-inclusive (floor to whole rands)
+  const maxAffordable = walletBal ? Math.floor(walletBal / (1 + PLATFORM_FEE_RATE)) : null;
+  const overBudget  = walletBal != null && totalNeeded > walletBal + 0.005;
+
   if (amt >= minInvest) {
     const ret = amt * rate * (termMonths / 12);
     document.getElementById('ic-invested').textContent = Utils.rand(Math.round(amt));
     document.getElementById('ic-returns').textContent  = '+' + Utils.rand(Math.round(ret));
     document.getElementById('ic-total').textContent    = Utils.rand(Math.round(amt + ret));
     preview.classList.add('invest-calc-box--visible');
-    // Wallet deduction breakdown
-    const fee = _platformFee(amt);
     if (feeAmtEl) feeAmtEl.textContent = Utils.rand(amt, 2);
     if (feeFeeEl) feeFeeEl.textContent = Utils.rand(fee, 2);
-    if (feeTotEl) feeTotEl.textContent = Utils.rand(amt + fee, 2);
+    if (feeTotEl) {
+      feeTotEl.textContent = Utils.rand(totalNeeded, 2);
+      feeTotEl.style.color = overBudget ? '#ef4444' : '#1a1a1a';
+    }
   } else {
-    document.getElementById('ic-invested').textContent = '—';
-    document.getElementById('ic-returns').textContent  = '—';
-    document.getElementById('ic-total').textContent    = '—';
+    ['ic-invested','ic-returns','ic-total'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
     preview.classList.remove('invest-calc-box--visible');
     if (feeAmtEl) feeAmtEl.textContent = '—';
     if (feeFeeEl) feeFeeEl.textContent = '—';
-    if (feeTotEl) feeTotEl.textContent = '—';
+    if (feeTotEl) { feeTotEl.textContent = '—'; feeTotEl.style.color = '#1a1a1a'; }
+  }
+
+  // Over-budget: show top-up prompt with max investable guide
+  if (banner) {
+    if (overBudget && maxAffordable != null) {
+      const canInvest = maxAffordable >= minInvest;
+      banner.style.display = 'block';
+      banner.innerHTML = `
+        <div style="margin-top:10px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 14px">
+          <div style="display:flex;align-items:flex-start;gap:10px">
+            <i class="fa-solid fa-circle-exclamation" style="color:#ef4444;margin-top:2px;flex-shrink:0"></i>
+            <div style="flex:1">
+              <div style="font-size:0.83rem;font-weight:700;color:#ef4444;margin-bottom:4px">Insufficient funds including the platform fee</div>
+              <div style="font-size:0.78rem;color:#6b7280;line-height:1.5">
+                You need <strong style="color:#1a1a1a">${Utils.rand(totalNeeded, 2)}</strong> (${Utils.rand(amt)} + ${Utils.rand(fee, 2)} fee) but your wallet has <strong style="color:#1a1a1a">${Utils.rand(walletBal)}</strong>.
+                ${canInvest
+                  ? `The most you can invest right now is <strong style="color:#1a1a1a">${Utils.rand(maxAffordable)}</strong>.`
+                  : `This exceeds your available balance even at the minimum investment.`}
+              </div>
+              <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                ${canInvest ? `<button class="btn btn--secondary btn--sm" onclick="document.getElementById('investAmount').value=${maxAffordable};_updateInvestCalc(${maxAffordable},${rate},${termMonths},${minInvest},${walletBal})">Use max (${Utils.rand(maxAffordable)})</button>` : ''}
+                <button class="btn btn--primary btn--sm" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))"><i class="fa-solid fa-plus"></i> Top Up Wallet</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      if (confirmBtn) confirmBtn.disabled = true;
+    } else {
+      banner.style.display = 'none';
+      banner.innerHTML = '';
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
   }
 }
 
