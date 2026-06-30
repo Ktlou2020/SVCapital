@@ -2261,7 +2261,6 @@ function _renderRecurringTab() {
           </div>
           <div style="text-align:right;flex-shrink:0">
             <div style="font-weight:700;color:#1a1a1a">${Utils.rand(ri.amount)}</div>
-            <div style="font-size:0.7rem;color:#22c55e">${Utils.pct(ri.annual_rate)} p.a.</div>
           </div>
         </div>`;
     }).join('');
@@ -3194,8 +3193,8 @@ async function renderProductDetailView(type) {
             </div>
           </div>` : ''}
 
-          <div style="margin-bottom:6px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">Projected growth of ${Utils.rand(10000)} at ${(projRate * 100).toFixed(2)}% p.a.</div>
-          <div style="position:relative;height:180px;margin-bottom:6px"><canvas id="prodGrowthChart"></canvas></div>
+          <div style="margin-bottom:10px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">Projected growth of ${Utils.rand(10000)} at ${(projRate * 100).toFixed(2)}% p.a. over 5 years</div>
+          <div style="position:relative;height:220px;margin-bottom:6px"><canvas id="prodGrowthChart"></canvas></div>
 
           ${isSolar ? '<div id="prodSolarHistory" style="margin-top:16px"></div>' : ''}
           <div id="prodTrackRecord" style="margin-top:16px"></div>
@@ -3233,23 +3232,104 @@ async function renderProductDetailView(type) {
   _renderProductFactsheets(type, product);
 }
 
-// Compound-growth projection of R10,000 over the term
+// Compound-growth projection of R10,000 over 5 years (60 months)
 let _prodGrowthChart = null;
 function _renderProductGrowthChart(rate, termMonths, color) {
   const canvas = document.getElementById('prodGrowthChart');
   if (!canvas || typeof Chart === 'undefined') return;
   try { if (_prodGrowthChart) { _prodGrowthChart.destroy(); _prodGrowthChart = null; } } catch (_) {}
-  const months = Math.max(1, Math.min(120, parseInt(termMonths) || 12));
+
+  // Always show 5-year (60 month) window, tick every 12 months
+  const totalMonths = 60;
   const labels = [], data = [];
-  for (let m = 0; m <= months; m++) { labels.push(m === 0 ? 'Start' : `M${m}`); data.push(Math.round(10000 * Math.pow(1 + rate, m / 12))); }
-  _prodGrowthChart = new Chart(canvas.getContext('2d'), {
+  for (let m = 0; m <= totalMonths; m++) {
+    labels.push(m === 0 ? 'Start' : (m % 12 === 0 ? `Y${m / 12}` : ''));
+    data.push(Math.round(10000 * Math.pow(1 + rate, m / 12)));
+  }
+
+  // Parse hex color for gradient
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 220);
+  grad.addColorStop(0, color + '55');
+  grad.addColorStop(1, color + '08');
+
+  const finalVal = data[data.length - 1];
+  const startVal = data[0];
+
+  _prodGrowthChart = new Chart(ctx, {
     type: 'line',
-    data: { labels, datasets: [{ data, borderColor: color, backgroundColor: color + '22', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
+    data: {
+      labels,
+      datasets: [{
+        data,
+        borderColor: color,
+        backgroundColor: grad,
+        fill: true,
+        tension: 0.4,
+        pointRadius: labels.map((l, i) => (i === 0 || i === totalMonths || (i % 12 === 0)) ? 4 : 0),
+        pointBackgroundColor: color,
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        borderWidth: 2.5,
+      }],
+    },
     options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => Utils.rand(c.parsed.y) } } },
-      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 6, color: 'rgba(0,0,0,0.4)', font: { size: 9 } } },
-                y: { ticks: { callback: v => 'R' + (v / 1000).toFixed(0) + 'k', color: 'rgba(0,0,0,0.4)', font: { size: 9 } }, grid: { color: 'rgba(0,0,0,0.05)' } } },
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => `Month ${items[0].dataIndex}`,
+            label: c => `  Value: ${Utils.rand(c.parsed.y)}`,
+          },
+          backgroundColor: '#1a1a1a',
+          titleColor: '#9ca3af',
+          bodyColor: '#ffffff',
+          padding: 10,
+          cornerRadius: 8,
+        },
+        annotation: {
+          annotations: {
+            endLabel: {
+              type: 'label',
+              xValue: totalMonths,
+              yValue: finalVal,
+              content: [Utils.rand(finalVal)],
+              color: color,
+              font: { size: 10, weight: '700' },
+              position: { x: 'end', y: 'center' },
+              xAdjust: -4,
+              yAdjust: -14,
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          border: { display: true, color: 'rgba(0,0,0,0.1)' },
+          ticks: {
+            color: 'rgba(0,0,0,0.45)',
+            font: { size: 9, weight: '600' },
+            maxRotation: 0,
+            callback: (val, i) => labels[i] || null,
+          },
+        },
+        y: {
+          position: 'left',
+          border: { display: false },
+          grid: { color: 'rgba(0,0,0,0.06)', drawTicks: false },
+          ticks: {
+            callback: v => 'R' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v),
+            color: 'rgba(0,0,0,0.45)',
+            font: { size: 9, weight: '600' },
+            maxTicksLimit: 6,
+            padding: 4,
+          },
+        },
+      },
+      layout: { padding: { top: 18, right: 12, bottom: 4, left: 4 } },
     },
   });
 }
@@ -3996,10 +4076,6 @@ async function loadMaturity() {
           <div class="maturity-card__detail">Matures: ${Utils.date(inv.maturity_date)} · ${days} days remaining</div>
           ${hasInstruction ? `<div style="font-size:0.72rem;color:var(--green);margin-top:4px"><i class="fa-solid fa-check-circle"></i> Instruction set: ${inv.maturity_instruction.replace(/_/g,' ')}</div>` : ''}
         </div>
-        <div class="maturity-card__payout">
-          <div class="maturity-card__payout-value">${Utils.rand(inv.amount + inv.expected_return_amount)}</div>
-          <div class="maturity-card__payout-label">Expected payout</div>
-        </div>
         <button class="btn ${hasInstruction ? 'btn--secondary' : 'btn--primary'}" onclick='openMaturityModal(${JSON.stringify(inv.id)})'>
           <i class="fa-solid fa-${hasInstruction ? 'pen' : 'paper-plane'}"></i> ${hasInstruction ? 'Update Instruction' : 'Set Instruction'}
         </button>
@@ -4017,10 +4093,6 @@ async function loadMaturity() {
           <div class="maturity-card__name">${_esc(inv.pool_name)}</div>
           <div class="maturity-card__detail">Matured: ${Utils.date(inv.maturity_date)} · Rate: ${Utils.pct(inv.expected_return_rate)}</div>
           ${instruction ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px"><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> Instruction: ${instruction.replace(/_/g,' ')}</div>` : ''}
-        </div>
-        <div class="maturity-card__payout">
-          <div class="maturity-card__payout-value">${Utils.rand(total)}</div>
-          <div class="maturity-card__payout-label">Total payout value</div>
         </div>
         ${instruction
           ? `<span class="badge badge--gray" style="text-transform:capitalize">${instruction.replace(/_/g,' ')}</span>`
@@ -9411,7 +9483,7 @@ async function _loadStatementArchive() {
     const taxYear = new Date().getMonth() >= 2 ? currentYear : currentYear - 1; // Feb cutoff
     const taxSection = `
       <div style="margin-bottom:14px;padding:12px;background:rgba(255,155,12,0.06);border-radius:8px;border:1px solid rgba(255,155,12,0.2)">
-        <div style="font-size:0.84rem;font-weight:700;margin-bottom:6px"><i class="fa-solid fa-file-shield" style="color:var(--gold);margin-right:6px"></i>Tax Certificates</div>
+        <div style="font-size:0.84rem;font-weight:700;margin-bottom:6px"><i class="fa-solid fa-file-shield" style="color:var(--gold);margin-right:6px"></i>Investment Income Certificate</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">Download your annual IT3(b)-style investment income summary for SARS submission.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${[taxYear, taxYear-1, taxYear-2].map(y => `<button class="btn btn--ghost btn--sm" onclick="_downloadTaxCert(${y})" style="font-size:0.75rem"><i class="fa-solid fa-download"></i> ${y}/${y+1}</button>`).join('')}
