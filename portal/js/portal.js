@@ -4043,10 +4043,6 @@ async function loadMaturity() {
           <div class="maturity-card__detail">Matures: ${Utils.date(inv.maturity_date)} · ${days} days remaining</div>
           ${hasInstruction ? `<div style="font-size:0.72rem;color:var(--green);margin-top:4px"><i class="fa-solid fa-check-circle"></i> Instruction set: ${inv.maturity_instruction.replace(/_/g,' ')}</div>` : ''}
         </div>
-        <div class="maturity-card__payout">
-          <div class="maturity-card__payout-value">${Utils.rand(inv.amount + inv.expected_return_amount)}</div>
-          <div class="maturity-card__payout-label">Expected payout</div>
-        </div>
         <button class="btn ${hasInstruction ? 'btn--secondary' : 'btn--primary'}" onclick='openMaturityModal(${JSON.stringify(inv.id)})'>
           <i class="fa-solid fa-${hasInstruction ? 'pen' : 'paper-plane'}"></i> ${hasInstruction ? 'Update Instruction' : 'Set Instruction'}
         </button>
