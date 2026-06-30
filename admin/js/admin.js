@@ -3659,7 +3659,7 @@ function renderCohortChart() {
   if (STATE.charts.cohort) STATE.charts.cohort.destroy();
   STATE.charts.cohort = new Chart(ctx, {
     type: 'bar',
-    data: { labels: months, datasets: [{ label: 'New Investors', data: counts, backgroundColor: 'rgba(59,130,246,0.7)', borderColor: '#656565', borderWidth: 1, borderRadius: 6 }] },
+    data: { labels: months, datasets: [{ label: 'New Investors', data: counts, backgroundColor: 'rgba(101,101,101,0.7)', borderColor: '#656565', borderWidth: 1, borderRadius: 6 }] },
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { labels: { color: '#7a92a8', font: { size: 11 } } } },
       scales: { x: { ticks: { color: '#3d5268' }, grid: { display: false } }, y: { ticks: { color: '#3d5268', stepSize: 1 }, grid: { color: 'rgba(0,0,0,0.05)' } } }
@@ -6445,7 +6445,7 @@ function renderAnNewInvChart() {
       datasets: [{
         label: 'New Investors',
         data: counts,
-        backgroundColor: 'rgba(99,102,241,0.7)',
+        backgroundColor: 'rgba(101,101,101,0.7)',
         borderRadius: 5
       }]
     },
