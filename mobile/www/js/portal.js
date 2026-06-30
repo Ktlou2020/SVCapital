@@ -2261,7 +2261,6 @@ function _renderRecurringTab() {
           </div>
           <div style="text-align:right;flex-shrink:0">
             <div style="font-weight:700;color:#1a1a1a">${Utils.rand(ri.amount)}</div>
-            <div style="font-size:0.7rem;color:#22c55e">${Utils.pct(ri.annual_rate)} p.a.</div>
           </div>
         </div>`;
     }).join('');
