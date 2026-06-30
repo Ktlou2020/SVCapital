@@ -2351,13 +2351,16 @@ async function viewPoolInvestors(poolId) {
 
     const statusColor = { active:'badge--green', matured:'badge--purple', paid_out:'badge--blue', cancelled:'badge--red' };
 
+    const hasFees = summary.mgmt_fee_pct > 0;
+
     body.innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
+      <!-- Pool stats -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
         ${[
-          ['Total Raised',  Utils.rand(summary.total_invested), 'coins',      '#D4AF37'],
-          ['Investors',     summary.investor_count,             'users',      '#656565'],
-          ['Active',        summary.active_count,               'chart-line', '#22c55e'],
-          ['Matured',       summary.matured_count,              'flag-checkered','#8b5cf6'],
+          ['Total Raised',  Utils.rand(summary.total_invested), 'coins',         '#D4AF37'],
+          ['Investors',     summary.investor_count,             'users',          '#656565'],
+          ['Active',        summary.active_count,               'chart-line',     '#22c55e'],
+          ['Matured',       summary.matured_count,              'flag-checkered', '#8b5cf6'],
         ].map(([label, val, icon, color]) => `
           <div style="background:var(--bg-secondary);border-radius:10px;padding:14px;text-align:center">
             <i class="fa-solid fa-${icon}" style="color:${color};font-size:1.1rem;display:block;margin-bottom:6px"></i>
@@ -2365,19 +2368,47 @@ async function viewPoolInvestors(poolId) {
             <div style="font-size:0.72rem;color:var(--text-muted)">${label}</div>
           </div>`).join('')}
       </div>
+
+      <!-- Fee summary bar -->
       ${investors.length ? `
+      <div style="background:var(--bg-secondary);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:grid;grid-template-columns:repeat(5,1fr);gap:12px;border:1px solid var(--border)">
+        <div>
+          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">Gross Invested</div>
+          <div style="font-size:0.95rem;font-weight:800;color:var(--gold)">${Utils.rand(summary.total_invested)}</div>
+        </div>
+        <div>
+          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">Upfront Fee${hasFees ? ` (${(summary.mgmt_fee_pct*100).toFixed(2)}%)` : ''}</div>
+          <div style="font-size:0.95rem;font-weight:800;color:#f97316">${hasFees ? Utils.rand(summary.total_upfront_fees) : '—'}</div>
+        </div>
+        <div>
+          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">Platform Fee (1%)</div>
+          <div style="font-size:0.95rem;font-weight:800;color:#f97316">${Utils.rand(summary.total_platform_fees)}</div>
+        </div>
+        <div>
+          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">EVA (from Upfront)</div>
+          <div style="font-size:0.95rem;font-weight:800;color:#8b5cf6">${hasFees ? Utils.rand(summary.total_eva) : '—'}</div>
+        </div>
+        <div>
+          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">Net Invested</div>
+          <div style="font-size:0.95rem;font-weight:800;color:#22c55e">${Utils.rand(summary.total_net_invested)}</div>
+        </div>
+      </div>
+
+      <!-- Per-investment table -->
       <div style="overflow-x:auto">
-        <table class="data-table" style="table-layout:fixed;width:100%">
+        <table class="data-table" style="table-layout:fixed;width:100%;min-width:900px">
           <thead><tr>
-            <th style="width:20%">Investor</th>
-            <th style="width:12%">Account</th>
-            <th style="width:11%">Amount</th>
-            <th style="width:8%">Rate</th>
-            <th style="width:9%">EVA</th>
-            <th style="width:9%">Status</th>
-            <th style="width:10%">Start</th>
-            <th style="width:10%">Maturity</th>
-            <th style="width:11%">Instruction</th>
+            <th style="width:16%">Investor</th>
+            <th style="width:11%">Account</th>
+            <th style="width:9%">Gross Amt</th>
+            <th style="width:8%">Upfront Fee</th>
+            <th style="width:8%">Platform Fee</th>
+            <th style="width:8%">EVA</th>
+            <th style="width:9%">Net Amount</th>
+            <th style="width:7%">Rate</th>
+            <th style="width:8%">Status</th>
+            <th style="width:8%">Start</th>
+            <th style="width:8%">Instruction</th>
           </tr></thead>
           <tbody>
             ${investors.map(r => {
@@ -2386,11 +2417,13 @@ async function viewPoolInvestors(poolId) {
                 <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${r.email||''}</div></td>
                 <td class="clip" style="font-family:monospace;font-size:0.75rem;color:var(--gold)">${r.investor_id}</td>
                 <td class="td-gold fw-700 clip">${Utils.rand(r.amount)}</td>
+                <td class="clip" style="font-size:0.78rem;color:#f97316">${r.upfront_fee > 0 ? Utils.rand(r.upfront_fee) : '—'}</td>
+                <td class="clip" style="font-size:0.78rem;color:#f97316">${Utils.rand(r.platform_fee)}</td>
+                <td class="clip" style="font-size:0.78rem;color:#8b5cf6">${r.eva_contribution > 0 ? Utils.rand(r.eva_contribution) : '—'}</td>
+                <td class="clip" style="font-size:0.82rem;font-weight:700;color:#22c55e">${Utils.rand(r.net_amount)}</td>
                 <td class="td-green clip">${r.annual_rate ? Utils.pct(r.annual_rate) : '—'}</td>
-                <td class="clip" style="font-size:0.75rem;color:#8b5cf6">${r.eva_amount > 0 ? Utils.rand(r.eva_amount) : '—'}</td>
                 <td><span class="badge ${statusColor[r.investment_status]||'badge--gray'}">${r.investment_status||'—'}</span></td>
                 <td class="td-muted clip">${Utils.date(r.start_date)}</td>
-                <td class="td-muted clip">${Utils.date(r.end_date)}</td>
                 <td class="clip" style="font-size:0.75rem;color:var(--text-muted)">${r.maturity_instruction?.replace(/_/g,' ')||'—'}</td>
               </tr>`;
             }).join('')}

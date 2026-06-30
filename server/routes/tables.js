@@ -455,6 +455,12 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
     if (!['admin','director','fund_manager'].includes(req.user.role))
       return res.status(403).json({ error: 'Forbidden.' });
 
+    const poolRes = await pool.query(
+      'SELECT management_fee_pct, operational_fee_pct FROM investment_pools WHERE id = $1',
+      [req.params.id]
+    );
+    const mgmtFeePct = parseFloat(poolRes.rows[0]?.management_fee_pct) || 0;
+
     const { rows } = await pool.query(`
       SELECT
         inv.id            AS investment_id,
@@ -479,11 +485,34 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
       ORDER BY inv.start_date DESC NULLS LAST
     `, [req.params.id]);
 
+    // Augment each row with fee breakdown
+    const PLATFORM_FEE_PCT = 0.01;
+    rows.forEach(r => {
+      const amt         = parseFloat(r.amount) || 0;
+      const platformFee = Math.round(amt * PLATFORM_FEE_PCT * 100) / 100;
+      const upfrontFee  = Math.round(amt * mgmtFeePct * 100) / 100;
+      // EVA is 20% of the upfront fee net of 15% VAT — taken from the upfront fee, not additional
+      const evaCalc     = Math.round((upfrontFee / 1.15) * 0.20 * 100) / 100;
+      const totalFees   = Math.round((platformFee + upfrontFee) * 100) / 100;
+      const netAmount   = Math.round((amt - upfrontFee) * 100) / 100;
+      r.platform_fee    = platformFee;
+      r.upfront_fee     = upfrontFee;
+      r.eva_contribution = evaCalc;
+      r.total_fees      = totalFees;
+      r.net_amount      = netAmount;
+    });
+
     const summary = {
-      total_invested:   rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0),
-      investor_count:   new Set(rows.map(r => r.investor_id)).size,
-      active_count:     rows.filter(r => r.investment_status === 'active').length,
-      matured_count:    rows.filter(r => r.investment_status === 'matured').length,
+      total_invested:       rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0),
+      investor_count:       new Set(rows.map(r => r.investor_id)).size,
+      active_count:         rows.filter(r => r.investment_status === 'active').length,
+      matured_count:        rows.filter(r => r.investment_status === 'matured').length,
+      total_platform_fees:  rows.reduce((s, r) => s + (r.platform_fee || 0), 0),
+      total_upfront_fees:   rows.reduce((s, r) => s + (r.upfront_fee || 0), 0),
+      total_eva:            rows.reduce((s, r) => s + (r.eva_contribution || 0), 0),
+      total_fees:           rows.reduce((s, r) => s + (r.total_fees || 0), 0),
+      total_net_invested:   rows.reduce((s, r) => s + (r.net_amount || 0), 0),
+      mgmt_fee_pct:         mgmtFeePct,
     };
 
     res.json({ investors: rows, summary });
