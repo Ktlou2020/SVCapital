@@ -1984,3 +1984,216 @@ body,
 .perf-row__value.positive { color: #22c55e !important; }
 .perf-row__value.neutral  { color: #1a1a1a !important; }
 .perf-row__value.warning  { color: #ff9b0c !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION 31 — MY ACCOUNTS (Sub-accounts) — MOBILE REDESIGN
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── View header ─────────────────────────────────────────────── */
+#view-subaccounts .sa-view-header {
+  display: block !important;
+  margin-bottom: 20px !important;
+}
+#view-subaccounts .sa-view-title {
+  font-size: 1.15rem !important;
+  font-weight: 800 !important;
+  color: #1a1a1a !important;
+  margin-bottom: 4px !important;
+}
+#view-subaccounts .sa-view-sub {
+  font-size: 0.78rem !important;
+  color: #6b7280 !important;
+  line-height: 1.5 !important;
+  margin-bottom: 14px !important;
+}
+#view-subaccounts .sa-view-header .btn--primary {
+  width: 100% !important;
+  justify-content: center !important;
+  padding: 13px !important;
+  font-size: 0.9rem !important;
+  border-radius: 14px !important;
+}
+
+/* ── Cards grid: single column on mobile ─────────────────────── */
+#view-subaccounts .sa-cards-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+}
+
+/* ── Card shell: white elevated card ─────────────────────────── */
+#view-subaccounts .sa-card {
+  background: #ffffff !important;
+  border-radius: 20px !important;
+  border: 1px solid rgba(0,0,0,0.07) !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.07) !important;
+  overflow: hidden !important;
+  transform: none !important;
+}
+
+/* ── Card header: coloured type banner ───────────────────────── */
+#view-subaccounts .sa-card__header {
+  padding: 14px 16px 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+#view-subaccounts .sa-card__type {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+#view-subaccounts .sa-card__icon {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 8px !important;
+  background: rgba(255,255,255,0.2) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #fff !important;
+  font-size: 0.85rem !important;
+  flex-shrink: 0 !important;
+}
+#view-subaccounts .sa-card__type-label {
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+  color: rgba(255,255,255,0.95) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+}
+#view-subaccounts .sa-age-chip {
+  font-size: 0.65rem !important;
+  font-weight: 700 !important;
+  background: rgba(255,255,255,0.2) !important;
+  color: #fff !important;
+  padding: 3px 9px !important;
+  border-radius: 100px !important;
+}
+#view-subaccounts .sa-kyc-badge {
+  font-size: 0.65rem !important;
+  font-weight: 700 !important;
+  padding: 4px 10px !important;
+  border-radius: 100px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+#view-subaccounts .sa-kyc-badge--ok      { background: rgba(34,197,94,0.18) !important; color: #16a34a !important; border: 1px solid rgba(34,197,94,0.3) !important; }
+#view-subaccounts .sa-kyc-badge--pending { background: rgba(251,191,36,0.18) !important; color: #92400e !important; border: 1px solid rgba(251,191,36,0.3) !important; }
+#view-subaccounts .sa-kyc-badge--missing { background: rgba(239,68,68,0.12) !important; color: #dc2626 !important; border: 1px solid rgba(239,68,68,0.25) !important; }
+
+/* ── Card body: white, dark text ─────────────────────────────── */
+#view-subaccounts .sa-card__body {
+  padding: 14px 16px 12px !important;
+  border-top: none !important;
+  background: transparent !important;
+}
+#view-subaccounts .sa-card__name {
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+  color: #1a1a1a !important;
+  margin-bottom: 12px !important;
+  letter-spacing: -0.01em !important;
+}
+
+/* ── Stat tiles: dark-label / big-value ──────────────────────── */
+#view-subaccounts .sa-card__stats {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 8px !important;
+  margin-bottom: 10px !important;
+}
+#view-subaccounts .sa-stat {
+  background: #F4F5F7 !important;
+  border-radius: 12px !important;
+  padding: 10px 12px !important;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+}
+#view-subaccounts .sa-stat__label {
+  font-size: 0.62rem !important;
+  text-transform: uppercase !important;
+  color: #9ca3af !important;
+  letter-spacing: 0.06em !important;
+  font-weight: 700 !important;
+  display: block !important;
+}
+#view-subaccounts .sa-stat__value {
+  font-size: 1rem !important;
+  font-weight: 900 !important;
+  color: #1a1a1a !important;
+  margin-top: 3px !important;
+  display: block !important;
+  letter-spacing: -0.02em !important;
+}
+
+/* ── Goal bar ────────────────────────────────────────────────── */
+#view-subaccounts .sa-goal-bar {
+  margin-top: 4px !important;
+  background: #F4F5F7 !important;
+  border-radius: 12px !important;
+  padding: 10px 12px !important;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+}
+#view-subaccounts .sa-goal-bar__label {
+  font-size: 0.7rem !important;
+  color: #6b7280 !important;
+  font-weight: 700 !important;
+  margin-bottom: 6px !important;
+}
+#view-subaccounts .sa-goal-bar__track {
+  height: 7px !important;
+  background: rgba(0,0,0,0.08) !important;
+  border-radius: 100px !important;
+}
+#view-subaccounts .sa-goal-bar__fill {
+  height: 100% !important;
+  background: linear-gradient(90deg, #ff9b0c, #ff5229) !important;
+  border-radius: 100px !important;
+}
+#view-subaccounts .sa-goal-bar__nums {
+  font-size: 0.7rem !important;
+  color: #6b7280 !important;
+  font-weight: 700 !important;
+  margin-top: 5px !important;
+  text-align: right !important;
+}
+
+/* ── Action row ──────────────────────────────────────────────── */
+#view-subaccounts .sa-card__actions {
+  padding: 10px 16px 14px !important;
+  display: flex !important;
+  gap: 8px !important;
+  border-top: 1px solid rgba(0,0,0,0.06) !important;
+  background: transparent !important;
+}
+#view-subaccounts .sa-card__actions .btn {
+  flex: 1 !important;
+  justify-content: center !important;
+  text-align: center !important;
+  font-size: 0.78rem !important;
+  padding: 9px 6px !important;
+  border-radius: 10px !important;
+  gap: 5px !important;
+}
+#view-subaccounts .sa-card__actions .btn--primary {
+  background: linear-gradient(135deg, #ff9b0c, #ff5229) !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: 0 3px 10px rgba(255,82,41,0.22) !important;
+}
+#view-subaccounts .sa-card__actions .btn--secondary {
+  background: #F4F5F7 !important;
+  color: #1a1a1a !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+}
+#view-subaccounts .sa-card__actions .btn:disabled {
+  opacity: 0.4 !important;
+}
+
+/* ── Minor card accent border ────────────────────────────────── */
+#view-subaccounts .sa-card--minor {
+  border: 1.5px solid rgba(255,155,12,0.3) !important;
+}
