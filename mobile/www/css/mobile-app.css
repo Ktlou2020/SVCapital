@@ -1799,6 +1799,15 @@ body,
    SECTION 30 — TARGETED PORTFOLIO OVERVIEW FIXES
    ═══════════════════════════════════════════════════════════════ */
 
+/* ── Welcome banner buttons: centred text ────────────────── */
+.welcome-actions .btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  gap: 6px !important;
+}
+
 /* ── Topbar: clean white with soft shadow ─────────────────── */
 .topbar {
   background: #ffffff !important;
