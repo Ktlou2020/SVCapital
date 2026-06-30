@@ -2687,6 +2687,7 @@ function launchPaystack() {
         email:    _pmInvestorEmail(),
         amount:   Math.round(totalCharged * 100),   // Paystack expects kobo/cents
         currency: 'ZAR',
+        channels: ['card'],  // card-only so we always get a reusable auth for auto top-up
         ref:      `SVC-PS-${Date.now()}`,
         metadata: {
           investor_id:    _pmInvestorId(),
