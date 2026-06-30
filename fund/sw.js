@@ -9,7 +9,7 @@ const STATIC_URLS = [
   '/fund/cattle.html',
   '/fund/js/fund.js',
   '/fund/js/cattle.js',
-  '/assets/full-colour-logo-horizontal-white-text.png',
+  '/assets/sv-capital-logo-horizontal-white-text.png',
   '/assets/logo-inline.svg',
   '/assets/svcapital-logo-header.png'
 ];
