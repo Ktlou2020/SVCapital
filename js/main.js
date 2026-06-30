@@ -941,6 +941,52 @@ async function _applyLiveProductAverages() {
     }
   });
 
+  // 3) Show/hide product cards and calculator tabs based on display_on_homepage
+  const calcKeyMap = {
+    cattle:   ['cattle'],
+    solar:    ['solar_7yr', 'solar_6yr', 'solar_5yr'],
+    short:    ['short_term', 'smme'],
+    delivery: ['delivery_bike'],
+  };
+  const calcTabMap = { // calc tab data-calc values → product home key
+    cattle:   'cattle',
+    solar7:   'solar',
+    solar5:   'solar',
+    short:    'short',
+    delivery: 'delivery',
+  };
+
+  // A home key is visible if at least one of its product_types has display_on_homepage=true
+  const homeVisible = {};
+  Object.keys(calcKeyMap).forEach(homeKey => {
+    homeVisible[homeKey] = calcKeyMap[homeKey].some(t => {
+      const p = prodByType[t];
+      return p && p.display_on_homepage !== false;
+    });
+  });
+
+  // Hide/show product cards
+  document.querySelectorAll('.product-card[data-product]').forEach(card => {
+    const key = card.dataset.product;
+    if (key in homeVisible) card.style.display = homeVisible[key] ? '' : 'none';
+  });
+
+  // Hide/show calculator tabs; if active tab hidden, activate first visible one
+  const allTabs = document.querySelectorAll('.calc-tab[data-calc]');
+  allTabs.forEach(tab => {
+    const homeKey = calcTabMap[tab.dataset.calc];
+    const visible = homeKey ? homeVisible[homeKey] : true;
+    tab.style.display = visible ? '' : 'none';
+    if (!visible && tab.classList.contains('active')) {
+      const first = Array.from(allTabs).find(t => {
+        const hk = calcTabMap[t.dataset.calc];
+        return hk ? homeVisible[hk] : true;
+      });
+      if (first) { first.classList.add('active'); currentCalcProduct = first.dataset.calc; updateCalculator(); }
+      tab.classList.remove('active');
+    }
+  });
+
   // Next pool closing — soonest open-pool closing date across all products
   _showNextPoolClosing(products);
 }
