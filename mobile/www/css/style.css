@@ -1262,7 +1262,7 @@ section { position: relative; padding: 100px 0; }
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-dim);
+  color: rgba(255,255,255,0.75);
   margin-bottom: 6px;
 }
 
