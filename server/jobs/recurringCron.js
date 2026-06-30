@@ -20,6 +20,7 @@
 const cron         = require('node-cron');
 const pool         = require('../db/pool');
 const emailService = require('../services/email');
+const pushService  = require('../services/pushService');
 
 async function runRecurringInvestments() {
   const todayDay = new Date().getDate(); // 1–31
@@ -137,8 +138,11 @@ async function runRecurringInvestments() {
    AUTO WALLET TOP-UP via Paystack charge_authorization
    ═══════════════════════════════════════════════════════════ */
 async function runAutoTopUps() {
-  const todayDay = new Date().getDate(); // 1-31
-  console.log(`[autoTopUp] Running for day ${todayDay}…`);
+  const today    = new Date();
+  const todayDay = today.getDate(); // 1-31
+  // Deterministic date-based reference prefix prevents double-charging on cron restarts
+  const todayStr = today.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+  console.log(`[autoTopUp] Running for day ${todayDay} (${todayStr})…`);
 
   const secretKey = (process.env.PAYSTACK_SECRET_KEY || '').trim();
   if (!secretKey) {
@@ -159,14 +163,28 @@ async function runAutoTopUps() {
   );
 
   console.log(`[autoTopUp] ${investors.length} investor(s) scheduled for top-up today`);
-  let processed = 0, failed = 0;
+  let processed = 0, skipped = 0, failed = 0;
 
   for (const inv of investors) {
     const amount   = parseFloat(inv.auto_topup_amount);
     const amtKobo  = Math.round(amount * 100);
-    const reference = `ATU-${Date.now()}-${inv.id.replace(/[^A-Z0-9]/g, '')}`;
+    // Deterministic reference: same investor+date always produces the same ref.
+    // Paystack rejects a duplicate reference → idempotent if the cron fires twice.
+    const reference = `ATU-${todayStr}-${inv.id.replace(/[^A-Z0-9]/gi, '').toUpperCase()}`;
 
     try {
+      // Skip if we already successfully credited this investor today (local idempotency)
+      const { rows: alreadyDone } = await pool.query(
+        `SELECT id FROM transactions
+         WHERE investor_id = $1 AND reference = $2 AND status = 'completed'`,
+        [inv.id, reference]
+      );
+      if (alreadyDone.length > 0) {
+        console.log(`[autoTopUp] Skipping ${inv.id} — already credited today (${reference})`);
+        skipped++;
+        continue;
+      }
+
       const psRes = await fetch('https://api.paystack.co/transaction/charge_authorization', {
         method: 'POST',
         headers: { Authorization: `Bearer ${secretKey}`, 'Content-Type': 'application/json' },
@@ -185,28 +203,51 @@ async function runAutoTopUps() {
       const psData = await psRes.json();
 
       if (psData.status && psData.data?.status === 'success') {
-        // Re-use the shared creditWallet helper from payments.js
+        await pool.query(
+          'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at=NOW() WHERE id=$2',
+          [amount, inv.id]
+        );
+        const desc = `Auto top-up via Paystack — R${amount.toLocaleString('en-ZA')} credited`;
+        await pool.query(
+          `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
+           VALUES (gen_random_uuid(),$1,'deposit',$2,'completed',$3,$4,NOW(),NOW())`,
+          [inv.id, amount, reference, desc]
+        );
         const { rows: [invRow] } = await pool.query('SELECT * FROM investors WHERE id=$1', [inv.id]);
         if (invRow) {
-          // Inline credit (same logic as creditWallet in payments.js)
-          await pool.query(
-            'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at=NOW() WHERE id=$2',
-            [amount, inv.id]
-          );
-          const desc = `Auto top-up via Paystack — R${amount.toLocaleString('en-ZA')} credited`;
-          await pool.query(
-            `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
-             VALUES (gen_random_uuid(),$1,'deposit',$2,'completed',$3,$4,NOW(),NOW())`,
-            [inv.id, amount, reference, desc]
-          );
           emailService.sendDepositConfirmed(invRow, amount, reference, 'Auto Top-Up (Paystack)').catch(() => {});
-          console.log(`[autoTopUp] R${amount} credited to ${inv.id}, ref: ${reference}`);
-          processed++;
         }
+        pushService.sendPushToInvestor(inv.id, {
+          title: 'Wallet Topped Up',
+          body:  `R${amount.toLocaleString('en-ZA')} has been added to your wallet.`,
+          url:   '/portal/',
+        }).catch(() => {});
+        console.log(`[autoTopUp] R${amount} credited to ${inv.id}, ref: ${reference}`);
+        processed++;
       } else {
+        const errMsg = (psData.message || '').toLowerCase();
         console.error(`[autoTopUp] Charge failed for ${inv.id}:`, psData.message || JSON.stringify(psData));
-        // Disable auto top-up after failure so we don't keep retrying a bad card
-        await pool.query('UPDATE investors SET auto_topup_enabled=false WHERE id=$1', [inv.id]);
+
+        // Only permanently disable for definitive card failures, not transient errors.
+        // Paystack 5xx, network timeouts, or generic errors should NOT disable the feature.
+        const isCardError = errMsg.includes('invalid') || errMsg.includes('expired') ||
+          errMsg.includes('do not honor') || errMsg.includes('declined') ||
+          errMsg.includes('stolen') || errMsg.includes('lost') ||
+          errMsg.includes('invalid authorization') || errMsg.includes('blocked');
+
+        if (isCardError) {
+          await pool.query('UPDATE investors SET auto_topup_enabled=false WHERE id=$1', [inv.id]);
+          console.log(`[autoTopUp] Auto top-up disabled for ${inv.id} (card error: ${psData.message})`);
+        }
+
+        // Notify investor of the failure
+        pushService.sendPushToInvestor(inv.id, {
+          title: 'Auto Top-Up Failed',
+          body:  isCardError
+            ? 'Your card could not be charged. Auto top-up has been paused — please update your card.'
+            : 'Your scheduled wallet top-up could not be completed. We will retry tomorrow.',
+          url: '/portal/',
+        }).catch(() => {});
         failed++;
       }
     } catch (err) {
@@ -215,7 +256,7 @@ async function runAutoTopUps() {
     }
   }
 
-  console.log(`[autoTopUp] Done — ${processed} credited, ${failed} failed`);
+  console.log(`[autoTopUp] Done — ${processed} credited, ${skipped} skipped, ${failed} failed`);
 }
 
 function startRecurringCron() {
