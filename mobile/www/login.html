@@ -585,9 +585,6 @@
         </div>
       </div>
 
-      <!-- Products — populated dynamically from /api/products (display_on_homepage=true) -->
-      <div style="margin-bottom:12px;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:700">Available Investment Products</div>
-      <div class="login-products" id="loginProductTags"></div>
 
       <!-- FSCA -->
       <div class="login-fsca">
@@ -1029,25 +1026,6 @@
       loginForm.addEventListener('submit', function() {
         if (window.SVC) SVC.track('svc_login_attempted', {});
       });
-    }
-
-    // Populate product tags from admin-managed catalogue (display_on_homepage = true)
-    var tagsEl = document.getElementById('loginProductTags');
-    if (tagsEl) {
-      fetch((window.__SVC_API_BASE__ || '/api/') + 'products')
-        .then(function(r) { return r.json(); })
-        .then(function(res) {
-          var products = (res.data || []).filter(function(p) { return p.display_on_homepage; });
-          if (!products.length) return;
-          tagsEl.innerHTML = products.map(function(p) {
-            var c = p.color || '#656565';
-            var hex = c.replace('#','');
-            var r = parseInt(hex.substring(0,2),16), g = parseInt(hex.substring(2,4),16), b = parseInt(hex.substring(4,6),16);
-            return '<span class="login-product-tag" style="background:rgba('+r+','+g+','+b+',0.15);color:'+c+';border:1px solid rgba('+r+','+g+','+b+',0.3)">'
-              + (p.label || p.product_type) + '</span>';
-          }).join('');
-        })
-        .catch(function() {});
     }
   });
 </script>
