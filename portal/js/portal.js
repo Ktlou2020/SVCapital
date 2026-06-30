@@ -4091,16 +4091,30 @@ async function openMaturityModal(investmentId) {
   const total     = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
   const existing  = inv.maturity_instruction || '';
 
-  // Fetch open pools of matching product type for reinvest option
-  let reinvestPools = [];
+  // Fetch all open pools
+  let allOpenPools = [];
   try {
     const poolsRes = await API.pools.list({ limit: 100 });
-    reinvestPools = (poolsRes.data || []).filter(p => p.status === 'open' && p.product_type === inv.product_type);
+    allOpenPools = (poolsRes.data || []).filter(p => p.status === 'open');
   } catch (_) { /* non-fatal */ }
+
+  const reinvestPools = allOpenPools.filter(p => p.product_type === inv.product_type);
 
   const reinvestPoolsHtml = reinvestPools.length
     ? reinvestPools.map(p => `<option value="${p.id}">${p.name} (${Utils.rand(p.min_investment)} min · ${Utils.pct(p.annual_rate)} p.a.)</option>`).join('')
     : `<option value="" disabled>No open pools available for this product type</option>`;
+
+  // Switch product: all product types except the current one.
+  // Pool availability is resolved at maturity time — the pool may not be open yet.
+  const allProductTypes = [...new Set(
+    (PORTAL.pools || []).filter(p => p.product_type && p.product_type !== inv.product_type).map(p => p.product_type)
+  )];
+  const switchProductsHtml = allProductTypes.length
+    ? allProductTypes.map(pt => {
+        const pi = Utils.productInfo(pt);
+        return `<option value="${pt}" ${existing==='switch_product' && inv.switch_product_type===pt?'selected':''}>${pi.label || pt}</option>`;
+      }).join('')
+    : `<option value="" disabled>No other product types available</option>`;
 
   document.getElementById('maturityModalBody').innerHTML = `
     <div class="info-list mb-16">
@@ -4113,10 +4127,11 @@ async function openMaturityModal(investmentId) {
     <div class="form-group">
       <label class="form-label">Instruction Type *</label>
       <select class="form-select" id="matInstructionType">
-        <option value="payout_all" ${existing==='payout_all'?'selected':''}>Payout All — Receive full capital + returns</option>
-        <option value="payout_return" ${existing==='payout_return'?'selected':''}>Payout Returns Only — Keep capital reinvested</option>
-        <option value="reinvest" ${existing==='reinvest'?'selected':''}>Reinvest — Roll over into same product</option>
-        <option value="payout_custom" ${existing==='payout_custom'?'selected':''}>Custom Payout — Specify amount</option>
+        <option value="payout_all"     ${existing==='payout_all'    ?'selected':''}>Payout All — Receive full capital + returns</option>
+        <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — Keep capital reinvested</option>
+        <option value="reinvest"       ${existing==='reinvest'      ?'selected':''}>Reinvest — Roll over into same product</option>
+        <option value="switch_product" ${existing==='switch_product'?'selected':''}>Switch Product — Move payout into a different product</option>
+        <option value="payout_custom"  ${existing==='payout_custom' ?'selected':''}>Custom Payout — Specify amount</option>
       </select>
     </div>
 
@@ -4127,6 +4142,16 @@ async function openMaturityModal(investmentId) {
           ${reinvestPoolsHtml}
         </select>
         ${!reinvestPools.length ? `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> A suitable open pool will be selected at maturity if none is available now.</div>` : ''}
+      </div>
+    </div>
+
+    <div id="switchProductGroup" style="display:${existing==='switch_product'?'block':'none'}">
+      <div class="form-group">
+        <label class="form-label">Switch to Product *</label>
+        <select class="form-select" id="matSwitchProductType">
+          ${switchProductsHtml}
+        </select>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The first available open pool for your chosen product will be used when your investment matures. A 1% platform fee applies.</div>
       </div>
     </div>
 
@@ -4147,8 +4172,9 @@ async function openMaturityModal(investmentId) {
   `;
 
   document.getElementById('matInstructionType').addEventListener('change', e => {
-    document.getElementById('customPayoutGroup').style.display  = e.target.value === 'payout_custom' ? 'block' : 'none';
-    document.getElementById('reinvestPoolGroup').style.display  = e.target.value === 'reinvest'      ? 'block' : 'none';
+    document.getElementById('customPayoutGroup').style.display  = e.target.value === 'payout_custom'  ? 'block' : 'none';
+    document.getElementById('reinvestPoolGroup').style.display  = e.target.value === 'reinvest'       ? 'block' : 'none';
+    document.getElementById('switchProductGroup').style.display = e.target.value === 'switch_product' ? 'block' : 'none';
   });
 
   const matBtn = document.getElementById('maturityConfirmBtn');
@@ -4157,15 +4183,20 @@ async function openMaturityModal(investmentId) {
 }
 
 async function submitMaturityInstruction(inv) {
-  const type      = document.getElementById('matInstructionType').value;
-  const customAmt = type === 'payout_custom' ? parseFloat(document.getElementById('matCustomAmount').value) : null;
-  const reinvestPoolId = type === 'reinvest' ? (document.getElementById('matReinvestPool')?.value || null) : null;
+  const type           = document.getElementById('matInstructionType').value;
+  const customAmt      = type === 'payout_custom'  ? parseFloat(document.getElementById('matCustomAmount').value) : null;
+  const reinvestPoolId = type === 'reinvest'        ? (document.getElementById('matReinvestPool')?.value  || null) : null;
+  const switchProductType = type === 'switch_product' ? (document.getElementById('matSwitchProductType')?.value || null) : null;
 
-  if (type === 'payout_custom' && (!customAmt || customAmt <= 0)) { Toast.error('Please enter a valid custom payout amount'); return; }
-  if (type === 'reinvest' && !reinvestPoolId) { Toast.error('Please select a pool to reinvest into, or choose another instruction type'); return; }
+  if (type === 'payout_custom'  && (!customAmt || customAmt <= 0)) { Toast.error('Please enter a valid custom payout amount'); return; }
+  if (type === 'reinvest'       && !reinvestPoolId)                 { Toast.error('Please select a pool to reinvest into, or choose another instruction type'); return; }
+  if (type === 'switch_product' && !switchProductType)              { Toast.error('Please select a product to switch into'); return; }
 
   try {
-    await API.investments.update(inv.id, { maturity_instruction: type });
+    const updateData = { maturity_instruction: type };
+    if (reinvestPoolId)   updateData.reinvest_pool_id      = reinvestPoolId;
+    if (switchProductType) updateData.switch_product_type  = switchProductType;
+    await API.investments.update(inv.id, updateData);
 
     Toast.success('Maturity instruction saved successfully!');
     SVC.track('svc_maturity_instruction', { investment_id: inv.id, action: type });

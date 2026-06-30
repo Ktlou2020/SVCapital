@@ -1109,6 +1109,7 @@ async function autoSetup() {
         BEGIN ALTER TABLE maturity_instructions ADD COLUMN submitted_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE maturity_instructions ADD COLUMN total_payout NUMERIC(18,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE maturity_instructions ADD COLUMN reinvest_pool_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE investments ADD COLUMN switch_product_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
       END $$
     `);
     console.log('✅ Investor FICA + gamification columns ready.');
