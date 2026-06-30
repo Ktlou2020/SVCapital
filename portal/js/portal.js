@@ -8910,11 +8910,11 @@ function _getPDF(orientation = 'portrait') {
 function _pdfHeader(doc, title, subtitle) {
   const W = doc.internal.pageSize.getWidth();
   // Dark header band
-  doc.setFillColor(26, 34, 53); // #303030
+  doc.setFillColor(10, 17, 40); // deep navy matching portal CI
   doc.rect(0, 0, W, 38, 'F');
   // Gold accent line
   doc.setFillColor(255, 155, 12);
-  doc.rect(0, 38, W, 2, 'F');
+  doc.rect(0, 38, W, 3, 'F');
   // Logo icon (square lotus mark) + brand name text
   if (_cachedLogoDataUrl) {
     doc.addImage(_cachedLogoDataUrl, 'PNG', 9, 7, 22, 22);
@@ -8927,7 +8927,7 @@ function _pdfHeader(doc, title, subtitle) {
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(156, 163, 175);
-  doc.text('SmartVest Financial Services · FSP #52449', textX, 24);
+  doc.text('SV Capital (Pty) Ltd', textX, 24);
   // Document title (right aligned)
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
@@ -9044,7 +9044,6 @@ function downloadCertificate(investmentId) {
   infoR('Investment ID', inv.id);
   infoR('Pool Name', inv.pool_name || pool.name || '—');
   infoR('Amount Invested', Utils.rand(inv.amount));
-  infoR('Annual Rate', Utils.pct(inv.expected_return_rate || inv.annual_rate));
 
   y = Math.max(ly, ry) + 4;
 
@@ -9073,8 +9072,10 @@ function downloadCertificate(investmentId) {
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(156, 163, 175);
-  doc.text('This certificate is a record of investment and does not constitute a guarantee of returns. All investments are subject to the terms', 14, y, { maxWidth: W - 28 });
-  doc.text('and conditions of SV Capital and SmartVest Financial Services (Pty) Ltd (FSP #52449).', 14, y + 5, { maxWidth: W - 28 });
+  doc.text('This certificate is a record of investment and does not constitute a guarantee of returns. All investments are subject to the terms and conditions of SV Capital.', 14, y, { maxWidth: W - 28 });
+  y += 8;
+  doc.setFontSize(6.5);
+  doc.text('IMPORTANT NOTICE: This investment is not a regulated financial product under the Financial Sector Conduct Authority (FSCA) and is not covered by the Financial Advisory and Intermediary Services Act (FAIS) or the Collective Investment Schemes Control Act (CISCA). This investment is managed solely by SV Capital (Pty) Ltd. Investors should be aware that their capital is at risk and there is no guarantee of returns. Past performance is not indicative of future results.', 14, y, { maxWidth: W - 28 });
 
   _pdfFooter(doc);
   doc.save(`SVC-Certificate-${inv.id}.pdf`);
