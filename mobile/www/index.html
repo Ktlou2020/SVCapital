@@ -495,7 +495,7 @@
             <button class="tab-btn" onclick="filterMyInvestments('paid_out', this)">Paid Out</button>
             <button class="tab-btn" onclick="filterMyInvestments('matured', this)">Matured</button>
           </div>
-          <select class="form-select" id="myInvProductFilter" style="min-width:180px;height:34px;font-size:0.8rem" onchange="renderMyInvestmentCards()">
+          <select class="form-select" id="myInvProductFilter" style="display:none" onchange="renderMyInvestmentCards()">
             <option value="">All Products</option>
           </select>
           <button class="btn btn--secondary btn--sm" style="margin-left:auto;white-space:nowrap" onclick="navigate('statement', document.querySelector('[data-view=statement]'))">
@@ -762,11 +762,11 @@
             <p class="section-banner__sub">Choose a product to see its details, factsheets and open pools — then invest. All investments are FSCA-regulated via SmartVest Financial Services (FSP 52449).</p>
           </div>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <div class="tab-bar" style="align-self:center">
+            <div class="tab-bar" style="align-self:center" id="marketRiskTabBar">
               <button class="tab-btn active" onclick="filterMarket('all', this)">All</button>
-              <button class="tab-btn" onclick="filterMarket('cattle', this)">Cattle</button>
-              <button class="tab-btn" onclick="filterMarket('solar', this)">Solar</button>
-              <button class="tab-btn" onclick="filterMarket('short_term', this)">Short-Term</button>
+              <button class="tab-btn" onclick="filterMarket('risk_low', this)">Low Risk</button>
+              <button class="tab-btn" onclick="filterMarket('risk_medium', this)">Medium Risk</button>
+              <button class="tab-btn" onclick="filterMarket('risk_high', this)">High Risk</button>
             </div>
             <button class="btn btn--sm" onclick="openCalcModal()" style="white-space:nowrap;background:linear-gradient(135deg,#FF8215,#FF9B0C);color:#fff;border:none;font-weight:700">
               <i class="fa-solid fa-calculator"></i> Calculate Returns

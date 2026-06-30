@@ -1988,7 +1988,7 @@ function renderMyInvestmentCards() {
         ` : ''}
 
         <div class="my-inv-card__stats">
-          <div class="mic-stat"><span class="mic-stat__label">Amount Invested</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(inv.amount)}</span></div>
+          <div class="mic-stat"><span class="mic-stat__label">Amount Invested</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(Math.round(inv.amount * 0.99 * 100) / 100)}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Launch Date</span><span class="mic-stat__value">${Utils.date(inv.investment_date || inv.start_date)}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Maturity Date</span><span class="mic-stat__value">${Utils.date(inv.maturity_date)}</span></div>
         </div>
@@ -3011,10 +3011,14 @@ async function loadMarketplace() {
 
 function filterMarket(type, btn) {
   PORTAL.marketFilter = type;
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  // Only update active state within the risk tab bar, not all tab-btns on the page
+  const tabBar = document.getElementById('marketRiskTabBar');
+  if (tabBar) tabBar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   renderMarketplace();
-  SVC.track('svc_filter_changed', { filter_type: 'marketplace', filter_value: type });
+  // Keep the tab bar visible after renderMarketplace hides it
+  if (tabBar) tabBar.style.display = '';
+  SVC.track('svc_filter_changed', { filter_type: 'marketplace_risk', filter_value: type });
 }
 
 const _POOL_META = {
@@ -3056,9 +3060,24 @@ function renderProductsGrid() {
     if (balEl) { balEl.textContent = Utils.rand(walletBal); balEl.style.color = walletBal >= 500 ? 'var(--green)' : 'var(--gold)'; }
   }
 
+  // Risk level groupings per product type
+  const _RISK_GROUP = {
+    'Low-Medium': 'risk_low',
+    'Low':        'risk_low',
+    'Medium':     'risk_medium',
+    'Medium-High':'risk_high',
+    'High':       'risk_high',
+  };
+
   // All active products (details + factsheets browsable even with no open pool),
   // sorted by sort order. Products with open pools rank first.
-  const products = (_mktProducts || []).filter(p => p.is_active).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  const mf = PORTAL.marketFilter || 'all';
+  const products = (_mktProducts || []).filter(p => {
+    if (!p.is_active) return false;
+    if (mf === 'all') return true;
+    const meta = _POOL_META[p.product_type] || {};
+    return _RISK_GROUP[meta.risk] === mf;
+  }).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
   const shown = products
     .map(p => ({ p, open: _openPoolsForProduct(p.product_type) }))
     .sort((a, b) => (b.open.length > 0) - (a.open.length > 0));
