@@ -364,9 +364,9 @@ function renderTaskCompletionPanel() {
           <div style="font-size:0.9rem;font-weight:800;color:#1a1a1a;margin-bottom:4px">You're set up and ready to invest confidently.</div>
           <div style="font-size:0.8rem;color:var(--text-muted)">Use Quick Actions to top up, browse new pools or generate your latest statement.</div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:4px">
-          <button class="btn btn--secondary btn--sm" style="flex:1;justify-content:center;text-align:center" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i> Statement</button>
-          <button class="btn btn--primary btn--sm" style="flex:2;justify-content:center;text-align:center" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-plus"></i> Invest more</button>
+        <div style="display:flex;gap:8px;margin-top:4px;align-items:center;justify-content:flex-end">
+          <button class="btn btn--secondary btn--sm" style="justify-content:center;text-align:center" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i> Statement</button>
+          <button class="btn btn--primary" style="justify-content:center;text-align:center;padding:13px 24px;font-size:0.95rem" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-plus"></i> Invest more</button>
         </div>
       </div>`;
     return;
