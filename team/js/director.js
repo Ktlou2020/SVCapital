@@ -253,7 +253,8 @@ const PAGE_META = {
   access:      { title:'Access & Roles',   sub:'Role-based access control matrix' },
   courses:     { title:'Course Library',   sub:'All available training courses' },
   payslips:    { title:'Payslips',         sub:'Generate and manage employee payslips' },
-  performance: { title:'Performance',      sub:'KPI leaderboard, scores and team analytics' },
+  performance:    { title:'Performance',    sub:'KPI leaderboard, scores and team analytics' },
+  'fee-settings': { title:'Fee Settings',  sub:'Configure platform-wide fee rates and EVA allocation' },
 };
 
 function navTo(view, btn) {
@@ -286,14 +287,15 @@ function navTo(view, btn) {
 
   // Render view content
   const renders = {
-    overview:    renderOverview,
-    employees:   renderEmployees,
-    onboarding:  renderOnboardingView,
-    leave:       renderLeave,
-    access:      renderAccessMatrix,
-    courses:     renderCourseLibrary,
-    payslips:    renderPayslips,
-    performance: renderPerformanceView,
+    overview:      renderOverview,
+    employees:     renderEmployees,
+    onboarding:    renderOnboardingView,
+    leave:         renderLeave,
+    access:        renderAccessMatrix,
+    courses:       renderCourseLibrary,
+    payslips:      renderPayslips,
+    performance:   renderPerformanceView,
+    'fee-settings': loadFeeSettings,
   };
   if (renders[view]) renders[view]();
 }
@@ -2264,3 +2266,71 @@ window.navTo = function(view, btn) {
 
 window.toggleDirHelp  = toggleDirHelp;
 window.renderDirHelp  = renderDirHelp;
+
+/* ═══ FEE SETTINGS ══════════════════════════════════════════════════ */
+
+async function loadFeeSettings() {
+  try {
+    const res  = await fetch('/api/settings/eva-rate', { headers: _authHeader() });
+    const data = await res.json();
+    const pct  = (data.eva_rate * 100).toFixed(1);
+    const inp  = document.getElementById('evaRateInput');
+    if (inp) {
+      inp.value = pct;
+      _updateEvaExample(data.eva_rate);
+    }
+  } catch (_) {}
+}
+
+function _updateEvaExample(rate) {
+  const el = document.getElementById('evaRateExample');
+  if (!el) return;
+  const exAmt       = 100000;
+  const upfrontPct  = 0.05; // illustrative 5% upfront fee
+  const upfront     = exAmt * upfrontPct;
+  const evaAmount   = (upfront / 1.15) * rate;
+  el.innerHTML = `
+    On a <strong>R${exAmt.toLocaleString()}</strong> investment with a <strong>5% upfront fee</strong>:<br>
+    Upfront fee = <strong>R${upfront.toLocaleString()}</strong> &nbsp;→&nbsp;
+    Net-VAT = <strong>R${(upfront/1.15).toFixed(2)}</strong> &nbsp;→&nbsp;
+    EVA = <strong style="color:#a78bfa">R${evaAmount.toFixed(2)}</strong> (${(rate*100).toFixed(1)}%)
+  `;
+}
+
+async function saveEvaRate() {
+  const inp  = document.getElementById('evaRateInput');
+  const btn  = document.getElementById('saveEvaBtn');
+  const fb   = document.getElementById('evaRateFeedback');
+  if (!inp) return;
+
+  const pct  = parseFloat(inp.value);
+  if (isNaN(pct) || pct < 0 || pct > 100) {
+    fb.style.display = 'block';
+    fb.style.color = '#ef4444';
+    fb.textContent = 'Please enter a value between 0 and 100.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    const res = await fetch('/api/settings/eva-rate', {
+      method:  'PUT',
+      headers: { ..._authHeader(), 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ eva_rate: pct / 100 }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    fb.style.display = 'block';
+    fb.style.color = '#22c55e';
+    fb.textContent = `✓ EVA rate updated to ${pct.toFixed(1)}%. Applied to all new investments.`;
+    _updateEvaExample(data.eva_rate);
+  } catch (e) {
+    fb.style.display = 'block';
+    fb.style.color = '#ef4444';
+    fb.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Rate';
+  }
+}

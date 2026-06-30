@@ -24,10 +24,10 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <link rel="stylesheet" href="../css/admin.css" />
-  <link rel="stylesheet" href="css/portal.css" />
+  <link rel="stylesheet" href="../portal/css/portal.css" />
   <link rel="stylesheet" href="../css/ci-theme.css" />
   <!-- sv-intelligence hidden -->
-  <link rel="stylesheet" href="css/portal-premium.css" />
+  <link rel="stylesheet" href="../portal/css/portal-premium.css" />
   <!-- Payment modal must retain dark theme — isolate from ci-theme overrides -->
   <style>
     #topUpModal.modal-overlay { background: rgba(0,0,0,0.82) !important; }
@@ -119,13 +119,13 @@
     <nav class="sidebar__nav">
       <div class="nav-section-label">My Account</div>
       <button class="nav-item active" data-view="overview" onclick="navigate('overview', this)">
-        <i class="fa-solid fa-grid-2"></i> Portfolio Overview
+        <i class="fa-solid fa-table-cells-large"></i> Portfolio Overview
       </button>
       <button class="nav-item" data-view="investments" onclick="navigate('investments', this)">
         <i class="fa-solid fa-chart-line"></i> My Investments
       </button>
       <button class="nav-item" data-view="analytics" onclick="navigate('analytics', this)">
-        <i class="fa-solid fa-chart-mixed"></i> Analytics
+        <i class="fa-solid fa-chart-column"></i> Analytics
       </button>
       <button class="nav-item" data-view="transactions" onclick="navigate('transactions', this)">
         <i class="fa-solid fa-arrows-rotate"></i> Transactions

@@ -455,11 +455,12 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
     if (!['admin','director','fund_manager'].includes(req.user.role))
       return res.status(403).json({ error: 'Forbidden.' });
 
-    const poolRes = await pool.query(
-      'SELECT management_fee_pct, operational_fee_pct FROM investment_pools WHERE id = $1',
-      [req.params.id]
-    );
+    const [poolRes, evaRes] = await Promise.all([
+      pool.query('SELECT management_fee_pct, operational_fee_pct FROM investment_pools WHERE id = $1', [req.params.id]),
+      pool.query("SELECT value FROM platform_settings WHERE key = 'eva_rate'"),
+    ]);
     const mgmtFeePct = parseFloat(poolRes.rows[0]?.management_fee_pct) || 0;
+    const evaRate    = parseFloat(evaRes.rows[0]?.value) || 0.15;
 
     const { rows } = await pool.query(`
       SELECT
@@ -491,8 +492,8 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
       const amt         = parseFloat(r.amount) || 0;
       const platformFee = Math.round(amt * PLATFORM_FEE_PCT * 100) / 100;
       const upfrontFee  = Math.round(amt * mgmtFeePct * 100) / 100;
-      // EVA is 20% of the upfront fee net of 15% VAT — taken from the upfront fee, not additional
-      const evaCalc     = Math.round((upfrontFee / 1.15) * 0.20 * 100) / 100;
+      // EVA is evaRate% of the upfront fee net of 15% VAT — taken from the upfront fee, not additional
+      const evaCalc     = Math.round((upfrontFee / 1.15) * evaRate * 100) / 100;
       const totalFees   = Math.round((platformFee + upfrontFee) * 100) / 100;
       const netAmount   = Math.round((amt - upfrontFee) * 100) / 100;
       r.platform_fee    = platformFee;
@@ -865,15 +866,16 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
 
           // EVA calculation — only on new funds (not reinvestments)
           if (!clean.is_reinvestment && clean.pool_id) {
-            const poolRes = await pool.query(
-              'SELECT management_fee_pct FROM investment_pools WHERE id = $1',
-              [clean.pool_id]
-            );
+            const [poolRes, evaRes] = await Promise.all([
+              pool.query('SELECT management_fee_pct FROM investment_pools WHERE id = $1', [clean.pool_id]),
+              pool.query("SELECT value FROM platform_settings WHERE key = 'eva_rate'"),
+            ]);
             const mgtFeePct = parseFloat(poolRes.rows[0]?.management_fee_pct) || 0;
+            const evaRate   = parseFloat(evaRes.rows[0]?.value) || 0.15;
             if (mgtFeePct > 0) {
               const grossMgtFee = investAmt * mgtFeePct;
               const netMgtFee   = grossMgtFee / 1.15;   // net of 15% South African VAT
-              const evaAmount   = Math.round(netMgtFee * 0.20 * 100) / 100;
+              const evaAmount   = Math.round(netMgtFee * evaRate * 100) / 100;
               await pool.query(
                 'UPDATE investments SET eva_amount = $1 WHERE id = $2',
                 [evaAmount, clean.id]
