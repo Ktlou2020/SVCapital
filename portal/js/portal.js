@@ -2231,16 +2231,20 @@ function _renderRecurringTab() {
     statusCard.innerHTML = `
       <div class="wallet-card__label">Recurring Investment</div>
       <div class="wallet-card__value" style="font-size:1.1rem;color:#9ca3af">Not active</div>
-      <div class="wallet-card__sub">Automate monthly investments into any open pool — minimum R100/month</div>
+      <div class="wallet-card__sub">Automate monthly investments into any open pool each month</div>
       <div class="wallet-card__actions">
         <button class="btn btn--primary" onclick="openRecurringModal()"><i class="fa-solid fa-plus"></i> Set Up Recurring</button>
       </div>`;
   }
 
-  // Show active investments matching the selected product type
-  const recurringInvs = productType
-    ? PORTAL.investments.filter(i => i.status === 'active' && i.product_type === productType)
-    : [];
+  // Show all active investments placed by the recurring cron (INV-RC- prefix),
+  // plus any active investments matching the currently configured product type
+  const recurringInvs = (PORTAL.investments || []).filter(i =>
+    i.status === 'active' && (
+      (i.id && i.id.startsWith('INV-RC-')) ||
+      (productType && i.product_type === productType)
+    )
+  );
 
   if (!recurringInvs.length) {
     listEl.innerHTML = `<div class="empty-state" style="padding:20px"><i class="fa-solid fa-rotate"></i><p>${isActive ? 'Your first recurring investment will be processed at the start of next month.' : 'Set up a recurring investment to automate your monthly savings.'}</p></div>`;
