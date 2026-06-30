@@ -160,6 +160,7 @@ router.post('/login', async (req, res) => {
       entityType: 'users', entityId: user.id,
       description: `${user.role} login: ${user.email}`,
       ip: req.ip,
+      platform: req.headers['x-platform'] || null,
     }));
 
     setImmediate(() => pool.query(

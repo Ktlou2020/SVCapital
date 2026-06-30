@@ -712,6 +712,14 @@
 </div>
 
 <script>document.querySelectorAll('.yr').forEach(function(e){e.textContent=new Date().getFullYear();});</script>
+<!-- Capacitor native bridge -->
+<script>
+if (window.Capacitor) {
+  window.__SVC_NATIVE__   = true;
+  window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
+}
+</script>
+<script src="/js/native.js"></script>
 <script src="js/api.js?v=2"></script>
 <script>
   'use strict';
@@ -906,7 +914,9 @@
     btn.disabled = true; btn.classList.add('loading');
     btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Signing in…';
     try {
-      const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ email, password }) });
+      const _loginHeaders = { 'Content-Type': 'application/json' };
+      if (window.__SVC_NATIVE__ && window.Capacitor) _loginHeaders['x-platform'] = window.Capacitor.getPlatform();
+      const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'auth/login', { method: 'POST', headers: _loginHeaders, credentials: 'include', body: JSON.stringify({ email, password }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Invalid credentials.');
       if (data.requires2FA) {
@@ -931,7 +941,7 @@
       // On native Android, bypass the /portal/ → / redirect chain and go straight
       // to index.html. The extra navigation triggers a second native.js load which
       // re-fires initPush() before Firebase is ready, crashing the app.
-      const dest = window.__SVC_NATIVE__ ? '/index.html' : (data.redirect || 'portal/');
+      const dest = window.__SVC_NATIVE__ ? '/portal/' : (data.redirect || 'portal/');
       setTimeout(() => { window.location.href = dest; }, 350);
     } catch (err) {
       btn.disabled = false; btn.classList.remove('loading');
@@ -952,7 +962,7 @@
       const data = JSON.parse(saved);
       localStorage.setItem('svc_token', data.token);
       localStorage.setItem('svc_user', JSON.stringify(data.user));
-      window.location.href = window.__SVC_NATIVE__ ? '/index.html' : (data.redirect || '/portal/');
+      window.location.href = window.__SVC_NATIVE__ ? '/portal/' : (data.redirect || '/portal/');
     } catch (err) {
       showError('Biometric authentication failed. Please sign in with your password.');
     }
@@ -988,7 +998,7 @@
       const savedLoginEmail = document.getElementById('emailInput')?.value?.trim().toLowerCase();
       if (savedLoginEmail) localStorage.setItem('svc_last_login_email', savedLoginEmail);
       btn.textContent = 'Verified ✓';
-      const dest2fa = window.__SVC_NATIVE__ ? '/index.html' : (data.redirect || 'portal/');
+      const dest2fa = window.__SVC_NATIVE__ ? '/portal/' : (data.redirect || 'portal/');
       setTimeout(() => { window.location.href = dest2fa; }, 350);
     } catch (err) {
       btn.disabled = false; btn.textContent = 'Verify Code';
