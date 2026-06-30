@@ -1840,7 +1840,7 @@ body {
 
 /* ─── SIDEBAR — Dark premium ─── */
 .sidebar {
-  background: linear-gradient(180deg, #0d1520 0%, #111d2c 100%) !important;
+  background: linear-gradient(180deg, #1a1a1a 0%, #141414 100%) !important;
   border-right: none !important;
   box-shadow: 4px 0 28px rgba(0,0,0,0.15) !important;
 }
@@ -2413,12 +2413,12 @@ body {
 body.dark-mode {
   background: #0d1117 !important;
 }
-body.dark-mode .main-content { background: #0d1117 !important; }
+body.dark-mode .main-content { background: #141414 !important; }
 body.dark-mode .sidebar {
-  background: linear-gradient(180deg, #060c14 0%, #090f1b 100%) !important;
+  background: linear-gradient(180deg, #1a1a1a 0%, #141414 100%) !important;
   box-shadow: 4px 0 28px rgba(0,0,0,0.35) !important;
 }
-body.dark-mode .topbar { background: #111827 !important; border-bottom-color: rgba(255,255,255,0.07) !important; }
+body.dark-mode .topbar { background: #1c1c1c !important; border-bottom-color: rgba(255,255,255,0.07) !important; }
 body.dark-mode .topbar__title { color: #f3f4f6 !important; }
 body.dark-mode .topbar__breadcrumb { color: #6b7280 !important; }
 body.dark-mode .topbar-btn { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.09) !important; color: #9ca3af !important; }
@@ -2952,7 +2952,7 @@ body.dark-mode .nav-item           { color: #6b7280 !important; }
 body.dark-mode .nav-item.active    { color: #ff9b0c !important; background: rgba(255,155,12,0.1) !important; }
 body.dark-mode .nav-item:hover     { color: #e2e8f0 !important; background: rgba(255,255,255,0.05) !important; }
 
-body.dark-mode .sidebar           { background: #0d1117 !important; border-right-color: rgba(255,255,255,0.06) !important; }
+body.dark-mode .sidebar           { background: #141414 !important; border-right-color: rgba(255,255,255,0.06) !important; }
 body.dark-mode .sidebar-user__avatar { background: rgba(255,155,12,0.15) !important; color: #ff9b0c !important; }
 body.dark-mode .user-name   { color: #e2e8f0 !important; }
 body.dark-mode .user-role   { color: #6b7280 !important; }
