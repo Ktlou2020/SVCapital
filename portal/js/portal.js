@@ -2231,16 +2231,20 @@ function _renderRecurringTab() {
     statusCard.innerHTML = `
       <div class="wallet-card__label">Recurring Investment</div>
       <div class="wallet-card__value" style="font-size:1.1rem;color:#9ca3af">Not active</div>
-      <div class="wallet-card__sub">Automate monthly investments into any open pool — minimum R100/month</div>
+      <div class="wallet-card__sub">Automate monthly investments into any open pool each month</div>
       <div class="wallet-card__actions">
         <button class="btn btn--primary" onclick="openRecurringModal()"><i class="fa-solid fa-plus"></i> Set Up Recurring</button>
       </div>`;
   }
 
-  // Show active investments matching the selected product type
-  const recurringInvs = productType
-    ? PORTAL.investments.filter(i => i.status === 'active' && i.product_type === productType)
-    : [];
+  // Show all active investments placed by the recurring cron (INV-RC- prefix),
+  // plus any active investments matching the currently configured product type
+  const recurringInvs = (PORTAL.investments || []).filter(i =>
+    i.status === 'active' && (
+      (i.id && i.id.startsWith('INV-RC-')) ||
+      (productType && i.product_type === productType)
+    )
+  );
 
   if (!recurringInvs.length) {
     listEl.innerHTML = `<div class="empty-state" style="padding:20px"><i class="fa-solid fa-rotate"></i><p>${isActive ? 'Your first recurring investment will be processed at the start of next month.' : 'Set up a recurring investment to automate your monthly savings.'}</p></div>`;
@@ -9438,7 +9442,7 @@ async function _loadStatementArchive() {
     const taxYear = new Date().getMonth() >= 2 ? currentYear : currentYear - 1; // Feb cutoff
     const taxSection = `
       <div style="margin-bottom:14px;padding:12px;background:rgba(255,155,12,0.06);border-radius:8px;border:1px solid rgba(255,155,12,0.2)">
-        <div style="font-size:0.84rem;font-weight:700;margin-bottom:6px"><i class="fa-solid fa-file-shield" style="color:var(--gold);margin-right:6px"></i>Tax Certificates</div>
+        <div style="font-size:0.84rem;font-weight:700;margin-bottom:6px"><i class="fa-solid fa-file-shield" style="color:var(--gold);margin-right:6px"></i>Investment Income Certificate</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">Download your annual IT3(b)-style investment income summary for SARS submission.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${[taxYear, taxYear-1, taxYear-2].map(y => `<button class="btn btn--ghost btn--sm" onclick="_downloadTaxCert(${y})" style="font-size:0.75rem"><i class="fa-solid fa-download"></i> ${y}/${y+1}</button>`).join('')}
