@@ -4087,25 +4087,16 @@ async function openMaturityModal(investmentId) {
   const inv = PORTAL.investments.find(i => i.id === investmentId);
   if (!inv) return;
 
+  const isDeliveryBike = (inv.product_type || '').includes('delivery_bike');
   const isActive  = inv.status === 'active';
   const total     = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
-  const existing  = inv.maturity_instruction || '';
 
-  // Fetch all open pools
-  let allOpenPools = [];
-  try {
-    const poolsRes = await API.pools.list({ limit: 100 });
-    allOpenPools = (poolsRes.data || []).filter(p => p.status === 'open');
-  } catch (_) { /* non-fatal */ }
+  // Delivery bike: force payout_all — no reinvest options
+  const existing = isDeliveryBike
+    ? (inv.maturity_instruction === 'reinvest' || !inv.maturity_instruction ? 'payout_all' : inv.maturity_instruction)
+    : (inv.maturity_instruction || '');
 
-  const reinvestPools = allOpenPools.filter(p => p.product_type === inv.product_type);
-
-  const reinvestPoolsHtml = reinvestPools.length
-    ? reinvestPools.map(p => `<option value="${p.id}">${p.name} (${Utils.rand(p.min_investment)} min · ${Utils.pct(p.annual_rate)} p.a.)</option>`).join('')
-    : `<option value="" disabled>No open pools available for this product type</option>`;
-
-  // Switch product: all product types except the current one.
-  // Pool availability is resolved at maturity time — the pool may not be open yet.
+  // All product types for switch option (resolved at maturity, pool may not be open yet)
   const allProductTypes = [...new Set(
     (PORTAL.pools || []).filter(p => p.product_type && p.product_type !== inv.product_type).map(p => p.product_type)
   )];
@@ -4115,6 +4106,8 @@ async function openMaturityModal(investmentId) {
         return `<option value="${pt}" ${existing==='switch_product' && inv.switch_product_type===pt?'selected':''}>${pi.label || pt}</option>`;
       }).join('')
     : `<option value="" disabled>No other product types available</option>`;
+
+  const poolNote = `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The first available open pool for this product will be assigned when your investment matures.</div>`;
 
   document.getElementById('maturityModalBody').innerHTML = `
     <div class="info-list mb-16">
@@ -4128,20 +4121,21 @@ async function openMaturityModal(investmentId) {
       <label class="form-label">Instruction Type *</label>
       <select class="form-select" id="matInstructionType">
         <option value="payout_all"     ${existing==='payout_all'    ?'selected':''}>Payout All — Receive full capital + returns</option>
+        ${!isDeliveryBike ? `
         <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — Keep capital reinvested</option>
         <option value="reinvest"       ${existing==='reinvest'      ?'selected':''}>Reinvest — Roll over into same product</option>
         <option value="switch_product" ${existing==='switch_product'?'selected':''}>Switch Product — Move payout into a different product</option>
-        <option value="payout_custom"  ${existing==='payout_custom' ?'selected':''}>Custom Payout — Specify amount</option>
+        ` : ''}
+        <option value="payout_custom"  ${existing==='payout_custom' ?'selected':''}>Custom Payout — Specify amount${!isDeliveryBike ? '; remainder reinvested' : ''}</option>
       </select>
+      ${isDeliveryBike ? `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> Delivery Bike investments are paid out at maturity and cannot be rolled over.</div>` : ''}
     </div>
 
-    <div id="reinvestPoolGroup" style="display:${existing==='reinvest'?'block':'none'}">
-      <div class="form-group">
-        <label class="form-label">Select Pool to Reinvest Into *</label>
-        <select class="form-select" id="matReinvestPool">
-          ${reinvestPoolsHtml}
-        </select>
-        ${!reinvestPools.length ? `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> A suitable open pool will be selected at maturity if none is available now.</div>` : ''}
+    ${!isDeliveryBike ? `
+    <div id="reinvestGroup" style="display:${existing==='reinvest'?'block':'none'}">
+      <div style="font-size:0.72rem;color:var(--text-dim);padding:10px 12px;background:rgba(255,155,12,0.06);border-radius:8px;border:1px solid rgba(255,155,12,0.15)">
+        <i class="fa-solid fa-rotate" style="color:var(--gold);margin-right:4px"></i>
+        Your full payout will be rolled into the next available open pool for <strong>${Utils.productInfo(inv.product_type).label}</strong>. ${poolNote}
       </div>
     </div>
 
@@ -4151,30 +4145,34 @@ async function openMaturityModal(investmentId) {
         <select class="form-select" id="matSwitchProductType">
           ${switchProductsHtml}
         </select>
-        <div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The first available open pool for your chosen product will be used when your investment matures. A 1% platform fee applies.</div>
+        ${poolNote}
       </div>
     </div>
+    ` : ''}
 
     <div id="customPayoutGroup" style="display:${existing==='payout_custom'?'block':'none'}">
       <div class="form-group">
-        <label class="form-label">Custom Payout Amount (R)</label>
-        <input type="number" class="form-input" id="matCustomAmount" placeholder="Amount to withdraw" />
+        <label class="form-label">Amount to Pay Out (R)</label>
+        <input type="number" class="form-input" id="matCustomAmount" placeholder="Amount to withdraw" max="${total}" />
+        ${!isDeliveryBike ? `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> Any remaining balance after payout will be reinvested into the same product.</div>` : ''}
       </div>
     </div>
 
     <div style="font-size:0.72rem;color:var(--text-dim);line-height:1.6;margin-top:8px">
       <i class="fa-solid fa-clock" style="color:var(--gold)"></i>
       ${isActive
-        ? `You can update this instruction at any time before maturity. If not submitted, funds will be automatically reinvested.`
-        : `Instruction must be submitted before <strong>5:00 PM on ${Utils.date(inv.maturity_date)}</strong>. If not submitted, funds will be automatically reinvested.`
+        ? `You can update this instruction at any time before maturity.${isDeliveryBike ? '' : ' If not submitted, funds will be automatically reinvested.'}`
+        : `Instruction must be submitted before <strong>5:00 PM on ${Utils.date(inv.maturity_date)}</strong>.${isDeliveryBike ? '' : ' If not submitted, funds will be automatically reinvested.'}`
       }
     </div>
   `;
 
   document.getElementById('matInstructionType').addEventListener('change', e => {
-    document.getElementById('customPayoutGroup').style.display  = e.target.value === 'payout_custom'  ? 'block' : 'none';
-    document.getElementById('reinvestPoolGroup').style.display  = e.target.value === 'reinvest'       ? 'block' : 'none';
-    document.getElementById('switchProductGroup').style.display = e.target.value === 'switch_product' ? 'block' : 'none';
+    document.getElementById('customPayoutGroup').style.display   = e.target.value === 'payout_custom'  ? 'block' : 'none';
+    if (!isDeliveryBike) {
+      document.getElementById('reinvestGroup').style.display       = e.target.value === 'reinvest'       ? 'block' : 'none';
+      document.getElementById('switchProductGroup').style.display  = e.target.value === 'switch_product' ? 'block' : 'none';
+    }
   });
 
   const matBtn = document.getElementById('maturityConfirmBtn');
@@ -4183,19 +4181,19 @@ async function openMaturityModal(investmentId) {
 }
 
 async function submitMaturityInstruction(inv) {
-  const type           = document.getElementById('matInstructionType').value;
-  const customAmt      = type === 'payout_custom'  ? parseFloat(document.getElementById('matCustomAmount').value) : null;
-  const reinvestPoolId = type === 'reinvest'        ? (document.getElementById('matReinvestPool')?.value  || null) : null;
-  const switchProductType = type === 'switch_product' ? (document.getElementById('matSwitchProductType')?.value || null) : null;
+  const type              = document.getElementById('matInstructionType').value;
+  const total             = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
+  const customAmt         = type === 'payout_custom'   ? parseFloat(document.getElementById('matCustomAmount')?.value || 0) : null;
+  const switchProductType = type === 'switch_product'  ? (document.getElementById('matSwitchProductType')?.value || null) : null;
 
-  if (type === 'payout_custom'  && (!customAmt || customAmt <= 0)) { Toast.error('Please enter a valid custom payout amount'); return; }
-  if (type === 'reinvest'       && !reinvestPoolId)                 { Toast.error('Please select a pool to reinvest into, or choose another instruction type'); return; }
+  if (type === 'payout_custom'  && (!customAmt || customAmt <= 0))  { Toast.error('Please enter a valid payout amount'); return; }
+  if (type === 'payout_custom'  && customAmt > total)               { Toast.error(`Payout amount cannot exceed total payout of ${Utils.rand(total)}`); return; }
   if (type === 'switch_product' && !switchProductType)              { Toast.error('Please select a product to switch into'); return; }
 
   try {
     const updateData = { maturity_instruction: type };
-    if (reinvestPoolId)   updateData.reinvest_pool_id      = reinvestPoolId;
-    if (switchProductType) updateData.switch_product_type  = switchProductType;
+    if (customAmt)          updateData.custom_payout_amount = customAmt;
+    if (switchProductType)  updateData.switch_product_type  = switchProductType;
     await API.investments.update(inv.id, updateData);
 
     Toast.success('Maturity instruction saved successfully!');
