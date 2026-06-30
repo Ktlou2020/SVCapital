@@ -2591,8 +2591,8 @@
           <div style="font-size:0.75rem;color:var(--text-muted)">Toggle to activate automatic monthly investment</div>
         </div>
         <label style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0">
-          <input type="checkbox" id="recurringEnabledToggle" style="opacity:0;width:0;height:0">
-          <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s;display:block" id="recurringToggleSlider" onclick="document.getElementById('recurringEnabledToggle').checked=!document.getElementById('recurringEnabledToggle').checked;updateRecurringToggleStyle()"></span>
+          <input type="checkbox" id="recurringEnabledToggle" style="opacity:0;width:0;height:0" onchange="updateRecurringToggleStyle()">
+          <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s;display:block" id="recurringToggleSlider"></span>
         </label>
       </div>
       <div class="form-group">
