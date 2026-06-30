@@ -4104,19 +4104,17 @@ async function openMaturityModal(investmentId) {
     ? reinvestPools.map(p => `<option value="${p.id}">${p.name} (${Utils.rand(p.min_investment)} min · ${Utils.pct(p.annual_rate)} p.a.)</option>`).join('')
     : `<option value="" disabled>No open pools available for this product type</option>`;
 
-  // Switch product: any open pool from a DIFFERENT product type where total >= min + 1% fee
-  const switchPools = allOpenPools.filter(p => {
-    const min = parseFloat(p.min_investment) || 0;
-    const fee = Math.round(min * 0.01 * 100) / 100;
-    return p.product_type !== inv.product_type && total >= (min + fee);
-  });
-  const switchPoolsHtml = switchPools.length
-    ? switchPools.map(p => {
-        const min = parseFloat(p.min_investment) || 0;
-        const fee = Math.round(min * 0.01 * 100) / 100;
-        return `<option value="${p.id}" data-min="${min}" data-fee="${fee}">${p.name} — ${Utils.productInfo(p.product_type).label} (${Utils.rand(min)} min + ${Utils.rand(fee)} fee · ${Utils.pct(p.annual_rate)} p.a.)</option>`;
+  // Switch product: all product types except the current one.
+  // Pool availability is resolved at maturity time — the pool may not be open yet.
+  const allProductTypes = [...new Set(
+    (PORTAL.pools || []).filter(p => p.product_type && p.product_type !== inv.product_type).map(p => p.product_type)
+  )];
+  const switchProductsHtml = allProductTypes.length
+    ? allProductTypes.map(pt => {
+        const pi = Utils.productInfo(pt);
+        return `<option value="${pt}" ${existing==='switch_product' && inv.switch_product_type===pt?'selected':''}>${pi.label || pt}</option>`;
       }).join('')
-    : `<option value="" disabled>No eligible pools available — your total payout must meet the pool minimum + 1% platform fee</option>`;
+    : `<option value="" disabled>No other product types available</option>`;
 
   document.getElementById('maturityModalBody').innerHTML = `
     <div class="info-list mb-16">
@@ -4149,11 +4147,11 @@ async function openMaturityModal(investmentId) {
 
     <div id="switchProductGroup" style="display:${existing==='switch_product'?'block':'none'}">
       <div class="form-group">
-        <label class="form-label">Select New Product Pool *</label>
-        <select class="form-select" id="matSwitchPool">
-          ${switchPoolsHtml}
+        <label class="form-label">Switch to Product *</label>
+        <select class="form-select" id="matSwitchProductType">
+          ${switchProductsHtml}
         </select>
-        ${switchPools.length ? `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> Your full payout of ${Utils.rand(total)} will be invested into the selected pool at maturity. A 1% platform fee applies.</div>` : ''}
+        <div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The first available open pool for your chosen product will be used when your investment matures. A 1% platform fee applies.</div>
       </div>
     </div>
 
@@ -4188,28 +4186,16 @@ async function submitMaturityInstruction(inv) {
   const type           = document.getElementById('matInstructionType').value;
   const customAmt      = type === 'payout_custom'  ? parseFloat(document.getElementById('matCustomAmount').value) : null;
   const reinvestPoolId = type === 'reinvest'        ? (document.getElementById('matReinvestPool')?.value  || null) : null;
-  const switchPoolId   = type === 'switch_product'  ? (document.getElementById('matSwitchPool')?.value    || null) : null;
+  const switchProductType = type === 'switch_product' ? (document.getElementById('matSwitchProductType')?.value || null) : null;
 
-  if (type === 'payout_custom' && (!customAmt || customAmt <= 0)) { Toast.error('Please enter a valid custom payout amount'); return; }
-  if (type === 'reinvest'      && !reinvestPoolId) { Toast.error('Please select a pool to reinvest into, or choose another instruction type'); return; }
-  if (type === 'switch_product' && !switchPoolId)  { Toast.error('Please select a product pool to switch into'); return; }
-
-  // Validate switch_product eligibility client-side (server re-validates at maturity)
-  if (type === 'switch_product' && switchPoolId) {
-    const selOpt = document.getElementById('matSwitchPool')?.selectedOptions?.[0];
-    const min    = parseFloat(selOpt?.dataset?.min || 0);
-    const fee    = parseFloat(selOpt?.dataset?.fee || 0);
-    const total  = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
-    if (total < min + fee) {
-      Toast.error(`Your total payout of ${Utils.rand(total)} does not meet the minimum of ${Utils.rand(min + fee)} (${Utils.rand(min)} + ${Utils.rand(fee)} fee) for this pool`);
-      return;
-    }
-  }
+  if (type === 'payout_custom'  && (!customAmt || customAmt <= 0)) { Toast.error('Please enter a valid custom payout amount'); return; }
+  if (type === 'reinvest'       && !reinvestPoolId)                 { Toast.error('Please select a pool to reinvest into, or choose another instruction type'); return; }
+  if (type === 'switch_product' && !switchProductType)              { Toast.error('Please select a product to switch into'); return; }
 
   try {
     const updateData = { maturity_instruction: type };
-    if (switchPoolId)   updateData.reinvest_pool_id = switchPoolId;
-    if (reinvestPoolId) updateData.reinvest_pool_id = reinvestPoolId;
+    if (reinvestPoolId)   updateData.reinvest_pool_id      = reinvestPoolId;
+    if (switchProductType) updateData.switch_product_type  = switchProductType;
     await API.investments.update(inv.id, updateData);
 
     Toast.success('Maturity instruction saved successfully!');
