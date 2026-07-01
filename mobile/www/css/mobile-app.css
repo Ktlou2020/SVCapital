@@ -5513,3 +5513,53 @@ i.fa, i.fas, i.far, i.fab, i.fal, i.fa-solid, i.fa-regular, i.fa-brands,
 
 /* Risk pill — Medium-High variant (orange) */
 #view-marketplace .mkt-risk-pill--modhigh.active { background: linear-gradient(135deg,#ff9b0c,#f97316) !important; box-shadow: 0 4px 12px rgba(255,155,12,0.3) !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION 59 — FICA/KYC PENDING NOTICE (world-class card)
+   ═══════════════════════════════════════════════════════════════ */
+.fica-alert-banner {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 13px !important;
+  background: #fff !important;
+  border: 1px solid rgba(245,158,11,0.28) !important;
+  border-left: 4px solid #f59e0b !important;
+  border-radius: 16px !important;
+  padding: 16px !important;
+  margin: 0 0 16px !important;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.06) !important;
+  animation: none !important;
+}
+.fica-alert-banner__icon {
+  width: 44px !important; height: 44px !important;
+  border-radius: 13px !important;
+  background: linear-gradient(135deg, rgba(245,158,11,0.18), rgba(245,158,11,0.08)) !important;
+  color: #d97706 !important; font-size: 1.15rem !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  flex-shrink: 0 !important;
+}
+.fica-alert-banner__body { flex: 1 1 60% !important; min-width: 0 !important; }
+.fica-alert-banner__title {
+  font-size: 0.95rem !important; font-weight: 800 !important; color: #0f172a !important;
+  letter-spacing: -0.01em !important; margin-bottom: 3px !important;
+}
+.fica-alert-banner__sub {
+  font-size: 0.8rem !important; color: #64748b !important; line-height: 1.5 !important;
+}
+/* Button spans the full width on its own row for a clean mobile CTA */
+.fica-alert-banner__action {
+  flex: 1 1 100% !important;
+}
+.fica-alert-banner__action .btn {
+  width: 100% !important;
+  display: flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important;
+  background: linear-gradient(135deg,#FF8215,#ff5229) !important;
+  color: #fff !important; border: none !important;
+  border-radius: 13px !important; padding: 13px !important;
+  font-size: 0.9rem !important; font-weight: 800 !important;
+  box-shadow: 0 4px 14px rgba(255,82,41,0.28) !important;
+}
+
+/* Sub-account stat tiles: ensure a space between the label and the R value */
+#view-subaccounts .sa-stat__label { margin-right: 6px !important; }

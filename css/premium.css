@@ -837,3 +837,43 @@ body.light .product-risk-filter .prf-pill,
   color: #fff;
 }
 .product-risk-filter .prf-empty { color: #64748b; }
+
+/* ─── Calculator: Solar term selector (5 / 6 / 7 years) ──────────────── */
+.calc-solar-terms {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+  animation: pageFadeIn 0.25s ease-out;
+}
+.calc-solar-terms__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.5);
+  margin-right: 4px;
+}
+.calc-term-btn {
+  border: 1.5px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.8);
+  border-radius: 100px;
+  padding: 8px 18px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.18s ease;
+}
+.calc-term-btn:hover {
+  border-color: rgba(255,155,12,0.5);
+  color: #fff;
+}
+.calc-term-btn.active {
+  background: linear-gradient(135deg, #ff9b0c, #ff5229);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(255,82,41,0.32);
+}

@@ -483,7 +483,7 @@
             <button class="tab-btn active" onclick="filterMyInvestments('all', this)">All</button>
             <button class="tab-btn" onclick="filterMyInvestments('active', this)">Active</button>            <button class="tab-btn" onclick="filterMyInvestments('matured', this)">Matured</button>
           </div>
-          <select class="form-select" id="myInvProductFilter" style="display:none" onchange="renderMyInvestmentCards()">
+          <select class="form-select form-select--sm" id="myInvProductFilter" style="width:auto;min-width:150px;height:34px;font-size:0.8rem;padding:0 28px 0 12px" onchange="renderMyInvestmentCards()">
             <option value="">All Products</option>
           </select>
           <button class="btn btn--secondary btn--sm" style="margin-left:auto;white-space:nowrap" onclick="navigate('statement', document.querySelector('[data-view=statement]'))">
@@ -1773,10 +1773,10 @@
 
       <div style="text-align:center;margin-bottom:24px">
         <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:8px">Amount to deposit</div>
-        <div style="display:flex;align-items:center;justify-content:center;gap:4px">
-          <span style="font-size:2rem;font-weight:700;color:#9ca3af">R</span>
+        <div style="display:flex;align-items:baseline;justify-content:center;gap:6px">
+          <span style="font-size:2.8rem;font-weight:900;color:#f0f4ff;line-height:1">R</span>
           <input type="number" id="pmAmount" min="100" step="100" placeholder="0"
-            style="font-size:2.8rem;font-weight:900;color:#f0f4ff;background:transparent;border:none;outline:none;width:180px;text-align:left;font-family:inherit"
+            style="font-size:2.8rem;font-weight:900;color:#f0f4ff;background:transparent;border:none;outline:none;width:180px;text-align:left;font-family:inherit;line-height:1"
             oninput="updateAmountPreview()" />
         </div>
         <div id="pmAmountHint" style="font-size:0.75rem;color:#9ca3af;margin-top:4px">Minimum deposit: R100</div>

@@ -3164,3 +3164,6 @@ body.dark-mode .fs-row__name { color:#f3f4f6 !important; }
 [class*="__value"],[class*="-value"],[class*="__val"],[class*="-val"] {
   font-family:'Poppins',system-ui,sans-serif !important;
 }
+
+/* Sub-account stat tiles: space between label and value */
+#view-subaccounts .sa-stat__label { margin-right: 6px; }

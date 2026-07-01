@@ -2148,9 +2148,21 @@ async function saveProduct(btn) {
         await API.products.update(id, payload);
         Toast.success('Product updated');
       } else {
+        // New products get a unique CI-palette colour (white excluded). If the
+        // admin didn't pick one, assign the first colour not already in use.
+        if (!payload.color) {
+          const palette = (window.Utils && Utils.ciProductPalette) ||
+            ['#ff9b0c', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'];
+          let used = new Set();
+          try {
+            const existing = (await API.products.list({ limit: 500 })).data || [];
+            used = new Set(existing.map(p => String(p.color || '').toLowerCase()));
+          } catch (_) {}
+          payload.color = palette.find(c => !used.has(c.toLowerCase())) || palette[Math.floor(Math.random() * palette.length)];
+        }
         payload.id = `PROD-${productType.toUpperCase()}-${Date.now()}`;
         await API.products.create(payload);
-        Toast.success('Product created');
+        Toast.success(`Product created — colour ${payload.color}`);
       }
       Modal.close('productModal');
       await loadProducts();
