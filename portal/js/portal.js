@@ -3020,20 +3020,28 @@ async function loadMarketplace() {
 
 function filterMarket(type, btn) {
   PORTAL.marketFilter = type;
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const bar = document.getElementById('marketRiskTabBar');
+  if (bar) bar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   renderMarketplace();
-  SVC.track('svc_filter_changed', { filter_type: 'marketplace', filter_value: type });
+  if (bar) bar.style.display = '';   // renderMarketplace hides .tab-bar; keep risk filter visible
+  SVC.track('svc_filter_changed', { filter_type: 'marketplace_risk', filter_value: type });
 }
 
 const _POOL_META = {
-  solar:         { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  solar_7yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  solar_6yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  solar_5yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  cattle:        { blurb: 'Partner with Beefcor — SA\'s premier feedlot — and earn returns as your herd grows from 200kg to 500kg.', risk: 'Medium-High',  riskColor: '#ff9b0c' },
-  short_term:    { blurb: 'Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.', risk: 'Medium',    riskColor: '#f59e0b' },
-  delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Low-Medium',   riskColor: '#22c55e' },
+  solar:         { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
+  solar_7yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
+  solar_6yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
+  solar_5yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
+  cattle:        { blurb: 'Partner with Beefcor — SA\'s premier feedlot — and earn returns as your herd grows from 200kg to 500kg.', risk: 'Aggressive',   riskColor: '#ef4444' },
+  short_term:    { blurb: 'Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.', risk: 'Moderate',  riskColor: '#f59e0b' },
+  delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Conservative', riskColor: '#22c55e' },
+};
+// Map each product's risk label to a filter group
+const _RISK_GROUP = {
+  'Conservative': 'risk_conservative',
+  'Moderate':     'risk_moderate',
+  'Aggressive':   'risk_aggressive',
 };
 
 // ── Product-first marketplace ────────────────────────────────────────────
@@ -3041,9 +3049,9 @@ const _POOL_META = {
 // + factsheets + a chart, then the open pools under it, and invest from there.
 
 function renderMarketplace() {
-  // Toggle the legacy category tab-bar — not used in the product-first flow
-  const tabBar = document.querySelector('#view-marketplace .tab-bar');
-  if (tabBar) tabBar.style.display = 'none';
+  // Risk filter bar: visible on the product grid, hidden inside a product detail
+  const tabBar = document.getElementById('marketRiskTabBar');
+  if (tabBar) tabBar.style.display = _selectedProductType ? 'none' : '';
   const banner = document.querySelector('#view-marketplace .section-banner__title');
   if (_selectedProductType) { if (banner) banner.textContent = 'Product Details'; renderProductDetailView(_selectedProductType); }
   else { if (banner) banner.textContent = 'Investment Products'; renderProductsGrid(); }
@@ -3067,7 +3075,14 @@ function renderProductsGrid() {
 
   // All active products (details + factsheets browsable even with no open pool),
   // sorted by sort order. Products with open pools rank first.
-  const products = (_mktProducts || []).filter(p => p.is_active).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  // Filtered by risk level (Conservative / Moderate / Aggressive).
+  const mf = PORTAL.marketFilter || 'all';
+  const products = (_mktProducts || []).filter(p => {
+    if (!p.is_active) return false;
+    if (mf === 'all') return true;
+    const meta = _POOL_META[p.product_type] || {};
+    return _RISK_GROUP[meta.risk] === mf;
+  }).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
   const shown = products
     .map(p => ({ p, open: _openPoolsForProduct(p.product_type) }))
     .sort((a, b) => (b.open.length > 0) - (a.open.length > 0));
@@ -5273,7 +5288,8 @@ function renderQuestView() {
   const refSection = document.getElementById('rewardsReferralSection');
   const refList    = document.getElementById('rewardsReferralList');
   const refTxns    = PORTAL.transactions.filter(t => t.type === 'referral_bonus').sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  if (refSection && refList) {
+  if (refSection) refSection.style.display = 'none';   // Referral Rewards History hidden (feature not live)
+  if (false && refSection && refList) {
     refSection.style.display = '';
     if (!refTxns.length) {
       refList.innerHTML = `<div class="empty-state" style="padding:20px"><i class="fa-solid fa-gift"></i><p>No referral bonuses yet. Share your referral link to earn rewards!</p></div>`;

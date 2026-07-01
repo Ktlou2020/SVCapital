@@ -109,7 +109,7 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar__brand">
       <a href="../index.html" class="sv-portal-logo" title="SV Capital — Home">
-        <img src="../assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="display:block;height:44px;width:auto">
+        <img src="../assets/full-colour-logo-horizontal-white-text.png" alt="SV Capital" style="display:block;height:44px;width:auto">
         <div class="brand-text">
           <span class="brand-role">Investor Portal</span>
         </div>
@@ -738,25 +738,27 @@
            VIEW: MARKETPLACE (Browse Pools)
       ══════════════════════════════════ -->
       <div class="view" id="view-marketplace">
-        <div class="section-banner mb-16">
-          <div>
-            <h2 class="section-banner__title">Investment Products</h2>
-            <p class="section-banner__sub">Choose a product to see its details, factsheets and open pools — then invest. All investments are FSCA-regulated via SmartVest Financial Services (FSP 52449).</p>
+        <div class="mkt-hero mb-16">
+          <div class="mkt-hero__icon"><i class="fa-solid fa-layer-group"></i></div>
+          <h2 class="mkt-hero__title">Investment Products</h2>
+          <p class="mkt-hero__sub">Choose a product to see its details, factsheets and open pools — then invest.</p>
+        </div>
+
+        <!-- Risk filter bar -->
+        <div class="mkt-filter-bar mb-16" id="marketRiskTabBar">
+          <div class="mkt-filter-bar__label"><i class="fa-solid fa-shield-halved"></i> Filter by risk</div>
+          <div class="mkt-risk-pills">
+            <button class="mkt-risk-pill active" data-risk="all" onclick="filterMarket('all')">All</button>
+            <button class="mkt-risk-pill mkt-risk-pill--con" data-risk="risk_conservative" onclick="filterMarket('risk_conservative')">Conservative</button>
+            <button class="mkt-risk-pill mkt-risk-pill--mod" data-risk="risk_moderate" onclick="filterMarket('risk_moderate')">Moderate</button>
+            <button class="mkt-risk-pill mkt-risk-pill--agg" data-risk="risk_aggressive" onclick="filterMarket('risk_aggressive')">Aggressive</button>
           </div>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <div id="marketRiskTabBar" style="display:flex;align-items:center;gap:8px">
-              <label style="font-size:0.75rem;color:rgba(255,255,255,0.5);white-space:nowrap">Risk Level</label>
-              <select id="marketRiskSelect" onchange="filterMarket(this.value)" style="background:#1e2235;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:8px 14px;font-size:0.82rem;font-weight:600;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23FF8215' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px">
-                <option value="all">All Products</option>
-                <option value="risk_conservative">Conservative</option>
-                <option value="risk_moderate">Moderate</option>
-                <option value="risk_aggressive">Aggressive</option>
-              </select>
-            </div>
-            <button class="btn btn--sm" onclick="openCalcModal()" style="white-space:nowrap;background:linear-gradient(135deg,#FF8215,#FF9B0C);color:#fff;border:none;font-weight:700">
-              <i class="fa-solid fa-calculator"></i> Calculate Returns
-            </button>
-          </div>
+          <button class="mkt-calc-btn" onclick="openCalcModal()">
+            <i class="fa-solid fa-calculator"></i> Calculate Returns
+          </button>
+          <select id="marketRiskSelect" style="display:none">
+            <option value="all"></option><option value="risk_conservative"></option><option value="risk_moderate"></option><option value="risk_aggressive"></option>
+          </select>
         </div>
 
         <!-- How to Invest steps -->
@@ -1663,21 +1665,19 @@
           <div class="gift-preview-panel">
             <div class="gift-card-label">Preview</div>
             <div class="gift-card" id="giftCardPreview">
-              <div class="gift-card__ribbon">
-                <div class="gift-card__ribbon-h"></div>
-                <div class="gift-card__ribbon-v"></div>
-                <div class="gift-card__bow"><i class="fa-solid fa-gift"></i></div>
+              <div class="gift-card__glow"></div>
+              <div class="gift-card__brand">
+                <span class="gift-card__brand-mark">SV</span>
+                <span class="gift-card__brand-name">SV CAPITAL</span>
+                <i class="fa-solid fa-gift gift-card__brand-icon"></i>
               </div>
-              <div class="gift-card__logo">
-                <img src="../assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="width:32px;height:32px;object-fit:contain;border-radius:8px">
-                <span>SV Capital</span>
-              </div>
-              <div class="gift-card__amount" id="previewAmount">R—</div>
               <div class="gift-card__label-row">Investment Gift</div>
+              <div class="gift-card__amount" id="previewAmount">R—</div>
+              <div class="gift-card__divider"></div>
               <div class="gift-card__to" id="previewTo">To: —</div>
               <div class="gift-card__message" id="previewMessage"></div>
               <div class="gift-card__from" id="previewFrom">From: —</div>
-              <div class="gift-card__footer">Venture Beyond the Ordinary</div>
+              <div class="gift-card__footer"><i class="fa-solid fa-seedling"></i> Venture Beyond the Ordinary</div>
             </div>
           </div>
         </div>

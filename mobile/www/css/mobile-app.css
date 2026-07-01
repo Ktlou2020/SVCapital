@@ -3457,33 +3457,42 @@ body,
 /* ── Page header ─────────────────────────────────────────────── */
 #view-subaccounts .sa-view-header {
   display: flex !important;
-  align-items: flex-start !important;
-  justify-content: space-between !important;
-  gap: 12px !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  text-align: center !important;
+  gap: 14px !important;
   margin-bottom: 20px !important;
 }
 #view-subaccounts .sa-view-title {
   font-size: 1.55rem !important;
   font-weight: 900 !important;
-  color: #fff !important;
+  color: #0f172a !important;
   letter-spacing: -0.02em !important;
   line-height: 1.15 !important;
 }
 #view-subaccounts .sa-view-sub {
-  font-size: 0.78rem !important;
-  color: rgba(255,255,255,0.5) !important;
-  margin-top: 4px !important;
+  font-size: 0.8rem !important;
+  color: #64748b !important;
+  margin-top: 5px !important;
   line-height: 1.5 !important;
+  max-width: 340px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
 }
 #view-subaccounts .sa-view-header .btn--primary {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
   background: linear-gradient(135deg,#FF8215,#ff5229) !important;
   border: none !important;
-  border-radius: 14px !important;
-  font-weight: 700 !important;
-  font-size: 0.82rem !important;
-  padding: 11px 18px !important;
+  border-radius: 16px !important;
+  font-weight: 800 !important;
+  font-size: 0.92rem !important;
+  padding: 15px 18px !important;
   white-space: nowrap !important;
-  box-shadow: 0 4px 14px rgba(255,82,41,0.3) !important;
+  box-shadow: 0 8px 22px rgba(255,82,41,0.32) !important;
   flex-shrink: 0 !important;
 }
 
@@ -5195,4 +5204,245 @@ i.fa, i.fas, i.far, i.fab, i.fal, i.fa-solid, i.fa-regular, i.fa-brands,
 }
 #view-quests .quest-category__icon-wrap {
   width: 42px !important; height: 42px !important; border-radius: 12px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION 55 — ACTION CENTRE "DONE" STATE (Portfolio Overview)
+   ═══════════════════════════════════════════════════════════════ */
+.action-centre-done {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+}
+.acd-headline {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+}
+.acd-check {
+  width: 38px !important; height: 38px !important; flex-shrink: 0 !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg,#22c55e,#16a34a) !important;
+  color: #fff !important; font-size: 1.05rem !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  box-shadow: 0 4px 12px rgba(34,197,94,0.32) !important;
+}
+.acd-title {
+  font-size: 0.95rem !important; font-weight: 800 !important;
+  color: #0f172a !important; letter-spacing: -0.01em !important; line-height: 1.3 !important;
+}
+.acd-sub {
+  font-size: 0.8rem !important; color: #64748b !important;
+  margin-top: 3px !important; line-height: 1.45 !important;
+}
+.acd-actions {
+  display: flex !important; gap: 10px !important; width: 100% !important;
+}
+.acd-btn {
+  flex: 1 1 0 !important; min-width: 0 !important;
+  display: flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important;
+  height: 50px !important; border-radius: 15px !important;
+  font-size: 0.9rem !important; font-weight: 800 !important; letter-spacing: -0.01em !important;
+  border: none !important; cursor: pointer !important;
+  transition: transform 0.09s ease, opacity 0.09s ease !important;
+}
+.acd-btn i { font-size: 0.9rem !important; }
+.acd-btn:active { transform: scale(0.97) !important; opacity: 0.92 !important; }
+.acd-btn--ghost {
+  background: #f1f5f9 !important; color: #334155 !important;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+}
+.acd-btn--primary {
+  background: linear-gradient(135deg,#FF8215,#ff5229) !important; color: #fff !important;
+  box-shadow: 0 6px 18px rgba(255,82,41,0.3) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION 56 — BROWSE POOLS HEADER: HERO + RISK PILL FILTER
+   ═══════════════════════════════════════════════════════════════ */
+/* Orange marketing hero */
+#view-marketplace .mkt-hero {
+  background: linear-gradient(135deg,#FF8215 0%,#ff5229 100%) !important;
+  border-radius: 22px !important;
+  padding: 22px 20px !important;
+  position: relative !important;
+  overflow: hidden !important;
+  box-shadow: 0 10px 26px rgba(255,82,41,0.28) !important;
+}
+#view-marketplace .mkt-hero::before {
+  content: '' !important; position: absolute !important;
+  top: -50px !important; right: -40px !important;
+  width: 180px !important; height: 180px !important;
+  background: radial-gradient(circle, rgba(255,255,255,0.22), transparent 70%) !important;
+  pointer-events: none !important;
+}
+#view-marketplace .mkt-hero__icon {
+  width: 44px !important; height: 44px !important; border-radius: 13px !important;
+  background: rgba(255,255,255,0.2) !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  color: #fff !important; font-size: 1.15rem !important; margin-bottom: 12px !important;
+  position: relative !important;
+}
+#view-marketplace .mkt-hero__title {
+  font-size: 1.4rem !important; font-weight: 900 !important; color: #fff !important;
+  letter-spacing: -0.02em !important; margin: 0 !important; position: relative !important;
+}
+#view-marketplace .mkt-hero__sub {
+  font-size: 0.82rem !important; color: rgba(255,255,255,0.9) !important;
+  margin: 5px 0 0 !important; line-height: 1.5 !important; position: relative !important;
+}
+
+/* White filter bar */
+#view-marketplace .mkt-filter-bar {
+  background: #fff !important;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.06) !important;
+  padding: 14px !important;
+  display: block !important;
+}
+#view-marketplace .mkt-filter-bar__label {
+  font-size: 0.68rem !important; font-weight: 800 !important; text-transform: uppercase !important;
+  letter-spacing: 0.07em !important; color: #94a3b8 !important; margin-bottom: 10px !important;
+  display: flex !important; align-items: center !important; gap: 6px !important;
+}
+#view-marketplace .mkt-filter-bar__label i { color: #FF8215 !important; }
+
+/* Risk pills — horizontal scroll, colour-coded */
+#view-marketplace .mkt-risk-pills {
+  display: flex !important; gap: 8px !important;
+  overflow-x: auto !important; -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: none !important; margin: 0 -2px 12px !important; padding: 0 2px 2px !important;
+}
+#view-marketplace .mkt-risk-pills::-webkit-scrollbar { display: none !important; }
+#view-marketplace .mkt-risk-pill {
+  flex: 0 0 auto !important;
+  border: 1.5px solid rgba(0,0,0,0.1) !important;
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-radius: 100px !important;
+  padding: 9px 16px !important;
+  font-size: 0.8rem !important; font-weight: 700 !important;
+  white-space: nowrap !important; cursor: pointer !important;
+  transition: all 0.14s ease !important;
+}
+#view-marketplace .mkt-risk-pill:active { transform: scale(0.95) !important; }
+#view-marketplace .mkt-risk-pill.active {
+  color: #fff !important; border-color: transparent !important;
+  background: linear-gradient(135deg,#FF8215,#ff5229) !important;
+  box-shadow: 0 4px 12px rgba(255,82,41,0.3) !important;
+}
+/* Risk-tinted active states */
+#view-marketplace .mkt-risk-pill--con.active { background: linear-gradient(135deg,#22c55e,#16a34a) !important; box-shadow: 0 4px 12px rgba(34,197,94,0.3) !important; }
+#view-marketplace .mkt-risk-pill--mod.active { background: linear-gradient(135deg,#f59e0b,#d97706) !important; box-shadow: 0 4px 12px rgba(245,158,11,0.3) !important; }
+#view-marketplace .mkt-risk-pill--agg.active { background: linear-gradient(135deg,#ef4444,#dc2626) !important; box-shadow: 0 4px 12px rgba(239,68,68,0.3) !important; }
+
+/* Calculate Returns — full width secondary */
+#view-marketplace .mkt-calc-btn {
+  width: 100% !important;
+  display: flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important;
+  background: #0f172a !important; color: #fff !important;
+  border: none !important; border-radius: 13px !important;
+  padding: 13px !important; font-size: 0.86rem !important; font-weight: 800 !important;
+  cursor: pointer !important;
+}
+#view-marketplace .mkt-calc-btn i { color: #FF8215 !important; }
+#view-marketplace .mkt-calc-btn:active { transform: scale(0.98) !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION 57 — GIFT PREVIEW CARD (premium) + REWARDS STATS
+   ═══════════════════════════════════════════════════════════════ */
+#view-gifts .gift-card {
+  position: relative !important;
+  width: 100% !important;
+  min-height: 260px !important;
+  border-radius: 22px !important;
+  overflow: hidden !important;
+  background: linear-gradient(150deg,#2a1c10 0%,#1a1a1a 45%,#0f0f0f 100%) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow: 0 16px 44px rgba(0,0,0,0.35) !important;
+  padding: 22px 22px 18px !important;
+  color: #fff !important;
+  display: flex !important; flex-direction: column !important;
+}
+#view-gifts .gift-card__glow {
+  position: absolute !important; top: -70px !important; right: -60px !important;
+  width: 220px !important; height: 220px !important;
+  background: radial-gradient(circle, rgba(255,130,21,0.4), transparent 70%) !important;
+  pointer-events: none !important;
+}
+#view-gifts .gift-card__brand {
+  display: flex !important; align-items: center !important; gap: 10px !important;
+  position: relative !important; margin-bottom: 20px !important;
+}
+#view-gifts .gift-card__brand-mark {
+  width: 38px !important; height: 38px !important; border-radius: 11px !important;
+  background: linear-gradient(135deg,#FF8215,#ff5229) !important;
+  color: #fff !important; font-weight: 900 !important; font-size: 0.95rem !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  letter-spacing: -0.02em !important; box-shadow: 0 5px 14px rgba(255,82,41,0.4) !important;
+}
+#view-gifts .gift-card__brand-name {
+  font-weight: 800 !important; font-size: 0.9rem !important; letter-spacing: 0.14em !important;
+  color: rgba(255,255,255,0.92) !important;
+}
+#view-gifts .gift-card__brand-icon { margin-left: auto !important; color: rgba(255,130,21,0.7) !important; font-size: 1.1rem !important; }
+#view-gifts .gift-card__label-row {
+  font-size: 0.66rem !important; font-weight: 800 !important; text-transform: uppercase !important;
+  letter-spacing: 0.16em !important; color: rgba(255,255,255,0.45) !important; position: relative !important;
+}
+#view-gifts .gift-card__amount {
+  font-size: 2.6rem !important; font-weight: 900 !important; letter-spacing: -0.03em !important;
+  line-height: 1.05 !important; margin: 2px 0 14px !important; position: relative !important;
+  background: linear-gradient(135deg,#fff,#ffd9b3) !important;
+  -webkit-background-clip: text !important; background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+#view-gifts .gift-card__divider {
+  height: 1px !important; background: rgba(255,255,255,0.1) !important;
+  margin: 0 0 14px !important; position: relative !important;
+}
+#view-gifts .gift-card__to,
+#view-gifts .gift-card__from {
+  font-size: 0.85rem !important; color: rgba(255,255,255,0.85) !important;
+  font-weight: 600 !important; position: relative !important; margin-bottom: 4px !important;
+}
+#view-gifts .gift-card__message {
+  font-size: 0.85rem !important; color: rgba(255,255,255,0.6) !important;
+  font-style: italic !important; line-height: 1.5 !important; margin: 6px 0 !important;
+  position: relative !important;
+}
+#view-gifts .gift-card__footer {
+  margin-top: auto !important; padding-top: 14px !important;
+  font-size: 0.72rem !important; font-weight: 700 !important; letter-spacing: 0.02em !important;
+  color: #FF8215 !important; display: flex !important; align-items: center !important; gap: 6px !important;
+  position: relative !important;
+}
+
+/* ── Rewards stats grid — icons, color, polish ───────────────── */
+#view-quests .rewards-stat {
+  position: relative !important;
+  padding: 16px 14px 14px !important;
+  overflow: hidden !important;
+}
+#view-quests .rewards-stat::before {
+  content: '' !important; position: absolute !important;
+  top: 0 !important; left: 0 !important; width: 100% !important; height: 3px !important;
+  background: linear-gradient(90deg,#FF8215,#ff5229) !important;
+}
+#view-quests .rewards-stat:nth-child(2)::before { background: linear-gradient(90deg,#a855f7,#7c3aed) !important; }
+#view-quests .rewards-stat:nth-child(3)::before { background: linear-gradient(90deg,#22c55e,#16a34a) !important; }
+#view-quests .rewards-stat:nth-child(4)::before { background: linear-gradient(90deg,#f59e0b,#d97706) !important; }
+#view-quests .rewards-stat:nth-child(5)::before { background: linear-gradient(90deg,#D4AF37,#b8860b) !important; }
+#view-quests .rewards-stat__val { font-size: 1.35rem !important; line-height: 1.1 !important; }
+#view-quests .rewards-stat__label {
+  font-size: 0.6rem !important; letter-spacing: 0.06em !important; margin-top: 6px !important;
+}
+
+/* ── Keep inline-hidden nav items hidden (Section 51's display:flex on
+   .nav-item was overriding inline display:none, e.g. Refer & Earn) ── */
+#sidebar .nav-item[data-view="referral"],
+#sidebar .nav-item[style*="display:none"],
+#sidebar .nav-item[style*="display: none"] {
+  display: none !important;
 }
