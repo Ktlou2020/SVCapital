@@ -4768,3 +4768,431 @@ body.keyboard-open .main-content {
 .sa-detail-sheet {
   padding-bottom: env(safe-area-inset-bottom, 0px) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION 50 — POPPINS EVERYWHERE (hardened)
+   Force Poppins on all text-bearing elements & pseudo-elements,
+   while never touching Font Awesome icon glyphs.
+   ═══════════════════════════════════════════════════════════════ */
+*:not(i):not(.fa):not(.fas):not(.far):not(.fab):not(.fal):not([class*="fa-"]),
+*:not(i):not([class*="fa-"])::before,
+*:not(i):not([class*="fa-"])::after {
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+/* Font Awesome must keep its own font on the icon element AND its ::before */
+i.fa, i.fas, i.far, i.fab, i.fal, i.fa-solid, i.fa-regular, i.fa-brands,
+[class*="fa-"], [class*="fa-"]::before {
+  font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands" !important;
+}
+.fa-brands, .fab, [class*="fa-"].fa-brands { font-family: "Font Awesome 6 Brands" !important; }
+/* Placeholders in Poppins too */
+::placeholder { font-family: 'Poppins', sans-serif !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION 51 — WORLD-CLASS SIDE MENU (DRAWER)
+   Full geometry + premium visual language. Loads last → authoritative.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Drawer geometry: off-canvas slide-in ────────────────────── */
+#sidebar.sidebar {
+  position: fixed !important;
+  top: 0 !important; left: 0 !important; bottom: 0 !important;
+  width: 84% !important; max-width: 340px !important;
+  height: 100% !important;
+  z-index: 1300 !important;                 /* above bottom nav (1200) */
+  transform: translateX(-102%) !important;
+  transition: transform 0.32s cubic-bezier(0.4,0,0.2,1) !important;
+  display: flex !important; flex-direction: column !important;
+  background: linear-gradient(165deg,#20232e 0%,#15171f 48%,#0d0e14 100%) !important;
+  border-right: none !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+  padding-top: max(env(safe-area-inset-top,0px), var(--native-sb-h,0px)) !important;
+}
+#sidebar.sidebar.open {
+  transform: translateX(0) !important;
+  box-shadow: 24px 0 60px rgba(0,0,0,0.5) !important;
+}
+
+/* Warm glow accents in the drawer background */
+#sidebar.sidebar::before {
+  content: '' !important; position: absolute !important;
+  top: -80px !important; right: -60px !important;
+  width: 240px !important; height: 240px !important;
+  background: radial-gradient(circle, rgba(255,130,21,0.22), transparent 70%) !important;
+  pointer-events: none !important; z-index: 0 !important;
+}
+
+/* ── Backdrop ────────────────────────────────────────────────── */
+.sidebar-backdrop {
+  position: fixed !important; inset: 0 !important;
+  background: rgba(6,8,14,0.55) !important;
+  z-index: 1250 !important;
+  opacity: 0 !important;
+  transition: opacity 0.3s ease !important;
+}
+.sidebar-backdrop.sidebar-backdrop--visible {
+  display: block !important; opacity: 1 !important;
+}
+
+/* ── Brand header ────────────────────────────────────────────── */
+#sidebar .sidebar__brand {
+  position: relative !important; z-index: 1 !important;
+  padding: 20px 20px 18px !important;
+  border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+  background: transparent !important;
+}
+#sidebar .sidebar__brand img { height: 40px !important; }
+#sidebar .brand-role {
+  color: rgba(255,255,255,0.4) !important;
+  font-size: 0.6rem !important; letter-spacing: 0.14em !important;
+  text-transform: uppercase !important; font-weight: 700 !important;
+  margin-top: 4px !important; display: block !important;
+}
+
+/* ── Nav scroll area ─────────────────────────────────────────── */
+#sidebar .sidebar__nav {
+  position: relative !important; z-index: 1 !important;
+  flex: 1 !important; overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain !important;
+  padding: 8px 12px 12px !important;
+}
+
+/* ── Section labels ──────────────────────────────────────────── */
+#sidebar .nav-section-label {
+  color: rgba(255,255,255,0.32) !important;
+  font-size: 0.6rem !important; font-weight: 800 !important;
+  letter-spacing: 0.16em !important; text-transform: uppercase !important;
+  padding: 18px 12px 8px !important;
+}
+
+/* ── Nav items: chip icon + label + active indicator ─────────── */
+#sidebar .nav-item {
+  position: relative !important;
+  display: flex !important; align-items: center !important; gap: 13px !important;
+  width: auto !important;
+  color: rgba(255,255,255,0.62) !important;
+  font-size: 0.9rem !important; font-weight: 600 !important;
+  padding: 11px 13px !important;
+  margin: 3px 0 !important;
+  border-radius: 14px !important;
+  border: none !important;
+  background: transparent !important;
+  transition: background 0.16s ease, color 0.16s ease !important;
+  text-align: left !important;
+}
+#sidebar .nav-item i {
+  width: 38px !important; height: 38px !important;
+  flex-shrink: 0 !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  background: rgba(255,255,255,0.06) !important;
+  border-radius: 11px !important;
+  font-size: 0.95rem !important;
+  color: rgba(255,255,255,0.6) !important;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease !important;
+}
+#sidebar .nav-item:active { background: rgba(255,255,255,0.05) !important; }
+#sidebar .nav-item:active i { transform: scale(0.92) !important; }
+
+/* Active nav item */
+#sidebar .nav-item.active {
+  color: #fff !important;
+  background: linear-gradient(135deg, rgba(255,130,21,0.18), rgba(255,82,41,0.1)) !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+#sidebar .nav-item.active i {
+  background: linear-gradient(135deg,#FF8215,#ff5229) !important;
+  color: #fff !important;
+  box-shadow: 0 5px 14px rgba(255,82,41,0.4) !important;
+}
+#sidebar .nav-item.active::before {
+  content: '' !important;
+  position: absolute !important; left: -12px !important; top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 4px !important; height: 26px !important;
+  background: linear-gradient(180deg,#FF8215,#ff5229) !important;
+  border-radius: 0 4px 4px 0 !important;
+}
+
+/* Badges on nav items */
+#sidebar .nav-badge, #sidebar .xp-nav-badge {
+  margin-left: auto !important;
+  background: linear-gradient(135deg,#FF8215,#ff5229) !important;
+  color: #fff !important;
+  font-size: 0.62rem !important; font-weight: 800 !important;
+  min-width: 20px !important; height: 20px !important;
+  border-radius: 100px !important;
+  display: inline-flex !important; align-items: center !important; justify-content: center !important;
+  padding: 0 6px !important;
+}
+
+/* ── Footer user card ────────────────────────────────────────── */
+#sidebar .sidebar__footer {
+  position: relative !important; z-index: 1 !important;
+  border-top: 1px solid rgba(255,255,255,0.08) !important;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom,0px)) !important;
+  background: rgba(0,0,0,0.2) !important;
+}
+#sidebar .sidebar-user {
+  display: flex !important; align-items: center !important; gap: 12px !important;
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 14px !important;
+  padding: 10px 12px !important;
+}
+#sidebar .sidebar-user__avatar {
+  width: 42px !important; height: 42px !important; border-radius: 12px !important;
+  background: linear-gradient(135deg,#FF8215,#ff5229) !important;
+  color: #fff !important; font-weight: 800 !important; font-size: 0.95rem !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  flex-shrink: 0 !important;
+}
+#sidebar .sidebar-user__info { display: flex !important; flex-direction: column !important; min-width: 0 !important; }
+#sidebar .sidebar .sidebar-user__info .user-name,
+#sidebar .sidebar-user__info .user-name {
+  color: #fff !important; font-weight: 700 !important; font-size: 0.88rem !important;
+  white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
+}
+#sidebar .sidebar-user__info .user-role {
+  color: rgba(255,255,255,0.45) !important; font-size: 0.72rem !important; margin-top: 1px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION 52 — BROWSE POOLS / PRODUCTS: PREMIUM CARD ELEVATION
+   ═══════════════════════════════════════════════════════════════ */
+#view-marketplace .market-pool-card.mpc-v2 {
+  padding: 0 0 16px !important;
+  border-radius: 22px !important;
+  border: 1px solid rgba(0,0,0,0.05) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.04) !important;
+  margin-bottom: 14px !important;
+}
+/* Full-bleed accent bar at very top */
+#view-marketplace .mpc2-accent {
+  height: 6px !important; border-radius: 0 !important; margin: 0 0 0 0 !important;
+}
+/* Inner padding wrapper for content sections */
+#view-marketplace .mpc2-top { padding: 16px 16px 0 !important; }
+#view-marketplace .mpc2-icon {
+  width: 50px !important; height: 50px !important; border-radius: 15px !important;
+  font-size: 1.3rem !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+}
+#view-marketplace .mpc2-title { font-size: 1.15rem !important; }
+#view-marketplace .mpc2-blurb {
+  margin-top: 4px !important;
+  display: -webkit-box !important; -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important; overflow: hidden !important;
+}
+#view-marketplace .mpc2-badge {
+  font-size: 0.6rem !important; padding: 5px 11px !important;
+  border: 1px solid transparent !important;
+}
+/* Metrics block */
+#view-marketplace .mpc2-metrics {
+  margin: 16px 16px 0 !important;
+  background: linear-gradient(135deg,#f8fafc,#f1f5f9) !important;
+  border: 1px solid rgba(0,0,0,0.04) !important;
+  border-radius: 16px !important;
+  padding: 14px 6px !important;
+}
+#view-marketplace .mpc2-metric__val { font-size: 1.4rem !important; }
+#view-marketplace .mpc2-metric__lbl { font-size: 0.58rem !important; margin-top: 3px !important; }
+/* Pills */
+#view-marketplace .mpc2-pills { padding: 0 16px !important; margin-top: 12px !important; }
+#view-marketplace .mpc2-pill {
+  background: #f1f5f9 !important; color: #475569 !important;
+  padding: 6px 12px !important; font-size: 0.7rem !important;
+  display: inline-flex !important; align-items: center !important; gap: 5px !important;
+}
+#view-marketplace .mpc2-pill i { color: #FF8215 !important; }
+#view-marketplace .mpc2-pill--urgent { background: rgba(239,68,68,0.1) !important; color: #dc2626 !important; }
+#view-marketplace .mpc2-pill--urgent i { color: #dc2626 !important; }
+/* Footer CTA */
+#view-marketplace .mpc2-footer { padding: 0 16px !important; margin-top: 16px !important; }
+#view-marketplace .mpc2-footer .btn--primary {
+  background: linear-gradient(135deg,#FF8215,#ff5229) !important;
+  border: none !important; border-radius: 15px !important;
+  height: 50px !important; font-weight: 800 !important; font-size: 0.92rem !important;
+  box-shadow: 0 6px 18px rgba(255,82,41,0.28) !important;
+  display: flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important;
+}
+/* Section banner (Browse Pools header) polish */
+#view-marketplace .section-banner {
+  border-radius: 20px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION 53 — MY ACCOUNTS: PREMIUM ELEVATION
+   ═══════════════════════════════════════════════════════════════ */
+/* Card shell — deeper, softer */
+#view-subaccounts .sa-card {
+  border-radius: 24px !important;
+  border: 1px solid rgba(0,0,0,0.05) !important;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.09), 0 1px 3px rgba(0,0,0,0.05) !important;
+  margin-bottom: 14px !important;
+}
+/* Header banner — taller, richer, with glow */
+#view-subaccounts .sa-card__header {
+  position: relative !important;
+  padding: 18px 18px 16px !important;
+  overflow: hidden !important;
+}
+#view-subaccounts .sa-card__header::after {
+  content: '' !important; position: absolute !important;
+  top: -40px !important; right: -30px !important;
+  width: 140px !important; height: 140px !important;
+  background: radial-gradient(circle, rgba(255,255,255,0.18), transparent 70%) !important;
+  pointer-events: none !important;
+}
+#view-subaccounts .sa-card__icon {
+  width: 40px !important; height: 40px !important; border-radius: 12px !important;
+  background: rgba(255,255,255,0.22) !important;
+  font-size: 1.05rem !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+#view-subaccounts .sa-card__type-label {
+  font-size: 0.72rem !important; letter-spacing: 0.12em !important;
+}
+#view-subaccounts .sa-kyc-badge {
+  backdrop-filter: none !important;
+  background: rgba(255,255,255,0.9) !important;
+  padding: 5px 11px !important; font-size: 0.62rem !important;
+}
+#view-subaccounts .sa-kyc-badge--ok      { background: rgba(220,252,231,0.95) !important; color: #15803d !important; }
+#view-subaccounts .sa-kyc-badge--pending { background: rgba(254,243,199,0.95) !important; color: #b45309 !important; }
+#view-subaccounts .sa-kyc-badge--missing { background: rgba(254,226,226,0.95) !important; color: #b91c1c !important; }
+
+/* Body */
+#view-subaccounts .sa-card__body { padding: 18px !important; }
+#view-subaccounts .sa-card__name {
+  font-size: 1.15rem !important; margin-bottom: 16px !important;
+}
+/* Stat tiles — add subtle top accent + bigger numbers */
+#view-subaccounts .sa-card__stats { gap: 10px !important; }
+#view-subaccounts .sa-stat {
+  background: linear-gradient(135deg,#f8fafc,#f1f5f9) !important;
+  border: 1px solid rgba(0,0,0,0.04) !important;
+  border-radius: 16px !important;
+  padding: 14px !important;
+}
+#view-subaccounts .sa-stat__label { font-size: 0.6rem !important; letter-spacing: 0.08em !important; }
+#view-subaccounts .sa-stat__value { font-size: 1.3rem !important; margin-top: 5px !important; }
+
+/* Action row — premium buttons */
+#view-subaccounts .sa-card__actions {
+  padding: 4px 18px 18px !important;
+  border-top: none !important;
+  gap: 9px !important;
+}
+#view-subaccounts .sa-card__actions .btn {
+  padding: 12px 8px !important; border-radius: 13px !important; font-size: 0.82rem !important;
+}
+#view-subaccounts .sa-card__actions .btn--primary {
+  box-shadow: 0 5px 14px rgba(255,82,41,0.28) !important;
+}
+#view-subaccounts .sa-card__actions .btn--secondary {
+  background: #f1f5f9 !important; color: #334155 !important;
+}
+
+/* Add Account CTA — full premium gradient */
+#view-subaccounts .sa-view-header .btn--primary,
+#view-subaccounts button[onclick*="openCreateSubAccountModal"] {
+  background: linear-gradient(135deg,#FF8215,#ff5229) !important;
+  border: none !important; border-radius: 16px !important;
+  padding: 13px 20px !important; font-weight: 800 !important;
+  box-shadow: 0 8px 22px rgba(255,82,41,0.32) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION 54 — EARN REWARDS: PREMIUM ELEVATION
+   ═══════════════════════════════════════════════════════════════ */
+/* Hero — richer branded gradient + glow */
+#view-quests .xp-hero {
+  background: linear-gradient(150deg,#241a12 0%,#1a1a1a 45%,#0f0f0f 100%) !important;
+  border: 1px solid rgba(255,255,255,0.06) !important;
+  border-radius: 24px !important;
+  padding: 22px 20px !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.28) !important;
+}
+#view-quests .xp-hero::before {
+  width: 200px !important; height: 200px !important;
+  top: -60px !important; right: -50px !important;
+  background: radial-gradient(circle, rgba(255,130,21,0.32), transparent 70%) !important;
+}
+#view-quests .xp-hero__level-icon {
+  width: 58px !important; height: 58px !important; border-radius: 18px !important;
+  font-size: 1.55rem !important;
+  box-shadow: 0 8px 22px rgba(255,82,41,0.45) !important;
+}
+#view-quests .xp-hero__level-name { font-size: 1.3rem !important; font-weight: 900 !important; letter-spacing: -0.02em !important; }
+#view-quests .xp-hero__xp { font-size: 0.9rem !important; color: #FF8215 !important; font-weight: 700 !important; }
+#view-quests .xp-hero__track-wrap { height: 10px !important; }
+#view-quests .xp-hero__track-label { font-size: 0.75rem !important; color: rgba(255,255,255,0.6) !important; }
+
+/* Stats tiles — gradient + accent number */
+#view-quests .rewards-stat {
+  background: linear-gradient(135deg,#ffffff,#f8fafc) !important;
+  border: 1px solid rgba(0,0,0,0.05) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.05) !important;
+  padding: 14px !important;
+}
+#view-quests .rewards-stat__val { font-size: 1.15rem !important; }
+
+/* Quest cards — white, layered, colored accent, tappable feel */
+#view-quests .quest-card,
+#view-quests .quest-cards-grid .quest-card {
+  background: #fff !important;
+  border: 1px solid rgba(0,0,0,0.05) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.06) !important;
+  padding: 15px 14px !important;
+  margin-bottom: 10px !important;
+}
+#view-quests .quest-card--ready {
+  border-color: rgba(255,130,21,0.28) !important;
+  box-shadow: 0 4px 16px rgba(255,130,21,0.12) !important;
+}
+#view-quests .quest-card--done {
+  background: linear-gradient(135deg,rgba(34,197,94,0.06),rgba(34,197,94,0.02)) !important;
+  border-color: rgba(34,197,94,0.2) !important;
+}
+#view-quests .quest-card__icon {
+  width: 48px !important; height: 48px !important; border-radius: 14px !important;
+  font-size: 1.2rem !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+}
+#view-quests .quest-card__title { font-size: 0.92rem !important; }
+#view-quests .quest-card__desc { font-size: 0.74rem !important; }
+#view-quests .quest-card__xp { font-size: 0.85rem !important; }
+#view-quests .quest-card .btn--primary,
+#view-quests .quest-card button[onclick] {
+  border-radius: 12px !important;
+  padding: 10px 18px !important;
+  font-size: 0.8rem !important;
+  box-shadow: 0 4px 12px rgba(255,82,41,0.3) !important;
+}
+
+/* Level track — refined chips */
+#view-quests .level-step__icon {
+  width: 44px !important; height: 44px !important; border-radius: 14px !important;
+  font-size: 1rem !important;
+}
+#view-quests .level-step.current .level-step__icon {
+  transform: scale(1.08) !important;
+}
+#view-quests .level-step__name { font-size: 0.66rem !important; font-weight: 700 !important; margin-top: 6px !important; }
+
+/* Category header cards */
+#view-quests .quest-category__header {
+  border-radius: 16px !important;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.05) !important;
+  padding: 14px 15px !important;
+}
+#view-quests .quest-category__icon-wrap {
+  width: 42px !important; height: 42px !important; border-radius: 12px !important;
+}
