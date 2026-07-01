@@ -5385,11 +5385,15 @@ function openSurveyModal(questId) {
       </button>
     </div>`;
 
-  document.getElementById('surveyModal').style.display = 'flex';
+  // Use Modal.open so the overlay gets the `.open` class (opacity/pointer-events);
+  // setting style.display alone leaves it at opacity:0 / pointer-events:none.
+  if (window.Modal && Modal.open) Modal.open('surveyModal');
+  else document.getElementById('surveyModal').classList.add('open');
 }
 
 function closeSurveyModal() {
-  document.getElementById('surveyModal').style.display = 'none';
+  if (window.Modal && Modal.close) Modal.close('surveyModal');
+  else document.getElementById('surveyModal').classList.remove('open');
 }
 
 async function submitSurvey(questId) {
