@@ -57,6 +57,23 @@ const PRODUCTS = {
       { label: 'Capital', value: 'End of term' },
     ]
   },
+  solar6: {
+    name: 'Solar Investment (6yr)',
+    rate: 0.1390,
+    minInvest: 10000,
+    term: 72,
+    termUnit: 'months',
+    termYears: 6,
+    icon: 'fa-solar-panel',
+    color: '#4CAF50',
+    partner: 'The Solar Experts',
+    infoItems: [
+      { label: 'Partner', value: 'The Solar Experts' },
+      { label: 'Location', value: 'Cape Town, SA' },
+      { label: 'Returns', value: 'Annual payouts' },
+      { label: 'Capital', value: 'End of term' },
+    ]
+  },
   short: {
     name: 'Short-Term Investment',
     rate: 0.1392,
@@ -424,15 +441,36 @@ function initCalculator() {
 
   if (!slider) return;
 
+  const solarTerms = document.getElementById('calcSolarTerms');
+
   // Tab switching
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       tabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
-      currentCalcProduct = tab.dataset.calc;
+      const calc = tab.dataset.calc;
+      const isSolar = String(calc).startsWith('solar');
+      // Show the 5/6/7-year term selector only for Solar; default to the
+      // currently-selected solar term (or 7yr).
+      if (solarTerms) solarTerms.style.display = isSolar ? 'flex' : 'none';
+      currentCalcProduct = isSolar
+        ? (String(currentCalcProduct).startsWith('solar') ? currentCalcProduct : 'solar7')
+        : calc;
       updateCalculator();
     });
   });
+
+  // Solar term selector (5 / 6 / 7 years)
+  if (solarTerms) {
+    solarTerms.querySelectorAll('.calc-term-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        solarTerms.querySelectorAll('.calc-term-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentCalcProduct = btn.dataset.solar;   // solar5 | solar6 | solar7
+        updateCalculator();
+      });
+    });
+  }
 
   // Slider input
   slider.addEventListener('input', () => {
@@ -465,7 +503,7 @@ function updateCalculator() {
   const years = product.termYears;
   let returnsEarned, totalPayout;
 
-  if (currentCalcProduct === 'solar7' || currentCalcProduct === 'solar5') {
+  if (String(currentCalcProduct).startsWith('solar')) {
     // Solar: annual returns + capital at end
     returnsEarned = amount * ratePerYear * years;
     totalPayout = amount + returnsEarned;
@@ -951,6 +989,7 @@ async function _applyLiveProductAverages() {
   const calcTabMap = { // calc tab data-calc values → product home key
     cattle:   'cattle',
     solar7:   'solar',
+    solar6:   'solar',
     solar5:   'solar',
     short:    'short',
     delivery: 'delivery',
@@ -1107,27 +1146,16 @@ async function _applyTrackRecord() {
       n += d.matured_count || 0;
     });
     if (!n) return;
-    pools.sort((a, b) => new Date(a.ended) - new Date(b.ended));
-    const maxRate = Math.max(...pools.map(p => Math.max(p.actual_rate, p.benchmark_rate)), 0.01);
-    const bars = pools.slice(-8).map(p => {
-      const aPct = Math.round(p.actual_rate / maxRate * 100);
-      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:0.72rem">
-        <span style="width:90px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(p.name || '').replace(/[<>&]/g, '')}</span>
-        <div style="flex:1;height:14px;background:rgba(255,255,255,0.06);border-radius:7px;position:relative"><div style="position:absolute;left:0;top:0;height:100%;width:${aPct}%;background:#ff9b0c;border-radius:7px"></div></div>
-        <span style="width:48px;text-align:right;color:#ff9b0c;font-weight:700">${(p.actual_rate * 100).toFixed(1)}%</span>
-      </div>`;
-    }).join('');
 
+    // Show the average delivered return only (no per-pool bar graph).
     MODAL_DATA[key].trackHtml = `
       <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
-        <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#ff9b0c;margin-bottom:12px"><i class="fa-solid fa-chart-column"></i> Track Record</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
-          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${n}</div><div style="font-size:0.72rem;color:var(--text-dim)">pool${n === 1 ? '' : 's'} matured</div></div>
-          <div><div style="font-size:1.3rem;font-weight:800;color:#ff9b0c">${(sumA / n * 100).toFixed(2)}%</div><div style="font-size:0.72rem;color:var(--text-dim)">avg achieved p.a.</div></div>
-          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${rand(paid)}</div><div style="font-size:0.72rem;color:var(--text-dim)">paid back</div></div>
+        <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#ff9b0c;margin-bottom:12px"><i class="fa-solid fa-award"></i> Track Record</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <div><div style="font-size:1.5rem;font-weight:800;color:#ff9b0c">${(sumA / n * 100).toFixed(2)}%</div><div style="font-size:0.72rem;color:var(--text-dim)">avg return achieved p.a.</div></div>
+          <div><div style="font-size:1.5rem;font-weight:800;color:#fff">${n}</div><div style="font-size:0.72rem;color:var(--text-dim)">pool${n === 1 ? '' : 's'} matured</div></div>
+          <div><div style="font-size:1.5rem;font-weight:800;color:#fff">${rand(paid)}</div><div style="font-size:0.72rem;color:var(--text-dim)">paid back</div></div>
         </div>
-        ${bars}
-        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:6px">Each bar is the actual return achieved by a matured pool.</div>
       </div>`;
   });
 }

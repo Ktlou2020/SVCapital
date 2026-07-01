@@ -1104,27 +1104,16 @@ async function _applyTrackRecord() {
       n += d.matured_count || 0;
     });
     if (!n) return;
-    pools.sort((a, b) => new Date(a.ended) - new Date(b.ended));
-    const maxRate = Math.max(...pools.map(p => Math.max(p.actual_rate, p.benchmark_rate)), 0.01);
-    const bars = pools.slice(-8).map(p => {
-      const aPct = Math.round(p.actual_rate / maxRate * 100);
-      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:0.72rem">
-        <span style="width:90px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(p.name || '').replace(/[<>&]/g, '')}</span>
-        <div style="flex:1;height:14px;background:rgba(255,255,255,0.06);border-radius:7px;position:relative"><div style="position:absolute;left:0;top:0;height:100%;width:${aPct}%;background:#ff9b0c;border-radius:7px"></div></div>
-        <span style="width:48px;text-align:right;color:#ff9b0c;font-weight:700">${(p.actual_rate * 100).toFixed(1)}%</span>
-      </div>`;
-    }).join('');
 
+    // Show the average delivered return only (no per-pool bar graph).
     MODAL_DATA[key].trackHtml = `
       <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
-        <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#ff9b0c;margin-bottom:12px"><i class="fa-solid fa-chart-column"></i> Track Record</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
-          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${n}</div><div style="font-size:0.72rem;color:var(--text-dim)">pool${n === 1 ? '' : 's'} matured</div></div>
-          <div><div style="font-size:1.3rem;font-weight:800;color:#ff9b0c">${(sumA / n * 100).toFixed(2)}%</div><div style="font-size:0.72rem;color:var(--text-dim)">avg achieved p.a.</div></div>
-          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${rand(paid)}</div><div style="font-size:0.72rem;color:var(--text-dim)">paid back</div></div>
+        <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#ff9b0c;margin-bottom:12px"><i class="fa-solid fa-award"></i> Track Record</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <div><div style="font-size:1.5rem;font-weight:800;color:#ff9b0c">${(sumA / n * 100).toFixed(2)}%</div><div style="font-size:0.72rem;color:var(--text-dim)">avg return achieved p.a.</div></div>
+          <div><div style="font-size:1.5rem;font-weight:800;color:#fff">${n}</div><div style="font-size:0.72rem;color:var(--text-dim)">pool${n === 1 ? '' : 's'} matured</div></div>
+          <div><div style="font-size:1.5rem;font-weight:800;color:#fff">${rand(paid)}</div><div style="font-size:0.72rem;color:var(--text-dim)">paid back</div></div>
         </div>
-        ${bars}
-        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:6px">Each bar is the actual return achieved by a matured pool.</div>
       </div>`;
   });
 }

@@ -662,7 +662,7 @@
               <i class="fa-solid fa-cow"></i> Cattle
             </button>
             <button class="calc-tab" data-calc="solar7">
-              <i class="fa-solid fa-solar-panel"></i> Solar 7yr
+              <i class="fa-solid fa-solar-panel"></i> Solar
             </button>
             <button class="calc-tab" data-calc="short">
               <i class="fa-solid fa-bolt"></i> Short-Term
@@ -670,6 +670,14 @@
             <button class="calc-tab" data-calc="delivery">
               <i class="fa-solid fa-motorcycle"></i> Delivery
             </button>
+          </div>
+
+          <!-- Solar term selector (shown when the Solar tab is active) -->
+          <div class="calc-solar-terms" id="calcSolarTerms" style="display:none">
+            <span class="calc-solar-terms__label">Choose term</span>
+            <button class="calc-term-btn" data-solar="solar5">5 Years</button>
+            <button class="calc-term-btn" data-solar="solar6">6 Years</button>
+            <button class="calc-term-btn active" data-solar="solar7">7 Years</button>
           </div>
 
           <div class="calc-input-group">

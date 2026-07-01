@@ -1610,6 +1610,13 @@ function renderOnboardingWizard() {
   const wizard = document.getElementById('onboardingWizard');
   if (!wizard) return;
 
+  // The Action Centre is now the single onboarding checklist — retire the
+  // duplicate "Getting Started" wizard so the overview isn't cluttered with
+  // two identical step lists.
+  wizard.style.display = 'none';
+  return;
+
+  // eslint-disable-next-line no-unreachable
   // Check dismiss state first
   if (localStorage.getItem('svc_onboard_dismissed') === '1') {
     wizard.style.display = 'none';
@@ -1952,7 +1959,18 @@ function filterMyInvestments(filter, btn) {
   SVC.track('svc_filter_changed', { filter_type: 'my_investments', filter_value: filter });
 }
 
+function populateMyInvProductFilter() {
+  const sel = document.getElementById('myInvProductFilter');
+  if (!sel) return;
+  const types = [...new Set((PORTAL.investments || []).map(i => i.product_type).filter(Boolean))];
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All Products</option>' +
+    types.map(t => `<option value="${_esc(t)}">${_esc(Utils.productInfo(t).label)}</option>`).join('');
+  if (types.includes(cur)) sel.value = cur;
+}
+
 function renderMyInvestmentCards() {
+  populateMyInvProductFilter();
   const grid = document.getElementById('myInvestmentsGrid');
   const productFilter = document.getElementById('myInvProductFilter')?.value || '';
   let items = PORTAL.myInvFilter === 'all' ? PORTAL.investments : PORTAL.investments.filter(i => i.status === PORTAL.myInvFilter);
@@ -3164,7 +3182,7 @@ function renderProductsGrid() {
 
   grid.innerHTML = shown.map(({ p, open }) => {
     const pi = Utils.productInfo(p.product_type);
-    const color = p.color || pi.color;
+    const color = Utils.productColor(p);
     const icon = p.icon || pi.icon;
     const avg = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : null;
     const rateLabel = avg != null ? `${(avg * 100).toFixed(2)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : '—');
@@ -3232,7 +3250,7 @@ async function renderProductDetailView(type) {
   if (!grid) return;
   const product = (_mktProducts || []).find(p => p.product_type === type) || { product_type: type, label: Utils.productInfo(type).label };
   const pi = Utils.productInfo(type);
-  const color = product.color || pi.color;
+  const color = Utils.productColor(product);
   const icon = product.icon || pi.icon;
   const open = _openPoolsForProduct(type);
   const avg = product.avg_actual_rate != null ? parseFloat(product.avg_actual_rate) : null;
@@ -3444,34 +3462,23 @@ async function _renderProductTrackRecord(type, color) {
   if (!n) { el.innerHTML = ''; return; }
   pools.sort((a, b) => new Date(a.ended) - new Date(b.ended));
 
+  // Show the average delivered return (no chart).
   el.innerHTML = `
-    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-chart-column" style="color:${color}"></i> Track record — delivered returns</div>
-    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px">
-      <div><div style="font-size:1.2rem;font-weight:800;color:var(--text)">${n}</div><div style="font-size:0.7rem;color:var(--text-muted)">pool${n === 1 ? '' : 's'} matured</div></div>
-      <div><div style="font-size:1.2rem;font-weight:800;color:${color}">${(sumA / n * 100).toFixed(2)}%</div><div style="font-size:0.7rem;color:var(--text-muted)">avg achieved p.a.</div></div>
-      <div><div style="font-size:1.2rem;font-weight:800;color:var(--text)">${Utils.rand(paidBack)}</div><div style="font-size:0.7rem;color:var(--text-muted)">paid back to investors</div></div>
-    </div>
-    <div style="position:relative;height:170px"><canvas id="prodTrackChart"></canvas></div>`;
-
-  const canvas = document.getElementById('prodTrackChart');
-  if (!canvas || typeof Chart === 'undefined') return;
-  try { if (_trackChart) { _trackChart.destroy(); _trackChart = null; } } catch (_) {}
-  _trackChart = new Chart(canvas.getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels: pools.map(p => p.name || 'Pool'),
-      datasets: [
-        { label: 'Achieved',  data: pools.map(p => +(p.actual_rate * 100).toFixed(2)),    backgroundColor: color },
-        { label: 'Benchmark', data: pools.map(p => +(p.benchmark_rate * 100).toFixed(2)), backgroundColor: 'rgba(0,0,0,0.15)' },
-      ],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, labels: { boxWidth: 10, font: { size: 10 } } }, tooltip: { callbacks: { title: c => (c[0] && c[0].label) || '', label: c => `${c.dataset.label}: ${c.parsed.y}%` } } },
-      scales: { x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 35, minRotation: 0, font: { size: 9 }, color: 'rgba(0,0,0,0.4)' } },
-                y: { ticks: { callback: v => v + '%', font: { size: 9 }, color: 'rgba(0,0,0,0.4)' }, grid: { color: 'rgba(0,0,0,0.05)' } } },
-    },
-  });
+    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:10px"><i class="fa-solid fa-award" style="color:${color}"></i> Track record — delivered returns</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:110px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px">
+        <div style="font-size:1.5rem;font-weight:900;color:${color};letter-spacing:-0.02em">${(sumA / n * 100).toFixed(2)}%</div>
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">avg return achieved p.a.</div>
+      </div>
+      <div style="flex:1;min-width:110px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px">
+        <div style="font-size:1.5rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${n}</div>
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">pool${n === 1 ? '' : 's'} matured</div>
+      </div>
+      <div style="flex:1;min-width:110px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px">
+        <div style="font-size:1.5rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${Utils.rand(paidBack)}</div>
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">paid back to investors</div>
+      </div>
+    </div>`;
 }
 
 // ── Solar: daily generation this month (FoxESS history) ──
@@ -4630,7 +4637,7 @@ function buildStatementHTML(opts) {
           ${stmtKPIBox('Total Portfolio Value', fmtNum(totalValue), '#ff9b0c')}
           ${stmtKPIBox('Capital Deployed', fmtNum(totalInvested), '#656565')}
           ${stmtKPIBox('Returns Earned', fmtNum(totalReturns), '#22C55E')}
-          ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#A855F7')}
+          ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#0096ff')}
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div style="background:#F7F8FA;border-radius:8px;padding:14px;border:1px solid rgba(0,0,0,0.06)">
@@ -4888,24 +4895,11 @@ function stmtInfoRow(label, val) {
 }
 
 function getProductInfo(type) {
-  const map = {
-    cattle:            { label:'Cattle Investment',        color:'#d97706', bg:'#fef3c7' },
-    solar_7yr:         { label:'Solar Investment (7yr)',   color:'#ea580c', bg:'#ffedd5' },
-    solar_6yr:         { label:'Solar Investment (6yr)',   color:'#ea580c', bg:'#fff7ed' },
-    solar_5yr:         { label:'Solar Investment (5yr)',   color:'#c2410c', bg:'#fff7ed' },
-    solar:             { label:'Solar Investment',         color:'#ea580c', bg:'#ffedd5' },
-    short_term:        { label:'Short Term Investment',    color:'#656565', bg:'#656565' },
-    delivery_bike:     { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
-    delivery_bikes:    { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
-    smme:              { label:'SMME Funding',             color:'#059669', bg:'#d1fae5' },
-    smme_funding:      { label:'SMME Funding',             color:'#059669', bg:'#d1fae5' },
-    property:          { label:'Property Investment',      color:'#656565', bg:'#cffafe' },
-    fixed_term:        { label:'Fixed Term Investment',    color:'#7c3aed', bg:'#ede9fe' },
-  };
-  const hit = map[type?.toLowerCase?.()];
-  if (hit) return hit;
-  const label = type ? type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Investment';
-  return { label, color:'#6b7280', bg:'#f3f4f6' };
+  // Colours align with each product's assigned colour (see Utils.productColor).
+  const base  = (window.Utils && Utils.productInfo) ? Utils.productInfo(type) : { label: '' };
+  const color = (window.Utils && Utils.productColor) ? Utils.productColor(type) : (base.color || '#6b7280');
+  const label = base.label || (type ? type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Investment');
+  return { label, color, bg: color + '1f' };   // 8-digit hex → light tint of the product colour
 }
 
 function printStatement() {
@@ -9457,7 +9451,7 @@ function downloadStatement() {
   // Summary stats
   const stats = [
     ['Portfolio Value', Utils.rand(portfolioVal), [255, 155, 12]],
-    ['Wallet Balance',  Utils.rand(walletBal),    [47, 140, 155]],
+    ['Wallet Balance',  Utils.rand(walletBal),    [0, 150, 255]],
     ['Total Invested',  Utils.rand(totalInvested), [26, 34, 53]],
     ['Returns Earned',  Utils.rand(totalReturns),  [34, 197, 94]],
   ];

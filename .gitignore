@@ -43,3 +43,7 @@ mobile/android/
 mobile/ios/
 mobile/node_modules/
 migration-data/
+
+.pgdata/
+var/
+toggle-test.html
