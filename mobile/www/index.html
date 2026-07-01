@@ -749,9 +749,10 @@
           <div class="mkt-filter-bar__label"><i class="fa-solid fa-shield-halved"></i> Filter by risk</div>
           <div class="mkt-risk-pills">
             <button class="mkt-risk-pill active" data-risk="all" onclick="filterMarket('all')">All</button>
-            <button class="mkt-risk-pill mkt-risk-pill--con" data-risk="risk_conservative" onclick="filterMarket('risk_conservative')">Conservative</button>
-            <button class="mkt-risk-pill mkt-risk-pill--mod" data-risk="risk_moderate" onclick="filterMarket('risk_moderate')">Moderate</button>
-            <button class="mkt-risk-pill mkt-risk-pill--agg" data-risk="risk_aggressive" onclick="filterMarket('risk_aggressive')">Aggressive</button>
+            <button class="mkt-risk-pill mkt-risk-pill--con" data-risk="Low" onclick="filterMarket('Low')">Low</button>
+            <button class="mkt-risk-pill mkt-risk-pill--mod" data-risk="Medium" onclick="filterMarket('Medium')">Medium</button>
+            <button class="mkt-risk-pill mkt-risk-pill--modhigh" data-risk="Medium-High" onclick="filterMarket('Medium-High')">Medium-High</button>
+            <button class="mkt-risk-pill mkt-risk-pill--agg" data-risk="High" onclick="filterMarket('High')">High</button>
           </div>
           <button class="mkt-calc-btn" onclick="openCalcModal()">
             <i class="fa-solid fa-calculator"></i> Calculate Returns
