@@ -377,14 +377,15 @@ function renderTaskCompletionPanel() {
   body.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:14px">
       ${tasks.map(task => `
-        <div style="padding:12px 14px;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:${task.done ? 'rgba(34,197,94,0.06)' : 'rgba(255,255,255,0.82)'};display:flex;gap:10px;align-items:flex-start">
-          <div style="width:24px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;background:${task.done ? '#22c55e' : task.tone + '22'};color:${task.done ? '#fff' : task.tone};flex-shrink:0;margin-top:2px">
+        <div class="ac-task${task.done ? ' ac-task--done' : ''}" ${task.done ? '' : `role="button" tabindex="0" onclick="${task.action}"`} style="padding:12px 14px;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:${task.done ? 'rgba(34,197,94,0.06)' : 'rgba(255,255,255,0.82)'};display:flex;gap:10px;align-items:center;${task.done ? '' : 'cursor:pointer'}">
+          <div style="width:24px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;background:${task.done ? '#22c55e' : task.tone + '22'};color:${task.done ? '#fff' : task.tone};flex-shrink:0">
             <i class="fa-solid ${task.done ? 'fa-check' : 'fa-circle'}" style="font-size:0.7rem"></i>
           </div>
           <div style="min-width:0;flex:1">
             <div style="font-size:0.8rem;font-weight:700;color:#1a1a1a;line-height:1.35">${task.label}</div>
-            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">${task.done ? 'Completed' : 'Still needed before the full flow feels seamless.'}</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">${task.done ? 'Completed' : task.cta}</div>
           </div>
+          ${task.done ? '' : `<i class="fa-solid fa-chevron-right" style="color:${task.tone};font-size:0.8rem;flex-shrink:0"></i>`}
         </div>`).join('')}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:4px;border-top:1px solid rgba(0,0,0,0.06)">
@@ -5276,7 +5277,7 @@ function renderQuestView() {
               ? (cat === 'milestone'
                   ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="claimMilestoneQuest('${quest.id}')">Claim</button>`
                   : cat === 'learning'
-                    ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="navigate('learn', document.querySelector('[data-view=learn]'))">Start</button>`
+                    ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="startLearningQuest('${quest.id}')">Start</button>`
                     : `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="openSurveyModal('${quest.id}')">Start</button>`)
               : `<div class="quest-card__locked"><i class="fa-solid fa-lock-open"></i> Available</div>`
           }
@@ -5834,12 +5835,10 @@ function renderLearnView() {
               <span style="color:${mod.color}"><i class="fa-solid fa-star"></i> +${mod.xp} XP</span>
             </div>
           </div>
-          ${isDone
-            ? `<div class="learn-done-badge"><i class="fa-solid fa-circle-check"></i> Completed</div>`
-            : `<button class="learn-expand-btn" onclick="_toggleModule('${mod.id}')">
-                 <i class="fa-solid fa-chevron-down" id="lchev-${mod.id}"></i>
-               </button>`
-          }
+          ${isDone ? `<div class="learn-done-badge"><i class="fa-solid fa-circle-check"></i> Completed</div>` : ''}
+          <button class="learn-expand-btn" onclick="_toggleModule('${mod.id}')" aria-label="View module">
+            <i class="fa-solid fa-chevron-down" id="lchev-${mod.id}"></i>
+          </button>
         </div>
         <div class="learn-module-body" id="lbody-${mod.id}" style="display:none">
           <div class="learn-key-points">
@@ -5848,9 +5847,12 @@ function renderLearnView() {
           </div>
           <div class="learn-content-text">${mod.content.split('\n\n').map(p => `<p>${p.trim()}</p>`).join('')}</div>
           <div class="learn-module-footer">
-            <button class="btn btn--primary" id="lquiz-btn-${mod.id}" onclick="_showModuleQuiz('${mod.id}')">
-              <i class="fa-solid fa-circle-question"></i> Take Quiz — Earn ${mod.xp} XP
-            </button>
+            ${isDone
+              ? `<div class="learn-earned-note"><i class="fa-solid fa-circle-check"></i> Completed — +${mod.xp} XP already earned</div>`
+              : `<button class="btn btn--primary" id="lquiz-btn-${mod.id}" onclick="_showModuleQuiz('${mod.id}')">
+                   <i class="fa-solid fa-circle-question"></i> Take Quiz — Earn ${mod.xp} XP
+                 </button>`
+            }
           </div>
           <div class="learn-quiz-section" id="lquiz-${mod.id}" style="display:none">
             <div class="learn-quiz-title"><i class="fa-solid fa-circle-question"></i> Knowledge Check — answer all questions correctly to earn XP</div>
@@ -5878,6 +5880,20 @@ function _toggleModule(modId) {
   const isOpen = body.style.display !== 'none';
   body.style.display = isOpen ? 'none' : 'block';
   if (chev) chev.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
+/* Learning-quest "Start": jump to the Learning Hub, switch to the module's
+   track, expand it, and scroll it into view. */
+function startLearningQuest(modId) {
+  navigate('learn', document.querySelector('[data-view=learn]'));
+  const mod = LEARN_MODULES.find(m => m.id === modId);
+  if (mod && typeof _setLearnTrack === 'function') _setLearnTrack(mod.track);
+  setTimeout(() => {
+    const body = document.getElementById(`lbody-${modId}`);
+    const card = document.getElementById(`lmod-${modId}`);
+    if (body && body.style.display === 'none') _toggleModule(modId);
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 180);
 }
 
 function _showModuleQuiz(modId) {

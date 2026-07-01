@@ -5446,3 +5446,67 @@ i.fa, i.fas, i.far, i.fab, i.fal, i.fa-solid, i.fa-regular, i.fa-brands,
 #sidebar .nav-item[style*="display: none"] {
   display: none !important;
 }
+
+/* ── Action Centre task cards: tappable feedback ─────────────── */
+.ac-task { transition: transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s ease !important; }
+.ac-task[role="button"]:active {
+  transform: scale(0.98) !important;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.08) !important;
+}
+.ac-task[role="button"] .fa-chevron-right { transition: transform 0.15s ease !important; }
+.ac-task[role="button"]:active .fa-chevron-right { transform: translateX(2px) !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION 58 — EARN REWARDS STATS: 3 PER ROW, TEXT FITS
+   ═══════════════════════════════════════════════════════════════ */
+#view-quests .rewards-stats-row {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 8px !important;
+  margin-bottom: 18px !important;
+}
+/* Reset the old full-width 5th-tile treatment — all tiles uniform now */
+#view-quests .rewards-stat,
+#view-quests .rewards-stat:nth-child(5) {
+  grid-column: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  padding: 13px 10px !important;
+  min-width: 0 !important;
+  gap: 2px !important;
+}
+/* Values: shrink to fit the narrower tile, never overflow */
+#view-quests .rewards-stat__val,
+#view-quests .rewards-stat:nth-child(5) .rewards-stat__val {
+  font-size: 0.92rem !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+/* Hide the level icon inside the Current-Level tile so the name has room */
+#view-quests #rwStatLevel i { display: none !important; }
+/* Labels: compact, wrap to two lines, centred rhythm */
+#view-quests .rewards-stat__label,
+#view-quests .rewards-stat:nth-child(5) .rewards-stat__label {
+  font-size: 0.56rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  color: #9ca3af !important;
+  text-transform: uppercase !important;
+  margin-top: 5px !important;
+  line-height: 1.25 !important;
+}
+
+/* Learning Hub — completed module "already earned" note */
+.learn-earned-note {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 12px; border-radius: 12px;
+  background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.25);
+  color: #16a34a; font-weight: 700; font-size: 0.85rem;
+}
