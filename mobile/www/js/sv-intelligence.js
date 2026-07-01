@@ -621,7 +621,7 @@ function _sviPortalAnswer(q) {
 
     const total = active.reduce((s,i) => s + (i.amount||0), 0);
     const totalExp = active.reduce((s,i) => s + (i.expected_return_amount||0), 0);
-    html += `\n\n**Total active: ${Utils.rand(total)}** · Expected returns: **${Utils.rand(totalExp)}**`;
+    html += `\n\n**Total active: ${Utils.rand(total)}** · Target returns: **${Utils.rand(totalExp)}**`;
     return html;
   }
 

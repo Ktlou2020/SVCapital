@@ -137,7 +137,7 @@ function sendInvestmentCreated(investor, { poolName, amount, annualRate, termMon
         <div class="row"><span class="lbl">Amount Invested</span><span class="val gold">${_fmt(amount)}</span></div>
         <div class="row"><span class="lbl">Annual Rate</span><span class="val green">${_pct(annualRate)}</span></div>
         <div class="row"><span class="lbl">Term</span><span class="val">${termMonths} months</span></div>
-        <div class="row"><span class="lbl">Expected Return</span><span class="val green">${_fmt(expectedReturn)}</span></div>
+        <div class="row"><span class="lbl">Target Return</span><span class="val green">${_fmt(expectedReturn)}</span></div>
         <div class="row"><span class="lbl">Maturity Date</span><span class="val">${_date(endDate)}</span></div>
       </div>
       <p>Track the performance of your investment in your portal at any time.</p>
@@ -160,7 +160,7 @@ function sendMaturityAlert(investor, { poolName, amount, expectedReturn, endDate
       <div class="box">
         <div class="row"><span class="lbl">Pool</span><span class="val">${poolName}</span></div>
         <div class="row"><span class="lbl">Principal</span><span class="val">${_fmt(amount)}</span></div>
-        <div class="row"><span class="lbl">Expected Return</span><span class="val green">${_fmt(expectedReturn)}</span></div>
+        <div class="row"><span class="lbl">Target Return</span><span class="val green">${_fmt(expectedReturn)}</span></div>
         <div class="row"><span class="lbl">Maturity Date</span><span class="val gold">${_date(endDate)}</span></div>
       </div>
       <p>Please log in and submit your <strong>maturity instruction</strong> (reinvest or pay out) before the maturity date to avoid delays.</p>

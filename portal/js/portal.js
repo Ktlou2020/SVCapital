@@ -540,7 +540,7 @@ function renderMarketConversionPanel(pools) {
 
   if (affordable.length) {
     title = `You can invest right now in ${affordable.length} open pool${affordable.length === 1 ? '' : 's'}.`;
-    sub = 'Recommended pools below are ranked by affordability, urgency, and expected return so you can act quickly.';
+    sub = 'Recommended pools below are ranked by affordability, urgency, and target return so you can act quickly.';
     action = "openInvestModal('" + affordable[0].id + "')";
     actionLabel = 'Open best-fit pool';
     accent = '#22c55e';
@@ -6509,7 +6509,7 @@ const TOUR_STEPS = [
     position: 'top',
     icon: 'fa-list-check',
     title: 'Active Investments',
-    body: 'Your current investments are listed here with product type, amount, expected return, and days remaining until maturity.',
+    body: 'Your current investments are listed here with product type, amount, target return, and days remaining until maturity.',
   },
   {
     id: 'nav_wallet',
@@ -8881,7 +8881,7 @@ function generateInvestmentCertificate(invId) {
         <tr><td style="padding:6px 0;color:#6b7280">Investment Pool</td><td style="font-weight:700">${inv.pool_name||pool.name||'—'}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Amount Invested</td><td style="font-weight:700;color:#ff9b0c;font-size:16px">${Utils.rand(inv.amount)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Annual Rate</td><td style="font-weight:700">${Utils.pct(inv.annual_rate||inv.expected_return_rate)}</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280">Expected Return</td><td style="font-weight:700;color:#22c55e">${Utils.rand(inv.expected_return_amount||inv.expected_return)}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Target Return</td><td style="font-weight:700;color:#22c55e">${Utils.rand(inv.expected_return_amount||inv.expected_return)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Investment Date</td><td style="font-weight:700">${Utils.date(inv.investment_date||inv.start_date)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Maturity Date</td><td style="font-weight:700">${Utils.date(inv.maturity_date||inv.end_date)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Status</td><td>${Utils.statusBadge(inv.status)}</td></tr>
