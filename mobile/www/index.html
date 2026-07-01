@@ -762,11 +762,14 @@
             <p class="section-banner__sub">Choose a product to see its details, factsheets and open pools — then invest. All investments are FSCA-regulated via SmartVest Financial Services (FSP 52449).</p>
           </div>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <div class="tab-bar" style="align-self:center" id="marketRiskTabBar">
-              <button class="tab-btn active" onclick="filterMarket('all', this)">All</button>
-              <button class="tab-btn" onclick="filterMarket('risk_low', this)">Low Risk</button>
-              <button class="tab-btn" onclick="filterMarket('risk_medium', this)">Medium Risk</button>
-              <button class="tab-btn" onclick="filterMarket('risk_high', this)">High Risk</button>
+            <div id="marketRiskTabBar" style="display:flex;align-items:center;gap:8px">
+              <label style="font-size:0.75rem;color:rgba(255,255,255,0.5);white-space:nowrap">Risk Level</label>
+              <select id="marketRiskSelect" onchange="filterMarket(this.value)" style="background:#1e2235;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:8px 14px;font-size:0.82rem;font-weight:600;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23FF8215' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px">
+                <option value="all">All Products</option>
+                <option value="risk_conservative">Conservative</option>
+                <option value="risk_moderate">Moderate</option>
+                <option value="risk_aggressive">Aggressive</option>
+              </select>
             </div>
             <button class="btn btn--sm" onclick="openCalcModal()" style="white-space:nowrap;background:linear-gradient(135deg,#FF8215,#FF9B0C);color:#fff;border:none;font-weight:700">
               <i class="fa-solid fa-calculator"></i> Calculate Returns
@@ -2201,16 +2204,10 @@
 </div>
 
 <!-- Sub Account Detail Modal -->
-<div class="modal-overlay" id="saDetailModal" onclick="if(event.target===this)Modal.close('saDetailModal')">
-  <div class="modal modal--lg">
-    <div class="modal__header">
-      <span class="modal__title" id="saDetailTitle">Account Details</span>
-      <button class="modal__close" aria-label="Close" onclick="Modal.close('saDetailModal')"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-    <div class="modal__body" id="saDetailBody" style="padding:0"></div>
-    <div class="modal__footer">
-      <button class="btn btn--secondary" onclick="Modal.close('saDetailModal')">Close</button>
-    </div>
+<div class="modal-overlay sa-detail-overlay" id="saDetailModal" onclick="if(event.target===this)Modal.close('saDetailModal')">
+  <div class="sa-detail-sheet">
+    <div class="sa-detail-drag-bar"></div>
+    <div class="sa-detail-scroll" id="saDetailBody"></div>
   </div>
 </div>
 

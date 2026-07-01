@@ -160,4 +160,86 @@ router.get('/signup-friction/summary', requireAuth, requireRole('admin', 'direct
   }
 });
 
+/* ────────────────────────────────────────────────────────
+   GET /api/analytics/personas
+   Aggregates investor_profile JSONB survey answers into
+   persona archetypes and distribution charts for the admin.
+   ──────────────────────────────────────────────────────── */
+router.get('/personas', requireAuth, requireRole('admin', 'director', 'staff'), async (req, res) => {
+  try {
+    const { rows } = await require('../db/pool').query(`
+      SELECT
+        i.id,
+        i.name,
+        i.email,
+        i.xp_points,
+        i.xp_level,
+        i.date_joined,
+        i.investor_profile
+      FROM investors i
+      WHERE i.investor_profile IS NOT NULL
+        AND i.investor_profile != '{}'::jsonb
+      ORDER BY i.date_joined DESC
+    `);
+
+    // ── Distribution counters ──
+    const dist = {
+      employment_status:    {},
+      income_bracket:       {},
+      investment_experience:{},
+      investment_goal:      {},
+      risk_reaction:        {},
+      time_horizon:         {},
+      saving_for:           {},
+      dependents:           {},
+      heard_via:            {},
+    };
+
+    const investors = rows.map(r => {
+      const p = r.investor_profile || {};
+      Object.keys(dist).forEach(k => {
+        const v = p[k];
+        if (v) dist[k][v] = (dist[k][v] || 0) + 1;
+      });
+
+      // Derive persona archetype
+      let persona = 'Explorer';
+      const goal = p.investment_goal || '';
+      const risk = p.risk_reaction  || '';
+      const exp  = p.investment_experience || '';
+      if (goal.includes('preservation') || risk.includes('Sell everything')) {
+        persona = 'Conservative Saver';
+      } else if (goal.includes('growth') && (risk.includes('Buy more') || exp.includes('Experienced') || exp.includes('Expert'))) {
+        persona = 'Growth Seeker';
+      } else if (goal.includes('income') || p.income_need?.includes('R')) {
+        persona = 'Income Investor';
+      } else if (risk.includes('Buy more') && (exp.includes('Expert') || exp.includes('Experienced'))) {
+        persona = 'Risk Taker';
+      } else if (p.saving_for?.includes('Retirement') || p.saving_for?.includes("Children")) {
+        persona = 'Long-Term Planner';
+      }
+
+      return {
+        id: r.id,
+        name: r.name,
+        email: r.email,
+        xp: r.xp_points,
+        level: r.xp_level,
+        joined: r.date_joined,
+        persona,
+        profile: p,
+      };
+    });
+
+    // Persona archetype counts
+    const personaCounts = {};
+    investors.forEach(i => { personaCounts[i.persona] = (personaCounts[i.persona] || 0) + 1; });
+
+    res.json({ investors, distributions: dist, personaCounts, total: investors.length });
+  } catch (err) {
+    console.error('[personas] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
