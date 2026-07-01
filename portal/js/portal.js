@@ -3039,11 +3039,15 @@ const _POOL_META = {
   delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Conservative', riskColor: '#22c55e' },
 };
 // Map each product's risk label to a filter group
-const _RISK_GROUP = {
-  'Conservative': 'risk_conservative',
-  'Moderate':     'risk_moderate',
-  'Aggressive':   'risk_aggressive',
-};
+// Risk profile is defined per-product in the admin console (products.risk_profile).
+// Resolve the current risk label + colour for a product type from live records.
+const _RISK_COLORS = { 'Low': '#22c55e', 'Medium': '#f59e0b', 'Medium-High': '#ff9b0c', 'High': '#ef4444' };
+function _productRisk(productType) {
+  const p = (_mktProducts || []).find(pr => pr.product_type === productType);
+  const risk = (p && p.risk_profile) ? p.risk_profile : 'Medium';
+  const color = (p && p.risk_color) ? p.risk_color : (_RISK_COLORS[risk] || '#f59e0b');
+  return { risk, color };
+}
 
 // ── Product-first marketplace ────────────────────────────────────────────
 // "Browse Pools" is now "Products": investors pick a product, see its details
@@ -3081,8 +3085,7 @@ function renderProductsGrid() {
   const products = (_mktProducts || []).filter(p => {
     if (!p.is_active) return false;
     if (mf === 'all') return true;
-    const meta = _POOL_META[p.product_type] || {};
-    return _RISK_GROUP[meta.risk] === mf;
+    return (p.risk_profile || 'Medium') === mf;   // risk from the product (admin console)
   }).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
   const shown = products
     .map(p => ({ p, open: _openPoolsForProduct(p.product_type) }))
@@ -3218,9 +3221,6 @@ async function renderProductDetailView(type) {
             </div>
           </div>` : ''}
 
-          <div style="margin-bottom:6px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">Projected growth of ${Utils.rand(10000)} at ${(projRate * 100).toFixed(2)}% p.a.</div>
-          <div style="position:relative;height:180px;margin-bottom:6px"><canvas id="prodGrowthChart"></canvas></div>
-
           ${isSolar ? '<div id="prodSolarHistory" style="margin-top:16px"></div>' : ''}
           <div id="prodTrackRecord" style="margin-top:16px"></div>
           <div id="prodFactsheets" style="margin-top:14px"></div>
@@ -3249,9 +3249,6 @@ async function renderProductDetailView(type) {
 
   // Verifiable track record (matured pools: actual vs benchmark)
   _renderProductTrackRecord(type, color);
-
-  // Growth projection chart
-  _renderProductGrowthChart(projRate, product.term_months || 12, color);
 
   // Factsheets (product-level + all pool factsheets for this product)
   _renderProductFactsheets(type, product);
@@ -3394,6 +3391,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
     const pct  = Utils.poolFillPct(pool);
     const days = Utils.daysRemaining(pool.end_date);
     const meta = _POOL_META[pool.product_type] || { blurb: '', risk: 'Medium', riskColor: '#f59e0b' };
+    const pr   = _productRisk(pool.product_type);   // risk profile from the product (admin console)
     const canInvest = walletBal >= _minPlusFee(pool);
     const urgency   = days !== null && days <= 7;
 
@@ -3469,7 +3467,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
             </div>
             <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
               ${highlighted ? `<span class="mpc2-badge mpc2-badge--featured"><i class="fa-solid fa-star" style="font-size:0.6rem"></i> Best Next Step</span>` : ''}
-              <span class="mpc2-badge" style="background:${meta.riskColor}14;color:${meta.riskColor};border-color:${meta.riskColor}30">${meta.risk} risk</span>
+              <span class="mpc2-badge" style="background:${pr.color}14;color:${pr.color};border-color:${pr.color}30">${pr.risk} risk</span>
               ${isWaitlisted
                 ? '<span class="mpc2-badge mpc2-badge--full"><i class="fa-solid fa-lock"></i> Pool Full</span>'
                 : (urgency ? '<span class="mpc2-badge mpc2-badge--urgent"><i class="fa-solid fa-fire"></i> Closing Soon</span>' : '')
@@ -3782,6 +3780,7 @@ function openInvestModal(poolId) {
   const walletBal  = _activeSa ? (parseFloat(_activeSa.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
   const pi         = Utils.productInfo(pool.product_type);
   const meta       = _POOL_META[pool.product_type] || { risk: 'Medium', riskColor: '#f59e0b' };
+  const pr         = _productRisk(pool.product_type);   // risk from the product (admin console)
   const maturityDt = new Date();
   maturityDt.setMonth(maturityDt.getMonth() + pool.term_months);
   const maturityStr = maturityDt.toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -3802,7 +3801,7 @@ function openInvestModal(poolId) {
           <span>·</span>
           <span>${pool.term_months}-month term</span>
           <span>·</span>
-          <span class="pool-risk-badge" style="background:${meta.riskColor}18;color:${meta.riskColor}">${meta.risk} risk</span>
+          <span class="pool-risk-badge" style="background:${pr.color}18;color:${pr.color}">${pr.risk} risk</span>
         </div>
       </div>
     </div>

@@ -1896,7 +1896,14 @@
       </div>
       <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Partner Name</label><input type="text" class="form-input" id="prodPartner" placeholder="Beefcor" /></div>
-        <div class="form-group"><label class="form-label">Risk Profile</label><input type="text" class="form-input" id="prodRisk" placeholder="Medium-High" /></div>
+        <div class="form-group"><label class="form-label">Risk Profile</label>
+          <select class="form-select" id="prodRisk">
+            <option value="Low">Low</option>
+            <option value="Medium" selected>Medium</option>
+            <option value="Medium-High">Medium-High</option>
+            <option value="High">High</option>
+          </select>
+        </div>
       </div>
       <div class="form-row form-row--3">
         <div class="form-group"><label class="form-label">Icon (Font Awesome)</label><input type="text" class="form-input" id="prodIcon" placeholder="fa-cow" /></div>

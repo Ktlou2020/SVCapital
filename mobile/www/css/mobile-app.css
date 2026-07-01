@@ -5510,3 +5510,6 @@ i.fa, i.fas, i.far, i.fab, i.fal, i.fa-solid, i.fa-regular, i.fa-brands,
   background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.25);
   color: #16a34a; font-weight: 700; font-size: 0.85rem;
 }
+
+/* Risk pill — Medium-High variant (orange) */
+#view-marketplace .mkt-risk-pill--modhigh.active { background: linear-gradient(135deg,#ff9b0c,#f97316) !important; box-shadow: 0 4px 12px rgba(255,155,12,0.3) !important; }

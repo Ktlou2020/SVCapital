@@ -5,6 +5,18 @@
 
 'use strict';
 
+/* ─── Platform tag for analytics/audit (ios | android | web) ───
+   Sent as the X-Platform header so the server records which platform each
+   request came from (powers admin "Mobile App Activity"). */
+function _svcPlatform() {
+  try {
+    if (window.Capacitor && typeof window.Capacitor.getPlatform === 'function') {
+      return window.Capacitor.getPlatform();   // 'ios' | 'android' | 'web'
+    }
+  } catch (_) {}
+  return 'web';
+}
+
 /* ─── API Base URL ─── */
 // In Capacitor native context, window.__SVC_API_BASE__ is injected by mobile/scripts/build.js
 // Otherwise fall back to the relative /api/ path (web / PWA)
@@ -141,7 +153,7 @@ const Auth = {
   async login(email, password, remember = true) {
     const res = await fetch(`${_API_BASE}auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Platform': _svcPlatform() },
       credentials: 'include',
       body: JSON.stringify({ email, password }),
     });
@@ -158,7 +170,7 @@ const Auth = {
   async register(payload) {
     const res = await fetch(`${_API_BASE}auth/register`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Platform': _svcPlatform() },
       credentials: 'include',
       body: JSON.stringify(payload),
     });
@@ -216,6 +228,7 @@ const API = {
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
+        'X-Platform': _svcPlatform(),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     };

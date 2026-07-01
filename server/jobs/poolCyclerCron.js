@@ -7,7 +7,7 @@
    cattle      → open today, close = last day of the month
                  that is 2 calendar months from today
    short_term  → open = 1st of next month,
-   smme           close = last day of that same next month
+                 close = last day of that same next month
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
@@ -43,7 +43,6 @@ const MONTH_NAMES = [
 const PRODUCT_LABELS = {
   cattle:     'Cattle Investment',
   short_term: 'Short Term Investment',
-  smme:       'SMME',
 };
 
 /* ── Core logic ───────────────────────────────────────────── */
@@ -56,7 +55,7 @@ async function cycleExpiredPools() {
     FROM investment_pools
     WHERE end_date < CURRENT_DATE
       AND status IN ('open','filling','active','waitlist')
-      AND product_type IN ('cattle','short_term','smme')
+      AND product_type IN ('cattle','short_term')
   `);
 
   if (!expired.length) {
@@ -101,7 +100,7 @@ async function cycleExpiredPools() {
         const cy = prevClose.getFullYear() + Math.floor(cm / 12);
         closeDate = lastDayOfMonth(cy, ((cm % 12) + 12) % 12);
       } else {
-        // short_term / smme: close = last day of the month in which the new pool opens
+        // short_term: close = last day of the month in which the new pool opens
         closeDate = lastDayOfMonth(openDate.getFullYear(), openDate.getMonth());
       }
 
