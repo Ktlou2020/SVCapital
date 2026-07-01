@@ -5,6 +5,18 @@
 
 'use strict';
 
+/* ─── Platform tag for analytics/audit (ios | android | web) ───
+   Sent as the X-Platform header so the server can record which platform
+   each request came from (powers admin "Mobile App Activity"). */
+function _svcPlatform() {
+  try {
+    if (window.Capacitor && typeof window.Capacitor.getPlatform === 'function') {
+      return window.Capacitor.getPlatform();   // 'ios' | 'android' | 'web'
+    }
+  } catch (_) {}
+  return 'web';
+}
+
 /* ─── Session-expired overlay (native app only) ─── */
 function _showSessionExpiredOverlay() {
   // Hide loading cover immediately — must happen before anything else so
@@ -163,7 +175,7 @@ const Auth = {
   async login(email, password, remember = true) {
     const res = await fetch(`${_API_BASE}auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Platform': _svcPlatform() },
       credentials: 'include',
       body: JSON.stringify({ email, password }),
     });
@@ -180,7 +192,7 @@ const Auth = {
   async register(payload) {
     const res = await fetch(`${_API_BASE}auth/register`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Platform': _svcPlatform() },
       credentials: 'include',
       body: JSON.stringify(payload),
     });
@@ -240,6 +252,7 @@ const API = {
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
+        'X-Platform': _svcPlatform(),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     };
