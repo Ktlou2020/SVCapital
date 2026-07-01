@@ -50,16 +50,19 @@ const PRODUCT_LABELS = {
 async function cycleExpiredPools() {
   console.log('[poolCycler] scanning for expired pools…');
 
+  // Pools are set to 'matured' at 23:00 by the maturity engine. At 00:01 we open
+  // their successors. cycled_at prevents re-opening a successor every night.
   const { rows: expired } = await pool.query(`
     SELECT *
     FROM investment_pools
-    WHERE end_date < CURRENT_DATE
-      AND status IN ('open','filling','active','waitlist')
+    WHERE status = 'matured'
+      AND end_date <= NOW()
+      AND cycled_at IS NULL
       AND product_type IN ('cattle','short_term')
   `);
 
   if (!expired.length) {
-    console.log('[poolCycler] no expired pools to cycle');
+    console.log('[poolCycler] no matured pools awaiting a successor');
     return 0;
   }
 
@@ -70,19 +73,20 @@ async function cycleExpiredPools() {
     try {
       await client.query('BEGIN');
 
-      // Re-check status with lock to prevent race with concurrent runs
+      // Re-check with lock to prevent a race with concurrent runs
       const { rows: [locked] } = await client.query(
-        `SELECT id, status FROM investment_pools WHERE id = $1 FOR UPDATE`,
+        `SELECT id, status, cycled_at FROM investment_pools WHERE id = $1 FOR UPDATE`,
         [p.id]
       );
-      if (!locked || !['open','filling','active','waitlist'].includes(locked.status)) {
+      if (!locked || locked.status !== 'matured' || locked.cycled_at) {
         await client.query('ROLLBACK');
         continue;
       }
 
-      // Close the expired pool
+      // Mark the matured pool as cycled (keeps status 'matured'; the maturity
+      // engine already set it). This prevents re-opening a successor nightly.
       await client.query(
-        `UPDATE investment_pools SET status = 'closed', updated_at = NOW() WHERE id = $1`,
+        `UPDATE investment_pools SET cycled_at = NOW(), updated_at = NOW() WHERE id = $1`,
         [p.id]
       );
 
@@ -143,8 +147,18 @@ async function cycleExpiredPools() {
         ]
       );
 
+      // Requirement: once a pool "closes" (a newer pool opens for fundraising),
+      // the previously-open pool of this product is deployed → status 'active'.
+      // Only the newly-opened successor stays 'open'.
+      await client.query(
+        `UPDATE investment_pools
+            SET status = 'active', updated_at = NOW()
+          WHERE product_type = $1 AND status = 'open' AND id <> $2`,
+        [p.product_type, newId]
+      );
+
       await client.query('COMMIT');
-      console.log(`[poolCycler] closed ${p.id} → opened successor ${newId} (${toISO(openDate)} – ${toISO(closeDate)})`);
+      console.log(`[poolCycler] matured ${p.id} → opened successor ${newId} (${toISO(openDate)} – ${toISO(closeDate)})`);
       cycled++;
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {});
@@ -155,22 +169,25 @@ async function cycleExpiredPools() {
   }
 
   console.log(`[poolCycler] done — ${cycled} pool(s) cycled`);
+  // NB: reinvestment happens at 23:00 in the maturity engine (into the pool
+  // closing that month-end), not here — the successor opened here is the NEXT
+  // month's fundraising pool.
   return cycled;
 }
 
 /* ── Scheduler ────────────────────────────────────────────── */
 
 function startPoolCyclerCron() {
-  // Run once immediately so any already-expired pools are cycled on startup
+  // Run once immediately so any already-matured pools are cycled on startup
   cycleExpiredPools().catch(err => console.error('[poolCycler] startup run failed:', err.message));
 
-  // Then daily at 00:30 SAST (Africa/Johannesburg = UTC+2, so 22:30 UTC previous day)
-  cron.schedule('30 22 * * *', async () => {
+  // Daily at 00:01 SAST — open successor pools + reinvest matured funds.
+  cron.schedule('1 0 * * *', async () => {
     await cycleExpiredPools();
   }, {
-    timezone: 'UTC',
+    timezone: 'Africa/Johannesburg',
   });
-  console.log('[poolCycler] scheduled: daily at 00:30 SAST (22:30 UTC)');
+  console.log('[poolCycler] scheduled: daily at 00:01 SAST');
 }
 
 module.exports = { startPoolCyclerCron, cycleExpiredPools };

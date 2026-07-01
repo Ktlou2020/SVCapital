@@ -1963,7 +1963,7 @@ function renderMyInvestmentCards() {
     const pi = Utils.productInfo(inv.product_type);
     const days = Utils.daysRemaining(inv.maturity_date);
     const progress = days !== null && inv.amount ? Math.min(100, Math.max(0, 100 - (days / (365 * 1.5) * 100))) : 100;
-    const isPaidOut = inv.status === 'paid_out';
+    const isPaidOut = inv.status === 'matured' || inv.status === 'paid_out';
 
     return `
       <div class="my-inv-card ${isPaidOut ? 'my-inv-card--paidout' : ''}">
@@ -2002,7 +2002,7 @@ function renderMyInvestmentCards() {
         ${isPaidOut ? `
           <div style="font-size:0.75rem;color:var(--text-muted);text-align:center">
             <i class="fa-solid fa-check-circle" style="color:var(--green)"></i>
-            Paid out ${Utils.date(inv.payout_date)} — Total: ${Utils.rand(inv.amount + inv.actual_return_amount)}
+            Matured ${Utils.date(inv.payout_date || inv.maturity_processed_at || inv.end_date)} — Total: ${Utils.rand(inv.amount + inv.actual_return_amount)}
           </div>
         ` : ''}
       </div>
@@ -3317,7 +3317,7 @@ async function _renderProductTrackRecord(type, color) {
   _trackChart = new Chart(canvas.getContext('2d'), {
     type: 'bar',
     data: {
-      labels: pools.map(p => (p.name || '').slice(0, 18)),
+      labels: pools.map(p => p.name || 'Pool'),
       datasets: [
         { label: 'Achieved',  data: pools.map(p => +(p.actual_rate * 100).toFixed(2)),    backgroundColor: color },
         { label: 'Benchmark', data: pools.map(p => +(p.benchmark_rate * 100).toFixed(2)), backgroundColor: 'rgba(0,0,0,0.15)' },
@@ -3325,8 +3325,8 @@ async function _renderProductTrackRecord(type, color) {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, labels: { boxWidth: 10, font: { size: 10 } } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y}%` } } },
-      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8, font: { size: 9 }, color: 'rgba(0,0,0,0.4)' } },
+      plugins: { legend: { display: true, labels: { boxWidth: 10, font: { size: 10 } } }, tooltip: { callbacks: { title: c => (c[0] && c[0].label) || '', label: c => `${c.dataset.label}: ${c.parsed.y}%` } } },
+      scales: { x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 35, minRotation: 0, font: { size: 9 }, color: 'rgba(0,0,0,0.4)' } },
                 y: { ticks: { callback: v => v + '%', font: { size: 9 }, color: 'rgba(0,0,0,0.4)' }, grid: { color: 'rgba(0,0,0,0.05)' } } },
     },
   });
@@ -4142,6 +4142,9 @@ async function openMaturityModal(investmentId) {
         <option value="switch_product" ${existing==='switch_product'?'selected':''}>Switch Product — Move payout into a different product</option>
         ` : ''}
         <option value="payout_custom"  ${existing==='payout_custom' ?'selected':''}>Custom Payout — Specify amount${!isDeliveryBike ? '; remainder reinvested' : ''}</option>
+        ${!isDeliveryBike ? `
+        <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}>Custom Switch — Pay out a portion &amp; switch the rest to another product</option>
+        ` : ''}
       </select>
       ${isDeliveryBike ? `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> Delivery Bike investments are paid out at maturity and cannot be rolled over.</div>` : ''}
     </div>
@@ -4154,7 +4157,7 @@ async function openMaturityModal(investmentId) {
       </div>
     </div>
 
-    <div id="switchProductGroup" style="display:${existing==='switch_product'?'block':'none'}">
+    <div id="switchProductGroup" style="display:${(existing==='switch_product'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
         <label class="form-label">Switch to Product *</label>
         <select class="form-select" id="matSwitchProductType">
@@ -4165,11 +4168,11 @@ async function openMaturityModal(investmentId) {
     </div>
     ` : ''}
 
-    <div id="customPayoutGroup" style="display:${existing==='payout_custom'?'block':'none'}">
+    <div id="customPayoutGroup" style="display:${(existing==='payout_custom'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
         <label class="form-label">Amount to Pay Out (R)</label>
-        <input type="number" class="form-input" id="matCustomAmount" placeholder="Amount to withdraw" max="${total}" />
-        ${!isDeliveryBike ? `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> Any remaining balance after payout will be reinvested into the same product.</div>` : ''}
+        <input type="number" class="form-input" id="matCustomAmount" placeholder="Amount to withdraw" max="${total}" value="${inv.custom_payout_amount || ''}" />
+        ${!isDeliveryBike ? `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The remaining balance is reinvested (Custom Payout) or switched to the chosen product (Custom Switch).</div>` : ''}
       </div>
     </div>
 
@@ -4183,10 +4186,11 @@ async function openMaturityModal(investmentId) {
   `;
 
   document.getElementById('matInstructionType').addEventListener('change', e => {
-    document.getElementById('customPayoutGroup').style.display   = e.target.value === 'payout_custom'  ? 'block' : 'none';
+    const v = e.target.value;
+    document.getElementById('customPayoutGroup').style.display   = (v === 'payout_custom' || v === 'custom_switch') ? 'block' : 'none';
     if (!isDeliveryBike) {
-      document.getElementById('reinvestGroup').style.display       = e.target.value === 'reinvest'       ? 'block' : 'none';
-      document.getElementById('switchProductGroup').style.display  = e.target.value === 'switch_product' ? 'block' : 'none';
+      document.getElementById('reinvestGroup').style.display       = v === 'reinvest'       ? 'block' : 'none';
+      document.getElementById('switchProductGroup').style.display  = (v === 'switch_product' || v === 'custom_switch') ? 'block' : 'none';
     }
   });
 
@@ -4198,18 +4202,24 @@ async function openMaturityModal(investmentId) {
 async function submitMaturityInstruction(inv) {
   const type              = document.getElementById('matInstructionType').value;
   const total             = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
-  const customAmt         = type === 'payout_custom'   ? parseFloat(document.getElementById('matCustomAmount')?.value || 0) : null;
-  const switchProductType = type === 'switch_product'  ? (document.getElementById('matSwitchProductType')?.value || null) : null;
+  const needsCustom       = (type === 'payout_custom' || type === 'custom_switch');
+  const customAmt         = needsCustom ? parseFloat(document.getElementById('matCustomAmount')?.value || 0) : null;
+  const switchProductType = (type === 'switch_product' || type === 'custom_switch') ? (document.getElementById('matSwitchProductType')?.value || null) : null;
 
-  if (type === 'payout_custom'  && (!customAmt || customAmt <= 0))  { Toast.error('Please enter a valid payout amount'); return; }
-  if (type === 'payout_custom'  && customAmt > total)               { Toast.error(`Payout amount cannot exceed total payout of ${Utils.rand(total)}`); return; }
-  if (type === 'switch_product' && !switchProductType)              { Toast.error('Please select a product to switch into'); return; }
+  if (needsCustom && (!customAmt || customAmt <= 0))  { Toast.error('Please enter a valid payout amount'); return; }
+  if (needsCustom && customAmt >= total)              { Toast.error(`Payout amount must be less than the total of ${Utils.rand(total)}`); return; }
+  if ((type === 'switch_product' || type === 'custom_switch') && !switchProductType) { Toast.error('Please select a product to switch into'); return; }
 
   try {
-    const updateData = { maturity_instruction: type };
-    if (customAmt)          updateData.custom_payout_amount = customAmt;
-    if (switchProductType)  updateData.switch_product_type  = switchProductType;
-    await API.investments.update(inv.id, updateData);
+    // Set the instruction via the dedicated endpoint FIRST — it enforces the
+    // 17:00 SAST maturity-day cutoff and rejects late submissions.
+    await API._fetch('POST', 'investments/' + inv.id + '/instruction', { instruction: type });
+
+    // Persist any auxiliary fields (custom amount / product switch).
+    const extra = {};
+    if (customAmt)          extra.custom_payout_amount = customAmt;
+    if (switchProductType)  extra.switch_product_type  = switchProductType;
+    if (Object.keys(extra).length) await API.investments.update(inv.id, extra);
 
     Toast.success('Maturity instruction saved successfully!');
     SVC.track('svc_maturity_instruction', { investment_id: inv.id, action: type });
@@ -4534,7 +4544,7 @@ function buildStatementHTML(opts) {
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:700;margin-bottom:10px">Investment Snapshot</div>
             ${stmtInfoRow('Total Investments', investments.length)}
             ${stmtInfoRow('Active Investments', activeInv)}
-            ${stmtInfoRow('Matured/Paid Out', investments.filter(i=>['matured','paid_out'].includes(i.status)).length)}
+            ${stmtInfoRow('Matured', investments.filter(i=>['matured','paid_out'].includes(i.status)).length)}
             ${stmtInfoRow('Risk Profile', investor.risk_profile ? investor.risk_profile.charAt(0).toUpperCase() + investor.risk_profile.slice(1) : 'Moderate')}
             ${stmtInfoRow('Province', investor.province || '—')}
             ${stmtInfoRow('Referral Code', investor.referral_code || '—')}
@@ -5497,20 +5507,20 @@ const LEARN_MODULES = [
     title: 'What is SV Capital?', readTime: 5, xp: 50,
     icon: 'fa-building-columns', color: '#656565',
     keyPoints: [
-      'SV Capital pools investor capital into tangible South African alternative assets',
-      'Products include solar projects, cattle farming, short-term loans, and delivery bikes',
-      'Each product has a defined term, return rate, and maturity date',
-      'All investments are backed by real, income-generating assets',
+      'SV Capital gives investors direct access to tangible South African alternative assets',
+      'Products include solar energy projects, cattle farming, and delivery-bike fleets',
+      'Investment terms start from 5 months, each with a defined return rate and maturity date',
+      'Every investment is backed by real, income-generating assets',
     ],
-    content: `SV Capital is a South African alternative investment platform that connects investors with real-economy projects generating above-inflation returns. Unlike unit trusts or share portfolios, your money is put to work in tangible assets — solar panels generating electricity, cattle being raised and sold at market, or secured loans to operating businesses.
+    content: `SV Capital is a South African alternative investment platform that connects investors directly with real-economy projects generating above-inflation returns. Unlike unit trusts or share portfolios, your money is put to work in tangible assets — solar panels generating electricity, cattle being raised and sold at market, and delivery-bike fleets earning daily income.
 
-Each investment has a clearly defined term (typically 6–36 months) and a fixed annual rate of return, so you know exactly what to expect. Your capital is tracked in real time on this portal, and returns are credited directly to your wallet on maturity.
+Each investment has a clearly defined term, starting from 5 months, and a set annual rate of return, so you know what to expect from the outset. Every product carries its own risk profile — from Low through to High — so you can match your investments to your appetite. Your capital is tracked in real time on this portal.
 
-The platform charges no entry fees and no monthly platform fees. Our revenue comes from structuring fees on the underlying transactions, so your quoted return is your net return.`,
+At maturity you decide what happens next: pay the funds out to your wallet, reinvest them, or switch into a different product. Reinvested funds are never charged a platform fee, so more of your money stays invested and working for you.`,
     quiz: [
       { q: 'What types of assets does SV Capital invest in?', options: ['Shares and unit trusts', 'Tangible South African alternative assets', 'Foreign currency and crypto', 'Government bonds only'], correct: 1 },
-      { q: 'How does SV Capital generate its revenue?', options: ['Monthly platform fees charged to investors', 'Annual management fees', 'Structuring fees on underlying transactions', 'Entry fees on every deposit'], correct: 2 },
-      { q: 'What is a typical SV Capital investment term?', options: ['1–7 days', '6–36 months', '5–10 years', 'Indefinite — no fixed term'], correct: 1 },
+      { q: 'What is the minimum SV Capital investment term?', options: ['1–7 days', '5 months', '5 years', 'No fixed term'], correct: 1 },
+      { q: 'What fee is charged when you reinvest your funds at maturity?', options: ['5%', '2%', '1%', 'No fee'], correct: 3 },
     ],
   },
   {

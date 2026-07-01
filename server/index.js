@@ -154,6 +154,7 @@ app.use('/api/migrate',   require('./routes/migrate'));
 app.use('/api/settings',  require('./routes/settings'));
 app.use('/api/legal',     require('./routes/legal'));
 app.use('/api/quests',    require('./routes/quests'));
+app.use('/api/investments', require('./routes/investments'));
 app.use('/api/gifts',        require('./routes/gifts'));
 app.use('/api/factsheets',   require('./routes/factsheets'));
 app.use('/api/products',     require('./routes/products'));
@@ -357,9 +358,8 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startInterestCron } = require('./jobs/interestCron');
   startInterestCron();
 
-  // Start automated payout cron (daily 07:30 SAST)
-  const { startPayoutCron } = require('./jobs/payoutCron');
-  startPayoutCron();
+  // Payout processing is now consolidated into the maturity engine (maturityCron).
+  // The standalone payoutCron has been retired.
 
   // Start monthly statement cron (1st of month, 07:00 SAST)
   const { startStatementCron } = require('./jobs/statementCron');

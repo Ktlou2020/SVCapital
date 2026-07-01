@@ -2258,7 +2258,7 @@ function renderPoolsGrid() {
           ${isWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="reopenPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-door-open" style="color:#22c55e;width:16px"></i> Reopen Pool</button>` : ''}
           <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="editPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-pen" style="width:16px"></i> Edit Pool</button>
           ${p.status === 'open' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="closePool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-lock" style="color:#ef4444;width:16px"></i> Close Pool</button>` : ''}
-          ${p.status === 'matured' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="markPaidOut('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-check" style="color:#22c55e;width:16px"></i> Mark Paid Out</button>` : ''}
+          ${p.status === 'matured' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="markPaidOut('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-check" style="color:#22c55e;width:16px"></i> Record Final Rate</button>` : ''}
           <div style="height:1px;background:var(--border);margin:4px 0"></div>
           <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem;color:#ef4444" onclick="deletePool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-trash" style="width:16px"></i> Delete Pool</button>
         </div>
@@ -2739,8 +2739,8 @@ async function markPaidOut(id) {
   const rate = prompt('Enter actual achieved rate (e.g. 0.1561):');
   if (!rate) return;
   try {
-    await API.pools.update(id, { status: 'paid_out', actual_rate: parseFloat(rate) });
-    Toast.success('Pool marked as paid out');
+    await API.pools.update(id, { status: 'matured', actual_rate: parseFloat(rate) });
+    Toast.success('Pool finalised (matured)');
     await loadPools();
   } catch (e) { Toast.error('Failed to update pool'); }
 }
@@ -2959,15 +2959,15 @@ function _invUpdateBulkBar() {
 async function bulkTriggerPayout() {
   const checked = [...document.querySelectorAll('.inv-select-cb:checked')].map(cb => cb.value);
   if (!checked.length) return Toast.error('Select at least one investment');
-  if (!await Confirm.ask(`Mark ${checked.length} investment(s) paid out?`, { body: 'These investments will be marked as matured/paid out.', confirmLabel: 'Mark Paid Out' })) return;
+  if (!await Confirm.ask(`Mark ${checked.length} investment(s) matured?`, { body: 'These investments will be marked as matured.', confirmLabel: 'Mark Matured' })) return;
   let done = 0;
   for (const id of checked) {
     try {
-      await API.investments.update(id, { status: 'paid_out', payout_date: new Date().toISOString() });
+      await API.investments.update(id, { status: 'matured', payout_date: new Date().toISOString() });
       done++;
     } catch(e) { console.error('payout error', id, e.message); }
   }
-  Toast.success(`${done} investment(s) marked as paid out`);
+  Toast.success(`${done} investment(s) marked as matured`);
   loadInvestments && loadInvestments();
 }
 
@@ -3021,6 +3021,22 @@ function viewInvestmentDetail(id) {
       <div class="info-row"><span class="info-row__label">Maturity Instruction</span><span class="info-row__value">${Utils.statusBadge(inv.maturity_instruction || 'pending')}</span></div>
     </div>
 
+    <div class="panel" style="padding:14px;margin-bottom:14px;background:var(--ci-bg-light,#F7F8FA)">
+      <div style="font-size:0.8rem;font-weight:700;color:#1a1a1a;margin-bottom:8px"><i class="fa-solid fa-user-pen" style="color:var(--gold);margin-right:6px"></i>Set instruction on behalf of client</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="admMatInstruction" class="form-select" style="flex:1;min-width:180px">
+          <option value="reinvest"${inv.maturity_instruction === 'reinvest' ? ' selected' : ''}>Reinvest into next pool</option>
+          <option value="payout_all"${inv.maturity_instruction === 'payout_all' ? ' selected' : ''}>Pay out all (capital + returns)</option>
+          <option value="payout_return"${inv.maturity_instruction === 'payout_return' ? ' selected' : ''}>Pay out returns only</option>
+          <option value="switch_product"${inv.maturity_instruction === 'switch_product' ? ' selected' : ''}>Switch product</option>
+        </select>
+        <button class="btn btn--primary btn--sm" onclick='adminSetInstruction(${JSON.stringify(inv.id)})'>
+          <i class="fa-solid fa-check"></i> Set Instruction
+        </button>
+      </div>
+      <div style="font-size:0.7rem;color:var(--text-muted);margin-top:6px">Admin submissions bypass the 17:00 client cut-off.</div>
+    </div>
+
     ${inv.status === 'active' ? `
       <div class="flex-between" style="gap:10px;flex-wrap:wrap">
         <button class="btn btn--success btn--sm" onclick='markInvestmentMatured(${JSON.stringify(inv.id)})'>
@@ -3033,6 +3049,21 @@ function viewInvestmentDetail(id) {
     ` : ''}
   `;
   Modal.open('investorDetailModal');
+}
+
+async function adminSetInstruction(id) {
+  const sel = document.getElementById('admMatInstruction');
+  const instruction = sel && sel.value;
+  if (!instruction) return;
+  try {
+    // Uses the dedicated endpoint; staff role bypasses the 17:00 client cut-off.
+    await API._fetch('POST', `investments/${id}/instruction`, { instruction });
+    Toast.success('Maturity instruction set on behalf of the client');
+    Modal.close('investorDetailModal');
+    await loadInvestments();
+  } catch (e) {
+    Toast.error(e.message || 'Failed to set instruction');
+  }
 }
 
 async function markInvestmentMatured(id) {
@@ -3054,7 +3085,7 @@ async function payoutInvestment(id) {
 
   try {
     await API.investments.update(id, {
-      status: 'paid_out',
+      status: 'matured',
       actual_return: actualReturn,
       payout_date: new Date().toISOString()
     });
@@ -6400,7 +6431,7 @@ function _buildTimelineEvents(inv, invsts, txns) {
       events.push({ date: i.end_date, icon: 'fa-clock', color: '#f97316', text: `Investment matured — ${poolLabel}` });
     }
     if (i.status === 'paid_out' && i.payout_date) {
-      events.push({ date: i.payout_date, icon: 'fa-check-circle', color: '#22c55e', text: `Investment paid out — ${poolLabel}` });
+      events.push({ date: i.payout_date, icon: 'fa-check-circle', color: '#22c55e', text: `Investment matured — ${poolLabel}` });
     }
   });
 

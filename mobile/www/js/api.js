@@ -515,7 +515,7 @@ const Utils = {
       filling:          ['badge--blue',   'Filling'],
       approved:         ['badge--green',  'Approved'],
       completed:        ['badge--green',  'Completed'],
-      paid_out:         ['badge--green',  'Paid Out'],
+      paid_out:         ['badge--purple', 'Matured'],   // merged into Matured
       matured:          ['badge--purple', 'Matured'],
       pending:          ['badge--orange', 'Pending'],
       pending_fica:     ['badge--orange', 'Pending FICA'],
