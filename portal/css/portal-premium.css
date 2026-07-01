@@ -3164,3 +3164,15 @@ body.dark-mode .fs-row__name { color:#f3f4f6 !important; }
 [class*="__value"],[class*="-value"],[class*="__val"],[class*="-val"] {
   font-family:'Poppins',system-ui,sans-serif !important;
 }
+
+/* ── Action Centre task cards: clickable hover/press feedback ── */
+.ac-task { transition: transform 0.12s ease, box-shadow 0.18s ease, border-color 0.18s ease; }
+.ac-task[role="button"] { cursor: pointer; }
+.ac-task[role="button"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.10);
+  border-color: rgba(255,130,21,0.35) !important;
+}
+.ac-task[role="button"]:active { transform: translateY(0) scale(0.995); }
+.ac-task[role="button"] .fa-chevron-right { transition: transform 0.18s ease; }
+.ac-task[role="button"]:hover .fa-chevron-right { transform: translateX(3px); }

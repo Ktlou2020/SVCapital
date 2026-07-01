@@ -422,6 +422,16 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
     const rows  = stripSensitive(table, dataResult.rows, req.user?.empId);
     const total = parseInt(countResult.rows[0].count);
 
+    // Normalise legacy return-transaction wording: "Monthly interest" → "Return Earned"
+    // (covers existing rows for all platforms; the interest cron already writes the new wording).
+    if (table === 'transactions') {
+      for (const r of rows) {
+        if (r && typeof r.description === 'string' && r.description.indexOf('Monthly interest') !== -1) {
+          r.description = r.description.replace(/Monthly interest/g, 'Return Earned');
+        }
+      }
+    }
+
     res.json({ data: rows, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (err) {
     console.error(`GET /${req.params.table}:`, err.message);
