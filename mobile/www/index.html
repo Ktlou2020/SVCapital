@@ -371,13 +371,8 @@
                   <i class="fa-solid fa-plus"></i> Invest More
                 </button>
               </div>
-              <div style="overflow-x:auto">
-                <table class="data-table">
-                  <thead><tr><th>Pool</th><th>Product</th><th>Invested Amount</th><th>Start Date</th><th>Maturity Date</th><th>Status</th></tr></thead>
-                  <tbody id="overviewInvestmentsBody">
-                    <tr><td colspan="6" class="text-center text-muted" style="padding:24px">Loading...</td></tr>
-                  </tbody>
-                </table>
+              <div id="overviewInvestmentsBody" class="ov-list">
+                <div class="text-center text-muted" style="padding:24px">Loading…</div>
               </div>
             </div>
 
@@ -387,13 +382,8 @@
                 <div><div class="table-card__title">Recent Activity</div></div>
                 <button class="btn btn--secondary btn--sm" onclick="navigate('transactions', document.querySelector('[data-view=transactions]'))">View All</button>
               </div>
-              <div style="overflow-x:auto">
-                <table class="data-table">
-                  <thead><tr><th>Type</th><th>Amount</th><th>Description</th><th>Date</th></tr></thead>
-                  <tbody id="overviewTxnBody">
-                    <tr><td colspan="4" class="text-center text-muted" style="padding:24px">Loading...</td></tr>
-                  </tbody>
-                </table>
+              <div id="overviewTxnBody" class="ov-list">
+                <div class="text-center text-muted" style="padding:24px">Loading…</div>
               </div>
             </div>
           </div>
@@ -483,7 +473,7 @@
       <div class="view" id="view-investments">
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
           <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div><div class="stat-card__value" id="mi-capital">—</div><div class="stat-card__label">Capital Deployed</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="mi-expected">—</div><div class="stat-card__label">Expected Returns</div></div>
+          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="mi-expected">—</div><div class="stat-card__label">Target Returns</div></div>
           <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-double"></i></div></div><div class="stat-card__value" id="mi-earned">—</div><div class="stat-card__label">Returns Earned</div></div>
           <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-layer-group"></i></div></div><div class="stat-card__value" id="mi-count">—</div><div class="stat-card__label">Total Investments</div></div>
         </div>
@@ -545,13 +535,10 @@
                 <span class="panel__title"><i class="fa-solid fa-timeline" style="color:#a855f7;margin-right:6px"></i>Investment Timeline</span>
                 <button class="btn btn--secondary btn--sm" onclick="exportAnalyticsCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
               </div>
-              <div class="panel__body" style="overflow-x:auto">
-                <table class="data-table">
-                  <thead><tr><th>Pool</th><th>Invested</th><th>Return</th><th>Rate</th><th>Start</th><th>End / Maturity</th><th>Duration</th><th>Status</th></tr></thead>
-                  <tbody id="analyticsTimelineBody">
-                    <tr><td colspan="8" class="text-center text-muted" style="padding:24px">Loading…</td></tr>
-                  </tbody>
-                </table>
+              <div class="panel__body" style="padding:12px">
+                <div id="analyticsTimelineBody" class="atl-list">
+                  <div class="text-center text-muted" style="padding:24px">Loading…</div>
+                </div>
               </div>
             </div>
           </div>
@@ -586,7 +573,7 @@
                 </div>
                 <div id="wpResult" style="background:rgba(255,155,12,0.08);border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:14px">
                   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                    <span style="font-size:0.75rem;color:var(--text-muted)">Expected Return</span>
+                    <span style="font-size:0.75rem;color:var(--text-muted)">Target Return</span>
                     <span style="font-size:1.05rem;font-weight:800;color:#22c55e" id="wpReturn">—</span>
                   </div>
                   <div style="display:flex;justify-content:space-between;align-items:center">
@@ -614,30 +601,25 @@
           </button>
         </div>
         <div id="txnAllTab">
-        <div class="table-card">
-          <div class="table-card__header">
-            <div><div class="table-card__title">My Transactions</div><div class="table-card__sub">Complete transaction history</div></div>
-            <div class="table-card__controls">
-              <select class="tbl-filter" id="myTxnTypeFilter">
-                <option value="">All Types</option>
-                <option value="investment">Investment</option>
-                <option value="deposit">Deposit</option>
-                <option value="payout">Payout</option>
-                <option value="withdrawal">Withdrawal</option>
-                <option value="reinvestment">Re-investment</option>
-                <option value="gift">Gift</option>
-              </select>
+          <!-- Summary strip -->
+          <div class="txn-summary" id="txnSummary"></div>
+          <!-- Filter pills -->
+          <div class="txn-filter-scroll">
+            <div class="txn-filter-pills" id="txnFilterPills">
+              <button class="txn-pill active" data-type="" onclick="_setTxnFilter('',this)">All</button>
+              <button class="txn-pill" data-type="deposit" onclick="_setTxnFilter('deposit',this)">Deposits</button>
+              <button class="txn-pill" data-type="investment" onclick="_setTxnFilter('investment',this)">Investments</button>
+              <button class="txn-pill" data-type="return" onclick="_setTxnFilter('return',this)">Returns</button>
+              <button class="txn-pill" data-type="payout" onclick="_setTxnFilter('payout',this)">Payouts</button>
+              <button class="txn-pill" data-type="withdrawal" onclick="_setTxnFilter('withdrawal',this)">Withdrawals</button>
+              <button class="txn-pill" data-type="gift_received" onclick="_setTxnFilter('gift_received',this)">Gifts</button>
             </div>
           </div>
-          <div style="overflow-x:auto">
-            <table class="data-table">
-              <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Reference</th><th>Description</th><th>Date</th></tr></thead>
-              <tbody id="myTxnBody">
-                <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
-              </tbody>
-            </table>
+          <select id="myTxnTypeFilter" style="display:none"><option value=""></option></select>
+          <!-- Card list -->
+          <div id="myTxnBody" class="txn-list">
+            <div class="text-center text-muted" style="padding:32px">Loading…</div>
           </div>
-        </div>
         </div>
         <div id="txnReturnsTab" style="display:none"></div>
       </div>
@@ -828,13 +810,21 @@
            VIEW: MATURITY INSTRUCTIONS
       ══════════════════════════════════ -->
       <div class="view" id="view-maturity">
-        <div class="panel mb-20" style="background:rgba(255,155,12,0.05);border-color:rgba(255,155,12,0.25)">
-          <div class="panel__body" style="display:flex;align-items:flex-start;gap:16px">
-            <i class="fa-solid fa-triangle-exclamation" style="color:var(--gold);font-size:1.3rem;margin-top:2px"></i>
-            <div>
-              <div style="font-weight:700;color:#1a1a1a;margin-bottom:4px">Maturity Instruction Deadline</div>
-              <div style="font-size:0.82rem;color:#6b7280">All maturity instructions must be submitted <strong>before 5:00 PM on the last day of your investment term</strong>. If no instruction is received, your funds will be automatically reinvested into the same product.</div>
-            </div>
+        <!-- Page header -->
+        <div class="maturity-header">
+          <div class="maturity-header__icon"><i class="fa-solid fa-hourglass-half"></i></div>
+          <div>
+            <div class="maturity-header__title">Maturity Instructions</div>
+            <div class="maturity-header__sub">Decide what happens to each investment when its term ends</div>
+          </div>
+        </div>
+
+        <!-- Deadline notice -->
+        <div class="maturity-notice">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <div>
+            <div class="maturity-notice__title">Instruction Deadline</div>
+            <div class="maturity-notice__text">All maturity instructions must be submitted <strong>before 5:00 PM on the last day of your investment term</strong>. If no instruction is received, your funds will be automatically reinvested into the same product.</div>
           </div>
         </div>
 
@@ -847,6 +837,17 @@
            VIEW: PROFILE
       ══════════════════════════════════ -->
       <div class="view" id="view-profile">
+        <!-- Profile hero -->
+        <div class="profile-hero" id="profileHero">
+          <div class="profile-hero__avatar" id="profileHeroAvatar">—</div>
+          <div class="profile-hero__name" id="profileHeroName">—</div>
+          <div class="profile-hero__email" id="profileHeroEmail">—</div>
+          <div class="profile-hero__chips">
+            <div class="profile-hero__chip"><i class="fa-solid fa-fingerprint"></i><span id="profileHeroId">—</span></div>
+            <div class="profile-hero__chip"><i class="fa-solid fa-calendar-day"></i><span id="profileHeroJoined">—</span></div>
+            <div class="profile-hero__chip" id="profileHeroStatusChip"><i class="fa-solid fa-circle-check"></i><span id="profileHeroStatus">Active</span></div>
+          </div>
+        </div>
         <div class="grid-layout grid-layout--sidebar">
           <div>
             <div class="panel mb-16">
@@ -1002,6 +1003,20 @@
            VIEW: SUPPORT
       ══════════════════════════════════ -->
       <div class="view" id="view-support">
+        <!-- Support hero -->
+        <div class="support-hero">
+          <div class="support-hero__icon"><i class="fa-solid fa-headset"></i></div>
+          <div class="support-hero__title">How can we help?</div>
+          <div class="support-hero__sub">Our team typically replies within a few hours. Reach us instantly below or log a ticket.</div>
+          <div class="support-hero__actions">
+            <a href="https://api.whatsapp.com/send?phone=27760842102" target="_blank" class="support-quick support-quick--whatsapp">
+              <i class="fa-brands fa-whatsapp"></i><span>WhatsApp</span>
+            </a>
+            <a href="mailto:enquiry@svcapital.co.za" class="support-quick support-quick--email">
+              <i class="fa-solid fa-envelope"></i><span>Email Us</span>
+            </a>
+          </div>
+        </div>
         <div class="grid-layout grid-layout--sidebar">
           <div>
             <div class="panel mb-16">
@@ -1140,29 +1155,35 @@
           </div>
 
           <div>
-            <div class="panel mb-16">
-              <div class="panel__header"><span class="panel__title">Referral Stats</span></div>
-              <div class="panel__body">
-                <div class="info-list">
-                  <div class="info-row"><span class="info-row__label">Total Referred</span><span class="info-row__value text-gold" id="refStatTotal">—</span></div>
-                  <div class="info-row"><span class="info-row__label">FICA/KYC Approved</span><span class="info-row__value" id="refStatApproved">—</span></div>
-                  <div class="info-row"><span class="info-row__label">Invested</span><span class="info-row__value" id="refStatInvested">—</span></div>
-                  <div class="info-row"><span class="info-row__label">Bonuses Earned</span><span class="info-row__value text-green" id="refStatBonuses">—</span></div>
-                </div>
+            <div class="ref-stats-grid">
+              <div class="ref-stat">
+                <div class="ref-stat__icon" style="background:rgba(255,130,21,0.14);color:#FF8215"><i class="fa-solid fa-user-group"></i></div>
+                <div class="ref-stat__value" id="refStatTotal">—</div>
+                <div class="ref-stat__label">Total Referred</div>
+              </div>
+              <div class="ref-stat">
+                <div class="ref-stat__icon" style="background:rgba(59,130,246,0.14);color:#3b82f6"><i class="fa-solid fa-circle-check"></i></div>
+                <div class="ref-stat__value" id="refStatApproved">—</div>
+                <div class="ref-stat__label">FICA Approved</div>
+              </div>
+              <div class="ref-stat">
+                <div class="ref-stat__icon" style="background:rgba(168,85,247,0.14);color:#a855f7"><i class="fa-solid fa-chart-line"></i></div>
+                <div class="ref-stat__value" id="refStatInvested">—</div>
+                <div class="ref-stat__label">Invested</div>
+              </div>
+              <div class="ref-stat">
+                <div class="ref-stat__icon" style="background:rgba(34,197,94,0.14);color:#22c55e"><i class="fa-solid fa-coins"></i></div>
+                <div class="ref-stat__value text-green" id="refStatBonuses">—</div>
+                <div class="ref-stat__label">Bonuses Earned</div>
               </div>
             </div>
 
             <div class="panel">
               <div class="panel__header"><span class="panel__title">Who You've Referred</span></div>
-              <div style="overflow-x:auto">
-                <table class="data-table" style="font-size:0.8rem">
-                  <thead><tr>
-                    <th>Name</th><th>FICA/KYC</th><th>Invested</th><th>Joined</th><th>Bonus Earned</th>
-                  </tr></thead>
-                  <tbody id="referredInvestorsBody">
-                    <tr><td colspan="4" class="text-center text-muted" style="padding:16px">Loading…</td></tr>
-                  </tbody>
-                </table>
+              <div class="panel__body" style="padding:12px">
+                <div id="referredInvestorsBody" class="ref-people-list">
+                  <div class="text-center text-muted" style="padding:16px">Loading…</div>
+                </div>
               </div>
             </div>
 
@@ -1203,38 +1224,32 @@
         </div>
 
         <!-- Section 1: Investment Certificates -->
-        <div class="table-card mb-20">
-          <div class="table-card__header">
+        <div class="panel mb-20">
+          <div class="panel__header">
             <div>
-              <div class="table-card__title"><i class="fa-solid fa-certificate" style="color:var(--gold)"></i> Investment Certificates</div>
-              <div class="table-card__sub">Download a certificate for each active investment</div>
+              <div class="panel__title"><i class="fa-solid fa-certificate" style="color:var(--gold)"></i> Investment Certificates</div>
+              <div style="font-size:0.75rem;color:#6b7280;margin-top:2px">Download a certificate for each active investment</div>
             </div>
           </div>
-          <div style="overflow-x:auto">
-            <table class="data-table">
-              <thead><tr><th>Pool</th><th>Product</th><th>Amount</th><th>Rate</th><th>Start Date</th><th>Maturity Date</th><th>Status</th><th>Action</th></tr></thead>
-              <tbody id="docCertificatesBody">
-                <tr><td colspan="8" class="text-center text-muted" style="padding:24px">Loading...</td></tr>
-              </tbody>
-            </table>
+          <div class="panel__body" style="padding:12px">
+            <div id="docCertificatesBody" class="doc-list">
+              <div class="text-center text-muted" style="padding:24px">Loading…</div>
+            </div>
           </div>
         </div>
 
         <!-- Section 2: Deposit Receipts -->
-        <div class="table-card mb-20">
-          <div class="table-card__header">
+        <div class="panel mb-20">
+          <div class="panel__header">
             <div>
-              <div class="table-card__title"><i class="fa-solid fa-receipt" style="color:#22c55e"></i> Deposit Receipts</div>
-              <div class="table-card__sub">Download a receipt for recent deposits</div>
+              <div class="panel__title"><i class="fa-solid fa-receipt" style="color:#22c55e"></i> Deposit Receipts</div>
+              <div style="font-size:0.75rem;color:#6b7280;margin-top:2px">Download a receipt for recent deposits</div>
             </div>
           </div>
-          <div style="overflow-x:auto">
-            <table class="data-table">
-              <thead><tr><th>Date</th><th>Amount</th><th>Description</th><th>Reference</th><th>Status</th><th>Action</th></tr></thead>
-              <tbody id="docReceiptsBody">
-                <tr><td colspan="6" class="text-center text-muted" style="padding:24px">Loading...</td></tr>
-              </tbody>
-            </table>
+          <div class="panel__body" style="padding:12px">
+            <div id="docReceiptsBody" class="doc-list">
+              <div class="text-center text-muted" style="padding:24px">Loading…</div>
+            </div>
           </div>
         </div>
 

@@ -181,18 +181,29 @@
   /* ── Haptic feedback ────────────────────────────── */
   function initHaptics() {
     if (!P.Haptics) return;
+
+    // Selection-style feedback for navigation, filters, toggles & choices —
+    // a light "tick" that feels like moving between options.
+    const SELECTION = '.mbn-item, .tab-btn, .txn-pill, .survey-opt, .gift-preset, ' +
+                      '.sa-type-btn, .faq-quick-q, .level-step, #marketRiskSelect';
+    // Impact-style feedback for actionable buttons — a firmer confirmation tap.
+    const IMPACT = '.btn--primary, .btn--gold, .btn--success, .btn--secondary, ' +
+                   '.sad-action-btn, .sad-upload-btn, .doc-card__btn, .support-quick, ' +
+                   '.quest-claim-btn, .survey-submit-btn, .sa-card__actions .btn, ' +
+                   '.support-hero__actions a, .maturity-card .btn';
+
     document.addEventListener('click', e => {
-      // Primary / gold buttons: light impact
-      if (e.target.closest('.btn--primary, .btn--gold')) {
-        P.Haptics.impact({ style: 'LIGHT' }).catch(() => {});
-      }
-      // Bottom nav taps: selection feedback (iOS) or light impact
-      if (e.target.closest('.mbn-item')) {
+      const t = e.target;
+      if (t.closest(SELECTION)) {
         P.Haptics.selectionStart().catch(() =>
           P.Haptics.impact({ style: 'LIGHT' }).catch(() => {})
         );
+        return;
       }
-    });
+      if (t.closest(IMPACT)) {
+        P.Haptics.impact({ style: 'LIGHT' }).catch(() => {});
+      }
+    }, true);
   }
 
   /* ── Back-button (Android) ──────────────────────── */
@@ -304,12 +315,37 @@
      stuck on a splash screen forever. Railway cold-starts can take 5-8 s. */
   setTimeout(_hideCover, 12000);
 
+  /* ── Keyboard-aware chrome (iOS + Android) ──────────
+     When the soft keyboard opens, the visual viewport shrinks. A fixed
+     bottom nav would otherwise float directly above the keyboard, which
+     looks broken. We detect the shrink via the visualViewport API (no
+     native plugin required — works on both platforms) and toggle a
+     body class so CSS can slide the bottom nav out of the way and free
+     up vertical space for the focused field. */
+  function initKeyboardAware() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    let baseline = vv.height;
+    const onResize = () => {
+      // A drop of >150px from the tallest seen height means the keyboard is up.
+      baseline = Math.max(baseline, vv.height);
+      const keyboardOpen = (baseline - vv.height) > 150;
+      document.body.classList.toggle('keyboard-open', keyboardOpen);
+    };
+    vv.addEventListener('resize', onResize);
+    // Reset baseline on orientation change so the threshold stays accurate.
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => { baseline = vv.height; document.body.classList.remove('keyboard-open'); }, 300);
+    });
+  }
+
   /* ── Init ───────────────────────────────────────── */
   async function init() {
     // Each plugin is wrapped independently — one failure must not block others.
     await initStatusBar().catch(e => console.warn('[native] StatusBar init failed:', e));
     await initNetwork().catch(e => console.warn('[native] Network init failed:', e));
     try { initHaptics();        } catch (e) { console.warn('[native] Haptics init failed:', e); }
+    try { initKeyboardAware();  } catch (e) { console.warn('[native] KeyboardAware init failed:', e); }
     try { initDarkModeSync();   } catch (e) { console.warn('[native] DarkModeSync init failed:', e); }
     try { initNavScrollToTop(); } catch (e) { console.warn('[native] NavScrollToTop init failed:', e); }
     try { initBackButton();     } catch (e) { console.warn('[native] BackButton init failed:', e); }

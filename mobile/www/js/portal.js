@@ -540,7 +540,7 @@ function renderMarketConversionPanel(pools) {
 
   if (affordable.length) {
     title = `You can invest right now in ${affordable.length} open pool${affordable.length === 1 ? '' : 's'}.`;
-    sub = 'Recommended pools below are ranked by affordability, urgency, and expected return so you can act quickly.';
+    sub = 'Recommended pools below are ranked by affordability, urgency, and target return so you can act quickly.';
     action = "openInvestModal('" + affordable[0].id + "')";
     actionLabel = 'Open best-fit pool';
     accent = '#22c55e';
@@ -1689,48 +1689,54 @@ function dismissOnboarding() {
 
 function renderOverviewInvestments() {
   const body = document.getElementById('overviewInvestmentsBody');
+  if (!body) return;
   const active = PORTAL.investments.filter(i => i.status === 'active');
 
-  if (!active.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No active investments. <a href="#" onclick="navigate(\'marketplace\', null)" style="color:var(--gold)">Browse pools →</a></td></tr>'; return; }
+  if (!active.length) { body.innerHTML = '<div class="text-center text-muted" style="padding:24px">No active investments. <a href="#" onclick="navigate(\'marketplace\', null)" style="color:var(--gold)">Browse pools →</a></div>'; return; }
 
   body.innerHTML = active.map(inv => {
     const pi = Utils.productInfo(inv.product_type);
     const days = Utils.daysRemaining(inv.maturity_date);
     const pool = PORTAL.pools.find(p => p.id === inv.pool_id);
     const progress = pool ? Utils.poolFillPct(pool) : 100;
+    const soon = days !== null && days <= 30;
 
-    return `<tr>
-      <td>
-        <div class="td-strong">${_esc(inv.pool_name)}</div>
-        <div style="margin-top:4px">
-          <div class="progress-bar" style="width:120px;height:4px"><div class="progress-fill" style="width:${progress}%"></div></div>
+    return `
+      <div class="ov-inv">
+        <div class="ov-inv__icon ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i></div>
+        <div class="ov-inv__main">
+          <div class="ov-inv__name">${_esc(inv.pool_name)}</div>
+          <div class="ov-inv__sub">${pi.label} · ${days !== null ? `<span style="${soon ? 'color:#d97706;font-weight:700' : ''}">${days} days left</span>` : 'Active'}</div>
+          <div class="ov-inv__bar"><div class="ov-inv__bar-fill" style="width:${progress}%"></div></div>
         </div>
-      </td>
-      <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
-      <td class="td-gold fw-700">${Utils.rand(inv.amount)}</td>
-      <td class="td-green">${Utils.rand(inv.expected_return_amount)}</td>
-      <td class="${days <= 30 ? 'td-gold' : 'td-muted'} fw-700">${days !== null ? days + ' days' : '—'}</td>
-      <td>${Utils.statusBadge(inv.status)}</td>
-    </tr>`;
+        <div class="ov-inv__right">
+          <div class="ov-inv__amount">${Utils.rand(inv.amount)}</div>
+          <div class="ov-inv__return">+${Utils.rand(inv.expected_return_amount)}</div>
+        </div>
+      </div>`;
   }).join('');
 }
 
 function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
+  if (!body) return;
   const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0)).slice(0, 5);
-  const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
 
-  if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No transactions yet</td></tr>'; return; }
+  if (!recent.length) { body.innerHTML = '<div class="text-center text-muted" style="padding:24px">No transactions yet</div>'; return; }
 
   const _txnIsPositive = t => !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
   body.innerHTML = recent.map(t => {
     const pos = _txnIsPositive(t);
-    return `<tr>
-      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${(t.type?.replace(/_/g, ' ') || '').replace(/^\w/, c => c.toUpperCase())}</span></td>
-      <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
-      <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
-      <td class="td-muted">${Utils.date(t.transaction_date)}</td>
-    </tr>`;
+    const meta = _TXN_META[t.type] || { icon: 'fa-circle-dot', color: '#9ca3af', label: (t.type || 'Transaction').replace(/_/g, ' ') };
+    return `
+      <div class="ov-txn">
+        <div class="ov-txn__icon" style="background:${meta.color}1a;color:${meta.color}"><i class="fa-solid ${meta.icon}"></i></div>
+        <div class="ov-txn__main">
+          <div class="ov-txn__label">${meta.label}</div>
+          <div class="ov-txn__date">${t.description ? _esc(t.description) + ' · ' : ''}${Utils.date(t.transaction_date)}</div>
+        </div>
+        <div class="ov-txn__amount" style="color:${pos ? '#16a34a' : '#dc2626'}">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</div>
+      </div>`;
   }).join('');
 }
 
@@ -2021,38 +2027,96 @@ async function loadMyTransactions() {
   document.getElementById('myTxnTypeFilter').addEventListener('change', renderMyTxnTable);
 }
 
+/* Icon + accent colour per transaction type */
+const _TXN_META = {
+  deposit:        { icon: 'fa-arrow-down-to-line',  color: '#22c55e', label: 'Deposit' },
+  investment:     { icon: 'fa-chart-line',          color: '#3b82f6', label: 'Investment' },
+  return:         { icon: 'fa-arrow-trend-up',      color: '#eab308', label: 'Return Payment' },
+  payout:         { icon: 'fa-money-bill-wave',     color: '#22c55e', label: 'Payout' },
+  reinvestment:   { icon: 'fa-arrows-rotate',       color: '#3b82f6', label: 'Re-investment' },
+  fee:            { icon: 'fa-receipt',             color: '#f59e0b', label: 'Platform Fee' },
+  referral_bonus: { icon: 'fa-user-group',          color: '#a855f7', label: 'Referral Bonus' },
+  withdrawal:     { icon: 'fa-arrow-up-from-line',  color: '#ef4444', label: 'Withdrawal' },
+  gift_sent:      { icon: 'fa-gift',                color: '#f59e0b', label: 'Gift Sent' },
+  gift_received:  { icon: 'fa-gift',                color: '#22c55e', label: 'Gift Received' },
+  reward:         { icon: 'fa-award',               color: '#a855f7', label: 'Reward' },
+};
+
+function _setTxnFilter(type, btn) {
+  const sel = document.getElementById('myTxnTypeFilter');
+  if (sel) sel.value = type;
+  document.querySelectorAll('#txnFilterPills .txn-pill').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderMyTxnTable();
+  SVC.track('svc_filter_changed', { filter_type: 'transactions', filter_value: type || 'all' });
+}
+
 function renderMyTxnTable() {
   const body = document.getElementById('myTxnBody');
-  const filter = document.getElementById('myTxnTypeFilter').value;
+  if (!body) return;
+  const filter = document.getElementById('myTxnTypeFilter')?.value || '';
   const items = filter ? PORTAL.transactions.filter(t => t.type === filter) : PORTAL.transactions;
   const sorted = [...items].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0));
 
-  const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
+  // Summary strip — money in vs out (all transactions, unfiltered)
+  const summary = document.getElementById('txnSummary');
+  if (summary) {
+    const _isPos = t => !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
+    let moneyIn = 0, moneyOut = 0;
+    PORTAL.transactions.forEach(t => {
+      const amt = Math.abs(parseFloat(t.amount) || 0);
+      if (t.status === 'rejected' || t.status === 'failed') return;
+      if (_isPos(t)) moneyIn += amt; else moneyOut += amt;
+    });
+    summary.innerHTML = `
+      <div class="txn-summary__item">
+        <div class="txn-summary__icon" style="background:rgba(34,197,94,0.15);color:#22c55e"><i class="fa-solid fa-arrow-down"></i></div>
+        <div><div class="txn-summary__label">Money In</div><div class="txn-summary__value" style="color:#22c55e">${Utils.rand(moneyIn)}</div></div>
+      </div>
+      <div class="txn-summary__divider"></div>
+      <div class="txn-summary__item">
+        <div class="txn-summary__icon" style="background:rgba(239,68,68,0.12);color:#ef4444"><i class="fa-solid fa-arrow-up"></i></div>
+        <div><div class="txn-summary__label">Money Out</div><div class="txn-summary__value" style="color:#ef4444">${Utils.rand(moneyOut)}</div></div>
+      </div>`;
+  }
 
   if (!sorted.length) {
-    body.innerHTML = `<tr><td colspan="6" style="padding:0;border:none">
-      <div class="empty-state">
+    body.innerHTML = `<div class="empty-state">
         <i class="fa-solid fa-receipt"></i>
         <div class="empty-state__title">No transactions yet</div>
         <div class="empty-state__sub">Top up your wallet or make an investment to see activity here.<br>
           <a href="#" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))" style="color:var(--gold)">Go to Wallet →</a>
         </div>
-      </div>
-    </td></tr>`;
+      </div>`;
     return;
   }
 
   const _isPosTxn = t => !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
+
+  // Group by month for section headers
+  let lastMonth = '';
   body.innerHTML = sorted.map(t => {
-    const pos = _isPosTxn(t);
-    return `<tr>
-      <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${(t.type?.replace(/_/g, ' ') || '').replace(/^\w/, c => c.toUpperCase())}</span></td>
-      <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
-      <td>${Utils.statusBadge(t.status)}</td>
-      <td class="td-muted" style="font-size:0.72rem">${t.reference || '—'}</td>
-      <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
-      <td class="td-muted">${Utils.date(t.transaction_date)}</td>
-    </tr>`;
+    const pos  = _isPosTxn(t);
+    const meta = _TXN_META[t.type] || { icon: 'fa-circle-dot', color: '#9ca3af', label: (t.type || 'Transaction').replace(/_/g, ' ') };
+    const d    = new Date(t.transaction_date || t.created_at || 0);
+    const month = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+    let header = '';
+    if (month !== lastMonth) { header = `<div class="txn-month">${month}</div>`; lastMonth = month; }
+
+    return `${header}
+      <div class="txn-card">
+        <div class="txn-card__icon" style="background:${meta.color}1a;color:${meta.color}">
+          <i class="fa-solid ${meta.icon}"></i>
+        </div>
+        <div class="txn-card__main">
+          <div class="txn-card__title">${meta.label}</div>
+          <div class="txn-card__meta">${t.description || t.reference || '—'}</div>
+        </div>
+        <div class="txn-card__right">
+          <div class="txn-card__amount" style="color:${pos ? '#16a34a' : '#dc2626'}">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</div>
+          <div class="txn-card__status txn-card__status--${(t.status || '').toLowerCase()}">${(t.status || 'completed').replace(/^\w/, c => c.toUpperCase())}</div>
+        </div>
+      </div>`;
   }).join('');
 }
 
@@ -6528,7 +6592,7 @@ const TOUR_STEPS = [
     position: 'top',
     icon: 'fa-list-check',
     title: 'Active Investments',
-    body: 'Your current investments are listed here with product type, amount, expected return, and days remaining until maturity.',
+    body: 'Your current investments are listed here with product type, amount, target return, and days remaining until maturity.',
   },
   {
     id: 'nav_wallet',
@@ -8376,7 +8440,10 @@ async function loadReferralDashboard() {
   const body = document.getElementById('referredInvestorsBody');
   if (!body) return;
   if (!referred.length) {
-    body.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding:16px">No referrals yet — share your code to get started <i class="fa-solid fa-arrow-up-right-from-square" style="margin-left:4px"></i></td></tr>`;
+    body.innerHTML = `<div class="ref-empty">
+      <i class="fa-solid fa-user-plus"></i>
+      <div>No referrals yet — share your code to get started.</div>
+    </div>`;
     return;
   }
   body.innerHTML = referred.map(r => {
@@ -8384,20 +8451,25 @@ async function loadReferralDashboard() {
       t.type === 'referral_bonus' &&
       (t.referred_investor_id === r.id || Math.abs(new Date(t.created_at) - new Date(r.date_joined||r.created_at)) < 86400000 * 7)
     );
-    const bonusCell = bonusTx
-      ? `<span style="font-weight:700;color:#22c55e">${Utils.rand(bonusTx.amount||0)}</span>`
-      : `<span style="color:#f59e0b">Pending</span>`;
+    const name = `${_esc(r.first_name || '')} ${_esc(r.last_name || '')}`.trim() || 'Investor';
+    const initials = name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+    const hasInvested = (r.total_invested || 0) > 0;
+    const bonusChip = bonusTx
+      ? `<span class="ref-person__bonus ref-person__bonus--paid">+${Utils.rand(bonusTx.amount || 0)}</span>`
+      : `<span class="ref-person__bonus ref-person__bonus--pending">Pending</span>`;
     return `
-    <tr>
-      <td><div style="font-weight:600;font-size:0.82rem;color:#1a1a1a">${_esc(r.first_name)} ${_esc(r.last_name)}</div></td>
-      <td>${Utils.statusBadge(r.fica_status || r.status)}</td>
-      <td>${(r.total_invested || 0) > 0
-        ? `<span class="badge badge--green">Invested</span>`
-        : `<span class="badge badge--gray">Not yet</span>`}</td>
-      <td style="font-size:0.75rem;color:#6b7280">${Utils.date(r.date_joined)}</td>
-      <td>${bonusCell}</td>
-    </tr>
-  `}).join('');
+    <div class="ref-person">
+      <div class="ref-person__avatar">${initials}</div>
+      <div class="ref-person__info">
+        <div class="ref-person__name">${name}</div>
+        <div class="ref-person__meta">
+          <span class="ref-person__dot ${hasInvested ? 'ref-person__dot--green' : 'ref-person__dot--amber'}"></span>
+          ${hasInvested ? 'Invested' : 'Not invested yet'} · ${Utils.date(r.date_joined)}
+        </div>
+      </div>
+      ${bonusChip}
+    </div>`;
+  }).join('');
 }
 
 /* ═══════════════════════════════════════════════
@@ -8887,27 +8959,35 @@ function _renderCertificatesTable() {
 
   const investments = PORTAL.investments;
   if (!investments.length) {
-    body.innerHTML = `<tr><td colspan="8" style="padding:28px"><div class="empty-state" style="padding:0;border:none;background:transparent"><i class="fa-solid fa-file-certificate"></i><div class="empty-state__title">No investment certificates yet</div><div class="empty-state__sub">Your first completed investment will unlock downloadable certificates and term sheets here.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-layer-group"></i> Browse pools</button><button class="btn btn--secondary btn--sm" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))"><i class="fa-solid fa-wallet"></i> Fund wallet</button></div></div></td></tr>`;
+    body.innerHTML = `<div class="empty-state" style="padding:20px 0;border:none;background:transparent"><i class="fa-solid fa-file-certificate"></i><div class="empty-state__title">No investment certificates yet</div><div class="empty-state__sub">Your first completed investment will unlock downloadable certificates and term sheets here.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-layer-group"></i> Browse pools</button><button class="btn btn--secondary btn--sm" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))"><i class="fa-solid fa-wallet"></i> Fund wallet</button></div></div>`;
     return;
   }
 
   body.innerHTML = investments.map(inv => {
     const pi = Utils.productInfo(inv.product_type);
-    return `<tr>
-      <td class="td-strong">${_esc(inv.pool_name) || '—'}</td>
-      <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
-      <td class="td-gold fw-700">${Utils.rand(inv.amount)}</td>
-      <td>${Utils.pct(inv.expected_return_rate || inv.annual_rate)}</td>
-      <td class="td-muted">${Utils.date(inv.investment_date || inv.start_date)}</td>
-      <td class="td-muted">${Utils.date(inv.maturity_date || inv.end_date)}</td>
-      <td>${Utils.statusBadge(inv.status)}</td>
-      <td style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn--primary btn--sm" onclick="downloadCertificate('${inv.id}')">
-          <i class="fa-solid fa-file-pdf"></i> Certificate
-        </button>
-        ${(() => { const pool = PORTAL.pools.find(p => p.id === inv.pool_id); return pool && pool.term_sheet_url ? `<a href="${pool.term_sheet_url}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-file-contract"></i> Term Sheet</a>` : ''; })()}
-      </td>
-    </tr>`;
+    const pool = PORTAL.pools.find(p => p.id === inv.pool_id);
+    const termSheet = pool && pool.term_sheet_url
+      ? `<a href="${pool.term_sheet_url}" target="_blank" rel="noopener" class="doc-card__btn doc-card__btn--ghost"><i class="fa-solid fa-file-contract"></i> Term Sheet</a>` : '';
+    return `
+    <div class="doc-card">
+      <div class="doc-card__top">
+        <div class="doc-card__icon ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i></div>
+        <div class="doc-card__head">
+          <div class="doc-card__title">${_esc(inv.pool_name) || pi.label}</div>
+          <div class="doc-card__sub">${pi.label} · ${Utils.pct(inv.expected_return_rate || inv.annual_rate)} p.a.</div>
+        </div>
+        <div class="doc-card__amount">${Utils.rand(inv.amount)}</div>
+      </div>
+      <div class="doc-card__meta">
+        <span><i class="fa-solid fa-calendar-day"></i> ${Utils.date(inv.investment_date || inv.start_date)}</span>
+        <span><i class="fa-solid fa-flag-checkered"></i> ${Utils.date(inv.maturity_date || inv.end_date)}</span>
+        <span class="doc-card__status">${Utils.statusBadge(inv.status)}</span>
+      </div>
+      <div class="doc-card__actions">
+        <button class="doc-card__btn doc-card__btn--primary" onclick="downloadCertificate('${inv.id}')"><i class="fa-solid fa-file-pdf"></i> Certificate</button>
+        ${termSheet}
+      </div>
+    </div>`;
   }).join('');
 }
 
@@ -8921,20 +9001,22 @@ function _renderReceiptsTable() {
     .slice(0, 20);
 
   if (!deposits.length) {
-    body.innerHTML = `<tr><td colspan="6" style="padding:28px"><div class="empty-state" style="padding:0;border:none;background:transparent"><i class="fa-solid fa-receipt"></i><div class="empty-state__title">No deposit receipts yet</div><div class="empty-state__sub">As soon as your first wallet top-up is completed, the receipt will appear here for download.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="openTopUpModal()"><i class="fa-solid fa-plus"></i> Top up wallet</button><button class="btn btn--secondary btn--sm" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i> Generate statement</button></div></div></td></tr>`;
+    body.innerHTML = `<div class="empty-state" style="padding:20px 0;border:none;background:transparent"><i class="fa-solid fa-receipt"></i><div class="empty-state__title">No deposit receipts yet</div><div class="empty-state__sub">As soon as your first wallet top-up is completed, the receipt will appear here for download.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="openTopUpModal()"><i class="fa-solid fa-plus"></i> Top up wallet</button><button class="btn btn--secondary btn--sm" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i> Generate statement</button></div></div>`;
     return;
   }
 
-  body.innerHTML = deposits.map(t => `<tr>
-    <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
-    <td class="td-green fw-700">+${Utils.rand(Math.abs(t.amount))}</td>
-    <td class="td-muted" style="font-size:0.78rem">${t.description || 'Wallet deposit'}</td>
-    <td class="td-muted" style="font-size:0.75rem">${t.reference || '—'}</td>
-    <td>${Utils.statusBadge(t.status)}</td>
-    <td><button class="btn btn--secondary btn--sm" onclick="downloadReceipt('${t.id}')">
-      <i class="fa-solid fa-download"></i> Receipt
-    </button></td>
-  </tr>`).join('');
+  body.innerHTML = deposits.map(t => `
+    <div class="doc-card doc-card--receipt">
+      <div class="doc-card__icon" style="background:rgba(34,197,94,0.14);color:#16a34a"><i class="fa-solid fa-arrow-down-to-line"></i></div>
+      <div class="doc-card__head">
+        <div class="doc-card__title">${t.description || 'Wallet Deposit'}</div>
+        <div class="doc-card__sub">${Utils.date(t.transaction_date || t.created_at)} · ${t.reference || 'No ref'}</div>
+      </div>
+      <div class="doc-card__receipt-right">
+        <div class="doc-card__amount" style="color:#16a34a">+${Utils.rand(Math.abs(t.amount))}</div>
+        <button class="doc-card__btn doc-card__btn--ghost doc-card__btn--sm" onclick="downloadReceipt('${t.id}')"><i class="fa-solid fa-download"></i> Receipt</button>
+      </div>
+    </div>`).join('');
 }
 
 /* ── Investment Certificate PDF (html path) ── */
@@ -8959,7 +9041,7 @@ function generateInvestmentCertificate(invId) {
         <tr><td style="padding:6px 0;color:#6b7280">Investment Pool</td><td style="font-weight:700">${inv.pool_name||pool.name||'—'}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Amount Invested</td><td style="font-weight:700;color:#ff9b0c;font-size:16px">${Utils.rand(inv.amount)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Annual Rate</td><td style="font-weight:700">${Utils.pct(inv.annual_rate||inv.expected_return_rate)}</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280">Expected Return</td><td style="font-weight:700;color:#22c55e">${Utils.rand(inv.expected_return_amount||inv.expected_return)}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Target Return</td><td style="font-weight:700;color:#22c55e">${Utils.rand(inv.expected_return_amount||inv.expected_return)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Investment Date</td><td style="font-weight:700">${Utils.date(inv.investment_date||inv.start_date)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Maturity Date</td><td style="font-weight:700">${Utils.date(inv.maturity_date||inv.end_date)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Status</td><td>${Utils.statusBadge(inv.status)}</td></tr>
@@ -9442,6 +9524,17 @@ async function submitRiskQuestionnaire() {
 function renderRiskProfile() {
   const inv = PORTAL.investor;
   if (!inv) return;
+
+  // ── Populate profile hero ─────────────────────────────────
+  const fullName = [inv.first_name, inv.last_name].filter(Boolean).join(' ') || inv.name || 'Investor';
+  const initials = fullName.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+  const _heroSet = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+  _heroSet('profileHeroAvatar', initials);
+  _heroSet('profileHeroName', fullName);
+  _heroSet('profileHeroEmail', inv.email);
+  _heroSet('profileHeroId', inv.id);
+  _heroSet('profileHeroJoined', inv.date_joined ? new Date(inv.date_joined).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' }) : '—');
+  _heroSet('profileHeroStatus', (inv.status || 'active').replace(/^\w/, c => c.toUpperCase()));
 
   // ── Populate personal info form ───────────────────────────
   const _set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
@@ -10354,12 +10447,12 @@ function _renderAnalyticsTimeline() {
   if (!tbody) return;
   const invs = [...PORTAL.investments].sort((a, b) => new Date(b.start_date || b.created_at) - new Date(a.start_date || a.created_at));
   if (!invs.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:24px">No investments yet.</td></tr>';
+    tbody.innerHTML = '<div class="text-center text-muted" style="padding:24px">No investments yet.</div>';
     return;
   }
-  const statusBadge = s => {
+  const statusMeta = s => {
     const map = { active:'#22c55e', paid_out:'#656565', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316' };
-    return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${String(s||'').replace('_',' ').toUpperCase()}</span>`;
+    return map[s] || '#9ca3af';
   };
   const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';
   tbody.innerHTML = invs.slice(0, 30).map(i => {
@@ -10369,16 +10462,24 @@ function _renderAnalyticsTimeline() {
     const start   = new Date(i.start_date || i.created_at);
     const end     = new Date(i.end_date || i.maturity_date);
     const days    = (!isNaN(start) && !isNaN(end)) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '—');
-    return `<tr>
-      <td style="font-weight:600">${_esc(i.pool_name || 'Pool')}</td>
-      <td>R ${capital.toLocaleString('en-ZA')}</td>
-      <td style="color:#22c55e;font-weight:600">+R ${ret.toLocaleString('en-ZA', {maximumFractionDigits:2})}</td>
-      <td>${rate > 0 ? rate.toFixed(1) + '% p.a.' : '—'}</td>
-      <td>${fmt(i.start_date || i.created_at)}</td>
-      <td>${fmt(i.end_date || i.maturity_date)}</td>
-      <td>${typeof days === 'number' ? days + ' d' : days}</td>
-      <td>${statusBadge(i.status)}</td>
-    </tr>`;
+    const sc      = statusMeta(i.status);
+    return `
+      <div class="atl-card">
+        <div class="atl-card__head">
+          <div class="atl-card__name">${_esc(i.pool_name || 'Pool')}</div>
+          <span class="atl-card__status" style="background:${sc}1f;color:${sc};border:1px solid ${sc}44">${String(i.status||'').replace('_',' ').toUpperCase()}</span>
+        </div>
+        <div class="atl-card__figures">
+          <div><span class="atl-card__k">Invested</span><span class="atl-card__v">R ${capital.toLocaleString('en-ZA')}</span></div>
+          <div><span class="atl-card__k">Return</span><span class="atl-card__v" style="color:#16a34a">+R ${ret.toLocaleString('en-ZA', {maximumFractionDigits:2})}</span></div>
+          <div><span class="atl-card__k">Rate</span><span class="atl-card__v">${rate > 0 ? rate.toFixed(1) + '%' : '—'}</span></div>
+        </div>
+        <div class="atl-card__dates">
+          <span><i class="fa-solid fa-play"></i> ${fmt(i.start_date || i.created_at)}</span>
+          <span><i class="fa-solid fa-flag-checkered"></i> ${fmt(i.end_date || i.maturity_date)}</span>
+          <span><i class="fa-solid fa-clock"></i> ${typeof days === 'number' ? days + ' days' : days}</span>
+        </div>
+      </div>`;
   }).join('');
 }
 
