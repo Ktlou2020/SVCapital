@@ -1992,18 +1992,16 @@ function renderMyInvestmentCards() {
           <div class="mic-stat"><span class="mic-stat__label">Amount Invested</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(inv.amount)}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Launch Date</span><span class="mic-stat__value">${Utils.date(inv.investment_date || inv.start_date)}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Maturity Date</span><span class="mic-stat__value">${Utils.date(inv.maturity_date)}</span></div>
+          ${isPaidOut ? `
+          <div class="mic-stat"><span class="mic-stat__label">Return Rate</span><span class="mic-stat__value">${Utils.pct(inv.annual_rate || inv.expected_return_rate)}</span></div>
+          <div class="mic-stat"><span class="mic-stat__label">Capital + Return</span><span class="mic-stat__value" style="color:var(--green)">${Utils.rand(inv.amount + (inv.actual_return_amount || inv.expected_return_amount || 0))}</span></div>
+          ` : ''}
         </div>
 
         ${inv.status === 'active' ? `
           <button class="btn btn--secondary btn--full btn--sm" onclick='openMaturityModal(${JSON.stringify(inv.id)})' style="margin-top:6px;font-size:0.76rem">
             <i class="fa-solid fa-hourglass-half"></i> Set Maturity Instruction
           </button>
-        ` : ''}
-        ${isPaidOut ? `
-          <div style="font-size:0.75rem;color:var(--text-muted);text-align:center">
-            <i class="fa-solid fa-check-circle" style="color:var(--green)"></i>
-            Matured ${Utils.date(inv.payout_date || inv.maturity_processed_at || inv.end_date)} — Total: ${Utils.rand(inv.amount + inv.actual_return_amount)}
-          </div>
         ` : ''}
       </div>
     `;
@@ -5528,20 +5526,20 @@ At maturity you decide what happens next: pay the funds out to your wallet, rein
     title: 'How Your Returns Work', readTime: 7, xp: 50,
     icon: 'fa-percent', color: '#22c55e',
     keyPoints: [
-      'Returns are expressed as an annual percentage rate (p.a.)',
-      'Your actual payout = capital × annual rate × (term in days ÷ 365)',
-      'Reinvesting your returns compounds your growth over time',
-      'Effective return % accounts for the full term, not just one year',
+      'Returns are shown as an annual percentage rate (p.a.)',
+      'Your payout = capital × annual rate × (term ÷ 12 months)',
+      'Every return appears in your history as a "Return Earned" entry',
+      'Reinvesting at maturity compounds your growth — and reinvestments pay no platform fee',
     ],
-    content: `When you invest with SV Capital, you earn a return based on two factors: the annual rate and the term. For example, R10,000 invested at 14% p.a. for 12 months returns R11,400 — the R10,000 original capital plus R1,400 in returns.
+    content: `When you invest with SV Capital, your return is driven by two things: the product's annual rate and its term. For example, R10,000 at 14% p.a. over 12 months returns R11,400 — your R10,000 capital plus R1,400 earned.
 
-Shorter-term products like cattle cycles (150–180 days) work the same way, but on a pro-rated basis. A 14% annual rate for 150 days pays roughly R575 on a R10,000 investment.
+Shorter terms are simply pro-rated. The same 14% annual rate over 5 months pays roughly R583 on R10,000. Every return you earn is credited and shown in your transaction history as a "Return Earned" entry.
 
-The "effective return" you see on your dashboard is the annualised figure, allowing you to compare products fairly regardless of their term length.`,
+The effective return you see on your dashboard is the annualised figure, so you can compare a 5-month product against a multi-year one on equal footing. When an investment matures you decide what happens next — pay out, reinvest, or switch products — and reinvested funds are never charged a platform fee.`,
     quiz: [
       { q: 'R10,000 invested at 14% p.a. for 12 months — what is the total payout?', options: ['R10,140', 'R10,700', 'R11,400', 'R12,400'], correct: 2 },
       { q: 'What does the "effective return %" on your dashboard allow you to do?', options: ['Calculate your tax', 'Compare products fairly regardless of term length', 'Predict future returns', 'Convert returns to foreign currency'], correct: 1 },
-      { q: 'At 14% p.a. for 150 days, the approximate return on R10,000 is:', options: ['R1,400', 'R200', 'R575', 'R2,100'], correct: 2 },
+      { q: 'At 14% p.a. for 5 months, the approximate return on R10,000 is:', options: ['R1,400', 'R200', 'R583', 'R2,100'], correct: 2 },
     ],
   },
   {
@@ -5551,12 +5549,12 @@ The "effective return" you see on your dashboard is the annualised figure, allow
     keyPoints: [
       'SV Capital funds solar panel installations for South African businesses',
       'Businesses pay structured lease or energy purchase agreements',
-      'Returns typically range from 14–18% p.a. over 24–36 month terms',
+      'Returns typically range from 14–18% p.a. over 5–7 year terms',
       'Solar projects benefit from long-term, predictable contractual cash flows',
     ],
     content: `Solar projects work by financing the installation of commercial-scale photovoltaic (PV) systems for verified South African businesses. Once installed, the business pays a set monthly amount — either as an energy purchase agreement (EPA) or a finance lease — providing predictable monthly revenue.
 
-SV Capital aggregates these returns and passes them to investors net of all structuring costs. Solar assets are long-duration, making them ideal for capital you do not need access to for 2–3 years. Loadshedding in South Africa has significantly increased demand for behind-the-meter solar, providing strong deal flow for this product.
+SV Capital aggregates these returns and passes them to investors net of all structuring costs. Solar assets are long-duration, making them ideal for capital you can commit for several years. Loadshedding in South Africa has significantly increased demand for behind-the-meter solar, providing strong deal flow for this product.
 
 Each solar project undergoes technical assessment, legal review, and business viability checks before being made available to investors.`,
     quiz: [
@@ -5567,23 +5565,23 @@ Each solar project undergoes technical assessment, legal review, and business vi
   },
   {
     id: 'learn_cattle', track: 'explorer', order: 4,
-    title: 'Cattle & Short-term Loans', readTime: 8, xp: 50,
+    title: 'Cattle Farming', readTime: 8, xp: 50,
     icon: 'fa-cow', color: '#a855f7',
     keyPoints: [
-      'Cattle are purchased at auction, raised on commercial farms, and resold',
-      'Each cycle typically runs 150–180 days with 12–16% p.a. returns',
-      'Short-term loans are made to businesses with real collateral',
-      'These shorter terms allow for reinvestment and capital recycling',
+      'Cattle are bought at auction, raised on a commercial feedlot, and sold at market',
+      'A cattle cycle typically runs around 12 months at 12–16% p.a.',
+      'Returns are driven by weight gain (≈200kg → 500kg) and the market price at sale',
+      'Cattle carries an Aggressive risk profile — higher potential returns with more variability',
     ],
-    content: `SV Capital's cattle product funds the purchase of commercial beef cattle at verified South African livestock auctions. The cattle are placed on contracted farms where they are fed and managed under professional supervision, then sold at market at the end of the cycle.
+    content: `SV Capital's cattle product funds the purchase of commercial beef cattle at verified South African livestock auctions, in partnership with Beefcor — one of SA's premier feedlots. The cattle are fed and managed under professional supervision as they grow from roughly 200kg to 500kg, then sold at market at the end of the cycle.
 
-Returns are driven by weight gain and market price at sale. SV Capital hedges execution risk through diversified lots and vetted farming partners. Each batch is tracked and reported on in real time via the admin platform.
+Returns are driven by weight gain and the market price at sale. SV Capital manages execution risk through diversified lots and vetted farming partners, and each batch is tracked and reported in real time.
 
-Short-term business loans are secured against verifiable collateral (trading assets, debtor books, or property bonds) and carry slightly lower rates than cattle due to their fixed repayment structure. Both products offer higher liquidity than solar, with capital recycling every 5–6 months.`,
+Because cattle depends on biological growth and market prices, it carries a higher (Aggressive) risk profile than solar — with the potential for stronger returns over a shorter, roughly 12-month term.`,
     quiz: [
-      { q: 'How long is a typical SV Capital cattle investment cycle?', options: ['30–60 days', '1–2 years', '150–180 days', '3–5 years'], correct: 2 },
-      { q: 'Short-term business loans at SV Capital are secured against:', options: ['No collateral — they are unsecured', 'Verifiable collateral such as trading assets, debtor books, or property bonds', 'Government guarantees', 'Foreign exchange reserves'], correct: 1 },
-      { q: 'Which unique risk applies to cattle but NOT to solar investments?', options: ['Interest rate risk', 'Currency risk', 'Biological and market variable risk', 'Regulatory risk'], correct: 2 },
+      { q: 'How long is a typical SV Capital cattle investment cycle?', options: ['30–60 days', 'About 12 months', '3–5 years', '10 years'], correct: 1 },
+      { q: 'What drives the returns on a cattle investment?', options: ['Fixed monthly interest', 'Weight gain and the market price at sale', 'Government subsidies', 'Rental income'], correct: 1 },
+      { q: 'What risk profile does the cattle product carry?', options: ['Low', 'Medium', 'Aggressive', 'No risk'], correct: 2 },
     ],
   },
   {
@@ -5596,7 +5594,7 @@ Short-term business loans are secured against verifiable collateral (trading ass
       'A blended portfolio smooths your overall return over time',
       'Diversification is not just by product — also consider term length and entry date',
     ],
-    content: `Diversification means not putting all your eggs in one basket — a principle that applies as much to alternative investments as to traditional ones. By spreading your capital across solar, cattle, and loans, you reduce the impact if any single investment underperforms.
+    content: `Diversification means not putting all your eggs in one basket — a principle that applies as much to alternative investments as to traditional ones. By spreading your capital across products like solar, cattle, and delivery-bike fleets, you reduce the impact if any single investment underperforms.
 
 Equally important is timeline diversification. If all your investments mature at the same time, you face reinvestment risk. Staggering your investments across different start dates means you always have capital returning, which can be reinvested into new opportunities.
 
@@ -5614,19 +5612,19 @@ Our data shows that investors with 3+ active product types consistently achieve 
     title: 'Risk vs Return', readTime: 8, xp: 50,
     icon: 'fa-scale-balanced', color: '#a855f7',
     keyPoints: [
-      'Higher potential returns always come with higher risk — there are no exceptions',
-      'Risk in alternative investments includes liquidity risk, operational risk, and market risk',
-      'Your risk profile determines the right mix of products for you',
+      'Higher potential returns always come with higher risk',
+      'Each product has a published risk profile — Low, Medium, Medium-High or High',
+      'Match products to your risk appetite and how long you can commit capital',
       'Diversification reduces but cannot eliminate all risk',
     ],
-    content: `Every investment involves a trade-off between risk and return. At SV Capital, solar projects carry the lowest operational risk (contractual cash flows) but require the longest capital commitment. Cattle farming offers higher potential returns but involves biological and market variables that solar does not.
+    content: `Every investment involves a trade-off between risk and return. At SV Capital, each product carries a published risk profile — from Low through to High — set by our investment team. Solar projects sit at the more conservative end (long, contractual cash flows), while cattle farming sits at the higher end (biological and market variability) with the potential for higher returns.
 
-Understanding your own risk tolerance is critical. If you might need access to your capital within 12 months, short-term products are more appropriate than 36-month solar commitments. If you can commit capital for longer and tolerate some variability, the blended portfolio approach tends to deliver the best long-term outcomes.
+Understanding your own risk tolerance is key. If you can only commit capital for a few months, shorter-term products suit you better; if you can commit for several years and tolerate some variability, a blended portfolio tends to deliver the best long-term outcome.
 
-The risk profile survey in the Earn Rewards section helps us calibrate your portfolio recommendations to your personal risk appetite.`,
+The 'Know Your Risk Profile' survey in Earn Rewards calibrates our recommendations to your personal appetite, and every product page shows its risk badge so you always know what you are taking on.`,
     quiz: [
-      { q: 'Which SV Capital product carries the lowest operational risk?', options: ['Cattle farming', 'Short-term loans', 'Solar projects', 'Delivery bikes'], correct: 2 },
-      { q: 'If you might need access to your capital within 12 months, which are most appropriate?', options: ['36-month solar investments', 'Short-term products', 'Estate planning products', 'Any product regardless of term'], correct: 1 },
+      { q: 'Which SV Capital product carries the lowest operational risk?', options: ['Cattle farming', 'Delivery bikes', 'Solar projects', 'None — they are equal'], correct: 2 },
+      { q: 'How do you see the risk level of each product?', options: ['A star rating', 'A risk profile from Low to High', 'A credit score', 'It is not shown'], correct: 1 },
       { q: 'Complete the sentence: "Higher potential returns always come with…"', options: ['Lower risk', 'More regulatory protection', 'Higher risk', 'Better liquidity'], correct: 2 },
     ],
   },
@@ -5637,14 +5635,14 @@ The risk profile survey in the Earn Rewards section helps us calibrate your port
     keyPoints: [
       'Compounding means earning returns on your returns, not just your original capital',
       'The longer your investment horizon, the more powerful compounding becomes',
-      'Reinvesting at maturity is the single most impactful decision you can make',
+      'Reinvesting at maturity is the single most impactful decision — and it is fee-free',
       'A 14% p.a. return, reinvested over 5 years, nearly doubles your capital',
     ],
     content: `Albert Einstein reportedly called compound interest the "eighth wonder of the world." In practice, compounding means that after your first investment matures, you reinvest both the original capital and the returns — so in the next cycle, you earn returns on a larger base.
 
 At 14% p.a., R10,000 grows to R11,400 after year 1. Reinvested, it becomes R12,996 after year 2 — not R12,800. The difference compounds every year. After 5 years, R10,000 compounding at 14% p.a. becomes approximately R19,254 — nearly double.
 
-The key to unlocking compounding is acting quickly at maturity. Capital sitting idle in your wallet earns nothing. Set your maturity instructions to reinvest, and let time do the work.`,
+The key to unlocking compounding is acting at maturity. Capital sitting idle in your wallet earns nothing. Set your maturity instruction to reinvest — reinvestments pay no platform fee, so your full balance rolls over — and let time do the work.`,
     quiz: [
       { q: 'What does "compounding" mean in investing?', options: ['Adding new capital every month', 'Earning returns on your returns, not just your original capital', 'Splitting investments into smaller portions', 'Switching between product types'], correct: 1 },
       { q: 'R10,000 compounding at 14% p.a. over 5 years grows to approximately:', options: ['R17,000', 'R19,254', 'R21,000', 'R15,500'], correct: 1 },
@@ -5658,12 +5656,12 @@ The key to unlocking compounding is acting quickly at maturity. Capital sitting 
     keyPoints: [
       'Investment returns from SV Capital are generally treated as ordinary income in South Africa',
       'You are required to declare investment returns in your annual tax return (ITR12)',
-      'SV Capital issues statements to assist with your tax declarations',
+      'SV Capital issues statements and an annual Investment Income Certificate to help with your tax',
       'Consult a registered tax practitioner for personalised advice',
     ],
     content: `In South Africa, income earned from investments is generally subject to income tax at your marginal rate. This applies to the returns (interest or profit share) you earn through SV Capital products. Your original capital returned at maturity is not taxable — only the profit portion is.
 
-SARS requires you to disclose all South African and foreign income on your annual return (ITR12). Your SV Capital account statement (available under "My Statement") provides a breakdown of all returns earned in each tax year, which you or your accountant can use for tax submissions.
+SARS requires you to disclose all South African and foreign income on your annual return (ITR12). Your SV Capital account statement and annual Investment Income Certificate (available under "My Statement") give a breakdown of all returns earned in each tax year, which you or your accountant can use for tax submissions.
 
 Note that SV Capital does not deduct tax at source — you are responsible for declaring and paying tax on returns earned. If your total investment income exceeds R23,800 per year (the annual interest exemption for individuals under 65), the excess is taxable. We strongly recommend consulting a registered tax practitioner.`,
     quiz: [
@@ -5688,11 +5686,11 @@ Note that SV Capital does not deduct tax at source — you are responsible for d
 
 Equally, minimise idle time. Capital sitting in your wallet between investments earns 0%. Even a 2-week idle period on R50,000 costs you approximately R380 in lost returns at 14% p.a. The fastest investors reinvest within 48 hours of maturity.
 
-The optimal blend for most SV Capital investors in 2025 is approximately 40% solar (stable base), 40% cattle/loans (higher rate, shorter term), and 20% in reserve for opportunistic reinvestment when high-rate pools open.`,
+A balanced blend for many SV Capital investors is roughly 40% solar (stable, longer-term base), 40% cattle (higher rate, shorter term), and 20% held in reserve for opportunistic reinvestment when new pools open. Because reinvestments are fee-free, rolling capital between pools costs you nothing.`,
     quiz: [
       { q: 'What is a "laddering strategy" in investing?', options: ['Investing in ladder-manufacturing companies', 'Starting multiple investments with staggered maturity dates', 'Increasing investment amounts each cycle', 'Only investing in the highest-rate products'], correct: 1 },
       { q: 'Approximately how much does a 2-week idle period cost on R50,000 at 14% p.a.?', options: ['R50', 'R1,000', 'R380', 'R1,900'], correct: 2 },
-      { q: 'The recommended optimal portfolio blend for SV Capital investors in 2025 is:', options: ['100% solar for maximum stability', '50% cattle, 50% solar', '40% solar, 40% cattle/loans, 20% reserve', 'Equal split across all available products'], correct: 2 },
+      { q: 'A balanced portfolio blend for SV Capital investors is:', options: ['100% solar for maximum stability', '50% cattle, 50% solar', '40% solar, 40% cattle, 20% reserve', 'Equal split across all available products'], correct: 2 },
     ],
   },
   {
@@ -10370,30 +10368,34 @@ function _renderAnalyticsTimeline() {
   if (!tbody) return;
   const invs = [...PORTAL.investments].sort((a, b) => new Date(b.start_date || b.created_at) - new Date(a.start_date || a.created_at));
   if (!invs.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:24px">No investments yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:24px">No investments yet.</td></tr>';
     return;
   }
   const statusBadge = s => {
-    const map = { active:'#22c55e', paid_out:'#656565', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316' };
+    const map = { active:'#22c55e', paid_out:'#656565', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316', open:'#22c55e', closed:'#656565' };
     return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${String(s||'').replace('_',' ').toUpperCase()}</span>`;
   };
   const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';
   tbody.innerHTML = invs.slice(0, 30).map(i => {
+    // Connect the row to its pool so name/dates/status reflect the actual pool.
+    const pool    = (PORTAL.pools || []).find(p => p.id === i.pool_id) || {};
     const capital = parseFloat(i.amount) || 0;
     const ret     = parseFloat(i.net_return) || parseFloat(i.expected_return) || 0;
-    const rate    = parseFloat(i.interest_rate) || parseFloat(i.rate) || 0;
-    const start   = new Date(i.start_date || i.created_at);
-    const end     = new Date(i.end_date || i.maturity_date);
+    const startVal = pool.start_date || i.start_date || i.created_at;
+    const endVal   = pool.end_date   || i.end_date   || i.maturity_date;
+    const start   = new Date(startVal);
+    const end     = new Date(endVal);
     const days    = (!isNaN(start) && !isNaN(end)) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '—');
+    // Once the pool has matured, every investment in it reads as matured.
+    const status  = (pool.status === 'matured' || pool.status === 'paid_out') ? 'matured' : (i.status || pool.status);
     return `<tr>
-      <td style="font-weight:600">${_esc(i.pool_name || 'Pool')}</td>
+      <td style="font-weight:600">${_esc(pool.name || i.pool_name || 'Pool')}</td>
       <td>R ${capital.toLocaleString('en-ZA')}</td>
-      <td style="color:#22c55e;font-weight:600">+R ${ret.toLocaleString('en-ZA', {maximumFractionDigits:2})}</td>
-      <td>${rate > 0 ? rate.toFixed(1) + '% p.a.' : '—'}</td>
-      <td>${fmt(i.start_date || i.created_at)}</td>
-      <td>${fmt(i.end_date || i.maturity_date)}</td>
+      <td style="color:#22c55e;font-weight:600">${Utils.pct(pool.annual_rate || i.annual_rate || i.expected_return_rate || 0)} p.a.</td>
+      <td>${fmt(startVal)}</td>
+      <td>${fmt(endVal)}</td>
       <td>${typeof days === 'number' ? days + ' d' : days}</td>
-      <td>${statusBadge(i.status)}</td>
+      <td>${statusBadge(status)}</td>
     </tr>`;
   }).join('');
 }
@@ -10410,17 +10412,20 @@ function updateWealthProjection() {
 }
 
 function exportAnalyticsCSV() {
-  const rows = [['Pool', 'Invested (R)', 'Return (R)', 'Rate (%)', 'Start', 'End', 'Days', 'Status']];
+  const rows = [['Pool', 'Invested (R)', 'Target Return (% p.a.)', 'Start', 'End', 'Days', 'Status']];
   PORTAL.investments.forEach(i => {
+    const pool = (PORTAL.pools || []).find(p => p.id === i.pool_id) || {};
     const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA') : '';
-    const start = new Date(i.start_date || i.created_at);
-    const end   = new Date(i.end_date   || i.maturity_date);
+    const startVal = pool.start_date || i.start_date || i.created_at;
+    const endVal   = pool.end_date   || i.end_date   || i.maturity_date;
+    const start = new Date(startVal);
+    const end   = new Date(endVal);
     const days  = (!isNaN(start) && !isNaN(end)) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '');
+    const status = (pool.status === 'matured' || pool.status === 'paid_out') ? 'matured' : (i.status || pool.status || '');
     rows.push([
-      i.pool_name || '', parseFloat(i.amount) || 0,
-      parseFloat(i.net_return) || parseFloat(i.expected_return) || 0,
-      parseFloat(i.interest_rate) || '', fmt(i.start_date || i.created_at),
-      fmt(i.end_date || i.maturity_date), days, i.status || '',
+      pool.name || i.pool_name || '', parseFloat(i.amount) || 0,
+      Utils.pct(pool.annual_rate || i.annual_rate || i.expected_return_rate || 0),
+      fmt(startVal), fmt(endVal), days, status,
     ]);
   });
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
