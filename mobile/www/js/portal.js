@@ -4718,7 +4718,13 @@ function buildStatementHTML(opts) {
   if (incInvestments && investments.length > 0) {
     const invRows = investments.map(inv => {
       const info = getProductInfo(inv.product_type);
-      const rate = ((Number(inv.expected_return_rate)||0)*100).toFixed(2);
+      // Actual rate ACHIEVED: only meaningful once matured. While active, show "—".
+      const isMatured = inv.status === 'matured' || inv.status === 'paid_out';
+      const baseRate = (Number(inv.expected_return_rate) || 0) * 100;
+      const expRet = Number(inv.expected_return) || 0;
+      const actRet = Number(inv.actual_return) || 0;
+      const achievedRate = expRet > 0 ? baseRate * (actRet / expRet) : baseRate;
+      const rateCell = isMatured ? `${achievedRate.toFixed(2)}%` : '—';
       const maturity = inv.maturity_date ? fmtDate(inv.maturity_date) : '—';
       const statusColor = inv.status === 'active' ? '#656565' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
       return `<tr style="border-bottom:1px solid #f0f0f0">
@@ -4728,7 +4734,7 @@ function buildStatementHTML(opts) {
           <span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em">${info.label}</span>
         </td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right;font-weight:700">${fmtNum(inv.amount)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#ff9b0c;text-align:right;font-weight:700">${rate}%</td>
+        <td style="padding:8px 10px;font-size:11px;color:${rateCell==='—'?'#9ca3af':'#ff9b0c'};text-align:right;font-weight:700">${rateCell}</td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${fmtDate(inv.investment_date)}</td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${maturity}</td>
         <td style="padding:8px 10px">
@@ -4752,7 +4758,7 @@ function buildStatementHTML(opts) {
                 <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Pool</th>
                 <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Product</th>
                 <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Amount</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Rate</th>
+                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Actual Rate</th>
                 <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Invested</th>
                 <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Maturity</th>
                 <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Status</th>
