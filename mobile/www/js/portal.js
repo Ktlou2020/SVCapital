@@ -359,14 +359,17 @@ function renderTaskCompletionPanel() {
   wrap.style.display = 'block';
   if (!pending.length) {
     body.innerHTML = `
-      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:space-between">
-        <div>
-          <div style="font-size:0.9rem;font-weight:800;color:#1a1a1a;margin-bottom:4px">You're set up and ready to invest confidently.</div>
-          <div style="font-size:0.8rem;color:var(--text-muted)">Use Quick Actions to top up, browse new pools or generate your latest statement.</div>
+      <div class="action-centre-done">
+        <div class="acd-headline">
+          <div class="acd-check"><i class="fa-solid fa-circle-check"></i></div>
+          <div>
+            <div class="acd-title">You're set up and ready to invest confidently.</div>
+            <div class="acd-sub">Top up, browse new pools, or generate your latest statement.</div>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:4px">
-          <button class="btn btn--secondary btn--sm" style="flex:1;justify-content:center;text-align:center" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i> Statement</button>
-          <button class="btn btn--primary btn--sm" style="flex:1;justify-content:center;text-align:center" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-plus"></i> Invest more</button>
+        <div class="acd-actions">
+          <button class="acd-btn acd-btn--ghost" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i><span>Statement</span></button>
+          <button class="acd-btn acd-btn--primary" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-plus"></i><span>Invest more</span></button>
         </div>
       </div>`;
     return;
@@ -3078,6 +3081,10 @@ function filterMarket(type) {
   renderMarketplace();
   const tabBar = document.getElementById('marketRiskTabBar');
   if (tabBar) tabBar.style.display = '';
+  // Highlight the active risk pill
+  document.querySelectorAll('.mkt-risk-pill').forEach(p =>
+    p.classList.toggle('active', p.getAttribute('data-risk') === type)
+  );
   const sel = document.getElementById('marketRiskSelect');
   if (sel && sel.value !== type) sel.value = type;
   SVC.track('svc_filter_changed', { filter_type: 'marketplace_risk', filter_value: type });
@@ -5356,7 +5363,8 @@ function renderQuestView() {
   const refSection = document.getElementById('rewardsReferralSection');
   const refList    = document.getElementById('rewardsReferralList');
   const refTxns    = PORTAL.transactions.filter(t => t.type === 'referral_bonus').sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  if (refSection && refList) {
+  if (refSection) refSection.style.display = 'none';   // Referral Rewards History hidden (feature not live)
+  if (false && refSection && refList) {
     refSection.style.display = '';
     if (!refTxns.length) {
       refList.innerHTML = `<div class="empty-state" style="padding:20px"><i class="fa-solid fa-gift"></i><p>No referral bonuses yet. Share your referral link to earn rewards!</p></div>`;
@@ -8005,7 +8013,7 @@ td:last-child{text-align:right;font-weight:600}
 <div class="wrap">
   <div class="hdr">
     <div>
-      <div class="logo"><img src="${window.location.origin}/assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital"></div>
+      <div class="logo"><img src="${window.location.origin}/assets/full-colour-logo-horizontal-white-text.png" alt="SV Capital"></div>
       <div style="font-size:0.75rem;color:#6b7280;margin-top:6px">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSCA Regulated</div>
     </div>
     <div class="cert-badge">
