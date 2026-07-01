@@ -1184,3 +1184,18 @@ async function _applySolarTelemetry() {
 }
 
 document.addEventListener('DOMContentLoaded', _applySolarTelemetry);
+
+/* ─── Public product page: filter by risk band ───────────────────────── */
+function filterProductsByRisk(risk, btn) {
+  document.querySelectorAll('.product-risk-filter .prf-pill').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  let shown = 0;
+  document.querySelectorAll('.products-grid .product-card').forEach(card => {
+    const match = risk === 'all' || card.getAttribute('data-risk') === risk;
+    card.style.display = match ? '' : 'none';
+    if (match) shown++;
+  });
+  const empty = document.getElementById('prfEmpty');
+  if (empty) empty.style.display = shown === 0 ? 'block' : 'none';
+}
+window.filterProductsByRisk = filterProductsByRisk;

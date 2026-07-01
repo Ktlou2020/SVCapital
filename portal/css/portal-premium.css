@@ -3176,3 +3176,11 @@ body.dark-mode .fs-row__name { color:#f3f4f6 !important; }
 .ac-task[role="button"]:active { transform: translateY(0) scale(0.995); }
 .ac-task[role="button"] .fa-chevron-right { transition: transform 0.18s ease; }
 .ac-task[role="button"]:hover .fa-chevron-right { transform: translateX(3px); }
+
+/* Learning Hub — completed module "already earned" note */
+.learn-earned-note {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 12px; border-radius: 12px;
+  background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.25);
+  color: #16a34a; font-weight: 700; font-size: 0.88rem;
+}

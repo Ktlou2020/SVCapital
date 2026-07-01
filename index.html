@@ -350,10 +350,21 @@
         <p class="section-sub">Choose from South Africa's most innovative asset-backed investment products. Every rand you invest is tied to a tangible, productive asset.</p>
       </div>
 
+      <div class="product-risk-filter" data-reveal="up">
+        <span class="prf-label">Filter by risk</span>
+        <div class="prf-pills">
+          <button class="prf-pill active" data-risk="all" onclick="filterProductsByRisk('all', this)">All</button>
+          <button class="prf-pill" data-risk="conservative" onclick="filterProductsByRisk('conservative', this)">Conservative</button>
+          <button class="prf-pill" data-risk="moderate" onclick="filterProductsByRisk('moderate', this)">Moderate</button>
+          <button class="prf-pill" data-risk="aggressive" onclick="filterProductsByRisk('aggressive', this)">Aggressive</button>
+        </div>
+        <div class="prf-empty" id="prfEmpty" style="display:none">No products in this risk band right now.</div>
+      </div>
+
       <div class="products-grid">
 
         <!-- Cattle Investment -->
-        <article class="product-card product-card--cattle" data-product="cattle" data-reveal="up" data-reveal-delay="100">
+        <article class="product-card product-card--cattle" data-product="cattle" data-risk="moderate" data-reveal="up" data-reveal-delay="100">
           <div class="product-card__bg"></div>
           <div class="product-card__badge-row">
             <span class="risk-badge risk-badge--moderate">Moderate Risk</span>
@@ -396,7 +407,7 @@
         </article>
 
         <!-- Solar 7-Year -->
-        <article class="product-card product-card--solar product-card--featured" data-product="solar" data-reveal="up" data-reveal-delay="200">
+        <article class="product-card product-card--solar product-card--featured" data-product="solar" data-risk="moderate" data-reveal="up" data-reveal-delay="200">
           <div class="product-card__bg"></div>
           <div class="product-card__featured-ribbon">Best Returns</div>
           <div class="product-card__badge-row">
@@ -443,7 +454,7 @@
         </article>
 
         <!-- Short-Term -->
-        <article class="product-card product-card--short" data-product="short" data-reveal="up" data-reveal-delay="300">
+        <article class="product-card product-card--short" data-product="short" data-risk="aggressive" data-reveal="up" data-reveal-delay="300">
           <div class="product-card__bg"></div>
           <div class="product-card__badge-row">
             <span class="risk-badge risk-badge--aggressive">Aggressive</span>
@@ -486,7 +497,7 @@
         </article>
 
         <!-- Delivery Bike -->
-        <article class="product-card product-card--delivery" data-product="delivery" data-reveal="up" data-reveal-delay="350">
+        <article class="product-card product-card--delivery" data-product="delivery" data-risk="aggressive" data-reveal="up" data-reveal-delay="350">
           <div class="product-card__bg"></div>
           <div class="product-card__badge-row">
             <span class="risk-badge risk-badge--aggressive">Aggressive</span>

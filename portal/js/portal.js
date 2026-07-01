@@ -5202,7 +5202,7 @@ function renderQuestView() {
               ? (cat === 'milestone'
                   ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="claimMilestoneQuest('${quest.id}')">Claim</button>`
                   : cat === 'learning'
-                    ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="navigate('learn', document.querySelector('[data-view=learn]'))">Start</button>`
+                    ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="startLearningQuest('${quest.id}')">Start</button>`
                     : `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="openSurveyModal('${quest.id}')">Start</button>`)
               : `<div class="quest-card__locked"><i class="fa-solid fa-lock-open"></i> Available</div>`
           }
@@ -5760,12 +5760,10 @@ function renderLearnView() {
               <span style="color:${mod.color}"><i class="fa-solid fa-star"></i> +${mod.xp} XP</span>
             </div>
           </div>
-          ${isDone
-            ? `<div class="learn-done-badge"><i class="fa-solid fa-circle-check"></i> Completed</div>`
-            : `<button class="learn-expand-btn" onclick="_toggleModule('${mod.id}')">
-                 <i class="fa-solid fa-chevron-down" id="lchev-${mod.id}"></i>
-               </button>`
-          }
+          ${isDone ? `<div class="learn-done-badge"><i class="fa-solid fa-circle-check"></i> Completed</div>` : ''}
+          <button class="learn-expand-btn" onclick="_toggleModule('${mod.id}')" aria-label="View module">
+            <i class="fa-solid fa-chevron-down" id="lchev-${mod.id}"></i>
+          </button>
         </div>
         <div class="learn-module-body" id="lbody-${mod.id}" style="display:none">
           <div class="learn-key-points">
@@ -5774,9 +5772,12 @@ function renderLearnView() {
           </div>
           <div class="learn-content-text">${mod.content.split('\n\n').map(p => `<p>${p.trim()}</p>`).join('')}</div>
           <div class="learn-module-footer">
-            <button class="btn btn--primary" id="lquiz-btn-${mod.id}" onclick="_showModuleQuiz('${mod.id}')">
-              <i class="fa-solid fa-circle-question"></i> Take Quiz — Earn ${mod.xp} XP
-            </button>
+            ${isDone
+              ? `<div class="learn-earned-note"><i class="fa-solid fa-circle-check"></i> Completed — +${mod.xp} XP already earned</div>`
+              : `<button class="btn btn--primary" id="lquiz-btn-${mod.id}" onclick="_showModuleQuiz('${mod.id}')">
+                   <i class="fa-solid fa-circle-question"></i> Take Quiz — Earn ${mod.xp} XP
+                 </button>`
+            }
           </div>
           <div class="learn-quiz-section" id="lquiz-${mod.id}" style="display:none">
             <div class="learn-quiz-title"><i class="fa-solid fa-circle-question"></i> Knowledge Check — answer all questions correctly to earn XP</div>
@@ -5804,6 +5805,20 @@ function _toggleModule(modId) {
   const isOpen = body.style.display !== 'none';
   body.style.display = isOpen ? 'none' : 'block';
   if (chev) chev.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
+/* Learning-quest "Start": jump to the Learning Hub, switch to the module's
+   track, expand it, and scroll it into view. */
+function startLearningQuest(modId) {
+  navigate('learn', document.querySelector('[data-view=learn]'));
+  const mod = LEARN_MODULES.find(m => m.id === modId);
+  if (mod && typeof _setLearnTrack === 'function') _setLearnTrack(mod.track);
+  setTimeout(() => {
+    const body = document.getElementById(`lbody-${modId}`);
+    const card = document.getElementById(`lmod-${modId}`);
+    if (body && body.style.display === 'none') _toggleModule(modId);
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 180);
 }
 
 function _showModuleQuiz(modId) {
