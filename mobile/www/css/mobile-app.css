@@ -3335,3 +3335,585 @@ body,
   border-radius: 12px !important;
   padding: 12px !important;
 }
+
+/* ── Section 36: Survey Modal ──────────────────────────── */
+.survey-modal-box {
+  background: #1a1a2e !important;
+  border-radius: 20px !important;
+  padding: 0 !important;
+  max-width: 480px !important;
+  width: calc(100vw - 32px) !important;
+  max-height: 85vh !important;
+  overflow-y: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.survey-modal-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 20px 20px 16px !important;
+  border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+}
+.survey-modal-icon {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 18px !important;
+  flex-shrink: 0 !important;
+}
+.survey-modal-title {
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  color: #fff !important;
+}
+.survey-modal-sub {
+  font-size: 0.78rem !important;
+  color: rgba(255,255,255,0.5) !important;
+  margin-top: 2px !important;
+}
+.survey-modal-xp {
+  margin-left: auto !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  flex-shrink: 0 !important;
+}
+.survey-body {
+  padding: 16px 20px !important;
+  flex: 1 !important;
+  overflow-y: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+}
+.survey-q {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+.survey-q__label {
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+  color: rgba(255,255,255,0.9) !important;
+  line-height: 1.4 !important;
+}
+.survey-q__options {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+.survey-opt {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  border-radius: 10px !important;
+  padding: 10px 14px !important;
+  cursor: pointer !important;
+  transition: all 0.15s !important;
+}
+.survey-opt:has(input:checked) {
+  background: rgba(255,130,21,0.15) !important;
+  border-color: #FF8215 !important;
+}
+.survey-opt input[type="radio"] {
+  accent-color: #FF8215 !important;
+  width: 16px !important;
+  height: 16px !important;
+  flex-shrink: 0 !important;
+}
+.survey-opt span {
+  font-size: 0.82rem !important;
+  color: rgba(255,255,255,0.85) !important;
+}
+.survey-footer {
+  padding: 16px 20px 20px !important;
+  display: flex !important;
+  gap: 10px !important;
+  border-top: 1px solid rgba(255,255,255,0.08) !important;
+}
+.survey-footer .btn--secondary {
+  background: rgba(255,255,255,0.08) !important;
+  color: rgba(255,255,255,0.7) !important;
+  border: none !important;
+  flex: 0 0 auto !important;
+}
+.survey-footer .survey-submit-btn {
+  flex: 1 !important;
+  background: #FF8215 !important;
+  color: #fff !important;
+  border: none !important;
+  font-weight: 600 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION 37 — MY ACCOUNTS: WORLD-CLASS REDESIGN
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Page header ─────────────────────────────────────────────── */
+#view-subaccounts .sa-view-header {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  margin-bottom: 20px !important;
+}
+#view-subaccounts .sa-view-title {
+  font-size: 1.55rem !important;
+  font-weight: 900 !important;
+  color: #fff !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1.15 !important;
+}
+#view-subaccounts .sa-view-sub {
+  font-size: 0.78rem !important;
+  color: rgba(255,255,255,0.5) !important;
+  margin-top: 4px !important;
+  line-height: 1.5 !important;
+}
+#view-subaccounts .sa-view-header .btn--primary {
+  background: linear-gradient(135deg,#FF8215,#ff5229) !important;
+  border: none !important;
+  border-radius: 14px !important;
+  font-weight: 700 !important;
+  font-size: 0.82rem !important;
+  padding: 11px 18px !important;
+  white-space: nowrap !important;
+  box-shadow: 0 4px 14px rgba(255,82,41,0.3) !important;
+  flex-shrink: 0 !important;
+}
+
+/* ── Card shell ──────────────────────────────────────────────── */
+#view-subaccounts .sa-card {
+  background: #ffffff !important;
+  border-radius: 22px !important;
+  border: 1px solid rgba(0,0,0,0.07) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.04) !important;
+  overflow: hidden !important;
+}
+
+/* ── Card header banner ──────────────────────────────────────── */
+#view-subaccounts .sa-card__header {
+  padding: 16px 18px 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+#view-subaccounts .sa-card__icon {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 10px !important;
+  background: rgba(255,255,255,0.18) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #fff !important;
+  font-size: 0.9rem !important;
+  flex-shrink: 0 !important;
+  backdrop-filter: blur(4px) !important;
+}
+#view-subaccounts .sa-card__type-label {
+  font-size: 0.68rem !important;
+  font-weight: 900 !important;
+  color: rgba(255,255,255,0.9) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+}
+
+/* ── KYC badge on card ───────────────────────────────────────── */
+#view-subaccounts .sa-kyc-badge {
+  font-size: 0.62rem !important;
+  font-weight: 800 !important;
+  padding: 4px 10px !important;
+  border-radius: 100px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  letter-spacing: 0.02em !important;
+}
+#view-subaccounts .sa-kyc-badge--ok      { background: rgba(34,197,94,0.2) !important; color: #16a34a !important; border: 1px solid rgba(34,197,94,0.35) !important; }
+#view-subaccounts .sa-kyc-badge--pending { background: rgba(245,158,11,0.18) !important; color: #92400e !important; border: 1px solid rgba(245,158,11,0.35) !important; }
+#view-subaccounts .sa-kyc-badge--missing { background: rgba(239,68,68,0.15) !important; color: #dc2626 !important; border: 1px solid rgba(239,68,68,0.3) !important; }
+
+/* ── Card body ───────────────────────────────────────────────── */
+#view-subaccounts .sa-card__body {
+  padding: 16px 18px 12px !important;
+}
+#view-subaccounts .sa-card__name {
+  font-size: 1.05rem !important;
+  font-weight: 900 !important;
+  color: #0f172a !important;
+  margin-bottom: 14px !important;
+  letter-spacing: -0.02em !important;
+}
+
+/* ── Stat tiles ──────────────────────────────────────────────── */
+#view-subaccounts .sa-card__stats {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 8px !important;
+  margin-bottom: 12px !important;
+}
+#view-subaccounts .sa-stat {
+  background: #f8fafc !important;
+  border-radius: 14px !important;
+  padding: 12px 14px !important;
+  border: 1px solid rgba(0,0,0,0.05) !important;
+}
+#view-subaccounts .sa-stat__label {
+  font-size: 0.6rem !important;
+  text-transform: uppercase !important;
+  color: #94a3b8 !important;
+  letter-spacing: 0.08em !important;
+  font-weight: 800 !important;
+  display: block !important;
+  margin-bottom: 4px !important;
+}
+#view-subaccounts .sa-stat__value {
+  font-size: 1.1rem !important;
+  font-weight: 900 !important;
+  color: #0f172a !important;
+  display: block !important;
+  letter-spacing: -0.03em !important;
+}
+
+/* ── Action row ──────────────────────────────────────────────── */
+#view-subaccounts .sa-card__actions {
+  padding: 10px 18px 16px !important;
+  display: flex !important;
+  gap: 8px !important;
+  border-top: 1px solid rgba(0,0,0,0.05) !important;
+}
+#view-subaccounts .sa-card__actions .btn {
+  flex: 1 !important;
+  justify-content: center !important;
+  font-size: 0.8rem !important;
+  font-weight: 700 !important;
+  padding: 10px 8px !important;
+  border-radius: 12px !important;
+  gap: 6px !important;
+}
+#view-subaccounts .sa-card__actions .btn--primary {
+  background: linear-gradient(135deg,#FF8215,#ff5229) !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: 0 3px 10px rgba(255,82,41,0.25) !important;
+}
+#view-subaccounts .sa-card__actions .btn--secondary {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  border: 1px solid rgba(0,0,0,0.07) !important;
+}
+#view-subaccounts .sa-card__actions .btn:disabled {
+  opacity: 0.38 !important;
+  pointer-events: none !important;
+}
+
+/* ── Goal bar ────────────────────────────────────────────────── */
+#view-subaccounts .sa-goal-bar {
+  background: #f8fafc !important;
+  border-radius: 14px !important;
+  padding: 12px 14px !important;
+  border: 1px solid rgba(0,0,0,0.05) !important;
+  margin-bottom: 4px !important;
+}
+#view-subaccounts .sa-goal-bar__track {
+  height: 6px !important;
+  background: rgba(0,0,0,0.07) !important;
+  border-radius: 100px !important;
+  margin: 6px 0 !important;
+}
+#view-subaccounts .sa-goal-bar__fill {
+  height: 100% !important;
+  background: linear-gradient(90deg,#FF8215,#ff5229) !important;
+  border-radius: 100px !important;
+  transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BOTTOM SHEET — Account Detail Modal
+   ══════════════════════════════════════════════════════════════ */
+.sa-detail-overlay {
+  align-items: flex-end !important;
+  background: rgba(0,0,0,0.65) !important;
+}
+.sa-detail-sheet {
+  width: 100% !important;
+  max-height: 92vh !important;
+  background: #111827 !important;
+  border-radius: 28px 28px 0 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  animation: slideUp 0.32s cubic-bezier(0.34,1.2,0.64,1) !important;
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0.6; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.sa-detail-drag-bar {
+  width: 40px !important;
+  height: 4px !important;
+  background: rgba(255,255,255,0.18) !important;
+  border-radius: 100px !important;
+  margin: 12px auto 0 !important;
+  flex-shrink: 0 !important;
+}
+.sa-detail-scroll {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  flex: 1 !important;
+}
+
+/* ── Hero section inside sheet ───────────────────────────────── */
+.sad-hero {
+  position: relative !important;
+  padding: 20px 20px 24px !important;
+  border-radius: 0 !important;
+}
+.sad-close-btn {
+  position: absolute !important;
+  top: 16px !important;
+  right: 16px !important;
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 50% !important;
+  background: rgba(255,255,255,0.12) !important;
+  border: none !important;
+  color: rgba(255,255,255,0.8) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.9rem !important;
+  cursor: pointer !important;
+}
+.sad-hero__type {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin-bottom: 14px !important;
+}
+.sad-hero__icon {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 12px !important;
+  background: rgba(255,255,255,0.15) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #fff !important;
+  font-size: 1.1rem !important;
+}
+.sad-hero__type-label {
+  font-size: 0.7rem !important;
+  font-weight: 900 !important;
+  color: rgba(255,255,255,0.7) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+}
+.sad-hero__name {
+  font-size: 1.6rem !important;
+  font-weight: 900 !important;
+  color: #fff !important;
+  letter-spacing: -0.03em !important;
+  line-height: 1.1 !important;
+  margin-bottom: 12px !important;
+}
+.sad-kyc-chip {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+  padding: 5px 12px !important;
+  border-radius: 100px !important;
+  margin-bottom: 20px !important;
+  letter-spacing: 0.02em !important;
+}
+
+/* ── Stats row in hero ───────────────────────────────────────── */
+.sad-stats-row {
+  display: flex !important;
+  background: rgba(0,0,0,0.25) !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+}
+.sad-stat {
+  flex: 1 !important;
+  padding: 14px 12px !important;
+  text-align: center !important;
+}
+.sad-stat-divider {
+  width: 1px !important;
+  background: rgba(255,255,255,0.1) !important;
+  margin: 10px 0 !important;
+  flex-shrink: 0 !important;
+}
+.sad-stat__label {
+  font-size: 0.58rem !important;
+  font-weight: 800 !important;
+  color: rgba(255,255,255,0.45) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  display: block !important;
+  margin-bottom: 5px !important;
+}
+.sad-stat__value {
+  font-size: 1rem !important;
+  font-weight: 900 !important;
+  color: #fff !important;
+  letter-spacing: -0.02em !important;
+  display: block !important;
+}
+
+/* ── Action buttons ──────────────────────────────────────────── */
+.sad-actions {
+  display: flex !important;
+  gap: 10px !important;
+  padding: 16px 20px !important;
+  border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+}
+.sad-action-btn {
+  flex: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  padding: 14px 12px !important;
+  border-radius: 16px !important;
+  font-size: 0.9rem !important;
+  font-weight: 800 !important;
+  border: none !important;
+  cursor: pointer !important;
+  letter-spacing: -0.01em !important;
+}
+.sad-action-btn--primary {
+  background: linear-gradient(135deg,#FF8215,#ff5229) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 16px rgba(255,82,41,0.3) !important;
+}
+.sad-action-btn--secondary {
+  background: rgba(255,255,255,0.08) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+}
+.sad-action-btn:disabled {
+  opacity: 0.3 !important;
+  pointer-events: none !important;
+}
+
+/* ── Content sections ────────────────────────────────────────── */
+.sad-section {
+  padding: 20px 20px 4px !important;
+}
+.sad-section__header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 0.72rem !important;
+  font-weight: 900 !important;
+  color: rgba(255,255,255,0.45) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+  margin-bottom: 14px !important;
+}
+
+/* ── FICA doc list ───────────────────────────────────────────── */
+.sad-fica-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  margin-bottom: 16px !important;
+}
+.sad-fica-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 12px !important;
+  padding: 12px 14px !important;
+  font-size: 0.82rem !important;
+  color: rgba(255,255,255,0.85) !important;
+  line-height: 1.4 !important;
+}
+.sad-fica-item__num {
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.7rem !important;
+  font-weight: 900 !important;
+  flex-shrink: 0 !important;
+}
+.sad-upload-btn {
+  width: 100% !important;
+  padding: 15px !important;
+  background: linear-gradient(135deg,#FF8215,#ff5229) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 16px !important;
+  font-size: 0.9rem !important;
+  font-weight: 800 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 16px rgba(255,82,41,0.3) !important;
+  margin-bottom: 4px !important;
+}
+
+/* ── Transaction list ────────────────────────────────────────── */
+.sad-txn-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+.sad-txn {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+  border-radius: 12px !important;
+  padding: 12px 14px !important;
+}
+.sad-txn__icon {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.85rem !important;
+  flex-shrink: 0 !important;
+}
+.sad-txn__info {
+  flex: 1 !important;
+}
+.sad-txn__type {
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+  color: rgba(255,255,255,0.9) !important;
+  text-transform: capitalize !important;
+}
+.sad-txn__date {
+  font-size: 0.7rem !important;
+  color: rgba(255,255,255,0.4) !important;
+  margin-top: 2px !important;
+}
+.sad-txn__amount {
+  font-size: 0.9rem !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.02em !important;
+}

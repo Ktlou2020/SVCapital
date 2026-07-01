@@ -554,7 +554,7 @@ function renderMarketConversionPanel(pools) {
   } else if (!openPools.length) {
     title = 'There are no open pools in this filter right now.';
     sub = 'Use the waitlist options below or switch category to keep your momentum.';
-    action = "filterMarket('all', document.querySelector('#view-marketplace .tab-bar .tab-btn'))";
+    action = "filterMarket('all')";
     actionLabel = 'Show all pools';
     accent = '#A855F7';
   }
@@ -3009,26 +3009,24 @@ async function loadMarketplace() {
   } catch (_) {}
 }
 
-function filterMarket(type, btn) {
+function filterMarket(type) {
   PORTAL.marketFilter = type;
-  // Only update active state within the risk tab bar, not all tab-btns on the page
-  const tabBar = document.getElementById('marketRiskTabBar');
-  if (tabBar) tabBar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
   renderMarketplace();
-  // Keep the tab bar visible after renderMarketplace hides it
+  const tabBar = document.getElementById('marketRiskTabBar');
   if (tabBar) tabBar.style.display = '';
+  const sel = document.getElementById('marketRiskSelect');
+  if (sel && sel.value !== type) sel.value = type;
   SVC.track('svc_filter_changed', { filter_type: 'marketplace_risk', filter_value: type });
 }
 
 const _POOL_META = {
-  solar:         { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  solar_7yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  solar_6yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  solar_5yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  cattle:        { blurb: 'Partner with Beefcor — SA\'s premier feedlot — and earn returns as your herd grows from 200kg to 500kg.', risk: 'Medium-High',  riskColor: '#ff9b0c' },
-  short_term:    { blurb: 'Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.', risk: 'Medium',    riskColor: '#f59e0b' },
-  delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Low-Medium',   riskColor: '#22c55e' },
+  solar:         { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
+  solar_7yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
+  solar_6yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
+  solar_5yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
+  cattle:        { blurb: 'Partner with Beefcor — SA\'s premier feedlot — and earn returns as your herd grows from 200kg to 500kg.', risk: 'Aggressive',   riskColor: '#ef4444' },
+  short_term:    { blurb: 'Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.', risk: 'Moderate',  riskColor: '#f59e0b' },
+  delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Conservative', riskColor: '#22c55e' },
 };
 
 // ── Product-first marketplace ────────────────────────────────────────────
@@ -3062,11 +3060,9 @@ function renderProductsGrid() {
 
   // Risk level groupings per product type
   const _RISK_GROUP = {
-    'Low-Medium': 'risk_low',
-    'Low':        'risk_low',
-    'Medium':     'risk_medium',
-    'Medium-High':'risk_high',
-    'High':       'risk_high',
+    'Conservative': 'risk_conservative',
+    'Moderate':     'risk_moderate',
+    'Aggressive':   'risk_aggressive',
   };
 
   // All active products (details + factsheets browsable even with no open pool),
@@ -7240,8 +7236,6 @@ async function openSaDetail(saId) {
   const meta    = SA_TYPE_META[sa.account_type] || SA_TYPE_META.business;
   SVC.track('svc_subaccount_viewed', { account_type: sa.account_type, kyc_status: sa.kyc_status });
 
-  document.getElementById('saDetailTitle').textContent = sa.name;
-
   if (isMinor) {
     document.getElementById('saDetailBody').innerHTML = _saMinorHub(sa);
     _saInitTipCarousel(sa);
@@ -7253,50 +7247,110 @@ async function openSaDetail(saId) {
 }
 
 function _saNormalDetail(sa, meta) {
-  const ficaItems = (SA_TYPE_META[sa.account_type]?.ficaDocs || [])
-    .map(d => `<div class="sa-fica-item"><i class="fa-solid fa-file-alt" style="color:${meta.color}"></i><span>${d}</span></div>`)
-    .join('');
+  const balance  = parseFloat(sa.wallet_balance)  || 0;
+  const invested = parseFloat(sa.total_invested)   || 0;
+  const returns  = parseFloat(sa.total_returns)    || 0;
 
-  const recentTxns = PORTAL.transactions
+  const kycStatus = sa.kyc_status || 'missing';
+  const kycMeta = {
+    approved:     { label: 'FICA Verified',    icon: 'fa-circle-check',        color: '#22c55e', bg: 'rgba(34,197,94,0.15)',  border: 'rgba(34,197,94,0.3)' },
+    under_review: { label: 'Under Review',     icon: 'fa-clock',               color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.3)' },
+    missing:      { label: 'FICA Required',    icon: 'fa-triangle-exclamation', color: '#ef4444', bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.25)' },
+  }[kycStatus] || { label: kycStatus, icon: 'fa-circle-info', color: '#9ca3af', bg: 'rgba(156,163,175,0.1)', border: 'rgba(156,163,175,0.2)' };
+
+  const ficaDocs = SA_TYPE_META[sa.account_type]?.ficaDocs || [];
+
+  const recentTxns = (PORTAL.transactions || [])
     .filter(t => t.sub_account_id === sa.id)
     .slice(0, 5);
 
+  const txnTypeIcon = t => ({
+    deposit: 'fa-arrow-down-to-line', investment: 'fa-chart-line',
+    withdrawal: 'fa-arrow-up-from-line', return: 'fa-coins',
+  }[t.type] || 'fa-circle-dot');
+
   return `
-    <div class="sa-detail-banner" style="background:${meta.bg}">
-      <div style="display:flex;align-items:center;gap:12px">
-        <div class="sa-detail-icon"><i class="fa-solid ${meta.icon}"></i></div>
-        <div>
-          <div style="font-size:1.1rem;font-weight:800;color:#fff">${sa.name}</div>
-          <div style="font-size:0.78rem;color:rgba(255,255,255,0.75)">${meta.label} Account · ${Utils.statusBadge ? Utils.statusBadge(sa.kyc_status) : sa.kyc_status}</div>
+    <!-- ── Hero banner ── -->
+    <div class="sad-hero" style="background:${meta.bg}">
+      <button class="sad-close-btn" onclick="Modal.close('saDetailModal')"><i class="fa-solid fa-xmark"></i></button>
+      <div class="sad-hero__type">
+        <div class="sad-hero__icon"><i class="fa-solid ${meta.icon}"></i></div>
+        <span class="sad-hero__type-label">${meta.label} Account</span>
+      </div>
+      <div class="sad-hero__name">${_esc(sa.name)}</div>
+      <div class="sad-kyc-chip" style="background:${kycMeta.bg};color:${kycMeta.color};border:1px solid ${kycMeta.border}">
+        <i class="fa-solid ${kycMeta.icon}"></i> ${kycMeta.label}
+      </div>
+      <div class="sad-stats-row">
+        <div class="sad-stat">
+          <div class="sad-stat__label">Wallet</div>
+          <div class="sad-stat__value">${Utils.rand(balance)}</div>
+        </div>
+        <div class="sad-stat-divider"></div>
+        <div class="sad-stat">
+          <div class="sad-stat__label">Invested</div>
+          <div class="sad-stat__value">${Utils.rand(invested)}</div>
+        </div>
+        <div class="sad-stat-divider"></div>
+        <div class="sad-stat">
+          <div class="sad-stat__label">Returns</div>
+          <div class="sad-stat__value" style="color:#4ade80">${Utils.rand(returns)}</div>
         </div>
       </div>
-      <div style="display:flex;gap:24px;margin-top:16px">
-        <div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Wallet</div><div style="font-size:1.3rem;font-weight:800;color:#fff">${Utils.rand(sa.wallet_balance)}</div></div>
-        <div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Invested</div><div style="font-size:1.3rem;font-weight:800;color:#fff">${Utils.rand(sa.total_invested)}</div></div>
-        <div><div style="font-size:0.7rem;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.5px">Returns</div><div style="font-size:1.3rem;font-weight:800;color:rgba(255,255,255,0.9)">${Utils.rand(sa.total_returns)}</div></div>
+    </div>
+
+    <!-- ── Action buttons ── -->
+    <div class="sad-actions">
+      <button class="sad-action-btn sad-action-btn--primary" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')">
+        <i class="fa-solid fa-wallet"></i><span>Deposit</span>
+      </button>
+      <button class="sad-action-btn sad-action-btn--secondary" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')" ${kycStatus !== 'approved' ? 'disabled' : ''}>
+        <i class="fa-solid fa-chart-line"></i><span>Invest</span>
+      </button>
+    </div>
+
+    ${kycStatus !== 'approved' ? `
+    <!-- ── FICA section ── -->
+    <div class="sad-section">
+      <div class="sad-section__header">
+        <i class="fa-solid fa-id-card" style="color:${meta.color}"></i>
+        <span>Documents Required</span>
       </div>
-    </div>
-
-    <div style="display:flex;gap:8px;margin:16px 0">
-      <button class="btn btn--primary btn--sm" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')"><i class="fa-solid fa-wallet"></i> Deposit</button>
-      <button class="btn btn--secondary btn--sm" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')" ${sa.kyc_status !== 'approved' ? 'disabled title="FICA approval required"' : ''}><i class="fa-solid fa-chart-line"></i> Invest</button>
-    </div>
-
-    <div class="sa-section-title"><i class="fa-solid fa-id-card"></i> FICA Documents Required</div>
-    <div class="sa-fica-list">${ficaItems}</div>
-    <button class="btn btn--secondary btn--sm mt-8" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-upload"></i> Upload FICA Document</button>
+      <div class="sad-fica-list">
+        ${ficaDocs.map((d, i) => `
+          <div class="sad-fica-item" style="animation-delay:${i * 60}ms">
+            <div class="sad-fica-item__num" style="background:${meta.color}22;color:${meta.color}">${i + 1}</div>
+            <span>${d}</span>
+          </div>`).join('')}
+      </div>
+      <button class="sad-upload-btn" onclick="openSaFicaUpload('${sa.id}')">
+        <i class="fa-solid fa-cloud-arrow-up"></i> Upload FICA Documents
+      </button>
+    </div>` : ''}
 
     ${recentTxns.length ? `
-    <div class="sa-section-title mt-16"><i class="fa-solid fa-receipt"></i> Recent Transactions</div>
-    <table class="data-table">
-      <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
-      <tbody>${recentTxns.map(t => `<tr>
-        <td><span class="badge badge--gray">${t.type}</span></td>
-        <td class="${t.amount > 0 ? 'td-green' : 'td-red'} fw-700">${Utils.rand(t.amount)}</td>
-        <td>${Utils.statusBadge(t.status)}</td>
-        <td class="td-muted">${Utils.date(t.created_at)}</td>
-      </tr>`).join('')}</tbody>
-    </table>` : ''}`;
+    <!-- ── Recent activity ── -->
+    <div class="sad-section">
+      <div class="sad-section__header">
+        <i class="fa-solid fa-clock-rotate-left" style="color:${meta.color}"></i>
+        <span>Recent Activity</span>
+      </div>
+      <div class="sad-txn-list">
+        ${recentTxns.map(t => `
+          <div class="sad-txn">
+            <div class="sad-txn__icon" style="background:${t.amount > 0 ? 'rgba(74,222,128,0.12)' : 'rgba(239,68,68,0.1)'}">
+              <i class="fa-solid ${txnTypeIcon(t)}" style="color:${t.amount > 0 ? '#4ade80' : '#ef4444'}"></i>
+            </div>
+            <div class="sad-txn__info">
+              <div class="sad-txn__type">${(t.type || 'transaction').replace(/_/g,' ')}</div>
+              <div class="sad-txn__date">${Utils.date(t.created_at)}</div>
+            </div>
+            <div class="sad-txn__amount" style="color:${t.amount > 0 ? '#4ade80' : '#ef4444'}">${t.amount > 0 ? '+' : ''}${Utils.rand(t.amount)}</div>
+          </div>`).join('')}
+      </div>
+    </div>` : ''}
+
+    <div style="height:32px"></div>`;
 }
 
 /* ── Minor Hub ──────────────────────────────────────────────── */

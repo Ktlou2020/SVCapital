@@ -3604,10 +3604,153 @@ async function loadAnalytics() {
     renderMaturityForecastChart();
     renderCohortChart();
     renderMobileActivity();
+    loadPersonas();
   } catch (e) {
     Toast.error('Failed to load analytics data');
     console.error('[loadAnalytics]', e);
   }
+}
+
+/* ── Investor Personas ──────────────────────────────────── */
+async function loadPersonas() {
+  const panel = document.getElementById('personasPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+  try {
+    const res = await fetch('/api/analytics/personas', { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    _renderPersonas(data);
+  } catch (e) {
+    panel.innerHTML = `<div class="text-center text-muted" style="padding:20px">No persona data yet — investors complete profile quests to appear here.</div>`;
+    console.warn('[personas]', e.message);
+  }
+}
+
+function _renderPersonas(data) {
+  const panel = document.getElementById('personasPanel');
+  if (!panel) return;
+
+  const PERSONA_META = {
+    'Conservative Saver': { icon: 'fa-shield-halved', color: '#64748b', desc: 'Prioritises capital preservation. Low risk tolerance, cautious approach.' },
+    'Growth Seeker':      { icon: 'fa-chart-line',    color: '#22c55e', desc: 'Focused on long-term capital growth. Comfortable with volatility.' },
+    'Income Investor':    { icon: 'fa-coins',          color: '#f59e0b', desc: 'Wants regular income from investments. Dividend / returns oriented.' },
+    'Risk Taker':         { icon: 'fa-fire-flame-curved', color: '#ef4444', desc: 'Experienced investor who buys on dips. High conviction, high risk.' },
+    'Long-Term Planner':  { icon: 'fa-calendar-days', color: '#a855f7', desc: 'Investing for retirement or dependents. Steady, multi-year horizon.' },
+    'Explorer':           { icon: 'fa-compass',        color: '#FF8215', desc: 'Just getting started. Goals and risk profile still taking shape.' },
+  };
+
+  const total = data.total || 1;
+
+  // Archetype cards
+  const archetypeHtml = Object.entries(data.personaCounts || {})
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => {
+      const m = PERSONA_META[name] || PERSONA_META['Explorer'];
+      const pct = Math.round(count / total * 100);
+      return `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:36px;height:36px;border-radius:50%;background:${m.color}22;display:flex;align-items:center;justify-content:center">
+              <i class="fa-solid ${m.icon}" style="color:${m.color};font-size:15px"></i>
+            </div>
+            <div>
+              <div style="font-weight:600;font-size:0.9rem">${name}</div>
+              <div style="font-size:0.75rem;color:var(--text-muted)">${count} investor${count !== 1 ? 's' : ''} · ${pct}%</div>
+            </div>
+          </div>
+          <div style="height:4px;background:var(--border);border-radius:2px">
+            <div style="height:4px;width:${pct}%;background:${m.color};border-radius:2px"></div>
+          </div>
+          <div style="font-size:0.75rem;color:var(--text-muted)">${m.desc}</div>
+        </div>`;
+    }).join('');
+
+  // Distribution chart helper
+  const distChart = (title, obj) => {
+    const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) return '';
+    const max = entries[0][1];
+    return `
+      <div style="margin-bottom:16px">
+        <div style="font-weight:600;font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">${title}</div>
+        ${entries.map(([label, count]) => `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+            <div style="flex:0 0 160px;font-size:0.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</div>
+            <div style="flex:1;height:6px;background:var(--border);border-radius:3px">
+              <div style="height:6px;width:${Math.round(count/max*100)}%;background:var(--orange);border-radius:3px"></div>
+            </div>
+            <div style="flex:0 0 24px;font-size:0.78rem;color:var(--text-muted);text-align:right">${count}</div>
+          </div>`).join('')}
+      </div>`;
+  };
+
+  const dist = data.distributions || {};
+
+  // Investor table (most recent 20)
+  const tableRows = (data.investors || []).slice(0, 20).map(inv => {
+    const m = PERSONA_META[inv.persona] || PERSONA_META['Explorer'];
+    return `
+      <tr>
+        <td style="font-weight:500">${inv.name || '—'}</td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${inv.email || '—'}</td>
+        <td>
+          <span style="display:inline-flex;align-items:center;gap:5px;background:${m.color}22;color:${m.color};padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:600">
+            <i class="fa-solid ${m.icon}" style="font-size:10px"></i>${inv.persona}
+          </span>
+        </td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${inv.profile?.investment_goal || inv.profile?.saving_for || '—'}</td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${inv.profile?.time_horizon || '—'}</td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${inv.profile?.income_bracket || '—'}</td>
+        <td><span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:2px 8px;font-size:0.75rem">${inv.level || '—'} · ${inv.xp || 0} XP</span></td>
+      </tr>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <!-- Total badge -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+      <span style="font-size:1.5rem;font-weight:700">${total}</span>
+      <span style="color:var(--text-muted)">investors with profile survey data</span>
+    </div>
+
+    <!-- Archetype cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:24px">
+      ${archetypeHtml || '<div class="text-muted">No persona data yet.</div>'}
+    </div>
+
+    <!-- Distributions -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+      <div class="panel" style="padding:16px">
+        ${distChart('Investment Goal', dist.investment_goal)}
+        ${distChart('Time Horizon', dist.time_horizon)}
+        ${distChart('Saving For', dist.saving_for)}
+      </div>
+      <div class="panel" style="padding:16px">
+        ${distChart('Employment Status', dist.employment_status)}
+        ${distChart('Income Bracket', dist.income_bracket)}
+        ${distChart('Investment Experience', dist.investment_experience)}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+      <div class="panel" style="padding:16px">
+        ${distChart('Risk Reaction', dist.risk_reaction)}
+        ${distChart('Dependents', dist.dependents)}
+      </div>
+      <div class="panel" style="padding:16px">
+        ${distChart('Referred Via', dist.heard_via)}
+      </div>
+    </div>
+
+    <!-- Investor table -->
+    <div style="font-weight:600;font-size:0.85rem;margin-bottom:10px">Individual Profiles (most recent 20)</div>
+    <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr>
+          <th>Name</th><th>Email</th><th>Persona</th><th>Goal</th><th>Horizon</th><th>Income</th><th>Level</th>
+        </tr></thead>
+        <tbody>${tableRows || '<tr><td colspan="7" class="text-center text-muted">No survey data yet</td></tr>'}</tbody>
+      </table>
+    </div>`;
 }
 
 function renderMaturityForecastChart() {
