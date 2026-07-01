@@ -100,8 +100,11 @@
 .navbar.scrolled .nav-mobile-toggle span { background: #1a1a1a !important; }
 
 /* ═══════════════════════════════════════════════════════════════
-   HERO — keep dark (brand moment)
+   HERO — CI brand gradient (matches portal hero & final CTA)
    ═══════════════════════════════════════════════════════════════ */
+.hero {
+  background: linear-gradient(135deg, #1a3a4a 0%, #0d2535 100%) !important;
+}
 .hero-eyebrow .eyebrow-dot { background: var(--ci-orange) !important; }
 .hero-headline em { color: var(--ci-orange-light) !important; }
 .hero-sub strong { color: #fff !important; }
