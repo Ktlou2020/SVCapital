@@ -1227,11 +1227,61 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && _p
 // Expose stop function so Auth.logout() can kill the interval before redirecting
 window._stopPolling = function () { if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; } };
 
+// ─── Idle auto-logout (web only) ───
+// Signs the investor out after 5 minutes of no activity. Skipped in the
+// native Capacitor app, which has its own session handling.
+function initIdleAutoLogout() {
+  const isNative = (typeof _svcPlatform === 'function' && _svcPlatform() !== 'web') ||
+                   (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+  if (isNative) return;
+
+  const IDLE_MS = 5 * 60 * 1000;      // 5 minutes
+  const WARN_MS = 30 * 1000;          // warn 30s before signing out
+  let idleTimer = null, warnTimer = null;
+
+  const doAutoLogout = () => {
+    try { if (typeof Toast !== 'undefined') Toast.info?.('Signed out due to inactivity'); } catch (_) {}
+    Auth.logout('../login.html?reason=timeout');
+  };
+
+  const reset = () => {
+    clearTimeout(idleTimer);
+    clearTimeout(warnTimer);
+    warnTimer = setTimeout(() => {
+      try { if (typeof Toast !== 'undefined') Toast.info?.('You will be signed out in 30 seconds due to inactivity.'); } catch (_) {}
+    }, IDLE_MS - WARN_MS);
+    idleTimer = setTimeout(doAutoLogout, IDLE_MS);
+  };
+
+  // Activity across tabs: broadcast last-activity via localStorage so multiple
+  // portal tabs share one idle clock.
+  const markActivity = () => {
+    try { localStorage.setItem('svc_last_activity', String(Date.now())); } catch (_) {}
+    reset();
+  };
+
+  ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'].forEach(ev =>
+    window.addEventListener(ev, markActivity, { passive: true }));
+
+  // Sync idle clock when another tab reports activity or the tab regains focus.
+  window.addEventListener('storage', e => { if (e.key === 'svc_last_activity') reset(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    let last = 0;
+    try { last = parseInt(localStorage.getItem('svc_last_activity') || '0', 10) || 0; } catch (_) {}
+    if (last && (Date.now() - last) >= IDLE_MS) { doAutoLogout(); return; }
+    reset();
+  });
+
+  markActivity();
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   _preloadLogo(); // warm logo cache for PDF generation
   Toast.init();
   initDarkMode();
   initPortalFormUX();
+  initIdleAutoLogout();
   // Set skeleton placeholders on overview stats while data loads
   const _skelSpan = '<span class="skeleton" style="display:inline-block;width:80px;height:20px;border-radius:4px"></span>';
   ['pov-total','pov-invested','pov-wallet','pov-returns'].forEach(id => {
