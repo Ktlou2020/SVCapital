@@ -2264,9 +2264,19 @@ function filterPools(status, btn) {
 
 function renderPoolsGrid() {
   const grid = document.getElementById('poolsGrid');
-  const pools = poolFilter === 'all'
+  let pools = poolFilter === 'all'
     ? STATE.pools
     : STATE.pools.filter(p => p.status === poolFilter || (poolFilter === 'active' && p.status === 'filling'));
+
+  // Free-text search across pool name, product and ID
+  const q = (document.getElementById('poolSearch')?.value || '').trim().toLowerCase();
+  if (q) {
+    pools = pools.filter(p => {
+      const label = (Utils.productInfo(p.product_type)?.label || '');
+      return [p.pool_name, p.product_type, label, p.id, p.partner_name]
+        .some(v => String(v || '').toLowerCase().includes(q));
+    });
+  }
 
   // Augment pools with live aggregates from STATE.investments
   if (STATE.investments.length) {

@@ -592,11 +592,12 @@
           </div>
         </div>
 
-        <div class="tab-bar">
+        <div class="tab-bar" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <button class="tab-btn active" onclick="filterPools('all', this)">All Pools</button>
           <button class="tab-btn" onclick="filterPools('open', this)">Open</button>
           <button class="tab-btn" onclick="filterPools('active', this)">Active</button>
           <button class="tab-btn" onclick="filterPools('matured', this)">Matured</button>
+          <div class="tbl-search" style="margin-left:auto"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search pools by name, product, ID…" id="poolSearch" oninput="renderPoolsGrid()" /></div>
         </div>
 
         <div class="grid-3" id="poolsGrid">
