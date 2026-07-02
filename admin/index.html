@@ -1904,10 +1904,17 @@
           </select>
         </div>
       </div>
-      <div class="form-row form-row--3">
+      <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Icon (Font Awesome)</label><input type="text" class="form-input" id="prodIcon" placeholder="fa-cow" /></div>
-        <div class="form-group"><label class="form-label">Colour</label><input type="text" class="form-input" id="prodColor" placeholder="#D4AF37" /></div>
         <div class="form-group"><label class="form-label">Risk Colour</label><input type="text" class="form-input" id="prodRiskColor" placeholder="#ff9b0c" /></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Product Colour <span style="color:var(--text-muted);font-weight:400">— used on tabs, graphs &amp; statement badges</span></label>
+        <div id="prodColorSwatches" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="color" id="prodColorPicker" value="#656565" title="Pick a custom colour" style="width:46px;height:38px;padding:2px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:none" oninput="_onProdColorPick(this.value)" />
+          <input type="text" class="form-input" id="prodColor" placeholder="#D4AF37" oninput="_onProdColorText(this.value)" style="flex:1" />
+        </div>
       </div>
       <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Active</label>
