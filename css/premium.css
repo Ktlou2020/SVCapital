@@ -877,3 +877,8 @@ body.light .product-risk-filter .prf-pill,
   color: #fff;
   box-shadow: 0 4px 14px rgba(255,82,41,0.32);
 }
+
+/* Trust / Regulatory Compliance sits on a dark background — force light text
+   so the heading and feature labels aren't invisible (dark-on-dark). */
+.trust-section .section-title { color: #ffffff !important; }
+.trust-section .compliance-item strong { color: #ffffff; }
