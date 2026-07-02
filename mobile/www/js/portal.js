@@ -1708,8 +1708,8 @@ function renderOverviewInvestments() {
       </td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700">${Utils.rand(inv.amount)}</td>
-      <td class="td-green">${Utils.rand(inv.expected_return_amount)}</td>
-      <td class="${days <= 30 ? 'td-gold' : 'td-muted'} fw-700">${days !== null ? days + ' days' : '—'}</td>
+      <td class="td-muted">${Utils.date(inv.investment_date || inv.start_date)}</td>
+      <td class="td-muted">${Utils.date(inv.maturity_date || inv.end_date)}</td>
       <td>${Utils.statusBadge(inv.status)}</td>
     </tr>`;
   }).join('');
