@@ -2065,6 +2065,8 @@ function openProductModal() {
   const ff = document.getElementById('prodFactsheetFile'); if (ff) ff.value = '';
   document.getElementById('prodFactsheetCurrent').textContent = '';
   document.getElementById('prodAvgReturnInfo').textContent = 'Will calculate once pools of this product mature.';
+  const pick = document.getElementById('prodColorPicker'); if (pick) pick.value = '#656565';
+  _renderProdColorSwatches();
   Modal.open('productModal');
 }
 
@@ -2088,6 +2090,9 @@ function editProduct(id) {
   document.getElementById('prodRisk').value        = p.risk_profile || '';
   document.getElementById('prodIcon').value        = p.icon || '';
   document.getElementById('prodColor').value       = p.color || '';
+  const pick = document.getElementById('prodColorPicker');
+  if (pick && /^#[0-9a-fA-F]{6}$/.test(p.color || '')) pick.value = p.color;
+  _renderProdColorSwatches();
   document.getElementById('prodRiskColor').value   = p.risk_color || '';
   document.getElementById('prodActive').value      = p.is_active ? 'true' : 'false';
   document.getElementById('prodHomepage').value    = p.display_on_homepage ? 'true' : 'false';
@@ -2100,6 +2105,39 @@ function editProduct(id) {
     ? `<strong style="color:var(--gold)">${(avg.rate * 100).toFixed(2)}% p.a.</strong> — average achieved return across ${avg.count} matured pool${avg.count === 1 ? '' : 's'}. Updates automatically as more pools mature.`
     : 'No matured pools for this product yet — the average return will appear automatically once pools mature.';
   Modal.open('productModal');
+}
+
+// ─── Product colour palette editor ───
+const PROD_PALETTE = (window.Utils && Utils.ciProductPalette) ||
+  ['#ff9b0c', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'];
+
+function _renderProdColorSwatches() {
+  const wrap = document.getElementById('prodColorSwatches');
+  if (!wrap) return;
+  const cur = (document.getElementById('prodColor').value || '').toLowerCase();
+  wrap.innerHTML = PROD_PALETTE.map(c => {
+    const sel = c.toLowerCase() === cur;
+    return `<button type="button" title="${c}" onclick="selectProdColor('${c}')"
+      style="width:30px;height:30px;border-radius:8px;background:${c};cursor:pointer;
+      border:2px solid ${sel ? '#111' : 'rgba(0,0,0,0.12)'};
+      box-shadow:${sel ? '0 0 0 2px #fff, 0 0 0 4px ' + c : 'none'};transition:transform .1s"
+      onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'"></button>`;
+  }).join('');
+}
+
+function selectProdColor(hex) {
+  document.getElementById('prodColor').value = hex;
+  const pick = document.getElementById('prodColorPicker'); if (pick) pick.value = hex;
+  _renderProdColorSwatches();
+}
+function _onProdColorPick(hex) {
+  document.getElementById('prodColor').value = hex;
+  _renderProdColorSwatches();
+}
+function _onProdColorText(hex) {
+  const pick = document.getElementById('prodColorPicker');
+  if (pick && /^#[0-9a-fA-F]{6}$/.test(hex.trim())) pick.value = hex.trim();
+  _renderProdColorSwatches();
 }
 
 async function saveProduct(btn) {
