@@ -1,36 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SV Capital — Director Panel</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
   <link rel="stylesheet" href="css/director.css" />
   <!-- Staff Auth guard — Directors only -->
   <script src="../js/staff-auth.js?v=5"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const s = StaffAuth.getSession();
-      if (!s) {
-        // No staffSession — check for a valid svc_token JWT (issued by /login.html)
-        try {
-          const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
-          if (jwt) {
-            const payload = JSON.parse(atob(jwt.split('.')[1]));
-            if (payload && payload.exp * 1000 > Date.now() &&
-                (payload.role === 'director' || payload.role === 'admin')) {
-              return; // Valid JWT with director/admin role — allow access
-            }
-          }
-        } catch (_) {}
-        window.location.replace('login.html');
-        return;
+      if (s) {
+        // Director Panel access is granted per individual (the 'director' app),
+        // OR via the legacy director-level check (executive/CEO) so no current
+        // director loses access.
+        if (!StaffAuth.canAccess(s, 'director') && !StaffAuth.isDirector(s)) {
+          window.location.replace('hub.html?denied=director');
+        }
+        return; // authorised — let director.js take over
       }
-      if (!StaffAuth.isDirector(s)) { window.location.replace('hub.html?denied=director'); return; }
+      // No staffSession — accept a valid svc_token JWT that carries the director
+      // app in its per-individual access list (or a qualifying legacy role).
+      try {
+        const tok = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+        if (tok) {
+          const payload = JSON.parse(atob(tok.split('.')[1]));
+          const hasDirectorApp = payload && Array.isArray(payload.apps) && payload.apps.includes('director');
+          if (payload && payload.exp * 1000 > Date.now() &&
+              (hasDirectorApp || payload.role === 'director' || payload.role === 'admin')) {
+            return; // Valid JWT — allow access; director.js will build synthetic session
+          }
+        }
+      } catch (_) {}
+      // Nothing valid — send to login
+      sessionStorage.setItem('staffLoginRedirect', window.location.pathname);
+      window.location.replace('login.html');
     });
   </script>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="../js/analytics.js"></script>
 </head>
 <body>
 
@@ -71,6 +100,10 @@
           <i class="fa-solid fa-rocket"></i> Onboarding
           <span class="nav-badge" id="pending-ob-badge" style="display:none">0</span>
         </button>
+        <button class="dir-nav-btn" data-view="leave" onclick="navTo('leave',this)">
+          <i class="fa-solid fa-calendar-day"></i> Leave Requests
+          <span class="nav-badge" id="pending-leave-badge" style="display:none">0</span>
+        </button>
       </div>
       <div class="dir-nav-group">
         <div class="dir-nav-group-label">Platform</div>
@@ -79,6 +112,13 @@
         </button>
         <button class="dir-nav-btn" data-view="courses" onclick="navTo('courses',this)">
           <i class="fa-solid fa-graduation-cap"></i> Course Library
+        </button>
+        <button class="dir-nav-btn" data-view="payslips" onclick="navTo('payslips',this)">
+          <i class="fa-solid fa-file-invoice-dollar"></i> Payslips
+        </button>
+        <button class="dir-nav-btn" data-view="performance" onclick="navTo('performance',this)">
+          <i class="fa-solid fa-chart-bar"></i> Performance
+          <span style="font-size:9px;background:rgba(124,92,252,.25);color:#a78bfa;padding:1px 6px;border-radius:8px;margin-left:auto">KPI</span>
         </button>
       </div>
       <div class="dir-nav-group">
@@ -116,7 +156,13 @@
         <div class="dir-page-title" id="pageTitle">Dashboard</div>
         <div class="dir-page-sub"  id="pageSub">Director Super Admin Panel</div>
       </div>
-      <div class="dir-topbar-actions" id="topbarActions"></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button onclick="openDirCmdPalette()" title="Command Palette (Ctrl+K)"
+          style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:6px 12px;color:#9ca3af;font-size:12px;cursor:pointer;font-family:monospace;display:flex;align-items:center;gap:6px">
+          <i class="fa-solid fa-magnifying-glass" style="font-size:11px"></i> ⌘K
+        </button>
+        <div class="dir-topbar-actions" id="topbarActions"></div>
+      </div>
     </div>
 
     <div class="dir-content">
@@ -124,6 +170,25 @@
       <!-- ── OVERVIEW ── -->
       <div class="dir-view active" id="view-overview">
         <div class="dir-stats" id="overviewStats"></div>
+        <div class="dir-stats" id="overviewStats2" style="margin-top:0"></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+          <!-- Department breakdown chart -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px">
+            <div class="dir-sec-head" style="margin-bottom:12px">
+              <div class="dir-sec-title">Team by Department</div>
+            </div>
+            <div style="position:relative;height:200px"><canvas id="deptChart"></canvas></div>
+          </div>
+          <!-- Activity feed -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px">
+            <div class="dir-sec-head" style="margin-bottom:12px">
+              <div class="dir-sec-title">Activity Feed</div>
+            </div>
+            <div id="dirActivityFeed" style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto"></div>
+          </div>
+        </div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
           <div>
             <div class="dir-sec-head">
@@ -144,15 +209,27 @@
 
       <!-- ── ALL EMPLOYEES ── -->
       <div class="dir-view" id="view-employees">
-        <div class="dir-sec-head">
+        <div class="dir-sec-head" style="flex-wrap:wrap;gap:10px">
           <div class="dir-sec-title">All Employees (<span id="empCount">0</span>)</div>
-          <div style="display:flex;gap:10px;align-items:center">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
             <div class="dir-search">
               <i class="fa-solid fa-magnifying-glass"></i>
-              <input type="text" id="empSearch" placeholder="Search employees…" oninput="filterEmployees()"/>
+              <input type="text" id="empSearch" placeholder="Search name, role, email…" oninput="filterEmployees()"/>
             </div>
+            <select id="empDeptFilter" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);padding:7px 10px;font-size:12px;font-family:inherit;cursor:pointer" onchange="filterEmployees()">
+              <option value="">All Departments</option>
+              <option>Executive</option><option>Operations</option><option>Investments</option>
+              <option>Client Services</option><option>Compliance</option><option>Marketing</option>
+              <option>Technology</option><option>Finance</option>
+            </select>
+            <select id="empStatusFilter" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);padding:7px 10px;font-size:12px;font-family:inherit;cursor:pointer" onchange="filterEmployees()">
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <button class="btn btn--ghost btn--sm" onclick="exportEmployeesCSV()"><i class="fa-solid fa-file-csv"></i> Export</button>
             <button class="btn btn--gold btn--sm" onclick="navTo('create',document.querySelector('[data-view=create]'))">
-              <i class="fa-solid fa-user-plus"></i> Add Employee
+              <i class="fa-solid fa-user-plus"></i> Add
             </button>
           </div>
         </div>
@@ -184,6 +261,10 @@
                 <div class="form-group"><label>Mobile Number</label><input id="c-phone" placeholder="+27 82 000 0000" /></div>
                 <div class="form-group"><label>Date of Birth</label><input id="c-dob" type="date" /></div>
                 <div class="form-group"><label>SA ID Number</label><input id="c-idnum" placeholder="9001015800086" /></div>
+                <div class="form-group">
+                  <label>Employee Number <span style="font-size:0.68rem;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(auto-generated if blank)</span></label>
+                  <input id="c-empnum" placeholder="e.g. SVC-2025-0001" style="font-family:monospace" />
+                </div>
               </div>
             </div>
 
@@ -193,9 +274,12 @@
                 <div class="form-group"><label>Role <span class="req">*</span></label>
                   <select id="c-role">
                     <option value="">Select role…</option>
-                    <option>CEO</option><option>Operations Manager</option><option>Investment Analyst</option>
-                    <option>Client Relations</option><option>Compliance Officer</option><option>Marketing</option>
-                    <option>Tech Lead</option><option>Finance Manager</option><option>Junior Analyst</option><option>Admin</option>
+                    <option>CEO</option><option>COO</option><option>Operations Manager</option>
+                    <option>Investment Analyst</option><option>Client Relations</option>
+                    <option>Compliance Officer</option><option>Internal Audit</option>
+                    <option>Marketing</option><option>Marketing Associate</option>
+                    <option>Tech Lead</option><option>Finance Manager</option>
+                    <option>Junior Analyst</option><option>Admin</option>
                   </select>
                 </div>
                 <div class="form-group"><label>Department <span class="req">*</span></label>
@@ -242,7 +326,7 @@
                     <div class="color-swatch" style="background:#00d4aa" data-color="#00d4aa" onclick="selectColor(this)"></div>
                     <div class="color-swatch" style="background:#e84393" data-color="#e84393" onclick="selectColor(this)"></div>
                     <div class="color-swatch" style="background:#f59e0b" data-color="#f59e0b" onclick="selectColor(this)"></div>
-                    <div class="color-swatch" style="background:#06b6d4" data-color="#06b6d4" onclick="selectColor(this)"></div>
+                    <div class="color-swatch" style="background:#656565" data-color="#656565" onclick="selectColor(this)"></div>
                     <div class="color-swatch" style="background:#10b981" data-color="#10b981" onclick="selectColor(this)"></div>
                     <div class="color-swatch" style="background:#fb923c" data-color="#fb923c" onclick="selectColor(this)"></div>
                     <div class="color-swatch" style="background:#a855f7" data-color="#a855f7" onclick="selectColor(this)"></div>
@@ -315,15 +399,28 @@
         <div id="onboardingList"></div>
       </div>
 
+      <!-- ── LEAVE REQUESTS ── -->
+      <div class="dir-view" id="view-leave">
+        <div class="dir-sec-head" style="margin-bottom:16px">
+          <div class="dir-sec-title">Leave Requests</div>
+          <div class="dir-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="leaveSearch" placeholder="Search employee…" oninput="renderLeave()"/>
+          </div>
+        </div>
+        <div id="leaveList"></div>
+      </div>
+
       <!-- ── ACCESS & ROLES ── -->
       <div class="dir-view" id="view-access">
-        <div class="dir-sec-head">
-          <div class="dir-sec-title">Role-Based Access Control</div>
+        <div class="dir-sec-head" style="margin-bottom:16px">
+          <div class="dir-sec-title">Employee App Access</div>
+          <div class="dir-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="accessSearch" placeholder="Search employees…" oninput="renderAccessMatrix()"/>
+          </div>
         </div>
-        <div class="dir-alert dir-alert--info" style="margin-bottom:20px">
-          <i class="fa-solid fa-circle-info"></i>
-          <div>Access is determined by each employee's <strong>Role</strong> and <strong>Level</strong>. Executive-level employees always have full access regardless of role. Change an employee's role or level in the <strong>All Employees</strong> view to update their access.</div>
-        </div>
+        <div id="empAccessList"></div>
         <div id="rbacMatrix"></div>
       </div>
 
@@ -333,6 +430,40 @@
           <div class="dir-sec-title">Course Library (<span id="courseCount">0</span> courses)</div>
         </div>
         <div id="courseGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px"></div>
+      </div>
+
+      <!-- ── PAYSLIPS ── -->
+      <div class="dir-view" id="view-payslips">
+        <div id="payslipsContent"></div>
+      </div>
+
+      <!-- ── PERFORMANCE ── -->
+      <div class="dir-view" id="view-performance">
+        <div class="dir-stats" id="perfStats"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px">
+            <div class="dir-sec-head" style="margin-bottom:12px">
+              <div class="dir-sec-title">KPI Score Distribution</div>
+            </div>
+            <div style="position:relative;height:220px"><canvas id="perfRadarChart"></canvas></div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px">
+            <div class="dir-sec-head" style="margin-bottom:12px">
+              <div class="dir-sec-title">Score by Department</div>
+            </div>
+            <div style="position:relative;height:220px"><canvas id="perfDeptChart"></canvas></div>
+          </div>
+        </div>
+        <div class="dir-sec-head" style="margin-bottom:12px">
+          <div class="dir-sec-title">Team KPI Leaderboard</div>
+          <button class="btn btn--ghost btn--sm" onclick="exportPerformanceCSV()"><i class="fa-solid fa-file-csv"></i> Export</button>
+        </div>
+        <div class="dir-table-wrap">
+          <table class="dir-table">
+            <thead><tr><th>Employee</th><th>Department</th><th>Overall Score</th><th>EVA Weight</th><th>XP</th><th>Level</th><th>Status</th></tr></thead>
+            <tbody id="perfLeaderboard"></tbody>
+          </table>
+        </div>
       </div>
 
     </div><!-- /dir-content -->
@@ -352,8 +483,25 @@
     <div class="dir-modal-body" id="empDetailBody"></div>
     <div class="dir-modal-footer">
       <button class="btn btn--danger btn--sm" id="modalDeactivateBtn">Deactivate</button>
+      <button class="btn btn--ghost btn--sm" id="modalResetPinBtn" style="color:#f59e0b;border-color:rgba(245,158,11,0.3)"><i class="fa-solid fa-key"></i> Reset PIN</button>
       <button class="btn btn--ghost" onclick="closeModal('empDetailModal')">Close</button>
       <button class="btn btn--gold btn--sm" id="modalEditBtn">Edit Employee</button>
+    </div>
+  </div>
+</div>
+
+<!-- Leave Requests Sign-in Alert -->
+<div class="dir-modal-overlay" id="leaveAlertModal">
+  <div class="dir-modal" style="max-width:440px">
+    <div class="dir-modal-header">
+      <div class="modal-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b"><i class="fa-solid fa-calendar-day"></i></div>
+      <h3>Leave Requests Pending</h3>
+      <button class="btn btn--ghost btn--sm" onclick="closeModal('leaveAlertModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="dir-modal-body" id="leaveAlertBody"></div>
+    <div class="dir-modal-footer">
+      <button class="btn btn--ghost" onclick="closeModal('leaveAlertModal')">Dismiss</button>
+      <button class="btn btn--gold btn--sm" onclick="closeModal('leaveAlertModal');navTo('leave',document.querySelector('[data-view=leave]'))"><i class="fa-solid fa-list-check"></i> Review Now</button>
     </div>
   </div>
 </div>
@@ -438,6 +586,21 @@
   .color-swatch:hover { transform:scale(1.15); }
   .color-swatch.selected { border-color:#fff;transform:scale(1.1); }
 </style>
+
+<!-- ══════════ COMMAND PALETTE ══════════ -->
+<div id="dirCmdOverlay" onclick="if(event.target===this)closeDirCmdPalette()"
+  style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9900;backdrop-filter:blur(4px);align-items:flex-start;justify-content:center;padding-top:80px">
+  <div style="background:#111318;border:1px solid rgba(245,158,11,.3);border-radius:14px;width:100%;max-width:560px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.7)">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.07)">
+      <i class="fa-solid fa-magnifying-glass" style="color:rgba(255,255,255,.35);font-size:14px"></i>
+      <input type="text" id="dirCmdInput" placeholder="Search views and actions…" autocomplete="off"
+        style="flex:1;background:none;border:none;outline:none;color:#e8eaf6;font-size:15px;font-family:inherit"
+        oninput="renderDirCmdResults(this.value)" onkeydown="dirCmdKeyNav(event)">
+      <kbd style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.13);border-radius:4px;font-size:10px;padding:2px 6px;color:rgba(255,255,255,.4)">ESC</kbd>
+    </div>
+    <div id="dirCmdResults" style="max-height:400px;overflow-y:auto;padding:8px 0"></div>
+  </div>
+</div>
 
 <script src="js/director.js"></script>
 </body>

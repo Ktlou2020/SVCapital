@@ -5,12 +5,40 @@
 'use strict';
 
 /* ─── API helpers ─────────────────────────────────────────────────── */
-const BASE   = '../';
-const get    = async p => { try { const r = await fetch(BASE+p); return r.ok ? r.json() : {data:[],total:0}; } catch { return {data:[],total:0}; } };
-const post   = async (p,b) => { const r = await fetch(BASE+p,{method:'POST',  headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
-const patch  = async (p,b) => { const r = await fetch(BASE+p,{method:'PATCH', headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
-const put    = async (p,b) => { const r = await fetch(BASE+p,{method:'PUT',   headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
-const del    = async p     => { await fetch(BASE+p,{method:'DELETE'}); };
+const BASE   = '/api/';
+
+/** Return { Authorization: 'Bearer <token>' } if a token is stored, else {} */
+function _authHeader() {
+  const t = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+  return t ? { 'Authorization': 'Bearer ' + t } : {};
+}
+
+const get    = async p => {
+  try {
+    const r = await fetch(BASE+p, { credentials:'include', headers: _authHeader() });
+    if (!r.ok) {
+      console.error(`[Director] API ${r.status} on GET ${p}`);
+      return {data:[],total:0,_error:r.status};
+    }
+    return r.json();
+  } catch(e) {
+    console.error(`[Director] Network error on GET ${p}:`, e.message);
+    return {data:[],total:0,_error:'network'};
+  }
+};
+const post   = async (p,b) => {
+  const r = await fetch(BASE+p, { method:'POST',  credentials:'include', headers:{'Content-Type':'application/json', ..._authHeader()}, body:JSON.stringify(b) });
+  return r.json();
+};
+const patch  = async (p,b) => {
+  const r = await fetch(BASE+p, { method:'PATCH', credentials:'include', headers:{'Content-Type':'application/json', ..._authHeader()}, body:JSON.stringify(b) });
+  return r.json();
+};
+const put    = async (p,b) => {
+  const r = await fetch(BASE+p, { method:'PUT',   credentials:'include', headers:{'Content-Type':'application/json', ..._authHeader()}, body:JSON.stringify(b) });
+  return r.json();
+};
+const del    = async p => { await fetch(BASE+p, { method:'DELETE', credentials:'include', headers: _authHeader() }); };
 
 async function fetchAll(table) {
   let page=1, all=[];
@@ -29,18 +57,27 @@ const zarM = v => { const n=Number(v)||0; return n>=1e6?`R${(n/1e6).toFixed(1)}M
 const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—';
 
 /* ─── RBAC reference ─────────────────────────────────────────────── */
-const RBAC = {
-  'CEO':                ['employee','team','fund','admin','ifa','portal','director'],
-  'Operations Manager': ['employee','team','fund','admin'],
-  'Finance Manager':    ['employee','team','fund','admin'],
-  'Tech Lead':          ['employee','team','fund','admin'],
-  'Investment Analyst': ['employee','team','fund'],
-  'Compliance Officer': ['employee','admin'],
-  'Client Relations':   ['employee','portal'],
-  'Marketing':          ['employee'],
-  'Junior Analyst':     ['employee'],
-  'Admin':              ['employee'],
+let RBAC = {
+  'CEO':                 ['employee','team','fund','admin','ifa','portal','director'],
+  'COO':                 ['employee','team','fund','admin','ifa','portal','director'],
+  'Operations Manager':  ['employee','team','fund','admin'],
+  'Finance Manager':     ['employee','team','fund','admin'],
+  'Tech Lead':           ['employee','team','fund','admin'],
+  'Investment Analyst':  ['employee','team','fund'],
+  'Compliance Officer':  ['employee','admin'],
+  'Internal Audit':      ['employee','admin'],
+  'Client Relations':    ['employee','portal'],
+  'Marketing':           ['employee'],
+  'Marketing Associate': ['employee'],
+  'Junior Analyst':      ['employee'],
+  'Admin':               ['employee'],
 };
+
+const ALL_ROLES = [
+  'CEO','COO','Operations Manager','Investment Analyst','Client Relations',
+  'Compliance Officer','Internal Audit','Marketing','Marketing Associate',
+  'Tech Lead','Finance Manager','Junior Analyst','Admin',
+];
 const APP_NAMES = {
   employee:'My Dashboard', team:'Team Dashboard', fund:'Fund Operations',
   admin:'Admin Console', ifa:'IFA Portal', portal:'Investor Portal', director:'Director Panel'
@@ -51,7 +88,7 @@ const APP_ICONS = {
 };
 const APP_COLORS = {
   employee:'#7c5cfc', team:'#00d4aa', fund:'#f59e0b',
-  admin:'#e84393', ifa:'#06b6d4', portal:'#10b981', director:'#f59e0b'
+  admin:'#e84393', ifa:'#656565', portal:'#10b981', director:'#f59e0b'
 };
 
 const LEVEL_LABELS = { junior:'Junior', mid:'Mid-Level', senior:'Senior', lead:'Lead', executive:'Executive' };
@@ -61,43 +98,129 @@ let _session    = null;
 let _employees  = [];
 let _onboarding = [];
 let _courses    = [];
+let _payslips   = [];
+let _kpiScores  = [];
+let _leaveReqs  = [];
 let _editingEmp = null;
 let _selectedColor = '#7c5cfc';
 let _currentView   = 'overview';
+let _dirCharts  = {};
 
 /* ═══ INIT ════════════════════════════════════════════════════════ */
 window.addEventListener('DOMContentLoaded', async () => {
   _session = StaffAuth.getSession();
-  if (!_session || !StaffAuth.isDirector(_session)) return;
+
+  // ── JWT-only path: user logged in via /login.html (no staffSession) ──
+  // Build a synthetic _session from the JWT so sidebar still renders.
+  if (!_session) {
+    try {
+      const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+      if (jwt) {
+        const payload = JSON.parse(atob(jwt.split('.')[1]));
+        if (payload && payload.exp * 1000 > Date.now() &&
+            (payload.role === 'director' || payload.role === 'admin')) {
+          // Reconstruct a minimal session object from svc_user or JWT payload
+          let u = {};
+          try { u = JSON.parse(localStorage.getItem('svc_user') || '{}'); } catch (_) {}
+          _session = {
+            empId:          u.id || payload.id || '',
+            email:          u.email || payload.email || '',
+            firstName:      u.firstName || payload.firstName || 'Director',
+            lastName:       u.lastName  || payload.lastName  || '',
+            role:           u.role || payload.role || 'director',
+            level:          'executive',
+            avatarInitials: ((u.firstName||'D')[0] + (u.lastName||'')[0]).toUpperCase() || 'D',
+            avatarColor:    '#7c5cfc',
+          };
+        }
+      }
+    } catch (_) {}
+  }
+
+  // ── Guard: if still no valid session, redirect to login ──
+  if (!_session || !StaffAuth.isDirector(_session)) {
+    window.location.replace('login.html');
+    return;
+  }
 
   // Populate sidebar user info
   const av = document.getElementById('sidebarAvatar');
   if (av) { av.textContent = _session.avatarInitials; av.style.background = _session.avatarColor || '#7c5cfc'; }
-  document.getElementById('sidebarName').textContent = _session.firstName + ' ' + _session.lastName;
+  document.getElementById('sidebarName').textContent = (_session.firstName || '') + ' ' + (_session.lastName || '');
   document.getElementById('sidebarRole').textContent = _session.role;
 
   // Live preview wiring for create form
   wirePreviewListeners();
 
-  // Load data
-  await loadAll();
+  // Load RBAC matrix from API (non-blocking fallback to defaults)
+  await loadRBACFromAPI();
 
-  // Hide loader
+  // Load data — wrapped so a fetch failure never leaves the spinner up
+  try {
+    await loadAll();
+  } catch (err) {
+    console.error('Director: loadAll failed:', err);
+  }
+
+  // Hide loader and reveal app regardless of data-load outcome
   document.getElementById('dir-loader').style.display = 'none';
   document.getElementById('dirApp').style.display = 'flex';
 
   navTo('overview', document.querySelector('[data-view=overview]'));
+
+  // Sign-in popup: alert directors to any leave requests awaiting review
+  _showPendingLeavePopup();
+
+  // Auto-generate payslips on the 25th
+  if (new Date().getDate() >= 25) {
+    setTimeout(autoGenerateMissingPayslips, 1200);
+  }
 });
 
+function _showPendingLeavePopup() {
+  const pending = _leaveReqs.filter(l => (l.status || 'pending') === 'pending');
+  if (!pending.length) return;
+  const body = document.getElementById('leaveAlertBody');
+  if (body) {
+    const rows = pending.slice(0, 6).map(l =>
+      `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border2);font-size:0.84rem">
+         <span style="font-weight:600;color:var(--text)">${_leaveEmpName(l.employee_id)}</span>
+         <span style="color:var(--muted);text-transform:capitalize">${(l.leave_type||'leave').replace(/_/g,' ')} · ${l.days_requested||'—'}d</span>
+       </div>`).join('');
+    body.innerHTML = `
+      <p style="font-size:0.9rem;color:var(--text);margin-bottom:6px">You have <b style="color:#f59e0b">${pending.length}</b> leave request${pending.length>1?'s':''} awaiting your review.</p>
+      <div>${rows}${pending.length>6?`<div style="font-size:0.78rem;color:var(--muted);padding-top:8px">…and ${pending.length-6} more</div>`:''}</div>`;
+  }
+  // Slight delay so it appears after the panel renders
+  setTimeout(() => openModal('leaveAlertModal'), 600);
+}
+
 async function loadAll() {
-  const [emps, ob, courses] = await Promise.all([
+  const [emps, ob, courses, payslips, kpis, leave] = await Promise.all([
     fetchAll('employees'),
     fetchAll('employee_onboarding'),
     fetchAll('employee_courses'),
+    fetchAll('payslips'),
+    fetchAll('kpi_scores').catch(() => []),
+    fetchAll('leave_requests').catch(() => []),
   ]);
   _employees  = emps;
   _onboarding = ob;
   _courses    = courses;
+  _payslips   = payslips;
+  _kpiScores  = kpis;
+  _leaveReqs  = leave;
+
+  if (!emps.length) {
+    try {
+      const jwtRole = (() => { try { return JSON.parse(atob((localStorage.getItem('svc_token')||'').split('.')[1])).role; } catch{return 'n/a';} })();
+      const probe = await fetch(BASE + 'tables/employees?limit=1', { credentials:'include', headers: _authHeader() });
+      console.warn(`[Director] employees probe → HTTP ${probe.status}. JWT role: ${jwtRole}`);
+      if (probe.status === 403) showToast(`Permission denied loading employees — JWT role "${jwtRole}" needs admin/director.`, 'error');
+      else if (probe.status === 401) showToast('Session expired — please log in again.', 'error');
+      else if (!probe.ok) showToast(`Could not load employees (HTTP ${probe.status}) — open console for details.`, 'error');
+    } catch (_) {}
+  }
 
   // Populate buddy dropdown
   const buddySel = document.getElementById('c-buddy');
@@ -110,16 +233,27 @@ async function loadAll() {
   const pending = _onboarding.filter(o => o.status === 'in_progress' || o.status === 'not_started');
   const badge = document.getElementById('pending-ob-badge');
   if (badge) { badge.textContent = pending.length; badge.style.display = pending.length ? '' : 'none'; }
+
+  _updatePendingLeaveBadge();
+}
+
+function _updatePendingLeaveBadge() {
+  const pendingLeave = _leaveReqs.filter(l => (l.status || 'pending') === 'pending').length;
+  const lb = document.getElementById('pending-leave-badge');
+  if (lb) { lb.textContent = pendingLeave; lb.style.display = pendingLeave ? '' : 'none'; }
 }
 
 /* ═══ NAVIGATION ═══════════════════════════════════════════════════ */
 const PAGE_META = {
-  overview:   { title:'Dashboard',       sub:'Platform overview and quick stats' },
-  employees:  { title:'All Employees',   sub:'Manage your full team roster' },
-  create:     { title:'Add Employee',    sub:'Create a new employee and start their onboarding journey' },
-  onboarding: { title:'Onboarding',      sub:'Track new employee onboarding progress' },
-  access:     { title:'Access & Roles',  sub:'Role-based access control matrix' },
-  courses:    { title:'Course Library',  sub:'All available training courses' },
+  overview:    { title:'Dashboard',        sub:'Platform overview and quick stats' },
+  employees:   { title:'All Employees',    sub:'Manage your full team roster' },
+  create:      { title:'Add Employee',     sub:'Create a new employee and start their onboarding journey' },
+  onboarding:  { title:'Onboarding',       sub:'Track new employee onboarding progress' },
+  leave:       { title:'Leave Requests',   sub:'Approve or decline employee leave' },
+  access:      { title:'Access & Roles',   sub:'Role-based access control matrix' },
+  courses:     { title:'Course Library',   sub:'All available training courses' },
+  payslips:    { title:'Payslips',         sub:'Generate and manage employee payslips' },
+  performance: { title:'Performance',      sub:'KPI leaderboard, scores and team analytics' },
 };
 
 function navTo(view, btn) {
@@ -138,26 +272,122 @@ function navTo(view, btn) {
   const actEl = document.getElementById('topbarActions');
   actEl.innerHTML = '';
   if (view === 'employees') {
-    actEl.innerHTML = `<button class="btn btn--gold btn--sm" onclick="navTo('create',document.querySelector('[data-view=create]'))"><i class="fa-solid fa-user-plus"></i> Add Employee</button>`;
+    actEl.innerHTML = `
+      <button class="btn btn--ghost btn--sm" onclick="exportEmployeesCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+      <button class="btn btn--ghost btn--sm" onclick="exportEmployeesPDF()"><i class="fa-solid fa-file-pdf"></i> Export PDF</button>
+      <button class="btn btn--gold btn--sm" onclick="navTo('create',document.querySelector('[data-view=create]'))"><i class="fa-solid fa-user-plus"></i> Add Employee</button>`;
+  } else if (view === 'payslips') {
+    actEl.innerHTML = `<button class="btn btn--ghost btn--sm" onclick="exportPayslipsSummaryCSV()"><i class="fa-solid fa-file-csv"></i> Export Summary</button>`;
+  } else if (view === 'performance') {
+    actEl.innerHTML = `<button class="btn btn--ghost btn--sm" onclick="exportPerformanceCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>`;
+  } else if (view === 'onboarding') {
+    actEl.innerHTML = `<button class="btn btn--ghost btn--sm" onclick="exportOnboardingCSV()"><i class="fa-solid fa-file-csv"></i> Export</button>`;
   }
 
   // Render view content
   const renders = {
-    overview:   renderOverview,
-    employees:  renderEmployees,
-    onboarding: renderOnboardingView,
-    access:     renderAccessMatrix,
-    courses:    renderCourseLibrary,
+    overview:    renderOverview,
+    employees:   renderEmployees,
+    onboarding:  renderOnboardingView,
+    leave:       renderLeave,
+    access:      renderAccessMatrix,
+    courses:     renderCourseLibrary,
+    payslips:    renderPayslips,
+    performance: renderPerformanceView,
   };
   if (renders[view]) renders[view]();
 }
 
+/* ═══ LEAVE REQUESTS ════════════════════════════════════════════════ */
+const LEAVE_STATUS_CHIP = {
+  pending:  'chip--onboard',
+  approved: 'chip--done',
+  rejected: 'chip--off',
+  cancelled:'chip--off',
+};
+
+function _leaveEmpName(empId) {
+  const e = _employees.find(x => x.id === empId);
+  return e ? `${e.first_name} ${e.last_name}` : (empId || '—');
+}
+
+function renderLeave() {
+  const host = document.getElementById('leaveList');
+  if (!host) return;
+  const q = (document.getElementById('leaveSearch')?.value || '').toLowerCase();
+
+  // Pending first, then most recent
+  const sorted = _leaveReqs.slice().sort((a, b) => {
+    const ap = (a.status || 'pending') === 'pending' ? 0 : 1;
+    const bp = (b.status || 'pending') === 'pending' ? 0 : 1;
+    if (ap !== bp) return ap - bp;
+    return new Date(b.created_at || b.start_date || 0) - new Date(a.created_at || a.start_date || 0);
+  });
+
+  const filtered = sorted.filter(l =>
+    !q || `${_leaveEmpName(l.employee_id)} ${l.leave_type || ''} ${l.reason || ''}`.toLowerCase().includes(q)
+  );
+
+  if (!filtered.length) {
+    host.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)"><i class="fa-solid fa-calendar-check" style="font-size:1.8rem;display:block;margin-bottom:10px;opacity:0.4"></i>No leave requests${q ? ' match your search' : ''}.</div>`;
+    return;
+  }
+
+  host.innerHTML = `
+    <div class="dir-table-wrap">
+      <table class="dir-table">
+        <thead><tr>
+          <th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Status</th><th>Action</th>
+        </tr></thead>
+        <tbody>
+          ${filtered.map(l => {
+            const status = l.status || 'pending';
+            const isPending = status === 'pending';
+            return `<tr>
+              <td style="font-weight:600;color:var(--text)">${_leaveEmpName(l.employee_id)}</td>
+              <td style="text-transform:capitalize">${(l.leave_type || '—').replace(/_/g, ' ')}</td>
+              <td>${fmtDate(l.start_date)}</td>
+              <td>${fmtDate(l.end_date)}</td>
+              <td>${l.days_requested || '—'}</td>
+              <td style="max-width:220px;font-size:0.78rem;color:var(--muted)">${l.reason ? l.reason.replace(/</g, '&lt;') : '—'}</td>
+              <td><span class="chip ${LEAVE_STATUS_CHIP[status] || 'chip--off'}" style="text-transform:capitalize">${status}</span></td>
+              <td>
+                ${isPending ? `
+                  <div style="display:flex;gap:6px">
+                    <button class="btn btn--primary btn--sm" onclick="approveLeave('${l.id}')"><i class="fa-solid fa-check"></i> Approve</button>
+                    <button class="btn btn--ghost btn--sm" onclick="declineLeave('${l.id}')"><i class="fa-solid fa-xmark"></i> Decline</button>
+                  </div>` : `<span style="font-size:0.72rem;color:var(--muted)">${l.approved_by ? 'by ' + l.approved_by : '—'}</span>`}
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+async function _setLeaveStatus(id, status, actionLabel) {
+  const reviewer = `${_session?.firstName || ''} ${_session?.lastName || ''}`.trim() || _session?.email || 'Director';
+  const res = await patch(`tables/leave_requests/${id}`, {
+    status,
+    approved_by: reviewer,
+    approved_at: new Date().toISOString(),
+  });
+  if (res && res.error) { showToast(res.error || `Could not ${actionLabel} leave`, 'error'); return; }
+  const idx = _leaveReqs.findIndex(l => l.id === id);
+  if (idx !== -1) { _leaveReqs[idx].status = status; _leaveReqs[idx].approved_by = reviewer; }
+  showToast(`Leave ${actionLabel}d`);
+  _updatePendingLeaveBadge();
+  renderLeave();
+}
+
+function approveLeave(id) { return _setLeaveStatus(id, 'approved', 'approve'); }
+function declineLeave(id) { return _setLeaveStatus(id, 'rejected', 'decline'); }
+
 /* ═══ OVERVIEW ══════════════════════════════════════════════════════ */
 function renderOverview() {
   const active    = _employees.filter(e => e.status === 'active').length;
-  const totalOb   = _onboarding.length;
-  const doneOb    = _onboarding.filter(o => o.status === 'completed').length;
   const inProgOb  = _onboarding.filter(o => o.status === 'in_progress').length;
+  const doneOb    = _onboarding.filter(o => o.status === 'completed').length;
 
   document.getElementById('overviewStats').innerHTML = `
     <div class="dir-stat">
@@ -177,6 +407,36 @@ function renderOverview() {
       <div><div class="dir-stat-val">${_courses.length}</div><div class="dir-stat-label">Courses Available</div></div>
     </div>
   `;
+
+  // Second KPI row — performance intel
+  const nettTotal = _payslips.reduce((s,p) => s+(parseFloat(p.nett_pay)||0), 0);
+  const latestMonth = _payslips.length ? _payslips.sort((a,b) => (b.pay_period||'').localeCompare(a.pay_period||''))[0].pay_period : null;
+  const monthPayslips = latestMonth ? _payslips.filter(p => p.pay_period === latestMonth) : [];
+  const monthNett = monthPayslips.reduce((s,p) => s+(parseFloat(p.nett_pay)||0), 0);
+  const avgKpi = _kpiScores.length ? (_kpiScores.reduce((s,k) => s+(parseFloat(k.overall_score)||0), 0) / _kpiScores.length) : null;
+  const totalXP = _employees.reduce((s,e) => s+(parseInt(e.xp_total)||0), 0);
+  const stats2El = document.getElementById('overviewStats2');
+  if (stats2El) stats2El.innerHTML = `
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(124,92,252,0.1);color:#a78bfa"><i class="fa-solid fa-chart-bar"></i></div>
+      <div><div class="dir-stat-val">${avgKpi !== null ? avgKpi.toFixed(1)+'%' : '—'}</div><div class="dir-stat-label">Avg KPI Score</div></div>
+    </div>
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(245,158,11,0.1);color:#f59e0b"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+      <div><div class="dir-stat-val">${zarM(monthNett)}</div><div class="dir-stat-label">Nett Payroll${latestMonth?' ('+latestMonth+')':''}</div></div>
+    </div>
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(16,185,129,0.1);color:#10b981"><i class="fa-solid fa-circle-check"></i></div>
+      <div><div class="dir-stat-val">${doneOb}</div><div class="dir-stat-label">Onboarding Completed</div></div>
+    </div>
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(0,212,170,0.1);color:#00d4aa"><i class="fa-solid fa-star"></i></div>
+      <div><div class="dir-stat-val">${totalXP.toLocaleString()}</div><div class="dir-stat-label">Total Team XP</div></div>
+    </div>
+  `;
+
+  renderDeptChart();
+  renderActivityFeed();
 
   // Recent employees (last 5 by start_date)
   const recent = [..._employees].sort((a,b) => new Date(b.start_date||b.created_at||0) - new Date(a.start_date||a.created_at||0)).slice(0,5);
@@ -230,10 +490,16 @@ function renderEmployees() {
 }
 
 function filterEmployees() {
-  const q = (document.getElementById('empSearch')?.value||'').toLowerCase();
-  _empFilteredList = _employees.filter(e =>
-    `${e.first_name} ${e.last_name} ${e.email} ${e.role} ${e.department}`.toLowerCase().includes(q)
-  );
+  const q      = (document.getElementById('empSearch')?.value||'').toLowerCase();
+  const dept   = document.getElementById('empDeptFilter')?.value || '';
+  const status = document.getElementById('empStatusFilter')?.value || '';
+  _empFilteredList = _employees.filter(e => {
+    if (q && !`${e.first_name} ${e.last_name} ${e.email} ${e.role} ${e.department}`.toLowerCase().includes(q)) return false;
+    if (dept && e.department !== dept) return false;
+    if (status && e.status !== status) return false;
+    return true;
+  });
+  document.getElementById('empCount').textContent = _empFilteredList.length;
   renderEmpTable(_empFilteredList);
 }
 
@@ -266,7 +532,8 @@ function renderEmpTable(list) {
         <td>
           <div style="display:flex;gap:6px">
             <button class="btn btn--ghost btn--sm" onclick="openEmpDetail('${e.id}')" title="View details"><i class="fa-solid fa-eye"></i></button>
-            <button class="btn btn--ghost btn--sm" onclick="openEmpEdit('${e.id}')" title="Edit"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn--ghost btn--sm" onclick="openEmpEdit('${e.id}')" title="Edit profile"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn--ghost btn--sm" onclick="resetEmployeePin('${e.id}')" title="Reset PIN" style="color:#f59e0b"><i class="fa-solid fa-key"></i></button>
             <a class="btn btn--ghost btn--sm" href="employee.html?id=${e.id}" title="Open dashboard"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
           </div>
         </td>
@@ -281,7 +548,15 @@ function openEmpDetail(empId) {
   if (!e) return;
   const ob = _onboarding.find(o => o.employee_id === empId);
   const obPct = ob && ob.tasks_total > 0 ? Math.round((ob.tasks_completed||0)/ob.tasks_total*100) : 0;
-  const allowedApps = (e.level === 'executive' ? Object.keys(APP_NAMES) : (RBAC[e.role]||['employee']));
+  const allowedApps = (Array.isArray(e.app_access) && e.app_access.length) ? e.app_access : ['employee'];
+
+  const docBadge = (url, label) => url
+    ? `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:5px 12px;font-size:0.76rem;font-weight:600;color:#16a34a;text-decoration:none">
+        <i class="fa-solid fa-file-check"></i> View ${label}
+       </a>`
+    : `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:5px 12px;font-size:0.76rem;color:var(--muted)">
+        <i class="fa-solid fa-file-slash"></i> ${label} not uploaded
+       </span>`;
 
   document.getElementById('empDetailBody').innerHTML = `
     <div class="emp-detail-panel">
@@ -293,6 +568,7 @@ function openEmpDetail(empId) {
           <div class="emp-detail-meta">
             <span><i class="fa-solid fa-envelope"></i> ${e.email||'—'}</span>
             <span><i class="fa-solid fa-phone"></i> ${e.phone||'—'}</span>
+            ${e.employee_number ? `<span style="font-family:monospace;font-size:0.78rem"><i class="fa-solid fa-id-badge"></i> ${e.employee_number}</span>` : ''}
             ${e.start_date ? `<span><i class="fa-solid fa-calendar"></i> Started ${fmtDate(e.start_date)}</span>` : ''}
           </div>
         </div>
@@ -316,6 +592,23 @@ function openEmpDetail(empId) {
             <div style="font-size:0.75rem;color:var(--muted);margin-top:5px">${ob.tasks_completed||0} of ${ob.tasks_total||0} tasks complete</div>
           </div>
         ` : ''}
+
+        <!-- Documents section -->
+        <div style="margin-bottom:20px">
+          <div class="emp-detail-label" style="margin-bottom:10px"><i class="fa-solid fa-folder-open" style="margin-right:6px;color:var(--gold)"></i>Employee Documents</div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px">
+            ${docBadge(e.proof_of_id_url, 'Proof of ID')}
+            ${docBadge(e.proof_of_banking_url, 'Proof of Banking')}
+          </div>
+          ${e.bank_name ? `
+            <div style="margin-top:12px;font-size:0.78rem;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap">
+              <span><i class="fa-solid fa-building-columns"></i> ${e.bank_name}</span>
+              ${e.bank_account_number ? `<span><i class="fa-solid fa-credit-card"></i> ••••${String(e.bank_account_number).slice(-4)}</span>` : ''}
+              ${e.bank_account_type ? `<span>${e.bank_account_type}</span>` : ''}
+            </div>
+          ` : ''}
+        </div>
+
         <div>
           <div class="emp-detail-label" style="margin-bottom:10px">App Access (${allowedApps.length} apps)</div>
           <div style="display:flex;flex-wrap:wrap;gap:8px">
@@ -332,6 +625,7 @@ function openEmpDetail(empId) {
 
   document.getElementById('modalDeactivateBtn').textContent = e.status === 'active' ? 'Deactivate' : 'Reactivate';
   document.getElementById('modalDeactivateBtn').onclick = () => toggleEmpStatus(empId, e.status);
+  document.getElementById('modalResetPinBtn').onclick = () => resetEmployeePin(empId);
   document.getElementById('modalEditBtn').onclick = () => { closeModal('empDetailModal'); openEmpEdit(empId); };
   openModal('empDetailModal');
 }
@@ -343,58 +637,153 @@ function openEmpEdit(empId) {
   const e = _editingEmp;
 
   document.getElementById('editEmpBody').innerHTML = `
-    <div class="form-grid">
-      <div class="form-group"><label>First Name</label><input id="e-fname" value="${e.first_name||''}"/></div>
-      <div class="form-group"><label>Last Name</label><input id="e-lname" value="${e.last_name||''}"/></div>
-      <div class="form-group"><label>Email</label><input id="e-email" value="${e.email||''}"/></div>
-      <div class="form-group"><label>Phone</label><input id="e-phone" value="${e.phone||''}"/></div>
-      <div class="form-group"><label>Role</label>
-        <select id="e-role">
-          ${['CEO','Operations Manager','Investment Analyst','Client Relations','Compliance Officer','Marketing','Tech Lead','Finance Manager','Junior Analyst','Admin'].map(r=>`<option ${r===e.role?'selected':''}>${r}</option>`).join('')}
-        </select>
+    <div class="edit-emp-tabs">
+      <button class="edit-emp-tab active" onclick="switchEmpTab(this,'tab-hr')"><i class="fa-solid fa-briefcase"></i> HR & Role</button>
+      <button class="edit-emp-tab" onclick="switchEmpTab(this,'tab-personal')"><i class="fa-solid fa-id-card"></i> Personal</button>
+      <button class="edit-emp-tab" onclick="switchEmpTab(this,'tab-address')"><i class="fa-solid fa-location-dot"></i> Address</button>
+      <button class="edit-emp-tab" onclick="switchEmpTab(this,'tab-banking')"><i class="fa-solid fa-building-columns"></i> Banking</button>
+      <button class="edit-emp-tab" onclick="switchEmpTab(this,'tab-emergency')"><i class="fa-solid fa-phone-volume"></i> Emergency</button>
+    </div>
+
+    <div class="edit-emp-panel active" id="tab-hr">
+      <div class="form-grid">
+        <div class="form-group"><label>First Name</label><input id="e-fname" value="${e.first_name||''}"/></div>
+        <div class="form-group"><label>Last Name</label><input id="e-lname" value="${e.last_name||''}"/></div>
+        <div class="form-group"><label>Email</label><input id="e-email" type="email" value="${e.email||''}"/></div>
+        <div class="form-group"><label>Phone</label><input id="e-phone" value="${e.phone||''}"/></div>
+        <div class="form-group"><label>Employee Number</label><input id="e-empnum" value="${e.employee_number||''}" placeholder="e.g. SVC-2025-0001" style="font-family:monospace"/></div>
+        <div class="form-group"><label>Role</label>
+          <select id="e-role">
+            ${ALL_ROLES.map(r=>`<option ${r===e.role?'selected':''}>${r}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Department</label>
+          <select id="e-dept">
+            ${['Executive','Operations','Investments','Client Services','Compliance','Marketing','Technology','Finance'].map(d=>`<option ${d===e.department?'selected':''}>${d}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Level</label>
+          <select id="e-level">
+            ${['junior','mid','senior','lead','executive'].map(l=>`<option value="${l}" ${l===e.level?'selected':''}>${LEVEL_LABELS[l]}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Status</label>
+          <select id="e-status">
+            ${['active','inactive','suspended'].map(s=>`<option value="${s}" ${s===e.status?'selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>EVA Weight</label>
+          <select id="e-eva">
+            ${[0.5,0.8,1.0,1.2,1.5,1.8,2.0].map(v=>`<option value="${v}" ${v==e.eva_weight?'selected':''}>×${v}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Base Salary (ZAR)</label><input id="e-salary" type="number" value="${e.base_salary||''}"/></div>
+        <div class="form-group"><label>Start Date</label><input id="e-start" type="date" value="${e.start_date?e.start_date.slice(0,10):''}"/></div>
+        <div class="form-group full"><label>Bio</label><textarea id="e-bio" rows="2">${e.bio||''}</textarea></div>
       </div>
-      <div class="form-group"><label>Department</label>
-        <select id="e-dept">
-          ${['Executive','Operations','Investments','Client Services','Compliance','Marketing','Technology','Finance'].map(d=>`<option ${d===e.department?'selected':''}>${d}</option>`).join('')}
-        </select>
+    </div>
+
+    <div class="edit-emp-panel" id="tab-personal">
+      <div class="form-grid">
+        <div class="form-group"><label>Birth Date</label><input id="e-dob" type="date" value="${e.birth_date?e.birth_date.slice(0,10):''}"/></div>
+        <div class="form-group"><label>ID Number</label><input id="e-idnum" value="${e.id_number||''}" placeholder="SA ID Number" maxlength="13" style="font-family:monospace"/>
+          <div style="font-size:0.72rem;color:var(--muted);margin-top:4px"><i class="fa-solid fa-shield"></i> Used as temporary PIN (last 4 digits) after a PIN reset</div>
+        </div>
       </div>
-      <div class="form-group"><label>Level</label>
-        <select id="e-level">
-          ${['junior','mid','senior','lead','executive'].map(l=>`<option value="${l}" ${l===e.level?'selected':''}>${LEVEL_LABELS[l]}</option>`).join('')}
-        </select>
+    </div>
+
+    <div class="edit-emp-panel" id="tab-address">
+      <div class="form-grid">
+        <div class="form-group full"><label>Address Line 1</label><input id="e-addr1" value="${e.address_line1||''}" placeholder="Street address"/></div>
+        <div class="form-group full"><label>Address Line 2</label><input id="e-addr2" value="${e.address_line2||''}" placeholder="Apartment, suite, unit (optional)"/></div>
+        <div class="form-group"><label>City</label><input id="e-city" value="${e.address_city||''}"/></div>
+        <div class="form-group"><label>Province</label>
+          <select id="e-province">
+            <option value="">— Select —</option>
+            ${['Gauteng','Western Cape','KwaZulu-Natal','Eastern Cape','Free State','Limpopo','Mpumalanga','North West','Northern Cape'].map(p=>`<option ${p===e.address_province?'selected':''}>${p}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Postal Code</label><input id="e-postal" value="${e.address_postal_code||''}" placeholder="0000" maxlength="10"/></div>
       </div>
-      <div class="form-group"><label>EVA Weight</label>
-        <select id="e-eva">
-          ${[0.5,0.8,1.0,1.2,1.5,1.8,2.0].map(v=>`<option value="${v}" ${v==e.eva_weight?'selected':''}>×${v}</option>`).join('')}
-        </select>
+    </div>
+
+    <div class="edit-emp-panel" id="tab-banking">
+      <div class="form-grid">
+        <div class="form-group"><label>Bank Name</label>
+          <select id="e-bankname">
+            <option value="">— Select —</option>
+            ${['ABSA','FNB','Standard Bank','Nedbank','Capitec','Investec','African Bank','TymeBank','Discovery Bank'].map(b=>`<option ${b===e.bank_name?'selected':''}>${b}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Account Holder</label><input id="e-bankholder" value="${e.bank_account_holder||''}" placeholder="Full name as on account"/></div>
+        <div class="form-group"><label>Account Number</label><input id="e-banknum" value="${e.bank_account_number||''}" placeholder="••••••••" style="font-family:monospace"/></div>
+        <div class="form-group"><label>Account Type</label>
+          <select id="e-banktype">
+            <option value="">— Select —</option>
+            ${['Cheque / Current','Savings','Transmission'].map(t=>`<option ${t===e.bank_account_type?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Branch Code</label><input id="e-bankbranch" value="${e.bank_branch_code||''}" placeholder="6-digit code" maxlength="6" style="font-family:monospace"/></div>
       </div>
-      <div class="form-group"><label>Base Salary (ZAR)</label><input id="e-salary" type="number" value="${e.base_salary||''}"/></div>
-      <div class="form-group"><label>Start Date</label><input id="e-start" type="date" value="${e.start_date?e.start_date.slice(0,10):''}"/></div>
-      <div class="form-group full"><label>Bio</label><textarea id="e-bio" rows="2">${e.bio||''}</textarea></div>
+    </div>
+
+    <div class="edit-emp-panel" id="tab-emergency">
+      <div class="form-grid">
+        <div class="form-group"><label>Emergency Contact Name</label><input id="e-emname" value="${e.emergency_contact_name||''}" placeholder="Full name"/></div>
+        <div class="form-group"><label>Emergency Contact Phone</label><input id="e-emphone" value="${e.emergency_contact_phone||''}" placeholder="+27 ..."/></div>
+      </div>
+      <div style="margin-top:20px;padding:14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:10px;font-size:0.8rem;color:var(--muted)">
+        <i class="fa-solid fa-circle-info" style="color:var(--gold);margin-right:6px"></i>
+        Emergency contact details are kept private and only accessed when necessary.
+      </div>
     </div>
   `;
   openModal('editEmpModal');
 }
 
+function switchEmpTab(btn, tabId) {
+  document.querySelectorAll('.edit-emp-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.edit-emp-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+}
+
 async function saveEmployeeEdit() {
   if (!_editingEmp) return;
+  const v = id => document.getElementById(id)?.value?.trim() || null;
   const updates = {
-    first_name:  document.getElementById('e-fname').value.trim(),
-    last_name:   document.getElementById('e-lname').value.trim(),
-    email:       document.getElementById('e-email').value.trim(),
-    phone:       document.getElementById('e-phone').value.trim(),
-    role:        document.getElementById('e-role').value,
-    department:  document.getElementById('e-dept').value,
-    level:       document.getElementById('e-level').value,
-    eva_weight:  parseFloat(document.getElementById('e-eva').value),
-    base_salary: Number(document.getElementById('e-salary').value) || null,
-    start_date:  document.getElementById('e-start').value || null,
-    bio:         document.getElementById('e-bio').value.trim(),
+    first_name:               v('e-fname') || '',
+    last_name:                v('e-lname') || '',
+    email:                    v('e-email'),
+    phone:                    v('e-phone'),
+    employee_number:          v('e-empnum'),
+    role:                     document.getElementById('e-role')?.value || _editingEmp.role,
+    department:               document.getElementById('e-dept')?.value || _editingEmp.department,
+    level:                    document.getElementById('e-level')?.value || _editingEmp.level,
+    status:                   document.getElementById('e-status')?.value || _editingEmp.status,
+    eva_weight:               parseFloat(document.getElementById('e-eva')?.value) || 1.0,
+    base_salary:              Number(document.getElementById('e-salary')?.value) || null,
+    start_date:               v('e-start') || null,
+    bio:                      v('e-bio'),
+    birth_date:               v('e-dob') || null,
+    id_number:                v('e-idnum'),
+    address_line1:            v('e-addr1'),
+    address_line2:            v('e-addr2'),
+    address_city:             v('e-city'),
+    address_province:         document.getElementById('e-province')?.value || null,
+    address_postal_code:      v('e-postal'),
+    bank_name:                document.getElementById('e-bankname')?.value || null,
+    bank_account_holder:      v('e-bankholder'),
+    bank_account_number:      v('e-banknum'),
+    bank_account_type:        document.getElementById('e-banktype')?.value || null,
+    bank_branch_code:         v('e-bankbranch'),
+    emergency_contact_name:   v('e-emname'),
+    emergency_contact_phone:  v('e-emphone'),
   };
   if (!updates.first_name || !updates.last_name) { showToast('First and last name are required', 'error'); return; }
 
   try {
-    const updated = await patch(`tables/employees/${_editingEmp.id}`, updates);
+    await patch(`tables/employees/${_editingEmp.id}`, updates);
     const idx = _employees.findIndex(e => e.id === _editingEmp.id);
     if (idx >= 0) _employees[idx] = { ..._employees[idx], ...updates };
     closeModal('editEmpModal');
@@ -412,6 +801,20 @@ async function toggleEmpStatus(empId, currentStatus) {
   closeModal('empDetailModal');
   showToast(`Employee ${newStatus === 'active' ? 'reactivated' : 'deactivated'}`);
   if (_currentView === 'employees') renderEmployees();
+}
+
+async function resetEmployeePin(empId) {
+  const emp = _employees.find(e => e.id === empId);
+  if (!emp) return;
+  const name = `${emp.first_name} ${emp.last_name}`;
+  if (!confirm(`Reset PIN for ${name}?\n\nThey will need to log in using the last 4 digits of their ID number as a temporary PIN, then set a new PIN.`)) return;
+  try {
+    await patch(`tables/employees/${empId}`, { pin_set: false, login_attempts: 0, login_locked_until: null });
+    closeModal('empDetailModal');
+    showToast(`PIN reset for ${name}. Temporary PIN is last 4 digits of their ID.`, 'success');
+  } catch(err) {
+    showToast('Failed to reset PIN', 'error');
+  }
 }
 
 /* ═══ CREATE EMPLOYEE ════════════════════════════════════════════════ */
@@ -450,7 +853,7 @@ function selectColor(el) {
 }
 
 function resetCreateForm() {
-  ['c-fname','c-lname','c-email','c-phone','c-dob','c-idnum','c-bio','c-welcome'].forEach(id => {
+  ['c-fname','c-lname','c-email','c-phone','c-dob','c-idnum','c-empnum','c-bio','c-welcome'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   ['c-role','c-dept'].forEach(id => { const el = document.getElementById(id); if (el) el.selectedIndex = 0; });
@@ -494,6 +897,9 @@ async function createEmployee() {
   const phone    = document.getElementById('c-phone').value.trim() || null;
   const bio      = document.getElementById('c-bio').value.trim() || null;
   const startDate= document.getElementById('c-start').value || new Date().toISOString().slice(0,10);
+  const empNumInput = (document.getElementById('c-empnum')?.value || '').trim();
+  const year     = new Date().getFullYear();
+  const empNumber = empNumInput || `SVC-${year}-${String(_employees.length + 1).padStart(4, '0')}`;
 
   try {
     // 1. Create employee record
@@ -502,40 +908,44 @@ async function createEmployee() {
       first_name:       fname,
       last_name:        lname,
       email:            email,
-      phone:            phone,
+      phone:            phone || null,
       role:             role,
       department:       dept,
       level:            level,
       avatar_initials:  initials,
       avatar_color:     _selectedColor,
-      base_salary:      salary,
-      start_date:       startDate,
-      birth_date:       dob,
-      id_number:        idNum,
-      bio:              bio,
+      base_salary:      salary || 0,
+      hire_date:        startDate,   // schema primary date column
+      start_date:       startDate,   // convenience alias (also in schema)
+      birth_date:       dob || null,
+      id_number:        idNum || null,
+      employee_number:  empNumber,
+      bio:              bio || null,
       status:           'active',
-      eva_weight:       evaWeight,
+      eva_weight:       evaWeight || 1.0,
       xp_points:        0,
       streak_days:      0,
-      badges:           [],
+      badges:           JSON.stringify([]),   // JSONB column — must be serialised
     });
     _employees.push(emp);
 
-    // 2. Auto-enrol in the 3 onboarding courses
+    // 2. Auto-enrol in the 3 onboarding courses (fire-and-forget — don't block employee creation)
     const onboardingCourses = ['CRS-OB-001','CRS-OB-002','CRS-OB-003'];
     for (const cid of onboardingCourses) {
-      await post('tables/course_progress', {
-        employee_id:      empId,
-        course_id:        cid,
-        status:           'enrolled',
-        current_module:   1,
-        modules_completed:[],
-        quiz_scores:      [],
-        overall_quiz_score: 0,
-        xp_earned:        0,
-        kpi_applied:      false,
-        started_at:       new Date().toISOString(),
-      });
+      try {
+        await post('tables/course_progress', {
+          employee_id:        empId,
+          course_id:          cid,
+          status:             'enrolled',
+          current_module:     1,
+          modules_completed:  JSON.stringify([]),
+          quiz_scores:        JSON.stringify([]),
+          overall_quiz_score: 0,
+          xp_earned:          0,
+          kpi_applied:        false,
+          started_at:         new Date().toISOString(),
+        });
+      } catch (_) { /* non-blocking — employee still created */ }
     }
 
     // 3. Create onboarding record with default task list
@@ -699,40 +1109,658 @@ function openObDetail(obId) {
   openModal('obDetailModal');
 }
 
+/* ═══ PAYSLIPS ══════════════════════════════════════════════════════ */
+
+function calcAnnualTax(annualIncome) {
+  const tiers = [
+    [0,       237100,   0,      0.18],
+    [237100,  370500,   42678,  0.26],
+    [370500,  512800,   77362,  0.31],
+    [512800,  673000,   121475, 0.36],
+    [673000,  857900,   179147, 0.39],
+    [857900,  1817000,  251258, 0.41],
+    [1817000, Infinity, 644489, 0.45],
+  ];
+  let tax = 0;
+  for (const [floor, ceil, base, rate] of tiers) {
+    if (annualIncome <= floor) break;
+    tax = base + (Math.min(annualIncome, ceil) - floor) * rate;
+    if (annualIncome <= ceil) break;
+  }
+  return Math.max(0, tax - 17235);
+}
+
+function calcMonthlyPAYE(monthly) {
+  return Math.round(calcAnnualTax(monthly * 12) / 12 * 100) / 100;
+}
+
+function calcUIF(gross) {
+  return Math.min(Math.round(gross * 0.01 * 100) / 100, 177.12);
+}
+
+function renderPayslips() {
+  const el = document.getElementById('payslipsContent');
+  const currentYear  = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  let periodOptions = '';
+  for (let i = 0; i < 24; i++) {
+    let m = currentMonth - i, y = currentYear;
+    while (m <= 0) { m += 12; y--; }
+    const val = `${y}-${String(m).padStart(2,'0')}`;
+    periodOptions += `<option value="${val}" ${i===0?'selected':''}>${MONTHS[m-1]} ${y}</option>`;
+  }
+
+  const empOptions = _employees
+    .filter(e => e.status === 'active')
+    .sort((a,b) => (a.first_name+a.last_name).localeCompare(b.first_name+b.last_name))
+    .map(e => `<option value="${e.id}">${e.first_name} ${e.last_name} · ${e.role||'—'}</option>`)
+    .join('');
+
+  const history = [..._payslips]
+    .sort((a,b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 50);
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px">
+        <div style="font-size:1rem;font-weight:800;margin-bottom:18px;display:flex;align-items:center;gap:10px">
+          <i class="fa-solid fa-file-invoice-dollar" style="color:var(--gold)"></i> Generate Payslip
+        </div>
+        <div class="form-grid">
+          <div class="form-group full"><label>Employee <span class="req">*</span></label>
+            <select id="ps-emp">${empOptions}</select>
+          </div>
+          <div class="form-group full"><label>Pay Period <span class="req">*</span></label>
+            <select id="ps-period">${periodOptions}</select>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+          <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Earnings</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Basic Salary (ZAR)</label>
+              <input id="ps-salary" type="number" placeholder="0.00"/>
+            </div>
+            <div class="form-group"><label>Bonus / Commission</label>
+              <input id="ps-bonus" type="number" placeholder="0.00"/>
+            </div>
+            <div class="form-group"><label>Other Earnings</label>
+              <input id="ps-other-earn" type="number" placeholder="0.00"/>
+            </div>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+          <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">
+            Deductions <span style="font-weight:400;text-transform:none;letter-spacing:0">(auto-calculated, editable)</span>
+          </div>
+          <div class="form-grid">
+            <div class="form-group"><label>PAYE Tax</label><input id="ps-tax" type="number" placeholder="auto"/></div>
+            <div class="form-group"><label>UIF (employee)</label><input id="ps-uif" type="number" placeholder="auto"/></div>
+            <div class="form-group"><label>Other Deductions</label><input id="ps-other-ded" type="number" placeholder="0.00"/></div>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+          <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Notes (optional)</div>
+          <textarea id="ps-notes" rows="2" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.82rem;font-family:var(--font);resize:none;outline:none"></textarea>
+        </div>
+        <div id="ps-preview" style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:10px;padding:14px;margin-top:16px">
+          <div style="font-size:0.7rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Preview</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.8rem">
+            <div style="color:var(--muted)">Total Earnings</div><div id="pv-earn" style="text-align:right;font-weight:600">R 0.00</div>
+            <div style="color:var(--muted)">Total Deductions</div><div id="pv-ded" style="text-align:right;font-weight:600">R 0.00</div>
+            <div style="font-weight:700;font-size:0.88rem">Nett Pay</div><div id="pv-nett" style="text-align:right;font-weight:800;font-size:0.88rem;color:var(--gold)">R 0.00</div>
+          </div>
+        </div>
+        <div style="margin-top:16px">
+          <button class="btn btn--gold" style="width:100%" id="psGenerateBtn">
+            <i class="fa-solid fa-file-circle-plus"></i> Generate &amp; Save
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:1rem;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:10px">
+          <i class="fa-solid fa-clock-rotate-left" style="color:var(--accent)"></i> Generated Payslips
+        </div>
+        <div id="ps-history">
+          ${history.length === 0
+            ? `<div class="dir-empty"><i class="fa-solid fa-file-invoice-dollar"></i><h3>No payslips yet</h3><p>Generate the first payslip using the form.</p></div>`
+            : history.map(p => {
+                const emp = _employees.find(e => e.id === p.employee_id);
+                const label = emp ? `${emp.first_name} ${emp.last_name}` : p.employee_id;
+                const [yr,mo] = p.pay_period.split('-');
+                const moLabel = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mo,10)-1] || mo;
+                return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px">
+                  <div style="width:40px;height:40px;border-radius:10px;background:rgba(245,158,11,0.1);color:var(--gold);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <i class="fa-solid fa-file-invoice-dollar"></i>
+                  </div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-weight:700;font-size:0.85rem">${label}</div>
+                    <div style="font-size:0.73rem;color:var(--muted)">${moLabel} ${yr} · Nett R ${Number(p.nett_pay||0).toLocaleString('en-ZA',{minimumFractionDigits:2})}</div>
+                  </div>
+                  <button class="btn btn--ghost btn--sm" onclick="printPayslip('${p.id}')"><i class="fa-solid fa-print"></i> Print</button>
+                  <button class="btn btn--danger btn--sm" style="opacity:0.7" onclick="deletePayslip('${p.id}')"><i class="fa-solid fa-trash"></i></button>
+                </div>`;
+              }).join('')
+          }
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Wire inputs → live preview
+  ['ps-salary','ps-bonus','ps-other-earn','ps-other-ded'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', _updatePayslipCalcs);
+  });
+
+  // Employee change → auto-fill salary
+  document.getElementById('ps-emp')?.addEventListener('change', () => {
+    const emp = _employees.find(e => e.id === document.getElementById('ps-emp').value);
+    if (emp?.base_salary) {
+      document.getElementById('ps-salary').value = Number(emp.base_salary).toFixed(2);
+      _updatePayslipCalcs();
+    }
+  });
+
+  // Generate button
+  document.getElementById('psGenerateBtn')?.addEventListener('click', generatePayslip);
+
+  // Pre-fill first employee's salary
+  const firstEmpId = document.getElementById('ps-emp')?.value;
+  const firstEmp = _employees.find(e => e.id === firstEmpId);
+  if (firstEmp?.base_salary) {
+    document.getElementById('ps-salary').value = Number(firstEmp.base_salary).toFixed(2);
+    _updatePayslipCalcs();
+  }
+}
+
+function _updatePayslipCalcs() {
+  const salary    = parseFloat(document.getElementById('ps-salary')?.value)    || 0;
+  const bonus     = parseFloat(document.getElementById('ps-bonus')?.value)     || 0;
+  const otherEarn = parseFloat(document.getElementById('ps-other-earn')?.value)|| 0;
+  const otherDed  = parseFloat(document.getElementById('ps-other-ded')?.value) || 0;
+
+  const totalEarnings = salary + bonus + otherEarn;
+  const tax = calcMonthlyPAYE(totalEarnings);
+  const uif = calcUIF(totalEarnings);
+
+  document.getElementById('ps-tax').value = tax.toFixed(2);
+  document.getElementById('ps-uif').value = uif.toFixed(2);
+
+  const totalDed = tax + uif + otherDed;
+  const nett     = totalEarnings - totalDed;
+  const fmt = n => `R ${n.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('pv-earn', fmt(totalEarnings));
+  set('pv-ded',  fmt(totalDed));
+  set('pv-nett', fmt(nett));
+}
+
+async function generatePayslip() {
+  const empId  = document.getElementById('ps-emp')?.value;
+  const period = document.getElementById('ps-period')?.value;
+  if (!empId || !period) { showToast('Select an employee and pay period', 'error'); return; }
+  if (_payslips.find(p => p.employee_id === empId && p.pay_period === period)) {
+    showToast('A payslip for this employee and period already exists', 'error'); return;
+  }
+
+  const salary    = parseFloat(document.getElementById('ps-salary').value)    || 0;
+  const bonus     = parseFloat(document.getElementById('ps-bonus').value)     || 0;
+  const otherEarn = parseFloat(document.getElementById('ps-other-earn').value)|| 0;
+  const tax       = parseFloat(document.getElementById('ps-tax').value)       || 0;
+  const uif       = parseFloat(document.getElementById('ps-uif').value)       || 0;
+  const otherDed  = parseFloat(document.getElementById('ps-other-ded').value) || 0;
+  const notes     = document.getElementById('ps-notes').value.trim();
+
+  const totalEarnings = salary + bonus + otherEarn;
+  const totalDed      = tax + uif + otherDed;
+  const nett          = totalEarnings - totalDed;
+  const uifCompany    = calcUIF(totalEarnings);
+
+  // YTD: sum all payslips for this employee in the same SA tax year (April–March)
+  const [yr, mo] = period.split('-').map(Number);
+  const taxYearStart = mo >= 4 ? `${yr}-04` : `${yr-1}-04`;
+  const prior = _payslips.filter(p => p.employee_id === empId && p.pay_period >= taxYearStart && p.pay_period < period);
+  const ytdEarnings = prior.reduce((s,p) => s + Number(p.total_earnings||0), 0) + totalEarnings;
+  const ytdTax      = prior.reduce((s,p) => s + Number(p.tax||0), 0) + tax;
+
+  // Pay date = last day of the pay period month
+  const [yr2, mo2] = period.split('-');
+  const payDate = `${yr2}-${mo2}-${new Date(Number(yr2), Number(mo2), 0).getDate()}`;
+
+  const btn = document.getElementById('psGenerateBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+
+  try {
+    const saved = await post('tables/payslips', {
+      id:                                 'PAY' + String(Date.now()).slice(-9),
+      employee_id:                        empId,
+      pay_period:                         period,
+      pay_date:                           payDate,
+      basic_salary:                       salary,
+      bonus,
+      other_earnings:                     otherEarn,
+      total_earnings:                     totalEarnings,
+      tax,
+      uif_employee:                       uif,
+      other_deductions:                   otherDed,
+      total_deductions:                   totalDed,
+      nett_pay:                           nett,
+      uif_company:                        uifCompany,
+      ytd_taxable_earnings:               ytdEarnings,
+      ytd_tax_paid:                       ytdTax,
+      ytd_taxable_company_contributions:  0,
+      ytd_taxable_fringe_benefits:        0,
+      ytd_provision_annual_bonus:         0,
+      notes,
+      generated_by: _session.empId,
+    });
+    _payslips.push(saved);
+    showToast('Payslip generated successfully!');
+    printPayslip(saved.id);
+    renderPayslips();
+  } catch(err) {
+    showToast('Failed to save payslip', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-file-circle-plus"></i> Generate &amp; Save';
+  }
+}
+
+async function deletePayslip(id) {
+  if (!confirm('Delete this payslip? This cannot be undone.')) return;
+  await del(`tables/payslips/${id}`);
+  _payslips = _payslips.filter(p => p.id !== id);
+  showToast('Payslip deleted');
+  renderPayslips();
+}
+
+function printPayslip(id) {
+  const p   = _payslips.find(x => x.id === id);
+  const emp = p ? _employees.find(e => e.id === p.employee_id) : null;
+  if (!p || !emp) { showToast('Payslip not found', 'error'); return; }
+  const w = window.open('', '_blank', 'width=900,height=720');
+  if (!w) { showToast('Allow pop-ups to print payslips', 'error'); return; }
+  w.document.write(buildPayslipHTML(p, emp));
+  w.document.close();
+  w.onload = () => w.print();
+}
+
+function buildPayslipHTML(p, emp) {
+  const fmt = n => Number(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const maskAcc = n => { const s=String(n||''); return s.length>4?'*'.repeat(s.length-4)+s.slice(-4):s; };
+  const rph = (Number(emp.base_salary||0)/173.33).toFixed(5);
+  const payDateFmt = (p.pay_date||'').replace(/-/g,'/');
+  const startFmt = emp.start_date?emp.start_date.slice(0,10).replace(/-/g,'/'):'—';
+  const empCode = emp.employee_number||emp.id;
+  const addrParts = [emp.address_line1,emp.address_line2,emp.address_city,emp.address_province,emp.address_postal_code].filter(Boolean);
+  const addrHtml = addrParts.length?addrParts.join(', '):'—';
+  const [yr,mo] = (p.pay_period||'').split('-');
+  const moLabel = ['January','February','March','April','May','June','July','August','September','October','November','December'][(parseInt(mo,10)||1)-1]||mo;
+  const LOGO = 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMTA2LjkyMSIgdmlld0JveD0iMCAwIDQzMS4yMTggMTA2LjkyMSIgd2lkdGg9IjQzMS4yMTgiPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGdyYWRpZW50VW5pdHM9Im9iamVjdEJvdW5kaW5nQm94IiBpZD0ibGluZWFyLWdyYWRpZW50IiB4MT0iMC44NzQiIHgyPSIwLjExIiB5MT0iMC4wMzQiIHkyPSIwLjk4NiI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iI2ZmOWIwYyIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjAuMjA0IiBzdG9wLWNvbG9yPSIjZmY5NDBlIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMC40OTIiIHN0b3AtY29sb3I9IiNmZjgyMTUiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIwLjgyNyIgc3RvcC1jb2xvcj0iI2ZmNjQyMSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjAuOTk3IiBzdG9wLWNvbG9yPSIjZmY1MjI5Ii8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGdyYWRpZW50VW5pdHM9Im9iamVjdEJvdW5kaW5nQm94IiBpZD0ibGluZWFyLWdyYWRpZW50LTIiIHgxPSIwLjUiIHgyPSIwLjUiIHkxPSIwLjAyNyIgeTI9IjAuOTk0Ij4KICAgICAgPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZWRhNWZmIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMC4xNzUiIHN0b3AtY29sb3I9IiNlZmE5ZTUiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIwLjU0OSIgc3RvcC1jb2xvcj0iI2Y1YjNhNCIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmZWMyNGYiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgZ3JhZGllbnRVbml0cz0ib2JqZWN0Qm91bmRpbmdCb3giIGlkPSJsaW5lYXItZ3JhZGllbnQtMyIgeDI9IjEiIHkxPSIwLjUiIHkyPSIwLjUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiM2NWVkMDAiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIwLjk5NyIgc3RvcC1jb2xvcj0iIzAwOTZmZiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBncmFkaWVudFVuaXRzPSJvYmplY3RCb3VuZGluZ0JveCIgaWQ9ImxpbmVhci1ncmFkaWVudC00IiB4Mj0iMSIgeTE9IjAuNSIgeTI9IjAuNSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMC4wMDMiIHN0b3AtY29sb3I9IiMwMDk2ZmYiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjNjVlZDAwIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGhyZWY9IiNsaW5lYXItZ3JhZGllbnQtMyIgaWQ9ImxpbmVhci1ncmFkaWVudC01IiB4MT0iMC45NDMiIHgyPSIwLjAyNyIgeTE9IjAuMDQ0IiB5Mj0iMC45ODYiLz4KICAgIDxsaW5lYXJHcmFkaWVudCBncmFkaWVudFVuaXRzPSJvYmplY3RCb3VuZGluZ0JveCIgaWQ9ImxpbmVhci1ncmFkaWVudC02IiB4MT0iMC4xMzEiIHgyPSIwLjg4OSIgeTE9IjAuMDI5IiB5Mj0iMC45OTYiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAuMDAzIiBzdG9wLWNvbG9yPSIjZmZlODZhIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI2ZmYjc4MiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBncmFkaWVudFVuaXRzPSJvYmplY3RCb3VuZGluZ0JveCIgaWQ9ImxpbmVhci1ncmFkaWVudC03IiB4MT0iMC4wNDkiIHgyPSIwLjk2NSIgeTE9IjAuMDQ0IiB5Mj0iMC45NzEiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmZjliMGMiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIwLjk5NyIgc3RvcC1jb2xvcj0iI2ZmNTIyOSIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBncmFkaWVudFVuaXRzPSJvYmplY3RCb3VuZGluZ0JveCIgaWQ9ImxpbmVhci1ncmFkaWVudC04IiB4MT0iMC41IiB4Mj0iMC41IiB5MT0iMC4wNTYiIHkyPSIwLjg5MSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iI2ZlYzI0ZiIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNlZmE5ZTYiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxnIGlkPSJMb2dvIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwKSI+CiAgICA8ZyBkYXRhLW5hbWU9Ikdyb3VwIDMxNDEiIGlkPSJHcm91cF8zMTQxIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMzg2MyAzMjY5LjgyNSkiPgogICAgICA8cGF0aCBkPSJNLTE0My4xNTYtMTMuMi0xNDguMTE1LDBoLTIuNTA4TC0xNTUuNi0xMy4yaDIuMzE4bDMuOTE0LDEwLjk4MiwzLjkzMy0xMC45ODJabTEyLjczLDcuNzE0YTYuNzcxLDYuNzcxLDAsMCwxLS4wNzYsMS4wNjRoLThhMi45LDIuOSwwLDAsMCwuOTMxLDIuMDE0LDIuOTM5LDIuOTM5LDAsMCwwLDIuMDUyLjc2LDIuNTM0LDIuNTM0LDAsMCwwLDIuNDctMS40NjNoMi4zMzdBNC43MTYsNC43MTYsMCwwLDEtMTMyLjQzLS43NTFhNS4wNDUsNS4wNDUsMCwwLDEtMy4wODguOTIyQTUuMzQ3LDUuMzQ3LDAsMCwxLTEzOC4yMDYtLjVhNC44LDQuOCwwLDAsMS0xLjg2Mi0xLjksNS44LDUuOCwwLDAsMS0uNjc0LTIuODQxLDUuOTMyLDUuOTMyLDAsMCwxLC42NTYtMi44NDEsNC42MSw0LjYxLDAsMCwxLDEuODQzLTEuODksNS40ODUsNS40ODUsMCwwLDEsMi43MjYtLjY2NSw1LjMzMiw1LjMzMiwwLDAsMSwyLjY0MS42NDYsNC41NjUsNC41NjUsMCwwLDEsMS44LDEuODE1QTUuNDY1LDUuNDY1LDAsMCwxLTEzMC40MjUtNS40OTFabS0yLjI2MS0uNjg0YTIuNDY1LDIuNDY1LDAsMCwwLS44NTUtMS45MTksMy4wNTcsMy4wNTcsMCwwLDAtMi4wNzEtLjcyMiwyLjc4MiwyLjc4MiwwLDAsMC0xLjkxOS43MTMsMi45NzgsMi45NzgsMCwwLDAtLjk1LDEuOTI4Wm0xMS00LjQ2NWE0LjcsNC43LDAsMCwxLDIuMjE0LjUxMywzLjY0OCwzLjY0OCwwLDAsMSwxLjUyOSwxLjUyLDUsNSwwLDAsMSwuNTUxLDIuNDMyVjBoLTIuMTQ3Vi01Ljg1MmEzLjAzOSwzLjAzOSwwLDAsMC0uNy0yLjE1NywyLjUsMi41LDAsMCwwLTEuOTE5LS43NSwyLjUzMywyLjUzMywwLDAsMC0xLjkyOS43NSwzLjAxMywzLjAxMywwLDAsMC0uNzEyLDIuMTU3VjBoLTIuMTY2Vi0xMC40NjloMi4xNjZ2MS4yYTMuNTg1LDMuNTg1LDAsMCwxLDEuMzU4LTEuMDA3QTQuMzQzLDQuMzQzLDAsMCwxLTEyMS42ODYtMTAuNjRaTS0xMTAuNzgtOC43djUuNzk1YTEuMTEyLDEuMTEyLDAsMCwwLC4yNzUuODQ2LDEuMzcsMS4zNywwLDAsMCwuOTQuMjU2aDEuMzNWMGgtMS43MWEzLjMsMy4zLDAsMCwxLTIuMjQyLS42ODQsMi44MTksMi44MTksMCwwLDEtLjc3OS0yLjIyM1YtOC43SC0xMTQuMnYtMS43NjdoMS4yMzV2LTIuNmgyLjE4NXYyLjZoMi41NDZWLTguN1ptMTUuMzUyLTEuNzY3VjBoLTIuMTY2Vi0xLjIzNWEzLjUwNiwzLjUwNiwwLDAsMS0xLjM0LDEuMDE2LDQuMjQ3LDQuMjQ3LDAsMCwxLTEuNzU3LjM3MUE0LjcsNC43LDAsMCwxLTEwMi45LS4zNjFhMy43MDYsMy43MDYsMCwwLDEtMS41MzktMS41MkE0LjkzMSw0LjkzMSwwLDAsMS0xMDUtNC4zMTN2LTYuMTU2aDIuMTQ3djUuODMzYTMuMDM5LDMuMDM5LDAsMCwwLC43LDIuMTU3LDIuNSwyLjUsMCwwLDAsMS45MTkuNzUxLDIuNTMzLDIuNTMzLDAsMCwwLDEuOTI5LS43NTEsMy4wMTMsMy4wMTMsMCwwLDAsLjcxMi0yLjE1N3YtNS44MzNabTYuMzQ2LDEuNTJhMy40LDMuNCwwLDAsMSwxLjI2My0xLjI0NSwzLjczNywzLjczNywwLDAsMSwxLjg3MS0uNDQ3Vi04LjRILTg2LjVhMi42MzgsMi42MzgsMCwwLDAtMS45MjkuNjQ2LDMuMDg5LDMuMDg5LDAsMCwwLS42NTUsMi4yNDJWMGgtMi4xNjZWLTEwLjQ2OWgyLjE2NlptMTYuMDU1LDMuNDU4QTYuNzcyLDYuNzcyLDAsMCwxLTczLjEtNC40MjdoLThhMi45LDIuOSwwLDAsMCwuOTMxLDIuMDE0LDIuOTM5LDIuOTM5LDAsMCwwLDIuMDUyLjc2LDIuNTM0LDIuNTM0LDAsMCwwLDIuNDctMS40NjNoMi4zMzdBNC43MTYsNC43MTYsMCwwLDEtNzUuMDMxLS43NTFhNS4wNDUsNS4wNDUsMCwwLDEtMy4wODguOTIyQTUuMzQ3LDUuMzQ3LDAsMCwxLTgwLjgwNy0uNWE0LjgsNC44LDAsMCwxLTEuODYyLTEuOSw1LjgsNS44LDAsMCwxLS42NzQtMi44NDEsNS45MzIsNS45MzIsMCwwLDEsLjY1NS0yLjg0MSw0LjYxLDQuNjEsMCwwLDEsMS44NDMtMS44OSw1LjQ4NSw1LjQ4NSwwLDAsMSwyLjcyNy0uNjY1LDUuMzMyLDUuMzMyLDAsMCwxLDIuNjQxLjY0Niw0LjU2NSw0LjU2NSwwLDAsMSwxLjgwNSwxLjgxNUE1LjQ2NSw1LjQ2NSwwLDAsMS03My4wMjctNS40OTFabS0yLjI2MS0uNjg0YTIuNDY1LDIuNDY1LDAsMCwwLS44NTUtMS45MTksMy4wNTcsMy4wNTcsMCwwLDAtMi4wNzEtLjcyMiwyLjc4MiwyLjc4MiwwLDAsMC0xLjkxOS43MTMsMi45NzgsMi45NzgsMCwwLDAtLjk1LDEuOTI4Wm0xOS4wNTctLjYwOGEyLjkyLDIuOTIsMCwwLDEsMS44MDUsMS4xMjEsMy4zLDMuMywwLDAsMSwuNzQxLDIuMTA5LDMuMjY4LDMuMjY4LDAsMCwxLS41MjMsMS44MTUsMy41NDEsMy41NDEsMCwwLDEtMS41MSwxLjI3Myw1LjM0LDUuMzQsMCwwLDEtMi4zLjQ2NUgtNjMuM1YtMTMuMmg1LjAzNWE1LjQsNS40LDAsMCwxLDIuMzE4LjQ1NiwzLjQsMy40LDAsMCwxLDEuNDYzLDEuMjI2LDMuMTE2LDMuMTE2LDAsMCwxLC40OTQsMS43MkEyLjk0NSwyLjk0NSwwLDAsMS01NC42LTcuOSwzLjU0LDMuNTQsMCwwLDEtNTYuMjMxLTYuNzgzWm0tNC45LS44NzRoMi42NzlhMi41NzMsMi41NzMsMCwwLDAsMS42NjItLjQ4NCwxLjY5MiwxLjY5MiwwLDAsMCwuNi0xLjQsMS43MjYsMS43MjYsMCwwLDAtLjYtMS40LDIuNTA2LDIuNTA2LDAsMCwwLTEuNjYyLS41aC0yLjY3OVptMi45MjYsNS44OUEyLjU4OSwyLjU4OSwwLDAsMC01Ni40NzgtMi4zYTEuODM4LDEuODM4LDAsMCwwLC42MjctMS40ODIsMS45MjMsMS45MjMsMCwwLDAtLjY2NS0xLjUzOSwyLjYyMiwyLjYyMiwwLDAsMC0xLjc2Ny0uNTdoLTIuODV2NC4xMjNabTE3LjgtMy43MjRhNi43NzIsNi43NzIsMCwwLDEtLjA3NiwxLjA2NGgtOGEyLjksMi45LDAsMCwwLC45MzEsMi4wMTQsMi45MzksMi45MzksMCwwLDAsMi4wNTIuNzYsMi41MzQsMi41MzQsMCwwLDAsMi40Ny0xLjQ2M2gyLjMzN2E0LjcxNiw0LjcxNiwwLDAsMS0xLjcyLDIuMzY2QTUuMDQ1LDUuMDQ1LDAsMCwxLTQ1LjUuMTcxLDUuMzQ3LDUuMzQ3LDAsMCwxLTQ4LjE4NC0uNWE0LjgsNC44LDAsMCwxLTEuODYyLTEuOSw1LjgsNS44LDAsMCwxLS42NzQtMi44NDEsNS45MzIsNS45MzIsMCwwLDEsLjY1Ni0yLjg0MSw0LjYxLDQuNjEsMCwwLDEsMS44NDMtMS44OUE1LjQ4NSw1LjQ4NSwwLDAsMS00NS41LTEwLjY0YTUuMzMyLDUuMzMyLDAsMCwxLDIuNjQxLjY0Niw0LjU2NSw0LjU2NSwwLDAsMSwxLjgwNSwxLjgxNUE1LjQ2NSw1LjQ2NSwwLDAsMS00MC40LTUuNDkxWm0tMi4yNjEtLjY4NGEyLjQ2NSwyLjQ2NSwwLDAsMC0uODU1LTEuOTE5LDMuMDU3LDMuMDU3LDAsMCwwLTIuMDcxLS43MjIsMi43ODIsMi43ODIsMCwwLDAtMS45MTkuNzEzLDIuOTc4LDIuOTc4LDAsMCwwLS45NSwxLjkyOFptMTUuMTQzLTQuMjk0LTYuNDIyLDE1LjM5aC0yLjI0MmwyLjEyOC01LjA5Mi00LjEyMy0xMC4zaDIuNDEzbDIuOTQ1LDcuOTgsMy4wNTktNy45OFpNLTIwLjAxNi4xNzFBNS4zNjEsNS4zNjEsMCwwLDEtMjIuNy0uNWE0Ljg0NSw0Ljg0NSwwLDAsMS0xLjg4MS0xLjksNS43MzEsNS43MzEsMCwwLDEtLjY4NC0yLjg0MSw1LjYyMSw1LjYyMSwwLDAsMSwuNy0yLjgzMSw0Ljg1Niw0Ljg1NiwwLDAsMSwxLjkxOS0xLjksNS41NjgsNS41NjgsMCwwLDEsMi43MTctLjY2NSw1LjU2OCw1LjU2OCwwLDAsMSwyLjcxNy42NjUsNC44NTYsNC44NTYsMCwwLDEsMS45MTksMS45LDUuNjIxLDUuNjIxLDAsMCwxLC43LDIuODMxQTUuNSw1LjUsMCwwLDEtMTUuMy0yLjQxMyw1LDUsMCwwLDEtMTcuMjcxLS41LDUuNjY4LDUuNjY4LDAsMCwxLTIwLjAxNi4xNzFabTAtMS44ODFhMy4yMjMsMy4yMjMsMCwwLDAsMS41NjgtLjQsMy4wNCwzLjA0LDAsMCwwLDEuMTg4LTEuMiwzLjg0OCwzLjg0OCwwLDAsMCwuNDU2LTEuOTM4LDMuOTI4LDMuOTI4LDAsMCwwLS40MzctMS45MjlBMi45NSwyLjk1LDAsMCwwLTE4LjQtOC4zNmEzLjE3LDMuMTcsMCwwLDAtMS41NTgtLjQsMy4xMTcsMy4xMTcsMCwwLDAtMS41NDkuNCwyLjg0OCwyLjg0OCwwLDAsMC0xLjEzLDEuMTg3LDQuMDc1LDQuMDc1LDAsMCwwLS40MTgsMS45MjksMy42NzMsMy42NzMsMCwwLDAsLjg2NSwyLjYxMkEyLjg1NywyLjg1NywwLDAsMC0yMC4wMTYtMS43MVptMTQuMTkzLTguOTNhNC43LDQuNywwLDAsMSwyLjIxNC41MTMsMy42NDgsMy42NDgsMCwwLDEsMS41MywxLjUyQTUsNSwwLDAsMS0xLjUzLTYuMTc1VjBILTMuNjc3Vi01Ljg1MmEzLjAzOSwzLjAzOSwwLDAsMC0uNy0yLjE1N0EyLjUsMi41LDAsMCwwLTYuMy04Ljc1OWEyLjUzMywyLjUzMywwLDAsMC0xLjkyOS43NUEzLjAxMywzLjAxMywwLDAsMC04Ljk0LTUuODUyVjBoLTIuMTY2Vi0xMC40NjlILTguOTR2MS4yYTMuNTg1LDMuNTg1LDAsMCwxLDEuMzU5LTEuMDA3QTQuMzQzLDQuMzQzLDAsMCwxLTUuODI0LTEwLjY0Wk0xLjgzMy01LjI4MmE1Ljc5NCw1Ljc5NCwwLDAsMSwuNjU1LTIuNzkzQTQuOCw0LjgsMCwwLDEsNC4yNzUtOS45NjVhNC44Miw0LjgyLDAsMCwxLDIuNTE4LS42NzUsNC45MSw0LjkxLDAsMCwxLDIuMDIzLjQ0N0E0LjE0LDQuMTQsMCwwLDEsMTAuNC05LjAwNlYtMTQuMDZoMi4xODVWMEgxMC40Vi0xLjU3N0E0LjA1NSw0LjA1NSwwLDAsMSw4LjkzLS4zMjMsNC41NjksNC41NjksMCwwLDEsNi43NzMuMTcxYTQuNjg1LDQuNjg1LDAsMCwxLTIuNS0uNjkzQTQuODk1LDQuODk1LDAsMCwxLDIuNDg5LTIuNDYxLDUuOTYyLDUuOTYyLDAsMCwxLDEuODMzLTUuMjgyWm04LjU2OS4wMzhhMy43OTEsMy43OTEsMCwwLDAtLjQ0Ni0xLjg4MUEzLjEzNCwzLjEzNCwwLDAsMCw4Ljc4Ny04LjM0MWEzLjA1NywzLjA1NywwLDAsMC0xLjU1OC0uNDE4LDMuMTEyLDMuMTEyLDAsMCwwLTEuNTU4LjQwOEEzLjA4MSwzLjA4MSwwLDAsMCw0LjUtNy4xNTRhMy43MzcsMy43MzcsMCwwLDAtLjQ0NywxLjg3MiwzLjksMy45LDAsMCwwLC40NDcsMS45QTMuMTUsMy4xNSwwLDAsMCw1LjY4MS0yLjEzOGEzLjAyMSwzLjAyMSwwLDAsMCwxLjU0OS40MjgsMy4wNTcsMy4wNTcsMCwwLDAsMS41NTgtLjQxOEEzLjExOSwzLjExOSwwLDAsMCw5Ljk1Ni0zLjM1MywzLjg0NSwzLjg0NSwwLDAsMCwxMC40LTUuMjQ0Wk0yNS41NjUtOC43djUuNzk1YTEuMTEyLDEuMTEyLDAsMCwwLC4yNzYuODQ2LDEuMzcsMS4zNywwLDAsMCwuOTQuMjU2aDEuMzNWMEgyNi40YTMuMywzLjMsMCwwLDEtMi4yNDItLjY4NCwyLjgxOSwyLjgxOSwwLDAsMS0uNzc5LTIuMjIzVi04LjdIMjIuMTQ1di0xLjc2N0gyMy4zOHYtMi42aDIuMTg1djIuNmgyLjU0NlYtOC43Wk0zNi44NS0xMC42NGE0LjM5MSw0LjM5MSwwLDAsMSwyLjEzOC41MTMsMy42NTEsMy42NTEsMCwwLDEsMS40ODIsMS41Miw1LjA3Miw1LjA3MiwwLDAsMSwuNTQyLDIuNDMyVjBIMzguODY0Vi01Ljg1MmEzLjAzOSwzLjAzOSwwLDAsMC0uNy0yLjE1NywyLjUsMi41LDAsMCwwLTEuOTE5LS43NSwyLjUzMywyLjUzMywwLDAsMC0xLjkyOS43NUEzLjAxMywzLjAxMywwLDAsMCwzMy42LTUuODUyVjBIMzEuNDM1Vi0xNC4wNkgzMy42djQuODA3QTMuNjMyLDMuNjMyLDAsMCwxLDM1LTEwLjI3OSw0LjY2OSw0LjY2OSwwLDAsMSwzNi44NS0xMC42NFpNNTQuNjkxLTUuNDkxYTYuNzcyLDYuNzcyLDAsMCwxLS4wNzYsMS4wNjRoLThhMi45LDIuOSwwLDAsMCwuOTMxLDIuMDE0LDIuOTM5LDIuOTM5LDAsMCwwLDIuMDUyLjc2LDIuNTM0LDIuNTM0LDAsMCwwLDIuNDctMS40NjNoMi4zMzdhNC43MTYsNC43MTYsMCwwLDEtMS43MiwyLjM2NkE1LjA0NSw1LjA0NSwwLDAsMSw0OS42LjE3MSw1LjM0Nyw1LjM0NywwLDAsMSw0Ni45MTEtLjVhNC44LDQuOCwwLDAsMS0xLjg2Mi0xLjksNS44LDUuOCwwLDAsMS0uNjc0LTIuODQxLDUuOTMyLDUuOTMyLDAsMCwxLC42NTYtMi44NDEsNC42MSw0LjYxLDAsMCwxLDEuODQzLTEuODlBNS40ODUsNS40ODUsMCwwLDEsNDkuNi0xMC42NGE1LjMzMiw1LjMzMiwwLDAsMSwyLjY0MS42NDYsNC41NjUsNC41NjUsMCwwLDEsMS44MDUsMS44MTVBNS40NjUsNS40NjUsMCwwLDEsNTQuNjkxLTUuNDkxWk01Mi40My02LjE3NWEyLjQ2NSwyLjQ2NSwwLDAsMC0uODU1LTEuOTE5QTMuMDU3LDMuMDU3LDAsMCwwLDQ5LjUtOC44MTZhMi43ODIsMi43ODIsMCwwLDAtMS45MTkuNzEzLDIuOTc4LDIuOTc4LDAsMCwwLS45NSwxLjkyOFpNNzAuNDQyLjEzM2E2Ljg0LDYuODQsMCwwLDEtMy4zOTEtLjg2NEE2LjQwNiw2LjQwNiwwLDAsMSw2NC42LTMuMTQ1YTYuOCw2LjgsMCwwLDEtLjktMy40ODcsNi43NDQsNi43NDQsMCwwLDEsLjktMy40NzcsNi40MjYsNi40MjYsMCwwLDEsMi40NTEtMi40LDYuODQsNi44NCwwLDAsMSwzLjM5MS0uODY0LDYuODc3LDYuODc3LDAsMCwxLDMuNDEuODY0LDYuMzU4LDYuMzU4LDAsMCwxLDIuNDQyLDIuNCw2LjgsNi44LDAsMCwxLC44OTMsMy40NzcsNi44NTIsNi44NTIsMCwwLDEtLjg5MywzLjQ4N0E2LjMzOCw2LjMzOCwwLDAsMSw3My44NTMtLjczMSw2Ljg3Nyw2Ljg3NywwLDAsMSw3MC40NDIuMTMzWm0wLTEuODgxYTQuNTUyLDQuNTUyLDAsMCwwLDIuMzM3LS42LDQuMTQ5LDQuMTQ5LDAsMCwwLDEuNjA1LTEuNzEsNS40OTEsNS40OTEsMCwwLDAsLjU3OS0yLjU3NUE1LjQzMyw1LjQzMywwLDAsMCw3NC4zODUtOS4yYTQuMSw0LjEsMCwwLDAtMS42MDUtMS42OTEsNC42MDksNC42MDksMCwwLDAtMi4zMzctLjU4OSw0LjYwOSw0LjYwOSwwLDAsMC0yLjMzNy41ODlBNC4xLDQuMSwwLDAsMCw2Ni41LTkuMmE1LjQzMyw1LjQzMywwLDAsMC0uNTc5LDIuNTY1QTUuNDkxLDUuNDkxLDAsMCwwLDY2LjUtNC4wNTZhNC4xNDksNC4xNDksMCwwLDAsMS42MDUsMS43MUE0LjU1Miw0LjU1MiwwLDAsMCw3MC40NDItMS43NDhabTEyLjM2OS03LjJhMy40LDMuNCwwLDAsMSwxLjI2My0xLjI0NSwzLjczNywzLjczNywwLDAsMSwxLjg3MS0uNDQ3Vi04LjRIODUuNGEyLjYzOCwyLjYzOCwwLDAsMC0xLjkyOS42NDYsMy4wODksMy4wODksMCwwLDAtLjY1NSwyLjI0MlYwSDgwLjY0NlYtMTAuNDY5aDIuMTY2Wm01LjczOCwzLjY2N0E1Ljc5NCw1Ljc5NCwwLDAsMSw4OS4yLTguMDc1YTQuOCw0LjgsMCwwLDEsMS43ODYtMS44OTEsNC44Miw0LjgyLDAsMCwxLDIuNTE4LS42NzUsNC45MSw0LjkxLDAsMCwxLDIuMDIzLjQ0Nyw0LjE0LDQuMTQsMCwwLDEsMS41ODcsMS4xODdWLTE0LjA2SDk5LjNWMEg5Ny4xMThWLTEuNTc3QTQuMDU1LDQuMDU1LDAsMCwxLDk1LjY0Ni0uMzIzYTQuNTY5LDQuNTY5LDAsMCwxLTIuMTU3LjQ5NCw0LjY4NSw0LjY4NSwwLDAsMS0yLjUtLjY5M0E0Ljg5NSw0Ljg5NSwwLDAsMSw4OS4yLTIuNDYxLDUuOTYyLDUuOTYyLDAsMCwxLDg4LjU0OS01LjI4MlptOC41NjkuMDM4YTMuNzkxLDMuNzkxLDAsMCwwLS40NDctMS44ODFBMy4xMzQsMy4xMzQsMCwwLDAsOTUuNS04LjM0MWEzLjA1NywzLjA1NywwLDAsMC0xLjU1OC0uNDE4LDMuMTEyLDMuMTEyLDAsMCwwLTEuNTU4LjQwOCwzLjA4MSwzLjA4MSwwLDAsMC0xLjE2OSwxLjIsMy43MzcsMy43MzcsMCwwLDAtLjQ0NiwxLjg3MiwzLjksMy45LDAsMCwwLC40NDYsMS45QTMuMTUsMy4xNSwwLDAsMCw5Mi40LTIuMTM4YTMuMDIxLDMuMDIxLDAsMCwwLDEuNTQ5LjQyOEEzLjA1NywzLjA1NywwLDAsMCw5NS41LTIuMTI4YTMuMTE5LDMuMTE5LDAsMCwwLDEuMTY5LTEuMjI1QTMuODQ1LDMuODQ1LDAsMCwwLDk3LjExOC01LjI0NFptNy40NjctNi42MTJhMS4zNDIsMS4zNDIsMCwwLDEtLjk4OC0uNCwxLjM0MiwxLjM0MiwwLDAsMS0uNC0uOTg4LDEuMzQyLDEuMzQyLDAsMCwxLC40LS45ODgsMS4zNDIsMS4zNDIsMCwwLDEsLjk4OC0uNCwxLjMxOSwxLjMxOSwwLDAsMSwuOTY5LjQsMS4zNDIsMS4zNDIsMCwwLDEsLjQuOTg4LDEuMzQyLDEuMzQyLDAsMCwxLS40Ljk4OEExLjMxOSwxLjMxOSwwLDAsMSwxMDQuNTg1LTExLjg1NlptMS4wNjQsMS4zODdWMGgtMi4xNjZWLTEwLjQ2OVptOS40NjItLjE3MWE0LjcsNC43LDAsMCwxLDIuMjE0LjUxMywzLjY0OCwzLjY0OCwwLDAsMSwxLjUyOSwxLjUyLDUsNSwwLDAsMSwuNTUxLDIuNDMyVjBoLTIuMTQ3Vi01Ljg1MmEzLjAzOSwzLjAzOSwwLDAsMC0uNy0yLjE1NywyLjUsMi41LDAsMCwwLTEuOTE5LS43NSwyLjUzMywyLjUzMywwLDAsMC0xLjkyOS43NUEzLjAxMywzLjAxMywwLDAsMCwxMTItNS44NTJWMGgtMi4xNjZWLTEwLjQ2OUgxMTJ2MS4yYTMuNTg1LDMuNTg1LDAsMCwxLDEuMzU4LTEuMDA3QTQuMzQzLDQuMzQzLDAsMCwxLDExNS4xMTEtMTAuNjRabTcuNjU3LDUuMzU4YTUuNzk0LDUuNzk0LDAsMCwxLC42NTUtMi43OTMsNC44LDQuOCwwLDAsMSwxLjc4Ni0xLjg5MSw0Ljc4NSw0Ljc4NSwwLDAsMSwyLjUtLjY3NSw0LjU3LDQuNTcsMCwwLDEsMi4xNTcuNDg0LDQuMzc2LDQuMzc2LDAsMCwxLDEuNDczLDEuMjA3di0xLjUyaDIuMTg1VjBoLTIuMTg1Vi0xLjU1OGE0LjMsNC4zLDAsMCwxLTEuNSwxLjIzNSw0LjYyNiw0LjYyNiwwLDAsMS0yLjE2Ni40OTQsNC42LDQuNiwwLDAsMS0yLjQ3LS42OTMsNC45MTgsNC45MTgsMCwwLDEtMS43NzctMS45MzhBNS45NjIsNS45NjIsMCwwLDEsMTIyLjc2OS01LjI4MlptOC41NjkuMDM4YTMuNzkxLDMuNzkxLDAsMCwwLS40NDctMS44ODEsMy4xMzQsMy4xMzQsMCwwLDAtMS4xNjktMS4yMTYsMy4wNTcsMy4wNTcsMCwwLDAtMS41NTgtLjQxOCwzLjExMiwzLjExMiwwLDAsMC0xLjU1OC40MDgsMy4wODEsMy4wODEsMCwwLDAtMS4xNjksMS4yLDMuNzM3LDMuNzM3LDAsMCwwLS40NDYsMS44NzIsMy45LDMuOSwwLDAsMCwuNDQ2LDEuOSwzLjE1LDMuMTUsMCwwLDAsMS4xNzgsMS4yNDQsMy4wMjEsMy4wMjEsMCwwLDAsMS41NDkuNDI4LDMuMDU3LDMuMDU3LDAsMCwwLDEuNTU4LS40MTgsMy4xMTgsMy4xMTgsMCwwLDAsMS4xNjktMS4yMjVBMy44NDUsMy44NDUsMCwwLDAsMTMxLjMzOC01LjI0NFptOC41MzEtMy43YTMuNCwzLjQsMCwwLDEsMS4yNjQtMS4yNDVBMy43MzcsMy43MzcsMCwwLDEsMTQzLTEwLjY0Vi04LjRoLS41NTFhMi42MzgsMi42MzgsMCwwLDAtMS45MjguNjQ2LDMuMDg5LDMuMDg5LDAsMCwwLS42NTYsMi4yNDJWMEgxMzcuN1YtMTAuNDY5aDIuMTY2Wm0xNS44ODQtMS41MkwxNDkuMzMsNC45MjFoLTIuMjQybDIuMTI4LTUuMDkyLTQuMTIzLTEwLjNoMi40MTNsMi45NDUsNy45OCwzLjA1OS03Ljk4WiIgZGF0YS1uYW1lPSJQYXRoIDE2NTAiIGZpbGw9IiMzMDMwMzAiIGlkPSJQYXRoXzE2NTAiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDQxMzggLTMxODIuNDk3KSIvPgogICAgICA8cGF0aCBkPSJNMjg2Ljg2NS05NS4wNDZhMTAuNTkzLDEwLjU5MywwLDAsMS00LjI1OS04LjM5NGgxMC40NzNhMy45MDcsMy45MDcsMCwwLDAsMS4xLDIuNzA2LDMuNTM4LDMuNTM4LDAsMCwwLDIuNDU1Ljg1MSwzLjU0NywzLjU0NywwLDAsMCwyLjIzLS42NzYsMi4yNDIsMi4yNDIsMCwwLDAsLjg3Ny0xLjg3OSwyLjY1OSwyLjY1OSwwLDAsMC0xLjQ1My0yLjQwNiwyNS42ODYsMjUuNjg2LDAsMCwwLTQuNzExLTEuOSw0Mi4xOSw0Mi4xOSwwLDAsMS01LjU4Ny0yLjIzLDEwLjcsMTAuNywwLDAsMS0zLjcwOC0zLjE1Nyw4Ljc1Myw4Ljc1MywwLDAsMS0xLjU3OC01LjQzNyw5LjkxMiw5LjkxMiwwLDAsMSwxLjctNS44MzksMTAuNTM1LDEwLjUzNSwwLDAsMSw0LjcxLTMuNjgzLDE3LjU4OSwxNy41ODksMCwwLDEsNi44MTYtMS4yNTNxNi4xNjMsMCw5Ljg0NywyLjg4MmExMC4zNjcsMTAuMzY3LDAsMCwxLDMuOTMzLDguMDkzSDI5OS4wNDNhMy4xNTMsMy4xNTMsMCwwLDAtLjk3Ny0yLjQwNiwzLjUxNywzLjUxNywwLDAsMC0yLjM4LS44LDIuNTQ3LDIuNTQ3LDAsMCwwLTEuOC42NTEsMi40LDIuNCwwLDAsMC0uNywxLjg1NCwyLjI4MywyLjI4MywwLDAsMCwuNzc3LDEuNzI4LDcuMTE4LDcuMTE4LDAsMCwwLDEuOTI5LDEuMjUzcTEuMTUyLjUyNiwzLjQwOCwxLjMyN2E0Mi4wNzEsNDIuMDcxLDAsMCwxLDUuNTM2LDIuMjgsMTEuMywxMS4zLDAsMCwxLDMuNzU4LDMuMTU4LDguMTE0LDguMTE0LDAsMCwxLDEuNTc5LDUuMTM2LDEwLjQsMTAuNCwwLDAsMS0xLjU3OSw1LjY2MywxMC44MzQsMTAuODM0LDAsMCwxLTQuNTU5LDMuOTU5LDE1LjksMTUuOSwwLDAsMS03LjA0MSwxLjQ1M0ExNi41NjQsMTYuNTY0LDAsMCwxLDI4Ni44NjUtOTUuMDQ2WiIgZGF0YS1uYW1lPSJQYXRoIDE1ODAiIGZpbGw9IiMzMDMwMzAiIGlkPSJQYXRoXzE1ODAiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDM2OTcuOTIgLTMxMTkuNjg5KSIvPgogICAgICA8cGF0aCBkPSJNMzYyLjUxNC0xMjcuNjA2LDM1MC4zMzctOTIuMjc3SDMzNy43NTlsLTEyLjIyNy0zNS4zMjloMTAuNTIzbDguMDE4LDI1LjUwNiw3Ljk2OC0yNS41MDZaIiBkYXRhLW5hbWU9IlBhdGggMTU4MSIgZmlsbD0iIzMwMzAzMCIgaWQ9IlBhdGhfMTU4MSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzY4Ny4wMTUgLTMxMTkuODc3KSIvPgogICAgICA8cGF0aCBkPSJNMzk5LjMyMi0xMTkuNDMyYTE1LjY2MywxNS42NjMsMCwwLDEsNi4xODgtNi4zNjUsMTguMzI2LDE4LjMyNiwwLDAsMSw5LjIyMS0yLjI4LDE3LjQ5LDE3LjQ5LDAsMCwxLDExLjEyNSwzLjUzMywxNi4wMjksMTYuMDI5LDAsMCwxLDUuODEyLDkuNkg0MjEuMUE3LjA4OSw3LjA4OSwwLDAsMCw0MTguNDY0LTExOGE3LjE1Nyw3LjE1NywwLDAsMC0zLjg4My0xLjA1Myw2LjcyMiw2LjcyMiwwLDAsMC01LjQzOCwyLjQzLDkuOCw5LjgsMCwwLDAtMi4wMjksNi40ODksOS44ODMsOS44ODMsMCwwLDAsMi4wMjksNi41NCw2LjcyMiw2LjcyMiwwLDAsMCw1LjQzOCwyLjQzLDcuMTU4LDcuMTU4LDAsMCwwLDMuODgzLTEuMDUzLDcuMDg1LDcuMDg1LDAsMCwwLDIuNjMxLTMuMDU2aDEwLjU3M2ExNi4wMjksMTYuMDI5LDAsMCwxLTUuODEyLDkuNiwxNy40OSwxNy40OSwwLDAsMS0xMS4xMjUsMy41MzMsMTguMzExLDE4LjMxMSwwLDAsMS05LjIyMS0yLjI4LDE1LjY1MiwxNS42NTIsMCwwLDEtNi4xODgtNi4zNjQsMTkuNTQyLDE5LjU0MiwwLDAsMS0yLjE4LTkuMzQ2QTE5LjQzNCwxOS40MzQsMCwwLDEsMzk5LjMyMi0xMTkuNDMyWiIgZGF0YS1uYW1lPSJQYXRoIDE1ODIiIGZpbGw9IiMzMDMwMzAiIGlkPSJQYXRoXzE1ODIiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDM2NjguODIzIC0zMTE5Ljc1OCkiLz4KICAgICAgPHBhdGggZD0iTTQ3NC41NjMtOTguMDRINDYyLjAzNWwtMS45LDUuNzYzSDQ0OS44MDlsMTIuODc4LTM1LjMyOWgxMS4zMjZsMTIuODI4LDM1LjMyOUg0NzYuNDY3Wm0tMi40NTUtNy41MTdMNDY4LjMtMTE2Ljk4MmwtMy43NTksMTEuNDI1WiIgZGF0YS1uYW1lPSJQYXRoIDE1ODMiIGZpbGw9IiMzMDMwMzAiIGlkPSJQYXRoXzE1ODMiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDM2NTUuNDQzIC0zMTE5Ljg3NykiLz4KICAgICAgPHBhdGggZD0iTTUzMy41NDMtMTA5Ljk5MmExMC42ODUsMTAuNjg1LDAsMCwxLTQuNDYsNC4yMDksMTUuNDI5LDE1LjQyOSwwLDAsMS03LjI5MSwxLjU3OGgtNC44NjF2MTEuOTI2aC05LjgyMnYtMzUuMzI5aDE0LjY4M2ExNS45NDMsMTUuOTQzLDAsMCwxLDcuMjQxLDEuNSwxMC4zNCwxMC4zNCwwLDAsMSw0LjQ4NSw0LjE1OSwxMi4yMSwxMi4yMSwwLDAsMSwxLjUsNi4xMTRBMTEuNzIxLDExLjcyMSwwLDAsMSw1MzMuNTQzLTEwOS45OTJaTTUyNS0xMTUuODNxMC0zLjg1OC00LjE2LTMuODU5aC0zLjkwOXY3LjY2N2gzLjkwOVE1MjUtMTEyLjAyMSw1MjUtMTE1LjgzWiIgZGF0YS1uYW1lPSJQYXRoIDE1ODQiIGZpbGw9IiMzMDMwMzAiIGlkPSJQYXRoXzE1ODQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDM2NDAuODg2IC0zMTE5Ljg3NykiLz4KICAgICAgPHBhdGggZD0iTTU2My4wMTMtMTI3LjYwNnYzNS4zMjloLTkuODIydi0zNS4zMjlaIiBkYXRhLW5hbWU9IlBhdGggMTU4NSIgZmlsbD0iIzMwMzAzMCIgaWQ9IlBhdGhfMTU4NSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzYyOS4xOCAtMzExOS44NzcpIi8+CiAgICAgIDxwYXRoIGQ9Ik02MDMuMTg0LTEyNy42MDZ2Ny44MThoLTkuNDIxdjI3LjUxMWgtOS44MjJ2LTI3LjUxMWgtOS4zMnYtNy44MThaIiBkYXRhLW5hbWU9IlBhdGggMTU4NiIgZmlsbD0iIzMwMzAzMCIgaWQ9IlBhdGhfMTU4NiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzYyMy43MzUgLTMxMTkuODc3KSIvPgogICAgICA8cGF0aCBkPSJNNjQyLjctOTguMDRINjMwLjE3NmwtMS45LDUuNzYzSDYxNy45NDlsMTIuODc4LTM1LjMyOWgxMS4zMjVMNjU0Ljk4LTkyLjI3N0g2NDQuNjA4Wm0tMi40NTYtNy41MTctMy44MDktMTEuNDI1LTMuNzU4LDExLjQyNVoiIGRhdGEtbmFtZT0iUGF0aCAxNTg3IiBmaWxsPSIjMzAzMDMwIiBpZD0iUGF0aF8xNTg3IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgzNjEyLjcyOCAtMzExOS44NzcpIi8+CiAgICAgIDxwYXRoIGQ9Ik02ODUuMDcxLTk5Ljc5NGgxMC45NzR2Ny41MTdoLTIwLjh2LTM1LjMyOWg5LjgyMloiIGRhdGEtbmFtZT0iUGF0aCAxNTg4IiBmaWxsPSIjMzAzMDMwIiBpZD0iUGF0aF8xNTg4IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgzNTk4LjE3MiAtMzExOS44NzcpIi8+CiAgICAgIDxnIGRhdGEtbmFtZT0iR3JvdXAgMzE0MSIgaWQ9Ikdyb3VwXzMxNDEtMiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzg2MyAtMzI2OS44MjUpIj4KICAgICAgICA8cGF0aCBkPSJNMTg2LjgzNy03OC4wNDFzLTEwLjQxMS0yMS42MTgtLjA3My00MS43MjYsMzMuOTc1LTI0LjIyMywzMy45NzUtMjQuMjIzLDEwLjQxLDIxLjYxOS4wNzMsNDEuNzI3UzE4Ni44MzctNzguMDQxLDE4Ni44MzctNzguMDQxWiIgZGF0YS1uYW1lPSJQYXRoIDE2MTMiIGZpbGw9InVybCgjbGluZWFyLWdyYWRpZW50KSIgaWQ9IlBhdGhfMTYxMyIgb3BhY2l0eT0iMC44IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTM5LjU2OSAxNTcuOTY5KSIvPgogICAgICAgIDxwYXRoIGQ9Ik0xODAuOTYzLTgyLjcwOHMyMC42NTgtMTUuNjEyLDIwLjY1OC00MC4wMTEtMjAuNjU4LTQwLjAxMS0yMC42NTgtNDAuMDExLTIwLjY1NywxNS42MTItMjAuNjU3LDQwLjAxMVMxODAuOTYzLTgyLjcwOCwxODAuOTYzLTgyLjcwOFoiIGRhdGEtbmFtZT0iUGF0aCAxNjE0IiBmaWxsPSJ1cmwoI2xpbmVhci1ncmFkaWVudC0yKSIgaWQ9IlBhdGhfMTYxNCIgb3BhY2l0eT0iMC44IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTM0LjAxIDE2Mi43MykiLz4KICAgICAgICA8cGF0aCBkPSJNMTQ0LjAyNi00Ni44NzhhMTguNzkzLDE4Ljc5MywwLDAsMCwxMi41ODgsNS4wODdBMTguNzkxLDE4Ljc5MSwwLDAsMCwxNjkuMi00Ni44NzdhMTguNzksMTguNzksMCwwLDAtMTIuNTg3LTUuMDg3QTE4LjgsMTguOCwwLDAsMCwxNDQuMDI2LTQ2Ljg3OFoiIGRhdGEtbmFtZT0iUGF0aCAxNjE2IiBmaWxsPSJ1cmwoI2xpbmVhci1ncmFkaWVudC0zKSIgaWQ9IlBhdGhfMTYxNiIgb3BhY2l0eT0iMC44IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTI5Ljg3NCAxMzQuNTkxKSIvPgogICAgICAgIDxwYXRoIGQ9Ik0xOTcuMTE1LTQ2Ljg3OEExOC43OSwxOC43OSwwLDAsMCwyMDkuNy00MS43OTFhMTguNzk0LDE4Ljc5NCwwLDAsMCwxMi41ODgtNS4wODZBMTguNzkzLDE4Ljc5MywwLDAsMCwyMDkuNy01MS45NjQsMTguNzkxLDE4Ljc5MSwwLDAsMCwxOTcuMTE1LTQ2Ljg3OFoiIGRhdGEtbmFtZT0iUGF0aCAxNjE3IiBmaWxsPSJ1cmwoI2xpbmVhci1ncmFkaWVudC00KSIgaWQ9IlBhdGhfMTYxNyIgb3BhY2l0eT0iMC44IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTQzLjM2MiAxMzQuNTkxKSIvPgogICAgICAgIDxwYXRoIGQ9Ik0xODguMTkzLTcxLjY4OXMtMi45MzUtMjEuMSwxMS4yNjItMzUuMywzNS4zLTExLjI2MSwzNS4zLTExLjI2MSwyLjkzNiwyMS4xLTExLjI2MSwzNS4zUzE4OC4xOTMtNzEuNjg5LDE4OC4xOTMtNzEuNjg5WiIgZGF0YS1uYW1lPSJQYXRoIDE2MTgiIGZpbGw9InVybCgjbGluZWFyLWdyYWRpZW50LTUpIiBpZD0iUGF0aF8xNjE4IiBvcGFjaXR5PSIwLjgiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0xNDEuMDMxIDE1MS40OTQpIi8+CiAgICAgICAgPHBhdGggZD0iTTE3NC40MzMtNzguMDQxczEwLjQxMS0yMS42MTguMDc0LTQxLjcyNi0zMy45NzUtMjQuMjIzLTMzLjk3NS0yNC4yMjMtMTAuNDExLDIxLjYxOS0uMDc0LDQxLjcyN1MxNzQuNDMzLTc4LjA0MSwxNzQuNDMzLTc4LjA0MVoiIGRhdGEtbmFtZT0iUGF0aCAxNjE5IiBmaWxsPSJ1cmwoI2xpbmVhci1ncmFkaWVudC02KSIgaWQ9IlBhdGhfMTYxOSIgb3BhY2l0eT0iMC44IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTI3LjgwNiAxNTcuOTY5KSIvPgogICAgICAgIDxwYXRoIGQ9Ik0xNzEuODctNzEuNjg5czIuOTM1LTIxLjEtMTEuMjYyLTM1LjMtMzUuMy0xMS4yNjEtMzUuMy0xMS4yNjEtMi45MzUsMjEuMSwxMS4yNjIsMzUuM1MxNzEuODctNzEuNjg5LDE3MS44Ny03MS42ODlaIiBkYXRhLW5hbWU9IlBhdGggMTYyMCIgZmlsbD0idXJsKCNsaW5lYXItZ3JhZGllbnQtNykiIGlkPSJQYXRoXzE2MjAiIG9wYWNpdHk9IjAuOCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTEyNS4wNTUgMTUxLjQ5NCkiLz4KICAgICAgICA8cGF0aCBkPSJNMTg2LjI3LTI2LjA5czUuMDc0LTMuODM1LDUuMDc0LTkuODI3LTUuMDc0LTkuODI4LTUuMDc0LTkuODI4UzE4MS4yLTQxLjkxLDE4MS4yLTM1LjkxNywxODYuMjctMjYuMDksMTg2LjI3LTI2LjA5WiIgZGF0YS1uYW1lPSJQYXRoIDE2MTUiIGZpbGw9InVybCgjbGluZWFyLWdyYWRpZW50LTgpIiBpZD0iUGF0aF8xNjE1IiBvcGFjaXR5PSIwLjgiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0xMzkuMzE4IDEzMy4wMSkiLz4KICAgICAgICA8ZyBkYXRhLW5hbWU9Ikdyb3VwIDMwMzgiIGlkPSJHcm91cF8zMDM4IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSg4OS4xODcgMTMuNDQxKSI+CiAgICAgICAgICA8cGF0aCBkPSJNMTIyLjYxNSwxOC4wMTh2LjY3NEgxMjEuNXYzLjQ5MWgtLjgzNVYxOC42OTNoLTEuMTF2LS42NzRaIiBkYXRhLW5hbWU9IlBhdGggMTYyMyIgZmlsbD0iIzMwMzAzMCIgaWQ9IlBhdGhfMTYyMyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTExOS41NTkgLTE4LjAxOCkiLz4KICAgICAgICAgIDxwYXRoIGQ9Ik0xMjguODcsMTguMDE4bC0xLjMyNSwzLjEtMS4zMjQtMy4xaC0uOTV2NC4xNjZoLjgzNnYtMi43MWwxLjEyMSwyLjcxaC42MzNsMS4xMTYtMi43MXYyLjcxaC44MzZWMTguMDE4WiIgZGF0YS1uYW1lPSJQYXRoIDE2MjQiIGZpbGw9IiMzMDMwMzAiIGlkPSJQYXRoXzE2MjQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0xMjEuMDEgLTE4LjAxOCkiLz4KICAgICAgICA8L2c+CiAgICAgIDwvZz4KICAgIDwvZz4KICA8L2c+Cjwvc3ZnPg==';
+  const hasBanking = emp.bank_name || emp.bank_account_number;
+  const bankSection = hasBanking ? `
+<div class="bank">
+  <div class="bank-lbl">&#128197; Payment Paid To</div>
+  <div class="bank-grid">
+    <div><div class="bk-l">Bank</div><div class="bk-v">${emp.bank_name||'—'}</div></div>
+    <div><div class="bk-l">Account Number</div><div class="bk-v">${emp.bank_account_number?maskAcc(emp.bank_account_number):'—'}</div></div>
+    <div><div class="bk-l">Account Type</div><div class="bk-v">${emp.bank_account_type||'—'}</div></div>
+    <div><div class="bk-l">Account Holder</div><div class="bk-v">${emp.bank_account_holder||emp.first_name+' '+emp.last_name}</div></div>
+  </div>
+</div>` : '';
+
+  const bonusRow = Number(p.bonus||0)>0 ? `<tr><td>Bonus / Commission</td><td></td><td class="r">${fmt(p.bonus)}</td><td></td><td></td><td></td></tr>` : '';
+  const otherEarnRow = Number(p.other_earnings||0)>0 ? `<tr><td>Other earnings</td><td></td><td class="r">${fmt(p.other_earnings)}</td><td></td><td></td><td></td></tr>` : '';
+  const otherDedRow = Number(p.other_deductions||0)>0 ? `<tr><td></td><td></td><td></td><td>Other deductions</td><td></td><td class="r">${fmt(p.other_deductions)}</td></tr>` : '';
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/>
+<title>Payslip ${moLabel} ${yr} ${emp.first_name} ${emp.last_name}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#e8edf2}
+body{font-family:Arial,Helvetica,sans-serif;font-size:9.5pt;color:#1a1a1a;min-height:100vh;padding:24px 0}
+.page{background:#fff;max-width:820px;margin:0 auto;box-shadow:0 4px 40px rgba(0,0,0,0.18);border-radius:3px;overflow:hidden}
+.hdr{background:linear-gradient(135deg,#0d2535 0%,#1a3a4a 100%);padding:22px 30px;display:flex;justify-content:space-between;align-items:flex-start}
+.hdr-co-name{font-size:14pt;font-weight:900;color:#fff;letter-spacing:-0.02em;margin-bottom:7px}
+.hdr-co-addr{font-size:8pt;color:rgba(255,255,255,0.6);line-height:1.65}
+.hdr-right{text-align:right;min-width:180px}
+.hdr-pd-lbl{font-size:7pt;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}
+.hdr-pd-val{font-size:13pt;font-weight:800;color:#FF9B0C;margin-bottom:12px;letter-spacing:0.02em}
+.hdr-logo{width:170px;height:auto;display:block;margin-left:auto}
+.emp-strip{padding:16px 30px;background:#f7f9fc;border-bottom:2px solid #e2e8f0;display:grid;grid-template-columns:1fr 1fr;gap:4px 36px}
+.er{display:flex;padding:2.5px 0;font-size:8.5pt}
+.el{font-weight:700;color:#6b7280;min-width:128px;flex-shrink:0;font-size:7.5pt;text-transform:uppercase;letter-spacing:.04em}
+.ev{color:#111827;font-weight:500}
+.sec{background:#0d2535;color:#fff;font-size:7pt;font-weight:800;text-transform:uppercase;letter-spacing:.12em;padding:6px 30px}
+.tw{padding:0 30px}
+table{width:100%;border-collapse:collapse;font-size:8.8pt}
+th{font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:9px 5px 7px;border-bottom:1.5px solid #cbd5e1;text-align:left}
+th.r,td.r{text-align:right}
+td{padding:5.5px 5px;border-bottom:1px solid #f1f5f9;vertical-align:top;color:#374151}
+.tr-tot td{font-weight:700;border-top:1.5px solid #94a3b8;border-bottom:1.5px solid #94a3b8;background:#f8fafc;color:#0f172a;padding:8px 5px}
+.tr-nett td{font-weight:800;font-size:11.5pt;color:#0d2535;padding:10px 5px;border-bottom:2.5px solid #FF8215}
+.tr-nett td.r{color:#FF8215}
+.bank{padding:14px 30px 16px;background:#fffbf5;border-top:1.5px solid #fed7aa;border-bottom:1.5px solid #fed7aa;margin-top:4px}
+.bank-lbl{font-size:7.5pt;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#b45309;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.bank-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 16px}
+.bk-l{font-size:7pt;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.bk-v{font-size:9pt;color:#431407;font-weight:600}
+.ftr{padding:11px 30px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #e2e8f0;background:#f9fafb}
+.ftr-l{font-size:6.5pt;color:#9ca3af;font-style:italic}
+.ftr-r{font-size:6.5pt;color:#9ca3af}
+.print-row{padding:18px;text-align:center;background:#f0f4f8}
+.pbtn{padding:11px 36px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:8px;font-size:10pt;font-weight:700;cursor:pointer;font-family:Arial;letter-spacing:.02em;box-shadow:0 3px 12px rgba(255,130,21,0.35)}
+@media print{html{background:#fff}body{padding:0}.page{box-shadow:none;border-radius:0}.print-row{display:none}}
+</style></head>
+<body><div class="page">
+
+<div class="hdr">
+  <div>
+    <div class="hdr-co-name">Smartvest Capital (Pty) Ltd</div>
+    <div class="hdr-co-addr">The Station · 63 Peter Place · Bryanston<br>Johannesburg · 2191<br>Reg. No: 2017/499533/07 &nbsp;|&nbsp; FSP Licence: #52449</div>
+  </div>
+  <div class="hdr-right">
+    <div class="hdr-pd-lbl">Pay Date</div>
+    <div class="hdr-pd-val">${payDateFmt}</div>
+    <img class="hdr-logo" src="data:image/svg+xml;base64,${LOGO}" alt="SV Capital"/>
+  </div>
+</div>
+
+<div class="emp-strip">
+  <div>
+    <div class="er"><span class="el">Employee</span><span class="ev">${emp.first_name} ${emp.last_name}</span></div>
+    <div class="er"><span class="el">Job Title</span><span class="ev">${emp.role||'—'}</span></div>
+    <div class="er"><span class="el">Address</span><span class="ev">${addrHtml}</span></div>
+  </div>
+  <div>
+    <div class="er"><span class="el">Employee Code</span><span class="ev">${empCode}</span></div>
+    <div class="er"><span class="el">Identity Number</span><span class="ev">${emp.id_number||'—'}</span></div>
+    <div class="er"><span class="el">Employed From</span><span class="ev">${startFmt}</span></div>
+    <div class="er"><span class="el">Rate Per Hour</span><span class="ev">R ${rph}</span></div>
+  </div>
+</div>
+
+<div class="sec" style="margin-top:14px">Earnings &amp; Deductions — ${moLabel} ${yr}</div>
+<div class="tw" style="padding-top:10px">
+<table>
+  <thead><tr>
+    <th style="width:32%">Earnings</th><th style="width:10%">Units</th>
+    <th class="r" style="width:15%">Amount (R)</th>
+    <th style="width:25%">Deductions</th>
+    <th class="r" style="width:8%">Opening Bal.</th>
+    <th class="r" style="width:10%">Amount (R)</th>
+  </tr></thead>
+  <tbody>
+    <tr><td>Basic salary</td><td></td><td class="r">${fmt(p.basic_salary)}</td><td>PAYE Tax</td><td></td><td class="r">${fmt(p.tax)}</td></tr>
+    ${bonusRow}
+    ${otherEarnRow}
+    <tr><td></td><td></td><td></td><td>Unemployment Insurance Fund</td><td></td><td class="r">${fmt(p.uif_employee)}</td></tr>
+    ${otherDedRow}
+  </tbody>
+  <tfoot>
+    <tr class="tr-tot"><td>Total Earnings</td><td></td><td class="r">${fmt(p.total_earnings)}</td><td>Total Deductions</td><td></td><td class="r">${fmt(p.total_deductions)}</td></tr>
+    <tr class="tr-nett"><td colspan="3"></td><td><strong>Nett Pay</strong></td><td></td><td class="r"><strong>${fmt(p.nett_pay)}</strong></td></tr>
+  </tfoot>
+</table>
+</div>
+
+<div class="sec" style="margin-top:14px">Company Contributions &amp; Year-to-Date Totals</div>
+<div class="tw" style="padding-top:10px;padding-bottom:12px">
+<table>
+  <thead><tr>
+    <th style="width:30%">Company Contributions</th><th class="r" style="width:20%">Amount (R)</th>
+    <th style="width:30%">YTD Totals</th><th class="r" style="width:20%">Amount (R)</th>
+  </tr></thead>
+  <tbody>
+    <tr><td>Unemployment Insurance Fund</td><td class="r">${fmt(p.uif_company)}</td><td><b>Taxable earnings</b></td><td class="r"><b>${fmt(p.ytd_taxable_earnings)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Taxable company contributions</b></td><td class="r"><b>${fmt(p.ytd_taxable_company_contributions||0)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Taxable fringe benefits</b></td><td class="r"><b>${fmt(p.ytd_taxable_fringe_benefits||0)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Provision for tax on annual bonus</b></td><td class="r"><b>${fmt(p.ytd_provision_annual_bonus||0)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Tax paid</b></td><td class="r"><b>${fmt(p.ytd_tax_paid)}</b></td></tr>
+  </tbody>
+</table>
+</div>
+
+${bankSection}
+
+<div class="ftr">
+  <div class="ftr-l">CONFIDENTIAL — This payslip is for the named employee only and must not be shared.</div>
+  <div class="ftr-r">Smartvest Capital (Pty) Ltd &nbsp;·&nbsp; ${moLabel} ${yr}</div>
+</div>
+
+<div class="print-row">
+  <button class="pbtn" onclick="window.print()">Download / Save as PDF</button>
+</div>
+</div></body></html>`;
+}
+async function autoGenerateMissingPayslips() {
+  const today = new Date();
+  const yr  = today.getFullYear();
+  const mo  = today.getMonth() + 1;
+  const period  = `${yr}-${String(mo).padStart(2,'0')}`;
+  const lastDay = new Date(yr, mo, 0).getDate();
+  const payDate = `${yr}-${String(mo).padStart(2,'0')}-${lastDay}`;
+
+  const activeEmps = _employees.filter(e => e.status === 'active' && Number(e.base_salary||0) > 0);
+  const missing = activeEmps.filter(e => !_payslips.some(p => p.employee_id === e.id && p.pay_period === period));
+  if (!missing.length) return;
+
+  const taxYearStart = mo >= 4 ? `${yr}-04` : `${yr-1}-04`;
+  let count = 0;
+
+  for (const emp of missing) {
+    const salary  = Number(emp.base_salary||0);
+    const tax     = calcMonthlyPAYE(salary);
+    const uif     = calcUIF(salary);
+    const totalDed = tax + uif;
+    const nett    = salary - totalDed;
+
+    const prior = _payslips.filter(p => p.employee_id === emp.id && p.pay_period >= taxYearStart && p.pay_period < period);
+    const ytdEarnings = prior.reduce((s,p)=>s+Number(p.total_earnings||0),0) + salary;
+    const ytdTax      = prior.reduce((s,p)=>s+Number(p.tax||0),0) + tax;
+
+    const id = 'PAY' + String(Date.now() + Math.round(Math.random()*1000)).slice(-9);
+    try {
+      const saved = await post('tables/payslips', {
+        id, employee_id: emp.id, pay_period: period, pay_date: payDate,
+        basic_salary: salary, bonus: 0, other_earnings: 0, total_earnings: salary,
+        tax, uif_employee: uif, other_deductions: 0,
+        total_deductions: totalDed, nett_pay: nett, uif_company: calcUIF(salary),
+        ytd_taxable_earnings: ytdEarnings, ytd_tax_paid: ytdTax,
+        ytd_taxable_company_contributions: 0, ytd_taxable_fringe_benefits: 0,
+        ytd_provision_annual_bonus: 0,
+        notes: 'Auto-generated on 25th of month',
+        generated_by: _session?.empId || 'system',
+      });
+      _payslips.push(saved);
+      count++;
+    } catch(_) {}
+  }
+
+  if (count > 0) {
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    showToast(`Auto-generated ${count} payslip${count > 1 ? 's' : ''} for ${months[mo-1]} ${yr}`, 'success');
+    if (_currentView === 'payslips') renderPayslips();
+  }
+}
+window.autoGenerateMissingPayslips = autoGenerateMissingPayslips;
+
+window.updatePayslipCalcs = _updatePayslipCalcs;
+window.generatePayslip    = generatePayslip;
+window.deletePayslip      = deletePayslip;
+window.printPayslip       = printPayslip;
+
 /* ═══ ACCESS MATRIX ═════════════════════════════════════════════════ */
+async function loadRBACFromAPI() {
+  try {
+    const base = window.__SVC_API_BASE__ || '/api/';
+    const r = await fetch(base + 'settings/rbac');
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data && data.matrix && typeof data.matrix === 'object' && !Array.isArray(data.matrix)) {
+      RBAC = data.matrix;
+    }
+  } catch (_) {}
+}
+
+function onRbacToggle(cb) {
+  const role = cb.dataset.role;
+  const app  = cb.dataset.app;
+  if (!RBAC[role]) RBAC[role] = [];
+  if (cb.checked) {
+    if (!RBAC[role].includes(app)) RBAC[role].push(app);
+  } else {
+    RBAC[role] = RBAC[role].filter(a => a !== app);
+  }
+}
+
+async function saveRBAC() {
+  const btn = document.getElementById('rbacSaveBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Saving…'; }
+  try {
+    const base = window.__SVC_API_BASE__ || '/api/';
+    const r = await fetch(base + 'settings/rbac', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ..._authHeader() },
+      body: JSON.stringify({ matrix: RBAC }),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      showToast('Access matrix saved successfully', 'success');
+    } else {
+      showToast(data.error || 'Failed to save matrix', 'error');
+    }
+  } catch (e) {
+    showToast('Network error — could not save matrix', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>Save Changes'; }
+  }
+}
+
+/* App access is allocated PER INDIVIDUAL. _accessDraft holds the in-progress
+   edits (empId → Set of editable app keys) until the director clicks Save. */
+let _accessDraft = {};
+const EDITABLE_APPS = Object.keys(APP_NAMES); // employee, team, fund, admin, ifa, portal, director
+
+/** The editable apps currently allocated to an employee (default: My Dashboard). */
+function _empEditableApps(e) {
+  const list = Array.isArray(e.app_access) && e.app_access.length ? e.app_access : ['employee'];
+  return EDITABLE_APPS.filter(k => list.includes(k));
+}
+
 function renderAccessMatrix() {
-  const allApps = Object.keys(APP_NAMES);
-  document.getElementById('rbacMatrix').innerHTML = `
+  const q = (document.getElementById('accessSearch')?.value || '').toLowerCase();
+  const filtered = _employees.filter(e =>
+    !q || `${e.first_name} ${e.last_name} ${e.role} ${e.email}`.toLowerCase().includes(q)
+  );
+
+  // Seed the draft for any employee not yet being edited
+  _employees.forEach(e => { if (!_accessDraft[e.id]) _accessDraft[e.id] = new Set(_empEditableApps(e)); });
+
+  document.getElementById('empAccessList').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div style="font-size:0.82rem;color:var(--muted)">Tick the apps each employee may open, then click Save. Access is set per person — their role is just a label. <strong>My Dashboard</strong> is always available.</div>
+      <button id="accessSaveBtn" class="btn btn--primary btn--sm" onclick="saveIndividualAccess()" style="min-width:130px">
+        <i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>Save Changes
+      </button>
+    </div>
     <div class="dir-table-wrap" style="overflow-x:auto">
       <table class="dir-table">
-        <thead>
-          <tr>
-            <th>Role</th>
-            ${allApps.map(k=>`<th style="text-align:center"><i class="fa-solid ${APP_ICONS[k]}" style="color:${APP_COLORS[k]}"></i><br><span style="font-size:0.6rem">${APP_NAMES[k].replace(' ','<br>')}</span></th>`).join('')}
-          </tr>
-        </thead>
+        <thead><tr>
+          <th>Employee</th><th>Role</th><th>Level</th>
+          ${EDITABLE_APPS.map(k=>`<th style="text-align:center;min-width:64px;font-size:0.65rem"><i class="fa-solid ${APP_ICONS[k]}" style="color:${APP_COLORS[k]}"></i><br>${APP_NAMES[k].replace(' ','<br>')}</th>`).join('')}
+          <th>Edit</th>
+        </tr></thead>
         <tbody>
-          ${Object.entries(RBAC).map(([role,apps])=>`
-            <tr>
-              <td><span class="role-chip" style="font-size:0.76rem">${role}</span></td>
-              ${allApps.map(k=>`
+          ${filtered.map(e => {
+            const draft = _accessDraft[e.id] || new Set(['employee']);
+            return `<tr>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="emp-row-avatar" style="background:${e.avatar_color||'#7c5cfc'};width:28px;height:28px;font-size:0.65rem">${e.avatar_initials||'?'}</div>
+                  <div>
+                    <div class="emp-row-name" style="font-size:0.8rem">${e.first_name} ${e.last_name}</div>
+                    <div class="emp-row-email" style="font-size:0.7rem">${e.email||''}</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="role-chip" style="font-size:0.72rem">${e.role||'—'}</span></td>
+              <td style="font-size:0.75rem;color:var(--muted)">${LEVEL_LABELS[e.level]||e.level||'—'}</td>
+              ${EDITABLE_APPS.map(k=>`
                 <td style="text-align:center">
-                  ${apps.includes(k)
-                    ? `<i class="fa-solid fa-circle-check" style="color:#10b981;font-size:0.95rem"></i>`
-                    : `<i class="fa-solid fa-circle-xmark" style="color:var(--border2);font-size:0.95rem"></i>`
-                  }
+                  <input type="checkbox"
+                    class="access-cb"
+                    data-emp="${e.id}"
+                    data-app="${k}"
+                    ${draft.has(k) ? 'checked' : ''}
+                    ${k === 'employee' ? 'disabled title="Always available"' : ''}
+                    onchange="onAccessToggle(this)"
+                    style="width:17px;height:17px;cursor:${k==='employee'?'not-allowed':'pointer'};accent-color:${APP_COLORS[k]}"
+                  >
                 </td>
               `).join('')}
-            </tr>
-          `).join('')}
-          <tr style="background:rgba(245,158,11,0.04);border-top:2px solid rgba(245,158,11,0.2)">
-            <td><span class="chip chip--onboard">Executive level</span><div style="font-size:0.68rem;color:var(--muted);margin-top:3px">Overrides role</div></td>
-            ${allApps.map(()=>`<td style="text-align:center"><i class="fa-solid fa-circle-check" style="color:var(--gold);font-size:0.95rem"></i></td>`).join('')}
-          </tr>
+              <td>
+                <button class="btn btn--ghost btn--sm" style="font-size:0.72rem" onclick="openEmpEdit('${e.id}')">
+                  <i class="fa-solid fa-pen"></i> Edit
+                </button>
+              </td>
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>
     </div>
   `;
+
+  const matrixEl = document.getElementById('rbacMatrix');
+  if (matrixEl) matrixEl.innerHTML = '';
+}
+
+function onAccessToggle(cb) {
+  const empId = cb.dataset.emp;
+  const app   = cb.dataset.app;
+  if (!_accessDraft[empId]) _accessDraft[empId] = new Set(['employee']);
+  if (cb.checked) _accessDraft[empId].add(app);
+  else            _accessDraft[empId].delete(app);
+}
+
+async function saveIndividualAccess() {
+  const btn = document.getElementById('accessSaveBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Saving…'; }
+  let saved = 0, failed = 0;
+  try {
+    for (const e of _employees) {
+      const draft = _accessDraft[e.id];
+      if (!draft) continue;
+      // Editable apps the director ticked (My Dashboard is always granted)…
+      const editable = EDITABLE_APPS.filter(k => draft.has(k));
+      if (!editable.includes('employee')) editable.push('employee');
+      // …plus any apps not shown in this editor (e.g. accounting) are preserved.
+      const preserved = (Array.isArray(e.app_access) ? e.app_access : []).filter(a => !EDITABLE_APPS.includes(a));
+      const next = Array.from(new Set([...editable, ...preserved]));
+
+      const current = Array.isArray(e.app_access) ? e.app_access.slice() : null;
+      // Skip if unchanged
+      if (current && current.length === next.length && next.every(a => current.includes(a))) continue;
+
+      try {
+        const res = await patch(`tables/employees/${e.id}`, { app_access: next });
+        if (res && res.error) throw new Error(res.error);
+        e.app_access = next;        // keep local state in sync
+        saved++;
+      } catch (_) { failed++; }
+    }
+    if (failed) showToast(`Saved ${saved}, ${failed} failed`, 'error');
+    else if (saved) showToast(`App access updated for ${saved} employee${saved!==1?'s':''}`);
+    else showToast('No changes to save');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>Save Changes'; }
+    renderAccessMatrix();
+  }
 }
 
 /* ═══ COURSE LIBRARY ════════════════════════════════════════════════ */
@@ -825,7 +1853,7 @@ const DIR_HELP = {
       { heading: 'Employee Detail Modal', icon: 'fa-id-card', color: '#f59e0b',
         text: 'Opens when you click View. Shows: personal info, XP, EVA weight, base salary, onboarding progress, and a full list of the apps this employee has access to based on their role and level.' },
       { heading: 'Edit Employee', icon: 'fa-pen', color: '#e84393',
-        text: 'Allows updating name, email, phone, role, department, level, EVA weight, salary, start date, and bio. Changing role or level will automatically update their RBAC app access.' },
+        text: 'Allows updating name, email, phone, role, department, level, EVA weight, salary, start date, and bio. App access is set per individual in the Access tab — changing role or level no longer changes their app access.' },
       { heading: 'Activate / Deactivate', icon: 'fa-toggle-on', color: '#ef4444',
         text: 'Inactive employees cannot log in to any staff portal. Use this to offboard employees without deleting their data. Reactivation restores all access immediately.' },
     ]
@@ -838,7 +1866,7 @@ const DIR_HELP = {
       { heading: 'Personal Information', icon: 'fa-id-card', color: '#7c5cfc',
         text: 'First name, last name, and work email are required. Phone, date of birth, and SA ID number are optional but important — the SA ID last 4 digits become the employee\'s default login PIN.' },
       { heading: 'Role & Position', icon: 'fa-briefcase', color: '#00d4aa',
-        text: 'Role determines which apps the employee can access (see RBAC matrix). Level determines seniority tier. EVA Weight (0.5×–2.0×) scales their variable bonus allocation.' },
+        text: 'Role is a job title/label and Level determines seniority tier. App access is granted per individual in the Access tab (not by role). EVA Weight (0.5×–2.0×) scales their variable bonus allocation.' },
       { heading: 'Live Preview Card', icon: 'fa-eye', color: '#f59e0b',
         text: 'The right panel updates in real time as you type — showing the employee\'s avatar initials, name, role, department, and colour. The 3 auto-enrolled onboarding courses are also shown.' },
       { heading: 'Onboarding Settings', icon: 'fa-rocket', color: '#e84393',
@@ -867,14 +1895,14 @@ const DIR_HELP = {
   access: {
     title: 'Access & Roles',
     icon:  'fa-key',
-    intro: 'The full RBAC (Role-Based Access Control) matrix showing every role\'s app permissions — and how executive level overrides all role restrictions.',
+    intro: 'Per-individual app access. Each employee has their own list of apps they may open — tick the apps per person and Save. Role is just a label and no longer controls access.',
     sections: [
-      { heading: 'Reading the Matrix', icon: 'fa-table', color: '#7c5cfc',
-        text: 'Rows = roles. Columns = apps. Green ✓ = access granted. Grey ✗ = no access. The gold "Executive level" row at the bottom shows that executive-level employees always get all 7 apps regardless of their role.' },
+      { heading: 'Reading the Grid', icon: 'fa-table', color: '#7c5cfc',
+        text: 'Rows = individual employees. Columns = apps. Tick a box to grant that person that app, then click Save Changes. My Dashboard is always available and cannot be removed.' },
       { heading: '7 App Keys', icon: 'fa-grid-2', color: '#00d4aa',
         text: 'My Dashboard (employee), Team Dashboard (team), Fund Operations (fund), Admin Console (admin), IFA Portal (ifa), Investor Portal (portal), Director Panel (director). Access is enforced on page load by StaffAuth.guard().' },
       { heading: 'Changing Access', icon: 'fa-sliders', color: '#f59e0b',
-        text: 'To change an employee\'s access, update their Role or Level in the All Employees view. Access updates immediately on their next login. No separate permission management is needed.' },
+        text: 'Tick/untick the apps for each employee in this Access tab and click Save. Changes take effect on the employee\'s next login. New employees start with only My Dashboard until you grant more.' },
       { heading: 'Director Panel Access', icon: 'fa-crown', color: '#e84393',
         text: 'Only CEO role and executive-level employees can access the Director Panel. This is enforced by StaffAuth.isDirector() which checks role === "CEO" OR level === "executive".' },
     ]
@@ -963,6 +1991,378 @@ function renderDirHelp(view) {
     </div>
   `;
 }
+
+/* ═══ DEPT CHART ══════════════════════════════════════════════════ */
+function renderDeptChart() {
+  const ctx = document.getElementById('deptChart');
+  if (!ctx) return;
+  if (_dirCharts.dept) { _dirCharts.dept.destroy(); }
+  const deptCounts = {};
+  _employees.filter(e => e.status === 'active').forEach(e => {
+    const d = e.department || 'Other';
+    deptCounts[d] = (deptCounts[d] || 0) + 1;
+  });
+  const labels = Object.keys(deptCounts);
+  const values = Object.values(deptCounts);
+  const palette = ['#7c5cfc','#f59e0b','#10b981','#00d4aa','#656565','#f87171','#a78bfa','#34d399'];
+  _dirCharts.dept = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label:'Headcount', data: values, backgroundColor: palette.slice(0, labels.length), borderRadius: 6, borderSkipped: false }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color:'#9ca3af', font:{size:11} }, grid: { display: false } },
+        y: { ticks: { color:'#9ca3af', stepSize:1 }, grid: { color:'rgba(255,255,255,0.04)' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+/* ═══ ACTIVITY FEED ══════════════════════════════════════════════ */
+function renderActivityFeed() {
+  const el = document.getElementById('dirActivityFeed');
+  if (!el) return;
+  const events = [];
+  [..._employees].sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0)).slice(0,3).forEach(e => {
+    events.push({ icon:'fa-user-plus', color:'#10b981', text:`<b>${e.first_name} ${e.last_name}</b> joined as ${e.role||'employee'}`, date: e.created_at });
+  });
+  _onboarding.filter(o => o.status === 'completed').slice(0,3).forEach(ob => {
+    const emp = _employees.find(e => e.id === ob.employee_id);
+    if (emp) events.push({ icon:'fa-rocket', color:'#f59e0b', text:`<b>${emp.first_name} ${emp.last_name}</b> completed onboarding`, date: ob.updated_at });
+  });
+  _onboarding.filter(o => o.status === 'in_progress').slice(0,2).forEach(ob => {
+    const emp = _employees.find(e => e.id === ob.employee_id);
+    const pct = ob.tasks_total > 0 ? Math.round((ob.tasks_completed||0)/ob.tasks_total*100) : 0;
+    if (emp) events.push({ icon:'fa-spinner', color:'#656565', text:`<b>${emp.first_name} ${emp.last_name}</b> — onboarding ${pct}% complete`, date: ob.updated_at });
+  });
+  // Leave requests — pending highlighted, plus recently decided
+  _leaveReqs.slice()
+    .sort((a,b) => new Date(b.created_at||b.start_date||0) - new Date(a.created_at||b.start_date||0))
+    .slice(0,5).forEach(l => {
+      const nm = _leaveEmpName(l.employee_id);
+      const st = l.status || 'pending';
+      if (st === 'pending') {
+        events.push({ icon:'fa-calendar-day', color:'#f59e0b', text:`<b>${nm}</b> requested ${(l.leave_type||'leave').replace(/_/g,' ')} leave`, date: l.created_at || l.start_date });
+      } else {
+        const ok = st === 'approved';
+        events.push({ icon: ok?'fa-calendar-check':'fa-calendar-xmark', color: ok?'#22c55e':'#ef4444', text:`<b>${nm}</b>'s leave was ${ok?'approved':'declined'}`, date: l.approved_at || l.updated_at || l.created_at });
+      }
+    });
+  events.sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+  if (!events.length) { el.innerHTML = `<div style="color:var(--muted);font-size:0.78rem;text-align:center;padding:20px">No recent activity</div>`; return; }
+  el.innerHTML = events.slice(0,8).map(ev => `
+    <div style="display:flex;align-items:flex-start;gap:10px;font-size:0.8rem">
+      <div style="width:24px;height:24px;border-radius:6px;background:${ev.color}1a;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+        <i class="fa-solid ${ev.icon}" style="color:${ev.color};font-size:0.7rem"></i>
+      </div>
+      <div style="flex:1;line-height:1.45;color:var(--muted2)">${ev.text}${ev.date ? `<span style="display:block;font-size:0.68rem;color:var(--muted);margin-top:1px">${fmtDate(ev.date)}</span>` : ''}</div>
+    </div>`).join('');
+}
+
+/* ═══ PERFORMANCE VIEW ═══════════════════════════════════════════ */
+function renderPerformanceView() {
+  const empData = _employees.map(e => {
+    const scores = _kpiScores.filter(k => k.employee_id === e.id);
+    const latest = scores.sort((a,b) => (b.period||'').localeCompare(a.period||''))[0];
+    return { ...e, kpi: latest ? parseFloat(latest.overall_score)||0 : null };
+  }).sort((a,b) => (b.kpi||0) - (a.kpi||0));
+
+  const withKpi = empData.filter(e => e.kpi !== null);
+  const avgKpi = withKpi.length ? withKpi.reduce((s,e)=>s+e.kpi,0)/withKpi.length : 0;
+  const topKpi = withKpi[0]?.kpi || 0;
+  const totalPayroll = _payslips.reduce((s,p)=>s+(parseFloat(p.nett_pay)||0),0);
+  const avgEva = _employees.length ? _employees.reduce((s,e)=>s+(parseFloat(e.eva_weight)||0),0)/_employees.length : 0;
+
+  const perfStats = document.getElementById('perfStats');
+  if (perfStats) perfStats.innerHTML = `
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(124,92,252,.1);color:#a78bfa"><i class="fa-solid fa-chart-bar"></i></div>
+      <div><div class="dir-stat-val">${avgKpi.toFixed(1)}%</div><div class="dir-stat-label">Avg KPI Score</div></div>
+    </div>
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(16,185,129,.1);color:#10b981"><i class="fa-solid fa-trophy"></i></div>
+      <div><div class="dir-stat-val">${topKpi.toFixed(1)}%</div><div class="dir-stat-label">Top Score</div></div>
+    </div>
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(245,158,11,.1);color:#f59e0b"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+      <div><div class="dir-stat-val">${zarM(totalPayroll)}</div><div class="dir-stat-label">Total Payroll (all time)</div></div>
+    </div>
+    <div class="dir-stat">
+      <div class="dir-stat-icon" style="background:rgba(0,212,170,.1);color:#00d4aa"><i class="fa-solid fa-scale-balanced"></i></div>
+      <div><div class="dir-stat-val">${avgEva.toFixed(2)}x</div><div class="dir-stat-label">Avg EVA Weight</div></div>
+    </div>
+  `;
+
+  // KPI radar chart — avg scores per dimension
+  const dims = ['strategy','execution','client','compliance','innovation','leadership','teamwork','growth'];
+  const dimLabels = ['Strategy','Execution','Client','Compliance','Innovation','Leadership','Teamwork','Growth'];
+  const dimAvgs = dims.map(d => {
+    const vals = _kpiScores.map(k => parseFloat(k[d+'_score'])||0).filter(v=>v>0);
+    return vals.length ? vals.reduce((s,v)=>s+v,0)/vals.length : 0;
+  });
+  const radarCtx = document.getElementById('perfRadarChart');
+  if (radarCtx) {
+    if (_dirCharts.perfRadar) _dirCharts.perfRadar.destroy();
+    _dirCharts.perfRadar = new Chart(radarCtx, {
+      type: 'radar',
+      data: {
+        labels: dimLabels,
+        datasets: [{
+          label: 'Team Avg', data: dimAvgs,
+          backgroundColor: 'rgba(124,92,252,0.15)', borderColor: '#7c5cfc', borderWidth: 2,
+          pointBackgroundColor: '#7c5cfc', pointRadius: 3
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { r: {
+          ticks: { display: false, stepSize: 25 },
+          grid: { color: 'rgba(255,255,255,0.07)' },
+          angleLines: { color: 'rgba(255,255,255,0.07)' },
+          pointLabels: { color: '#9ca3af', font: { size: 10 } },
+          min: 0, max: 100
+        }}
+      }
+    });
+  }
+
+  // Dept avg score bar chart
+  const deptCtx = document.getElementById('perfDeptChart');
+  if (deptCtx) {
+    if (_dirCharts.perfDept) _dirCharts.perfDept.destroy();
+    const deptMap = {};
+    empData.forEach(e => {
+      if (e.kpi === null) return;
+      const d = e.department || 'Other';
+      if (!deptMap[d]) deptMap[d] = [];
+      deptMap[d].push(e.kpi);
+    });
+    const dLabels = Object.keys(deptMap);
+    const dAvgs = dLabels.map(d => deptMap[d].reduce((s,v)=>s+v,0)/deptMap[d].length);
+    const palette = ['#7c5cfc','#f59e0b','#10b981','#00d4aa','#656565','#f87171','#a78bfa','#34d399'];
+    _dirCharts.perfDept = new Chart(deptCtx, {
+      type: 'bar',
+      data: { labels: dLabels, datasets: [{ label:'Avg KPI %', data: dAvgs.map(v=>+v.toFixed(1)), backgroundColor: palette.slice(0,dLabels.length), borderRadius:5 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color:'#9ca3af', font:{size:11} }, grid: { display:false } },
+          y: { ticks: { color:'#9ca3af', callback:v=>v+'%' }, grid: { color:'rgba(255,255,255,0.04)' }, min:0, max:100 }
+        }
+      }
+    });
+  }
+
+  // Leaderboard table
+  const tbody = document.getElementById('perfLeaderboard');
+  if (!tbody) return;
+  if (!empData.length) { tbody.innerHTML = `<tr><td colspan="7"><div class="dir-empty">No employee data</div></td></tr>`; return; }
+  const LEVELS = [{level:1,title:'Analyst',minXP:0},{level:2,title:'Associate',minXP:500},{level:3,title:'Senior',minXP:1200},{level:4,title:'Lead',minXP:2500},{level:5,title:'Director',minXP:4500},{level:6,title:'MVP',minXP:7000}];
+  function xpLevel(xp) { return [...LEVELS].reverse().find(l => (xp||0) >= l.minXP) || LEVELS[0]; }
+  tbody.innerHTML = empData.map((e, i) => {
+    const lv = xpLevel(e.xp_total);
+    const kpiColor = e.kpi === null ? '#6b7280' : e.kpi >= 75 ? '#10b981' : e.kpi >= 50 ? '#f59e0b' : '#ef4444';
+    return `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:22px;text-align:center;font-size:0.75rem;font-weight:700;color:${i<3?'#f59e0b':'#6b7280'}">${i+1}</div>
+          <div class="emp-row-avatar" style="background:${e.avatar_color||'#7c5cfc'}">${e.avatar_initials||'?'}</div>
+          <div><div class="emp-row-name">${e.first_name} ${e.last_name}</div><div class="emp-row-email">${e.role||''}</div></div>
+        </div>
+      </td>
+      <td style="color:var(--muted2);font-size:0.8rem">${e.department||'—'}</td>
+      <td><span style="font-weight:700;color:${kpiColor}">${e.kpi !== null ? e.kpi.toFixed(1)+'%' : '—'}</span></td>
+      <td style="color:var(--muted2)">${e.eva_weight||'1.0'}x</td>
+      <td style="color:var(--muted2)">${(e.xp_total||0).toLocaleString()} XP</td>
+      <td><span style="background:${lv.color}22;color:${lv.color};border-radius:6px;padding:2px 8px;font-size:0.72rem;font-weight:700">${lv.title}</span></td>
+      <td>${statusChip(e.status)}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ═══ CSV / PDF EXPORTS ══════════════════════════════════════════ */
+function _dirCsvDownload(filename, headers, rows) {
+  const esc = v => { const s=String(v==null?'':v); return (s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s; };
+  const csv = [headers.map(esc).join(','), ...rows.map(r=>r.map(esc).join(','))].join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=filename; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  showToast('CSV export started', 'success');
+}
+
+function exportEmployeesCSV() {
+  if (!_employees.length) { showToast('No employees to export', 'error'); return; }
+  const headers = ['First Name','Last Name','Email','Role','Department','Level','Status','Start Date','Salary','EVA Weight'];
+  const rows = _employees.map(e => [
+    e.first_name, e.last_name, e.email, e.role, e.department,
+    LEVEL_LABELS[e.level]||e.level, e.status, e.start_date||'', e.salary||'', e.eva_weight||''
+  ]);
+  _dirCsvDownload('employees.csv', headers, rows);
+}
+
+function exportEmployeesPDF() {
+  const jsPDF = window.jspdf?.jsPDF;
+  if (!jsPDF) { showToast('PDF library not loaded', 'error'); return; }
+  if (!_employees.length) { showToast('No employees to export', 'error'); return; }
+  const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+  doc.setFontSize(16); doc.setTextColor(245,158,11);
+  doc.text('SV Capital — Employee Register', 14, 16);
+  doc.setFontSize(9); doc.setTextColor(100,116,139);
+  doc.text(`Generated: ${new Date().toLocaleDateString('en-ZA')} · ${_employees.length} employees`, 14, 22);
+  doc.autoTable({
+    startY: 27,
+    head: [['Name','Email','Role','Dept','Level','Status','Start Date']],
+    body: _employees.map(e => [
+      `${e.first_name} ${e.last_name}`, e.email||'', e.role||'',
+      e.department||'', LEVEL_LABELS[e.level]||e.level||'',
+      e.status||'', e.start_date||''
+    ]),
+    styles:{ fontSize:8, cellPadding:3 },
+    headStyles:{ fillColor:[17,19,24], textColor:[245,158,11], fontStyle:'bold' },
+    alternateRowStyles:{ fillColor:[245,247,250] },
+    theme:'grid'
+  });
+  doc.save('employees.pdf');
+  showToast('PDF export started', 'success');
+}
+
+function exportPayslipsSummaryCSV() {
+  if (!_payslips.length) { showToast('No payslips to export', 'error'); return; }
+  const headers = ['Employee ID','Pay Period','Gross Pay','PAYE','UIF','Other Ded','Nett Pay','Notes'];
+  const rows = _payslips.map(p => [
+    p.employee_id||'', p.pay_period||'',
+    p.gross_pay||0, p.paye||0, p.uif||0, p.other_deductions||0, p.nett_pay||0, p.notes||''
+  ]);
+  _dirCsvDownload('payslips_summary.csv', headers, rows);
+}
+
+function exportOnboardingCSV() {
+  if (!_onboarding.length) { showToast('No onboarding records to export', 'error'); return; }
+  const headers = ['Employee','Role','Status','Tasks Done','Tasks Total','Progress %','Start Date','Buddy'];
+  const rows = _onboarding.map(ob => {
+    const emp = _employees.find(e => e.id === ob.employee_id);
+    const pct = ob.tasks_total > 0 ? Math.round((ob.tasks_completed||0)/ob.tasks_total*100) : 0;
+    return [
+      emp ? `${emp.first_name} ${emp.last_name}` : ob.employee_id,
+      emp?.role||'', ob.status||'', ob.tasks_completed||0, ob.tasks_total||0, pct+'%',
+      ob.start_date||'', ob.buddy_name||''
+    ];
+  });
+  _dirCsvDownload('onboarding_report.csv', headers, rows);
+}
+
+function exportPerformanceCSV() {
+  const headers = ['Employee','Department','Role','KPI Score','EVA Weight','XP','Level','Status'];
+  const rows = _employees.map(e => {
+    const scores = _kpiScores.filter(k => k.employee_id === e.id);
+    const latest = scores.sort((a,b)=>(b.period||'').localeCompare(a.period||''))[0];
+    const kpi = latest ? parseFloat(latest.overall_score)||0 : '';
+    return [
+      `${e.first_name} ${e.last_name}`, e.department||'', e.role||'',
+      kpi !== '' ? kpi.toFixed(1)+'%' : '—',
+      e.eva_weight||'1.0', e.xp_total||0, LEVEL_LABELS[e.level]||e.level||'', e.status||''
+    ];
+  });
+  _dirCsvDownload('performance_report.csv', headers, rows);
+}
+
+/* ═══ COMMAND PALETTE ════════════════════════════════════════════ */
+const DIR_CMD_ITEMS = [
+  { label:'Dashboard',       icon:'fa-gauge-high',          view:'overview' },
+  { label:'All Employees',   icon:'fa-users',               view:'employees' },
+  { label:'Add Employee',    icon:'fa-user-plus',           view:'create' },
+  { label:'Onboarding',      icon:'fa-rocket',              view:'onboarding' },
+  { label:'Access & Roles',  icon:'fa-key',                 view:'access' },
+  { label:'Course Library',  icon:'fa-graduation-cap',      view:'courses' },
+  { label:'Payslips',        icon:'fa-file-invoice-dollar', view:'payslips' },
+  { label:'Performance',     icon:'fa-chart-bar',           view:'performance' },
+  { label:'Export Employees CSV', icon:'fa-file-csv',       action: ()=>exportEmployeesCSV() },
+  { label:'Export Employees PDF', icon:'fa-file-pdf',       action: ()=>exportEmployeesPDF() },
+  { label:'Export Payslips CSV',  icon:'fa-file-csv',       action: ()=>exportPayslipsSummaryCSV() },
+  { label:'Export Onboarding CSV',icon:'fa-file-csv',       action: ()=>exportOnboardingCSV() },
+  { label:'Export Performance CSV',icon:'fa-file-csv',      action: ()=>exportPerformanceCSV() },
+  { label:'App Hub',         icon:'fa-grid-2',              href:'hub.html' },
+  { label:'My Dashboard',    icon:'fa-user-circle',         href:'employee.html' },
+  { label:'Team Dashboard',  icon:'fa-people-group',        href:'index.html' },
+];
+let _dirCmdActive = -1;
+
+function openDirCmdPalette() {
+  const ov = document.getElementById('dirCmdOverlay');
+  if (!ov) return;
+  ov.style.display = 'flex';
+  _dirCmdActive = -1;
+  const inp = document.getElementById('dirCmdInput');
+  if (inp) { inp.value = ''; inp.focus(); }
+  renderDirCmdResults('');
+}
+
+function closeDirCmdPalette() {
+  const ov = document.getElementById('dirCmdOverlay');
+  if (ov) ov.style.display = 'none';
+}
+
+function renderDirCmdResults(q) {
+  const el = document.getElementById('dirCmdResults');
+  if (!el) return;
+  _dirCmdActive = -1;
+  const query = (q||'').toLowerCase().trim();
+  const filtered = query ? DIR_CMD_ITEMS.filter(c=>c.label.toLowerCase().includes(query)) : DIR_CMD_ITEMS;
+  if (!filtered.length) {
+    el.innerHTML = `<div style="padding:20px;text-align:center;color:#6b7280;font-size:13px">No results for "${q}"</div>`;
+    el._filtered = []; return;
+  }
+  el.innerHTML = filtered.map((c,i) =>
+    `<div class="dir-cmd-item" data-idx="${i}" onmouseenter="dirCmdHover(${i})" onclick="dirCmdSelect(${i})"
+      style="display:flex;align-items:center;gap:12px;padding:10px 18px;cursor:pointer;transition:background .1s;color:#e8eaf6;font-size:13px">
+      <i class="fa-solid ${c.icon}" style="width:16px;text-align:center;color:#6b7280;font-size:13px"></i>
+      <span>${c.label}</span>
+      ${c.view?`<kbd style="margin-left:auto;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:4px;font-size:10px;padding:1px 6px;color:#6b7280">${c.view}</kbd>`:''}
+    </div>`
+  ).join('');
+  el._filtered = filtered;
+}
+
+function dirCmdHover(idx) {
+  _dirCmdActive = idx;
+  document.querySelectorAll('.dir-cmd-item').forEach((el,i) => {
+    el.style.background = i === idx ? 'rgba(245,158,11,.1)' : '';
+  });
+}
+
+function dirCmdSelect(idx) {
+  const el = document.getElementById('dirCmdResults');
+  const filtered = el?._filtered || DIR_CMD_ITEMS;
+  const item = filtered[idx];
+  if (!item) return;
+  closeDirCmdPalette();
+  if (item.action) { item.action(); return; }
+  if (item.href)   { window.location.href = item.href; return; }
+  if (item.view)   navTo(item.view, document.querySelector(`[data-view="${item.view}"]`));
+}
+
+function dirCmdKeyNav(e) {
+  const el = document.getElementById('dirCmdResults');
+  const filtered = el?._filtered || [];
+  const count = filtered.length;
+  if (!count) return;
+  if (e.key==='ArrowDown')  { e.preventDefault(); dirCmdHover((_dirCmdActive+1)%count); }
+  if (e.key==='ArrowUp')    { e.preventDefault(); dirCmdHover((_dirCmdActive-1+count)%count); }
+  if (e.key==='Enter')      { e.preventDefault(); if (_dirCmdActive>=0) dirCmdSelect(_dirCmdActive); else if(count>0) dirCmdSelect(0); }
+  if (e.key==='Escape')     { closeDirCmdPalette(); }
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key==='k') { e.preventDefault(); openDirCmdPalette(); }
+  if (e.key==='Escape') { const ov=document.getElementById('dirCmdOverlay'); if(ov&&ov.style.display!=='none') closeDirCmdPalette(); }
+});
 
 // Auto-update help panel when navigating
 const _dirOrigNavTo = navTo;
