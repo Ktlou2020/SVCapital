@@ -879,6 +879,9 @@ async function _applyLiveProductAverages() {
   } catch (_) { return; }
   if (!products.length) return;
 
+  // Populate the shared Utils cache so productInfo() returns API colors everywhere
+  if (typeof Utils !== 'undefined') Utils.setProductCache(products);
+
   const avgByType = {}, prodByType = {};
   products.forEach(p => {
     prodByType[p.product_type] = p;
@@ -922,7 +925,22 @@ async function _applyLiveProductAverages() {
       if (typeof PRODUCTS !== 'undefined' && PRODUCTS[key]) PRODUCTS[key].rate = rate;
     }
 
-    // 2) Admin-managed product detail copy → "View Details" modal
+    // 2) Apply API color to product card elements on the homepage
+    const primaryType = homeMap[key].primary;
+    const apiColor = prodByType[primaryType]?.color;
+    if (apiColor) {
+      const card = document.querySelector(`.product-card[data-product="${key}"]`);
+      if (card) {
+        const bg   = card.querySelector('.product-card__bg');
+        const icon = card.querySelector('.product-card__icon');
+        const gold = card.querySelector('.stat__value--gold');
+        if (bg)   bg.style.background = `radial-gradient(circle at top right, ${apiColor}18, transparent)`;
+        if (icon) icon.style.color = apiColor;
+        if (gold) gold.style.color = apiColor;
+      }
+    }
+
+    // 3) Admin-managed product detail copy → "View Details" modal
     if (prod && typeof MODAL_DATA !== 'undefined' && MODAL_DATA[key]) {
       const m = MODAL_DATA[key];
       if (prod.label)       m.eyebrow = prod.label;
