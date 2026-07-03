@@ -8418,7 +8418,7 @@ let _kycFile = null;
 
 function _kycFileSelected(file) {
   if (!file) return;
-  if (file.size > 10 * 1024 * 1024) { Toast.error('File too large — maximum 10 MB'); return; }
+  if (file.size > 10 * 1024 * 1024) { Toast.error('File too large — maximum 10 MB. Please compress the image and try again.'); return; }
   _kycFile = file;
   const statusEl = document.getElementById('kycFileStatus');
   const nameEl   = document.getElementById('kycFileName');
@@ -8508,8 +8508,13 @@ async function submitKycDocument() {
     _renderKycStatusPanel();
     _renderKycDocsList();
   } catch (e) {
-    Toast.error('Upload failed — please try again');
-    console.error(e);
+    const msg = e?.message || '';
+    if (msg.includes('too large') || msg.includes('entity') || msg.includes('limit')) {
+      Toast.error('File too large for upload. Please compress the image or use a smaller file (max 10 MB).');
+    } else {
+      Toast.error('Upload failed — please try again');
+    }
+    console.error('[submitKycDocument]', e);
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit for Review'; }
   }
