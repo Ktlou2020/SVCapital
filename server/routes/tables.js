@@ -191,15 +191,20 @@ const STRIP_COLS = {
   employees: ['pin_hash', 'id_number', 'login_attempts', 'login_locked_until'],
 };
 
-function stripSensitive(table, rows, ownEmpId) {
+const ADMIN_ROLES = new Set(['admin', 'director', 'fund_manager']);
+
+function stripSensitive(table, rows, ownEmpId, userRole) {
   const cols = STRIP_COLS[table];
   if (!cols) return rows;
   return rows.map(row => {
     const clean = { ...row };
     cols.forEach(c => {
-      // An employee may see their OWN id_number (needed for their profile);
-      // it stays stripped for everyone else. pin_hash etc. are always stripped.
-      if (c === 'id_number' && table === 'employees' && ownEmpId && row.id === ownEmpId) return;
+      // pin_hash is always stripped — never exposed.
+      if (c === 'pin_hash') { delete clean[c]; return; }
+      // id_number: visible to the employee themselves and to admin/director roles.
+      if (c === 'id_number' && table === 'employees') {
+        if ((ownEmpId && row.id === ownEmpId) || ADMIN_ROLES.has(userRole)) return;
+      }
       delete clean[c];
     });
     return clean;
@@ -419,7 +424,7 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
       pool.query(countQuery, countParams),
     ]);
 
-    const rows  = stripSensitive(table, dataResult.rows, req.user?.empId);
+    const rows  = stripSensitive(table, dataResult.rows, req.user?.empId, req.user?.role);
     const total = parseInt(countResult.rows[0].count);
 
     // Normalise legacy return-transaction wording: "Monthly interest" → "Return Earned"
@@ -552,7 +557,7 @@ router.get('/:table/:id', requireAuth, validateTable, async (req, res) => {
       }
     }
 
-    const [clean] = stripSensitive(table, rows, req.user?.empId);
+    const [clean] = stripSensitive(table, rows, req.user?.empId, req.user?.role);
     res.json(clean);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -667,7 +672,7 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       `INSERT INTO ${table} (${cols}) VALUES (${placeholders}) RETURNING *`,
       values
     );
-    const [clean] = stripSensitive(table, rows, req.user?.empId);
+    const [clean] = stripSensitive(table, rows, req.user?.empId, req.user?.role);
     res.status(201).json(clean);
 
     /* ── Wallet credit hook ─────────────────────────────────────────────
@@ -957,7 +962,7 @@ router.put('/:table/:id', requireAuth, validateTable, async (req, res) => {
       values
     );
     if (!rows[0]) return res.status(404).json({ error: 'Record not found.' });
-    const [clean] = stripSensitive(table, rows, req.user?.empId);
+    const [clean] = stripSensitive(table, rows, req.user?.empId, req.user?.role);
     res.json(clean);
   } catch (err) {
     console.error(`PUT /${req.params.table}/${req.params.id}:`, err.message);
@@ -1019,7 +1024,7 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
       values
     );
     if (!rows[0]) return res.status(404).json({ error: 'Record not found.' });
-    const [clean] = stripSensitive(table, rows, req.user?.empId);
+    const [clean] = stripSensitive(table, rows, req.user?.empId, req.user?.role);
     res.json(clean);
 
     // ── Audit + Email hooks (fire-and-forget) ─────────────────────────────
