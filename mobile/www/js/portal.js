@@ -8694,6 +8694,7 @@ async function _renderKycDocsList() {
   try {
     const res = await API.kyc.list({ investor_id: PORTAL.investor.id, limit: 20 });
     docs = res.data || [];
+    PORTAL._kycDocs = docs;
   } catch (_) {}
 
   const inv = PORTAL.investor;
@@ -8746,34 +8747,44 @@ async function _renderKycDocsList() {
 }
 
 function _viewKycDoc(docId) {
-  const inv = PORTAL.investor;
-  if (!inv) return;
-  // Re-fetch docs to get file_data (may be stripped in list view)
-  API.kyc.list({ investor_id: inv.id, limit: 20 }).then(res => {
-    const doc = (res.data || []).find(d => d.id === docId);
-    if (!doc) { Toast.error('Document not found'); return; }
-    const rawData = doc.file_data || doc.file_url || '';
-    if (!rawData) { Toast.error('No file data available for this document'); return; }
-    if (rawData.startsWith('data:')) {
-      try {
-        const [header, b64] = rawData.split(',');
-        const mime = header.match(/:(.*?);/)?.[1] || 'application/octet-stream';
-        const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-        const blob = new Blob([bytes], { type: mime });
-        const url = URL.createObjectURL(blob);
-        const w = window.open(url, '_blank', 'noopener');
-        if (!w) {
-          const a = document.createElement('a');
-          a.href = rawData; a.download = doc.file_name || 'document'; a.click();
-        }
-      } catch (_) {
-        const w = window.open('', '_blank');
-        if (w) w.document.write(`<title>Document</title><body style="margin:0;background:#000"><img src="${rawData}" style="max-width:100%"></body>`);
-      }
-    } else {
-      window.open(rawData, '_blank', 'noopener,noreferrer');
+  const doc = (PORTAL._kycDocs || []).find(d => d.id === docId);
+  if (!doc) { Toast.error('Document not found'); return; }
+  const rawData = doc.file_data || doc.file_url || '';
+  if (!rawData) { Toast.error('No file data available for this document'); return; }
+
+  if (rawData.startsWith('http')) {
+    window.open(rawData, '_blank', 'noopener,noreferrer');
+    return;
+  }
+
+  if (rawData.startsWith('data:')) {
+    try {
+      const [header, b64] = rawData.split(',');
+      const mime = header.match(/:(.*?);/)?.[1] || 'application/octet-stream';
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime });
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = doc.file_name || 'document';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+    } catch (_) {
+      const a = document.createElement('a');
+      a.href = rawData;
+      a.download = doc.file_name || 'document';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
-  }).catch(() => Toast.error('Could not load document'));
+    return;
+  }
+
+  Toast.error('Unable to open document');
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -9240,51 +9251,59 @@ function downloadCertificate(investmentId) {
   // Header
   let y = _pdfHeader(doc, 'INVESTMENT CERTIFICATE', `#${inv.id}`);
 
-  // Certificate badge area
-  y += 6;
+  // Certificate outer box — spans full content area
+  const certBoxY = y + 6;
   doc.setFillColor(255, 249, 235);
   doc.setDrawColor(255, 155, 12);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(14, y, W - 28, 22, 3, 3, 'FD');
+  doc.setLineWidth(0.8);
+  doc.roundedRect(14, certBoxY, W - 28, 126, 4, 4, 'FD');
+
+  // Title strip inside outer box
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(180, 100, 0);
-  doc.text('CERTIFICATE OF INVESTMENT', W / 2, y + 8, { align: 'center' });
+  doc.text('CERTIFICATE OF INVESTMENT', W / 2, certBoxY + 9, { align: 'center' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(120, 80, 0);
-  doc.text('This certifies that the investor has made a valid investment with SV Capital.', W / 2, y + 15, { align: 'center' });
-  y += 28;
+  doc.text('This certifies that the investor has made a valid investment with SV Capital.', W / 2, certBoxY + 16, { align: 'center' });
+
+  // Divider line between title and info panels
+  doc.setDrawColor(255, 155, 12);
+  doc.setLineWidth(0.3);
+  doc.line(18, certBoxY + 21, W - 18, certBoxY + 21);
+
+  y = certBoxY + 26;
 
   // Two-column info layout
   const leftX  = 14;
   const rightX = W / 2 + 4;
   const valLeft  = 70;
-  const valRight = W / 2 + 58;
+  const valRight = W / 2 + 54;
 
-  doc.setFillColor(247, 248, 250);
-  doc.roundedRect(leftX, y, (W - 28) / 2 - 2, 62, 2, 2, 'F');
-  doc.roundedRect(rightX - 2, y, (W - 28) / 2, 62, 2, 2, 'F');
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(leftX + 4, y, (W - 28) / 2 - 6, 68, 2, 2, 'F');
+  doc.roundedRect(rightX, y, (W - 28) / 2 - 6, 68, 2, 2, 'F');
 
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(107, 114, 128);
-  doc.text('INVESTOR DETAILS', leftX + 4, y + 8);
-  doc.text('INVESTMENT DETAILS', rightX + 2, y + 8);
+  doc.text('INVESTOR DETAILS', leftX + 8, y + 8);
+  doc.text('INVESTMENT DETAILS', rightX + 4, y + 8);
 
   let ly = y + 16;
   let ry = y + 16;
 
   const infoL = (lbl, val) => {
     doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(107, 114, 128);
-    doc.text(lbl, leftX + 4, ly);
+    doc.text(lbl, leftX + 8, ly);
     doc.setFont('helvetica', 'normal'); doc.setTextColor(26, 26, 26);
     doc.text(String(val || '—'), valLeft, ly);
     ly += 7;
   };
   const infoR = (lbl, val) => {
     doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(107, 114, 128);
-    doc.text(lbl, rightX + 2, ry);
+    doc.text(lbl, rightX + 4, ry);
     doc.setFont('helvetica', 'normal'); doc.setTextColor(26, 26, 26);
     doc.text(String(val || '—'), valRight, ry);
     ry += 7;
@@ -9302,23 +9321,23 @@ function downloadCertificate(investmentId) {
 
   y = Math.max(ly, ry) + 4;
 
-  doc.setFillColor(247, 248, 250);
-  doc.roundedRect(leftX, y, W - 28, 26, 2, 2, 'F');
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(leftX + 4, y, W - 36, 26, 2, 2, 'F');
 
   let iy = y + 10;
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold'); doc.setTextColor(107, 114, 128);
-  doc.text('Start Date', leftX + 4, iy);
-  doc.text('Maturity Date', W / 2 - 20, iy);
-  doc.text('Status', W - 60, iy);
+  doc.text('Start Date', leftX + 8, iy);
+  doc.text('Maturity Date', W / 2 - 18, iy);
+  doc.text('Status', W - 58, iy);
 
   doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
   doc.setTextColor(26, 26, 26);
-  doc.text(Utils.date(inv.investment_date || inv.start_date), leftX + 4, iy + 8);
-  doc.text(Utils.date(inv.maturity_date || inv.end_date), W / 2 - 20, iy + 8);
+  doc.text(Utils.date(inv.investment_date || inv.start_date), leftX + 8, iy + 8);
+  doc.text(Utils.date(inv.maturity_date || inv.end_date), W / 2 - 18, iy + 8);
   const statusColor = inv.status === 'active' ? [47, 140, 155] : inv.status === 'paid_out' ? [34, 197, 94] : [156, 163, 175];
   doc.setTextColor(...statusColor);
-  doc.text((inv.status || '').toUpperCase(), W - 60, iy + 8);
+  doc.text((inv.status || '').toUpperCase(), W - 58, iy + 8);
 
   y += 32;
 
