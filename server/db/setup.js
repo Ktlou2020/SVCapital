@@ -1044,6 +1044,11 @@ const DEFAULT_PRODUCTS = [
 
 async function seedProducts() {
   try {
+    const { rows } = await pool.query('SELECT COUNT(*) AS count FROM products');
+    if (parseInt(rows[0].count, 10) > 0) {
+      console.log('ℹ️  Products table already has data — skipping seed.');
+      return;
+    }
     for (const p of DEFAULT_PRODUCTS) {
       await pool.query(
         `INSERT INTO products
