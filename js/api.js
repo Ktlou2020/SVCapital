@@ -452,7 +452,14 @@ const Utils = {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   },
 
-  /* Product display info */
+  /* Product color/icon cache — populated from GET /api/products so admin changes flow everywhere */
+  _productCache: {},
+  setProductCache(products) {
+    if (!Array.isArray(products)) return;
+    products.forEach(p => { if (p.product_type) this._productCache[p.product_type] = p; });
+  },
+
+  /* Product display info — checks API cache first, falls back to static map */
   productInfo(type) {
     const map = {
       cattle:         { label: 'Cattle Investment',       icon: 'fa-cow',        color: '#fec24f', badgeClass: 'badge--gold' },
@@ -466,7 +473,16 @@ const Utils = {
       delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#ff9b0c', badgeClass: 'badge--orange' },
       other:          { label: 'Other',                   icon: 'fa-circle',      color: '#656565', badgeClass: 'badge--gray' },
     };
-    return map[type] || { label: type, icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
+    const base = map[type] || { label: type || 'Other', icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
+    const cached = this._productCache[type];
+    if (!cached) return base;
+    return {
+      ...base,
+      label:      cached.label      || base.label,
+      icon:       cached.icon       || base.icon,
+      color:      cached.color      || base.color,
+      badgeClass: cached.badge_class || base.badgeClass,
+    };
   },
 
   ciProductPalette: ['#ff9b0c', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'],

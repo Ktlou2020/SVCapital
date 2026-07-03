@@ -1913,20 +1913,20 @@ function renderAllocationChart() {
   // creates orphan GPU compositor layers on Android WebView that cause content to blank.
   if (ctx.offsetParent === null) return;
 
-  const colors = ['#D4AF37', '#22c55e', '#656565', '#f97316', '#a855f7', '#ec4899', '#656565'];
-
   const activeInvests = PORTAL.investments.filter(i => i.status === 'active');
-  const allocation = {};
+  const byType = {};
   activeInvests.forEach(i => {
-    const label = Utils.productInfo(i.product_type || 'other').label;
-    allocation[label] = (allocation[label] || 0) + (parseFloat(i.amount) || 0);
+    const type = i.product_type || 'other';
+    if (!byType[type]) byType[type] = { label: Utils.productInfo(type).label, color: Utils.productInfo(type).color, amount: 0 };
+    byType[type].amount += parseFloat(i.amount) || 0;
   });
 
-  const isEmpty = !Object.keys(allocation).length;
-  if (isEmpty) allocation['No Investments'] = 1;
+  const isEmpty = !Object.keys(byType).length;
+  if (isEmpty) byType['none'] = { label: 'No Investments', color: '#656565', amount: 1 };
 
-  const labels = Object.keys(allocation);
-  const values = Object.values(allocation);
+  const labels = Object.values(byType).map(v => v.label);
+  const values = Object.values(byType).map(v => v.amount);
+  const colors = Object.values(byType).map(v => v.color);
   const total  = values.reduce((s, v) => s + v, 0);
 
   if (PORTAL.charts.alloc) PORTAL.charts.alloc.destroy();
@@ -1934,7 +1934,7 @@ function renderAllocationChart() {
     type: 'doughnut',
     data: {
       labels,
-      datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderColor: '#ffffff', borderWidth: 2, hoverOffset: 4 }]
+      datasets: [{ data: values, backgroundColor: colors, borderColor: '#ffffff', borderWidth: 2, hoverOffset: 4 }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -3603,6 +3603,7 @@ async function _getPortalProducts() {
   try {
     const r = await API._fetch('GET', 'products');
     _portalProductsCache = r.data || [];
+    Utils.setProductCache(_portalProductsCache);
   } catch (_) { _portalProductsCache = []; }
   return _portalProductsCache;
 }
