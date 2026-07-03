@@ -8627,44 +8627,107 @@ async function _renderKycDocsList() {
 }
 
 function _viewKycDoc(docId) {
-  const doc = (PORTAL._kycDocs || []).find(d => d.id === docId);
-  if (!doc) { Toast.error('Document not found'); return; }
-  const rawData = doc.file_data || doc.file_url || '';
+  const kycDoc = (PORTAL._kycDocs || []).find(d => d.id === docId);
+  if (!kycDoc) { Toast.error('Document not found'); return; }
+  const rawData = kycDoc.file_data || kycDoc.file_url || '';
   if (!rawData) { Toast.error('No file data available for this document'); return; }
 
-  if (rawData.startsWith('http')) {
-    window.open(rawData, '_blank', 'noopener,noreferrer');
-    return;
-  }
+  const fileName = kycDoc.file_name || 'document';
+  const mime = rawData.startsWith('data:')
+    ? (rawData.match(/^data:(.*?);/) || [])[1] || ''
+    : '';
+  const isImage = /image\//i.test(mime) || /\.(png|jpg|jpeg|gif|webp)$/i.test(fileName);
+  const isPdf   = /pdf/i.test(mime)   || /\.pdf$/i.test(fileName);
 
+  // Build blob URL so both images and PDFs can be embedded without popup
+  let viewSrc = rawData;
+  let blobUrl  = null;
   if (rawData.startsWith('data:')) {
     try {
       const [header, b64] = rawData.split(',');
-      const mime = header.match(/:(.*?);/)?.[1] || 'application/octet-stream';
-      const binary = atob(b64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const blob = new Blob([bytes], { type: mime });
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = doc.file_name || 'document';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
-    } catch (_) {
-      const a = document.createElement('a');
-      a.href = rawData;
-      a.download = doc.file_name || 'document';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
-    return;
+      const mimeType = header.match(/:(.*?);/)?.[1] || 'application/octet-stream';
+      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const blob  = new Blob([bytes], { type: mimeType });
+      blobUrl  = URL.createObjectURL(blob);
+      viewSrc  = blobUrl;
+    } catch (_) { /* fall back to raw data URI */ }
   }
 
-  Toast.error('Unable to open document');
+  // Overlay container
+  const overlay = document.createElement('div');
+  overlay.style.cssText = [
+    'position:fixed','inset:0','z-index:99999',
+    'background:rgba(0,0,0,0.82)',
+    'display:flex','flex-direction:column',
+    'align-items:center','justify-content:flex-start',
+  ].join(';');
+
+  // Toolbar
+  const toolbar = document.createElement('div');
+  toolbar.style.cssText = [
+    'width:100%','max-width:960px',
+    'display:flex','align-items:center','justify-content:space-between',
+    'padding:10px 16px','box-sizing:border-box',
+    'background:#1a1a1a','flex-shrink:0',
+  ].join(';');
+  toolbar.innerHTML = `
+    <span style="color:#e5e7eb;font-size:0.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%">${fileName}</span>
+    <span style="display:flex;gap:10px">
+      <button id="_kycDownBtn" style="background:#ff9b0c;color:#000;border:none;border-radius:6px;padding:6px 14px;font-size:0.8rem;font-weight:600;cursor:pointer">Download</button>
+      <button id="_kycCloseBtn" style="background:#374151;color:#f3f4f6;border:none;border-radius:6px;padding:6px 14px;font-size:0.8rem;font-weight:600;cursor:pointer">Close ✕</button>
+    </span>
+  `;
+
+  // Content area
+  const content = document.createElement('div');
+  content.style.cssText = [
+    'flex:1','width:100%','max-width:960px',
+    'overflow:auto','display:flex',
+    'align-items:center','justify-content:center',
+    'padding:12px','box-sizing:border-box',
+  ].join(';');
+
+  if (isImage) {
+    const img = document.createElement('img');
+    img.src = viewSrc;
+    img.style.cssText = 'max-width:100%;max-height:calc(100vh - 80px);object-fit:contain;border-radius:4px';
+    img.onerror = () => { img.alt = 'Image could not be loaded'; };
+    content.appendChild(img);
+  } else if (isPdf) {
+    const iframe = document.createElement('iframe');
+    iframe.src = viewSrc;
+    iframe.style.cssText = 'width:100%;height:calc(100vh - 80px);border:none;border-radius:4px;background:#fff';
+    content.appendChild(iframe);
+  } else {
+    content.innerHTML = `<div style="color:#e5e7eb;text-align:center;padding:32px">
+      <i class="fa-solid fa-file" style="font-size:3rem;display:block;margin-bottom:12px;opacity:0.5"></i>
+      <p style="margin:0 0 16px">Preview not available for this file type.</p>
+      <button id="_kycDlOnly" style="background:#ff9b0c;color:#000;border:none;border-radius:6px;padding:8px 20px;font-size:0.85rem;font-weight:600;cursor:pointer">Download File</button>
+    </div>`;
+  }
+
+  overlay.appendChild(toolbar);
+  overlay.appendChild(content);
+  document.body.appendChild(overlay);
+
+  const _cleanup = () => {
+    overlay.remove();
+    if (blobUrl) setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  };
+  const _download = () => {
+    const a = document.createElement('a');
+    a.href = blobUrl || rawData;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  overlay.querySelector('#_kycCloseBtn').addEventListener('click', _cleanup);
+  overlay.querySelector('#_kycDownBtn').addEventListener('click', _download);
+  const dlOnly = overlay.querySelector('#_kycDlOnly');
+  if (dlOnly) dlOnly.addEventListener('click', _download);
+  overlay.addEventListener('click', e => { if (e.target === overlay) _cleanup(); });
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -9145,7 +9208,7 @@ function downloadCertificate(investmentId) {
   doc.setFillColor(255, 249, 235);
   doc.setDrawColor(255, 155, 12);
   doc.setLineWidth(0.8);
-  doc.roundedRect(14, certBoxY, W - 28, 120, 4, 4, 'FD');
+  doc.roundedRect(14, certBoxY, W - 28, 155, 4, 4, 'FD');
 
   // Title strip inside outer box
   doc.setFontSize(9);
