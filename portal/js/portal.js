@@ -8617,7 +8617,7 @@ async function _renderKycDocsList() {
                 d.file_url
                   ? `<a href="${d.file_url}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-download"></i> View</a>`
                   : d.file_data
-                    ? `<button class="btn btn--secondary btn--sm" onclick="_viewKycDoc(${JSON.stringify(d.id)})"><i class="fa-solid fa-eye"></i> View</button>`
+                    ? `<button class="btn btn--secondary btn--sm" onclick="_viewKycDoc('${d.id}')"><i class="fa-solid fa-eye"></i> View</button>`
                     : '—'
               }</td>
             </tr>`).join('')}
