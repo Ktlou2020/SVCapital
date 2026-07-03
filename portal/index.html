@@ -443,7 +443,7 @@
             <button class="tab-btn active" onclick="filterMyInvestments('all', this)">All</button>
             <button class="tab-btn" onclick="filterMyInvestments('active', this)">Active</button>            <button class="tab-btn" onclick="filterMyInvestments('matured', this)">Matured</button>
           </div>
-          <select class="form-select form-select--sm" id="myInvProductFilter" style="width:auto;min-width:150px;height:34px;font-size:0.8rem;padding:0 28px 0 12px" onchange="renderMyInvestmentCards()">
+          <select class="form-select form-select--sm" id="myInvProductFilter" style="width:160px;flex-shrink:0;height:34px;font-size:0.8rem;padding:0 30px 0 10px" onchange="renderMyInvestmentCards()">
             <option value="">All Products</option>
           </select>
           <button class="btn btn--secondary btn--sm" style="margin-left:auto;white-space:nowrap" onclick="navigate('statement', document.querySelector('[data-view=statement]'))">
