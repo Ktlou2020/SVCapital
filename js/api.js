@@ -5,6 +5,18 @@
 
 'use strict';
 
+/* ─── Platform tag for analytics/audit (ios | android | web) ───
+   Sent as the X-Platform header so the server records which platform each
+   request came from (powers admin "Mobile App Activity"). */
+function _svcPlatform() {
+  try {
+    if (window.Capacitor && typeof window.Capacitor.getPlatform === 'function') {
+      return window.Capacitor.getPlatform();   // 'ios' | 'android' | 'web'
+    }
+  } catch (_) {}
+  return 'web';
+}
+
 /* ─── API Base URL ─── */
 // In Capacitor native context, window.__SVC_API_BASE__ is injected by mobile/scripts/build.js
 // Otherwise fall back to the relative /api/ path (web / PWA)
@@ -141,7 +153,7 @@ const Auth = {
   async login(email, password, remember = true) {
     const res = await fetch(`${_API_BASE}auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Platform': _svcPlatform() },
       credentials: 'include',
       body: JSON.stringify({ email, password }),
     });
@@ -158,7 +170,7 @@ const Auth = {
   async register(payload) {
     const res = await fetch(`${_API_BASE}auth/register`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Platform': _svcPlatform() },
       credentials: 'include',
       body: JSON.stringify(payload),
     });
@@ -216,6 +228,7 @@ const API = {
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
+        'X-Platform': _svcPlatform(),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     };
@@ -442,18 +455,28 @@ const Utils = {
   /* Product display info */
   productInfo(type) {
     const map = {
-      cattle:         { label: 'Cattle Investment',       icon: 'fa-cow',        color: '#D4AF37', badgeClass: 'badge--gold' },
-      solar:          { label: 'Solar Investment',        icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
-      solar_7yr:      { label: 'Solar Investment (7yr)',  icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
-      solar_6yr:      { label: 'Solar Investment (6yr)',  icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
-      solar_5yr:      { label: 'Solar Investment (5yr)',  icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
-      short_term:     { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#656565', badgeClass: 'badge--blue' },
-      smme:           { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#656565', badgeClass: 'badge--blue' },
-      delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#f97316', badgeClass: 'badge--orange' },
-      delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#f97316', badgeClass: 'badge--orange' },
+      cattle:         { label: 'Cattle Investment',       icon: 'fa-cow',        color: '#fec24f', badgeClass: 'badge--gold' },
+      solar:          { label: 'Solar Investment',        icon: 'fa-solar-panel', color: '#65ed00', badgeClass: 'badge--green' },
+      solar_7yr:      { label: 'Solar Investment (7yr)',  icon: 'fa-solar-panel', color: '#65ed00', badgeClass: 'badge--green' },
+      solar_6yr:      { label: 'Solar Investment (6yr)',  icon: 'fa-solar-panel', color: '#65ed00', badgeClass: 'badge--green' },
+      solar_5yr:      { label: 'Solar Investment (5yr)',  icon: 'fa-solar-panel', color: '#65ed00', badgeClass: 'badge--green' },
+      short_term:     { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#ff5229', badgeClass: 'badge--orange' },
+      smme:           { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#ff5229', badgeClass: 'badge--orange' },
+      delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#ff9b0c', badgeClass: 'badge--orange' },
+      delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#ff9b0c', badgeClass: 'badge--orange' },
       other:          { label: 'Other',                   icon: 'fa-circle',      color: '#656565', badgeClass: 'badge--gray' },
     };
     return map[type] || { label: type, icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
+  },
+
+  ciProductPalette: ['#ff9b0c', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'],
+
+  productColor(product) {
+    const type = (product && product.product_type) || product;
+    const KNOWN = ['cattle', 'solar', 'solar_5yr', 'solar_6yr', 'solar_7yr', 'short_term', 'smme', 'delivery_bike', 'delivery_bikes'];
+    if (KNOWN.includes(type)) return this.productInfo(type).color;
+    if (product && product.color) return product.color;
+    return this.productInfo(type).color;
   },
 
   /* Status badge HTML */
@@ -464,7 +487,7 @@ const Utils = {
       filling:          ['badge--blue',   'Filling'],
       approved:         ['badge--green',  'Approved'],
       completed:        ['badge--green',  'Completed'],
-      paid_out:         ['badge--green',  'Paid Out'],
+      paid_out:         ['badge--purple', 'Matured'],   // merged into Matured
       matured:          ['badge--purple', 'Matured'],
       pending:          ['badge--orange', 'Pending'],
       pending_fica:     ['badge--orange', 'Pending FICA'],

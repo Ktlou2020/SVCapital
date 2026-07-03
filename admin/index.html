@@ -42,7 +42,7 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar__brand">
       <a href="../index.html" class="sv-portal-logo" title="SV Capital — Home">
-        <img src="../assets/full-colour-logo-horizontal-white-text.png" alt="SV Capital" style="display:block;height:36px;width:auto">
+        <img src="../assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="display:block;height:36px;width:auto">
         <div class="brand-text">
           <span class="brand-role">Admin Console</span>
         </div>
@@ -592,12 +592,12 @@
           </div>
         </div>
 
-        <div class="tab-bar">
+        <div class="tab-bar" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <button class="tab-btn active" onclick="filterPools('all', this)">All Pools</button>
           <button class="tab-btn" onclick="filterPools('open', this)">Open</button>
           <button class="tab-btn" onclick="filterPools('active', this)">Active</button>
           <button class="tab-btn" onclick="filterPools('matured', this)">Matured</button>
-          <button class="tab-btn" onclick="filterPools('paid_out', this)">Paid Out</button>
+          <div class="tbl-search" style="margin-left:auto"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search pools by name, product, ID…" id="poolSearch" oninput="renderPoolsGrid()" /></div>
         </div>
 
         <div class="grid-3" id="poolsGrid">
@@ -643,7 +643,7 @@
           </div>
           <div id="invBulkBar" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.3);border-radius:8px;margin-bottom:8px">
             <span style="font-size:0.85rem;font-weight:600;color:#1a1a1a"><span id="invBulkCount">0</span> selected</span>
-            <button class="btn btn--primary btn--sm" onclick="bulkTriggerPayout()"><i class="fa-solid fa-money-bill-transfer"></i> Mark Paid Out</button>
+            <button class="btn btn--primary btn--sm" onclick="bulkTriggerPayout()"><i class="fa-solid fa-money-bill-transfer"></i> Mark Matured</button>
             <button class="btn btn--secondary btn--sm" onclick="document.querySelectorAll('.inv-select-cb').forEach(cb=>cb.checked=false);_invUpdateBulkBar()">Clear</button>
           </div>
           <div style="overflow-x:auto">
@@ -1128,6 +1128,17 @@
           </div>
           <div class="panel__body" id="mobileActivityPanel">
             <div class="text-center text-muted" style="padding:20px">Loading…</div>
+          </div>
+        </div>
+
+        <!-- ══ INVESTOR PERSONAS ══ -->
+        <div class="panel mb-16" id="personasSection">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-users-viewfinder" style="color:var(--orange);margin-right:8px"></i>Investor Personas</span>
+            <button class="btn btn--secondary btn--sm" onclick="loadPersonas()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          </div>
+          <div class="panel__body" id="personasPanel">
+            <div class="text-center text-muted" style="padding:20px">Loading personas…</div>
           </div>
         </div>
 
@@ -1698,7 +1709,7 @@
   display: block;
   max-width: 100%;
 }
-.data-table td.clip { white-space: nowrap; text-overflow: ellipsis; }
+.data-table td.clip { display: table-cell; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Tighten up th/td padding globally */
 .data-table th { padding: 8px 10px; }
@@ -1885,12 +1896,26 @@
       </div>
       <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Partner Name</label><input type="text" class="form-input" id="prodPartner" placeholder="Beefcor" /></div>
-        <div class="form-group"><label class="form-label">Risk Profile</label><input type="text" class="form-input" id="prodRisk" placeholder="Medium-High" /></div>
+        <div class="form-group"><label class="form-label">Risk Profile</label>
+          <select class="form-select" id="prodRisk">
+            <option value="Low">Low</option>
+            <option value="Medium" selected>Medium</option>
+            <option value="Medium-High">Medium-High</option>
+            <option value="High">High</option>
+          </select>
+        </div>
       </div>
-      <div class="form-row form-row--3">
+      <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Icon (Font Awesome)</label><input type="text" class="form-input" id="prodIcon" placeholder="fa-cow" /></div>
-        <div class="form-group"><label class="form-label">Colour</label><input type="text" class="form-input" id="prodColor" placeholder="#D4AF37" /></div>
         <div class="form-group"><label class="form-label">Risk Colour</label><input type="text" class="form-input" id="prodRiskColor" placeholder="#ff9b0c" /></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Product Colour <span style="color:var(--text-muted);font-weight:400">— used on tabs, graphs &amp; statement badges</span></label>
+        <div id="prodColorSwatches" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="color" id="prodColorPicker" value="#656565" title="Pick a custom colour" style="width:46px;height:38px;padding:2px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:none" oninput="_onProdColorPick(this.value)" />
+          <input type="text" class="form-input" id="prodColor" placeholder="#D4AF37" oninput="_onProdColorText(this.value)" style="flex:1" />
+        </div>
       </div>
       <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Active</label>
@@ -2100,7 +2125,6 @@
             <option value="active">Active</option>
             <option value="closed">Closed</option>
             <option value="matured">Matured</option>
-            <option value="paid_out">Paid Out</option>
           </select>
         </div>
       </div>

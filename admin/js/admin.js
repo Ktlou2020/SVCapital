@@ -2060,10 +2060,13 @@ function openProductModal() {
   ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodRisk','prodIcon','prodColor','prodRiskColor'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('prodActive').value = 'true';
   document.getElementById('prodHomepage').value = 'true';
+  document.getElementById('prodRisk').value = 'Medium';   // default risk profile for new products
   document.getElementById('prodType').removeAttribute('readonly');
   const ff = document.getElementById('prodFactsheetFile'); if (ff) ff.value = '';
   document.getElementById('prodFactsheetCurrent').textContent = '';
   document.getElementById('prodAvgReturnInfo').textContent = 'Will calculate once pools of this product mature.';
+  const pick = document.getElementById('prodColorPicker'); if (pick) pick.value = '#656565';
+  _renderProdColorSwatches();
   Modal.open('productModal');
 }
 
@@ -2087,6 +2090,9 @@ function editProduct(id) {
   document.getElementById('prodRisk').value        = p.risk_profile || '';
   document.getElementById('prodIcon').value        = p.icon || '';
   document.getElementById('prodColor').value       = p.color || '';
+  const pick = document.getElementById('prodColorPicker');
+  if (pick && /^#[0-9a-fA-F]{6}$/.test(p.color || '')) pick.value = p.color;
+  _renderProdColorSwatches();
   document.getElementById('prodRiskColor').value   = p.risk_color || '';
   document.getElementById('prodActive').value      = p.is_active ? 'true' : 'false';
   document.getElementById('prodHomepage').value    = p.display_on_homepage ? 'true' : 'false';
@@ -2099,6 +2105,39 @@ function editProduct(id) {
     ? `<strong style="color:var(--gold)">${(avg.rate * 100).toFixed(2)}% p.a.</strong> — average achieved return across ${avg.count} matured pool${avg.count === 1 ? '' : 's'}. Updates automatically as more pools mature.`
     : 'No matured pools for this product yet — the average return will appear automatically once pools mature.';
   Modal.open('productModal');
+}
+
+// ─── Product colour palette editor ───
+const PROD_PALETTE = (window.Utils && Utils.ciProductPalette) ||
+  ['#ff9b0c', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'];
+
+function _renderProdColorSwatches() {
+  const wrap = document.getElementById('prodColorSwatches');
+  if (!wrap) return;
+  const cur = (document.getElementById('prodColor').value || '').toLowerCase();
+  wrap.innerHTML = PROD_PALETTE.map(c => {
+    const sel = c.toLowerCase() === cur;
+    return `<button type="button" title="${c}" onclick="selectProdColor('${c}')"
+      style="width:30px;height:30px;border-radius:8px;background:${c};cursor:pointer;
+      border:2px solid ${sel ? '#111' : 'rgba(0,0,0,0.12)'};
+      box-shadow:${sel ? '0 0 0 2px #fff, 0 0 0 4px ' + c : 'none'};transition:transform .1s"
+      onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'"></button>`;
+  }).join('');
+}
+
+function selectProdColor(hex) {
+  document.getElementById('prodColor').value = hex;
+  const pick = document.getElementById('prodColorPicker'); if (pick) pick.value = hex;
+  _renderProdColorSwatches();
+}
+function _onProdColorPick(hex) {
+  document.getElementById('prodColor').value = hex;
+  _renderProdColorSwatches();
+}
+function _onProdColorText(hex) {
+  const pick = document.getElementById('prodColorPicker');
+  if (pick && /^#[0-9a-fA-F]{6}$/.test(hex.trim())) pick.value = hex.trim();
+  _renderProdColorSwatches();
 }
 
 async function saveProduct(btn) {
@@ -2147,9 +2186,21 @@ async function saveProduct(btn) {
         await API.products.update(id, payload);
         Toast.success('Product updated');
       } else {
+        // New products get a unique CI-palette colour (white excluded). If the
+        // admin didn't pick one, assign the first colour not already in use.
+        if (!payload.color) {
+          const palette = (window.Utils && Utils.ciProductPalette) ||
+            ['#ff9b0c', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'];
+          let used = new Set();
+          try {
+            const existing = (await API.products.list({ limit: 500 })).data || [];
+            used = new Set(existing.map(p => String(p.color || '').toLowerCase()));
+          } catch (_) {}
+          payload.color = palette.find(c => !used.has(c.toLowerCase())) || palette[Math.floor(Math.random() * palette.length)];
+        }
         payload.id = `PROD-${productType.toUpperCase()}-${Date.now()}`;
         await API.products.create(payload);
-        Toast.success('Product created');
+        Toast.success(`Product created — colour ${payload.color}`);
       }
       Modal.close('productModal');
       await loadProducts();
@@ -2213,7 +2264,19 @@ function filterPools(status, btn) {
 
 function renderPoolsGrid() {
   const grid = document.getElementById('poolsGrid');
-  const pools = poolFilter === 'all' ? STATE.pools : STATE.pools.filter(p => p.status === poolFilter);
+  let pools = poolFilter === 'all'
+    ? STATE.pools
+    : STATE.pools.filter(p => p.status === poolFilter || (poolFilter === 'active' && p.status === 'filling'));
+
+  // Free-text search across pool name, product and ID
+  const q = (document.getElementById('poolSearch')?.value || '').trim().toLowerCase();
+  if (q) {
+    pools = pools.filter(p => {
+      const label = (Utils.productInfo(p.product_type)?.label || '');
+      return [p.pool_name, p.product_type, label, p.id, p.partner_name]
+        .some(v => String(v || '').toLowerCase().includes(q));
+    });
+  }
 
   // Augment pools with live aggregates from STATE.investments
   if (STATE.investments.length) {
@@ -2246,16 +2309,16 @@ function renderPoolsGrid() {
     const canSetWaitlist = ['open', 'filling', 'active'].includes(p.status);
     const pid = p.id; // alias for readability inside template
     const manageDropdown = `
-      <div style="position:relative;display:inline-block" class="pool-manage-wrap">
+      <div style="position:relative;display:inline-block;z-index:10" class="pool-manage-wrap">
         <button class="btn btn--secondary btn--sm" onclick="togglePoolManageMenu(event,'pool-menu-${pid}')">
           <i class="fa-solid fa-ellipsis-vertical"></i> Manage
         </button>
-        <div id="pool-menu-${pid}" style="display:none;position:fixed;background:var(--dark-3);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:9999;min-width:180px;overflow:hidden">
+        <div id="pool-menu-${pid}" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--dark-3);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:9999;min-width:180px;overflow:hidden">
           ${canSetWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="setPoolWaitlist('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-clock" style="color:#f59e0b;width:16px"></i> Set to Waitlist</button>` : ''}
           ${isWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="reopenPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-door-open" style="color:#22c55e;width:16px"></i> Reopen Pool</button>` : ''}
           <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="editPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-pen" style="width:16px"></i> Edit Pool</button>
           ${p.status === 'open' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="closePool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-lock" style="color:#ef4444;width:16px"></i> Close Pool</button>` : ''}
-          ${p.status === 'matured' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="markPaidOut('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-check" style="color:#22c55e;width:16px"></i> Mark Paid Out</button>` : ''}
+          ${p.status === 'matured' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="markPaidOut('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-check" style="color:#22c55e;width:16px"></i> Record Final Rate</button>` : ''}
           <div style="height:1px;background:var(--border);margin:4px 0"></div>
           <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem;color:#ef4444" onclick="deletePool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-trash" style="width:16px"></i> Delete Pool</button>
         </div>
@@ -2351,13 +2414,16 @@ async function viewPoolInvestors(poolId) {
 
     const statusColor = { active:'badge--green', matured:'badge--purple', paid_out:'badge--blue', cancelled:'badge--red' };
 
+    const hasFees = summary.mgmt_fee_pct > 0;
+
     body.innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
+      <!-- Pool stats -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
         ${[
-          ['Total Raised',  Utils.rand(summary.total_invested), 'coins',      '#D4AF37'],
-          ['Investors',     summary.investor_count,             'users',      '#656565'],
-          ['Active',        summary.active_count,               'chart-line', '#22c55e'],
-          ['Matured',       summary.matured_count,              'flag-checkered','#8b5cf6'],
+          ['Total Raised',  Utils.rand(summary.total_invested), 'coins',         '#D4AF37'],
+          ['Investors',     summary.investor_count,             'users',          '#656565'],
+          ['Active',        summary.active_count,               'chart-line',     '#22c55e'],
+          ['Matured',       summary.matured_count,              'flag-checkered', '#8b5cf6'],
         ].map(([label, val, icon, color]) => `
           <div style="background:var(--bg-secondary);border-radius:10px;padding:14px;text-align:center">
             <i class="fa-solid fa-${icon}" style="color:${color};font-size:1.1rem;display:block;margin-bottom:6px"></i>
@@ -2365,19 +2431,47 @@ async function viewPoolInvestors(poolId) {
             <div style="font-size:0.72rem;color:var(--text-muted)">${label}</div>
           </div>`).join('')}
       </div>
+
+      <!-- Fee summary bar -->
       ${investors.length ? `
+      <div style="background:var(--bg-secondary);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:grid;grid-template-columns:repeat(5,1fr);gap:12px;border:1px solid var(--border)">
+        <div>
+          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">Gross Invested</div>
+          <div style="font-size:0.95rem;font-weight:800;color:var(--gold)">${Utils.rand(summary.total_invested)}</div>
+        </div>
+        <div>
+          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">Upfront Fee${hasFees ? ` (${(summary.mgmt_fee_pct*100).toFixed(2)}%)` : ''}</div>
+          <div style="font-size:0.95rem;font-weight:800;color:#f97316">${hasFees ? Utils.rand(summary.total_upfront_fees) : '—'}</div>
+        </div>
+        <div>
+          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">Platform Fee (1%)</div>
+          <div style="font-size:0.95rem;font-weight:800;color:#f97316">${Utils.rand(summary.total_platform_fees)}</div>
+        </div>
+        <div>
+          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">EVA (from Upfront)</div>
+          <div style="font-size:0.95rem;font-weight:800;color:#8b5cf6">${hasFees ? Utils.rand(summary.total_eva) : '—'}</div>
+        </div>
+        <div>
+          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">Net Invested</div>
+          <div style="font-size:0.95rem;font-weight:800;color:#22c55e">${Utils.rand(summary.total_net_invested)}</div>
+        </div>
+      </div>
+
+      <!-- Per-investment table -->
       <div style="overflow-x:auto">
-        <table class="data-table" style="table-layout:fixed;width:100%">
+        <table class="data-table" style="table-layout:fixed;width:100%;min-width:900px">
           <thead><tr>
-            <th style="width:20%">Investor</th>
-            <th style="width:12%">Account</th>
-            <th style="width:11%">Amount</th>
-            <th style="width:8%">Rate</th>
-            <th style="width:9%">EVA</th>
-            <th style="width:9%">Status</th>
-            <th style="width:10%">Start</th>
-            <th style="width:10%">Maturity</th>
-            <th style="width:11%">Instruction</th>
+            <th style="width:16%">Investor</th>
+            <th style="width:11%">Account</th>
+            <th style="width:9%">Gross Amt</th>
+            <th style="width:8%">Upfront Fee</th>
+            <th style="width:8%">Platform Fee</th>
+            <th style="width:8%">EVA</th>
+            <th style="width:9%">Net Amount</th>
+            <th style="width:7%">Rate</th>
+            <th style="width:8%">Status</th>
+            <th style="width:8%">Start</th>
+            <th style="width:8%">Instruction</th>
           </tr></thead>
           <tbody>
             ${investors.map(r => {
@@ -2386,11 +2480,13 @@ async function viewPoolInvestors(poolId) {
                 <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${r.email||''}</div></td>
                 <td class="clip" style="font-family:monospace;font-size:0.75rem;color:var(--gold)">${r.investor_id}</td>
                 <td class="td-gold fw-700 clip">${Utils.rand(r.amount)}</td>
+                <td class="clip" style="font-size:0.78rem;color:#f97316">${r.upfront_fee > 0 ? Utils.rand(r.upfront_fee) : '—'}</td>
+                <td class="clip" style="font-size:0.78rem;color:#f97316">${Utils.rand(r.platform_fee)}</td>
+                <td class="clip" style="font-size:0.78rem;color:#8b5cf6">${r.eva_contribution > 0 ? Utils.rand(r.eva_contribution) : '—'}</td>
+                <td class="clip" style="font-size:0.82rem;font-weight:700;color:#22c55e">${Utils.rand(r.net_amount)}</td>
                 <td class="td-green clip">${r.annual_rate ? Utils.pct(r.annual_rate) : '—'}</td>
-                <td class="clip" style="font-size:0.75rem;color:#8b5cf6">${r.eva_amount > 0 ? Utils.rand(r.eva_amount) : '—'}</td>
                 <td><span class="badge ${statusColor[r.investment_status]||'badge--gray'}">${r.investment_status||'—'}</span></td>
                 <td class="td-muted clip">${Utils.date(r.start_date)}</td>
-                <td class="td-muted clip">${Utils.date(r.end_date)}</td>
                 <td class="clip" style="font-size:0.75rem;color:var(--text-muted)">${r.maturity_instruction?.replace(/_/g,' ')||'—'}</td>
               </tr>`;
             }).join('')}
@@ -2405,33 +2501,20 @@ async function viewPoolInvestors(poolId) {
 
 function togglePoolManageMenu(evt, menuId) {
   evt.stopPropagation();
-  // Close all other menus first
   document.querySelectorAll('[id^="pool-menu-"]').forEach(m => { if (m.id !== menuId) m.style.display = 'none'; });
   const menu = document.getElementById(menuId);
   if (!menu) return;
   const isHidden = menu.style.display === 'none' || !menu.style.display;
+  menu.style.display = isHidden ? 'block' : 'none';
   if (isHidden) {
-    // Position fixed below the button, aligned to its right edge
-    const btn = evt.currentTarget;
-    const rect = btn.getBoundingClientRect();
-    menu.style.display = 'block';
-    const menuW = menu.offsetWidth || 180;
-    const left = Math.min(rect.right - menuW, window.innerWidth - menuW - 8);
-    const top = rect.bottom + 4;
-    menu.style.top  = top + 'px';
-    menu.style.left = Math.max(8, left) + 'px';
-    // Close on outside click
     setTimeout(() => {
       document.addEventListener('click', function closeMenu(e) {
-        const menu2 = document.getElementById(menuId);
-        if (menu2 && !menu2.contains(e.target)) {
-          menu2.style.display = 'none';
+        if (!menu.contains(e.target)) {
+          menu.style.display = 'none';
           document.removeEventListener('click', closeMenu);
         }
       });
-    }, 10);
-  } else {
-    menu.style.display = 'none';
+    }, 200);
   }
 }
 
@@ -2691,9 +2774,9 @@ async function saveNewPool(btn) {
         maturity_date: document.getElementById('newPoolMaturityDate').value ? new Date(document.getElementById('newPoolMaturityDate').value).toISOString() : '',
         status: 'open', investor_count: 0,
         max_capacity,
-        management_fee_pct:       parseFloat(document.getElementById('newPoolMgtFeePct')?.value) || 0,
+        management_fee_pct:       (parseFloat(document.getElementById('newPoolMgtFeePct')?.value) || 0) / 100,
         management_fee_frequency: document.getElementById('newPoolMgtFeeFreq')?.value || 'once',
-        operational_fee_pct:      parseFloat(document.getElementById('newPoolOpFeePct')?.value) || 0,
+        operational_fee_pct:      (parseFloat(document.getElementById('newPoolOpFeePct')?.value) || 0) / 100,
         operational_fee_frequency: document.getElementById('newPoolOpFeeFreq')?.value || 'annual',
       });
       Toast.success('Pool created');
@@ -2716,8 +2799,8 @@ async function markPaidOut(id) {
   const rate = prompt('Enter actual achieved rate (e.g. 0.1561):');
   if (!rate) return;
   try {
-    await API.pools.update(id, { status: 'paid_out', actual_rate: parseFloat(rate) });
-    Toast.success('Pool marked as paid out');
+    await API.pools.update(id, { status: 'matured', actual_rate: parseFloat(rate) });
+    Toast.success('Pool finalised (matured)');
     await loadPools();
   } catch (e) { Toast.error('Failed to update pool'); }
 }
@@ -2745,7 +2828,11 @@ async function deletePool(id) {
 
 function editPool(id) {
   const pool = STATE.pools.find(p => p.id === id);
-  if (!pool) return;
+  if (!pool) {
+    Toast.error('Pool data not loaded — please refresh the page.');
+    loadPools();
+    return;
+  }
 
   document.getElementById('editPoolId').value          = pool.id;
   document.getElementById('editPoolName').value        = pool.name || '';
@@ -2775,11 +2862,11 @@ function editPool(id) {
   document.getElementById('editPoolMaturityDate').value = toDateVal(pool.maturity_date);
   document.getElementById('editPoolMaxCapacity').value = pool.max_capacity || '';
   const mgtFeeEl = document.getElementById('editPoolMgtFeePct');
-  if (mgtFeeEl) mgtFeeEl.value = pool.management_fee_pct || 0;
+  if (mgtFeeEl) mgtFeeEl.value = pool.management_fee_pct ? (Number(pool.management_fee_pct) * 100).toFixed(4).replace(/\.?0+$/, '') : 0;
   const mgtFeeFreqEl = document.getElementById('editPoolMgtFeeFreq');
   if (mgtFeeFreqEl) mgtFeeFreqEl.value = pool.management_fee_frequency || 'once';
   const opFeeEl = document.getElementById('editPoolOpFeePct');
-  if (opFeeEl) opFeeEl.value = pool.operational_fee_pct || 0;
+  if (opFeeEl) opFeeEl.value = pool.operational_fee_pct ? (Number(pool.operational_fee_pct) * 100).toFixed(4).replace(/\.?0+$/, '') : 0;
   const opFeeFreqEl = document.getElementById('editPoolOpFeeFreq');
   if (opFeeFreqEl) opFeeFreqEl.value = pool.operational_fee_frequency || 'annual';
 
@@ -2810,9 +2897,9 @@ async function saveEditPool(btn) {
     end_date:       toISO(document.getElementById('editPoolCloseDate').value),
     maturity_date:  toISO(document.getElementById('editPoolMaturityDate').value),
     max_capacity:   maxCapVal2 ? (parseFloat(maxCapVal2) || null) : null,
-    management_fee_pct:        parseFloat(document.getElementById('editPoolMgtFeePct')?.value) || 0,
+    management_fee_pct:        (parseFloat(document.getElementById('editPoolMgtFeePct')?.value) || 0) / 100,
     management_fee_frequency:  document.getElementById('editPoolMgtFeeFreq')?.value || 'once',
-    operational_fee_pct:       parseFloat(document.getElementById('editPoolOpFeePct')?.value) || 0,
+    operational_fee_pct:       (parseFloat(document.getElementById('editPoolOpFeePct')?.value) || 0) / 100,
     operational_fee_frequency: document.getElementById('editPoolOpFeeFreq')?.value || 'annual',
   };
 
@@ -2932,15 +3019,15 @@ function _invUpdateBulkBar() {
 async function bulkTriggerPayout() {
   const checked = [...document.querySelectorAll('.inv-select-cb:checked')].map(cb => cb.value);
   if (!checked.length) return Toast.error('Select at least one investment');
-  if (!await Confirm.ask(`Mark ${checked.length} investment(s) paid out?`, { body: 'These investments will be marked as matured/paid out.', confirmLabel: 'Mark Paid Out' })) return;
+  if (!await Confirm.ask(`Mark ${checked.length} investment(s) matured?`, { body: 'These investments will be marked as matured.', confirmLabel: 'Mark Matured' })) return;
   let done = 0;
   for (const id of checked) {
     try {
-      await API.investments.update(id, { status: 'paid_out', payout_date: new Date().toISOString() });
+      await API.investments.update(id, { status: 'matured', payout_date: new Date().toISOString() });
       done++;
     } catch(e) { console.error('payout error', id, e.message); }
   }
-  Toast.success(`${done} investment(s) marked as paid out`);
+  Toast.success(`${done} investment(s) marked as matured`);
   loadInvestments && loadInvestments();
 }
 
@@ -2985,13 +3072,29 @@ function viewInvestmentDetail(id) {
       <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(inv.pool_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Product</span><span class="info-row__value"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></span></div>
       <div class="info-row"><span class="info-row__label">Invested Amount</span><span class="info-row__value td-gold fw-700">${Utils.rand(inv.amount)}</span></div>
-      <div class="info-row"><span class="info-row__label">Expected Return</span><span class="info-row__value td-green">${Utils.rand(inv.expected_return)}</span></div>
+      <div class="info-row"><span class="info-row__label">Target Return</span><span class="info-row__value td-green">${Utils.rand(inv.expected_return)}</span></div>
       <div class="info-row"><span class="info-row__label">Return Rate</span><span class="info-row__value">${Utils.pct(inv.annual_rate)} p.a.</span></div>
       <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value">${Utils.statusBadge(inv.status)}</span></div>
       <div class="info-row"><span class="info-row__label">Investment Date</span><span class="info-row__value td-muted">${Utils.date(inv.start_date)}</span></div>
       <div class="info-row"><span class="info-row__label">Maturity Date</span><span class="info-row__value td-muted">${Utils.date(inv.end_date)}</span></div>
       <div class="info-row"><span class="info-row__label">Payout Date</span><span class="info-row__value td-muted">${Utils.date(inv.payout_date) || 'Pending'}</span></div>
       <div class="info-row"><span class="info-row__label">Maturity Instruction</span><span class="info-row__value">${Utils.statusBadge(inv.maturity_instruction || 'pending')}</span></div>
+    </div>
+
+    <div class="panel" style="padding:14px;margin-bottom:14px;background:var(--ci-bg-light,#F7F8FA)">
+      <div style="font-size:0.8rem;font-weight:700;color:#1a1a1a;margin-bottom:8px"><i class="fa-solid fa-user-pen" style="color:var(--gold);margin-right:6px"></i>Set instruction on behalf of client</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="admMatInstruction" class="form-select" style="flex:1;min-width:180px">
+          <option value="reinvest"${inv.maturity_instruction === 'reinvest' ? ' selected' : ''}>Reinvest into next pool</option>
+          <option value="payout_all"${inv.maturity_instruction === 'payout_all' ? ' selected' : ''}>Pay out all (capital + returns)</option>
+          <option value="payout_return"${inv.maturity_instruction === 'payout_return' ? ' selected' : ''}>Pay out returns only</option>
+          <option value="switch_product"${inv.maturity_instruction === 'switch_product' ? ' selected' : ''}>Switch product</option>
+        </select>
+        <button class="btn btn--primary btn--sm" onclick='adminSetInstruction(${JSON.stringify(inv.id)})'>
+          <i class="fa-solid fa-check"></i> Set Instruction
+        </button>
+      </div>
+      <div style="font-size:0.7rem;color:var(--text-muted);margin-top:6px">Admin submissions bypass the 17:00 client cut-off.</div>
     </div>
 
     ${inv.status === 'active' ? `
@@ -3006,6 +3109,21 @@ function viewInvestmentDetail(id) {
     ` : ''}
   `;
   Modal.open('investorDetailModal');
+}
+
+async function adminSetInstruction(id) {
+  const sel = document.getElementById('admMatInstruction');
+  const instruction = sel && sel.value;
+  if (!instruction) return;
+  try {
+    // Uses the dedicated endpoint; staff role bypasses the 17:00 client cut-off.
+    await API._fetch('POST', `investments/${id}/instruction`, { instruction });
+    Toast.success('Maturity instruction set on behalf of the client');
+    Modal.close('investorDetailModal');
+    await loadInvestments();
+  } catch (e) {
+    Toast.error(e.message || 'Failed to set instruction');
+  }
 }
 
 async function markInvestmentMatured(id) {
@@ -3027,7 +3145,7 @@ async function payoutInvestment(id) {
 
   try {
     await API.investments.update(id, {
-      status: 'paid_out',
+      status: 'matured',
       actual_return: actualReturn,
       payout_date: new Date().toISOString()
     });
@@ -3057,11 +3175,11 @@ async function loadMaturity() {
     const [matRes, invRes, investRes] = await Promise.all([
       API.maturityInstructions.list({ limit: 1000 }),
       STATE.investors.length  ? Promise.resolve({ data: STATE.investors  }) : API.investors.list({ limit: 5000 }),
-      STATE.investments.length ? Promise.resolve({ data: STATE.investments }) : API.investments.list({ limit: 5000 })
+      API.investments.list({ limit: 5000 })  // always fresh — maturity_instruction may have changed
     ]);
 
-    if (!STATE.investors.length)   STATE.investors   = invRes.data   || [];
-    if (!STATE.investments.length) STATE.investments = investRes.data || [];
+    if (!STATE.investors.length) STATE.investors = invRes.data || [];
+    STATE.investments = investRes.data || [];
 
     const matRecords = matRes.data || [];
 
@@ -3578,10 +3696,153 @@ async function loadAnalytics() {
     renderMaturityForecastChart();
     renderCohortChart();
     renderMobileActivity();
+    loadPersonas();
   } catch (e) {
     Toast.error('Failed to load analytics data');
     console.error('[loadAnalytics]', e);
   }
+}
+
+/* ── Investor Personas ──────────────────────────────────── */
+async function loadPersonas() {
+  const panel = document.getElementById('personasPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="text-center text-muted" style="padding:20px">Loading…</div>';
+  try {
+    const res = await fetch('/api/analytics/personas', { headers: { Authorization: `Bearer ${AUTH.token}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    _renderPersonas(data);
+  } catch (e) {
+    panel.innerHTML = `<div class="text-center text-muted" style="padding:20px">No persona data yet — investors complete profile quests to appear here.</div>`;
+    console.warn('[personas]', e.message);
+  }
+}
+
+function _renderPersonas(data) {
+  const panel = document.getElementById('personasPanel');
+  if (!panel) return;
+
+  const PERSONA_META = {
+    'Conservative Saver': { icon: 'fa-shield-halved', color: '#64748b', desc: 'Prioritises capital preservation. Low risk tolerance, cautious approach.' },
+    'Growth Seeker':      { icon: 'fa-chart-line',    color: '#22c55e', desc: 'Focused on long-term capital growth. Comfortable with volatility.' },
+    'Income Investor':    { icon: 'fa-coins',          color: '#f59e0b', desc: 'Wants regular income from investments. Dividend / returns oriented.' },
+    'Risk Taker':         { icon: 'fa-fire-flame-curved', color: '#ef4444', desc: 'Experienced investor who buys on dips. High conviction, high risk.' },
+    'Long-Term Planner':  { icon: 'fa-calendar-days', color: '#a855f7', desc: 'Investing for retirement or dependents. Steady, multi-year horizon.' },
+    'Explorer':           { icon: 'fa-compass',        color: '#FF8215', desc: 'Just getting started. Goals and risk profile still taking shape.' },
+  };
+
+  const total = data.total || 1;
+
+  // Archetype cards
+  const archetypeHtml = Object.entries(data.personaCounts || {})
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => {
+      const m = PERSONA_META[name] || PERSONA_META['Explorer'];
+      const pct = Math.round(count / total * 100);
+      return `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:36px;height:36px;border-radius:50%;background:${m.color}22;display:flex;align-items:center;justify-content:center">
+              <i class="fa-solid ${m.icon}" style="color:${m.color};font-size:15px"></i>
+            </div>
+            <div>
+              <div style="font-weight:600;font-size:0.9rem">${name}</div>
+              <div style="font-size:0.75rem;color:var(--text-muted)">${count} investor${count !== 1 ? 's' : ''} · ${pct}%</div>
+            </div>
+          </div>
+          <div style="height:4px;background:var(--border);border-radius:2px">
+            <div style="height:4px;width:${pct}%;background:${m.color};border-radius:2px"></div>
+          </div>
+          <div style="font-size:0.75rem;color:var(--text-muted)">${m.desc}</div>
+        </div>`;
+    }).join('');
+
+  // Distribution chart helper
+  const distChart = (title, obj) => {
+    const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) return '';
+    const max = entries[0][1];
+    return `
+      <div style="margin-bottom:16px">
+        <div style="font-weight:600;font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">${title}</div>
+        ${entries.map(([label, count]) => `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+            <div style="flex:0 0 160px;font-size:0.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</div>
+            <div style="flex:1;height:6px;background:var(--border);border-radius:3px">
+              <div style="height:6px;width:${Math.round(count/max*100)}%;background:var(--orange);border-radius:3px"></div>
+            </div>
+            <div style="flex:0 0 24px;font-size:0.78rem;color:var(--text-muted);text-align:right">${count}</div>
+          </div>`).join('')}
+      </div>`;
+  };
+
+  const dist = data.distributions || {};
+
+  // Investor table (most recent 20)
+  const tableRows = (data.investors || []).slice(0, 20).map(inv => {
+    const m = PERSONA_META[inv.persona] || PERSONA_META['Explorer'];
+    return `
+      <tr>
+        <td style="font-weight:500">${inv.name || '—'}</td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${inv.email || '—'}</td>
+        <td>
+          <span style="display:inline-flex;align-items:center;gap:5px;background:${m.color}22;color:${m.color};padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:600">
+            <i class="fa-solid ${m.icon}" style="font-size:10px"></i>${inv.persona}
+          </span>
+        </td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${inv.profile?.investment_goal || inv.profile?.saving_for || '—'}</td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${inv.profile?.time_horizon || '—'}</td>
+        <td style="color:var(--text-muted);font-size:0.8rem">${inv.profile?.income_bracket || '—'}</td>
+        <td><span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:2px 8px;font-size:0.75rem">${inv.level || '—'} · ${inv.xp || 0} XP</span></td>
+      </tr>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <!-- Total badge -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+      <span style="font-size:1.5rem;font-weight:700">${total}</span>
+      <span style="color:var(--text-muted)">investors with profile survey data</span>
+    </div>
+
+    <!-- Archetype cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:24px">
+      ${archetypeHtml || '<div class="text-muted">No persona data yet.</div>'}
+    </div>
+
+    <!-- Distributions -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+      <div class="panel" style="padding:16px">
+        ${distChart('Investment Goal', dist.investment_goal)}
+        ${distChart('Time Horizon', dist.time_horizon)}
+        ${distChart('Saving For', dist.saving_for)}
+      </div>
+      <div class="panel" style="padding:16px">
+        ${distChart('Employment Status', dist.employment_status)}
+        ${distChart('Income Bracket', dist.income_bracket)}
+        ${distChart('Investment Experience', dist.investment_experience)}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+      <div class="panel" style="padding:16px">
+        ${distChart('Risk Reaction', dist.risk_reaction)}
+        ${distChart('Dependents', dist.dependents)}
+      </div>
+      <div class="panel" style="padding:16px">
+        ${distChart('Referred Via', dist.heard_via)}
+      </div>
+    </div>
+
+    <!-- Investor table -->
+    <div style="font-weight:600;font-size:0.85rem;margin-bottom:10px">Individual Profiles (most recent 20)</div>
+    <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr>
+          <th>Name</th><th>Email</th><th>Persona</th><th>Goal</th><th>Horizon</th><th>Income</th><th>Level</th>
+        </tr></thead>
+        <tbody>${tableRows || '<tr><td colspan="7" class="text-center text-muted">No survey data yet</td></tr>'}</tbody>
+      </table>
+    </div>`;
 }
 
 function renderMaturityForecastChart() {
@@ -3626,7 +3887,7 @@ function renderCohortChart() {
   if (STATE.charts.cohort) STATE.charts.cohort.destroy();
   STATE.charts.cohort = new Chart(ctx, {
     type: 'bar',
-    data: { labels: months, datasets: [{ label: 'New Investors', data: counts, backgroundColor: 'rgba(59,130,246,0.7)', borderColor: '#656565', borderWidth: 1, borderRadius: 6 }] },
+    data: { labels: months, datasets: [{ label: 'New Investors', data: counts, backgroundColor: 'rgba(101,101,101,0.7)', borderColor: '#656565', borderWidth: 1, borderRadius: 6 }] },
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { labels: { color: '#7a92a8', font: { size: 11 } } } },
       scales: { x: { ticks: { color: '#3d5268' }, grid: { display: false } }, y: { ticks: { color: '#3d5268', stepSize: 1 }, grid: { color: 'rgba(0,0,0,0.05)' } } }
@@ -3679,7 +3940,7 @@ async function renderMobileActivity() {
 
   panel.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px">
-      <div style="background:rgba(0,150,255,0.08);border:1px solid rgba(0,150,255,0.2);border-radius:10px;padding:14px 16px">
+      <div style="background:rgba(101,101,101,0.08);border:1px solid rgba(0,150,255,0.2);border-radius:10px;padding:14px 16px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <i class="fa-brands fa-apple" style="font-size:1.2rem;color:#656565"></i>
           <span style="font-size:0.72rem;font-weight:700;color:#656565;text-transform:uppercase;letter-spacing:0.05em">iOS</span>
@@ -6230,7 +6491,7 @@ function _buildTimelineEvents(inv, invsts, txns) {
       events.push({ date: i.end_date, icon: 'fa-clock', color: '#f97316', text: `Investment matured — ${poolLabel}` });
     }
     if (i.status === 'paid_out' && i.payout_date) {
-      events.push({ date: i.payout_date, icon: 'fa-check-circle', color: '#22c55e', text: `Investment paid out — ${poolLabel}` });
+      events.push({ date: i.payout_date, icon: 'fa-check-circle', color: '#22c55e', text: `Investment matured — ${poolLabel}` });
     }
   });
 
@@ -6412,7 +6673,7 @@ function renderAnNewInvChart() {
       datasets: [{
         label: 'New Investors',
         data: counts,
-        backgroundColor: 'rgba(99,102,241,0.7)',
+        backgroundColor: 'rgba(101,101,101,0.7)',
         borderRadius: 5
       }]
     },

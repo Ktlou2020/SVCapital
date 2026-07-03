@@ -374,14 +374,15 @@ function renderTaskCompletionPanel() {
   body.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:14px">
       ${tasks.map(task => `
-        <div style="padding:12px 14px;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:${task.done ? 'rgba(34,197,94,0.06)' : 'rgba(255,255,255,0.82)'};display:flex;gap:10px;align-items:flex-start">
-          <div style="width:24px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;background:${task.done ? '#22c55e' : task.tone + '22'};color:${task.done ? '#fff' : task.tone};flex-shrink:0;margin-top:2px">
+        <div class="ac-task${task.done ? ' ac-task--done' : ''}" ${task.done ? '' : `role="button" tabindex="0" onclick="${task.action}"`} style="padding:12px 14px;border-radius:12px;border:1px solid rgba(0,0,0,0.06);background:${task.done ? 'rgba(34,197,94,0.06)' : 'rgba(255,255,255,0.82)'};display:flex;gap:10px;align-items:center;${task.done ? '' : 'cursor:pointer'}">
+          <div style="width:24px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;background:${task.done ? '#22c55e' : task.tone + '22'};color:${task.done ? '#fff' : task.tone};flex-shrink:0">
             <i class="fa-solid ${task.done ? 'fa-check' : 'fa-circle'}" style="font-size:0.7rem"></i>
           </div>
           <div style="min-width:0;flex:1">
             <div style="font-size:0.8rem;font-weight:700;color:#1a1a1a;line-height:1.35">${task.label}</div>
-            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">${task.done ? 'Completed' : 'Still needed before the full flow feels seamless.'}</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">${task.done ? 'Completed' : task.cta}</div>
           </div>
+          ${task.done ? '' : `<i class="fa-solid fa-chevron-right" style="color:${task.tone};font-size:0.8rem;flex-shrink:0"></i>`}
         </div>`).join('')}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:4px;border-top:1px solid rgba(0,0,0,0.06)">
@@ -540,7 +541,7 @@ function renderMarketConversionPanel(pools) {
 
   if (affordable.length) {
     title = `You can invest right now in ${affordable.length} open pool${affordable.length === 1 ? '' : 's'}.`;
-    sub = 'Recommended pools below are ranked by affordability, urgency, and expected return so you can act quickly.';
+    sub = 'Recommended pools below are ranked by affordability, urgency, and target return so you can act quickly.';
     action = "openInvestModal('" + affordable[0].id + "')";
     actionLabel = 'Open best-fit pool';
     accent = '#22c55e';
@@ -1226,11 +1227,61 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && _p
 // Expose stop function so Auth.logout() can kill the interval before redirecting
 window._stopPolling = function () { if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; } };
 
+// ─── Idle auto-logout (web only) ───
+// Signs the investor out after 5 minutes of no activity. Skipped in the
+// native Capacitor app, which has its own session handling.
+function initIdleAutoLogout() {
+  const isNative = (typeof _svcPlatform === 'function' && _svcPlatform() !== 'web') ||
+                   (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+  if (isNative) return;
+
+  const IDLE_MS = 5 * 60 * 1000;      // 5 minutes
+  const WARN_MS = 30 * 1000;          // warn 30s before signing out
+  let idleTimer = null, warnTimer = null;
+
+  const doAutoLogout = () => {
+    try { if (typeof Toast !== 'undefined') Toast.info?.('Signed out due to inactivity'); } catch (_) {}
+    Auth.logout('../login.html?reason=timeout');
+  };
+
+  const reset = () => {
+    clearTimeout(idleTimer);
+    clearTimeout(warnTimer);
+    warnTimer = setTimeout(() => {
+      try { if (typeof Toast !== 'undefined') Toast.info?.('You will be signed out in 30 seconds due to inactivity.'); } catch (_) {}
+    }, IDLE_MS - WARN_MS);
+    idleTimer = setTimeout(doAutoLogout, IDLE_MS);
+  };
+
+  // Activity across tabs: broadcast last-activity via localStorage so multiple
+  // portal tabs share one idle clock.
+  const markActivity = () => {
+    try { localStorage.setItem('svc_last_activity', String(Date.now())); } catch (_) {}
+    reset();
+  };
+
+  ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'].forEach(ev =>
+    window.addEventListener(ev, markActivity, { passive: true }));
+
+  // Sync idle clock when another tab reports activity or the tab regains focus.
+  window.addEventListener('storage', e => { if (e.key === 'svc_last_activity') reset(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    let last = 0;
+    try { last = parseInt(localStorage.getItem('svc_last_activity') || '0', 10) || 0; } catch (_) {}
+    if (last && (Date.now() - last) >= IDLE_MS) { doAutoLogout(); return; }
+    reset();
+  });
+
+  markActivity();
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   _preloadLogo(); // warm logo cache for PDF generation
   Toast.init();
   initDarkMode();
   initPortalFormUX();
+  initIdleAutoLogout();
   // Set skeleton placeholders on overview stats while data loads
   const _skelSpan = '<span class="skeleton" style="display:inline-block;width:80px;height:20px;border-radius:4px"></span>';
   ['pov-total','pov-invested','pov-wallet','pov-returns'].forEach(id => {
@@ -1942,7 +1993,18 @@ function filterMyInvestments(filter, btn) {
   SVC.track('svc_filter_changed', { filter_type: 'my_investments', filter_value: filter });
 }
 
+function populateMyInvProductFilter() {
+  const sel = document.getElementById('myInvProductFilter');
+  if (!sel) return;
+  const types = [...new Set((PORTAL.investments || []).map(i => i.product_type).filter(Boolean))];
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All Products</option>' +
+    types.map(t => `<option value="${_esc(t)}">${_esc(Utils.productInfo(t).label)}</option>`).join('');
+  if (types.includes(cur)) sel.value = cur;
+}
+
 function renderMyInvestmentCards() {
+  populateMyInvProductFilter();
   const grid = document.getElementById('myInvestmentsGrid');
   const productFilter = document.getElementById('myInvProductFilter')?.value || '';
   let items = PORTAL.myInvFilter === 'all' ? PORTAL.investments : PORTAL.investments.filter(i => i.status === PORTAL.myInvFilter);
@@ -1962,7 +2024,7 @@ function renderMyInvestmentCards() {
     const pi = Utils.productInfo(inv.product_type);
     const days = Utils.daysRemaining(inv.maturity_date);
     const progress = days !== null && inv.amount ? Math.min(100, Math.max(0, 100 - (days / (365 * 1.5) * 100))) : 100;
-    const isPaidOut = inv.status === 'paid_out';
+    const isPaidOut = inv.status === 'matured' || inv.status === 'paid_out';
 
     return `
       <div class="my-inv-card ${isPaidOut ? 'my-inv-card--paidout' : ''}">
@@ -1991,18 +2053,16 @@ function renderMyInvestmentCards() {
           <div class="mic-stat"><span class="mic-stat__label">Amount Invested</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(inv.amount)}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Launch Date</span><span class="mic-stat__value">${Utils.date(inv.investment_date || inv.start_date)}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Maturity Date</span><span class="mic-stat__value">${Utils.date(inv.maturity_date)}</span></div>
+          ${isPaidOut ? `
+          <div class="mic-stat"><span class="mic-stat__label">Return Rate</span><span class="mic-stat__value">${Utils.pct(inv.annual_rate || inv.expected_return_rate)}</span></div>
+          <div class="mic-stat"><span class="mic-stat__label">Capital + Return</span><span class="mic-stat__value" style="color:var(--green)">${Utils.rand(inv.amount + (inv.actual_return_amount || inv.expected_return_amount || 0))}</span></div>
+          ` : ''}
         </div>
 
         ${inv.status === 'active' ? `
           <button class="btn btn--secondary btn--full btn--sm" onclick='openMaturityModal(${JSON.stringify(inv.id)})' style="margin-top:6px;font-size:0.76rem">
             <i class="fa-solid fa-hourglass-half"></i> Set Maturity Instruction
           </button>
-        ` : ''}
-        ${isPaidOut ? `
-          <div style="font-size:0.75rem;color:var(--text-muted);text-align:center">
-            <i class="fa-solid fa-check-circle" style="color:var(--green)"></i>
-            Paid out ${Utils.date(inv.payout_date)} — Total: ${Utils.rand(inv.amount + inv.actual_return_amount)}
-          </div>
         ` : ''}
       </div>
     `;
@@ -2231,16 +2291,20 @@ function _renderRecurringTab() {
     statusCard.innerHTML = `
       <div class="wallet-card__label">Recurring Investment</div>
       <div class="wallet-card__value" style="font-size:1.1rem;color:#9ca3af">Not active</div>
-      <div class="wallet-card__sub">Automate monthly investments into any open pool — minimum R100/month</div>
+      <div class="wallet-card__sub">Automate monthly investments into any open pool each month</div>
       <div class="wallet-card__actions">
         <button class="btn btn--primary" onclick="openRecurringModal()"><i class="fa-solid fa-plus"></i> Set Up Recurring</button>
       </div>`;
   }
 
-  // Show active investments matching the selected product type
-  const recurringInvs = productType
-    ? PORTAL.investments.filter(i => i.status === 'active' && i.product_type === productType)
-    : [];
+  // Show all active investments placed by the recurring cron (INV-RC- prefix),
+  // plus any active investments matching the currently configured product type
+  const recurringInvs = (PORTAL.investments || []).filter(i =>
+    i.status === 'active' && (
+      (i.id && i.id.startsWith('INV-RC-')) ||
+      (productType && i.product_type === productType)
+    )
+  );
 
   if (!recurringInvs.length) {
     listEl.innerHTML = `<div class="empty-state" style="padding:20px"><i class="fa-solid fa-rotate"></i><p>${isActive ? 'Your first recurring investment will be processed at the start of next month.' : 'Set up a recurring investment to automate your monthly savings.'}</p></div>`;
@@ -2261,7 +2325,6 @@ function _renderRecurringTab() {
           </div>
           <div style="text-align:right;flex-shrink:0">
             <div style="font-weight:700;color:#1a1a1a">${Utils.rand(ri.amount)}</div>
-            <div style="font-size:0.7rem;color:#22c55e">${Utils.pct(ri.annual_rate)} p.a.</div>
           </div>
         </div>`;
     }).join('');
@@ -2399,7 +2462,11 @@ function openAutoTopUpModal() {
   const settings = _autoTopUpSettings || {};
   const el = id => document.getElementById(id);
   if (!el('autoTopUpModal')) return;
-  if (el('atuEnabled'))  el('atuEnabled').checked = !!settings.auto_topup_enabled;
+  const isEnabled = !!settings.auto_topup_enabled;
+  if (el('atuEnabled'))  el('atuEnabled').checked = isEnabled;
+  // Sync the custom toggle span colour to match the checkbox state
+  const toggleSpan = el('autoTopUpModal').querySelector('label span');
+  if (toggleSpan) toggleSpan.style.background = isEnabled ? '#ff9b0c' : '#ccc';
   if (el('atuAmount'))   el('atuAmount').value    = settings.auto_topup_amount || '';
   if (el('atuDay'))      el('atuDay').value       = settings.auto_topup_day || 1;
   Modal.open('autoTopUpModal');
@@ -2683,6 +2750,7 @@ function launchPaystack() {
         email:    _pmInvestorEmail(),
         amount:   Math.round(totalCharged * 100),   // Paystack expects kobo/cents
         currency: 'ZAR',
+        channels: ['card'],  // card-only so we always get a reusable auth for auto top-up
         ref:      `SVC-PS-${Date.now()}`,
         metadata: {
           investor_id:    _pmInvestorId(),
@@ -3012,30 +3080,42 @@ async function loadMarketplace() {
 
 function filterMarket(type, btn) {
   PORTAL.marketFilter = type;
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const bar = document.getElementById('marketRiskTabBar');
+  if (bar) bar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   renderMarketplace();
-  SVC.track('svc_filter_changed', { filter_type: 'marketplace', filter_value: type });
+  if (bar) bar.style.display = '';   // renderMarketplace hides .tab-bar; keep risk filter visible
+  SVC.track('svc_filter_changed', { filter_type: 'marketplace_risk', filter_value: type });
 }
 
 const _POOL_META = {
-  solar:         { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  solar_7yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  solar_6yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  solar_5yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Medium',      riskColor: '#f59e0b' },
-  cattle:        { blurb: 'Partner with Beefcor — SA\'s premier feedlot — and earn returns as your herd grows from 200kg to 500kg.', risk: 'Medium-High',  riskColor: '#ff9b0c' },
-  short_term:    { blurb: 'Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.', risk: 'Medium',    riskColor: '#f59e0b' },
-  delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Low-Medium',   riskColor: '#22c55e' },
+  solar:         { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
+  solar_7yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
+  solar_6yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
+  solar_5yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
+  cattle:        { blurb: 'Partner with Beefcor — SA\'s premier feedlot — and earn returns as your herd grows from 200kg to 500kg.', risk: 'Aggressive',   riskColor: '#ef4444' },
+  short_term:    { blurb: 'Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.', risk: 'Moderate',  riskColor: '#f59e0b' },
+  delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Conservative', riskColor: '#22c55e' },
 };
+// Map each product's risk label to a filter group
+// Risk profile is defined per-product in the admin console (products.risk_profile).
+// Resolve the current risk label + colour for a product type from live records.
+const _RISK_COLORS = { 'Low': '#22c55e', 'Medium': '#f59e0b', 'Medium-High': '#ff9b0c', 'High': '#ef4444' };
+function _productRisk(productType) {
+  const p = (_mktProducts || []).find(pr => pr.product_type === productType);
+  const risk = (p && p.risk_profile) ? p.risk_profile : 'Medium';
+  const color = (p && p.risk_color) ? p.risk_color : (_RISK_COLORS[risk] || '#f59e0b');
+  return { risk, color };
+}
 
 // ── Product-first marketplace ────────────────────────────────────────────
 // "Browse Pools" is now "Products": investors pick a product, see its details
 // + factsheets + a chart, then the open pools under it, and invest from there.
 
 function renderMarketplace() {
-  // Toggle the legacy category tab-bar — not used in the product-first flow
-  const tabBar = document.querySelector('#view-marketplace .tab-bar');
-  if (tabBar) tabBar.style.display = 'none';
+  // Risk filter bar: visible on the product grid, hidden inside a product detail
+  const tabBar = document.getElementById('marketRiskTabBar');
+  if (tabBar) tabBar.style.display = _selectedProductType ? 'none' : '';
   const banner = document.querySelector('#view-marketplace .section-banner__title');
   if (_selectedProductType) { if (banner) banner.textContent = 'Product Details'; renderProductDetailView(_selectedProductType); }
   else { if (banner) banner.textContent = 'Investment Products'; renderProductsGrid(); }
@@ -3059,7 +3139,13 @@ function renderProductsGrid() {
 
   // All active products (details + factsheets browsable even with no open pool),
   // sorted by sort order. Products with open pools rank first.
-  const products = (_mktProducts || []).filter(p => p.is_active).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  // Filtered by risk level (Conservative / Moderate / Aggressive).
+  const mf = PORTAL.marketFilter || 'all';
+  const products = (_mktProducts || []).filter(p => {
+    if (!p.is_active) return false;
+    if (mf === 'all') return true;
+    return (p.risk_profile || 'Medium') === mf;   // risk from the product (admin console)
+  }).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
   const shown = products
     .map(p => ({ p, open: _openPoolsForProduct(p.product_type) }))
     .sort((a, b) => (b.open.length > 0) - (a.open.length > 0));
@@ -3076,7 +3162,7 @@ function renderProductsGrid() {
 
   grid.innerHTML = shown.map(({ p, open }) => {
     const pi = Utils.productInfo(p.product_type);
-    const color = p.color || pi.color;
+    const color = Utils.productColor(p);
     const icon = p.icon || pi.icon;
     const avg = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : null;
     const rateLabel = avg != null ? `${(avg * 100).toFixed(2)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : '—');
@@ -3144,7 +3230,7 @@ async function renderProductDetailView(type) {
   if (!grid) return;
   const product = (_mktProducts || []).find(p => p.product_type === type) || { product_type: type, label: Utils.productInfo(type).label };
   const pi = Utils.productInfo(type);
-  const color = product.color || pi.color;
+  const color = Utils.productColor(product);
   const icon = product.icon || pi.icon;
   const open = _openPoolsForProduct(type);
   const avg = product.avg_actual_rate != null ? parseFloat(product.avg_actual_rate) : null;
@@ -3194,9 +3280,6 @@ async function renderProductDetailView(type) {
             </div>
           </div>` : ''}
 
-          <div style="margin-bottom:6px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">Projected growth of ${Utils.rand(10000)} at ${(projRate * 100).toFixed(2)}% p.a.</div>
-          <div style="position:relative;height:180px;margin-bottom:6px"><canvas id="prodGrowthChart"></canvas></div>
-
           ${isSolar ? '<div id="prodSolarHistory" style="margin-top:16px"></div>' : ''}
           <div id="prodTrackRecord" style="margin-top:16px"></div>
           <div id="prodFactsheets" style="margin-top:14px"></div>
@@ -3225,9 +3308,6 @@ async function renderProductDetailView(type) {
 
   // Verifiable track record (matured pools: actual vs benchmark)
   _renderProductTrackRecord(type, color);
-
-  // Growth projection chart
-  _renderProductGrowthChart(projRate, product.term_months || 12, color);
 
   // Factsheets (product-level + all pool factsheets for this product)
   _renderProductFactsheets(type, product);
@@ -3281,34 +3361,23 @@ async function _renderProductTrackRecord(type, color) {
   if (!n) { el.innerHTML = ''; return; }
   pools.sort((a, b) => new Date(a.ended) - new Date(b.ended));
 
+  // Show the average delivered return (no chart).
   el.innerHTML = `
-    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-chart-column" style="color:${color}"></i> Track record — delivered returns</div>
-    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px">
-      <div><div style="font-size:1.2rem;font-weight:800;color:var(--text)">${n}</div><div style="font-size:0.7rem;color:var(--text-muted)">pool${n === 1 ? '' : 's'} matured</div></div>
-      <div><div style="font-size:1.2rem;font-weight:800;color:${color}">${(sumA / n * 100).toFixed(2)}%</div><div style="font-size:0.7rem;color:var(--text-muted)">avg achieved p.a.</div></div>
-      <div><div style="font-size:1.2rem;font-weight:800;color:var(--text)">${Utils.rand(paidBack)}</div><div style="font-size:0.7rem;color:var(--text-muted)">paid back to investors</div></div>
-    </div>
-    <div style="position:relative;height:170px"><canvas id="prodTrackChart"></canvas></div>`;
-
-  const canvas = document.getElementById('prodTrackChart');
-  if (!canvas || typeof Chart === 'undefined') return;
-  try { if (_trackChart) { _trackChart.destroy(); _trackChart = null; } } catch (_) {}
-  _trackChart = new Chart(canvas.getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels: pools.map(p => (p.name || '').slice(0, 18)),
-      datasets: [
-        { label: 'Achieved',  data: pools.map(p => +(p.actual_rate * 100).toFixed(2)),    backgroundColor: color },
-        { label: 'Benchmark', data: pools.map(p => +(p.benchmark_rate * 100).toFixed(2)), backgroundColor: 'rgba(0,0,0,0.15)' },
-      ],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, labels: { boxWidth: 10, font: { size: 10 } } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y}%` } } },
-      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8, font: { size: 9 }, color: 'rgba(0,0,0,0.4)' } },
-                y: { ticks: { callback: v => v + '%', font: { size: 9 }, color: 'rgba(0,0,0,0.4)' }, grid: { color: 'rgba(0,0,0,0.05)' } } },
-    },
-  });
+    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:10px"><i class="fa-solid fa-award" style="color:${color}"></i> Track record — delivered returns</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:130px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:16px">
+        <div style="font-size:1.6rem;font-weight:900;color:${color};letter-spacing:-0.02em">${(sumA / n * 100).toFixed(2)}%</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">avg return achieved p.a.</div>
+      </div>
+      <div style="flex:1;min-width:130px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:16px">
+        <div style="font-size:1.6rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${n}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">pool${n === 1 ? '' : 's'} matured</div>
+      </div>
+      <div style="flex:1;min-width:130px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:16px">
+        <div style="font-size:1.6rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${Utils.rand(paidBack)}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">paid back to investors</div>
+      </div>
+    </div>`;
 }
 
 // ── Solar: daily generation this month (FoxESS history) ──
@@ -3370,6 +3439,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
     const pct  = Utils.poolFillPct(pool);
     const days = Utils.daysRemaining(pool.end_date);
     const meta = _POOL_META[pool.product_type] || { blurb: '', risk: 'Medium', riskColor: '#f59e0b' };
+    const pr   = _productRisk(pool.product_type);   // risk profile from the product (admin console)
     const canInvest = walletBal >= _minPlusFee(pool);
     const urgency   = days !== null && days <= 7;
 
@@ -3445,7 +3515,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
             </div>
             <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
               ${highlighted ? `<span class="mpc2-badge mpc2-badge--featured"><i class="fa-solid fa-star" style="font-size:0.6rem"></i> Best Next Step</span>` : ''}
-              <span class="mpc2-badge" style="background:${meta.riskColor}14;color:${meta.riskColor};border-color:${meta.riskColor}30">${meta.risk} risk</span>
+              <span class="mpc2-badge" style="background:${pr.color}14;color:${pr.color};border-color:${pr.color}30">${pr.risk} risk</span>
               ${isWaitlisted
                 ? '<span class="mpc2-badge mpc2-badge--full"><i class="fa-solid fa-lock"></i> Pool Full</span>'
                 : (urgency ? '<span class="mpc2-badge mpc2-badge--urgent"><i class="fa-solid fa-fire"></i> Closing Soon</span>' : '')
@@ -3758,6 +3828,7 @@ function openInvestModal(poolId) {
   const walletBal  = _activeSa ? (parseFloat(_activeSa.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
   const pi         = Utils.productInfo(pool.product_type);
   const meta       = _POOL_META[pool.product_type] || { risk: 'Medium', riskColor: '#f59e0b' };
+  const pr         = _productRisk(pool.product_type);   // risk from the product (admin console)
   const maturityDt = new Date();
   maturityDt.setMonth(maturityDt.getMonth() + pool.term_months);
   const maturityStr = maturityDt.toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -3778,7 +3849,7 @@ function openInvestModal(poolId) {
           <span>·</span>
           <span>${pool.term_months}-month term</span>
           <span>·</span>
-          <span class="pool-risk-badge" style="background:${meta.riskColor}18;color:${meta.riskColor}">${meta.risk} risk</span>
+          <span class="pool-risk-badge" style="background:${pr.color}18;color:${pr.color}">${pr.risk} risk</span>
         </div>
       </div>
     </div>
@@ -3803,14 +3874,16 @@ function openInvestModal(poolId) {
     <div class="form-group" style="margin-top:14px">
       <label class="form-label">How much would you like to invest?</label>
       <div class="invest-quickpick mb-8">
-        ${[pool.min_investment, 5000, 10000, 25000].filter(v => v <= walletBal || v === pool.min_investment).map(v =>
-          `<button class="invest-qp-btn" onclick="document.getElementById('investAmount').value=${v};_updateInvestCalc(${v},${pool.annual_rate},${pool.term_months},${pool.min_investment})">${Utils.rand(v)}</button>`
+        ${[pool.min_investment, 5000, 10000, 25000].filter(v => (v + _platformFee(v)) <= walletBal || v === pool.min_investment).map(v =>
+          `<button class="invest-qp-btn" onclick="document.getElementById('investAmount').value=${v};_updateInvestCalc(${v},${pool.annual_rate},${pool.term_months},${pool.min_investment},${walletBal})">${Utils.rand(v)}</button>`
         ).join('')}
       </div>
       <input type="number" class="form-input" id="investAmount"
         placeholder="Enter amount (min ${Utils.rand(pool.min_investment)})"
-        min="${pool.min_investment}" max="${walletBal}" oninput="_updateInvestCalc(parseFloat(this.value)||0,${pool.annual_rate},${pool.term_months},${pool.min_investment})" />
+        min="${pool.min_investment}" max="${Math.floor(walletBal / (1 + PLATFORM_FEE_RATE))}"
+        oninput="_updateInvestCalc(parseFloat(this.value)||0,${pool.annual_rate},${pool.term_months},${pool.min_investment},${walletBal})" />
     </div>
+    <div id="investInsufficientBanner" style="display:none"></div>
 
     <!-- Live return calculator -->
     <div id="investCalcPreview" class="invest-calc-box">
@@ -3857,31 +3930,71 @@ function openInvestModal(poolId) {
   if (pool.product_type === 'cattle') _renderCattleHerdStatus('cattleHerdStatus');
 }
 
-function _updateInvestCalc(amt, rate, termMonths, minInvest) {
-  const preview = document.getElementById('investCalcPreview');
+function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
+  const preview  = document.getElementById('investCalcPreview');
+  const banner   = document.getElementById('investInsufficientBanner');
+  const confirmBtn = document.getElementById('investConfirmBtn');
   if (!preview) return;
   const feeAmtEl = document.getElementById('ic-fee-amount');
   const feeFeeEl = document.getElementById('ic-fee-fee');
   const feeTotEl = document.getElementById('ic-fee-total');
+
+  const fee        = _platformFee(amt);
+  const totalNeeded = amt + fee;
+  // Max the investor can invest fee-inclusive (floor to whole rands)
+  const maxAffordable = walletBal ? Math.floor(walletBal / (1 + PLATFORM_FEE_RATE)) : null;
+  const overBudget  = walletBal != null && totalNeeded > walletBal + 0.005;
+
   if (amt >= minInvest) {
     const ret = amt * rate * (termMonths / 12);
     document.getElementById('ic-invested').textContent = Utils.rand(Math.round(amt));
     document.getElementById('ic-returns').textContent  = '+' + Utils.rand(Math.round(ret));
     document.getElementById('ic-total').textContent    = Utils.rand(Math.round(amt + ret));
     preview.classList.add('invest-calc-box--visible');
-    // Wallet deduction breakdown
-    const fee = _platformFee(amt);
     if (feeAmtEl) feeAmtEl.textContent = Utils.rand(amt, 2);
     if (feeFeeEl) feeFeeEl.textContent = Utils.rand(fee, 2);
-    if (feeTotEl) feeTotEl.textContent = Utils.rand(amt + fee, 2);
+    if (feeTotEl) {
+      feeTotEl.textContent = Utils.rand(totalNeeded, 2);
+      feeTotEl.style.color = overBudget ? '#ef4444' : '#1a1a1a';
+    }
   } else {
-    document.getElementById('ic-invested').textContent = '—';
-    document.getElementById('ic-returns').textContent  = '—';
-    document.getElementById('ic-total').textContent    = '—';
+    ['ic-invested','ic-returns','ic-total'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
     preview.classList.remove('invest-calc-box--visible');
     if (feeAmtEl) feeAmtEl.textContent = '—';
     if (feeFeeEl) feeFeeEl.textContent = '—';
-    if (feeTotEl) feeTotEl.textContent = '—';
+    if (feeTotEl) { feeTotEl.textContent = '—'; feeTotEl.style.color = '#1a1a1a'; }
+  }
+
+  // Over-budget: show top-up prompt with max investable guide
+  if (banner) {
+    if (overBudget && maxAffordable != null) {
+      const canInvest = maxAffordable >= minInvest;
+      banner.style.display = 'block';
+      banner.innerHTML = `
+        <div style="margin-top:10px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 14px">
+          <div style="display:flex;align-items:flex-start;gap:10px">
+            <i class="fa-solid fa-circle-exclamation" style="color:#ef4444;margin-top:2px;flex-shrink:0"></i>
+            <div style="flex:1">
+              <div style="font-size:0.83rem;font-weight:700;color:#ef4444;margin-bottom:4px">Insufficient funds including the platform fee</div>
+              <div style="font-size:0.78rem;color:#6b7280;line-height:1.5">
+                You need <strong style="color:#1a1a1a">${Utils.rand(totalNeeded, 2)}</strong> (${Utils.rand(amt)} + ${Utils.rand(fee, 2)} fee) but your wallet has <strong style="color:#1a1a1a">${Utils.rand(walletBal)}</strong>.
+                ${canInvest
+                  ? `The most you can invest right now is <strong style="color:#1a1a1a">${Utils.rand(maxAffordable)}</strong>.`
+                  : `This exceeds your available balance even at the minimum investment.`}
+              </div>
+              <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                ${canInvest ? `<button class="btn btn--secondary btn--sm" onclick="document.getElementById('investAmount').value=${maxAffordable};_updateInvestCalc(${maxAffordable},${rate},${termMonths},${minInvest},${walletBal})">Use max (${Utils.rand(maxAffordable)})</button>` : ''}
+                <button class="btn btn--primary btn--sm" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))"><i class="fa-solid fa-plus"></i> Top Up Wallet</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      if (confirmBtn) confirmBtn.disabled = true;
+    } else {
+      banner.style.display = 'none';
+      banner.innerHTML = '';
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
   }
 }
 
@@ -3996,10 +4109,6 @@ async function loadMaturity() {
           <div class="maturity-card__detail">Matures: ${Utils.date(inv.maturity_date)} · ${days} days remaining</div>
           ${hasInstruction ? `<div style="font-size:0.72rem;color:var(--green);margin-top:4px"><i class="fa-solid fa-check-circle"></i> Instruction set: ${inv.maturity_instruction.replace(/_/g,' ')}</div>` : ''}
         </div>
-        <div class="maturity-card__payout">
-          <div class="maturity-card__payout-value">${Utils.rand(inv.amount + inv.expected_return_amount)}</div>
-          <div class="maturity-card__payout-label">Expected payout</div>
-        </div>
         <button class="btn ${hasInstruction ? 'btn--secondary' : 'btn--primary'}" onclick='openMaturityModal(${JSON.stringify(inv.id)})'>
           <i class="fa-solid fa-${hasInstruction ? 'pen' : 'paper-plane'}"></i> ${hasInstruction ? 'Update Instruction' : 'Set Instruction'}
         </button>
@@ -4041,20 +4150,27 @@ async function openMaturityModal(investmentId) {
   const inv = PORTAL.investments.find(i => i.id === investmentId);
   if (!inv) return;
 
+  const isDeliveryBike = (inv.product_type || '').includes('delivery_bike');
   const isActive  = inv.status === 'active';
   const total     = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
-  const existing  = inv.maturity_instruction || '';
 
-  // Fetch open pools of matching product type for reinvest option
-  let reinvestPools = [];
-  try {
-    const poolsRes = await API.pools.list({ limit: 100 });
-    reinvestPools = (poolsRes.data || []).filter(p => p.status === 'open' && p.product_type === inv.product_type);
-  } catch (_) { /* non-fatal */ }
+  // Delivery bike: force payout_all — no reinvest options
+  const existing = isDeliveryBike
+    ? (inv.maturity_instruction === 'reinvest' || !inv.maturity_instruction ? 'payout_all' : inv.maturity_instruction)
+    : (inv.maturity_instruction || '');
 
-  const reinvestPoolsHtml = reinvestPools.length
-    ? reinvestPools.map(p => `<option value="${p.id}">${p.name} (${Utils.rand(p.min_investment)} min · ${Utils.pct(p.annual_rate)} p.a.)</option>`).join('')
-    : `<option value="" disabled>No open pools available for this product type</option>`;
+  // All product types for switch option (resolved at maturity, pool may not be open yet)
+  const allProductTypes = [...new Set(
+    (PORTAL.pools || []).filter(p => p.product_type && p.product_type !== inv.product_type).map(p => p.product_type)
+  )];
+  const switchProductsHtml = allProductTypes.length
+    ? allProductTypes.map(pt => {
+        const pi = Utils.productInfo(pt);
+        return `<option value="${pt}" ${existing==='switch_product' && inv.switch_product_type===pt?'selected':''}>${pi.label || pt}</option>`;
+      }).join('')
+    : `<option value="" disabled>No other product types available</option>`;
+
+  const poolNote = `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The first available open pool for this product will be assigned when your investment matures.</div>`;
 
   document.getElementById('maturityModalBody').innerHTML = `
     <div class="info-list mb-16">
@@ -4067,42 +4183,63 @@ async function openMaturityModal(investmentId) {
     <div class="form-group">
       <label class="form-label">Instruction Type *</label>
       <select class="form-select" id="matInstructionType">
-        <option value="payout_all" ${existing==='payout_all'?'selected':''}>Payout All — Receive full capital + returns</option>
-        <option value="payout_return" ${existing==='payout_return'?'selected':''}>Payout Returns Only — Keep capital reinvested</option>
-        <option value="reinvest" ${existing==='reinvest'?'selected':''}>Reinvest — Roll over into same product</option>
-        <option value="payout_custom" ${existing==='payout_custom'?'selected':''}>Custom Payout — Specify amount</option>
+        <option value="payout_all"     ${existing==='payout_all'    ?'selected':''}>Payout All — Receive full capital + returns</option>
+        ${!isDeliveryBike ? `
+        <option value="payout_return"  ${existing==='payout_return' ?'selected':''}>Payout Returns Only — Keep capital reinvested</option>
+        <option value="reinvest"       ${existing==='reinvest'      ?'selected':''}>Reinvest — Roll over into same product</option>
+        <option value="switch_product" ${existing==='switch_product'?'selected':''}>Switch Product — Move payout into a different product</option>
+        ` : ''}
+        <option value="payout_custom"  ${existing==='payout_custom' ?'selected':''}>Custom Payout — Specify amount${!isDeliveryBike ? '; remainder reinvested' : ''}</option>
+        ${!isDeliveryBike ? `
+        <option value="custom_switch"  ${existing==='custom_switch' ?'selected':''}>Custom Switch — Pay out a portion &amp; switch the rest to another product</option>
+        ` : ''}
       </select>
+      ${isDeliveryBike ? `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> Delivery Bike investments are paid out at maturity and cannot be rolled over.</div>` : ''}
     </div>
 
-    <div id="reinvestPoolGroup" style="display:${existing==='reinvest'?'block':'none'}">
-      <div class="form-group">
-        <label class="form-label">Select Pool to Reinvest Into *</label>
-        <select class="form-select" id="matReinvestPool">
-          ${reinvestPoolsHtml}
-        </select>
-        ${!reinvestPools.length ? `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> A suitable open pool will be selected at maturity if none is available now.</div>` : ''}
+    ${!isDeliveryBike ? `
+    <div id="reinvestGroup" style="display:${existing==='reinvest'?'block':'none'}">
+      <div style="font-size:0.72rem;color:var(--text-dim);padding:10px 12px;background:rgba(255,155,12,0.06);border-radius:8px;border:1px solid rgba(255,155,12,0.15)">
+        <i class="fa-solid fa-rotate" style="color:var(--gold);margin-right:4px"></i>
+        Your full payout will be rolled into the next available open pool for <strong>${Utils.productInfo(inv.product_type).label}</strong>. ${poolNote}
       </div>
     </div>
 
-    <div id="customPayoutGroup" style="display:${existing==='payout_custom'?'block':'none'}">
+    <div id="switchProductGroup" style="display:${(existing==='switch_product'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
-        <label class="form-label">Custom Payout Amount (R)</label>
-        <input type="number" class="form-input" id="matCustomAmount" placeholder="Amount to withdraw" />
+        <label class="form-label">Switch to Product *</label>
+        <select class="form-select" id="matSwitchProductType">
+          ${switchProductsHtml}
+        </select>
+        ${poolNote}
+      </div>
+    </div>
+    ` : ''}
+
+    <div id="customPayoutGroup" style="display:${(existing==='payout_custom'||existing==='custom_switch')?'block':'none'}">
+      <div class="form-group">
+        <label class="form-label">Amount to Pay Out (R)</label>
+        <input type="number" class="form-input" id="matCustomAmount" placeholder="Amount to withdraw" max="${total}" value="${inv.custom_payout_amount || ''}" />
+        ${!isDeliveryBike ? `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The remaining balance is reinvested (Custom Payout) or switched to the chosen product (Custom Switch).</div>` : ''}
       </div>
     </div>
 
     <div style="font-size:0.72rem;color:var(--text-dim);line-height:1.6;margin-top:8px">
       <i class="fa-solid fa-clock" style="color:var(--gold)"></i>
       ${isActive
-        ? `You can update this instruction at any time before maturity. If not submitted, funds will be automatically reinvested.`
-        : `Instruction must be submitted before <strong>5:00 PM on ${Utils.date(inv.maturity_date)}</strong>. If not submitted, funds will be automatically reinvested.`
+        ? `You can update this instruction at any time before maturity.${isDeliveryBike ? '' : ' If not submitted, funds will be automatically reinvested.'}`
+        : `Instruction must be submitted before <strong>5:00 PM on ${Utils.date(inv.maturity_date)}</strong>.${isDeliveryBike ? '' : ' If not submitted, funds will be automatically reinvested.'}`
       }
     </div>
   `;
 
   document.getElementById('matInstructionType').addEventListener('change', e => {
-    document.getElementById('customPayoutGroup').style.display  = e.target.value === 'payout_custom' ? 'block' : 'none';
-    document.getElementById('reinvestPoolGroup').style.display  = e.target.value === 'reinvest'      ? 'block' : 'none';
+    const v = e.target.value;
+    document.getElementById('customPayoutGroup').style.display   = (v === 'payout_custom' || v === 'custom_switch') ? 'block' : 'none';
+    if (!isDeliveryBike) {
+      document.getElementById('reinvestGroup').style.display       = v === 'reinvest'       ? 'block' : 'none';
+      document.getElementById('switchProductGroup').style.display  = (v === 'switch_product' || v === 'custom_switch') ? 'block' : 'none';
+    }
   });
 
   const matBtn = document.getElementById('maturityConfirmBtn');
@@ -4111,30 +4248,26 @@ async function openMaturityModal(investmentId) {
 }
 
 async function submitMaturityInstruction(inv) {
-  const type      = document.getElementById('matInstructionType').value;
-  const customAmt = type === 'payout_custom' ? parseFloat(document.getElementById('matCustomAmount').value) : null;
-  const reinvestPoolId = type === 'reinvest' ? (document.getElementById('matReinvestPool')?.value || null) : null;
+  const type              = document.getElementById('matInstructionType').value;
+  const total             = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
+  const needsCustom       = (type === 'payout_custom' || type === 'custom_switch');
+  const customAmt         = needsCustom ? parseFloat(document.getElementById('matCustomAmount')?.value || 0) : null;
+  const switchProductType = (type === 'switch_product' || type === 'custom_switch') ? (document.getElementById('matSwitchProductType')?.value || null) : null;
 
-  if (type === 'payout_custom' && (!customAmt || customAmt <= 0)) { Toast.error('Please enter a valid custom payout amount'); return; }
-  if (type === 'reinvest' && !reinvestPoolId) { Toast.error('Please select a pool to reinvest into, or choose another instruction type'); return; }
+  if (needsCustom && (!customAmt || customAmt <= 0))  { Toast.error('Please enter a valid payout amount'); return; }
+  if (needsCustom && customAmt >= total)              { Toast.error(`Payout amount must be less than the total of ${Utils.rand(total)}`); return; }
+  if ((type === 'switch_product' || type === 'custom_switch') && !switchProductType) { Toast.error('Please select a product to switch into'); return; }
 
   try {
-    await API.maturityInstructions.create({
-      id: Utils.genId('MAT'),
-      investment_id: inv.id,
-      investor_id: DEMO_INVESTOR_ID,
-      investor_name: `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
-      pool_name: inv.pool_name,
-      instruction: type,
-      instruction_type: type,
-      custom_payout_amount: customAmt || 0,
-      reinvest_pool_id: reinvestPoolId,
-      status: 'submitted',
-      submitted_date: new Date().toISOString(),
-      total_payout: inv.amount + (inv.actual_return_amount || inv.expected_return_amount)
-    });
+    // Set the instruction via the dedicated endpoint FIRST — it enforces the
+    // 17:00 SAST maturity-day cutoff and rejects late submissions.
+    await API._fetch('POST', 'investments/' + inv.id + '/instruction', { instruction: type });
 
-    await API.investments.update(inv.id, { maturity_instruction: type });
+    // Persist any auxiliary fields (custom amount / product switch).
+    const extra = {};
+    if (customAmt)          extra.custom_payout_amount = customAmt;
+    if (switchProductType)  extra.switch_product_type  = switchProductType;
+    if (Object.keys(extra).length) await API.investments.update(inv.id, extra);
 
     Toast.success('Maturity instruction saved successfully!');
     SVC.track('svc_maturity_instruction', { investment_id: inv.id, action: type });
@@ -4443,7 +4576,7 @@ function buildStatementHTML(opts) {
           ${stmtKPIBox('Total Portfolio Value', fmtNum(totalValue), '#ff9b0c')}
           ${stmtKPIBox('Capital Deployed', fmtNum(totalInvested), '#656565')}
           ${stmtKPIBox('Returns Earned', fmtNum(totalReturns), '#22C55E')}
-          ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#A855F7')}
+          ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#0096ff')}
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div style="background:#F7F8FA;border-radius:8px;padding:14px;border:1px solid rgba(0,0,0,0.06)">
@@ -4459,7 +4592,7 @@ function buildStatementHTML(opts) {
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:700;margin-bottom:10px">Investment Snapshot</div>
             ${stmtInfoRow('Total Investments', investments.length)}
             ${stmtInfoRow('Active Investments', activeInv)}
-            ${stmtInfoRow('Matured/Paid Out', investments.filter(i=>['matured','paid_out'].includes(i.status)).length)}
+            ${stmtInfoRow('Matured', investments.filter(i=>['matured','paid_out'].includes(i.status)).length)}
             ${stmtInfoRow('Risk Profile', investor.risk_profile ? investor.risk_profile.charAt(0).toUpperCase() + investor.risk_profile.slice(1) : 'Moderate')}
             ${stmtInfoRow('Province', investor.province || '—')}
             ${stmtInfoRow('Referral Code', investor.referral_code || '—')}
@@ -4524,7 +4657,13 @@ function buildStatementHTML(opts) {
   if (incInvestments && investments.length > 0) {
     const invRows = investments.map(inv => {
       const info = getProductInfo(inv.product_type);
-      const rate = ((Number(inv.expected_return_rate)||0)*100).toFixed(2);
+      // Actual rate ACHIEVED: only meaningful once matured. While active, show "—".
+      const isMatured = inv.status === 'matured' || inv.status === 'paid_out';
+      const baseRate = (Number(inv.expected_return_rate) || 0) * 100;
+      const expRet = Number(inv.expected_return) || 0;
+      const actRet = Number(inv.actual_return) || 0;
+      const achievedRate = expRet > 0 ? baseRate * (actRet / expRet) : baseRate;
+      const rateCell = isMatured ? `${achievedRate.toFixed(2)}%` : '—';
       const maturity = inv.maturity_date ? fmtDate(inv.maturity_date) : '—';
       const statusColor = inv.status === 'active' ? '#656565' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
       return `<tr style="border-bottom:1px solid #f0f0f0">
@@ -4534,7 +4673,7 @@ function buildStatementHTML(opts) {
           <span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em">${info.label}</span>
         </td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right;font-weight:700">${fmtNum(inv.amount)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#ff9b0c;text-align:right;font-weight:700">${rate}%</td>
+        <td style="padding:8px 10px;font-size:11px;color:${rateCell==='—'?'#9ca3af':'#ff9b0c'};text-align:right;font-weight:700">${rateCell}</td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${fmtDate(inv.investment_date)}</td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${maturity}</td>
         <td style="padding:8px 10px">
@@ -4558,7 +4697,7 @@ function buildStatementHTML(opts) {
                 <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Pool</th>
                 <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Product</th>
                 <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Amount</th>
-                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Rate</th>
+                <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Actual Rate</th>
                 <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Invested</th>
                 <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Maturity</th>
                 <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Status</th>
@@ -4626,17 +4765,21 @@ function buildStatementHTML(opts) {
       </section>`;
   }
 
+  const logoOutlineUrl = new URL('../assets/logo-outline.png', window.location.href).href;
   // ─── FULL DOCUMENT ───
   return `
-    <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%">
+    <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%;position:relative">
+
+      <!-- Watermark -->
+      <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:0;opacity:0.04;width:480px;height:480px;background:url('${logoOutlineUrl}') center/contain no-repeat;print-color-adjust:exact;-webkit-print-color-adjust:exact"></div>
 
       <!-- Header Band -->
-      <div style="background:linear-gradient(135deg,#1a3a4a 0%,#0d2535 100%);padding:28px 40px;display:flex;align-items:center;justify-content:space-between">
+      <div style="background:#303030;padding:28px 40px;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1">
         <div style="display:flex;align-items:center;gap:14px">
           <img src="${logoUrl}" alt="" style="height:52px;width:52px;object-fit:contain;display:block">
           <div>
             <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:0.06em;line-height:1">SV CAPITAL</div>
-            <div style="font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:0.12em;margin-top:3px;font-weight:500">VENTURE BEYOND THE ORDINARY</div>
+            <div style="font-size:10px;color:rgba(255,155,12,0.75);letter-spacing:0.12em;margin-top:3px;font-weight:600">VENTURE BEYOND THE ORDINARY</div>
           </div>
         </div>
         <div style="text-align:right">
@@ -4665,14 +4808,18 @@ function buildStatementHTML(opts) {
       </div>
 
       <!-- Footer -->
-      <div style="background:#F7F8FA;border-top:1px solid rgba(0,0,0,0.07);padding:20px 40px;display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <div style="font-size:10px;font-weight:700;color:#1a1a1a;margin-bottom:3px">SmartVest Financial Services (Pty) Ltd</div>
-          <div style="font-size:9px;color:#9ca3af">Authorised Financial Services Provider · FSP License #52449 · Regulated by the FSCA</div>
+      <div style="background:#F7F8FA;border-top:3px solid #ff9b0c;padding:20px 40px;position:relative;z-index:1">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:#1a1a1a;margin-bottom:3px">SV Capital (Pty) Ltd</div>
+            <div style="font-size:9px;color:#9ca3af">enquiry@svcapital.co.za · www.svcapital.co.za</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:9px;color:#c1c7d0">This statement is computer generated and does not require a signature.</div>
+          </div>
         </div>
-        <div style="text-align:right">
-          <div style="font-size:9px;color:#9ca3af">enquiry@svcapital.co.za · www.svcapital.co.za</div>
-          <div style="font-size:9px;color:#c1c7d0;margin-top:2px">This statement is computer generated and does not require a signature.</div>
+        <div style="font-size:7.5px;color:#b0b8c4;border-top:1px solid rgba(0,0,0,0.06);padding-top:8px;line-height:1.5">
+          IMPORTANT NOTICE: This investment is not a regulated financial product under the Financial Sector Conduct Authority (FSCA) and is not covered by the Financial Advisory and Intermediary Services Act (FAIS) or the Collective Investment Schemes Control Act (CISCA). This investment is managed solely by SV Capital (Pty) Ltd. Capital is at risk and returns are not guaranteed.
         </div>
       </div>
 
@@ -4701,24 +4848,11 @@ function stmtInfoRow(label, val) {
 }
 
 function getProductInfo(type) {
-  const map = {
-    cattle:            { label:'Cattle Investment',        color:'#d97706', bg:'#fef3c7' },
-    solar_7yr:         { label:'Solar Investment (7yr)',   color:'#ea580c', bg:'#ffedd5' },
-    solar_6yr:         { label:'Solar Investment (6yr)',   color:'#ea580c', bg:'#fff7ed' },
-    solar_5yr:         { label:'Solar Investment (5yr)',   color:'#c2410c', bg:'#fff7ed' },
-    solar:             { label:'Solar Investment',         color:'#ea580c', bg:'#ffedd5' },
-    short_term:        { label:'Short Term Investment',    color:'#656565', bg:'#656565' },
-    delivery_bike:     { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
-    delivery_bikes:    { label:'Delivery Bikes',           color:'#7c3aed', bg:'#ede9fe' },
-    smme:              { label:'SMME Funding',             color:'#059669', bg:'#d1fae5' },
-    smme_funding:      { label:'SMME Funding',             color:'#059669', bg:'#d1fae5' },
-    property:          { label:'Property Investment',      color:'#656565', bg:'#cffafe' },
-    fixed_term:        { label:'Fixed Term Investment',    color:'#7c3aed', bg:'#ede9fe' },
-  };
-  const hit = map[type?.toLowerCase?.()];
-  if (hit) return hit;
-  const label = type ? type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Investment';
-  return { label, color:'#6b7280', bg:'#f3f4f6' };
+  // Colours align with each product's assigned colour (see Utils.productColor).
+  const base  = (window.Utils && Utils.productInfo) ? Utils.productInfo(type) : { label: '' };
+  const color = (window.Utils && Utils.productColor) ? Utils.productColor(type) : (base.color || '#6b7280');
+  const label = base.label || (type ? type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Investment');
+  return { label, color, bg: color + '1f' };   // 8-digit hex → light tint of the product colour
 }
 
 function printStatement() {
@@ -5118,7 +5252,7 @@ function renderQuestView() {
               ? (cat === 'milestone'
                   ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="claimMilestoneQuest('${quest.id}')">Claim</button>`
                   : cat === 'learning'
-                    ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="navigate('learn', document.querySelector('[data-view=learn]'))">Start</button>`
+                    ? `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="startLearningQuest('${quest.id}')">Start</button>`
                     : `<button class="btn quest-claim-btn" style="background:${quest.color}" onclick="openSurveyModal('${quest.id}')">Start</button>`)
               : `<div class="quest-card__locked"><i class="fa-solid fa-lock-open"></i> Available</div>`
           }
@@ -5205,7 +5339,8 @@ function renderQuestView() {
   const refSection = document.getElementById('rewardsReferralSection');
   const refList    = document.getElementById('rewardsReferralList');
   const refTxns    = PORTAL.transactions.filter(t => t.type === 'referral_bonus').sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  if (refSection && refList) {
+  if (refSection) refSection.style.display = 'none';   // Referral Rewards History hidden (feature not live)
+  if (false && refSection && refList) {
     refSection.style.display = '';
     if (!refTxns.length) {
       refList.innerHTML = `<div class="empty-state" style="padding:20px"><i class="fa-solid fa-gift"></i><p>No referral bonuses yet. Share your referral link to earn rewards!</p></div>`;
@@ -5300,11 +5435,15 @@ function openSurveyModal(questId) {
       </button>
     </div>`;
 
-  document.getElementById('surveyModal').style.display = 'flex';
+  // Use Modal.open so the overlay gets the `.open` class (opacity/pointer-events);
+  // setting style.display alone leaves it at opacity:0 / pointer-events:none.
+  if (window.Modal && Modal.open) Modal.open('surveyModal');
+  else document.getElementById('surveyModal').classList.add('open');
 }
 
 function closeSurveyModal() {
-  document.getElementById('surveyModal').style.display = 'none';
+  if (window.Modal && Modal.close) Modal.close('surveyModal');
+  else document.getElementById('surveyModal').classList.remove('open');
 }
 
 async function submitSurvey(questId) {
@@ -5409,20 +5548,20 @@ const LEARN_MODULES = [
     title: 'What is SV Capital?', readTime: 5, xp: 50,
     icon: 'fa-building-columns', color: '#656565',
     keyPoints: [
-      'SV Capital pools investor capital into tangible South African alternative assets',
-      'Products include solar projects, cattle farming, short-term loans, and delivery bikes',
-      'Each product has a defined term, return rate, and maturity date',
-      'All investments are backed by real, income-generating assets',
+      'SV Capital gives investors direct access to tangible South African alternative assets',
+      'Products include solar energy projects, cattle farming, and delivery-bike fleets',
+      'Investment terms start from 5 months, each with a defined return rate and maturity date',
+      'Every investment is backed by real, income-generating assets',
     ],
-    content: `SV Capital is a South African alternative investment platform that connects investors with real-economy projects generating above-inflation returns. Unlike unit trusts or share portfolios, your money is put to work in tangible assets — solar panels generating electricity, cattle being raised and sold at market, or secured loans to operating businesses.
+    content: `SV Capital is a South African alternative investment platform that connects investors directly with real-economy projects generating above-inflation returns. Unlike unit trusts or share portfolios, your money is put to work in tangible assets — solar panels generating electricity, cattle being raised and sold at market, and delivery-bike fleets earning daily income.
 
-Each investment has a clearly defined term (typically 6–36 months) and a fixed annual rate of return, so you know exactly what to expect. Your capital is tracked in real time on this portal, and returns are credited directly to your wallet on maturity.
+Each investment has a clearly defined term, starting from 5 months, and a set annual rate of return, so you know what to expect from the outset. Every product carries its own risk profile — from Low through to High — so you can match your investments to your appetite. Your capital is tracked in real time on this portal.
 
-The platform charges no entry fees and no monthly platform fees. Our revenue comes from structuring fees on the underlying transactions, so your quoted return is your net return.`,
+At maturity you decide what happens next: pay the funds out to your wallet, reinvest them, or switch into a different product. Reinvested funds are never charged a platform fee, so more of your money stays invested and working for you.`,
     quiz: [
       { q: 'What types of assets does SV Capital invest in?', options: ['Shares and unit trusts', 'Tangible South African alternative assets', 'Foreign currency and crypto', 'Government bonds only'], correct: 1 },
-      { q: 'How does SV Capital generate its revenue?', options: ['Monthly platform fees charged to investors', 'Annual management fees', 'Structuring fees on underlying transactions', 'Entry fees on every deposit'], correct: 2 },
-      { q: 'What is a typical SV Capital investment term?', options: ['1–7 days', '6–36 months', '5–10 years', 'Indefinite — no fixed term'], correct: 1 },
+      { q: 'What is the minimum SV Capital investment term?', options: ['1–7 days', '5 months', '5 years', 'No fixed term'], correct: 1 },
+      { q: 'What fee is charged when you reinvest your funds at maturity?', options: ['5%', '2%', '1%', 'No fee'], correct: 3 },
     ],
   },
   {
@@ -5430,20 +5569,20 @@ The platform charges no entry fees and no monthly platform fees. Our revenue com
     title: 'How Your Returns Work', readTime: 7, xp: 50,
     icon: 'fa-percent', color: '#22c55e',
     keyPoints: [
-      'Returns are expressed as an annual percentage rate (p.a.)',
-      'Your actual payout = capital × annual rate × (term in days ÷ 365)',
-      'Reinvesting your returns compounds your growth over time',
-      'Effective return % accounts for the full term, not just one year',
+      'Returns are shown as an annual percentage rate (p.a.)',
+      'Your payout = capital × annual rate × (term ÷ 12 months)',
+      'Every return appears in your history as a "Return Earned" entry',
+      'Reinvesting at maturity compounds your growth — and reinvestments pay no platform fee',
     ],
-    content: `When you invest with SV Capital, you earn a return based on two factors: the annual rate and the term. For example, R10,000 invested at 14% p.a. for 12 months returns R11,400 — the R10,000 original capital plus R1,400 in returns.
+    content: `When you invest with SV Capital, your return is driven by two things: the product's annual rate and its term. For example, R10,000 at 14% p.a. over 12 months returns R11,400 — your R10,000 capital plus R1,400 earned.
 
-Shorter-term products like cattle cycles (150–180 days) work the same way, but on a pro-rated basis. A 14% annual rate for 150 days pays roughly R575 on a R10,000 investment.
+Shorter terms are simply pro-rated. The same 14% annual rate over 5 months pays roughly R583 on R10,000. Every return you earn is credited and shown in your transaction history as a "Return Earned" entry.
 
-The "effective return" you see on your dashboard is the annualised figure, allowing you to compare products fairly regardless of their term length.`,
+The effective return you see on your dashboard is the annualised figure, so you can compare a 5-month product against a multi-year one on equal footing. When an investment matures you decide what happens next — pay out, reinvest, or switch products — and reinvested funds are never charged a platform fee.`,
     quiz: [
       { q: 'R10,000 invested at 14% p.a. for 12 months — what is the total payout?', options: ['R10,140', 'R10,700', 'R11,400', 'R12,400'], correct: 2 },
       { q: 'What does the "effective return %" on your dashboard allow you to do?', options: ['Calculate your tax', 'Compare products fairly regardless of term length', 'Predict future returns', 'Convert returns to foreign currency'], correct: 1 },
-      { q: 'At 14% p.a. for 150 days, the approximate return on R10,000 is:', options: ['R1,400', 'R200', 'R575', 'R2,100'], correct: 2 },
+      { q: 'At 14% p.a. for 5 months, the approximate return on R10,000 is:', options: ['R1,400', 'R200', 'R583', 'R2,100'], correct: 2 },
     ],
   },
   {
@@ -5453,12 +5592,12 @@ The "effective return" you see on your dashboard is the annualised figure, allow
     keyPoints: [
       'SV Capital funds solar panel installations for South African businesses',
       'Businesses pay structured lease or energy purchase agreements',
-      'Returns typically range from 14–18% p.a. over 24–36 month terms',
+      'Returns typically range from 14–18% p.a. over 5–7 year terms',
       'Solar projects benefit from long-term, predictable contractual cash flows',
     ],
     content: `Solar projects work by financing the installation of commercial-scale photovoltaic (PV) systems for verified South African businesses. Once installed, the business pays a set monthly amount — either as an energy purchase agreement (EPA) or a finance lease — providing predictable monthly revenue.
 
-SV Capital aggregates these returns and passes them to investors net of all structuring costs. Solar assets are long-duration, making them ideal for capital you do not need access to for 2–3 years. Loadshedding in South Africa has significantly increased demand for behind-the-meter solar, providing strong deal flow for this product.
+SV Capital aggregates these returns and passes them to investors net of all structuring costs. Solar assets are long-duration, making them ideal for capital you can commit for several years. Loadshedding in South Africa has significantly increased demand for behind-the-meter solar, providing strong deal flow for this product.
 
 Each solar project undergoes technical assessment, legal review, and business viability checks before being made available to investors.`,
     quiz: [
@@ -5469,23 +5608,23 @@ Each solar project undergoes technical assessment, legal review, and business vi
   },
   {
     id: 'learn_cattle', track: 'explorer', order: 4,
-    title: 'Cattle & Short-term Loans', readTime: 8, xp: 50,
+    title: 'Cattle Farming', readTime: 8, xp: 50,
     icon: 'fa-cow', color: '#a855f7',
     keyPoints: [
-      'Cattle are purchased at auction, raised on commercial farms, and resold',
-      'Each cycle typically runs 150–180 days with 12–16% p.a. returns',
-      'Short-term loans are made to businesses with real collateral',
-      'These shorter terms allow for reinvestment and capital recycling',
+      'Cattle are bought at auction, raised on a commercial feedlot, and sold at market',
+      'A cattle cycle typically runs around 12 months at 12–16% p.a.',
+      'Returns are driven by weight gain (≈200kg → 500kg) and the market price at sale',
+      'Cattle carries an Aggressive risk profile — higher potential returns with more variability',
     ],
-    content: `SV Capital's cattle product funds the purchase of commercial beef cattle at verified South African livestock auctions. The cattle are placed on contracted farms where they are fed and managed under professional supervision, then sold at market at the end of the cycle.
+    content: `SV Capital's cattle product funds the purchase of commercial beef cattle at verified South African livestock auctions, in partnership with Beefcor — one of SA's premier feedlots. The cattle are fed and managed under professional supervision as they grow from roughly 200kg to 500kg, then sold at market at the end of the cycle.
 
-Returns are driven by weight gain and market price at sale. SV Capital hedges execution risk through diversified lots and vetted farming partners. Each batch is tracked and reported on in real time via the admin platform.
+Returns are driven by weight gain and the market price at sale. SV Capital manages execution risk through diversified lots and vetted farming partners, and each batch is tracked and reported in real time.
 
-Short-term business loans are secured against verifiable collateral (trading assets, debtor books, or property bonds) and carry slightly lower rates than cattle due to their fixed repayment structure. Both products offer higher liquidity than solar, with capital recycling every 5–6 months.`,
+Because cattle depends on biological growth and market prices, it carries a higher (Aggressive) risk profile than solar — with the potential for stronger returns over a shorter, roughly 12-month term.`,
     quiz: [
-      { q: 'How long is a typical SV Capital cattle investment cycle?', options: ['30–60 days', '1–2 years', '150–180 days', '3–5 years'], correct: 2 },
-      { q: 'Short-term business loans at SV Capital are secured against:', options: ['No collateral — they are unsecured', 'Verifiable collateral such as trading assets, debtor books, or property bonds', 'Government guarantees', 'Foreign exchange reserves'], correct: 1 },
-      { q: 'Which unique risk applies to cattle but NOT to solar investments?', options: ['Interest rate risk', 'Currency risk', 'Biological and market variable risk', 'Regulatory risk'], correct: 2 },
+      { q: 'How long is a typical SV Capital cattle investment cycle?', options: ['30–60 days', 'About 12 months', '3–5 years', '10 years'], correct: 1 },
+      { q: 'What drives the returns on a cattle investment?', options: ['Fixed monthly interest', 'Weight gain and the market price at sale', 'Government subsidies', 'Rental income'], correct: 1 },
+      { q: 'What risk profile does the cattle product carry?', options: ['Low', 'Medium', 'Aggressive', 'No risk'], correct: 2 },
     ],
   },
   {
@@ -5498,7 +5637,7 @@ Short-term business loans are secured against verifiable collateral (trading ass
       'A blended portfolio smooths your overall return over time',
       'Diversification is not just by product — also consider term length and entry date',
     ],
-    content: `Diversification means not putting all your eggs in one basket — a principle that applies as much to alternative investments as to traditional ones. By spreading your capital across solar, cattle, and loans, you reduce the impact if any single investment underperforms.
+    content: `Diversification means not putting all your eggs in one basket — a principle that applies as much to alternative investments as to traditional ones. By spreading your capital across products like solar, cattle, and delivery-bike fleets, you reduce the impact if any single investment underperforms.
 
 Equally important is timeline diversification. If all your investments mature at the same time, you face reinvestment risk. Staggering your investments across different start dates means you always have capital returning, which can be reinvested into new opportunities.
 
@@ -5516,19 +5655,19 @@ Our data shows that investors with 3+ active product types consistently achieve 
     title: 'Risk vs Return', readTime: 8, xp: 50,
     icon: 'fa-scale-balanced', color: '#a855f7',
     keyPoints: [
-      'Higher potential returns always come with higher risk — there are no exceptions',
-      'Risk in alternative investments includes liquidity risk, operational risk, and market risk',
-      'Your risk profile determines the right mix of products for you',
+      'Higher potential returns always come with higher risk',
+      'Each product has a published risk profile — Low, Medium, Medium-High or High',
+      'Match products to your risk appetite and how long you can commit capital',
       'Diversification reduces but cannot eliminate all risk',
     ],
-    content: `Every investment involves a trade-off between risk and return. At SV Capital, solar projects carry the lowest operational risk (contractual cash flows) but require the longest capital commitment. Cattle farming offers higher potential returns but involves biological and market variables that solar does not.
+    content: `Every investment involves a trade-off between risk and return. At SV Capital, each product carries a published risk profile — from Low through to High — set by our investment team. Solar projects sit at the more conservative end (long, contractual cash flows), while cattle farming sits at the higher end (biological and market variability) with the potential for higher returns.
 
-Understanding your own risk tolerance is critical. If you might need access to your capital within 12 months, short-term products are more appropriate than 36-month solar commitments. If you can commit capital for longer and tolerate some variability, the blended portfolio approach tends to deliver the best long-term outcomes.
+Understanding your own risk tolerance is key. If you can only commit capital for a few months, shorter-term products suit you better; if you can commit for several years and tolerate some variability, a blended portfolio tends to deliver the best long-term outcome.
 
-The risk profile survey in the Earn Rewards section helps us calibrate your portfolio recommendations to your personal risk appetite.`,
+The 'Know Your Risk Profile' survey in Earn Rewards calibrates our recommendations to your personal appetite, and every product page shows its risk badge so you always know what you are taking on.`,
     quiz: [
-      { q: 'Which SV Capital product carries the lowest operational risk?', options: ['Cattle farming', 'Short-term loans', 'Solar projects', 'Delivery bikes'], correct: 2 },
-      { q: 'If you might need access to your capital within 12 months, which are most appropriate?', options: ['36-month solar investments', 'Short-term products', 'Estate planning products', 'Any product regardless of term'], correct: 1 },
+      { q: 'Which SV Capital product carries the lowest operational risk?', options: ['Cattle farming', 'Delivery bikes', 'Solar projects', 'None — they are equal'], correct: 2 },
+      { q: 'How do you see the risk level of each product?', options: ['A star rating', 'A risk profile from Low to High', 'A credit score', 'It is not shown'], correct: 1 },
       { q: 'Complete the sentence: "Higher potential returns always come with…"', options: ['Lower risk', 'More regulatory protection', 'Higher risk', 'Better liquidity'], correct: 2 },
     ],
   },
@@ -5539,14 +5678,14 @@ The risk profile survey in the Earn Rewards section helps us calibrate your port
     keyPoints: [
       'Compounding means earning returns on your returns, not just your original capital',
       'The longer your investment horizon, the more powerful compounding becomes',
-      'Reinvesting at maturity is the single most impactful decision you can make',
+      'Reinvesting at maturity is the single most impactful decision — and it is fee-free',
       'A 14% p.a. return, reinvested over 5 years, nearly doubles your capital',
     ],
     content: `Albert Einstein reportedly called compound interest the "eighth wonder of the world." In practice, compounding means that after your first investment matures, you reinvest both the original capital and the returns — so in the next cycle, you earn returns on a larger base.
 
 At 14% p.a., R10,000 grows to R11,400 after year 1. Reinvested, it becomes R12,996 after year 2 — not R12,800. The difference compounds every year. After 5 years, R10,000 compounding at 14% p.a. becomes approximately R19,254 — nearly double.
 
-The key to unlocking compounding is acting quickly at maturity. Capital sitting idle in your wallet earns nothing. Set your maturity instructions to reinvest, and let time do the work.`,
+The key to unlocking compounding is acting at maturity. Capital sitting idle in your wallet earns nothing. Set your maturity instruction to reinvest — reinvestments pay no platform fee, so your full balance rolls over — and let time do the work.`,
     quiz: [
       { q: 'What does "compounding" mean in investing?', options: ['Adding new capital every month', 'Earning returns on your returns, not just your original capital', 'Splitting investments into smaller portions', 'Switching between product types'], correct: 1 },
       { q: 'R10,000 compounding at 14% p.a. over 5 years grows to approximately:', options: ['R17,000', 'R19,254', 'R21,000', 'R15,500'], correct: 1 },
@@ -5560,12 +5699,12 @@ The key to unlocking compounding is acting quickly at maturity. Capital sitting 
     keyPoints: [
       'Investment returns from SV Capital are generally treated as ordinary income in South Africa',
       'You are required to declare investment returns in your annual tax return (ITR12)',
-      'SV Capital issues statements to assist with your tax declarations',
+      'SV Capital issues statements and an annual Investment Income Certificate to help with your tax',
       'Consult a registered tax practitioner for personalised advice',
     ],
     content: `In South Africa, income earned from investments is generally subject to income tax at your marginal rate. This applies to the returns (interest or profit share) you earn through SV Capital products. Your original capital returned at maturity is not taxable — only the profit portion is.
 
-SARS requires you to disclose all South African and foreign income on your annual return (ITR12). Your SV Capital account statement (available under "My Statement") provides a breakdown of all returns earned in each tax year, which you or your accountant can use for tax submissions.
+SARS requires you to disclose all South African and foreign income on your annual return (ITR12). Your SV Capital account statement and annual Investment Income Certificate (available under "My Statement") give a breakdown of all returns earned in each tax year, which you or your accountant can use for tax submissions.
 
 Note that SV Capital does not deduct tax at source — you are responsible for declaring and paying tax on returns earned. If your total investment income exceeds R23,800 per year (the annual interest exemption for individuals under 65), the excess is taxable. We strongly recommend consulting a registered tax practitioner.`,
     quiz: [
@@ -5590,11 +5729,11 @@ Note that SV Capital does not deduct tax at source — you are responsible for d
 
 Equally, minimise idle time. Capital sitting in your wallet between investments earns 0%. Even a 2-week idle period on R50,000 costs you approximately R380 in lost returns at 14% p.a. The fastest investors reinvest within 48 hours of maturity.
 
-The optimal blend for most SV Capital investors in 2025 is approximately 40% solar (stable base), 40% cattle/loans (higher rate, shorter term), and 20% in reserve for opportunistic reinvestment when high-rate pools open.`,
+A balanced blend for many SV Capital investors is roughly 40% solar (stable, longer-term base), 40% cattle (higher rate, shorter term), and 20% held in reserve for opportunistic reinvestment when new pools open. Because reinvestments are fee-free, rolling capital between pools costs you nothing.`,
     quiz: [
       { q: 'What is a "laddering strategy" in investing?', options: ['Investing in ladder-manufacturing companies', 'Starting multiple investments with staggered maturity dates', 'Increasing investment amounts each cycle', 'Only investing in the highest-rate products'], correct: 1 },
       { q: 'Approximately how much does a 2-week idle period cost on R50,000 at 14% p.a.?', options: ['R50', 'R1,000', 'R380', 'R1,900'], correct: 2 },
-      { q: 'The recommended optimal portfolio blend for SV Capital investors in 2025 is:', options: ['100% solar for maximum stability', '50% cattle, 50% solar', '40% solar, 40% cattle/loans, 20% reserve', 'Equal split across all available products'], correct: 2 },
+      { q: 'A balanced portfolio blend for SV Capital investors is:', options: ['100% solar for maximum stability', '50% cattle, 50% solar', '40% solar, 40% cattle, 20% reserve', 'Equal split across all available products'], correct: 2 },
     ],
   },
   {
@@ -5675,12 +5814,10 @@ function renderLearnView() {
               <span style="color:${mod.color}"><i class="fa-solid fa-star"></i> +${mod.xp} XP</span>
             </div>
           </div>
-          ${isDone
-            ? `<div class="learn-done-badge"><i class="fa-solid fa-circle-check"></i> Completed</div>`
-            : `<button class="learn-expand-btn" onclick="_toggleModule('${mod.id}')">
-                 <i class="fa-solid fa-chevron-down" id="lchev-${mod.id}"></i>
-               </button>`
-          }
+          ${isDone ? `<div class="learn-done-badge"><i class="fa-solid fa-circle-check"></i> Completed</div>` : ''}
+          <button class="learn-expand-btn" onclick="_toggleModule('${mod.id}')" aria-label="View module">
+            <i class="fa-solid fa-chevron-down" id="lchev-${mod.id}"></i>
+          </button>
         </div>
         <div class="learn-module-body" id="lbody-${mod.id}" style="display:none">
           <div class="learn-key-points">
@@ -5689,9 +5826,12 @@ function renderLearnView() {
           </div>
           <div class="learn-content-text">${mod.content.split('\n\n').map(p => `<p>${p.trim()}</p>`).join('')}</div>
           <div class="learn-module-footer">
-            <button class="btn btn--primary" id="lquiz-btn-${mod.id}" onclick="_showModuleQuiz('${mod.id}')">
-              <i class="fa-solid fa-circle-question"></i> Take Quiz — Earn ${mod.xp} XP
-            </button>
+            ${isDone
+              ? `<div class="learn-earned-note"><i class="fa-solid fa-circle-check"></i> Completed — +${mod.xp} XP already earned</div>`
+              : `<button class="btn btn--primary" id="lquiz-btn-${mod.id}" onclick="_showModuleQuiz('${mod.id}')">
+                   <i class="fa-solid fa-circle-question"></i> Take Quiz — Earn ${mod.xp} XP
+                 </button>`
+            }
           </div>
           <div class="learn-quiz-section" id="lquiz-${mod.id}" style="display:none">
             <div class="learn-quiz-title"><i class="fa-solid fa-circle-question"></i> Knowledge Check — answer all questions correctly to earn XP</div>
@@ -5719,6 +5859,20 @@ function _toggleModule(modId) {
   const isOpen = body.style.display !== 'none';
   body.style.display = isOpen ? 'none' : 'block';
   if (chev) chev.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
+/* Learning-quest "Start": jump to the Learning Hub, switch to the module's
+   track, expand it, and scroll it into view. */
+function startLearningQuest(modId) {
+  navigate('learn', document.querySelector('[data-view=learn]'));
+  const mod = LEARN_MODULES.find(m => m.id === modId);
+  if (mod && typeof _setLearnTrack === 'function') _setLearnTrack(mod.track);
+  setTimeout(() => {
+    const body = document.getElementById(`lbody-${modId}`);
+    const card = document.getElementById(`lmod-${modId}`);
+    if (body && body.style.display === 'none') _toggleModule(modId);
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 180);
 }
 
 function _showModuleQuiz(modId) {
@@ -6441,7 +6595,7 @@ const TOUR_STEPS = [
     position: 'top',
     icon: 'fa-list-check',
     title: 'Active Investments',
-    body: 'Your current investments are listed here with product type, amount, expected return, and days remaining until maturity.',
+    body: 'Your current investments are listed here with product type, amount, target return, and days remaining until maturity.',
   },
   {
     id: 'nav_wallet',
@@ -6912,7 +7066,7 @@ function _saCard(sa) {
     </div>
     <div class="sa-card__actions">
       <button class="btn btn--sm btn--primary" onclick="openSaDeposit('${sa.id}')"><i class="fa-solid fa-wallet"></i> Deposit</button>
-      <button class="btn btn--sm btn--secondary" onclick="openSaInvest('${sa.id}')" ${sa.kyc_status !== 'approved' ? 'disabled title="FICA required before investing"' : ''}><i class="fa-solid fa-chart-line"></i> Invest</button>
+      <button class="btn btn--sm btn--secondary" onclick="openSaInvest('${sa.id}')"><i class="fa-solid fa-chart-line"></i> Invest</button>
       <button class="btn btn--sm btn--secondary" onclick="openSaDetail('${sa.id}')"><i class="fa-solid fa-${isMinor ? 'star' : 'eye'}"></i> ${isMinor ? 'Hub' : 'Details'}</button>
     </div>
   </div>`;
@@ -7188,7 +7342,7 @@ function _saNormalDetail(sa, meta) {
 
     <div style="display:flex;gap:8px;margin:16px 0">
       <button class="btn btn--primary btn--sm" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')"><i class="fa-solid fa-wallet"></i> Deposit</button>
-      <button class="btn btn--secondary btn--sm" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')" ${sa.kyc_status !== 'approved' ? 'disabled title="FICA approval required"' : ''}><i class="fa-solid fa-chart-line"></i> Invest</button>
+      <button class="btn btn--secondary btn--sm" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-chart-line"></i> Invest</button>
     </div>
 
     <div class="sa-section-title"><i class="fa-solid fa-id-card"></i> FICA Documents Required</div>
@@ -7260,7 +7414,7 @@ function _saMinorHub(sa) {
     <!-- Actions -->
     <div class="minor-actions">
       <button class="minor-btn minor-btn--deposit" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')"><i class="fa-solid fa-piggy-bank"></i><span>Add to Jar</span></button>
-      <button class="minor-btn minor-btn--invest" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')" ${sa.kyc_status !== 'approved' ? 'disabled' : ''}><i class="fa-solid fa-seedling"></i><span>Invest</span></button>
+      <button class="minor-btn minor-btn--invest" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-seedling"></i><span>Invest</span></button>
       <button class="minor-btn minor-btn--fica" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-id-card"></i><span>FICA Docs</span></button>
     </div>
 
@@ -7343,7 +7497,6 @@ async function confirmSaDeposit() {
 function openSaInvest(saId) {
   const sa = PORTAL.subAccounts.find(a => a.id === saId);
   if (!sa) return;
-  if (sa.kyc_status !== 'approved') { Toast.warn('FICA documents must be approved before investing'); return; }
   if ((parseFloat(sa.wallet_balance) || 0) <= 0) { Toast.warn('Please deposit funds first'); return; }
 
   _pmSaId = saId;  // tag all investments made after this to the sub-account
@@ -7796,7 +7949,7 @@ td:last-child{text-align:right;font-weight:600}
 <div class="wrap">
   <div class="hdr">
     <div>
-      <div class="logo"><img src="${window.location.origin}/assets/full-colour-logo-horizontal-white-text.png" alt="SV Capital"></div>
+      <div class="logo"><img src="${window.location.origin}/assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital"></div>
       <div style="font-size:0.75rem;color:#6b7280;margin-top:6px">SV Capital (Pty) Ltd &nbsp;·&nbsp; FSCA Regulated</div>
     </div>
     <div class="cert-badge">
@@ -8814,7 +8967,7 @@ function generateInvestmentCertificate(invId) {
         <tr><td style="padding:6px 0;color:#6b7280">Investment Pool</td><td style="font-weight:700">${inv.pool_name||pool.name||'—'}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Amount Invested</td><td style="font-weight:700;color:#ff9b0c;font-size:16px">${Utils.rand(inv.amount)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Annual Rate</td><td style="font-weight:700">${Utils.pct(inv.annual_rate||inv.expected_return_rate)}</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280">Expected Return</td><td style="font-weight:700;color:#22c55e">${Utils.rand(inv.expected_return_amount||inv.expected_return)}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Target Return</td><td style="font-weight:700;color:#22c55e">${Utils.rand(inv.expected_return_amount||inv.expected_return)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Investment Date</td><td style="font-weight:700">${Utils.date(inv.investment_date||inv.start_date)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Maturity Date</td><td style="font-weight:700">${Utils.date(inv.maturity_date||inv.end_date)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Status</td><td>${Utils.statusBadge(inv.status)}</td></tr>
@@ -8848,18 +9001,22 @@ function generateInvestmentCertificate(invId) {
 
 /* ── PDF: logo cache ── */
 let _cachedLogoDataUrl = null;
+let _cachedLogoOutlineDataUrl = null;
 async function _preloadLogo() {
   try {
-    const url  = new URL('../assets/logo.png', window.location.href).href;
-    const resp = await fetch(url);
-    if (!resp.ok) return;
-    const blob = await resp.blob();
-    _cachedLogoDataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    const toDataUrl = async (url) => {
+      const resp = await fetch(url);
+      if (!resp.ok) return null;
+      const blob = await resp.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    };
+    _cachedLogoDataUrl        = await toDataUrl(new URL('../assets/logo.png',         window.location.href).href);
+    _cachedLogoOutlineDataUrl = await toDataUrl(new URL('../assets/logo-outline.png', window.location.href).href);
   } catch (_) {}
 }
 
@@ -8876,15 +9033,29 @@ function _getPDF(orientation = 'portrait') {
   return new lib({ orientation, unit: 'mm', format: 'a4' });
 }
 
+/* ── PDF: watermark (centred logo outline at low opacity) ── */
+function _pdfWatermark(doc) {
+  if (!_cachedLogoOutlineDataUrl) return;
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const size = 100; // mm
+  doc.saveGraphicsState?.();
+  // jsPDF doesn't support native opacity for images; draw at reduced opacity via GState if available
+  try { doc.setGState(new doc.GState({ opacity: 0.05 })); } catch (_) {}
+  doc.addImage(_cachedLogoOutlineDataUrl, 'PNG', (W - size) / 2, (H - size) / 2, size, size);
+  try { doc.setGState(new doc.GState({ opacity: 1 })); } catch (_) {}
+  doc.restoreGraphicsState?.();
+}
+
 /* ── PDF: dark header bar ── */
 function _pdfHeader(doc, title, subtitle) {
   const W = doc.internal.pageSize.getWidth();
   // Dark header band
-  doc.setFillColor(26, 34, 53); // #303030
+  doc.setFillColor(48, 48, 48); // #303030
   doc.rect(0, 0, W, 38, 'F');
   // Gold accent line
   doc.setFillColor(255, 155, 12);
-  doc.rect(0, 38, W, 2, 'F');
+  doc.rect(0, 38, W, 3, 'F');
   // Logo icon (square lotus mark) + brand name text
   if (_cachedLogoDataUrl) {
     doc.addImage(_cachedLogoDataUrl, 'PNG', 9, 7, 22, 22);
@@ -8897,7 +9068,7 @@ function _pdfHeader(doc, title, subtitle) {
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(156, 163, 175);
-  doc.text('SmartVest Financial Services · FSP #52449', textX, 24);
+  doc.text('SV Capital (Pty) Ltd', textX, 24);
   // Document title (right aligned)
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
@@ -8955,6 +9126,7 @@ function downloadCertificate(investmentId) {
 
   // Header
   let y = _pdfHeader(doc, 'INVESTMENT CERTIFICATE', `#${inv.id}`);
+  _pdfWatermark(doc);
 
   // Certificate badge area
   y += 6;
@@ -9014,7 +9186,6 @@ function downloadCertificate(investmentId) {
   infoR('Investment ID', inv.id);
   infoR('Pool Name', inv.pool_name || pool.name || '—');
   infoR('Amount Invested', Utils.rand(inv.amount));
-  infoR('Annual Rate', Utils.pct(inv.expected_return_rate || inv.annual_rate));
 
   y = Math.max(ly, ry) + 4;
 
@@ -9043,8 +9214,10 @@ function downloadCertificate(investmentId) {
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(156, 163, 175);
-  doc.text('This certificate is a record of investment and does not constitute a guarantee of returns. All investments are subject to the terms', 14, y, { maxWidth: W - 28 });
-  doc.text('and conditions of SV Capital and SmartVest Financial Services (Pty) Ltd (FSP #52449).', 14, y + 5, { maxWidth: W - 28 });
+  doc.text('This certificate is a record of investment and does not constitute a guarantee of returns. All investments are subject to the terms and conditions of SV Capital.', 14, y, { maxWidth: W - 28 });
+  y += 8;
+  doc.setFontSize(6.5);
+  doc.text('IMPORTANT NOTICE: This investment is not a regulated financial product under the Financial Sector Conduct Authority (FSCA) and is not covered by the Financial Advisory and Intermediary Services Act (FAIS) or the Collective Investment Schemes Control Act (CISCA). This investment is managed solely by SV Capital (Pty) Ltd. Investors should be aware that their capital is at risk and there is no guarantee of returns. Past performance is not indicative of future results.', 14, y, { maxWidth: W - 28 });
 
   _pdfFooter(doc);
   doc.save(`SVC-Certificate-${inv.id}.pdf`);
@@ -9158,6 +9331,7 @@ function downloadStatement() {
 
   // Header
   let y = _pdfHeader(doc, 'ACCOUNT STATEMENT', periodLabel);
+  _pdfWatermark(doc);
   y += 6;
 
   // Investor info
@@ -9174,8 +9348,8 @@ function downloadStatement() {
   // Summary stats
   const stats = [
     ['Portfolio Value', Utils.rand(portfolioVal), [255, 155, 12]],
-    ['Wallet Balance',  Utils.rand(walletBal),    [47, 140, 155]],
-    ['Total Invested',  Utils.rand(totalInvested), [26, 34, 53]],
+    ['Wallet Balance',  Utils.rand(walletBal),    [0, 150, 255]],
+    ['Total Invested',  Utils.rand(totalInvested), [48, 48, 48]],
     ['Returns Earned',  Utils.rand(totalReturns),  [34, 197, 94]],
   ];
   const boxW = (W - 28 - 9) / 4;
@@ -9215,7 +9389,7 @@ function downloadStatement() {
         body: tableBody,
         startY: y,
         margin: { left: 14, right: 14 },
-        headStyles: { fillColor: [26, 34, 53], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+        headStyles: { fillColor: [48, 48, 48], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
         bodyStyles: { fontSize: 8, textColor: [26, 26, 26] },
         alternateRowStyles: { fillColor: [247, 248, 250] },
         columnStyles: {
@@ -9411,7 +9585,7 @@ async function _loadStatementArchive() {
     const taxYear = new Date().getMonth() >= 2 ? currentYear : currentYear - 1; // Feb cutoff
     const taxSection = `
       <div style="margin-bottom:14px;padding:12px;background:rgba(255,155,12,0.06);border-radius:8px;border:1px solid rgba(255,155,12,0.2)">
-        <div style="font-size:0.84rem;font-weight:700;margin-bottom:6px"><i class="fa-solid fa-file-shield" style="color:var(--gold);margin-right:6px"></i>Tax Certificates</div>
+        <div style="font-size:0.84rem;font-weight:700;margin-bottom:6px"><i class="fa-solid fa-file-shield" style="color:var(--gold);margin-right:6px"></i>Investment Income Certificate</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">Download your annual IT3(b)-style investment income summary for SARS submission.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${[taxYear, taxYear-1, taxYear-2].map(y => `<button class="btn btn--ghost btn--sm" onclick="_downloadTaxCert(${y})" style="font-size:0.75rem"><i class="fa-solid fa-download"></i> ${y}/${y+1}</button>`).join('')}
@@ -9727,9 +9901,21 @@ function openRecurringModal() {
     toggle.checked = !!(inv && inv.recurring_enabled);
     updateRecurringToggleStyle();
   }
-  if (amtEl && inv?.recurring_amount)         amtEl.value   = inv.recurring_amount;
-  if (prodSel && inv?.recurring_product_type) prodSel.value = inv.recurring_product_type;
-  if (daySel  && inv?.recurring_day)          daySel.value  = inv.recurring_day;
+  if (amtEl && inv?.recurring_amount) amtEl.value = inv.recurring_amount;
+  if (daySel && inv?.recurring_day)   daySel.value = inv.recurring_day;
+
+  // Populate product types from pools that currently have an open pool
+  if (prodSel) {
+    const openProductTypes = [...new Set(
+      (PORTAL.pools || [])
+        .filter(p => p.status === 'open')
+        .map(p => p.product_type)
+        .filter(Boolean)
+    )];
+    prodSel.innerHTML = '<option value="">Select a product…</option>' +
+      openProductTypes.map(pt => `<option value="${pt}">${Utils.productInfo(pt).label || pt}</option>`).join('');
+    if (inv?.recurring_product_type) prodSel.value = inv.recurring_product_type;
+  }
 
   Modal.open('recurringModal');
 }
@@ -9749,6 +9935,22 @@ async function saveRecurringInvestment() {
     if (!amount || amount < 100) { Toast.error('Please enter a monthly amount of at least R100'); return; }
     if (!productType) { Toast.error('Please select a product type'); return; }
     if (!day || day < 1 || day > 28) { Toast.error('Please select a valid day (1–28)'); return; }
+
+    // Validate against the open pool's minimum investment
+    const openPool = (PORTAL.pools || []).find(p => p.status === 'open' && p.product_type === productType);
+    if (openPool) {
+      const minInvest = parseFloat(openPool.min_investment) || 0;
+      if (amount < minInvest) {
+        Toast.error(`Minimum investment for this product is ${Utils.rand(minInvest)}`);
+        return;
+      }
+      const platformFee = Math.round(amount * 0.01 * 100) / 100;
+      const totalRequired = amount + platformFee;
+      const walletBal = parseFloat(PORTAL.investor?.wallet_balance) || 0;
+      if (walletBal < totalRequired) {
+        Toast.warn(`Note: your wallet (${Utils.rand(walletBal)}) will need at least ${Utils.rand(totalRequired)} on the chosen day (${Utils.rand(amount)} + ${Utils.rand(platformFee)} platform fee).`);
+      }
+    }
   }
 
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
@@ -10209,30 +10411,34 @@ function _renderAnalyticsTimeline() {
   if (!tbody) return;
   const invs = [...PORTAL.investments].sort((a, b) => new Date(b.start_date || b.created_at) - new Date(a.start_date || a.created_at));
   if (!invs.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:24px">No investments yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:24px">No investments yet.</td></tr>';
     return;
   }
   const statusBadge = s => {
-    const map = { active:'#22c55e', paid_out:'#656565', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316' };
+    const map = { active:'#22c55e', paid_out:'#656565', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316', open:'#22c55e', closed:'#656565' };
     return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${String(s||'').replace('_',' ').toUpperCase()}</span>`;
   };
   const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';
   tbody.innerHTML = invs.slice(0, 30).map(i => {
+    // Connect the row to its pool so name/dates/status reflect the actual pool.
+    const pool    = (PORTAL.pools || []).find(p => p.id === i.pool_id) || {};
     const capital = parseFloat(i.amount) || 0;
     const ret     = parseFloat(i.net_return) || parseFloat(i.expected_return) || 0;
-    const rate    = parseFloat(i.interest_rate) || parseFloat(i.rate) || 0;
-    const start   = new Date(i.start_date || i.created_at);
-    const end     = new Date(i.end_date || i.maturity_date);
+    const startVal = pool.start_date || i.start_date || i.created_at;
+    const endVal   = pool.end_date   || i.end_date   || i.maturity_date;
+    const start   = new Date(startVal);
+    const end     = new Date(endVal);
     const days    = (!isNaN(start) && !isNaN(end)) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '—');
+    // Once the pool has matured, every investment in it reads as matured.
+    const status  = (pool.status === 'matured' || pool.status === 'paid_out') ? 'matured' : (i.status || pool.status);
     return `<tr>
-      <td style="font-weight:600">${_esc(i.pool_name || 'Pool')}</td>
+      <td style="font-weight:600">${_esc(pool.name || i.pool_name || 'Pool')}</td>
       <td>R ${capital.toLocaleString('en-ZA')}</td>
-      <td style="color:#22c55e;font-weight:600">+R ${ret.toLocaleString('en-ZA', {maximumFractionDigits:2})}</td>
-      <td>${rate > 0 ? rate.toFixed(1) + '% p.a.' : '—'}</td>
-      <td>${fmt(i.start_date || i.created_at)}</td>
-      <td>${fmt(i.end_date || i.maturity_date)}</td>
+      <td style="color:#22c55e;font-weight:600">${Utils.pct(pool.annual_rate || i.annual_rate || i.expected_return_rate || 0)} p.a.</td>
+      <td>${fmt(startVal)}</td>
+      <td>${fmt(endVal)}</td>
       <td>${typeof days === 'number' ? days + ' d' : days}</td>
-      <td>${statusBadge(i.status)}</td>
+      <td>${statusBadge(status)}</td>
     </tr>`;
   }).join('');
 }
@@ -10249,17 +10455,20 @@ function updateWealthProjection() {
 }
 
 function exportAnalyticsCSV() {
-  const rows = [['Pool', 'Invested (R)', 'Return (R)', 'Rate (%)', 'Start', 'End', 'Days', 'Status']];
+  const rows = [['Pool', 'Invested (R)', 'Target Return (% p.a.)', 'Start', 'End', 'Days', 'Status']];
   PORTAL.investments.forEach(i => {
+    const pool = (PORTAL.pools || []).find(p => p.id === i.pool_id) || {};
     const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA') : '';
-    const start = new Date(i.start_date || i.created_at);
-    const end   = new Date(i.end_date   || i.maturity_date);
+    const startVal = pool.start_date || i.start_date || i.created_at;
+    const endVal   = pool.end_date   || i.end_date   || i.maturity_date;
+    const start = new Date(startVal);
+    const end   = new Date(endVal);
     const days  = (!isNaN(start) && !isNaN(end)) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '');
+    const status = (pool.status === 'matured' || pool.status === 'paid_out') ? 'matured' : (i.status || pool.status || '');
     rows.push([
-      i.pool_name || '', parseFloat(i.amount) || 0,
-      parseFloat(i.net_return) || parseFloat(i.expected_return) || 0,
-      parseFloat(i.interest_rate) || '', fmt(i.start_date || i.created_at),
-      fmt(i.end_date || i.maturity_date), days, i.status || '',
+      pool.name || i.pool_name || '', parseFloat(i.amount) || 0,
+      Utils.pct(pool.annual_rate || i.annual_rate || i.expected_return_rate || 0),
+      fmt(startVal), fmt(endVal), days, status,
     ]);
   });
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');

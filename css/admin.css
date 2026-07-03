@@ -3,13 +3,13 @@
    ═══════════════════════════════════════════════ */
 
 :root {
-  --black: #060a0f;
-  --dark-1: #0d1117;
-  --dark-2: #111720;
-  --dark-3: #161d2a;
-  --dark-4: #1c2535;
-  --dark-5: #243040;
-  --dark-6: #2d3a50;
+  --black: #101010;
+  --dark-1: #141414;
+  --dark-2: #1c1c1c;
+  --dark-3: #242424;
+  --dark-4: #2e2e2e;
+  --dark-5: #383838;
+  --dark-6: #404040;
   --gold: #D4AF37;
   --gold-light: #f0d060;
   --gold-dark: #b8961e;
@@ -19,7 +19,7 @@
   --red: #ef4444;
   --red-bg: rgba(239,68,68,0.1);
   --blue: #656565;
-  --blue-bg: rgba(59,130,246,0.1);
+  --blue-bg: rgba(101,101,101,0.1);
   --orange: #f97316;
   --orange-bg: rgba(249,115,22,0.1);
   --purple: #a855f7;
@@ -494,7 +494,7 @@ img { max-width: 100%; display: block; }
 .badge--green { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
 .badge--red { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
 .badge--gold { background: var(--gold-glow); color: var(--gold); border: 1px solid var(--border-gold); }
-.badge--blue { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(59,130,246,0.2); }
+.badge--blue { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(101,101,101,0.2); }
 .badge--orange { background: var(--orange-bg); color: var(--orange); border: 1px solid rgba(249,115,22,0.2); }
 .badge--purple { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(168,85,247,0.2); }
 .badge--gray { background: var(--surface); color: var(--text-muted); border: 1px solid var(--border); }
@@ -582,7 +582,7 @@ img { max-width: 100%; display: block; }
 .avatar--md { width: 40px; height: 40px; font-size: 0.85rem; }
 .avatar--lg { width: 52px; height: 52px; font-size: 1rem; }
 .avatar--gold { background: linear-gradient(135deg, var(--gold-dark), var(--gold)); color: #1a1200; }
-.avatar--blue { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(59,130,246,0.3); }
+.avatar--blue { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(101,101,101,0.3); }
 .avatar--green { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
 
 /* ─── TABS ─── */
@@ -599,7 +599,7 @@ img { max-width: 100%; display: block; }
 .toast--success i { color: var(--green); }
 .toast--error { border-color: rgba(239,68,68,0.3); }
 .toast--error i { color: var(--red); }
-.toast--info { border-color: rgba(59,130,246,0.3); }
+.toast--info { border-color: rgba(101,101,101,0.3); }
 .toast--info i { color: var(--blue); }
 .toast__msg { flex: 1; color: var(--text); }
 

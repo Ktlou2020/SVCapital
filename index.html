@@ -350,10 +350,21 @@
         <p class="section-sub">Choose from South Africa's most innovative asset-backed investment products. Every rand you invest is tied to a tangible, productive asset.</p>
       </div>
 
+      <div class="product-risk-filter" data-reveal="up">
+        <span class="prf-label">Filter by risk</span>
+        <div class="prf-pills">
+          <button class="prf-pill active" data-risk="all" onclick="filterProductsByRisk('all', this)">All</button>
+          <button class="prf-pill" data-risk="conservative" onclick="filterProductsByRisk('conservative', this)">Conservative</button>
+          <button class="prf-pill" data-risk="moderate" onclick="filterProductsByRisk('moderate', this)">Moderate</button>
+          <button class="prf-pill" data-risk="aggressive" onclick="filterProductsByRisk('aggressive', this)">Aggressive</button>
+        </div>
+        <div class="prf-empty" id="prfEmpty" style="display:none">No products in this risk band right now.</div>
+      </div>
+
       <div class="products-grid">
 
         <!-- Cattle Investment -->
-        <article class="product-card product-card--cattle" data-product="cattle" data-reveal="up" data-reveal-delay="100">
+        <article class="product-card product-card--cattle" data-product="cattle" data-risk="moderate" data-reveal="up" data-reveal-delay="100">
           <div class="product-card__bg"></div>
           <div class="product-card__badge-row">
             <span class="risk-badge risk-badge--moderate">Moderate Risk</span>
@@ -396,7 +407,7 @@
         </article>
 
         <!-- Solar 7-Year -->
-        <article class="product-card product-card--solar product-card--featured" data-product="solar" data-reveal="up" data-reveal-delay="200">
+        <article class="product-card product-card--solar product-card--featured" data-product="solar" data-risk="moderate" data-reveal="up" data-reveal-delay="200">
           <div class="product-card__bg"></div>
           <div class="product-card__featured-ribbon">Best Returns</div>
           <div class="product-card__badge-row">
@@ -443,7 +454,7 @@
         </article>
 
         <!-- Short-Term -->
-        <article class="product-card product-card--short" data-product="short" data-reveal="up" data-reveal-delay="300">
+        <article class="product-card product-card--short" data-product="short" data-risk="aggressive" data-reveal="up" data-reveal-delay="300">
           <div class="product-card__bg"></div>
           <div class="product-card__badge-row">
             <span class="risk-badge risk-badge--aggressive">Aggressive</span>
@@ -486,7 +497,7 @@
         </article>
 
         <!-- Delivery Bike -->
-        <article class="product-card product-card--delivery" data-product="delivery" data-reveal="up" data-reveal-delay="350">
+        <article class="product-card product-card--delivery" data-product="delivery" data-risk="aggressive" data-reveal="up" data-reveal-delay="350">
           <div class="product-card__bg"></div>
           <div class="product-card__badge-row">
             <span class="risk-badge risk-badge--aggressive">Aggressive</span>
@@ -651,7 +662,7 @@
               <i class="fa-solid fa-cow"></i> Cattle
             </button>
             <button class="calc-tab" data-calc="solar7">
-              <i class="fa-solid fa-solar-panel"></i> Solar 7yr
+              <i class="fa-solid fa-solar-panel"></i> Solar
             </button>
             <button class="calc-tab" data-calc="short">
               <i class="fa-solid fa-bolt"></i> Short-Term
@@ -659,6 +670,14 @@
             <button class="calc-tab" data-calc="delivery">
               <i class="fa-solid fa-motorcycle"></i> Delivery
             </button>
+          </div>
+
+          <!-- Solar term selector (shown when the Solar tab is active) -->
+          <div class="calc-solar-terms" id="calcSolarTerms" style="display:none">
+            <span class="calc-solar-terms__label">Choose term</span>
+            <button class="calc-term-btn" data-solar="solar5">5 Years</button>
+            <button class="calc-term-btn" data-solar="solar6">6 Years</button>
+            <button class="calc-term-btn active" data-solar="solar7">7 Years</button>
           </div>
 
           <div class="calc-input-group">
@@ -776,7 +795,7 @@
             <div class="step__number">02</div>
             <div class="step__content">
               <h3>Choose Your Investment</h3>
-              <p>Browse live investment pools. Each listing shows real-time pool progress, expected returns, term length, and full product details. Select the product that fits your goals.</p>
+              <p>Browse live investment pools. Each listing shows real-time pool progress, target returns, term length, and full product details. Select the product that fits your goals.</p>
               <div class="step__time">📊 Real-time pool tracking</div>
             </div>
           </div>

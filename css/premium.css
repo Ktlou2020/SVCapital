@@ -760,3 +760,143 @@ body {
   flex-shrink: 0;
   margin: 0 4px;
 }
+
+/* ─── Public products page: risk filter ──────────────────────────────── */
+.product-risk-filter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin: 0 auto 40px;
+  text-align: center;
+}
+.product-risk-filter .prf-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--gold, #D4AF37);
+}
+.product-risk-filter .prf-pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+.product-risk-filter .prf-pill {
+  border: 1.5px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.75);
+  border-radius: 100px;
+  padding: 10px 22px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.18s ease;
+}
+.product-risk-filter .prf-pill:hover {
+  border-color: rgba(249,115,22,0.5);
+  color: #fff;
+  transform: translateY(-1px);
+}
+.product-risk-filter .prf-pill.active {
+  background: linear-gradient(135deg, #FF8215, #ff5229);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(255,82,41,0.35);
+}
+.product-risk-filter .prf-empty {
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.55);
+  padding: 8px 0;
+}
+/* On light-themed variants, keep pills readable */
+body.light .product-risk-filter .prf-pill,
+.products--light .prf-pill {
+  border-color: rgba(0,0,0,0.12);
+  background: #fff;
+  color: #475569;
+}
+
+/* Products section is light (#fff) — pill colours tuned for light bg */
+.product-risk-filter .prf-label { color: #ff5229; }
+.product-risk-filter .prf-pill {
+  border: 1.5px solid rgba(0,0,0,0.12);
+  background: #fff;
+  color: #475569;
+}
+.product-risk-filter .prf-pill:hover {
+  border-color: rgba(255,82,41,0.5);
+  color: #0f172a;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+.product-risk-filter .prf-pill.active {
+  background: linear-gradient(135deg, #FF8215, #ff5229);
+  border-color: transparent;
+  color: #fff;
+}
+.product-risk-filter .prf-empty { color: #64748b; }
+
+/* ─── Calculator: Solar term selector (5 / 6 / 7 years) ──────────────── */
+.calc-solar-terms {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+  animation: pageFadeIn 0.25s ease-out;
+}
+.calc-solar-terms__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.5);
+  margin-right: 4px;
+}
+.calc-term-btn {
+  border: 1.5px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.8);
+  border-radius: 100px;
+  padding: 8px 18px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.18s ease;
+}
+.calc-term-btn:hover {
+  border-color: rgba(255,155,12,0.5);
+  color: #fff;
+}
+.calc-term-btn.active {
+  background: linear-gradient(135deg, #ff9b0c, #ff5229);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(255,82,41,0.32);
+}
+
+/* Trust / Regulatory Compliance sits on a dark background — force light text
+   so the heading and feature labels aren't invisible (dark-on-dark). */
+.trust-section .section-title { color: #ffffff !important; }
+.trust-section .compliance-item strong { color: #ffffff; }
+
+/* ── Mobile-browser optimisations for the public site ── */
+@media (max-width: 600px) {
+  /* Comparison table: tighten so it reads without awkward wide scroll,
+     keep horizontal scroll with momentum as a fallback. */
+  .compare-table-wrap {
+    -webkit-overflow-scrolling: touch;
+    border-radius: 12px;
+  }
+  .compare-table th, .compare-table td { padding: 10px 10px; font-size: 0.78rem; }
+  .compare-table th { font-size: 0.66rem; letter-spacing: 0.03em; }
+  .compare-table td:first-child, .compare-table th:first-child { position: sticky; left: 0; background: #fff; z-index: 1; }
+  .compare-table th:first-child { background: #f7f8fa; }
+
+  /* Comfortable tap targets & no accidental horizontal scroll */
+  .btn, .nav-btn { min-height: 44px; }
+  .trust-main .section-title { font-size: 1.7rem !important; line-height: 1.15; }
+}

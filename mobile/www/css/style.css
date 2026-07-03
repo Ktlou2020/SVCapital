@@ -5,12 +5,12 @@
 
 /* ─── CSS Custom Properties ─── */
 :root {
-  --black: #080b10;
-  --dark-1: #0d1117;
-  --dark-2: #111720;
-  --dark-3: #161d2a;
-  --dark-4: #1c2535;
-  --dark-5: #243040;
+  --black: #101010;
+  --dark-1: #141414;
+  --dark-2: #1c1c1c;
+  --dark-3: #242424;
+  --dark-4: #2e2e2e;
+  --dark-5: #383838;
   --gold: #D4AF37;
   --gold-light: #f0d060;
   --gold-dark: #b8961e;
@@ -1262,7 +1262,7 @@ section { position: relative; padding: 100px 0; }
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-dim);
+  color: rgba(255,255,255,0.75);
   margin-bottom: 6px;
 }
 

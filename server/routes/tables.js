@@ -47,7 +47,7 @@ async function _sendPush(investorId, payload) {
 
 /* ─── Input Validation ─── */
 const NUMERIC_FIELDS = new Set(['amount','wallet_balance','total_invested','total_returns','annual_rate','max_capacity','current_invested','recurring_amount','xp_points']);
-const STATUS_FIELDS  = { status: ['active','inactive','suspended','pending','pending_fica','fica_submitted','matured','paid_out','cancelled','rejected','open','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor','submitted','approved','expired'], fica_status: ['pending','approved','rejected','not_started','submitted'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','payout_custom','reinvest','pending'] };
+const STATUS_FIELDS  = { status: ['active','inactive','suspended','pending','pending_fica','fica_submitted','matured','paid_out','cancelled','rejected','open','filling','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor','submitted','approved','expired'], fica_status: ['pending','approved','rejected','not_started','submitted'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','payout_custom','reinvest','switch_product','custom_switch','pending'] };
 
 function validateBody(table, body, isCreate) {
   const errors = [];
@@ -422,6 +422,16 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
     const rows  = stripSensitive(table, dataResult.rows, req.user?.empId);
     const total = parseInt(countResult.rows[0].count);
 
+    // Normalise legacy return-transaction wording: "Monthly interest" → "Return Earned"
+    // (covers existing rows for all platforms; the interest cron already writes the new wording).
+    if (table === 'transactions') {
+      for (const r of rows) {
+        if (r && typeof r.description === 'string' && r.description.indexOf('Monthly interest') !== -1) {
+          r.description = r.description.replace(/Monthly interest/g, 'Return Earned');
+        }
+      }
+    }
+
     res.json({ data: rows, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (err) {
     console.error(`GET /${req.params.table}:`, err.message);
@@ -455,6 +465,13 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
     if (!['admin','director','fund_manager'].includes(req.user.role))
       return res.status(403).json({ error: 'Forbidden.' });
 
+    const [poolRes, evaRes] = await Promise.all([
+      pool.query('SELECT management_fee_pct, operational_fee_pct FROM investment_pools WHERE id = $1', [req.params.id]),
+      pool.query("SELECT value FROM platform_settings WHERE key = 'eva_rate'"),
+    ]);
+    const mgmtFeePct = parseFloat(poolRes.rows[0]?.management_fee_pct) || 0;
+    const evaRate    = parseFloat(evaRes.rows[0]?.value) || 0.15;
+
     const { rows } = await pool.query(`
       SELECT
         inv.id            AS investment_id,
@@ -479,11 +496,34 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
       ORDER BY inv.start_date DESC NULLS LAST
     `, [req.params.id]);
 
+    // Augment each row with fee breakdown
+    const PLATFORM_FEE_PCT = 0.01;
+    rows.forEach(r => {
+      const amt         = parseFloat(r.amount) || 0;
+      const platformFee = Math.round(amt * PLATFORM_FEE_PCT * 100) / 100;
+      const upfrontFee  = Math.round(amt * mgmtFeePct * 100) / 100;
+      // EVA is evaRate% of the upfront fee net of 15% VAT — taken from the upfront fee, not additional
+      const evaCalc     = Math.round((upfrontFee / 1.15) * evaRate * 100) / 100;
+      const totalFees   = Math.round((platformFee + upfrontFee) * 100) / 100;
+      const netAmount   = Math.round((amt - upfrontFee) * 100) / 100;
+      r.platform_fee    = platformFee;
+      r.upfront_fee     = upfrontFee;
+      r.eva_contribution = evaCalc;
+      r.total_fees      = totalFees;
+      r.net_amount      = netAmount;
+    });
+
     const summary = {
-      total_invested:   rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0),
-      investor_count:   new Set(rows.map(r => r.investor_id)).size,
-      active_count:     rows.filter(r => r.investment_status === 'active').length,
-      matured_count:    rows.filter(r => r.investment_status === 'matured').length,
+      total_invested:       rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0),
+      investor_count:       new Set(rows.map(r => r.investor_id)).size,
+      active_count:         rows.filter(r => r.investment_status === 'active').length,
+      matured_count:        rows.filter(r => r.investment_status === 'matured').length,
+      total_platform_fees:  rows.reduce((s, r) => s + (r.platform_fee || 0), 0),
+      total_upfront_fees:   rows.reduce((s, r) => s + (r.upfront_fee || 0), 0),
+      total_eva:            rows.reduce((s, r) => s + (r.eva_contribution || 0), 0),
+      total_fees:           rows.reduce((s, r) => s + (r.total_fees || 0), 0),
+      total_net_invested:   rows.reduce((s, r) => s + (r.net_amount || 0), 0),
+      mgmt_fee_pct:         mgmtFeePct,
     };
 
     res.json({ investors: rows, summary });
@@ -836,15 +876,16 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
 
           // EVA calculation — only on new funds (not reinvestments)
           if (!clean.is_reinvestment && clean.pool_id) {
-            const poolRes = await pool.query(
-              'SELECT management_fee_pct FROM investment_pools WHERE id = $1',
-              [clean.pool_id]
-            );
+            const [poolRes, evaRes] = await Promise.all([
+              pool.query('SELECT management_fee_pct FROM investment_pools WHERE id = $1', [clean.pool_id]),
+              pool.query("SELECT value FROM platform_settings WHERE key = 'eva_rate'"),
+            ]);
             const mgtFeePct = parseFloat(poolRes.rows[0]?.management_fee_pct) || 0;
+            const evaRate   = parseFloat(evaRes.rows[0]?.value) || 0.15;
             if (mgtFeePct > 0) {
               const grossMgtFee = investAmt * mgtFeePct;
               const netMgtFee   = grossMgtFee / 1.15;   // net of 15% South African VAT
-              const evaAmount   = Math.round(netMgtFee * 0.20 * 100) / 100;
+              const evaAmount   = Math.round(netMgtFee * evaRate * 100) / 100;
               await pool.query(
                 'UPDATE investments SET eva_amount = $1 WHERE id = $2',
                 [evaAmount, clean.id]

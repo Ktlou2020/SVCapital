@@ -9,11 +9,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>SV Capital — Investor Portal</title>
   <meta name="theme-color" content="#FF9B0C" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="SV Capital" />
-  <link rel="manifest" href="manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
@@ -55,28 +50,6 @@
 </head>
 <body>
 
-<!-- PWA Install Banner -->
-<div id="pwaInstallBanner" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#1a2332;border:1px solid rgba(255,155,12,0.4);border-radius:14px;padding:14px 20px;align-items:center;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,0.4);max-width:420px;width:calc(100% - 40px)">
-  <img src="../assets/logo-192.png" width="36" height="36" style="border-radius:8px;flex-shrink:0">
-  <div style="flex:1;min-width:0">
-    <div style="color:#fff;font-weight:700;font-size:0.88rem">Add SV Capital to your home screen</div>
-    <div style="color:rgba(255,255,255,0.55);font-size:0.75rem;margin-top:2px">Get instant notifications and faster access</div>
-  </div>
-  <button onclick="pwaInstall()" style="background:#ff9b0c;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:0.8rem;cursor:pointer;white-space:nowrap;flex-shrink:0">Install</button>
-  <button onclick="_dismissPwaPrompt()" style="background:transparent;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:1.1rem;line-height:1;padding:4px;flex-shrink:0">&#x2715;</button>
-</div>
-
-<!-- iOS PWA Install Banner (Safari "Add to Home Screen") -->
-<div id="iosPwaBanner" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#1a2332;border:1px solid rgba(255,155,12,0.4);border-radius:14px;padding:14px 18px;align-items:flex-start;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);max-width:360px;width:calc(100% - 40px)">
-  <img src="../assets/logo-192.png" width="36" height="36" style="border-radius:8px;flex-shrink:0;margin-top:2px">
-  <div style="flex:1;min-width:0">
-    <div style="color:#fff;font-weight:700;font-size:0.88rem">Add SV Capital to your home screen</div>
-    <div style="color:rgba(255,255,255,0.7);font-size:0.78rem;margin-top:5px;line-height:1.5">
-      Tap <span style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:4px;padding:1px 6px;font-size:0.8rem">&#x2191; Share</span> at the bottom of your browser, then tap <strong style="color:#ff9b0c">Add to Home Screen</strong>.
-    </div>
-  </div>
-  <button onclick="_dismissIosBanner()" style="background:transparent;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:1.1rem;line-height:1;padding:4px;flex-shrink:0">&#x2715;</button>
-</div>
 
 <div class="app-layout">
 
@@ -84,7 +57,7 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar__brand">
       <a href="../index.html" class="sv-portal-logo" title="SV Capital — Home">
-        <img src="../assets/full-colour-logo-horizontal-white-text.png" alt="SV Capital" style="display:block;height:44px;width:auto">
+        <img src="../assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="display:block;height:44px;width:auto">
         <div class="brand-text">
           <span class="brand-role">Investor Portal</span>
         </div>
@@ -94,13 +67,13 @@
     <nav class="sidebar__nav">
       <div class="nav-section-label">My Account</div>
       <button class="nav-item active" data-view="overview" onclick="navigate('overview', this)">
-        <i class="fa-solid fa-grid-2"></i> Portfolio Overview
+        <i class="fa-solid fa-table-cells-large"></i> Portfolio Overview
       </button>
       <button class="nav-item" data-view="investments" onclick="navigate('investments', this)">
         <i class="fa-solid fa-chart-line"></i> My Investments
       </button>
       <button class="nav-item" data-view="analytics" onclick="navigate('analytics', this)">
-        <i class="fa-solid fa-chart-mixed"></i> Analytics
+        <i class="fa-solid fa-chart-column"></i> Analytics
       </button>
       <button class="nav-item" data-view="transactions" onclick="navigate('transactions', this)">
         <i class="fa-solid fa-arrows-rotate"></i> Transactions
@@ -460,7 +433,7 @@
       <div class="view" id="view-investments">
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
           <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div><div class="stat-card__value" id="mi-capital">—</div><div class="stat-card__label">Capital Deployed</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="mi-expected">—</div><div class="stat-card__label">Expected Returns</div></div>
+          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="mi-expected">—</div><div class="stat-card__label">Target Returns</div></div>
           <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-double"></i></div></div><div class="stat-card__value" id="mi-earned">—</div><div class="stat-card__label">Returns Earned</div></div>
           <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-layer-group"></i></div></div><div class="stat-card__value" id="mi-count">—</div><div class="stat-card__label">Total Investments</div></div>
         </div>
@@ -468,11 +441,9 @@
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px">
           <div class="tab-bar" style="margin-bottom:0">
             <button class="tab-btn active" onclick="filterMyInvestments('all', this)">All</button>
-            <button class="tab-btn" onclick="filterMyInvestments('active', this)">Active</button>
-            <button class="tab-btn" onclick="filterMyInvestments('paid_out', this)">Paid Out</button>
-            <button class="tab-btn" onclick="filterMyInvestments('matured', this)">Matured</button>
+            <button class="tab-btn" onclick="filterMyInvestments('active', this)">Active</button>            <button class="tab-btn" onclick="filterMyInvestments('matured', this)">Matured</button>
           </div>
-          <select class="form-select" id="myInvProductFilter" style="min-width:180px;height:34px;font-size:0.8rem" onchange="renderMyInvestmentCards()">
+          <select class="form-select form-select--sm" id="myInvProductFilter" style="width:auto;min-width:150px;height:34px;font-size:0.8rem;padding:0 28px 0 12px" onchange="renderMyInvestmentCards()">
             <option value="">All Products</option>
           </select>
           <button class="btn btn--secondary btn--sm" style="margin-left:auto;white-space:nowrap" onclick="navigate('statement', document.querySelector('[data-view=statement]'))">
@@ -524,9 +495,9 @@
               </div>
               <div class="panel__body" style="overflow-x:auto">
                 <table class="data-table">
-                  <thead><tr><th>Pool</th><th>Invested</th><th>Return</th><th>Rate</th><th>Start</th><th>End / Maturity</th><th>Duration</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Pool</th><th>Invested</th><th>Target Return</th><th>Start</th><th>End / Maturity</th><th>Duration</th><th>Status</th></tr></thead>
                   <tbody id="analyticsTimelineBody">
-                    <tr><td colspan="8" class="text-center text-muted" style="padding:24px">Loading…</td></tr>
+                    <tr><td colspan="7" class="text-center text-muted" style="padding:24px">Loading…</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -563,7 +534,7 @@
                 </div>
                 <div id="wpResult" style="background:rgba(255,155,12,0.08);border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:14px">
                   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                    <span style="font-size:0.75rem;color:var(--text-muted)">Expected Return</span>
+                    <span style="font-size:0.75rem;color:var(--text-muted)">Target Return</span>
                     <span style="font-size:1.05rem;font-weight:800;color:#22c55e" id="wpReturn">—</span>
                   </div>
                   <div style="display:flex;justify-content:space-between;align-items:center">
@@ -739,11 +710,13 @@
             <p class="section-banner__sub">Choose a product to see its details, factsheets and open pools — then invest. All investments are FSCA-regulated via SmartVest Financial Services (FSP 52449).</p>
           </div>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <div class="tab-bar" style="align-self:center">
+            <div class="tab-bar" id="marketRiskTabBar" style="align-self:center">
+              <span style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-right:4px;align-self:center">Risk</span>
               <button class="tab-btn active" onclick="filterMarket('all', this)">All</button>
-              <button class="tab-btn" onclick="filterMarket('cattle', this)">Cattle</button>
-              <button class="tab-btn" onclick="filterMarket('solar', this)">Solar</button>
-              <button class="tab-btn" onclick="filterMarket('short_term', this)">Short-Term</button>
+              <button class="tab-btn" onclick="filterMarket('Low', this)">Low</button>
+              <button class="tab-btn" onclick="filterMarket('Medium', this)">Medium</button>
+              <button class="tab-btn" onclick="filterMarket('Medium-High', this)">Medium-High</button>
+              <button class="tab-btn" onclick="filterMarket('High', this)">High</button>
             </div>
             <button class="btn btn--sm" onclick="openCalcModal()" style="white-space:nowrap;background:linear-gradient(135deg,#FF8215,#FF9B0C);color:#fff;border:none;font-weight:700">
               <i class="fa-solid fa-calculator"></i> Calculate Returns
@@ -1449,10 +1422,6 @@
             <div class="rewards-stat__label">Quests Completed</div>
           </div>
           <div class="rewards-stat">
-            <div class="rewards-stat__val" id="rwStatRef" style="color:#ff9b0c">R0</div>
-            <div class="rewards-stat__label">Referral Bonuses</div>
-          </div>
-          <div class="rewards-stat">
             <div class="rewards-stat__val" id="rwStatTotal" style="color:#D4AF37">0 / 7</div>
             <div class="rewards-stat__label">Levels Reached</div>
           </div>
@@ -1628,7 +1597,7 @@
                 <div class="gift-card__bow"><i class="fa-solid fa-gift"></i></div>
               </div>
               <div class="gift-card__logo">
-                <img src="../assets/full-colour-logo-horizontal-white-text.png" alt="SV Capital" style="width:32px;height:32px;object-fit:contain;border-radius:8px">
+                <img src="../assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="width:32px;height:32px;object-fit:contain;border-radius:8px">
                 <span>SV Capital</span>
               </div>
               <div class="gift-card__amount" id="previewAmount">R—</div>
@@ -1733,10 +1702,10 @@
 
       <div style="text-align:center;margin-bottom:24px">
         <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:8px">Amount to deposit</div>
-        <div style="display:flex;align-items:center;justify-content:center;gap:4px">
-          <span style="font-size:2rem;font-weight:700;color:#9ca3af">R</span>
+        <div style="display:flex;align-items:baseline;justify-content:center;gap:6px">
+          <span style="font-size:2.8rem;font-weight:900;color:#f0f4ff;line-height:1">R</span>
           <input type="number" id="pmAmount" min="100" step="100" placeholder="0"
-            style="font-size:2.8rem;font-weight:900;color:#f0f4ff;background:transparent;border:none;outline:none;width:180px;text-align:left;font-family:inherit"
+            style="font-size:2.8rem;font-weight:900;color:#f0f4ff;background:transparent;border:none;outline:none;width:180px;text-align:left;font-family:inherit;line-height:1"
             oninput="updateAmountPreview()" />
         </div>
         <div id="pmAmountHint" style="font-size:0.75rem;color:#9ca3af;margin-top:4px">Minimum deposit: R100</div>
@@ -2622,8 +2591,8 @@
           <div style="font-size:0.75rem;color:var(--text-muted)">Toggle to activate automatic monthly investment</div>
         </div>
         <label style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0">
-          <input type="checkbox" id="recurringEnabledToggle" style="opacity:0;width:0;height:0">
-          <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s;display:block" id="recurringToggleSlider" onclick="document.getElementById('recurringEnabledToggle').checked=!document.getElementById('recurringEnabledToggle').checked;updateRecurringToggleStyle()"></span>
+          <input type="checkbox" id="recurringEnabledToggle" style="opacity:0;width:0;height:0" onchange="updateRecurringToggleStyle()">
+          <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s;display:block" id="recurringToggleSlider"></span>
         </label>
       </div>
       <div class="form-group">
@@ -2637,14 +2606,6 @@
         <label class="form-label">Product Type <span style="color:#ef4444">*</span></label>
         <select class="form-select" id="recurringProductSelect">
           <option value="">Select a product…</option>
-          <option value="cattle">Cattle Finance</option>
-          <option value="solar_7yr">Solar Energy — 7 Year</option>
-          <option value="solar_6yr">Solar Energy — 6 Year</option>
-          <option value="solar_5yr">Solar Energy — 5 Year</option>
-          <option value="short_term">Short Term Investment</option>
-          <option value="smme">SMME Finance</option>
-          <option value="delivery_bike">Delivery Bike</option>
-          <option value="other">Other</option>
         </select>
         <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">Funds will automatically be allocated to any open pool for this product type.</div>
       </div>
@@ -2696,9 +2657,9 @@
           <div style="font-size:0.75rem;color:var(--text-muted)">Charge your saved card on the selected day each month</div>
         </div>
         <label style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0">
-          <input type="checkbox" id="atuEnabled" style="opacity:0;width:0;height:0">
-          <span style="position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:26px;transition:.3s;display:block"
-                onclick="const cb=document.getElementById('atuEnabled');cb.checked=!cb.checked;this.style.background=cb.checked?'#ff9b0c':'#ccc'"></span>
+          <input type="checkbox" id="atuEnabled" style="opacity:0;width:0;height:0"
+                 onchange="const sp=this.parentElement.querySelector('span');if(sp)sp.style.background=this.checked?'#ff9b0c':'#ccc'">
+          <span style="position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:26px;transition:.3s;display:block"></span>
         </label>
       </div>
 
@@ -2864,17 +2825,25 @@
 </nav>
 
 <script src="../js/api.js?v=2"></script>
+<!-- Capacitor native bridge — detects Capacitor WebView and activates native features
+     (push notifications, haptics, status bar, back button, network monitoring) -->
+<script>
+if (window.Capacitor) {
+  window.__SVC_NATIVE__     = true;
+  window.__SVC_API_BASE__   = 'https://svcapital-production.up.railway.app/api/';
+}
+</script>
+<script src="/js/native.js"></script>
 <script src="js/portal.js?v=2"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
+// Service worker: web browsers only (not Capacitor). Handles web push notifications.
+// PWA offline caching removed — native app delivery is via Capacitor/FCM.
 if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {
-  // Web only. In the native app the assets are already local; a service worker
-  // there serves stale cached JS/CSS (cache-first) and races network vs cache,
-  // causing content to flash then disappear. native.js unregisters it instead.
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/portal/sw.js', { scope: '/portal/' })
-      .then(r => { window._swReg = r; console.log('[SW] Registered'); })
-      .catch(e => console.warn('[SW] Registration failed:', e));
+      .then(r => { window._swReg = r; })
+      .catch(() => {});
   });
 }
 </script>

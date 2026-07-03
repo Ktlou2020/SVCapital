@@ -363,7 +363,7 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investment_pools ADD COLUMN maturity_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Pool target type: 'amount' (raise to a goal amount) or 'date' (open until a closing date)
   BEGIN ALTER TABLE investment_pools ADD COLUMN target_type TEXT DEFAULT 'amount'; EXCEPTION WHEN duplicate_column THEN NULL; END;
-  -- EVA tracking on investments (20% of net-VAT management fee, new funds only)
+  -- EVA tracking on investments (% of net-VAT management fee configured via platform_settings eva_rate)
   BEGIN ALTER TABLE investments ADD COLUMN is_reinvestment BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN eva_amount NUMERIC(12,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- System-generated tickets (AML checks etc — hidden from client view)
@@ -1100,6 +1100,11 @@ async function autoSetup() {
         BEGIN ALTER TABLE investments ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE audit_events ADD COLUMN actor_role TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE audit_events ADD COLUMN actor_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE audit_events ADD COLUMN platform TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE investment_pools ADD COLUMN cycled_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        -- Merge legacy 'paid_out' status into 'matured' (pools + investments)
+        BEGIN UPDATE investment_pools SET status = 'matured' WHERE status = 'paid_out'; EXCEPTION WHEN others THEN NULL; END;
+        BEGIN UPDATE investments      SET status = 'matured' WHERE status = 'paid_out'; EXCEPTION WHEN others THEN NULL; END;
         BEGIN ALTER TABLE investors ADD COLUMN fica_status TEXT DEFAULT 'pending'; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE maturity_instructions ADD COLUMN investor_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE maturity_instructions ADD COLUMN pool_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -1108,6 +1113,8 @@ async function autoSetup() {
         BEGIN ALTER TABLE maturity_instructions ADD COLUMN submitted_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE maturity_instructions ADD COLUMN total_payout NUMERIC(18,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE maturity_instructions ADD COLUMN reinvest_pool_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE investments ADD COLUMN switch_product_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE investments ADD COLUMN custom_payout_amount NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
       END $$
     `);
     console.log('✅ Investor FICA + gamification columns ready.');
@@ -1203,7 +1210,8 @@ async function autoSetup() {
         ('min_investment',      '1000',                          'Global minimum investment (ZAR)'),
         ('kyc_required',        'true',                          'KYC required before investment'),
         ('maintenance_mode',    'false',                         'Maintenance mode'),
-        ('currency',            'ZAR',                           'Platform currency')
+        ('currency',            'ZAR',                           'Platform currency'),
+        ('eva_rate',            '0.15',                          'EVA rate — % of net-VAT upfront fee allocated to the referring employee')
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
     `);
 

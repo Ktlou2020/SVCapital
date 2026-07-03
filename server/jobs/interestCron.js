@@ -54,7 +54,7 @@ async function runInterestCrediting() {
       }
 
       const poolName    = investment.pool_name || investment.pool_id || 'your investment';
-      const description = `Monthly interest — ${poolName} (${yearMonth})`;
+      const description = `Return Earned — ${poolName} (${yearMonth})`;
 
       // 1. Record the return transaction
       await pool.query(

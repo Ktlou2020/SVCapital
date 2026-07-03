@@ -1840,7 +1840,7 @@ body {
 
 /* ─── SIDEBAR — Dark premium ─── */
 .sidebar {
-  background: linear-gradient(180deg, #0d1520 0%, #111d2c 100%) !important;
+  background: linear-gradient(180deg, #1a1a1a 0%, #141414 100%) !important;
   border-right: none !important;
   box-shadow: 4px 0 28px rgba(0,0,0,0.15) !important;
 }
@@ -2413,12 +2413,12 @@ body {
 body.dark-mode {
   background: #0d1117 !important;
 }
-body.dark-mode .main-content { background: #0d1117 !important; }
+body.dark-mode .main-content { background: #141414 !important; }
 body.dark-mode .sidebar {
-  background: linear-gradient(180deg, #060c14 0%, #090f1b 100%) !important;
+  background: linear-gradient(180deg, #1a1a1a 0%, #141414 100%) !important;
   box-shadow: 4px 0 28px rgba(0,0,0,0.35) !important;
 }
-body.dark-mode .topbar { background: #111827 !important; border-bottom-color: rgba(255,255,255,0.07) !important; }
+body.dark-mode .topbar { background: #1c1c1c !important; border-bottom-color: rgba(255,255,255,0.07) !important; }
 body.dark-mode .topbar__title { color: #f3f4f6 !important; }
 body.dark-mode .topbar__breadcrumb { color: #6b7280 !important; }
 body.dark-mode .topbar-btn { background: rgba(255,255,255,0.06) !important; border-color: rgba(255,255,255,0.09) !important; color: #9ca3af !important; }
@@ -2553,8 +2553,8 @@ h1, h2, h3, .section-banner__title, .modal__title, .welcome-name, .panel__title,
 .welcome-greeting { color: #ff9b0c !important; }
 
 /* ─── CI blue (#656565) for ghost/teal buttons ─── */
-.btn--ghost { color: #656565 !important; border-color: rgba(0,150,255,0.22) !important; }
-.btn--ghost:hover { background: rgba(0,150,255,0.06) !important; }
+.btn--ghost { color: #656565 !important; border-color: rgba(101,101,101,0.22) !important; }
+.btn--ghost:hover { background: rgba(101,101,101,0.06) !important; }
 
 /* ─── CI text colors ─── */
 .topbar__title { color: #303030 !important; }
@@ -2645,7 +2645,7 @@ body.dark-mode .tab-btn.active { color: #ff9b0c !important; }
 .sa-kyc-badge        { font-size:0.65rem;font-weight:700;padding:3px 8px;border-radius:12px;display:inline-flex;align-items:center;gap:4px; }
 .sa-kyc-badge--ok    { background:rgba(34,197,94,0.2);color:#22c55e; }
 .sa-kyc-badge--pending{ background:rgba(251,191,36,0.2);color:#fbbf24; }
-.sa-kyc-badge--missing{ background:rgba(239,68,68,0.18);color:#f87171; }
+.sa-kyc-badge--missing{ background:rgba(239,68,68,0.18);color:#fff; }
 
 .sa-card__body  { padding:16px 18px;border-top:1px solid rgba(255,255,255,0.07);color:#fff; }
 .sa-card__name  { font-size:1rem;font-weight:800;color:#fff;margin-bottom:12px;letter-spacing:-0.01em; }
@@ -2952,7 +2952,7 @@ body.dark-mode .nav-item           { color: #6b7280 !important; }
 body.dark-mode .nav-item.active    { color: #ff9b0c !important; background: rgba(255,155,12,0.1) !important; }
 body.dark-mode .nav-item:hover     { color: #e2e8f0 !important; background: rgba(255,255,255,0.05) !important; }
 
-body.dark-mode .sidebar           { background: #0d1117 !important; border-right-color: rgba(255,255,255,0.06) !important; }
+body.dark-mode .sidebar           { background: #141414 !important; border-right-color: rgba(255,255,255,0.06) !important; }
 body.dark-mode .sidebar-user__avatar { background: rgba(255,155,12,0.15) !important; color: #ff9b0c !important; }
 body.dark-mode .user-name   { color: #e2e8f0 !important; }
 body.dark-mode .user-role   { color: #6b7280 !important; }
@@ -3164,3 +3164,26 @@ body.dark-mode .fs-row__name { color:#f3f4f6 !important; }
 [class*="__value"],[class*="-value"],[class*="__val"],[class*="-val"] {
   font-family:'Poppins',system-ui,sans-serif !important;
 }
+
+/* ── Action Centre task cards: clickable hover/press feedback ── */
+.ac-task { transition: transform 0.12s ease, box-shadow 0.18s ease, border-color 0.18s ease; }
+.ac-task[role="button"] { cursor: pointer; }
+.ac-task[role="button"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.10);
+  border-color: rgba(255,130,21,0.35) !important;
+}
+.ac-task[role="button"]:active { transform: translateY(0) scale(0.995); }
+.ac-task[role="button"] .fa-chevron-right { transition: transform 0.18s ease; }
+.ac-task[role="button"]:hover .fa-chevron-right { transform: translateX(3px); }
+
+/* Learning Hub — completed module "already earned" note */
+.learn-earned-note {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 12px; border-radius: 12px;
+  background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.25);
+  color: #16a34a; font-weight: 700; font-size: 0.88rem;
+}
+
+/* Sub-account stat tiles: space between label and value */
+#view-subaccounts .sa-stat__label { margin-right: 6px; }

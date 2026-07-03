@@ -60,7 +60,7 @@
     /* ─── Left Panel (Brand) ─── */
     .login-left {
       flex: 1;
-      background: linear-gradient(145deg, #1a3a4a 0%, #0d2535 60%, #162030 100%);
+      background: linear-gradient(145deg, #2a2a2a 0%, #1a1a1a 60%, #222222 100%);
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -86,7 +86,7 @@
       position: absolute;
       bottom: -80px; left: -80px;
       width: 400px; height: 400px;
-      background: radial-gradient(circle, rgba(47,140,155,0.12) 0%, transparent 65%);
+      background: radial-gradient(circle, rgba(101,101,101,0.10) 0%, transparent 65%);
       border-radius: 50%;
       pointer-events: none;
     }
@@ -99,7 +99,7 @@
       opacity: 0.06;
     }
     .login-deco--1 { width: 280px; height: 280px; border: 2px solid rgba(255,155,12,1); top: 10%; right: 5%; }
-    .login-deco--2 { width: 160px; height: 160px; border: 2px solid rgba(47,140,155,1); bottom: 15%; right: 15%; opacity: 0.1; }
+    .login-deco--2 { width: 160px; height: 160px; border: 2px solid rgba(255,255,255,1); bottom: 15%; right: 15%; opacity: 0.1; }
 
     .login-left__content {
       position: relative;
@@ -336,6 +336,9 @@
       font-family: var(--font);
       transition: all var(--ease);
       outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      box-sizing: border-box;
     }
 
     .form-input:focus {
@@ -349,17 +352,18 @@
     }
 
     .form-input-wrap .form-input {
-      padding-left: 42px;
+      padding-left: 48px !important;
     }
 
     .form-input-icon {
       position: absolute;
-      left: 14px;
+      left: 16px;
       top: 50%;
       transform: translateY(-50%);
       color: var(--text-dim);
       font-size: 0.85rem;
       pointer-events: none;
+      z-index: 1;
     }
 
     .form-input-toggle {
@@ -557,9 +561,6 @@
       <!-- Brand -->
       <div class="login-brand">
         <img src="assets/full-colour-logo-horizontal-white-text.png" alt="SV Capital logo">
-        <div>
-          <div class="login-brand__tagline">Venture Beyond the Ordinary</div>
-        </div>
       </div>
 
       <!-- Hero -->
@@ -588,13 +589,6 @@
         </div>
       </div>
 
-      <!-- Products -->
-      <div style="margin-bottom:12px;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:700">Available Investment Products</div>
-      <div class="login-products">
-        <span class="login-product-tag login-product-tag--cattle">Cattle Finance</span>
-        <span class="login-product-tag login-product-tag--solar">Solar Energy</span>
-        <span class="login-product-tag login-product-tag--smme">SMME Short-Term</span>
-      </div>
 
       <!-- FSCA -->
       <div class="login-fsca">
