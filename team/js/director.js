@@ -534,7 +534,8 @@ function renderEmpTable(list) {
         <td>
           <div style="display:flex;gap:6px">
             <button class="btn btn--ghost btn--sm" onclick="openEmpDetail('${e.id}')" title="View details"><i class="fa-solid fa-eye"></i></button>
-            <button class="btn btn--ghost btn--sm" onclick="openEmpEdit('${e.id}')" title="Edit"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn--ghost btn--sm" onclick="openEmpEdit('${e.id}')" title="Edit profile"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn--ghost btn--sm" onclick="resetEmployeePin('${e.id}')" title="Reset PIN" style="color:#f59e0b"><i class="fa-solid fa-key"></i></button>
             <a class="btn btn--ghost btn--sm" href="employee.html?id=${e.id}" title="Open dashboard"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
           </div>
         </td>
@@ -626,6 +627,7 @@ function openEmpDetail(empId) {
 
   document.getElementById('modalDeactivateBtn').textContent = e.status === 'active' ? 'Deactivate' : 'Reactivate';
   document.getElementById('modalDeactivateBtn').onclick = () => toggleEmpStatus(empId, e.status);
+  document.getElementById('modalResetPinBtn').onclick = () => resetEmployeePin(empId);
   document.getElementById('modalEditBtn').onclick = () => { closeModal('empDetailModal'); openEmpEdit(empId); };
   openModal('empDetailModal');
 }
@@ -637,60 +639,153 @@ function openEmpEdit(empId) {
   const e = _editingEmp;
 
   document.getElementById('editEmpBody').innerHTML = `
-    <div class="form-grid">
-      <div class="form-group"><label>First Name</label><input id="e-fname" value="${e.first_name||''}"/></div>
-      <div class="form-group"><label>Last Name</label><input id="e-lname" value="${e.last_name||''}"/></div>
-      <div class="form-group"><label>Email</label><input id="e-email" value="${e.email||''}"/></div>
-      <div class="form-group"><label>Phone</label><input id="e-phone" value="${e.phone||''}"/></div>
-      <div class="form-group"><label>Employee Number</label><input id="e-empnum" value="${e.employee_number||''}" placeholder="e.g. SVC-2025-0001" style="font-family:monospace"/></div>
-      <div class="form-group"><label>Role</label>
-        <select id="e-role">
-          ${ALL_ROLES.map(r=>`<option ${r===e.role?'selected':''}>${r}</option>`).join('')}
-        </select>
+    <div class="edit-emp-tabs">
+      <button class="edit-emp-tab active" onclick="switchEmpTab(this,'tab-hr')"><i class="fa-solid fa-briefcase"></i> HR & Role</button>
+      <button class="edit-emp-tab" onclick="switchEmpTab(this,'tab-personal')"><i class="fa-solid fa-id-card"></i> Personal</button>
+      <button class="edit-emp-tab" onclick="switchEmpTab(this,'tab-address')"><i class="fa-solid fa-location-dot"></i> Address</button>
+      <button class="edit-emp-tab" onclick="switchEmpTab(this,'tab-banking')"><i class="fa-solid fa-building-columns"></i> Banking</button>
+      <button class="edit-emp-tab" onclick="switchEmpTab(this,'tab-emergency')"><i class="fa-solid fa-phone-volume"></i> Emergency</button>
+    </div>
+
+    <div class="edit-emp-panel active" id="tab-hr">
+      <div class="form-grid">
+        <div class="form-group"><label>First Name</label><input id="e-fname" value="${e.first_name||''}"/></div>
+        <div class="form-group"><label>Last Name</label><input id="e-lname" value="${e.last_name||''}"/></div>
+        <div class="form-group"><label>Email</label><input id="e-email" type="email" value="${e.email||''}"/></div>
+        <div class="form-group"><label>Phone</label><input id="e-phone" value="${e.phone||''}"/></div>
+        <div class="form-group"><label>Employee Number</label><input id="e-empnum" value="${e.employee_number||''}" placeholder="e.g. SVC-2025-0001" style="font-family:monospace"/></div>
+        <div class="form-group"><label>Role</label>
+          <select id="e-role">
+            ${ALL_ROLES.map(r=>`<option ${r===e.role?'selected':''}>${r}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Department</label>
+          <select id="e-dept">
+            ${['Executive','Operations','Investments','Client Services','Compliance','Marketing','Technology','Finance'].map(d=>`<option ${d===e.department?'selected':''}>${d}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Level</label>
+          <select id="e-level">
+            ${['junior','mid','senior','lead','executive'].map(l=>`<option value="${l}" ${l===e.level?'selected':''}>${LEVEL_LABELS[l]}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Status</label>
+          <select id="e-status">
+            ${['active','inactive','suspended'].map(s=>`<option value="${s}" ${s===e.status?'selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>EVA Weight</label>
+          <select id="e-eva">
+            ${[0.5,0.8,1.0,1.2,1.5,1.8,2.0].map(v=>`<option value="${v}" ${v==e.eva_weight?'selected':''}>×${v}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Base Salary (ZAR)</label><input id="e-salary" type="number" value="${e.base_salary||''}"/></div>
+        <div class="form-group"><label>Start Date</label><input id="e-start" type="date" value="${e.start_date?e.start_date.slice(0,10):''}"/></div>
+        <div class="form-group full"><label>Bio</label><textarea id="e-bio" rows="2">${e.bio||''}</textarea></div>
       </div>
-      <div class="form-group"><label>Department</label>
-        <select id="e-dept">
-          ${['Executive','Operations','Investments','Client Services','Compliance','Marketing','Technology','Finance'].map(d=>`<option ${d===e.department?'selected':''}>${d}</option>`).join('')}
-        </select>
+    </div>
+
+    <div class="edit-emp-panel" id="tab-personal">
+      <div class="form-grid">
+        <div class="form-group"><label>Birth Date</label><input id="e-dob" type="date" value="${e.birth_date?e.birth_date.slice(0,10):''}"/></div>
+        <div class="form-group"><label>ID Number</label><input id="e-idnum" value="${e.id_number||''}" placeholder="SA ID Number" maxlength="13" style="font-family:monospace"/>
+          <div style="font-size:0.72rem;color:var(--muted);margin-top:4px"><i class="fa-solid fa-shield"></i> Used as temporary PIN (last 4 digits) after a PIN reset</div>
+        </div>
       </div>
-      <div class="form-group"><label>Level</label>
-        <select id="e-level">
-          ${['junior','mid','senior','lead','executive'].map(l=>`<option value="${l}" ${l===e.level?'selected':''}>${LEVEL_LABELS[l]}</option>`).join('')}
-        </select>
+    </div>
+
+    <div class="edit-emp-panel" id="tab-address">
+      <div class="form-grid">
+        <div class="form-group full"><label>Address Line 1</label><input id="e-addr1" value="${e.address_line1||''}" placeholder="Street address"/></div>
+        <div class="form-group full"><label>Address Line 2</label><input id="e-addr2" value="${e.address_line2||''}" placeholder="Apartment, suite, unit (optional)"/></div>
+        <div class="form-group"><label>City</label><input id="e-city" value="${e.address_city||''}"/></div>
+        <div class="form-group"><label>Province</label>
+          <select id="e-province">
+            <option value="">— Select —</option>
+            ${['Gauteng','Western Cape','KwaZulu-Natal','Eastern Cape','Free State','Limpopo','Mpumalanga','North West','Northern Cape'].map(p=>`<option ${p===e.address_province?'selected':''}>${p}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Postal Code</label><input id="e-postal" value="${e.address_postal_code||''}" placeholder="0000" maxlength="10"/></div>
       </div>
-      <div class="form-group"><label>EVA Weight</label>
-        <select id="e-eva">
-          ${[0.5,0.8,1.0,1.2,1.5,1.8,2.0].map(v=>`<option value="${v}" ${v==e.eva_weight?'selected':''}>×${v}</option>`).join('')}
-        </select>
+    </div>
+
+    <div class="edit-emp-panel" id="tab-banking">
+      <div class="form-grid">
+        <div class="form-group"><label>Bank Name</label>
+          <select id="e-bankname">
+            <option value="">— Select —</option>
+            ${['ABSA','FNB','Standard Bank','Nedbank','Capitec','Investec','African Bank','TymeBank','Discovery Bank'].map(b=>`<option ${b===e.bank_name?'selected':''}>${b}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Account Holder</label><input id="e-bankholder" value="${e.bank_account_holder||''}" placeholder="Full name as on account"/></div>
+        <div class="form-group"><label>Account Number</label><input id="e-banknum" value="${e.bank_account_number||''}" placeholder="••••••••" style="font-family:monospace"/></div>
+        <div class="form-group"><label>Account Type</label>
+          <select id="e-banktype">
+            <option value="">— Select —</option>
+            ${['Cheque / Current','Savings','Transmission'].map(t=>`<option ${t===e.bank_account_type?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Branch Code</label><input id="e-bankbranch" value="${e.bank_branch_code||''}" placeholder="6-digit code" maxlength="6" style="font-family:monospace"/></div>
       </div>
-      <div class="form-group"><label>Base Salary (ZAR)</label><input id="e-salary" type="number" value="${e.base_salary||''}"/></div>
-      <div class="form-group"><label>Start Date</label><input id="e-start" type="date" value="${e.start_date?e.start_date.slice(0,10):''}"/></div>
-      <div class="form-group full"><label>Bio</label><textarea id="e-bio" rows="2">${e.bio||''}</textarea></div>
+    </div>
+
+    <div class="edit-emp-panel" id="tab-emergency">
+      <div class="form-grid">
+        <div class="form-group"><label>Emergency Contact Name</label><input id="e-emname" value="${e.emergency_contact_name||''}" placeholder="Full name"/></div>
+        <div class="form-group"><label>Emergency Contact Phone</label><input id="e-emphone" value="${e.emergency_contact_phone||''}" placeholder="+27 ..."/></div>
+      </div>
+      <div style="margin-top:20px;padding:14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:10px;font-size:0.8rem;color:var(--muted)">
+        <i class="fa-solid fa-circle-info" style="color:var(--gold);margin-right:6px"></i>
+        Emergency contact details are kept private and only accessed when necessary.
+      </div>
     </div>
   `;
   openModal('editEmpModal');
 }
 
+function switchEmpTab(btn, tabId) {
+  document.querySelectorAll('.edit-emp-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.edit-emp-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+}
+
 async function saveEmployeeEdit() {
   if (!_editingEmp) return;
+  const v = id => document.getElementById(id)?.value?.trim() || null;
   const updates = {
-    first_name:      document.getElementById('e-fname').value.trim(),
-    last_name:       document.getElementById('e-lname').value.trim(),
-    email:           document.getElementById('e-email').value.trim(),
-    phone:           document.getElementById('e-phone').value.trim(),
-    employee_number: document.getElementById('e-empnum').value.trim() || null,
-    role:            document.getElementById('e-role').value,
-    department:      document.getElementById('e-dept').value,
-    level:           document.getElementById('e-level').value,
-    eva_weight:      parseFloat(document.getElementById('e-eva').value),
-    base_salary:     Number(document.getElementById('e-salary').value) || null,
-    start_date:      document.getElementById('e-start').value || null,
-    bio:             document.getElementById('e-bio').value.trim(),
+    first_name:               v('e-fname') || '',
+    last_name:                v('e-lname') || '',
+    email:                    v('e-email'),
+    phone:                    v('e-phone'),
+    employee_number:          v('e-empnum'),
+    role:                     document.getElementById('e-role')?.value || _editingEmp.role,
+    department:               document.getElementById('e-dept')?.value || _editingEmp.department,
+    level:                    document.getElementById('e-level')?.value || _editingEmp.level,
+    status:                   document.getElementById('e-status')?.value || _editingEmp.status,
+    eva_weight:               parseFloat(document.getElementById('e-eva')?.value) || 1.0,
+    base_salary:              Number(document.getElementById('e-salary')?.value) || null,
+    start_date:               v('e-start') || null,
+    bio:                      v('e-bio'),
+    birth_date:               v('e-dob') || null,
+    id_number:                v('e-idnum'),
+    address_line1:            v('e-addr1'),
+    address_line2:            v('e-addr2'),
+    address_city:             v('e-city'),
+    address_province:         document.getElementById('e-province')?.value || null,
+    address_postal_code:      v('e-postal'),
+    bank_name:                document.getElementById('e-bankname')?.value || null,
+    bank_account_holder:      v('e-bankholder'),
+    bank_account_number:      v('e-banknum'),
+    bank_account_type:        document.getElementById('e-banktype')?.value || null,
+    bank_branch_code:         v('e-bankbranch'),
+    emergency_contact_name:   v('e-emname'),
+    emergency_contact_phone:  v('e-emphone'),
   };
   if (!updates.first_name || !updates.last_name) { showToast('First and last name are required', 'error'); return; }
 
   try {
-    const updated = await patch(`tables/employees/${_editingEmp.id}`, updates);
+    await patch(`tables/employees/${_editingEmp.id}`, updates);
     const idx = _employees.findIndex(e => e.id === _editingEmp.id);
     if (idx >= 0) _employees[idx] = { ..._employees[idx], ...updates };
     closeModal('editEmpModal');
@@ -708,6 +803,20 @@ async function toggleEmpStatus(empId, currentStatus) {
   closeModal('empDetailModal');
   showToast(`Employee ${newStatus === 'active' ? 'reactivated' : 'deactivated'}`);
   if (_currentView === 'employees') renderEmployees();
+}
+
+async function resetEmployeePin(empId) {
+  const emp = _employees.find(e => e.id === empId);
+  if (!emp) return;
+  const name = `${emp.first_name} ${emp.last_name}`;
+  if (!confirm(`Reset PIN for ${name}?\n\nThey will need to log in using the last 4 digits of their ID number as a temporary PIN, then set a new PIN.`)) return;
+  try {
+    await patch(`tables/employees/${empId}`, { pin_set: false, login_attempts: 0, login_locked_until: null });
+    closeModal('empDetailModal');
+    showToast(`PIN reset for ${name}. Temporary PIN is last 4 digits of their ID.`, 'success');
+  } catch(err) {
+    showToast('Failed to reset PIN', 'error');
+  }
 }
 
 /* ═══ CREATE EMPLOYEE ════════════════════════════════════════════════ */
