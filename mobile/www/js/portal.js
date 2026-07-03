@@ -8563,7 +8563,8 @@ function _kycHandleDrop(event) {
   if (zone) zone.style.borderColor = 'rgba(255,155,12,0.35)';
   const file = event.dataTransfer?.files?.[0];
   if (file) {
-    document.getElementById('kycFileInput').files; // reset
+    const inp = document.getElementById('kycFileInput');
+    if (inp) inp.value = '';
     _kycFileSelected(file);
   }
 }
@@ -8623,32 +8624,45 @@ async function submitKycDocument() {
     Toast.success('Document submitted! The compliance team will review it within 1–2 business days.');
     SVC.track('svc_kyc_uploaded', { doc_type: docType });
     Modal.close('kycUploadModal');
-    _kycFile = null;
-    // Refresh KYC panel wherever visible
-    _renderKycStatusPanel();
-    _renderKycDocsList();
+    // Refresh KYC panels with fresh data (Bug #7)
+    _refreshKycPanels();
   } catch (e) {
     const msg = e?.message || '';
-    if (msg.includes('too large') || msg.includes('entity') || msg.includes('limit')) {
+    if (e?.status === 413 || msg.includes('too large') || msg.includes('entity') || msg.includes('limit')) {
       Toast.error('File too large for upload. Please compress the image or use a smaller file (max 10 MB).');
     } else {
       Toast.error('Upload failed — please try again');
     }
     console.error('[submitKycDocument]', e);
   } finally {
+    _kycFile = null;
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit for Review'; }
   }
 }
 
-async function _renderKycStatusPanel() {
-  const body = document.getElementById('kycStatusBody');
-  if (!body || !PORTAL.investor) return;
-
+async function _refreshKycPanels() {
+  if (!PORTAL.investor) return;
   let docs = [];
   try {
     const res = await API.kyc.list({ investor_id: PORTAL.investor.id, limit: 20 });
     docs = res.data || [];
+    PORTAL._kycDocs = docs;
   } catch (_) {}
+  _renderKycStatusPanel(docs);
+  _renderKycDocsList(docs);
+}
+
+async function _renderKycStatusPanel(preloadedDocs) {
+  const body = document.getElementById('kycStatusBody');
+  if (!body || !PORTAL.investor) return;
+
+  let docs = preloadedDocs;
+  if (!docs) {
+    try {
+      const res = await API.kyc.list({ investor_id: PORTAL.investor.id, limit: 20 });
+      docs = res.data || [];
+    } catch (_) { docs = []; }
+  }
 
   const inv = PORTAL.investor;
   const overallStatus = inv.fica_status || inv.kyc_status || 'pending';
@@ -8677,8 +8691,8 @@ async function _renderKycStatusPanel() {
           <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,0,0,0.03);border-radius:8px">
             <i class="fa-solid fa-file-lines" style="color:#FF9B0C;font-size:0.9rem;flex-shrink:0"></i>
             <div style="flex:1;min-width:0">
-              <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${typeLabel[d.doc_type] || d.doc_type}</div>
-              <div style="font-size:0.72rem;color:#9ca3af">${d.file_name || '—'} · ${Utils.date(d.created_at)}</div>
+              <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${typeLabel[d.doc_type] || _esc(d.doc_type)}</div>
+              <div style="font-size:0.72rem;color:#9ca3af">${_esc(d.file_name) || '—'} · ${Utils.date(d.created_at)}</div>
             </div>
             ${Utils.statusBadge(d.status)}
           </div>
@@ -8691,16 +8705,18 @@ async function _renderKycStatusPanel() {
   `;
 }
 
-async function _renderKycDocsList() {
+async function _renderKycDocsList(preloadedDocs) {
   const list = document.getElementById('kycDocsList');
   if (!list || !PORTAL.investor) return;
 
-  let docs = [];
-  try {
-    const res = await API.kyc.list({ investor_id: PORTAL.investor.id, limit: 20 });
-    docs = res.data || [];
-    PORTAL._kycDocs = docs;
-  } catch (_) {}
+  let docs = preloadedDocs;
+  if (!docs) {
+    try {
+      const res = await API.kyc.list({ investor_id: PORTAL.investor.id, limit: 20 });
+      docs = res.data || [];
+    } catch (_) { docs = []; }
+  }
+  PORTAL._kycDocs = docs;
 
   const inv = PORTAL.investor;
   const overallStatus = inv.fica_status || inv.kyc_status || 'pending';
@@ -8728,11 +8744,11 @@ async function _renderKycDocsList() {
           <thead><tr><th>Document Type</th><th>File</th><th>Submitted</th><th>Status</th><th>Notes</th><th></th></tr></thead>
           <tbody>
             ${docs.map(d => `<tr>
-              <td class="td-strong">${typeLabel[d.doc_type] || d.doc_type}</td>
-              <td class="td-muted" style="font-size:0.78rem">${d.file_name || '—'}</td>
+              <td class="td-strong">${typeLabel[d.doc_type] || _esc(d.doc_type)}</td>
+              <td class="td-muted" style="font-size:0.78rem">${_esc(d.file_name) || '—'}</td>
               <td class="td-muted">${Utils.date(d.created_at)}</td>
               <td>${Utils.statusBadge(d.status)}</td>
-              <td class="td-muted" style="font-size:0.72rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.notes || '—'}</td>
+              <td class="td-muted" style="font-size:0.72rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(d.notes) || '—'}</td>
               <td>${
                 d.file_url
                   ? `<a href="${d.file_url}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-download"></i> View</a>`
@@ -8778,8 +8794,12 @@ function _viewKycDoc(docId) {
     } catch (_) { /* fall back to raw data URI */ }
   }
 
+  // Singleton guard — close any existing overlay before opening a new one (Bug #11)
+  document.getElementById('_kycOverlay')?.remove();
+
   // Overlay container
   const overlay = document.createElement('div');
+  overlay.id = '_kycOverlay';
   overlay.style.cssText = [
     'position:fixed','inset:0','z-index:99999',
     'background:rgba(0,0,0,0.82)',
@@ -8796,12 +8816,13 @@ function _viewKycDoc(docId) {
     'background:#1a1a1a','flex-shrink:0',
   ].join(';');
   toolbar.innerHTML = `
-    <span style="color:#e5e7eb;font-size:0.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%">${fileName}</span>
+    <span id="_kycDocTitle" style="color:#e5e7eb;font-size:0.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%"></span>
     <span style="display:flex;gap:10px">
       <button id="_kycDownBtn" style="background:#ff9b0c;color:#000;border:none;border-radius:6px;padding:6px 14px;font-size:0.8rem;font-weight:600;cursor:pointer">Download</button>
       <button id="_kycCloseBtn" style="background:#374151;color:#f3f4f6;border:none;border-radius:6px;padding:6px 14px;font-size:0.8rem;font-weight:600;cursor:pointer">Close ✕</button>
     </span>
   `;
+  toolbar.querySelector('#_kycDocTitle').textContent = fileName;
 
   // Content area
   const content = document.createElement('div');
@@ -9309,7 +9330,7 @@ function downloadCertificate(investmentId) {
   const inv = PORTAL.investments.find(i => String(i.id) === String(investmentId));
   if (!inv) { Toast.error('Investment not found — please refresh and try again.'); return; }
   const investor = PORTAL.investor;
-  const pool = PORTAL.pools.find(p => p.id === inv.pool_id) || {};
+  const pool = (PORTAL.pools || []).find(p => p.id === inv.pool_id) || {};
 
   const doc = _getPDF('portrait');
   if (!doc) return;
