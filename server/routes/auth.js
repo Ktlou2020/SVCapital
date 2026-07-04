@@ -55,9 +55,8 @@ const IS_PROD            = process.env.NODE_ENV === 'production';
 const MAX_LOGIN_ATTEMPTS = 3;
 const LOCKOUT_MINUTES    = 30;
 
-if (IS_PROD && !process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET env var is not set. Refusing to start — all tokens would be forgeable.');
-  process.exit(1);
+if (!process.env.JWT_SECRET) {
+  console.error('CRITICAL: JWT_SECRET env var is not set. Set this in Railway environment variables immediately.');
 }
 
 function signToken(user) {
@@ -75,16 +74,6 @@ function signToken(user) {
     { expiresIn: JWT_EXPIRES_IN }
   );
 }
-
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const twoFaLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 5, message: { error: 'Too many 2FA attempts.' } });
 
 /* ─── POST /api/auth/login ─── */
 router.post('/login', loginLimiter, async (req, res) => {

@@ -15,10 +15,9 @@ async function runDirectorReport() {
       return;
     }
 
-    // 2. Compute month stats — use DB clock for month boundaries (FIX 8)
+    // 2. Compute month stats — derive boundary timestamps from DB to avoid server-local-time drift
     const { rows: [dateRow] } = await pool.query(
-      `SELECT date_trunc('month', NOW() - INTERVAL '1 month') AS month_start,
-              date_trunc('month', NOW()) AS month_end`
+      "SELECT date_trunc('month', NOW() - INTERVAL '1 month') AS month_start, date_trunc('month', NOW()) AS month_end"
     );
     const monthStart = dateRow.month_start;
     const monthEnd   = dateRow.month_end;
@@ -49,7 +48,7 @@ async function runDirectorReport() {
 
     // Pool breakdown
     const { rows: pools } = await pool.query(
-      "SELECT i.pool_id, i.pool_name, i.product_type, SUM(i.amount) AS invested, COUNT(*) AS investors FROM investments i WHERE i.status='active' GROUP BY i.pool_id, i.pool_name, i.product_type ORDER BY invested DESC LIMIT 10"
+      "SELECT pool_id, pool_name, product_type, SUM(amount) AS invested, COUNT(*) AS investors FROM investments WHERE status='active' GROUP BY pool_id, product_type, pool_name ORDER BY invested DESC LIMIT 10"
     );
 
     // Total investors

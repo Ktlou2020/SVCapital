@@ -28,6 +28,7 @@ function getPool() {
         ca: process.env.DATABASE_SSL_CA || undefined,
       }
     : false;
+  if (process.env.NODE_ENV === 'production' && process.env.DATABASE_SSL !== 'false') console.log('[db] SSL enabled with cert verification');
 
   if (process.env.NODE_ENV === 'production' && process.env.DATABASE_SSL !== 'false') console.log('[db] SSL enabled with cert verification');
 

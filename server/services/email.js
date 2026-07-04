@@ -12,6 +12,8 @@ const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 //   onboarding@resend.dev
 const FROM = process.env.FROM_EMAIL || 'SV Capital <noreply@svcapital.co.za>';
 
+const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
 /* ── HTML wrapper ─────────────────────────────────────────── */
 function _wrap(body) {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
@@ -610,6 +612,7 @@ function sendKycRejected(investor, { reason, notes } = {}) {
 
 /* ── 16. FICA re-verification reminder ───────────────────── */
 function sendFicaResubmitReminder(investor) {
+  const BASE_URL = process.env.BASE_URL || 'https://portal.svcapital.co.za';
   return _send({
     to: investor.email,
     subject: 'Action Required: Please resubmit your FICA documents',
