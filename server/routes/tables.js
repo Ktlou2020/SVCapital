@@ -298,9 +298,9 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         const uRow = await pool.query('SELECT investor_id FROM users WHERE id = $1', [req.user.id]);
         investorId = uRow.rows[0]?.investor_id || null;
       }
-      // Last resort: match investor by email and auto-repair the broken users.investor_id link
+      // Last resort: match investor by email (case-insensitive) and auto-repair the broken users.investor_id link
       if (!investorId && req.user.email) {
-        const eRow = await pool.query('SELECT id FROM investors WHERE email = $1 LIMIT 1', [req.user.email]);
+        const eRow = await pool.query('SELECT id FROM investors WHERE LOWER(email) = LOWER($1) LIMIT 1', [req.user.email]);
         investorId = eRow.rows[0]?.id || null;
         if (investorId && req.user.id) {
           pool.query('UPDATE users SET investor_id=$1 WHERE id=$2', [investorId, req.user.id]).catch(() => {});
@@ -571,9 +571,23 @@ router.get('/:table/:id', requireAuth, validateTable, async (req, res) => {
 
     // Investor data isolation: verify the row belongs to this investor
     if (req.user.role === 'investor' && INVESTOR_COLS[table]) {
+      let investorId = req.user.investorId;
+      // JWT may lack investorId for older sessions — look it up from users table
+      if (!investorId && req.user.id) {
+        const uRow = await pool.query('SELECT investor_id FROM users WHERE id = $1', [req.user.id]);
+        investorId = uRow.rows[0]?.investor_id || null;
+      }
+      // Last resort: match investor by email (case-insensitive) and auto-repair the link
+      if (!investorId && req.user.email) {
+        const eRow = await pool.query('SELECT id FROM investors WHERE LOWER(email) = LOWER($1) LIMIT 1', [req.user.email]);
+        investorId = eRow.rows[0]?.id || null;
+        if (investorId && req.user.id) {
+          pool.query('UPDATE users SET investor_id=$1 WHERE id=$2', [investorId, req.user.id]).catch(() => {});
+        }
+      }
       const ownerCol = INVESTOR_COLS[table];
       const rowOwner = table === 'investors' ? rows[0].id : rows[0][ownerCol];
-      if (rowOwner !== req.user.investorId) {
+      if (rowOwner !== investorId) {
         return res.status(404).json({ error: 'Record not found.' });
       }
     }
