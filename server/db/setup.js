@@ -21,9 +21,13 @@ CREATE TABLE IF NOT EXISTS users (
   created_at    TIMESTAMPTZ DEFAULT NOW(),
   updated_at    TIMESTAMPTZ DEFAULT NOW(),
   last_login    TIMESTAMPTZ,
-  investor_id   TEXT,
-  ifa_id        TEXT,
-  staff_pin     TEXT
+  investor_id        TEXT,
+  ifa_id             TEXT,
+  staff_pin          TEXT,
+  login_attempts     INT DEFAULT 0,
+  login_locked_until TIMESTAMPTZ,
+  last_login_ip      TEXT,
+  last_login_at      TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS users_email_idx ON users(email);
 CREATE INDEX IF NOT EXISTS users_role_idx  ON users(role);
@@ -316,6 +320,11 @@ DO $$ BEGIN
   -- TOTP 2FA columns for users table
   BEGIN ALTER TABLE users ADD COLUMN totp_secret TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  -- Login lockout and tracking columns for users table
+  BEGIN ALTER TABLE users ADD COLUMN login_attempts INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE users ADD COLUMN login_locked_until TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE users ADD COLUMN last_login_ip TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE users ADD COLUMN last_login_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Auto-maturity processing tracking
   BEGIN ALTER TABLE investments ADD COLUMN maturity_processed_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- IFA commission invoice tracking
