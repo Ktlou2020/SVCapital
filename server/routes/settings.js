@@ -23,8 +23,8 @@ const DEFAULT_RBAC = {
   'Admin':               ['employee','admin','accounting'],
 };
 
-/* GET /api/settings/rbac — public read so staff-auth.js can load it without auth */
-router.get('/rbac', async (req, res) => {
+/* GET /api/settings/rbac — requires authentication */
+router.get('/rbac', requireAuth, async (req, res) => {
   try {
     const row = await db.query('SELECT value FROM platform_settings WHERE key = $1', [RBAC_KEY]);
     const matrix = row.rows[0] ? JSON.parse(row.rows[0].value) : DEFAULT_RBAC;
@@ -59,8 +59,8 @@ router.put('/rbac', requireAuth, requireRole('admin', 'director'), async (req, r
   }
 });
 
-/* GET /api/settings/eva-rate — authenticated staff */
-router.get('/eva-rate', requireAuth, async (req, res) => {
+/* GET /api/settings/eva-rate — admin/director only */
+router.get('/eva-rate', requireAuth, requireRole('admin', 'director'), async (req, res) => {
   try {
     const row = await db.query("SELECT value FROM platform_settings WHERE key = 'eva_rate'");
     const rate = row.rows[0] ? parseFloat(row.rows[0].value) : 0.15;

@@ -24,26 +24,30 @@ router.post('/:id/instruction', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Invalid instruction.' });
   }
 
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query('SELECT * FROM investments WHERE id = $1 LIMIT 1', [id]);
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT * FROM investments WHERE id=$1 FOR UPDATE', [id]);
     const inv = rows[0];
-    if (!inv) return res.status(404).json({ error: 'Investment not found.' });
+    if (!inv) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Investment not found.' }); }
 
     const isStaff = STAFF_ROLES.includes(req.user.role);
 
     // Clients may only manage their own investment.
     if (!isStaff) {
       if (!req.user.investorId || inv.investor_id !== req.user.investorId) {
+        await client.query('ROLLBACK');
         return res.status(403).json({ error: 'Forbidden.' });
       }
       // Cutoff: 17:00 SAST on the maturity (end_date) day = 15:00 UTC that date.
       if (inv.end_date) {
-        const { rows: [chk] } = await pool.query(
+        const { rows: [chk] } = await client.query(
           `SELECT (end_date::timestamp + interval '15 hours') <= NOW() AS past_cutoff
              FROM investments WHERE id = $1`,
           [id]
         );
         if (chk && chk.past_cutoff) {
+          await client.query('ROLLBACK');
           return res.status(403).json({
             error: 'Instructions close at 17:00 (SA time) on the maturity date. Please contact support.',
             code: 'INSTRUCTION_CUTOFF',
@@ -52,14 +56,16 @@ router.post('/:id/instruction', requireAuth, async (req, res) => {
       }
       // Also block once the investment is no longer active.
       if (inv.status !== 'active') {
+        await client.query('ROLLBACK');
         return res.status(409).json({ error: 'This investment can no longer be changed.' });
       }
     }
 
-    await pool.query(
+    await client.query(
       'UPDATE investments SET maturity_instruction = $1, updated_at = NOW() WHERE id = $2',
       [instruction, id]
     );
+    await client.query('COMMIT');
 
     audit.log({
       actorId: req.user.id || req.user.investorId, actorEmail: req.user.email, actorRole: req.user.role,
@@ -70,9 +76,10 @@ router.post('/:id/instruction', requireAuth, async (req, res) => {
 
     res.json({ success: true, instruction, onBehalf: isStaff });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('[investments/instruction] error:', err.message);
     res.status(500).json({ error: err.message });
-  }
+  } finally { client.release(); }
 });
 
 module.exports = router;
