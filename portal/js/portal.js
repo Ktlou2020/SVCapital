@@ -19,6 +19,7 @@ const DEMO_INVESTOR_ID = (() => {
 
 /* Escape user-controlled strings before inserting into innerHTML */
 const _esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const _safeUrl = u => (typeof u === 'string' && /^https?:\/\//i.test(u)) ? u : '#';
 
 let PORTAL = {
   investor: null,
@@ -1081,8 +1082,8 @@ function loadNotifications() {
     <div class="notif-item${n.unread ? ' unread' : ''}" data-id="n${i}" ${n.action ? `onclick="${n.action};toggleNotifPanel()" style="cursor:pointer"` : ''}>
       <div class="notif-icon" style="background:${n.iconBg}"><i class="fa-solid ${n.icon}" style="color:${n.iconColor}"></i></div>
       <div class="notif-body">
-        <div class="notif-title">${n.title}</div>
-        <div class="notif-sub">${n.sub}</div>
+        <div class="notif-title">${_esc(n.title)}</div>
+        <div class="notif-sub">${_esc(n.sub)}</div>
         <div class="notif-time">${n.time}</div>
       </div>
     </div>
@@ -1241,6 +1242,9 @@ function initIdleAutoLogout() {
 
   const doAutoLogout = () => {
     try { if (typeof Toast !== 'undefined') Toast.info?.('Signed out due to inactivity'); } catch (_) {}
+    localStorage.removeItem('svc_portal_cache');
+    localStorage.removeItem('svc_user');
+    sessionStorage.clear();
     Auth.logout('../login.html?reason=timeout');
   };
 
@@ -1436,18 +1440,11 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
       );
     }
 
-    // Last resort: show the first investor's data so portal is never empty
-    if (myInvests.length === 0 && allInvestments.length > 0) {
-      const fallbackId = allInvestments[0].investor_id;
-      myInvests = allInvestments.filter(i => i.investor_id === fallbackId);
-      // also align investor object to fallback if needed
-      if (!PORTAL.investor) {
-        PORTAL.investor = allInvestors.find(i => i.id === fallbackId) || allInvestors[0] || {};
-      }
-    }
-    if (myTxns.length === 0 && allTxns.length > 0) {
-      const fallbackId = allTxns[0].investor_id;
-      myTxns = allTxns.filter(t => t.investor_id === fallbackId);
+    // If no investments match the authenticated investor, show empty state — do NOT fall back to another investor's data
+    const investorId = PORTAL.investor?.id;
+    if (!investorId) {
+      console.error('[portal] Could not determine investor ID — aborting data load');
+      return;
     }
 
     PORTAL.investments  = myInvests.map(inv => ({
@@ -1476,14 +1473,10 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
 
     // Cache fresh data so the next launch renders instantly from localStorage
     try {
-      localStorage.setItem('svc_portal_cache', JSON.stringify({
-        investor: PORTAL.investor,
-        investments: PORTAL.investments,
-        transactions: PORTAL.transactions,
-        pools: PORTAL.pools,
-        waitlist: PORTAL.waitlist,
-        cachedAt: Date.now(),
-      }));
+      const _cacheableKeys = ['pools', 'products', 'notifications_count'];
+      const _safeCache = {};
+      for (const k of _cacheableKeys) { if (PORTAL[k] !== undefined) _safeCache[k] = PORTAL[k]; }
+      localStorage.setItem('svc_portal_cache', JSON.stringify(_safeCache));
     } catch (_) {}
 
     renderOverview(_opts.skipCharts);
@@ -3424,7 +3417,7 @@ async function _renderProductFactsheets(type, product) {
   el.innerHTML = `
     <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i> Factsheets & documents</div>
     ${all.length ? `<div style="display:flex;flex-direction:column;gap:8px">
-      ${all.map(s => `<a href="${s.file_url}" target="_blank" rel="noopener" class="fs-row ${s._product ? 'fs-row--current' : ''}">
+      ${all.map(s => `<a href="${_safeUrl(s.file_url)}" target="_blank" rel="noopener" class="fs-row ${s._product ? 'fs-row--current' : ''}">
         <div class="fs-row__icon"><i class="fa-solid fa-file-pdf"></i></div>
         <div class="fs-row__info"><div class="fs-row__name">${_esc(s.file_name)}${s._product ? ' <span class="fs-current-tag">Product</span>' : ''}</div>
           <div class="fs-row__meta">${Utils.date(s.created_at)}</div></div>
@@ -3525,8 +3518,8 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
 
           <!-- Title + blurb -->
           <div style="margin-top:14px">
-            <div class="mpc2-title">${pool.name}</div>
-            <div class="mpc2-blurb">${meta.blurb}</div>
+            <div class="mpc2-title">${_esc(pool.name)}</div>
+            <div class="mpc2-blurb">${_esc(meta.blurb)}</div>
           </div>
         </div>
 
@@ -3560,7 +3553,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
           </div>` : ''}
           ${pool.partner_name ? `<div class="mpc2-pill">
             <i class="fa-solid fa-handshake"></i>
-            <span><strong>${pool.partner_name}</strong></span>
+            <span><strong>${_esc(pool.partner_name)}</strong></span>
           </div>` : ''}
         </div>
 
@@ -3751,7 +3744,7 @@ async function viewFactsheet(poolId, poolName) {
       <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:16px">${all.length} document${all.length > 1 ? 's' : ''} available</p>
       <div style="display:flex;flex-direction:column;gap:10px">
         ${all.map(s => `
-          <a href="${s.file_url}" target="_blank" rel="noopener" class="fs-row ${s.is_current ? 'fs-row--current' : ''}">
+          <a href="${_safeUrl(s.file_url)}" target="_blank" rel="noopener" class="fs-row ${s.is_current ? 'fs-row--current' : ''}">
             <div class="fs-row__icon"><i class="fa-solid fa-file-pdf"></i></div>
             <div class="fs-row__info">
               <div class="fs-row__name">${_esc(s.file_name)}${s._product ? ' <span class="fs-current-tag">Product</span>' : (s.is_current ? ' <span class="fs-current-tag">Current</span>' : '')}</div>
@@ -4018,7 +4011,7 @@ async function confirmInvestment(pool) {
     const investmentId = Utils.genId('INVST');
     await API.investments.create({
       id: investmentId,
-      investor_id: DEMO_INVESTOR_ID,
+      investor_id: PORTAL.investor?.id,
       pool_id: pool.id,
       product_type: pool.product_type,
       pool_name: pool.name,
@@ -4039,7 +4032,7 @@ async function confirmInvestment(pool) {
     // Record investment transaction
     await API.transactions.create({
       id:          Utils.genId('TXN'),
-      investor_id: DEMO_INVESTOR_ID,
+      investor_id: PORTAL.investor?.id,
       investor_name:    `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
       type:             'investment',
       amount:           amount,
@@ -4346,7 +4339,7 @@ Data: ${_tktAttachBase64}`;
     try {
       await API.tickets.create({
         id:             Utils.genId('TKT'),
-        investor_id:    DEMO_INVESTOR_ID,
+        investor_id:    PORTAL.investor?.id,
         investor_name:  `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim(),
         investor_email: PORTAL.investor?.email || '',
         subject,
@@ -5341,21 +5334,6 @@ function renderQuestView() {
   const refList    = document.getElementById('rewardsReferralList');
   const refTxns    = PORTAL.transactions.filter(t => t.type === 'referral_bonus').sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   if (refSection) refSection.style.display = 'none';   // Referral Rewards History hidden (feature not live)
-  if (false && refSection && refList) {
-    refSection.style.display = '';
-    if (!refTxns.length) {
-      refList.innerHTML = `<div class="empty-state" style="padding:20px"><i class="fa-solid fa-gift"></i><p>No referral bonuses yet. Share your referral link to earn rewards!</p></div>`;
-    } else {
-      refList.innerHTML = refTxns.map(t => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
-          <div>
-            <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${t.description || 'Referral bonus'}</div>
-            <div style="font-size:0.7rem;color:#9ca3af">${Utils.date(t.created_at || t.transaction_date)}</div>
-          </div>
-          <span style="font-weight:700;color:#ff9b0c">+${Utils.rand(Math.abs(parseFloat(t.amount) || 0))}</span>
-        </div>`).join('');
-    }
-  }
 }
 
 /* ─── Claim a milestone quest via button ─────────────────── */
@@ -8644,7 +8622,7 @@ async function _renderKycDocsList(preloadedDocs) {
               <td class="td-muted" style="font-size:0.72rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(d.notes)}</td>
               <td>${
                 d.file_url
-                  ? `<a href="${d.file_url}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-download"></i> View</a>`
+                  ? `<a href="${_safeUrl(d.file_url)}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-download"></i> View</a>`
                   : d.file_data
                     ? `<button class="btn btn--secondary btn--sm" onclick="_viewKycDoc('${d.id}')"><i class="fa-solid fa-eye"></i> View</button>`
                     : '—'
@@ -10626,7 +10604,7 @@ const PORTAL_CMD_ITEMS = [
   { label: 'Download Statement PDF',   icon: 'fa-file-pdf',        group: 'Actions',  action: () => downloadStatement() },
   { label: 'Export Analytics CSV',     icon: 'fa-table',           group: 'Actions',  action: () => exportAnalyticsCSV() },
   { label: 'Submit Maturity Instruction', icon: 'fa-check-circle', group: 'Actions',  action: () => navigate('maturity', document.querySelector('[data-view=maturity]')) },
-  { label: 'Sign Out',                 icon: 'fa-arrow-right-from-bracket', group: 'Actions', action: () => Auth.logout('../login.html') },
+  { label: 'Sign Out',                 icon: 'fa-arrow-right-from-bracket', group: 'Actions', action: () => { localStorage.removeItem('svc_portal_cache'); localStorage.removeItem('svc_user'); sessionStorage.clear(); Auth.logout('../login.html'); } },
 ];
 
 let _portalCmdActive = -1;
