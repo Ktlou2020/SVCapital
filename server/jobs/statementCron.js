@@ -23,7 +23,8 @@ async function runMonthlyStatements() {
       pool.query(
         `SELECT investor_id, type, amount, status, created_at
          FROM transactions
-         WHERE created_at >= NOW() - INTERVAL '30 days'
+         WHERE created_at >= date_trunc('month', NOW() - INTERVAL '1 month')
+           AND created_at < date_trunc('month', NOW())
            AND investor_id IN (SELECT id FROM investors WHERE status='active' AND email IS NOT NULL)
          ORDER BY investor_id, created_at DESC`
       ),
@@ -45,24 +46,30 @@ async function runMonthlyStatements() {
     let sent = 0, failed = 0;
     for (const inv of investors) {
       try {
-        await enqueue(inv.email, 'sendMonthlyStatement', { args: [inv, {
-          investments:        (invsByInvestor[inv.id] || []).slice(0, 20),
-          recentTransactions: (txnsByInvestor[inv.id] || []).slice(0, 20),
-        }] });
+        const prevMonth = new Date(); prevMonth.setMonth(prevMonth.getMonth() - 1);
+        const period_year = prevMonth.getFullYear();
+        const period_month = prevMonth.getMonth() + 1;
 
+        // Store a record so the investor can see it in their archive
+        // (PDF content is generated client-side; server stores a placeholder)
+        // INSERT first — only enqueue email if this record was newly inserted (rowCount > 0)
+        let inserted = false;
         try {
-          const now = new Date();
-          const year = now.getFullYear();
-          const month = now.getMonth() + 1;
-          // Store a record so the investor can see it in their archive
-          // (PDF content is generated client-side; server stores a placeholder)
-          await pool.query(
+          const insertRes = await pool.query(
             `INSERT INTO investor_statements (investor_id, period_year, period_month, pdf_data)
              VALUES ($1, $2, $3, $4)
              ON CONFLICT (investor_id, period_year, period_month) DO NOTHING`,
-            [inv.id, year, month, '']
+            [inv.id, period_year, period_month, '']
           );
+          inserted = insertRes.rowCount > 0;
         } catch (archErr) { console.error('[statementCron] archive error:', archErr.message); }
+
+        if (inserted) {
+          await enqueue(inv.email, 'sendMonthlyStatement', { args: [inv, {
+            investments:        (invsByInvestor[inv.id] || []).slice(0, 20),
+            recentTransactions: (txnsByInvestor[inv.id] || []).slice(0, 20),
+          }] });
+        }
 
         sent++;
       } catch (e) {

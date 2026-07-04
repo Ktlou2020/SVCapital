@@ -27,7 +27,8 @@ async function runFicaSweep() {
   try {
     /* ── Batch 1: Annual re-checks ── */
     const { rows: annualDue } = await pool.query(`
-      SELECT * FROM investors
+      SELECT id, email, first_name, last_name, id_number, nationality, kyc_status, fica_status, fica_last_checked_at, fica_resubmit_requested_at
+      FROM investors
       WHERE last_auto_fica_check IS NOT NULL
         AND last_auto_fica_check < NOW() - INTERVAL '1 year'
         AND status != 'suspended'
@@ -40,7 +41,8 @@ async function runFicaSweep() {
     let firstDeposit = [];
     if (remainingSlots > 0) {
       const { rows } = await pool.query(`
-        SELECT i.* FROM investors i
+        SELECT i.id, i.email, i.first_name, i.last_name, i.id_number, i.nationality, i.kyc_status, i.fica_status, i.fica_last_checked_at, i.fica_resubmit_requested_at
+        FROM investors i
         WHERE i.last_auto_fica_check IS NULL
           AND i.status != 'suspended'
           AND EXISTS (
@@ -109,8 +111,8 @@ async function runFicaExpiryAlerts() {
   `);
   for (const inv of rows) {
     try {
-      await emailService.sendFicaResubmitReminder(inv);
       await pool.query('UPDATE investors SET fica_resubmit_requested_at=NOW() WHERE id=$1', [inv.id]);
+      await emailService.sendFicaResubmitReminder(inv);
       console.log(`[ficaCron] FICA expiry reminder sent to ${inv.id}`);
     } catch (e) { console.error('[ficaCron] expiry alert error:', e.message); }
   }
