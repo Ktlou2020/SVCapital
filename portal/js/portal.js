@@ -1396,7 +1396,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadPortalData(_attempt = 0, _opts = {}) {
   const MAX_ATTEMPTS = 3;
   try {
-    const [invRes, invstRes, txnRes, poolRes] = await Promise.all([
+    // allSettled so a single failing endpoint (e.g. a new table not yet migrated)
+    // never kills the whole portal load — each result is independently unpacked.
+    const [invResult, invstResult, txnResult, poolResult] = await Promise.allSettled([
       API.investors.list({ limit: 100 }),
       API.investments.list({ limit: 200 }),
       API.transactions.list({ limit: 200 }),
@@ -1404,7 +1406,24 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
       loadPaymentConfig(),  // load Paystack key from server env var
     ]);
 
-    const allInvestors   = invRes.data   || [];
+    const invRes   = invResult.status   === 'fulfilled' ? invResult.value   : { data: [] };
+    const invstRes = invstResult.status === 'fulfilled' ? invstResult.value : { data: [] };
+    const txnRes   = txnResult.status   === 'fulfilled' ? txnResult.value   : { data: [] };
+    const poolRes  = poolResult.status  === 'fulfilled' ? poolResult.value  : { data: [] };
+
+    // Log any API failures for debugging
+    if (invResult.status === 'rejected')   console.warn('[portal] investors API failed:', invResult.reason?.message);
+    if (invstResult.status === 'rejected') console.warn('[portal] investments API failed:', invstResult.reason?.message);
+    if (txnResult.status === 'rejected')   console.warn('[portal] transactions API failed:', txnResult.reason?.message);
+    if (poolResult.status === 'rejected')  console.warn('[portal] pools API failed:', poolResult.reason?.message);
+
+    // If the investors call itself failed (e.g. 401/500), and all other calls also failed,
+    // that's a hard network/auth error — throw so the retry loop runs.
+    if (invResult.status === 'rejected' && invstResult.status === 'rejected' && txnResult.status === 'rejected') {
+      throw invResult.reason;
+    }
+
+    let allInvestors   = invRes.data   || [];
     const allInvestments = invstRes.data || [];
     const allTxns        = txnRes.data   || [];
 
@@ -1413,10 +1432,25 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
 
     // Fallback: the server already scopes investor-role list results to the authenticated user,
     // so any item in allInvestors belongs to this user — use the first one when find-by-ID fails.
-    // (A direct GET with DEMO_INVESTOR_ID='INV-001' would always 404 when the investor's real
-    //  ID is different, so we skip that round-trip and rely on the list result.)
     if (!PORTAL.investor && allInvestors.length > 0) {
       PORTAL.investor = allInvestors[0];
+    }
+
+    // Last resort: if the list returned empty (server could not resolve investor from JWT),
+    // call /api/auth/me to get the live investor_id from the DB, then use the single-record
+    // GET which has the email fallback and bypasses the list isolation guard.
+    if (!PORTAL.investor) {
+      try {
+        const meData = await API.me();
+        const freshInvestorId = meData && (meData.investor_id || meData.investorId);
+        if (freshInvestorId) {
+          const inv = await API.investors.get(freshInvestorId).catch(() => null);
+          if (inv && inv.id) {
+            PORTAL.investor = inv;
+            allInvestors = [inv];
+          }
+        }
+      } catch (_) {}
     }
 
     const resolvedId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
@@ -1534,7 +1568,8 @@ function renderOverview(skipCharts) {
   const totEl = document.getElementById('pov-total');
   if (totEl) _animateNum(totEl, totalValue, 'R ', '', 1100);
 
-  document.getElementById('pov-return').innerHTML = `<i class="fa-solid fa-arrow-trend-up"></i> <span>+${returnPct}% effective return · ${Utils.rand(totalRet)} earned</span>`;
+  const retEl2 = document.getElementById('pov-return');
+  if (retEl2) retEl2.innerHTML = `<i class="fa-solid fa-arrow-trend-up"></i> <span>+${returnPct}% effective return · ${Utils.rand(totalRet)} earned</span>`;
 
   const invEl = document.getElementById('pov-invested');
   if (invEl) _animateNum(invEl, totalInvested, 'R ', '', 900);
@@ -1542,7 +1577,8 @@ function renderOverview(skipCharts) {
   if (walEl) _animateNum(walEl, inv.wallet_balance || 0, 'R ', '', 800);
   const retEl = document.getElementById('pov-returns');
   if (retEl) _animateNum(retEl, totalRet, 'R ', '', 900);
-  document.getElementById('pov-active').textContent = activeCount;
+  const actEl = document.getElementById('pov-active');
+  if (actEl) actEl.textContent = activeCount;
 
   // ── Rewards & XP stat ──────────────────────────────────────
   const referralTotal = PORTAL.transactions
