@@ -57,20 +57,21 @@ async function runMonthlyStatements() {
     let sent = 0, failed = 0;
     for (const inv of investors) {
       try {
-        // FIX 5: INSERT guard first — only enqueue email if a new record was created
-        let insertResult;
+        // Store a record so the investor can see it in their archive
+        // (PDF content is generated client-side; server stores a placeholder)
+        // INSERT first — only enqueue email if this record was newly inserted (rowCount > 0)
+        let inserted = false;
         try {
-          // Store a record so the investor can see it in their archive
-          // (PDF content is generated client-side; server stores a placeholder)
-          insertResult = await pool.query(
+          const insertRes = await pool.query(
             `INSERT INTO investor_statements (investor_id, period_year, period_month, pdf_data)
              VALUES ($1, $2, $3, $4)
              ON CONFLICT (investor_id, period_year, period_month) DO NOTHING`,
             [inv.id, period_year, period_month, '']
           );
+          inserted = insertRes.rowCount > 0;
         } catch (archErr) { console.error('[statementCron] archive error:', archErr.message); }
 
-        if (insertResult && insertResult.rowCount > 0) {
+        if (inserted) {
           await enqueue(inv.email, 'sendMonthlyStatement', { args: [inv, {
             investments:        (invsByInvestor[inv.id] || []).slice(0, 20),
             recentTransactions: (txnsByInvestor[inv.id] || []).slice(0, 20),
