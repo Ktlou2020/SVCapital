@@ -11,8 +11,9 @@ async function log({ actorId = null, actorEmail = null, actorRole = null, action
       [uuidv4(), action, entityType, entityId ? String(entityId) : null,
        actorId || null, actorEmail || null, actorRole || null, description, ip || null, metadata, platform || null]
     );
-  } catch (e) {
-    console.error('[audit] write error:', e.message);
+  } catch (err) {
+    console.error('[audit] CRITICAL: Failed to write audit event', { event, err: err.message });
+    // TODO: Route to external SIEM/logging sink — audit failures must not be silent in production
   }
 }
 

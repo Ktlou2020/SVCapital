@@ -80,6 +80,9 @@ CREATE TABLE IF NOT EXISTS transactions (
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS transactions_investor_idx ON transactions(investor_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
+CREATE INDEX IF NOT EXISTS idx_transactions_investor_id ON transactions(investor_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_reference ON transactions(reference);
 
 CREATE TABLE IF NOT EXISTS kyc_documents (
   id TEXT PRIMARY KEY,
@@ -1168,7 +1171,9 @@ async function autoSetup() {
     console.log('🌱 Provisioning production user accounts…');
     await pool.query('DELETE FROM users');
 
-    const cooHash = await bcrypt.hash(process.env.COO_PASSWORD || 'SvCap!C00#2026', 12);
+    const cooPassword = process.env.COO_PASSWORD;
+    if (!cooPassword) throw new Error('[setup] COO_PASSWORD env var must be set before seeding the database');
+    const cooHash = await bcrypt.hash(cooPassword, 12);
 
     await pool.query(`
       INSERT INTO users (email, password_hash, role, first_name, last_name)

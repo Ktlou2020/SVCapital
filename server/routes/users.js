@@ -19,7 +19,10 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 /* ─── GET /api/users ─── */
 router.get('/', requireAuth, requireRole('admin', 'director'), async (req, res) => {
   try {
-    const { role, search, page = 1, limit = 50 } = req.query;
+    const { role, search } = req.query;
+    if (isNaN(parseInt(req.query.limit || '50'))) return res.status(400).json({ error: 'Invalid limit parameter.' });
+    const limit = Math.max(1, Math.min(parseInt(req.query.limit) || 50, 200));
+    const page  = Math.max(1, parseInt(req.query.page) || 1);
     const offset = (page - 1) * limit;
     let conditions = ['1=1'];
     const params = [];
@@ -97,6 +100,10 @@ router.post('/', requireAuth, requireRole('admin', 'director'), async (req, res)
 router.put('/:id', requireAuth, requireRole('admin', 'director'), async (req, res) => {
   try {
     const { email, role, isActive, investorId, ifaId } = req.body;
+    const VALID_ROLES = ['investor', 'admin', 'director', 'ifa', 'compliance'];
+    if (req.body.role && !VALID_ROLES.includes(req.body.role)) {
+      return res.status(400).json({ error: 'Invalid role.' });
+    }
     const firstName = req.body.firstName != null ? stripHtml(req.body.firstName) : undefined;
     const lastName  = req.body.lastName  != null ? stripHtml(req.body.lastName)  : undefined;
     const { rows: [user] } = await pool.query(`

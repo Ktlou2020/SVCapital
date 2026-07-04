@@ -18,6 +18,8 @@
  * @param {string} reference   - payment reference string
  * @returns {{ flagged: boolean, reason?: string }}
  */
+// NOTE: checkDeposit is called fire-and-forget from payments.js. This result is currently ignored.
+// TODO: The caller in payments.js should await this and hold the deposit in 'pending_aml' status if flagged.
 async function checkDeposit(pool, investorId, amount, reference) {
   let flagReason = null;
 
@@ -33,7 +35,7 @@ async function checkDeposit(pool, investorId, amount, reference) {
          FROM transactions
         WHERE investor_id = $1
           AND type        = 'deposit'
-          AND status      = 'completed'
+          AND status      IN ('completed', 'pending')
           AND created_at  > NOW() - INTERVAL '24 hours'`,
       [investorId]
     );
@@ -51,7 +53,7 @@ async function checkDeposit(pool, investorId, amount, reference) {
 
   // Raise AML support ticket
   const timestamp = new Date().toISOString();
-  const ticketId  = `AML-${Date.now()}`;
+  const ticketId  = require('crypto').randomUUID ? require('crypto').randomUUID() : require('uuid').v4();
   const subject   = `AML Alert — ${flagReason}`;
   const message   =
     `Automated AML flag triggered.\n\n` +

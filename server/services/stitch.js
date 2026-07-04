@@ -11,7 +11,8 @@
 
 const CLIENT_ID     = process.env.STITCH_CLIENT_ID     || '';
 const CLIENT_SECRET = process.env.STITCH_CLIENT_SECRET || '';
-const SANDBOX       = process.env.STITCH_SANDBOX !== 'false';
+const SANDBOX       = process.env.STITCH_SANDBOX === 'true';
+console.log('[Stitch] Running in', SANDBOX ? 'SANDBOX' : 'PRODUCTION', 'mode');
 
 const TOKEN_URL = 'https://secure.stitch.money/connect/token';
 const GQL_URL   = SANDBOX
@@ -51,8 +52,7 @@ async function _getToken() {
 ────────────────────────────────────────────────────────────────────────── */
 async function verifyBankAccount({ accountNumber, bankId, accountHolder }) {
   if (!CLIENT_ID || !CLIENT_SECRET) {
-    console.warn('[Stitch] No credentials — returning sandbox pass.');
-    return _sandboxPass(accountHolder);
+    throw new Error('[Stitch] STITCH_CLIENT_ID and STITCH_CLIENT_SECRET are required.');
   }
 
   const token = await _getToken();
