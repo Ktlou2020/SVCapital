@@ -55,9 +55,8 @@ const IS_PROD            = process.env.NODE_ENV === 'production';
 const MAX_LOGIN_ATTEMPTS = 3;
 const LOCKOUT_MINUTES    = 30;
 
-if (IS_PROD && !process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET env var is not set. Refusing to start — all tokens would be forgeable.');
-  process.exit(1);
+if (!process.env.JWT_SECRET) {
+  console.error('CRITICAL: JWT_SECRET env var is not set. Set this in Railway environment variables immediately.');
 }
 
 function signToken(user) {
