@@ -94,8 +94,12 @@ app.use('/api/payments/paystack/webhook', (req, res, next) => {
     next();
   });
 });
-app.use(express.json({ limit: '15mb' }));
-app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+// KYC document uploads embed base64 files — allow 15 MB on that route only
+app.use('/api/tables/kyc_documents', express.json({ limit: '15mb' }));
+app.use('/api/tables/kyc_documents', express.urlencoded({ extended: true, limit: '15mb' }));
+// Conservative limit for all other routes
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 /* ─── Rate Limiting ─── */

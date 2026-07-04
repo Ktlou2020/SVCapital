@@ -113,54 +113,70 @@ async function runRecurringInvestments() {
       const endDate        = new Date(startDate);
       endDate.setMonth(endDate.getMonth() + termMonths);
       const expectedReturn = Math.round(amount * annualRate * (termMonths / 12) * 100) / 100;
-      const investmentId   = 'INV-RC-' + Date.now() + '-' + investor.id.replace(/[^A-Z0-9]/g, '');
-      const txRef          = 'RC-' + Date.now();
+      // Bug #6 fix: append random suffix to prevent ID collision when two investors
+      // resolve DB queries in the same millisecond tick
+      const rnd          = Math.random().toString(36).slice(2, 7).toUpperCase();
+      const investmentId = `INV-RC-${Date.now()}-${investor.id.replace(/[^A-Z0-9]/g, '')}-${rnd}`;
+      const txRef        = `RC-${Date.now()}-${rnd}`;
 
-      // Deduct investment amount + 1% platform fee from wallet atomically
-      const { rowCount } = await pool.query(
-        'UPDATE investors SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2 AND wallet_balance >= $1',
-        [totalDeduct, investor.id]
-      );
-      if (!rowCount) {
+      // Bug #1 fix: wrap wallet debit + all inserts in a single DB transaction so
+      // a mid-process crash cannot leave the investor debited without an investment record.
+      let didSkip = false;
+      const txClient = await pool.connect();
+      try {
+        await txClient.query('BEGIN');
+
+        const { rowCount } = await txClient.query(
+          'UPDATE investors SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2 AND wallet_balance >= $1',
+          [totalDeduct, investor.id]
+        );
+        if (!rowCount) {
+          await txClient.query('ROLLBACK');
+          didSkip = true;
+        } else {
+          await txClient.query(
+            `INSERT INTO investments
+               (id, investor_id, pool_id, pool_name, amount, status, start_date, end_date,
+                annual_rate, term_months, expected_return, actual_return, product_type, is_reinvestment, created_at, updated_at)
+             VALUES ($1,$2,$3,$4,$5,'active',$6,$7,$8,$9,$10,0,$11,false,NOW(),NOW())`,
+            [
+              investmentId, investor.id, pool_row.id, pool_row.name,
+              amount,
+              startDate.toISOString().slice(0, 10),
+              endDate.toISOString().slice(0, 10),
+              annualRate, termMonths, expectedReturn, pool_row.product_type,
+            ]
+          );
+          await txClient.query(
+            `INSERT INTO transactions
+               (id, investor_id, type, amount, status, reference, description, transaction_date, investment_id, pool_id, created_at, updated_at)
+             VALUES (gen_random_uuid(),$1,'investment',$2,'completed',$3,$4,NOW(),$5,$6,NOW(),NOW())`,
+            [investor.id, amount, txRef, `Recurring investment — ${pool_row.name}`, investmentId, pool_row.id]
+          );
+          await txClient.query(
+            `INSERT INTO transactions
+               (id, investor_id, type, amount, status, reference, description, transaction_date, investment_id, pool_id, created_at, updated_at)
+             VALUES (gen_random_uuid(),$1,'fee',$2,'completed',$3,$4,NOW(),$5,$6,NOW(),NOW())`,
+            [investor.id, platformFee, txRef + '-FEE', `Platform fee — ${pool_row.name}`, investmentId, pool_row.id]
+          );
+          await txClient.query(
+            'UPDATE investors SET total_invested = COALESCE(total_invested,0) + $1, updated_at = NOW() WHERE id = $2',
+            [amount, investor.id]
+          );
+          await txClient.query('COMMIT');
+        }
+      } catch (txErr) {
+        await txClient.query('ROLLBACK').catch(() => {});
+        throw txErr;
+      } finally {
+        txClient.release();
+      }
+
+      if (didSkip) {
         console.log(`[recurringCron] Skipping ${investor.id} — balance check failed at deduction`);
         skipped++;
         continue;
       }
-
-      await pool.query(
-        `INSERT INTO investments
-           (id, investor_id, pool_id, pool_name, amount, status, start_date, end_date,
-            annual_rate, term_months, expected_return, actual_return, product_type, is_reinvestment, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,'active',$6,$7,$8,$9,$10,0,$11,false,NOW(),NOW())`,
-        [
-          investmentId, investor.id, pool_row.id, pool_row.name,
-          amount,
-          startDate.toISOString().slice(0, 10),
-          endDate.toISOString().slice(0, 10),
-          annualRate, termMonths, expectedReturn, pool_row.product_type,
-        ]
-      );
-
-      // Investment transaction
-      await pool.query(
-        `INSERT INTO transactions
-           (id, investor_id, type, amount, status, reference, description, transaction_date, investment_id, pool_id, created_at, updated_at)
-         VALUES (gen_random_uuid(),$1,'investment',$2,'completed',$3,$4,NOW(),$5,$6,NOW(),NOW())`,
-        [investor.id, amount, txRef, `Recurring investment — ${pool_row.name}`, investmentId, pool_row.id]
-      );
-
-      // Platform fee transaction
-      await pool.query(
-        `INSERT INTO transactions
-           (id, investor_id, type, amount, status, reference, description, transaction_date, investment_id, pool_id, created_at, updated_at)
-         VALUES (gen_random_uuid(),$1,'fee',$2,'completed',$3,$4,NOW(),$5,$6,NOW(),NOW())`,
-        [investor.id, platformFee, txRef + '-FEE', `Platform fee — ${pool_row.name}`, investmentId, pool_row.id]
-      );
-
-      await pool.query(
-        'UPDATE investors SET total_invested = COALESCE(total_invested,0) + $1, updated_at = NOW() WHERE id = $2',
-        [amount, investor.id]
-      );
 
       setImmediate(() => emailService.sendInvestmentCreated(investor, {
         poolName: pool_row.name, amount, annualRate, termMonths, expectedReturn,
@@ -201,6 +217,8 @@ async function runAutoTopUps() {
     return;
   }
 
+  // Bug #5 fix: clamp auto_topup_day to the last day of the current month so investors
+  // who set day 29/30/31 are not silently skipped in shorter months.
   const { rows: investors } = await pool.query(
     `SELECT i.id, i.first_name, i.last_name, i.email, i.auto_topup_amount,
             pa.authorization_code, pa.email AS auth_email
@@ -208,7 +226,11 @@ async function runAutoTopUps() {
      JOIN paystack_authorizations pa ON pa.investor_id = i.id
      WHERE i.auto_topup_enabled = true
        AND i.auto_topup_amount  > 0
-       AND i.auto_topup_day     = $1
+       AND LEAST(i.auto_topup_day,
+             DATE_PART('days',
+               DATE_TRUNC('month', NOW()) + INTERVAL '1 month' - INTERVAL '1 day'
+             )::int
+           ) = $1
        AND i.status             = 'active'`,
     [todayDay]
   );
@@ -254,16 +276,29 @@ async function runAutoTopUps() {
       const psData = await psRes.json();
 
       if (psData.status && psData.data?.status === 'success') {
-        await pool.query(
-          'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at=NOW() WHERE id=$2',
-          [amount, inv.id]
-        );
+        // Bug #2 fix: insert transaction record FIRST then credit wallet — both in a DB
+        // transaction. This ensures a crash between the two operations cannot leave the
+        // investor charged by Paystack but without a wallet credit (or vice versa).
         const desc = `Auto top-up via Paystack — R${amount.toLocaleString('en-ZA')} credited`;
-        await pool.query(
-          `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
-           VALUES (gen_random_uuid(),$1,'deposit',$2,'completed',$3,$4,NOW(),NOW())`,
-          [inv.id, amount, reference, desc]
-        );
+        const topupClient = await pool.connect();
+        try {
+          await topupClient.query('BEGIN');
+          await topupClient.query(
+            `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
+             VALUES (gen_random_uuid(),$1,'deposit',$2,'completed',$3,$4,NOW(),NOW())`,
+            [inv.id, amount, reference, desc]
+          );
+          await topupClient.query(
+            'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at=NOW() WHERE id=$2',
+            [amount, inv.id]
+          );
+          await topupClient.query('COMMIT');
+        } catch (dbErr) {
+          await topupClient.query('ROLLBACK').catch(() => {});
+          throw dbErr;
+        } finally {
+          topupClient.release();
+        }
         const { rows: [invRow] } = await pool.query('SELECT * FROM investors WHERE id=$1', [inv.id]);
         if (invRow) {
           emailService.sendDepositConfirmed(invRow, amount, reference, 'Auto Top-Up (Paystack)').catch(() => {});
@@ -296,7 +331,7 @@ async function runAutoTopUps() {
           title: 'Auto Top-Up Failed',
           body:  isCardError
             ? 'Your card could not be charged. Auto top-up has been paused — please update your card.'
-            : 'Your scheduled wallet top-up could not be completed. We will retry tomorrow.',
+            : 'Your scheduled wallet top-up could not be completed this month. It will be attempted again next month.',
           url: '/portal/',
         }).catch(() => {});
         failed++;
