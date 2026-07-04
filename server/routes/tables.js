@@ -144,13 +144,15 @@ const ADMIN_WRITE_TABLES = new Set([
   'payslips',
   'eva_periods', 'pulse_surveys', 'learning_paths',
   'products',
+  'investment_pools', 'platform_settings', 'fund_runs', 'ifas',
+  'fica_checks', 'compliance_calendar', 'accepted_client_documents',
 ]);
 
 /* ─── Columns that must never be set via the generic API ─── */
-const PROTECTED_WRITE_COLS = {
-  employees: ['pin_hash'],
-  users:     ['password_hash', 'staff_pin'],
-};
+const PROTECTED_WRITE_COLS = new Set([
+  'pin_hash', 'password_hash', 'staff_pin',
+  'fica_status', 'kyc_status', 'wallet_balance', 'total_invested', 'totp_enabled',
+]);
 
 /* ─── Investor-owned tables: column that ties a row to an investor ─── */
 const INVESTOR_COLS = {
@@ -187,7 +189,8 @@ const EMPLOYEE_OWNED_COLS = {
 
 /* ─── Columns to strip from responses ─── */
 const STRIP_COLS = {
-  users: ['password_hash', 'staff_pin'],
+  investors: ['totp_secret', 'totp_temp_secret'],
+  users: ['password_hash', 'staff_pin', 'totp_secret', 'totp_temp_secret'],
   employees: ['pin_hash', 'id_number', 'login_attempts', 'login_locked_until'],
 };
 
@@ -439,8 +442,8 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
 
     res.json({ data: rows, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (err) {
-    console.error(`GET /${req.params.table}:`, err.message);
-    res.status(500).json({ error: err.message });
+    console.error('[tables]', err);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -459,7 +462,8 @@ router.get('/investors/next-account', requireAuth, async (req, res) => {
     `);
     res.json({ account_number: `SV-${rows[0].next_num}` });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[tables]', err);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -533,7 +537,8 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
 
     res.json({ investors: rows, summary });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[tables]', err);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -542,6 +547,13 @@ router.get('/:table/:id', requireAuth, validateTable, async (req, res) => {
   try {
     const table = req.params.table;
     const key   = req.tableKey;
+    const isAdminOrDirector = ['admin', 'director', 'fund_manager'].includes(req.user.role);
+
+    // FIX 4: ADMIN_ONLY_TABLES check for single-record GET
+    if (!isAdminOrDirector && ADMIN_ONLY_TABLES && ADMIN_ONLY_TABLES.has(table)) {
+      return res.status(403).json({ error: 'Forbidden.' });
+    }
+
     const { rows } = await pool.query(
       `SELECT * FROM ${table} WHERE ${key} = $1 LIMIT 1`,
       [req.params.id]
@@ -557,10 +569,19 @@ router.get('/:table/:id', requireAuth, validateTable, async (req, res) => {
       }
     }
 
+    // FIX 9: IFA single-record GET scoped to assigned clients
+    if (req.user && req.user.role === 'ifa' && rows[0] && rows[0].investor_id) {
+      const assigned = req.user.assigned_clients || [];
+      if (!assigned.includes(rows[0].investor_id)) {
+        return res.status(403).json({ error: 'Forbidden.' });
+      }
+    }
+
     const [clean] = stripSensitive(table, rows, req.user?.empId, req.user?.role);
     res.json(clean);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[tables]', err);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -577,9 +598,8 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
 
     const body = { ...req.body };
 
-    // Strip columns that must never be set via the generic API (e.g. pin_hash, password_hash)
-    const protectedCols = PROTECTED_WRITE_COLS[table] || [];
-    protectedCols.forEach(c => delete body[c]);
+    // Strip columns that must never be set via the generic API
+    PROTECTED_WRITE_COLS.forEach(c => delete body[c]);
 
     const validationErrors = validateBody(table, req.body, true);
     if (validationErrors.length) return res.status(400).json({ error: validationErrors.join('; ') });
@@ -608,8 +628,9 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       // sub-account when one is specified, otherwise the main investor wallet.
       let walletBal = 0, walletLabel = 'your wallet';
       if (body.sub_account_id) {
-        const { rows: sa } = await pool.query('SELECT wallet_balance FROM sub_accounts WHERE id = $1', [body.sub_account_id]);
-        walletBal = parseFloat(sa[0]?.wallet_balance) || 0;
+        const { rows: sa } = await pool.query('SELECT wallet_balance FROM sub_accounts WHERE id=$1 AND parent_investor_id=$2', [body.sub_account_id, req.user.investorId]);
+        if (!sa[0]) return res.status(403).json({ error: 'Forbidden.' });
+        walletBal = parseFloat(sa[0].wallet_balance) || 0;
         walletLabel = 'this sub-account';
       } else {
         const { rows: iv } = await pool.query('SELECT wallet_balance FROM investors WHERE id = $1', [body.investor_id]);
@@ -905,8 +926,8 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       });
     }
   } catch (err) {
-    console.error(`POST /${req.params.table}:`, err.message);
-    res.status(500).json({ error: err.message });
+    console.error('[tables]', err);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -952,6 +973,13 @@ router.put('/:table/:id', requireAuth, validateTable, async (req, res) => {
     // auto updated_at
     body.updated_at = new Date().toISOString();
 
+    // FIX 2b: strip columns that must never be set via the generic API
+    PROTECTED_WRITE_COLS.forEach(c => delete body[c]);
+
+    // FIX 1: validate column names to prevent SQL injection
+    const _badKey = Object.keys(body).find(k => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k));
+    if (_badKey) return res.status(400).json({ error: 'Invalid field name: ' + _badKey });
+
     const keys   = Object.keys(body);
     const values = Object.values(body);
     const sets   = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
@@ -965,8 +993,8 @@ router.put('/:table/:id', requireAuth, validateTable, async (req, res) => {
     const [clean] = stripSensitive(table, rows, req.user?.empId, req.user?.role);
     res.json(clean);
   } catch (err) {
-    console.error(`PUT /${req.params.table}/${req.params.id}:`, err.message);
-    res.status(500).json({ error: err.message });
+    console.error('[tables]', err);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -1011,8 +1039,22 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     delete body.created_at;
     body.updated_at = new Date().toISOString();
 
+    // FIX 2b: strip columns that must never be set via the generic API
+    PROTECTED_WRITE_COLS.forEach(c => delete body[c]);
+
+    // FIX 1: validate column names to prevent SQL injection
+    const _badKey = Object.keys(body).find(k => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k));
+    if (_badKey) return res.status(400).json({ error: 'Invalid field name: ' + _badKey });
+
     const validationErrors = validateBody(table, req.body, false);
     if (validationErrors.length) return res.status(400).json({ error: validationErrors.join('; ') });
+
+    // FIX 7: capture pre-patch transaction status to prevent double wallet credit
+    let _prePatchTxStatus = null;
+    if (table === 'transactions' && body.status === 'completed') {
+      const { rows: _cur } = await pool.query('SELECT status FROM transactions WHERE id=$1', [req.params.id]);
+      _prePatchTxStatus = _cur[0]?.status ?? null;
+    }
 
     const keys   = Object.keys(body);
     const values = Object.values(body);
@@ -1055,11 +1097,14 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
         // Deposit / return / payout confirmed → credit wallet + email investor
         if (table === 'transactions' && body.status === 'completed' && updated.investor_id &&
             (updated.type === 'deposit' || updated.type === 'return' || updated.type === 'payout' || updated.type === 'referral_bonus')) {
-          // Credit wallet atomically
-          await pool.query(
-            'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-            [parseFloat(updated.amount), updated.investor_id]
-          );
+          // FIX 7: only credit if the transaction was not already completed before this PATCH
+          if (_prePatchTxStatus !== 'completed') {
+            // Credit wallet atomically
+            await pool.query(
+              'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+              [parseFloat(updated.amount), updated.investor_id]
+            );
+          }
           if (updated.type === 'deposit') {
             const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
             if (inv[0]) {
@@ -1317,8 +1362,8 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
       }
     });
   } catch (err) {
-    console.error(`PATCH /${req.params.table}/${req.params.id}:`, err.message);
-    res.status(500).json({ error: err.message });
+    console.error('[tables]', err);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -1360,8 +1405,8 @@ router.delete('/:table/:id', requireAuth, validateTable, async (req, res) => {
     if (result.rowCount === 0) return res.status(404).json({ error: 'Record not found.' });
     res.json({ success: true, deleted: req.params.id });
   } catch (err) {
-    console.error(`DELETE /${req.params.table}/${req.params.id}:`, err.message);
-    res.status(500).json({ error: err.message });
+    console.error('[tables]', err);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
