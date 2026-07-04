@@ -298,6 +298,14 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         const uRow = await pool.query('SELECT investor_id FROM users WHERE id = $1', [req.user.id]);
         investorId = uRow.rows[0]?.investor_id || null;
       }
+      // Last resort: match investor by email and auto-repair the broken users.investor_id link
+      if (!investorId && req.user.email) {
+        const eRow = await pool.query('SELECT id FROM investors WHERE email = $1 LIMIT 1', [req.user.email]);
+        investorId = eRow.rows[0]?.id || null;
+        if (investorId && req.user.id) {
+          pool.query('UPDATE users SET investor_id=$1 WHERE id=$2', [investorId, req.user.id]).catch(() => {});
+        }
+      }
       if (INVESTOR_COLS[table]) {
         if (investorId) {
           params.push(investorId);

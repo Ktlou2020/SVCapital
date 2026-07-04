@@ -1411,8 +1411,9 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
     // Find the logged-in investor by their JWT-resolved ID
     PORTAL.investor = allInvestors.find(i => i.id === DEMO_INVESTOR_ID) || null;
 
-    // If not matched by DEMO_INVESTOR_ID, try a direct fetch (covers UUID vs string ID mismatches)
-    if (!PORTAL.investor && DEMO_INVESTOR_ID && DEMO_INVESTOR_ID !== 'INV-001') {
+    // If not matched by ID, try a direct fetch — works even when DEMO_INVESTOR_ID is the 'INV-001' fallback
+    // because the server will resolve by email when investorId is missing from the JWT
+    if (!PORTAL.investor) {
       const directRes = await API.investors.get(DEMO_INVESTOR_ID).catch(() => null);
       if (directRes && directRes.id) PORTAL.investor = directRes;
     }
@@ -1507,7 +1508,8 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
       return loadPortalData(_attempt + 1);
     }
 
-    // All attempts exhausted — show whatever partial data we have and hide cover
+    // All attempts exhausted — ensure investor stub exists so renderOverview clears "Loading..."
+    if (!PORTAL.investor) PORTAL.investor = { id: DEMO_INVESTOR_ID };
     try { renderOverview(); } catch (_) {}
     if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
     Toast.error('Could not connect to server — pull down to refresh');
