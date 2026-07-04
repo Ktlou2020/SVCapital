@@ -6,7 +6,18 @@ const { enqueue } = require('../services/emailQueue');
 async function runMonthlyStatements() {
   console.log('[statementCron] Running monthly statement job…');
   try {
-    // Batch-load all active investors + their investments + last-30-day transactions — 3 queries total
+    // FIX 3: Get calendar-month boundaries from DB clock (avoids JS Date drift)
+    const { rows: [{ start_date, end_date }] } = await pool.query(
+      `SELECT date_trunc('month', NOW() - INTERVAL '1 month') AS start_date,
+              date_trunc('month', NOW()) AS end_date`
+    );
+
+    // FIX 4: Period year/month = previous calendar month
+    const prevMonth = new Date(); prevMonth.setMonth(prevMonth.getMonth() - 1);
+    const period_year = prevMonth.getFullYear();
+    const period_month = prevMonth.getMonth() + 1;
+
+    // Batch-load all active investors + their investments + last-month transactions — 3 queries total
     const [investorsRes, invstRes, txnRes] = await Promise.all([
       pool.query(
         `SELECT id, email, first_name, last_name, wallet_balance, total_invested, total_returns
@@ -23,9 +34,10 @@ async function runMonthlyStatements() {
       pool.query(
         `SELECT investor_id, type, amount, status, created_at
          FROM transactions
-         WHERE created_at >= NOW() - INTERVAL '30 days'
+         WHERE created_at >= $1 AND created_at < $2
            AND investor_id IN (SELECT id FROM investors WHERE status='active' AND email IS NOT NULL)
-         ORDER BY investor_id, created_at DESC`
+         ORDER BY investor_id, created_at DESC`,
+        [start_date, end_date]
       ),
     ]);
 
@@ -45,24 +57,25 @@ async function runMonthlyStatements() {
     let sent = 0, failed = 0;
     for (const inv of investors) {
       try {
-        await enqueue(inv.email, 'sendMonthlyStatement', { args: [inv, {
-          investments:        (invsByInvestor[inv.id] || []).slice(0, 20),
-          recentTransactions: (txnsByInvestor[inv.id] || []).slice(0, 20),
-        }] });
-
+        // FIX 5: INSERT guard first — only enqueue email if a new record was created
+        let insertResult;
         try {
-          const now = new Date();
-          const year = now.getFullYear();
-          const month = now.getMonth() + 1;
           // Store a record so the investor can see it in their archive
           // (PDF content is generated client-side; server stores a placeholder)
-          await pool.query(
+          insertResult = await pool.query(
             `INSERT INTO investor_statements (investor_id, period_year, period_month, pdf_data)
              VALUES ($1, $2, $3, $4)
              ON CONFLICT (investor_id, period_year, period_month) DO NOTHING`,
-            [inv.id, year, month, '']
+            [inv.id, period_year, period_month, '']
           );
         } catch (archErr) { console.error('[statementCron] archive error:', archErr.message); }
+
+        if (insertResult && insertResult.rowCount > 0) {
+          await enqueue(inv.email, 'sendMonthlyStatement', { args: [inv, {
+            investments:        (invsByInvestor[inv.id] || []).slice(0, 20),
+            recentTransactions: (txnsByInvestor[inv.id] || []).slice(0, 20),
+          }] });
+        }
 
         sent++;
       } catch (e) {

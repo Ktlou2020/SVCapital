@@ -8,18 +8,21 @@ async function runDirectorReport() {
   try {
     // 1. Fetch all directors/admins from users table
     const { rows: directors } = await pool.query(
-      "SELECT * FROM users WHERE role IN ('director', 'admin') AND email IS NOT NULL"
+      "SELECT id, email, first_name, last_name, role FROM users WHERE role IN ('director', 'admin') AND email IS NOT NULL"
     );
     if (!directors.length) {
       console.log('[directorReportCron] No directors/admins found — skipping.');
       return;
     }
 
-    // 2. Compute month stats
-    const now        = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1); // previous month
-    const monthEnd   = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthLabel = monthStart.toLocaleString('en-ZA', { month: 'long', year: 'numeric' });
+    // 2. Compute month stats — use DB clock for month boundaries (FIX 8)
+    const { rows: [dateRow] } = await pool.query(
+      `SELECT date_trunc('month', NOW() - INTERVAL '1 month') AS month_start,
+              date_trunc('month', NOW()) AS month_end`
+    );
+    const monthStart = dateRow.month_start;
+    const monthEnd   = dateRow.month_end;
+    const monthLabel = new Date(monthStart).toLocaleString('en-ZA', { month: 'long', year: 'numeric' });
 
     // Total AUM (all active investments)
     const { rows: [aumRow] } = await pool.query(
@@ -46,7 +49,7 @@ async function runDirectorReport() {
 
     // Pool breakdown
     const { rows: pools } = await pool.query(
-      "SELECT pool_name, product_type, SUM(amount) AS invested, COUNT(*) AS investors FROM investments WHERE status='active' GROUP BY pool_name, product_type ORDER BY invested DESC LIMIT 10"
+      "SELECT i.pool_id, i.pool_name, i.product_type, SUM(i.amount) AS invested, COUNT(*) AS investors FROM investments i WHERE i.status='active' GROUP BY i.pool_id, i.pool_name, i.product_type ORDER BY invested DESC LIMIT 10"
     );
 
     // Total investors
