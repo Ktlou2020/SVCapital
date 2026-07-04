@@ -1454,9 +1454,14 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
 
     // Cache fresh data so the next launch renders instantly from localStorage
     try {
-      const _cacheableKeys = ['pools', 'products', 'notifications_count'];
-      const _safeCache = {};
-      for (const k of _cacheableKeys) { if (PORTAL[k] !== undefined) _safeCache[k] = PORTAL[k]; }
+      const _safeCache = {
+        cachedAt:     Date.now(),
+        investor:     PORTAL.investor,
+        investments:  PORTAL.investments,
+        transactions: PORTAL.transactions,
+        pools:        PORTAL.pools,
+        waitlist:     PORTAL.waitlist,
+      };
       localStorage.setItem('svc_portal_cache', JSON.stringify(_safeCache));
     } catch (_) {}
 
