@@ -102,33 +102,33 @@ router.post('/:txId/approve', requireAuth, requireRole('admin', 'director'), asy
   try {
     const { txId } = req.params;
 
-    // Fetch and lock the transaction to prevent concurrent approvals
-    const client = await pool.connect();
     let tx, investor;
+    const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
+      // Lock the row and guard against concurrent approvals
       const { rows } = await client.query(
         `SELECT * FROM transactions WHERE id = $1 AND type = 'withdrawal' AND status = 'pending' FOR UPDATE`,
         [txId]
       );
       if (!rows[0]) {
         await client.query('ROLLBACK');
-        return res.status(404).json({ error: 'Pending withdrawal transaction not found.' });
+        return res.status(404).json({ error: 'Withdrawal not found or already processed' });
       }
       tx = rows[0];
 
-      const { rows: [inv] } = await client.query(
+      const { rows: [invRow] } = await client.query(
         `SELECT id, email, first_name, last_name, phone, bank_name FROM investors WHERE id = $1`,
         [tx.investor_id]
       );
-      if (!inv) {
+      if (!invRow) {
         await client.query('ROLLBACK');
         return res.status(404).json({ error: 'Investor record not found.' });
       }
-      investor = inv;
+      investor = invRow;
 
-      // Mark as completed
+      // Mark as completed with status guard
       await client.query(
         `UPDATE transactions SET status = 'completed', updated_at = NOW() WHERE id = $1 AND status = 'pending'`,
         [txId]
@@ -189,12 +189,12 @@ router.post('/:txId/reject', requireAuth, requireRole('admin', 'director'), asyn
     const { txId } = req.params;
     const { reason } = req.body;
 
-    // Fetch and lock the transaction, then atomically refund wallet
-    const client = await pool.connect();
     let tx, investor;
+    const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
+      // Lock the row and guard against concurrent rejections
       const { rows } = await client.query(
         `SELECT * FROM transactions WHERE id = $1 AND type = 'withdrawal' AND status = 'pending' FOR UPDATE`,
         [txId]
@@ -205,17 +205,17 @@ router.post('/:txId/reject', requireAuth, requireRole('admin', 'director'), asyn
       }
       tx = rows[0];
 
-      const { rows: [inv] } = await client.query(
+      const { rows: [invRow] } = await client.query(
         `SELECT id, email, first_name, last_name, phone FROM investors WHERE id = $1`,
         [tx.investor_id]
       );
-      if (!inv) {
+      if (!invRow) {
         await client.query('ROLLBACK');
         return res.status(404).json({ error: 'Investor record not found.' });
       }
-      investor = inv;
+      investor = invRow;
 
-      // Mark as rejected and store reason
+      // Mark as rejected and store reason with status guard
       await client.query(
         `UPDATE transactions SET status = 'rejected', notes = $1, updated_at = NOW() WHERE id = $2 AND status = 'pending'`,
         [reason || null, txId]

@@ -32,14 +32,19 @@ router.get('/config', requireAuth, (req, res) => {
 ────────────────────────────────────────────────────────── */
 async function creditWallet(investorId, amount, reference, actorEmail = null, source = 'paystack', subAccountId = null) {
   const client = await pool.connect();
+  let investor;
   try {
     await client.query('BEGIN');
+
+    const invRes = await client.query('SELECT * FROM investors WHERE id = $1', [investorId]);
+    if (!invRes.rows[0]) { await client.query('ROLLBACK'); throw new Error(`Investor ${investorId} not found`); }
+    investor = invRes.rows[0];
 
     const sourceLabel = source === 'webhook' ? 'Paystack (confirmed)' : 'Paystack';
     const dest = subAccountId ? `sub-account` : 'wallet';
     const desc = `Top-up via ${sourceLabel} — R${Number(amount).toLocaleString('en-ZA')} credited to ${dest}`;
 
-    // Idempotency guard — INSERT with ON CONFLICT DO NOTHING prevents double-credit
+    // Atomic idempotency guard — ON CONFLICT DO NOTHING means rowCount = 0 if duplicate
     const { rowCount } = await client.query(
       `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, sub_account_id, transaction_date, created_at)
        VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, $4, $5, NOW(), NOW())
@@ -52,13 +57,6 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
       return { alreadyProcessed: true };
     }
 
-    const invRes = await client.query('SELECT * FROM investors WHERE id = $1', [investorId]);
-    if (!invRes.rows[0]) {
-      await client.query('ROLLBACK');
-      throw new Error(`Investor ${investorId} not found`);
-    }
-    const investor = invRes.rows[0];
-
     // Route credit: sub-account wallet takes priority when sub_account_id is present
     if (subAccountId) {
       await client.query(
@@ -66,7 +64,6 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
         [parseFloat(amount), subAccountId]
       );
     } else {
-      // Atomic SQL increment — safe against race conditions
       await client.query(
         'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
         [parseFloat(amount), investorId]
@@ -74,30 +71,30 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
     }
 
     await client.query('COMMIT');
-
-    // Email + SMS confirmation (non-blocking)
-    Promise.all([
-      emailService.sendDepositConfirmed(investor, amount, reference, 'Paystack').catch(e => console.error('[payments] email error:', e.message)),
-      smsService.sendDepositConfirmed(investor.phone, investor.first_name, amount).catch(e => console.error('[payments] sms error:', e.message)),
-    ]);
-
-    // Audit trail
-    await audit.log({
-      actorEmail: actorEmail || investor.email,
-      action: 'transaction.completed',
-      entityType: 'transactions',
-      entityId: reference,
-      description: `Paystack deposit R${amount} credited to ${investorId}`,
-    }).catch(() => {});
-
-    console.log(`[payments] Credited R${amount} to ${subAccountId ? `sub-account ${subAccountId}` : `investor ${investorId}`}, ref: ${reference}`);
-    return { alreadyProcessed: false, amount, investorId, subAccountId };
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     throw err;
   } finally {
     client.release();
   }
+
+  // Email + SMS confirmation (non-blocking)
+  Promise.all([
+    emailService.sendDepositConfirmed(investor, amount, reference, 'Paystack').catch(e => console.error('[payments] email error:', e.message)),
+    smsService.sendDepositConfirmed(investor.phone, investor.first_name, amount).catch(e => console.error('[payments] sms error:', e.message)),
+  ]);
+
+  // Audit trail
+  await audit.log({
+    actorEmail: actorEmail || investor.email,
+    action: 'transaction.completed',
+    entityType: 'transactions',
+    entityId: reference,
+    description: `Paystack deposit R${amount} credited to ${investorId}`,
+  }).catch(() => {});
+
+  console.log(`[payments] Credited R${amount} to ${subAccountId ? `sub-account ${subAccountId}` : `investor ${investorId}`}, ref: ${reference}`);
+  return { alreadyProcessed: false, amount, investorId, subAccountId };
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -195,6 +192,7 @@ router.post('/paystack/webhook', async (req, res) => {
     console.error('[payments] rawBody missing — HMAC verification failed');
     return res.status(400).json({ error: 'Signature verification failed' });
   }
+  // Verify HMAC-SHA512 signature using the raw body (captured in server/index.js middleware)
   const expectedSig = crypto.createHmac('sha512', secretKey).update(req.rawBody).digest('hex');
   if (expectedSig !== req.headers['x-paystack-signature']) {
     console.warn('[payments/webhook] Invalid Paystack signature — ignoring');

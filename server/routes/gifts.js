@@ -245,7 +245,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
     await client.query(
       `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, created_at, updated_at)
        VALUES (gen_random_uuid(), $1, 'gift_cancelled', $2, 'completed', $3, 'Gift cancellation refund', NOW(), NOW())`,
-      [senderId, gift.amount, 'GIFT-CANCEL-' + gift.id]
+      [gift.sender_id, gift.amount, 'GIFT-CANCEL-' + gift.id]
     );
 
     await client.query('COMMIT');
