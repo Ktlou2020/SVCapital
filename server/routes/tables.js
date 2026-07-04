@@ -592,9 +592,12 @@ router.get('/:table/:id', requireAuth, validateTable, async (req, res) => {
       }
     }
 
-    // FIX 9: IFA single-record GET scoped to assigned clients
+    // IFA single-record GET: look up assigned_clients from DB — it is not in the JWT payload
     if (req.user && req.user.role === 'ifa' && rows[0] && rows[0].investor_id) {
-      const assigned = req.user.assigned_clients || [];
+      const { rows: ifaRows } = await pool.query(
+        'SELECT assigned_clients FROM ifas WHERE id = $1', [req.user.ifaId]
+      );
+      const assigned = ifaRows[0]?.assigned_clients || [];
       if (!assigned.includes(rows[0].investor_id)) {
         return res.status(403).json({ error: 'Forbidden.' });
       }
@@ -627,11 +630,14 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     const validationErrors = validateBody(table, req.body, true);
     if (validationErrors.length) return res.status(400).json({ error: validationErrors.join('; ') });
 
-    // ── Investment affordability guard ──────────────────────────────────
-    // When a client invests, they must have enough wallet balance to cover the
-    // pool minimum AND the amount + 1% platform fee (this matches the wallet
-    // deduction applied by the investment hook below). Scoped to investor-role
-    // requests so admin/fund-manager bookkeeping flows are not affected.
+    const _badPostKey = Object.keys(body).find(k => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k));
+    if (_badPostKey) return res.status(400).json({ error: 'Invalid field name: ' + _badPostKey });
+
+    // ── Investment affordability guard + atomic deduction ──────────────
+    // Runs inside a DB transaction with a row-level lock (FOR UPDATE) so two
+    // concurrent POST requests cannot both pass the balance check and both
+    // deduct — the second request blocks until the first commits.
+    let _investmentWalletDeducted = false;
     if (table === 'investments' && req.user.role === 'investor') {
       const amount = parseFloat(body.amount) || 0;
       if (amount <= 0) return res.status(400).json({ error: 'Investment amount must be greater than zero.' });
@@ -646,25 +652,55 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
 
       const platformFee = Math.round(amount * 0.01 * 100) / 100;
       const required    = amount + platformFee;
+      const walletLabel = body.sub_account_id ? 'this sub-account' : 'your wallet';
 
-      // Validate against the wallet the funds actually come from: the
-      // sub-account when one is specified, otherwise the main investor wallet.
-      let walletBal = 0, walletLabel = 'your wallet';
-      if (body.sub_account_id) {
-        const { rows: sa } = await pool.query('SELECT wallet_balance FROM sub_accounts WHERE id=$1 AND parent_investor_id=$2', [body.sub_account_id, req.user.investorId]);
-        if (!sa[0]) return res.status(403).json({ error: 'Forbidden.' });
-        walletBal = parseFloat(sa[0].wallet_balance) || 0;
-        walletLabel = 'this sub-account';
-      } else {
-        const { rows: iv } = await pool.query('SELECT wallet_balance FROM investors WHERE id = $1', [body.investor_id]);
-        walletBal = parseFloat(iv[0]?.wallet_balance) || 0;
-      }
-      if (required - walletBal > 0.001) {
-        return res.status(400).json({
-          error: `Insufficient balance. This investment requires R${required.toLocaleString('en-ZA')} `
-               + `(R${amount.toLocaleString('en-ZA')} + R${platformFee.toLocaleString('en-ZA')} platform fee), `
-               + `but the available balance in ${walletLabel} is R${walletBal.toLocaleString('en-ZA')}.`,
-        });
+      const _invClient = await pool.connect();
+      try {
+        await _invClient.query('BEGIN');
+        let walletBal = 0;
+        if (body.sub_account_id) {
+          const { rows: sa } = await _invClient.query(
+            'SELECT wallet_balance FROM sub_accounts WHERE id=$1 AND parent_investor_id=$2 FOR UPDATE',
+            [body.sub_account_id, req.user.investorId]
+          );
+          if (!sa[0]) {
+            await _invClient.query('ROLLBACK');
+            return res.status(403).json({ error: 'Forbidden.' });
+          }
+          walletBal = parseFloat(sa[0].wallet_balance) || 0;
+        } else {
+          const { rows: iv } = await _invClient.query(
+            'SELECT wallet_balance FROM investors WHERE id = $1 FOR UPDATE', [body.investor_id]
+          );
+          walletBal = parseFloat(iv[0]?.wallet_balance) || 0;
+        }
+        if (required - walletBal > 0.001) {
+          await _invClient.query('ROLLBACK');
+          return res.status(400).json({
+            error: `Insufficient balance. This investment requires R${required.toLocaleString('en-ZA')} `
+                 + `(R${amount.toLocaleString('en-ZA')} + R${platformFee.toLocaleString('en-ZA')} platform fee), `
+                 + `but the available balance in ${walletLabel} is R${walletBal.toLocaleString('en-ZA')}.`,
+          });
+        }
+        // Deduct while holding the row lock — prevents double-spend on concurrent requests
+        if (body.sub_account_id) {
+          await _invClient.query(
+            `UPDATE sub_accounts SET wallet_balance = wallet_balance - $1, total_invested = COALESCE(total_invested, 0) + $2, updated_at = NOW() WHERE id = $3`,
+            [required, amount, body.sub_account_id]
+          );
+        } else {
+          await _invClient.query(
+            `UPDATE investors SET wallet_balance = wallet_balance - $1, total_invested = COALESCE(total_invested, 0) + $2, updated_at = NOW() WHERE id = $3`,
+            [required, amount, body.investor_id]
+          );
+        }
+        await _invClient.query('COMMIT');
+        _investmentWalletDeducted = true;
+      } catch (e) {
+        await _invClient.query('ROLLBACK');
+        throw e;
+      } finally {
+        _invClient.release();
       }
     }
 
@@ -890,27 +926,28 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
           const platformFee = Math.round(investAmt * 0.01 * 100) / 100;
           const totalDeduct = investAmt + platformFee;
 
-          // Atomically deduct amount + fee from the funding wallet and update
-          // total_invested. Sub-account investments draw from the sub-account's
-          // own wallet; otherwise the main investor wallet is used.
-          if (clean.sub_account_id) {
-            await pool.query(
-              `UPDATE sub_accounts
-                 SET wallet_balance = GREATEST(0, wallet_balance - $1),
-                     total_invested = COALESCE(total_invested, 0) + $2,
-                     updated_at     = NOW()
-               WHERE id = $3`,
-              [totalDeduct, investAmt, clean.sub_account_id]
-            );
-          } else {
-            await pool.query(
-              `UPDATE investors
-                 SET wallet_balance  = GREATEST(0, wallet_balance - $1),
-                     total_invested  = COALESCE(total_invested, 0) + $2,
-                     updated_at      = NOW()
-               WHERE id = $3`,
-              [totalDeduct, investAmt, clean.investor_id]
-            );
+          // Deduct wallet + total_invested — skip if already done atomically in the
+          // affordability transaction above (investor-role POSTs only).
+          if (!_investmentWalletDeducted) {
+            if (clean.sub_account_id) {
+              await pool.query(
+                `UPDATE sub_accounts
+                   SET wallet_balance = GREATEST(0, wallet_balance - $1),
+                       total_invested = COALESCE(total_invested, 0) + $2,
+                       updated_at     = NOW()
+                 WHERE id = $3`,
+                [totalDeduct, investAmt, clean.sub_account_id]
+              );
+            } else {
+              await pool.query(
+                `UPDATE investors
+                   SET wallet_balance  = GREATEST(0, wallet_balance - $1),
+                       total_invested  = COALESCE(total_invested, 0) + $2,
+                       updated_at      = NOW()
+                 WHERE id = $3`,
+                [totalDeduct, investAmt, clean.investor_id]
+              );
+            }
           }
 
           // Record the platform fee as a separate transaction (tagged to the
@@ -1072,23 +1109,36 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     const validationErrors = validateBody(table, req.body, false);
     if (validationErrors.length) return res.status(400).json({ error: validationErrors.join('; ') });
 
-    // FIX 7: capture pre-patch transaction status to prevent double wallet credit
-    let _prePatchTxStatus = null;
-    if (table === 'transactions' && body.status === 'completed') {
-      const { rows: _cur } = await pool.query('SELECT status FROM transactions WHERE id=$1', [req.params.id]);
-      _prePatchTxStatus = _cur[0]?.status ?? null;
-    }
-
     const keys   = Object.keys(body);
     const values = Object.values(body);
     const sets   = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
     values.push(req.params.id);
 
-    const { rows } = await pool.query(
-      `UPDATE ${table} SET ${sets} WHERE ${key} = $${values.length} RETURNING *`,
-      values
-    );
-    if (!rows[0]) return res.status(404).json({ error: 'Record not found.' });
+    // For transaction completion use a conditional UPDATE to prevent race-condition
+    // double-credits: only applies if the row is not already completed.
+    // The WHERE AND condition is atomic so two concurrent PATCHes cannot both succeed.
+    let rows, _skipWalletCredit = false;
+    if (table === 'transactions' && body.status === 'completed') {
+      const { rows: updated } = await pool.query(
+        `UPDATE ${table} SET ${sets} WHERE ${key} = $${values.length} AND status <> 'completed' RETURNING *`,
+        values
+      );
+      if (!updated[0]) {
+        const { rows: existing } = await pool.query('SELECT * FROM transactions WHERE id = $1', [req.params.id]);
+        if (!existing[0]) return res.status(404).json({ error: 'Record not found.' });
+        _skipWalletCredit = true;
+        rows = existing;
+      } else {
+        rows = updated;
+      }
+    } else {
+      const result = await pool.query(
+        `UPDATE ${table} SET ${sets} WHERE ${key} = $${values.length} RETURNING *`,
+        values
+      );
+      rows = result.rows;
+      if (!rows[0]) return res.status(404).json({ error: 'Record not found.' });
+    }
     const [clean] = stripSensitive(table, rows, req.user?.empId, req.user?.role);
     res.json(clean);
 
@@ -1120,8 +1170,8 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
         // Deposit / return / payout confirmed → credit wallet + email investor
         if (table === 'transactions' && body.status === 'completed' && updated.investor_id &&
             (updated.type === 'deposit' || updated.type === 'return' || updated.type === 'payout' || updated.type === 'referral_bonus')) {
-          // FIX 7: only credit if the transaction was not already completed before this PATCH
-          if (_prePatchTxStatus !== 'completed') {
+          // Only credit if this PATCH was the one that completed the transaction
+          if (!_skipWalletCredit) {
             // Credit wallet atomically
             await pool.query(
               'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
