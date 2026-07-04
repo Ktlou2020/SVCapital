@@ -26,7 +26,7 @@ function stripHtml(str) {
 }
 
 const JWT_SECRET     = process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error('[auth] JWT_SECRET env var is required');
+if (!JWT_SECRET) console.error('[auth] CRITICAL: JWT_SECRET env var is not set — token signing will fail');
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
