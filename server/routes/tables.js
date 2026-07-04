@@ -149,11 +149,10 @@ const ADMIN_WRITE_TABLES = new Set([
 ]);
 
 /* ─── Columns that must never be set via the generic API ─── */
-const PROTECTED_WRITE_COLS = {
-  _global:   ['fica_status', 'kyc_status', 'wallet_balance', 'total_invested', 'totp_enabled'],
-  employees: ['pin_hash'],
-  users:     ['password_hash', 'staff_pin'],
-};
+const PROTECTED_WRITE_COLS = new Set([
+  'pin_hash', 'password_hash', 'staff_pin',
+  'fica_status', 'kyc_status', 'wallet_balance', 'total_invested', 'totp_enabled',
+]);
 
 /* ─── Investor-owned tables: column that ties a row to an investor ─── */
 const INVESTOR_COLS = {
@@ -190,6 +189,7 @@ const EMPLOYEE_OWNED_COLS = {
 
 /* ─── Columns to strip from responses ─── */
 const STRIP_COLS = {
+  investors: ['totp_secret', 'totp_temp_secret'],
   users: ['password_hash', 'staff_pin', 'totp_secret', 'totp_temp_secret'],
   employees: ['pin_hash', 'id_number', 'login_attempts', 'login_locked_until'],
 };
@@ -548,9 +548,13 @@ router.get('/:table/:id', requireAuth, validateTable, async (req, res) => {
     const table = req.params.table;
     const key   = req.tableKey;
     const isAdminOrDirector = ['admin', 'director', 'fund_manager'].includes(req.user.role);
+
+    // FIX 4: ADMIN_ONLY_TABLES check for single-record GET
     if (!isAdminOrDirector && ADMIN_ONLY_TABLES && ADMIN_ONLY_TABLES.has(table)) {
       return res.status(403).json({ error: 'Forbidden.' });
     }
+
+
     const { rows } = await pool.query(
       `SELECT * FROM ${table} WHERE ${key} = $1 LIMIT 1`,
       [req.params.id]
@@ -566,7 +570,7 @@ router.get('/:table/:id', requireAuth, validateTable, async (req, res) => {
       }
     }
 
-    // IFA role: scope single-record reads to assigned clients only
+    // FIX 9: IFA single-record GET scoped to assigned clients
     if (req.user && req.user.role === 'ifa' && rows[0] && rows[0].investor_id) {
       const assigned = req.user.assigned_clients || [];
       if (!assigned.includes(rows[0].investor_id)) {
@@ -595,9 +599,8 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
 
     const body = { ...req.body };
 
-    // Strip columns that must never be set via the generic API (e.g. pin_hash, password_hash)
-    const protectedCols = [...(PROTECTED_WRITE_COLS._global || []), ...(PROTECTED_WRITE_COLS[table] || [])];
-    protectedCols.forEach(c => delete body[c]);
+    // Strip columns that must never be set via the generic API
+    PROTECTED_WRITE_COLS.forEach(c => delete body[c]);
 
     const validationErrors = validateBody(table, req.body, true);
     if (validationErrors.length) return res.status(400).json({ error: validationErrors.join('; ') });
@@ -628,7 +631,7 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       if (body.sub_account_id) {
         const { rows: sa } = await pool.query('SELECT wallet_balance FROM sub_accounts WHERE id=$1 AND parent_investor_id=$2', [body.sub_account_id, req.user.investorId]);
         if (!sa[0]) return res.status(403).json({ error: 'Forbidden.' });
-        walletBal = parseFloat(sa[0]?.wallet_balance) || 0;
+        walletBal = parseFloat(sa[0].wallet_balance) || 0;
         walletLabel = 'this sub-account';
       } else {
         const { rows: iv } = await pool.query('SELECT wallet_balance FROM investors WHERE id = $1', [body.investor_id]);
@@ -971,10 +974,10 @@ router.put('/:table/:id', requireAuth, validateTable, async (req, res) => {
     // auto updated_at
     body.updated_at = new Date().toISOString();
 
-    // Strip columns that must never be set via the generic API
-    const _putProtected = [...(PROTECTED_WRITE_COLS._global || []), ...(PROTECTED_WRITE_COLS[table] || [])];
-    _putProtected.forEach(c => delete body[c]);
+    // FIX 2b: strip columns that must never be set via the generic API
+    PROTECTED_WRITE_COLS.forEach(c => delete body[c]);
 
+    // FIX 1: validate column names to prevent SQL injection
     const _badKey = Object.keys(body).find(k => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k));
     if (_badKey) return res.status(400).json({ error: 'Invalid field name: ' + _badKey });
 
@@ -1037,17 +1040,17 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     delete body.created_at;
     body.updated_at = new Date().toISOString();
 
-    // Strip columns that must never be set via the generic API
-    const _patchProtected = [...(PROTECTED_WRITE_COLS._global || []), ...(PROTECTED_WRITE_COLS[table] || [])];
-    _patchProtected.forEach(c => delete body[c]);
+    // FIX 2b: strip columns that must never be set via the generic API
+    PROTECTED_WRITE_COLS.forEach(c => delete body[c]);
 
+    // FIX 1: validate column names to prevent SQL injection
     const _badKey = Object.keys(body).find(k => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k));
     if (_badKey) return res.status(400).json({ error: 'Invalid field name: ' + _badKey });
 
     const validationErrors = validateBody(table, req.body, false);
     if (validationErrors.length) return res.status(400).json({ error: validationErrors.join('; ') });
 
-    // FIX 7: Capture pre-update transaction status to prevent double wallet credits
+    // FIX 7: capture pre-patch transaction status to prevent double wallet credit
     let _prePatchTxStatus = null;
     if (table === 'transactions' && body.status === 'completed') {
       const { rows: _cur } = await pool.query('SELECT status FROM transactions WHERE id=$1', [req.params.id]);
@@ -1094,13 +1097,15 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
 
         // Deposit / return / payout confirmed → credit wallet + email investor
         if (table === 'transactions' && body.status === 'completed' && updated.investor_id &&
-            (updated.type === 'deposit' || updated.type === 'return' || updated.type === 'payout' || updated.type === 'referral_bonus') &&
-            _prePatchTxStatus !== 'completed') {
-          // Credit wallet atomically
-          await pool.query(
-            'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-            [parseFloat(updated.amount), updated.investor_id]
-          );
+            (updated.type === 'deposit' || updated.type === 'return' || updated.type === 'payout' || updated.type === 'referral_bonus')) {
+          // FIX 7: only credit if the transaction was not already completed before this PATCH
+          if (_prePatchTxStatus !== 'completed') {
+            // Credit wallet atomically
+            await pool.query(
+              'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+              [parseFloat(updated.amount), updated.investor_id]
+            );
+          }
           if (updated.type === 'deposit') {
             const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
             if (inv[0]) {
