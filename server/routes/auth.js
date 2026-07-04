@@ -13,8 +13,8 @@ const router     = require('express').Router();
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const crypto     = require('crypto');
-const rateLimit  = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
+const rateLimit  = require('express-rate-limit');
 const pool       = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const emailService = require('../services/email');
@@ -28,6 +28,20 @@ function stripHtml(str) {
 const JWT_SECRET     = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('[auth] JWT_SECRET env var is required');
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const twoFaLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many 2FA attempts.' },
+});
+
 function generateRecoveryCodes() {
   const codes = [];
   for (let i = 0; i < 8; i++) {
@@ -36,8 +50,10 @@ function generateRecoveryCodes() {
   }
   return codes;
 }
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
-const IS_PROD        = process.env.NODE_ENV === 'production';
+const JWT_EXPIRES_IN     = process.env.JWT_EXPIRES_IN || '8h';
+const IS_PROD            = process.env.NODE_ENV === 'production';
+const MAX_LOGIN_ATTEMPTS = 3;
+const LOCKOUT_MINUTES    = 30;
 
 if (IS_PROD && !process.env.JWT_SECRET) {
   console.error('FATAL: JWT_SECRET env var is not set. Refusing to start — all tokens would be forgeable.');
@@ -93,7 +109,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     if (!user.is_active)
       return res.status(403).json({ error: 'Account is deactivated. Contact support.' });
 
-    // Check account lockout
+    // Per-account lockout (mirrors staff-token lockout pattern)
     if (user.login_locked_until && new Date(user.login_locked_until) > new Date()) {
       const secsLeft = Math.ceil((new Date(user.login_locked_until) - Date.now()) / 1000);
       return res.status(429).json({
@@ -107,8 +123,9 @@ router.post('/login', loginLimiter, async (req, res) => {
       const newAttempts = (user.login_attempts || 0) + 1;
       if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
         await pool.query(
-          `UPDATE users SET login_attempts = 0, login_locked_until = NOW() + INTERVAL '${LOCKOUT_MINUTES} minutes' WHERE id = $1`,
-          [user.id]
+          `UPDATE users SET login_attempts = 0,
+             login_locked_until = NOW() + INTERVAL '${LOCKOUT_MINUTES} minutes'
+           WHERE id = $1`, [user.id]
         );
         return res.status(429).json({
           error: `Too many failed attempts. Account locked for ${LOCKOUT_MINUTES} minutes.`,
@@ -122,7 +139,7 @@ router.post('/login', loginLimiter, async (req, res) => {
         attemptsLeft: left,
       });
     }
-    // Clear failed attempts on success
+    // Clear failed attempts on successful password match
     await pool.query('UPDATE users SET login_attempts = 0, login_locked_until = NULL WHERE id = $1', [user.id]);
 
     // 2FA check: if enabled, issue a short-lived pending token instead of full JWT
@@ -494,7 +511,7 @@ router.post('/reset-password', async (req, res) => {
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     if (payload.purpose !== 'password_reset') return res.status(400).json({ error: 'Invalid reset token.' });
 
     // Enforce one-time-use: check jti in DB and mark as used atomically
@@ -576,9 +593,6 @@ async function issueStaffJwt(emp, res) {
   return { token, role: jwtRole };
 }
 
-const MAX_LOGIN_ATTEMPTS = 3;
-const LOCKOUT_MINUTES    = 30;
-
 /* ─── POST /api/auth/staff-lookup ───────────────────────────────────────────
    Returns employee display fields for the email-lookup step.
    Does NOT return id_number or pin_hash — PIN validation is server-only.
@@ -658,7 +672,8 @@ router.post('/staff-token', async (req, res) => {
       if (tempPin) {
         const _a = Buffer.from(String(pin));
         const _b = Buffer.from(String(tempPin));
-        valid = _a.length === _b.length && crypto.timingSafeEqual(_a, _b);
+        const _match = _a.length === _b.length && crypto.timingSafeEqual(_a, _b);
+        valid = _match;
       }
     } else {
       valid = emp.pin_hash ? await bcrypt.compare(pin, emp.pin_hash) : false;
