@@ -33,17 +33,12 @@ const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
 async function runMaturityProcessing() {
   console.log('[maturity] running maturity processing (23:00)…');
 
-  // 1. Mature the POOLS whose end_date (maturity date) has passed.
-  const { rowCount: poolsMatured } = await pool.query(`
-    UPDATE investment_pools
-       SET status = 'matured', updated_at = NOW()
-     WHERE end_date IS NOT NULL
-       AND end_date <= NOW()
-       AND status IN ('open','filling','active','waitlist')
-  `);
-  if (poolsMatured) console.log(`[maturity] ${poolsMatured} pool(s) set to matured`);
+  // FIX 10: Removed bulk pool status UPDATE from here. Pool status is now
+  // updated inside each investment's own transaction, only after that
+  // investment is fully processed and only when no further unprocessed
+  // investments remain in the pool.
 
-  // 2. Find investments maturing now that still need processing.
+  // Find investments maturing now that still need processing.
   const { rows: investments } = await pool.query(`
     SELECT i.*, inv.email, inv.first_name, inv.last_name, inv.phone
     FROM investments i
@@ -56,7 +51,26 @@ async function runMaturityProcessing() {
 
   let processed = 0, reinvestPending = 0;
   for (const inv of investments) {
+    // FIX 6: Each investment gets its own client + transaction.
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
+
+      // FIX 6: Lock this specific investment row within the transaction.
+      // SKIP LOCKED means a concurrent cron instance skips rows we have locked.
+      const { rows: locked } = await client.query(
+        `SELECT id FROM investments
+          WHERE id = $1
+            AND maturity_processed_at IS NULL
+          FOR UPDATE SKIP LOCKED`,
+        [inv.id]
+      );
+      if (!locked.length) {
+        // Another instance has claimed this row — skip it.
+        await client.query('ROLLBACK');
+        continue; // finally releases the client
+      }
+
       const principal    = parseFloat(inv.amount) || 0;
       const actualReturn = parseFloat(inv.actual_return) || parseFloat(inv.expected_return) || 0;
       const gross        = round2(principal + actualReturn);
@@ -65,57 +79,86 @@ async function runMaturityProcessing() {
       const custom       = Math.max(0, Math.min(gross, round2(parseFloat(inv.custom_payout_amount) || 0)));
       const switchType   = inv.switch_product_type || inv.product_type;
 
-      // Mark matured first.
-      await pool.query(`UPDATE investments SET status = 'matured', updated_at = NOW() WHERE id = $1`, [inv.id]);
+      // Mark investment matured inside the transaction.
+      await client.query(
+        `UPDATE investments SET status = 'matured', updated_at = NOW() WHERE id = $1`,
+        [inv.id]
+      );
 
-      // Execute the maturity instruction. Reinvested/switched capital is
-      // fee-free and rolls into the pool of the relevant product that is open
-      // and closing at month-end.
+      // Execute the maturity instruction. All money movement uses the same client
+      // so it participates in this transaction.
       switch (instruction) {
         case 'payout_all':
-          await creditWallet(inv, gross, actualReturn, `Maturity payout — ${poolName}`);
+          await creditWallet(client, inv, gross, actualReturn, `Maturity payout — ${poolName}`);
           break;
 
         case 'payout_return':
           // Returns paid out; capital reinvested into the same product.
-          await creditWallet(inv, actualReturn, actualReturn, `Maturity return payout — ${poolName}`);
-          await reinvestAmount(inv, principal, inv.product_type, poolName);
+          await creditWallet(client, inv, actualReturn, actualReturn, `Maturity return payout — ${poolName}`);
+          await reinvestAmount(client, inv, principal, inv.product_type, poolName);
           reinvestPending++;
           break;
 
         case 'payout_custom': {
           // Pay out a custom amount; reinvest the remainder into the same product.
-          await creditWallet(inv, custom, Math.min(actualReturn, custom), `Maturity custom payout — ${poolName}`);
-          await reinvestAmount(inv, round2(gross - custom), inv.product_type, poolName);
+          await creditWallet(client, inv, custom, Math.min(actualReturn, custom), `Maturity custom payout — ${poolName}`);
+          await reinvestAmount(client, inv, round2(gross - custom), inv.product_type, poolName);
           reinvestPending++;
           break;
         }
 
         case 'custom_switch': {
           // Pay out a custom amount; switch the remainder into another product.
-          await creditWallet(inv, custom, Math.min(actualReturn, custom), `Maturity custom payout — ${poolName}`);
-          await reinvestAmount(inv, round2(gross - custom), switchType, poolName);
+          await creditWallet(client, inv, custom, Math.min(actualReturn, custom), `Maturity custom payout — ${poolName}`);
+          await reinvestAmount(client, inv, round2(gross - custom), switchType, poolName);
           reinvestPending++;
           break;
         }
 
         case 'switch_product':
           // Switch the full matured amount into another product.
-          await reinvestAmount(inv, gross, switchType, poolName);
+          await reinvestAmount(client, inv, gross, switchType, poolName);
           reinvestPending++;
           break;
 
         case 'reinvest':
         default:
-          await reinvestAmount(inv, gross, inv.product_type, poolName);
+          await reinvestAmount(client, inv, gross, inv.product_type, poolName);
           reinvestPending++;
           break;
       }
 
-      // All money movement done — close out the maturity.
-      await pool.query(`UPDATE investments SET maturity_processed_at = NOW(), updated_at = NOW() WHERE id = $1`, [inv.id]);
+      // FIX 6: Set maturity_processed_at in the SAME transaction as the wallet/reinvest
+      // operations — if anything fails, ROLLBACK ensures it is NOT set.
+      await client.query(
+        `UPDATE investments SET maturity_processed_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [inv.id]
+      );
 
-      // Notify the investor.
+      // FIX 10: Mark the pool 'matured' inside this transaction, but only once all
+      // investments in the pool have been processed (maturity_processed_at IS NOT NULL).
+      // Because we set maturity_processed_at just above, the current investment is
+      // already excluded by the NOT EXISTS check.
+      if (inv.pool_id) {
+        await client.query(
+          `UPDATE investment_pools
+              SET status = 'matured', updated_at = NOW()
+            WHERE id = $1
+              AND end_date IS NOT NULL
+              AND end_date <= NOW()
+              AND status IN ('open','filling','active','waitlist')
+              AND NOT EXISTS (
+                SELECT 1 FROM investments
+                 WHERE pool_id = $1
+                   AND maturity_processed_at IS NULL
+              )`,
+          [inv.pool_id]
+        );
+      }
+
+      await client.query('COMMIT');
+
+      // Notifications are best-effort and sent after the transaction commits.
       await emailService.sendInvestmentMatured(
         { email: inv.email, first_name: inv.first_name },
         { poolName, amount: principal, actualReturn }
@@ -126,7 +169,10 @@ async function runMaturityProcessing() {
 
       processed++;
     } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
       console.error(`[maturity] failed to process investment ${inv.id}:`, err.message);
+    } finally {
+      client.release();
     }
   }
 
@@ -137,19 +183,26 @@ async function runMaturityProcessing() {
 /* ────────────────────────────────────────────────────────────
    creditWallet — pay `amount` to the investor's wallet as a payout.
    `returnPortion` is the part counted toward total_returns.
+   `reference` overrides the default 'MAT-<inv.id>' — supply a distinct
+   suffix (e.g. 'MAT-FALLBACK-<id>') when calling from reinvestAmount
+   so that a fallback credit and a primary credit on the same investment
+   don't collide on the unique reference index (FIX 8).
+   All writes go through `client` so they participate in the caller's
+   transaction (FIX 6).
    ──────────────────────────────────────────────────────────── */
-async function creditWallet(inv, amount, returnPortion, description) {
+async function creditWallet(client, inv, amount, returnPortion, description, reference) {
   const amt = round2(amount);
   if (amt <= 0) return;
-  await pool.query(
+  const ref = reference || ('MAT-' + inv.id);
+  await client.query(
     'UPDATE investors SET wallet_balance = wallet_balance + $1, total_returns = COALESCE(total_returns,0) + $2, updated_at = NOW() WHERE id = $3',
     [amt, round2(returnPortion || 0), inv.investor_id]
   );
-  await pool.query(
+  await client.query(
     `INSERT INTO transactions
        (id, investor_id, type, amount, status, reference, description, investment_id, transaction_date, created_at, updated_at)
      VALUES (gen_random_uuid(),$1,'payout',$2,'completed',$3,$4,$5,NOW(),NOW(),NOW())`,
-    [inv.investor_id, amt, 'MAT-' + inv.id, description, inv.id]
+    [inv.investor_id, amt, ref, description, inv.id]
   );
 }
 
@@ -159,12 +212,14 @@ async function creditWallet(inv, amount, returnPortion, description) {
    active fundraising pool). If no such pool exists, the amount is paid
    to the investor's wallet instead. Does NOT mark maturity_processed_at
    (the caller does that once all money movement is complete).
+   All writes go through `client` so they participate in the caller's
+   transaction (FIX 6, FIX 7, FIX 8, FIX 9).
    ──────────────────────────────────────────────────────────── */
-async function reinvestAmount(inv, amount, productType, sourcePoolName) {
+async function reinvestAmount(client, inv, amount, productType, sourcePoolName) {
   const amt = round2(amount);
   if (amt <= 0) return;
   try {
-    const { rows: targets } = await pool.query(
+    const { rows: targets } = await client.query(
       `SELECT * FROM investment_pools
         WHERE status = 'open'
           AND product_type = $1
@@ -176,9 +231,45 @@ async function reinvestAmount(inv, amount, productType, sourcePoolName) {
     const target = targets[0];
 
     if (!target) {
-      // No open closing pool for this product — pay the amount to the wallet.
-      await creditWallet(inv, amt, 0, `Maturity payout — ${sourcePoolName} (no open ${productType || ''} pool to reinvest into)`);
+      // No open pool for this product — pay the amount to the wallet.
+      // FIX 8: Use a distinct reference suffix for this fallback credit.
+      await creditWallet(
+        client, inv, amt, 0,
+        `Maturity payout — ${sourcePoolName} (no open ${productType || ''} pool to reinvest into)`,
+        'MAT-FALLBACK-' + inv.id
+      );
       console.log(`[maturity] no open ${productType} pool — paid R${amt} to wallet for ${inv.investor_id}`);
+      return;
+    }
+
+    // FIX 9: Lock the target pool row FOR UPDATE before re-checking capacity,
+    // preventing concurrent over-allocation.
+    const { rows: poolRows } = await client.query(
+      'SELECT id, current_invested, max_investment FROM investment_pools WHERE id = $1 FOR UPDATE',
+      [target.id]
+    );
+    const lockedPool = poolRows[0];
+    if (!lockedPool) {
+      // Pool disappeared between the SELECT above and the lock attempt.
+      await creditWallet(
+        client, inv, amt, 0,
+        `Maturity payout — ${sourcePoolName} (target pool not found)`,
+        'MAT-FALLBACK-' + inv.id
+      );
+      return;
+    }
+
+    // Re-check capacity AFTER acquiring the lock.
+    const currentInvested = Number(lockedPool.current_invested) || 0;
+    const maxInvestment   = lockedPool.max_investment != null ? Number(lockedPool.max_investment) : null;
+    if (maxInvestment !== null && currentInvested + amt > maxInvestment) {
+      // Pool has filled up since we fetched it — fall back to wallet.
+      await creditWallet(
+        client, inv, amt, 0,
+        `Maturity payout — ${sourcePoolName} (pool at capacity)`,
+        'MAT-FALLBACK-' + inv.id
+      );
+      console.log(`[maturity] pool ${target.id} at capacity — paid R${amt} to wallet for ${inv.investor_id}`);
       return;
     }
 
@@ -189,7 +280,7 @@ async function reinvestAmount(inv, amount, productType, sourcePoolName) {
     const newInvId     = 'INV-RI-' + Date.now() + '-' + String(inv.investor_id).replace(/[^A-Z0-9]/gi, '').slice(-6);
     const switched     = target.product_type !== inv.product_type;
 
-    await pool.query(
+    await client.query(
       `INSERT INTO investments
          (id, investor_id, pool_id, pool_name, amount, status, start_date, end_date,
           annual_rate, term_months, expected_return, actual_return, product_type,
@@ -201,21 +292,24 @@ async function reinvestAmount(inv, amount, productType, sourcePoolName) {
     );
 
     const verb = switched ? 'switch' : 'reinvestment';
-    await pool.query(
+    await client.query(
       `INSERT INTO transactions
          (id, investor_id, type, amount, status, reference, description, investment_id, pool_id, transaction_date, created_at, updated_at)
        VALUES (gen_random_uuid(),$1,'investment',$2,'completed',$3,$4,$5,$6,NOW(),NOW(),NOW())`,
       [inv.investor_id, amt, 'REINV-' + inv.id, `Maturity ${verb} — ${sourcePoolName} → ${target.name}`, newInvId, target.id]
     );
 
-    await pool.query(
+    await client.query(
       'UPDATE investment_pools SET current_invested = COALESCE(current_invested,0) + $1, raised_amount = COALESCE(raised_amount,0) + $1, updated_at = NOW() WHERE id = $2',
       [amt, target.id]
     );
 
     console.log(`[maturity] ${verb} ${inv.id} → ${newInvId} (R${amt}, fee-free) into closing pool ${target.id}`);
   } catch (err) {
+    // FIX 7: Log but re-throw so the caller's transaction rolls back and
+    // maturity_processed_at is NOT set — the investment will be retried next run.
     console.error(`[maturity] reinvestAmount failed for ${inv.id}:`, err.message);
+    throw err;
   }
 }
 
