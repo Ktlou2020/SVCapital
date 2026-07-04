@@ -5,7 +5,7 @@
 
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error('[auth] JWT_SECRET env var is required');
+if (!JWT_SECRET) console.error('[auth] CRITICAL: JWT_SECRET env var is not set — all authenticated requests will be rejected');
 
 /**
  * Verify JWT from Authorization header or cookie.
