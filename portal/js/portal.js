@@ -1398,7 +1398,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
   try {
     // allSettled so a single failing endpoint (e.g. a new table not yet migrated)
     // never kills the whole portal load — each result is independently unpacked.
-    const [invResult, invstResult, txnResult, poolResult] = await Promise.allSettled([
+    const [invResult, invstResult, txnResult, poolResult, payResult] = await Promise.allSettled([
       API.investors.list({ limit: 100 }),
       API.investments.list({ limit: 200 }),
       API.transactions.list({ limit: 200 }),
@@ -1416,6 +1416,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
     if (invstResult.status === 'rejected') console.warn('[portal] investments API failed:', invstResult.reason?.message);
     if (txnResult.status === 'rejected')   console.warn('[portal] transactions API failed:', txnResult.reason?.message);
     if (poolResult.status === 'rejected')  console.warn('[portal] pools API failed:', poolResult.reason?.message);
+    if (payResult.status  === 'rejected')  console.warn('[portal] payment config failed:', payResult.reason?.message);
 
     // If the investors call itself failed (e.g. 401/500), and all other calls also failed,
     // that's a hard network/auth error — throw so the retry loop runs.

@@ -1347,7 +1347,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
   const MAX_ATTEMPTS = 3;
   try {
     // allSettled so a single failing endpoint never kills the whole portal load.
-    const [invResult, invstResult, txnResult, poolResult] = await Promise.allSettled([
+    const [invResult, invstResult, txnResult, poolResult, payResult] = await Promise.allSettled([
       API.investors.list({ limit: 100 }),
       API.investments.list({ limit: 200 }),
       API.transactions.list({ limit: 200 }),
@@ -1364,6 +1364,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
     if (invstResult.status === 'rejected') console.warn('[portal] investments API failed:', invstResult.reason?.message);
     if (txnResult.status === 'rejected')   console.warn('[portal] transactions API failed:', txnResult.reason?.message);
     if (poolResult.status === 'rejected')  console.warn('[portal] pools API failed:', poolResult.reason?.message);
+    if (payResult.status  === 'rejected')  console.warn('[portal] payment config failed:', payResult.reason?.message);
 
     if (invResult.status === 'rejected' && invstResult.status === 'rejected' && txnResult.status === 'rejected') {
       throw invResult.reason;

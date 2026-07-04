@@ -139,10 +139,6 @@ app.use(['/api/tables'], (req, res, next) => {
 app.use('/api/auth/', authLimiter);
 app.use('/api/auth/staff-token', staffPinLimiter);
 app.use('/api/auth/staff-lookup', staffPinLimiter);
-app.use(['/api/tables'], (req, res, next) => {
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return writeLimiter(req, res, next);
-  next();
-});
 
 /* Prevent caching of all API responses */
 app.use('/api/', (_req, res, next) => {

@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE INDEX IF NOT EXISTS transactions_investor_idx ON transactions(investor_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 CREATE INDEX IF NOT EXISTS idx_transactions_investor_id ON transactions(investor_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_reference ON transactions(reference);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_reference ON transactions(reference);
 
 CREATE TABLE IF NOT EXISTS kyc_documents (
   id TEXT PRIMARY KEY,
@@ -1178,6 +1178,24 @@ async function autoSetup() {
       }
     }
     console.log('✅ Performance indexes ready.');
+
+    // 1d. Upgrade transactions.reference to UNIQUE if the existing index is plain
+    // (required so ON CONFLICT (reference) DO NOTHING works in payments.js + interestCron.js)
+    try {
+      const { rows: idxInfo } = await pool.query(`
+        SELECT ix.indisunique FROM pg_class t
+        JOIN pg_index ix ON t.oid = ix.indrelid
+        JOIN pg_class i  ON i.oid = ix.indexrelid
+        WHERE t.relname = 'transactions' AND i.relname = 'idx_transactions_reference'
+      `);
+      if (!idxInfo[0]?.indisunique) {
+        await pool.query('DROP INDEX IF EXISTS idx_transactions_reference');
+        await pool.query('CREATE UNIQUE INDEX idx_transactions_reference ON transactions(reference)');
+        console.log('✅ transactions.reference index upgraded to UNIQUE.');
+      }
+    } catch (idxErr) {
+      console.warn('⚠️  Could not upgrade transactions.reference to UNIQUE:', idxErr.message);
+    }
 
     // 2. Check if the COO account already exists — if so, skip seeding entirely
     const { rows: existing } = await pool.query(
