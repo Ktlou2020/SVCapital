@@ -120,11 +120,21 @@ const staffPinLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many PIN attempts from this device — please try again in 15 minutes.' },
 });
+const writeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: 'Too many write requests. Please slow down.' },
+  skip: (req) => req.user && (req.user.role === 'admin' || req.user.role === 'director'),
+});
 
 app.use('/api/', apiLimiter);
 app.use('/api/auth/', authLimiter);
 app.use('/api/auth/staff-token', staffPinLimiter);
 app.use('/api/auth/staff-lookup', staffPinLimiter);
+app.use(['/api/tables'], (req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return writeLimiter(req, res, next);
+  next();
+});
 
 /* Prevent caching of all API responses */
 app.use('/api/', (_req, res, next) => {
@@ -242,26 +252,19 @@ app.get('/api/provision', async (req, res) => {
    (Railway healthcheck kills the container on any non-2xx response.)
    ──────────────────────────────────────────────────────────────────────── */
 app.get('/api/health', async (req, res) => {
-  let dbStatus = 'unknown';
-  let dbError  = null;
   try {
     const pool = require('./db/pool');
     await pool.query('SELECT 1');
-    dbStatus = 'connected';
+    res.status(200).json({
+      status: 'ok',
+      db:     true,
+      ts:     new Date().toISOString(),
+      env:    process.env.NODE_ENV || 'development',
+    });
   } catch (err) {
-    dbError  = err.message || String(err);
-    dbStatus = 'disconnected';
-    console.warn('Health check — DB not reachable:', dbError);
+    console.error('[health] DB check failed:', err.message);
+    return res.status(503).json({ status: 'error', db: false });
   }
-  // Always 200 — the server is up regardless of DB state
-  res.status(200).json({
-    status:   'ok',
-    db:       dbStatus,
-    dbError:  dbError,
-    dbUrl:    process.env.DATABASE_URL ? '✅ set' : '❌ not set',
-    ts:       new Date().toISOString(),
-    env:      process.env.NODE_ENV || 'development',
-  });
 });
 
 /* ─── Legal Pages — served directly at both /page and /page.html ─── */
