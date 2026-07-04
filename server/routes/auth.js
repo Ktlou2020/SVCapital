@@ -9,11 +9,13 @@
    ═══════════════════════════════════════════════════════ */
 'use strict';
 
-const router  = require('express').Router();
-const bcrypt  = require('bcryptjs');
-const jwt     = require('jsonwebtoken');
+const router     = require('express').Router();
+const bcrypt     = require('bcryptjs');
+const jwt        = require('jsonwebtoken');
+const crypto     = require('crypto');
 const { v4: uuidv4 } = require('uuid');
-const pool    = require('../db/pool');
+const rateLimit  = require('express-rate-limit');
+const pool       = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const emailService = require('../services/email');
 const audit        = require('../services/audit');
@@ -23,10 +25,24 @@ function stripHtml(str) {
   return (str || '').replace(/<[^>]*>/g, '').replace(/[<>]/g, '').trim();
 }
 
-const JWT_SECRET     = process.env.JWT_SECRET || 'svcapital-dev-secret-change-in-production';
+const JWT_SECRET     = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('[auth] JWT_SECRET env var is required');
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const twoFaLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many 2FA attempts.' },
+});
 
 function generateRecoveryCodes() {
-  const crypto = require('crypto');
   const codes = [];
   for (let i = 0; i < 8; i++) {
     const raw = crypto.randomBytes(5).toString('hex').toUpperCase(); // 10 chars
@@ -34,8 +50,10 @@ function generateRecoveryCodes() {
   }
   return codes;
 }
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
-const IS_PROD        = process.env.NODE_ENV === 'production';
+const JWT_EXPIRES_IN     = process.env.JWT_EXPIRES_IN || '8h';
+const IS_PROD            = process.env.NODE_ENV === 'production';
+const MAX_LOGIN_ATTEMPTS = 3;
+const LOCKOUT_MINUTES    = 30;
 
 if (IS_PROD && !process.env.JWT_SECRET) {
   console.error('FATAL: JWT_SECRET env var is not set. Refusing to start — all tokens would be forgeable.');
@@ -59,7 +77,7 @@ function signToken(user) {
 }
 
 /* ─── POST /api/auth/login ─── */
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || typeof email !== 'string' || !email.includes('@')) {
@@ -81,9 +99,38 @@ router.post('/login', async (req, res) => {
     if (!user.is_active)
       return res.status(403).json({ error: 'Account is deactivated. Contact support.' });
 
+    // Per-account lockout (mirrors staff-token lockout pattern)
+    if (user.login_locked_until && new Date(user.login_locked_until) > new Date()) {
+      const secsLeft = Math.ceil((new Date(user.login_locked_until) - Date.now()) / 1000);
+      return res.status(429).json({
+        error: `Account locked after too many failed attempts. Try again in ${Math.ceil(secsLeft / 60)} minute(s).`,
+        lockedSecsRemaining: secsLeft,
+      });
+    }
+
     const match = await bcrypt.compare(password, user.password_hash);
-    if (!match)
-      return res.status(401).json({ error: 'Invalid credentials.' });
+    if (!match) {
+      const newAttempts = (user.login_attempts || 0) + 1;
+      if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
+        await pool.query(
+          `UPDATE users SET login_attempts = 0,
+             login_locked_until = NOW() + INTERVAL '${LOCKOUT_MINUTES} minutes'
+           WHERE id = $1`, [user.id]
+        );
+        return res.status(429).json({
+          error: `Too many failed attempts. Account locked for ${LOCKOUT_MINUTES} minutes.`,
+          lockedSecsRemaining: LOCKOUT_MINUTES * 60,
+        });
+      }
+      await pool.query('UPDATE users SET login_attempts = $1 WHERE id = $2', [newAttempts, user.id]);
+      const left = MAX_LOGIN_ATTEMPTS - newAttempts;
+      return res.status(401).json({
+        error: `Invalid credentials. ${left} attempt${left !== 1 ? 's' : ''} remaining.`,
+        attemptsLeft: left,
+      });
+    }
+    // Clear failed attempts on successful password match
+    await pool.query('UPDATE users SET login_attempts = 0, login_locked_until = NULL WHERE id = $1', [user.id]);
 
     // 2FA check: if enabled, issue a short-lived pending token instead of full JWT
     if (user.totp_enabled) {
@@ -131,6 +178,8 @@ router.post('/login', async (req, res) => {
     );
 
     // Set cookie for web clients
+    // TODO(security): SameSite=None without CSRF tokens. Add csurf middleware or enforce
+    // Authorization: Bearer header instead of cookie for state-changing endpoints.
     res.cookie('svc_token', token, {
       httpOnly: true,
       secure:   IS_PROD,
@@ -170,7 +219,6 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      refreshToken,
       user: {
         id:         user.id,
         email:      user.email,
@@ -329,7 +377,6 @@ router.post('/register', async (req, res) => {
 
     res.status(201).json({
       token,
-      refreshToken,
       user: {
         id:         newUser.id,
         email:      newUser.email,
@@ -373,6 +420,9 @@ router.get('/me', requireAuth, async (req, res) => {
 
 /* ─── POST /api/auth/logout ─── */
 router.post('/logout', async (req, res) => {
+  // TODO(security): JWT denylist — add this token's jti to a Redis/DB denylist (TTL = token expiry)
+  // until then, tokens remain valid for up to 8h after logout. Requires: jti claim on all JWTs,
+  // a denylist store (Redis recommended), and a check in requireAuth middleware.
   await pool.query('DELETE FROM sessions WHERE refresh_token=$1', [req.cookies?.svc_refresh]).catch(() => {});
   res.clearCookie('svc_token');
   res.clearCookie('svc_refresh', { path: '/api/auth' });
@@ -424,7 +474,7 @@ router.post('/forgot-password', async (req, res) => {
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
       const token = jwt.sign(
         { sub: user.id, purpose: 'password_reset', jti },
-        process.env.JWT_SECRET,
+        JWT_SECRET,
         { expiresIn: '15m' }
       );
       // Invalidate any previous unused tokens for this user
@@ -452,7 +502,7 @@ router.post('/reset-password', async (req, res) => {
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     if (payload.purpose !== 'password_reset') return res.status(400).json({ error: 'Invalid reset token.' });
 
     // Enforce one-time-use: check jti in DB and mark as used atomically
@@ -534,9 +584,6 @@ async function issueStaffJwt(emp, res) {
   return { token, role: jwtRole };
 }
 
-const MAX_LOGIN_ATTEMPTS = 3;
-const LOCKOUT_MINUTES    = 30;
-
 /* ─── POST /api/auth/staff-lookup ───────────────────────────────────────────
    Returns employee display fields for the email-lookup step.
    Does NOT return id_number or pin_hash — PIN validation is server-only.
@@ -557,7 +604,7 @@ router.post('/staff-lookup', async (req, res) => {
        LIMIT 1`,
       [email.toLowerCase().trim()]
     );
-    if (!rows[0]) return res.status(404).json({ error: 'No staff account found for that email address.' });
+    if (!rows[0]) return res.status(200).json({ message: 'If an account exists, login instructions have been sent.' });
 
     const emp = rows[0];
     const locked = !!(emp.login_locked_until && new Date(emp.login_locked_until) > new Date());
@@ -613,7 +660,12 @@ router.post('/staff-token', async (req, res) => {
     if (!emp.pin_set) {
       const idDigits = (emp.id_number || '').replace(/\D/g, '');
       const tempPin  = idDigits.slice(-4);
-      valid = !!(tempPin && pin === tempPin);
+      if (tempPin) {
+        const _a = Buffer.from(String(pin));
+        const _b = Buffer.from(String(tempPin));
+        const _match = _a.length === _b.length && crypto.timingSafeEqual(_a, _b);
+        valid = _match;
+      }
     } else {
       valid = emp.pin_hash ? await bcrypt.compare(pin, emp.pin_hash) : false;
     }
@@ -774,7 +826,7 @@ router.post('/2fa/disable', requireAuth, async (req, res) => {
 });
 
 /* ─── POST /api/auth/2fa/recover ─── */
-router.post('/2fa/recover', async (req, res) => {
+router.post('/2fa/recover', twoFaLimiter, async (req, res) => {
   try {
     const { pending2FAToken, recoveryCode } = req.body;
     if (!pending2FAToken || !recoveryCode) return res.status(400).json({ error: 'pending2FAToken and recoveryCode are required.' });
@@ -801,7 +853,7 @@ router.post('/2fa/recover', async (req, res) => {
 });
 
 /* ─── POST /api/auth/2fa/verify-login ─── */
-router.post('/2fa/verify-login', async (req, res) => {
+router.post('/2fa/verify-login', twoFaLimiter, async (req, res) => {
   try {
     const { pending2FAToken, token } = req.body;
     if (!pending2FAToken || !token) return res.status(400).json({ error: 'pending2FAToken and token are required.' });
