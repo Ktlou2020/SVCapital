@@ -8430,10 +8430,7 @@ async function loadReferralDashboard() {
 /* ─── KYC Document Upload ─────────────────────────────────────── */
 let _kycFile = null;
 
-// Bug #3 fix: HTML-escape helper — use on every server-supplied string before
-// embedding in innerHTML to prevent XSS via malicious filenames / notes.
-const _esc = s => String(s == null ? '—' : s)
-  .replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+// _esc is declared at the top of this file (line 21) — no duplicate needed here.
 
 function _kycFileSelected(file) {
   if (!file) return;
