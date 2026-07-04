@@ -12,7 +12,7 @@ async function log({ actorId = null, actorEmail = null, actorRole = null, action
        actorId || null, actorEmail || null, actorRole || null, description, ip || null, metadata, platform || null]
     );
   } catch (err) {
-    console.error('[audit] CRITICAL: Failed to write audit event', { event, err: err.message });
+    console.error('[audit] CRITICAL: Failed to write audit event', { event: { action, entityType, entityId, actorId }, err: err.message });
     // TODO: Route to external SIEM/logging sink — audit failures must not be silent in production
   }
 }
