@@ -76,16 +76,6 @@ function signToken(user) {
   );
 }
 
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const twoFaLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 5, message: { error: 'Too many 2FA attempts.' } });
-
 /* ─── POST /api/auth/login ─── */
 router.post('/login', loginLimiter, async (req, res) => {
   try {
