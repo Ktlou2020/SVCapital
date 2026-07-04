@@ -33,19 +33,9 @@ async function runInterestCrediting() {
     const reference = `INT-${investment.id}-${yearMonth}`;
 
     try {
-      // Idempotency check — skip if already credited this month
-      const { rows: existing } = await pool.query(
-        `SELECT id FROM transactions WHERE reference = $1 AND type = 'return'`,
-        [reference]
-      );
-      if (existing.length > 0) {
-        skipped++;
-        continue;
-      }
-
       // Calculate monthly interest
-      const annualRate    = Number(investment.annual_rate) || 0;
-      const amount        = Number(investment.amount)      || 0;
+      const annualRate      = Number(investment.annual_rate) || 0;
+      const amount          = Number(investment.amount)      || 0;
       const monthlyInterest = Math.round(amount * annualRate / 12 * 100) / 100;
 
       if (monthlyInterest <= 0) {
@@ -56,29 +46,48 @@ async function runInterestCrediting() {
       const poolName    = investment.pool_name || investment.pool_id || 'your investment';
       const description = `Return Earned — ${poolName} (${yearMonth})`;
 
-      // 1. Record the return transaction
-      await pool.query(
-        `INSERT INTO transactions
-           (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
-         VALUES (gen_random_uuid(), $1, 'return', $2, 'completed', $3, $4, NOW(), NOW())`,
-        [investment.investor_id, monthlyInterest, reference, description]
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
 
-      // 2. Update investor total_returns
-      await pool.query(
-        `UPDATE investors
-            SET total_returns = total_returns + $1, updated_at = NOW()
-          WHERE id = $2`,
-        [monthlyInterest, investment.investor_id]
-      );
+        // Idempotency: INSERT ON CONFLICT DO NOTHING — skip if already credited this month
+        const { rowCount } = await client.query(
+          `INSERT INTO transactions
+             (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
+           VALUES (gen_random_uuid(), $1, 'return', $2, 'completed', $3, $4, NOW(), NOW())
+           ON CONFLICT (reference) DO NOTHING`,
+          [investment.investor_id, monthlyInterest, reference, description]
+        );
 
-      // 3. Update investment actual_return
-      await pool.query(
-        `UPDATE investments
-            SET actual_return = actual_return + $1, updated_at = NOW()
-          WHERE id = $2`,
-        [monthlyInterest, investment.id]
-      );
+        if (!rowCount) {
+          await client.query('ROLLBACK');
+          skipped++;
+          continue; // already processed; finally releases the client
+        }
+
+        // 2. Update investor total_returns
+        await client.query(
+          `UPDATE investors
+              SET total_returns = total_returns + $1, updated_at = NOW()
+            WHERE id = $2`,
+          [monthlyInterest, investment.investor_id]
+        );
+
+        // 3. Update investment actual_return
+        await client.query(
+          `UPDATE investments
+              SET actual_return = actual_return + $1, updated_at = NOW()
+            WHERE id = $2`,
+          [monthlyInterest, investment.id]
+        );
+
+        await client.query('COMMIT');
+      } catch (txErr) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw txErr;
+      } finally {
+        client.release();
+      }
 
       console.log(
         `[interestCron] R${monthlyInterest} interest → investor ${investment.investor_id}, investment ${investment.id}`
