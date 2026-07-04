@@ -1416,7 +1416,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
     PORTAL.pools        = poolRes.data || [];
 
     // Ensure investor object is never null so statement guard passes
-    if (!PORTAL.investor) PORTAL.investor = { id: demoId };
+    if (!PORTAL.investor) PORTAL.investor = { id: DEMO_INVESTOR_ID };
 
     // Load waitlist entries for this investor (non-blocking)
     const waitlistRes = await API._fetch('GET', 'tables/investment_waitlist', null, { investor_id: PORTAL.investor.id, limit: 50 }).catch(() => ({ data: [] }));
