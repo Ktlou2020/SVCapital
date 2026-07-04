@@ -12,8 +12,6 @@ const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 //   onboarding@resend.dev
 const FROM = process.env.FROM_EMAIL || 'SV Capital <noreply@svcapital.co.za>';
 
-const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-
 /* ── HTML wrapper ─────────────────────────────────────────── */
 function _wrap(body) {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
