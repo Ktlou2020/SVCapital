@@ -34,9 +34,16 @@ function hotp(key, counter) {
 function generateSecret() { return b32Encode(crypto.randomBytes(20)); }
 
 function verify(secret, token) {
+  // TODO(security): Add replay protection — persist last_used_counter per secret in DB.
+  // Reject any code whose counter <= last_used_counter. Requires adding a totp_last_counter
+  // column to the investors/employees table. Until then, codes are valid for the full ~90s window.
   const key = b32Decode(secret);
   const t = Math.floor(Date.now() / 30000);
-  for (const w of [-1, 0, 1]) { if (hotp(key, t + w) === String(token).trim()) return true; }
+  for (const w of [-1, 0, 1]) {
+    const expected = Buffer.from(String(hotp(key, t+w)).padStart(6, '0'));
+    const actual = Buffer.from(String(token).trim().padStart(6, '0'));
+    if (expected.length === actual.length && crypto.timingSafeEqual(expected, actual)) { return true; }
+  }
   return false;
 }
 

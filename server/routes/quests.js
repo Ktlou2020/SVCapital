@@ -212,6 +212,20 @@ router.post('/complete', requireAuth, async (req, res) => {
       return res.status(409).json({ error: 'Quest already completed.' });
     }
 
+    // Milestone verification — server-side check of underlying condition
+    if (quest.category === 'milestone' || questId.startsWith('milestone')) {
+      const { rows: invRows } = await pool.query(
+        'SELECT COALESCE(SUM(amount),0) as total FROM investments WHERE investor_id=$1 AND status=$2',
+        [investorId, 'active']
+      );
+      const total = parseFloat(invRows[0].total);
+      const milestoneAmounts = { milestone_10k: 10000, milestone_50k: 50000, milestone_100k: 100000, milestone_250k: 250000 };
+      const required = milestoneAmounts[questId];
+      if (required && total < required) {
+        return res.status(403).json({ error: 'Milestone requirement not met.' });
+      }
+    }
+
     // Record completion
     const cId = `QC-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
     await pool.query(
@@ -231,7 +245,12 @@ router.post('/complete', requireAuth, async (req, res) => {
     const newLvl  = getLevelForXP(newXP);
     const leveledUp = newLvl.id !== prevLvl.id;
 
-    // Update investor — merge survey data into investor_profile
+    // Update investor — merge survey data into investor_profile (key allowlist)
+    const ALLOWED_PROFILE_KEYS = ['risk_tolerance', 'investment_goal', 'experience_level', 'time_horizon', 'survey_completed_at', 'onboarding_step'];
+    const safeData = {};
+    for (const k of ALLOWED_PROFILE_KEYS) {
+      if (data[k] !== undefined) safeData[k] = data[k];
+    }
     await pool.query(
       `UPDATE investors SET
          xp_points          = $1,
@@ -239,7 +258,7 @@ router.post('/complete', requireAuth, async (req, res) => {
          investor_profile    = COALESCE(investor_profile, '{}') || $3::jsonb,
          updated_at          = NOW()
        WHERE id = $4`,
-      [newXP, newLvl.id, JSON.stringify(data), investorId]
+      [newXP, newLvl.id, JSON.stringify(safeData), investorId]
     );
 
     const nextLevel = XP_LEVELS.find(l => l.min > newXP) || null;

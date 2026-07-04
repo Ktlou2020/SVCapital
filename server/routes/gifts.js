@@ -180,7 +180,7 @@ router.post('/claim/:token', requireAuth, async (req, res) => {
     );
     if (!gift) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Gift not found' }); }
     if (gift.status !== 'pending') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Gift already claimed or cancelled' }); }
-    if (new Date(gift.expires_at) < new Date()) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Gift has expired' }); }
+    if (gift.expires_at && new Date(gift.expires_at) < new Date()) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Gift has expired' }); }
 
     const { rows: [claimant] } = await client.query(
       'SELECT email, first_name, last_name FROM investors WHERE id = $1',
@@ -242,6 +242,11 @@ router.delete('/:id', requireAuth, async (req, res) => {
       'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
       [gift.amount, senderId]
     );
+    await client.query(
+      `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, created_at, updated_at)
+       VALUES (gen_random_uuid(), $1, 'gift_cancelled', $2, 'completed', $3, 'Gift cancellation refund', NOW(), NOW())`,
+      [senderId, gift.amount, 'GIFT-CANCEL-' + gift.id]
+    );
 
     await client.query('COMMIT');
     res.json({ success: true, refunded: gift.amount });
@@ -258,11 +263,11 @@ router.get('/check-recipient', requireAuth, async (req, res) => {
   const { email: recipientEmail } = req.query;
   if (!recipientEmail) return res.status(400).json({ error: 'email required' });
   try {
-    const { rows: [inv] } = await pool.query(
-      'SELECT first_name, last_name FROM investors WHERE LOWER(email) = LOWER($1)',
+    const { rows: [investor] } = await pool.query(
+      'SELECT id FROM investors WHERE LOWER(email) = LOWER($1)',
       [recipientEmail]
     );
-    res.json({ exists: !!inv, name: inv ? `${inv.first_name} ${inv.last_name}`.trim() : null });
+    return res.json({ exists: !!investor });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

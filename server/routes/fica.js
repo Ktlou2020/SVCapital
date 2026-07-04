@@ -200,6 +200,15 @@ router.post('/webhook/smile', async (req, res) => {
    Stitch async result callback (for async bank verification flows).
    ═══════════════════════════════════════════════════════ */
 router.post('/webhook/stitch', async (req, res) => {
+  // TODO(security): Implement Stitch webhook signature verification
+  // The Stitch docs describe HMAC-SHA256 signing. Verify before processing:
+  // const sig = req.headers['x-stitch-signature'];
+  // if (!sig || !verifyStitchSignature(req.rawBody, sig)) return res.status(401).json({ error: 'Invalid signature' });
+  // For now, only process if a STITCH_WEBHOOK_SECRET env var is set:
+  if (!process.env.STITCH_WEBHOOK_SECRET) {
+    console.warn('[fica] STITCH_WEBHOOK_SECRET not set — rejecting Stitch webhook');
+    return res.status(500).json({ error: 'Webhook verification not configured' });
+  }
   res.sendStatus(200);
   console.log('[Stitch Webhook] Received:', JSON.stringify(req.body).slice(0, 300));
   /* Extend here if using Stitch async flows */

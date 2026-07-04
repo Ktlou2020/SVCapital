@@ -4,7 +4,8 @@
 'use strict';
 
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'svcapital-dev-secret-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('[auth] JWT_SECRET env var is required');
 
 /**
  * Verify JWT from Authorization header or cookie.
@@ -23,7 +24,7 @@ function requireAuth(req, res, next) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     req.user = payload;
     next();
   } catch (err) {
@@ -54,7 +55,7 @@ function optionalAuth(req, res, next) {
     ? authHeader.slice(7)
     : (req.cookies && req.cookies['svc_token']);
   if (token) {
-    try { req.user = jwt.verify(token, JWT_SECRET); } catch (_) {}
+    try { req.user = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }); } catch (_) {}
   }
   next();
 }

@@ -6,6 +6,7 @@
 'use strict';
 
 const BASE_URL = process.env.BASE_URL || 'https://platform.svcapital.co.za';
+const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 // FROM_EMAIL must come from a domain verified in your Resend dashboard.
 // Until svcapital.co.za is verified, use the Resend test address:
 //   onboarding@resend.dev
@@ -51,7 +52,11 @@ p{font-size:0.93rem;color:#444;line-height:1.65;margin-bottom:14px}
 /* ── Core send ────────────────────────────────────────────── */
 async function _send({ to, subject, html, text }) {
   const key = process.env.RESEND_API_KEY;
-  if (!key) { console.warn('[email] RESEND_API_KEY not set — skipping:', subject); return; }
+  if (!key) {
+    if (process.env.NODE_ENV === 'production') throw new Error('[email] RESEND_API_KEY is required in production');
+    console.warn('[email] RESEND_API_KEY not set — email suppressed:', to, subject);
+    return;
+  }
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -203,7 +208,7 @@ function sendTicketResponse(investor, { subject: ticketSubject, adminResponse })
       <h2>Support Response 💬</h2>
       <p>Hi ${first_name}, the SV Capital support team has responded to your query.</p>
       <div class="box" style="border-left:4px solid #ff9b0c;padding-left:18px">
-        <p style="margin:0;font-size:0.9rem;color:#333;line-height:1.7">${adminResponse.replace(/\n/g, '<br>')}</p>
+        <p style="margin:0;font-size:0.9rem;color:#333;line-height:1.7">${escHtml(adminResponse).replace(/\n/g, '<br>')}</p>
       </div>
       <p>If you have further questions, please log in and raise a follow-up ticket.</p>
       <a href="${BASE_URL}/portal/" class="btn">View My Tickets →</a>
@@ -613,7 +618,7 @@ function sendFicaResubmitReminder(investor) {
       <p>Dear ${investor.first_name},</p>
       <p>Your FICA verification documents are approaching their 3-year validity period. To comply with South African regulatory requirements, we kindly request that you resubmit your identity documents.</p>
       <p>Please log in to your SV Capital investor portal and navigate to <strong>My Profile → KYC Documents</strong> to upload updated documents.</p>
-      <a href="https://platform.svcapital.co.za/portal/" class="btn">Resubmit Documents</a>
+      <a href="${BASE_URL}/portal/" class="btn">Resubmit Documents</a>
       <p>If you have any questions, please contact our support team.</p>
     `),
   });
@@ -629,12 +634,12 @@ function sendGiftReceived(to, { senderName, amount, message, recipientName }) {
     html: _wrap(`
       <h2>You've received an investment gift! 🎁</h2>
       <p>Hi ${recipientName},</p>
-      <p><strong>${senderName}</strong> just sent you an investment gift on SV Capital.</p>
-      ${message ? `<div class="box" style="border-left:4px solid #ff9b0c;background:#fffbf0"><p style="font-style:italic;color:#555;margin:0">&ldquo;${message}&rdquo;</p></div>` : ''}
+      <p><strong>${escHtml(senderName)}</strong> just sent you an investment gift on SV Capital.</p>
+      ${message ? `<div class="box" style="border-left:4px solid #ff9b0c;background:#fffbf0"><p style="font-style:italic;color:#555;margin:0">&ldquo;${escHtml(message)}&rdquo;</p></div>` : ''}
       <span class="big">R${amt}</span>
       <p>This amount has been added directly to your wallet and is ready to invest right now.</p>
       <a href="${BASE_URL}/portal/" class="btn">Go to My Wallet →</a>
-      <p style="font-size:0.8rem;color:#aaa;margin-top:24px">Gift sender: ${senderName} &nbsp;·&nbsp; SV Capital — Venture Beyond the Ordinary</p>
+      <p style="font-size:0.8rem;color:#aaa;margin-top:24px">Gift sender: ${escHtml(senderName)} &nbsp;·&nbsp; SV Capital — Venture Beyond the Ordinary</p>
     `),
   });
 }

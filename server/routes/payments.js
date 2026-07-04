@@ -31,74 +31,73 @@ router.get('/config', requireAuth, (req, res) => {
    Idempotent: skips silently if the reference is already processed.
 ────────────────────────────────────────────────────────── */
 async function creditWallet(investorId, amount, reference, actorEmail = null, source = 'paystack', subAccountId = null) {
-  // Idempotency check — never double-credit the same reference
-  const dupCheck = await pool.query(
-    `SELECT id FROM transactions
-     WHERE reference = $1 AND investor_id = $2 AND type = 'deposit' AND status = 'completed'`,
-    [reference, investorId]
-  );
-  if (dupCheck.rows.length > 0) {
-    console.log(`[payments] ${reference} already processed — skipping duplicate credit`);
-    return { alreadyProcessed: true };
-  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  const invRes = await pool.query('SELECT * FROM investors WHERE id = $1', [investorId]);
-  if (!invRes.rows[0]) throw new Error(`Investor ${investorId} not found`);
-  const investor = invRes.rows[0];
+    const sourceLabel = source === 'webhook' ? 'Paystack (confirmed)' : 'Paystack';
+    const dest = subAccountId ? `sub-account` : 'wallet';
+    const desc = `Top-up via ${sourceLabel} — R${Number(amount).toLocaleString('en-ZA')} credited to ${dest}`;
 
-  // Route credit: sub-account wallet takes priority when sub_account_id is present
-  if (subAccountId) {
-    await pool.query(
-      'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1 WHERE id = $2',
-      [parseFloat(amount), subAccountId]
-    );
-  } else {
-    // Atomic SQL increment — safe against race conditions
-    await pool.query(
-      'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-      [parseFloat(amount), investorId]
-    );
-  }
-
-  const sourceLabel = source === 'webhook' ? 'Paystack (confirmed)' : 'Paystack';
-  const dest = subAccountId ? `sub-account` : 'wallet';
-  const desc = `Top-up via ${sourceLabel} — R${Number(amount).toLocaleString('en-ZA')} credited to ${dest}`;
-
-  // Upsert transaction: update pending → completed, or insert fresh
-  const existingTx = await pool.query(
-    `SELECT id FROM transactions WHERE reference = $1 AND investor_id = $2 AND type = 'deposit'`,
-    [reference, investorId]
-  );
-  if (existingTx.rows.length > 0) {
-    await pool.query(
-      `UPDATE transactions SET status = 'completed', description = $1, updated_at = NOW() WHERE id = $2`,
-      [desc, existingTx.rows[0].id]
-    );
-  } else {
-    await pool.query(
+    // Idempotency guard — INSERT with ON CONFLICT DO NOTHING prevents double-credit
+    const { rowCount } = await client.query(
       `INSERT INTO transactions (id, investor_id, type, amount, status, reference, description, sub_account_id, transaction_date, created_at)
-       VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, $4, $5, NOW(), NOW())`,
+       VALUES (gen_random_uuid(), $1, 'deposit', $2, 'completed', $3, $4, $5, NOW(), NOW())
+       ON CONFLICT (reference) DO NOTHING`,
       [investorId, amount, reference, desc, subAccountId || null]
     );
+    if (!rowCount) {
+      await client.query('ROLLBACK');
+      console.log(`[payments] ${reference} already processed — skipping duplicate credit`);
+      return { alreadyProcessed: true };
+    }
+
+    const invRes = await client.query('SELECT * FROM investors WHERE id = $1', [investorId]);
+    if (!invRes.rows[0]) {
+      await client.query('ROLLBACK');
+      throw new Error(`Investor ${investorId} not found`);
+    }
+    const investor = invRes.rows[0];
+
+    // Route credit: sub-account wallet takes priority when sub_account_id is present
+    if (subAccountId) {
+      await client.query(
+        'UPDATE sub_accounts SET wallet_balance = wallet_balance + $1 WHERE id = $2',
+        [parseFloat(amount), subAccountId]
+      );
+    } else {
+      // Atomic SQL increment — safe against race conditions
+      await client.query(
+        'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+        [parseFloat(amount), investorId]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    // Email + SMS confirmation (non-blocking)
+    Promise.all([
+      emailService.sendDepositConfirmed(investor, amount, reference, 'Paystack').catch(e => console.error('[payments] email error:', e.message)),
+      smsService.sendDepositConfirmed(investor.phone, investor.first_name, amount).catch(e => console.error('[payments] sms error:', e.message)),
+    ]);
+
+    // Audit trail
+    await audit.log({
+      actorEmail: actorEmail || investor.email,
+      action: 'transaction.completed',
+      entityType: 'transactions',
+      entityId: reference,
+      description: `Paystack deposit R${amount} credited to ${investorId}`,
+    }).catch(() => {});
+
+    console.log(`[payments] Credited R${amount} to ${subAccountId ? `sub-account ${subAccountId}` : `investor ${investorId}`}, ref: ${reference}`);
+    return { alreadyProcessed: false, amount, investorId, subAccountId };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
   }
-
-  // Email + SMS confirmation (non-blocking)
-  Promise.all([
-    emailService.sendDepositConfirmed(investor, amount, reference, 'Paystack').catch(e => console.error('[payments] email error:', e.message)),
-    smsService.sendDepositConfirmed(investor.phone, investor.first_name, amount).catch(e => console.error('[payments] sms error:', e.message)),
-  ]);
-
-  // Audit trail
-  await audit.log({
-    actorEmail: actorEmail || investor.email,
-    action: 'transaction.completed',
-    entityType: 'transactions',
-    entityId: reference,
-    description: `Paystack deposit R${amount} credited to ${investorId}`,
-  }).catch(() => {});
-
-  console.log(`[payments] Credited R${amount} to ${subAccountId ? `sub-account ${subAccountId}` : `investor ${investorId}`}, ref: ${reference}`);
-  return { alreadyProcessed: false, amount, investorId, subAccountId };
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -108,11 +107,11 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
    credits the investor's wallet.
 ────────────────────────────────────────────────────────── */
 router.post('/paystack/verify', requireAuth, async (req, res) => {
-  const { reference, investorId, walletCredit, subAccountId } = req.body;
+  const { reference, walletCredit, subAccountId } = req.body;
   if (!reference) return res.status(400).json({ error: 'reference is required' });
 
-  const resolvedInvestorId = investorId || req.user.investorId;
-  if (!resolvedInvestorId) return res.status(400).json({ error: 'investorId is required' });
+  const investorId = req.user.investorId;
+  if (!investorId) return res.status(400).json({ error: 'investorId is required' });
 
   const secretKey = (process.env.PAYSTACK_SECRET_KEY || '').trim();
 
@@ -146,8 +145,8 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
     // Always credit the authenticated user — never trust investor_id from Paystack metadata.
     const creditAmount = Number(psData.data.metadata?.wallet_credit) || (psData.data.amount / 100);
 
-    const result = await creditWallet(resolvedInvestorId, creditAmount, reference, req.user?.email, 'paystack', subAccountId || null);
-    aml.checkDeposit(pool, resolvedInvestorId, creditAmount, reference).catch(e => console.error('[aml]', e.message));
+    const result = await creditWallet(investorId, creditAmount, reference, req.user?.email, 'paystack', subAccountId || null);
+    aml.checkDeposit(pool, investorId, creditAmount, reference).catch(e => console.error('[aml]', e.message));
 
     // Save reusable authorization code for future auto top-ups
     let authSaved = false;
@@ -161,7 +160,7 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
            ON CONFLICT (investor_id) DO UPDATE SET
              authorization_code=$2, email=$3, card_type=$4, last4=$5,
              exp_month=$6, exp_year=$7, bank=$8, channel=$9, updated_at=NOW()`,
-          [resolvedInvestorId, auth.authorization_code, psData.data.customer.email,
+          [investorId, auth.authorization_code, psData.data.customer.email,
            auth.card_type, auth.last4, auth.exp_month, auth.exp_year, auth.bank, auth.channel]
         );
         authSaved = true;
@@ -186,21 +185,24 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
    No auth required (uses HMAC signature verification instead).
 ────────────────────────────────────────────────────────── */
 router.post('/paystack/webhook', async (req, res) => {
+  const secretKey = (process.env.PAYSTACK_SECRET_KEY || '').trim();
+  if (!secretKey) {
+    console.error('[payments] PAYSTACK_SECRET_KEY not set — rejecting webhook');
+    return res.status(500).json({ error: 'Webhook verification unavailable' });
+  }
+
+  if (!req.rawBody) {
+    console.error('[payments] rawBody missing — HMAC verification failed');
+    return res.status(400).json({ error: 'Signature verification failed' });
+  }
+  const expectedSig = crypto.createHmac('sha512', secretKey).update(req.rawBody).digest('hex');
+  if (expectedSig !== req.headers['x-paystack-signature']) {
+    console.warn('[payments/webhook] Invalid Paystack signature — ignoring');
+    return res.status(400).json({ error: 'Invalid signature' });
+  }
+
   // Acknowledge immediately — Paystack requires a 200 within 5 seconds
   res.sendStatus(200);
-
-  const secretKey = (process.env.PAYSTACK_SECRET_KEY || '').trim();
-  if (secretKey) {
-    // Verify HMAC-SHA512 signature using the raw body (captured in server/index.js middleware)
-    const rawBody = req.rawBody || JSON.stringify(req.body);
-    const expectedSig = crypto.createHmac('sha512', secretKey).update(rawBody).digest('hex');
-    if (expectedSig !== req.headers['x-paystack-signature']) {
-      console.warn('[payments/webhook] Invalid Paystack signature — ignoring');
-      return;
-    }
-  } else {
-    console.warn('[payments/webhook] PAYSTACK_SECRET_KEY not set — skipping signature check');
-  }
 
   const { event, data } = req.body;
   if (event !== 'charge.success') return;
@@ -277,26 +279,36 @@ router.post('/ozow-hash', requireAuth, (req, res) => {
    DELETE /api/payments/topup-card — remove saved card + disable auto top-up
 ────────────────────────────────────────────────────────── */
 router.get('/topup-card', requireAuth, async (req, res) => {
-  const investorId = req.user.investorId;
-  if (!investorId) return res.status(400).json({ error: 'investorId required' });
-  const { rows } = await pool.query(
-    `SELECT card_type, last4, exp_month, exp_year, bank, channel, created_at
-     FROM paystack_authorizations WHERE investor_id = $1`,
-    [investorId]
-  );
-  res.json({ card: rows[0] || null });
+  try {
+    const investorId = req.user.investorId;
+    if (!investorId) return res.status(400).json({ error: 'investorId required' });
+    const { rows } = await pool.query(
+      `SELECT card_type, last4, exp_month, exp_year, bank, channel, created_at
+       FROM paystack_authorizations WHERE investor_id = $1`,
+      [investorId]
+    );
+    res.json({ card: rows[0] || null });
+  } catch (err) {
+    console.error('[payments]', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
 });
 
 router.delete('/topup-card', requireAuth, async (req, res) => {
-  const investorId = req.user.investorId;
-  if (!investorId) return res.status(400).json({ error: 'investorId required' });
-  await pool.query('DELETE FROM paystack_authorizations WHERE investor_id = $1', [investorId]);
-  await pool.query(
-    `UPDATE investors SET auto_topup_enabled=false, auto_topup_amount=NULL, auto_topup_day=1, updated_at=NOW()
-     WHERE id=$1`,
-    [investorId]
-  );
-  res.json({ success: true });
+  try {
+    const investorId = req.user.investorId;
+    if (!investorId) return res.status(400).json({ error: 'investorId required' });
+    await pool.query('DELETE FROM paystack_authorizations WHERE investor_id = $1', [investorId]);
+    await pool.query(
+      `UPDATE investors SET auto_topup_enabled=false, auto_topup_amount=NULL, auto_topup_day=1, updated_at=NOW()
+       WHERE id=$1`,
+      [investorId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[payments]', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
 });
 
 /* ──────────────────────────────────────────────────────────
@@ -304,41 +316,51 @@ router.delete('/topup-card', requireAuth, async (req, res) => {
    POST /api/payments/auto-topup  — save settings
 ────────────────────────────────────────────────────────── */
 router.get('/auto-topup', requireAuth, async (req, res) => {
-  const investorId = req.user.investorId;
-  if (!investorId) return res.status(400).json({ error: 'investorId required' });
-  const { rows } = await pool.query(
-    `SELECT auto_topup_enabled, auto_topup_amount, auto_topup_day FROM investors WHERE id=$1`,
-    [investorId]
-  );
-  res.json(rows[0] || { auto_topup_enabled: false, auto_topup_amount: null, auto_topup_day: 1 });
+  try {
+    const investorId = req.user.investorId;
+    if (!investorId) return res.status(400).json({ error: 'investorId required' });
+    const { rows } = await pool.query(
+      `SELECT auto_topup_enabled, auto_topup_amount, auto_topup_day FROM investors WHERE id=$1`,
+      [investorId]
+    );
+    res.json(rows[0] || { auto_topup_enabled: false, auto_topup_amount: null, auto_topup_day: 1 });
+  } catch (err) {
+    console.error('[payments]', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
 });
 
 router.post('/auto-topup', requireAuth, async (req, res) => {
-  const investorId = req.user.investorId;
-  if (!investorId) return res.status(400).json({ error: 'investorId required' });
+  try {
+    const investorId = req.user.investorId;
+    if (!investorId) return res.status(400).json({ error: 'investorId required' });
 
-  const { enabled, amount, day } = req.body;
-  const amountNum = parseFloat(amount);
-  const dayNum    = parseInt(day, 10);
+    const { enabled, amount, day } = req.body;
+    const amountNum = parseFloat(amount);
+    const dayNum    = parseInt(day, 10);
 
-  if (enabled) {
-    if (!amountNum || amountNum < 50) return res.status(400).json({ error: 'Minimum auto top-up amount is R50' });
-    if (!dayNum || dayNum < 1 || dayNum > 28) return res.status(400).json({ error: 'Day must be between 1 and 28' });
+    if (enabled) {
+      if (!amountNum || amountNum < 50) return res.status(400).json({ error: 'Minimum auto top-up amount is R50' });
+      if (!dayNum || dayNum < 1 || dayNum > 28) return res.status(400).json({ error: 'Day must be between 1 and 28' });
 
-    // Require saved card to enable
-    const { rows } = await pool.query(
-      'SELECT id FROM paystack_authorizations WHERE investor_id=$1', [investorId]
+      // Require saved card to enable
+      const { rows } = await pool.query(
+        'SELECT id FROM paystack_authorizations WHERE investor_id=$1', [investorId]
+      );
+      if (!rows.length) return res.status(400).json({ error: 'No saved card found. Complete a Paystack top-up first to save your card.' });
+    }
+
+    await pool.query(
+      `UPDATE investors SET
+         auto_topup_enabled=$1, auto_topup_amount=$2, auto_topup_day=$3, updated_at=NOW()
+       WHERE id=$4`,
+      [!!enabled, enabled ? amountNum : null, enabled ? dayNum : 1, investorId]
     );
-    if (!rows.length) return res.status(400).json({ error: 'No saved card found. Complete a Paystack top-up first to save your card.' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[payments]', err);
+    res.status(500).json({ error: 'Internal server error.' });
   }
-
-  await pool.query(
-    `UPDATE investors SET
-       auto_topup_enabled=$1, auto_topup_amount=$2, auto_topup_day=$3, updated_at=NOW()
-     WHERE id=$4`,
-    [!!enabled, enabled ? amountNum : null, enabled ? dayNum : 1, investorId]
-  );
-  res.json({ success: true });
 });
 
 module.exports = router;
