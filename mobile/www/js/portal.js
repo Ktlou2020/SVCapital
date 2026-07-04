@@ -1361,16 +1361,11 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
     // Find the logged-in investor by their JWT-resolved ID
     PORTAL.investor = allInvestors.find(i => i.id === DEMO_INVESTOR_ID) || null;
 
-    // If not matched by ID, try a direct fetch — works even when DEMO_INVESTOR_ID is the 'INV-001' fallback
-    // because the server will resolve by email when investorId is missing from the JWT
-    if (!PORTAL.investor) {
-      const directRes = await API.investors.get(DEMO_INVESTOR_ID).catch(() => null);
-      if (directRes && directRes.id) PORTAL.investor = directRes;
-    }
-
-    // Last resort: if the server scoped the list to exactly one investor (the auth user),
-    // use it directly — safe because the server already enforced ownership
-    if (!PORTAL.investor && allInvestors.length === 1) {
+    // Fallback: the server already scopes investor-role list results to the authenticated user,
+    // so any item in allInvestors belongs to this user — use the first one when find-by-ID fails.
+    // (A direct GET with DEMO_INVESTOR_ID='INV-001' would always 404 when the investor's real
+    //  ID is different, so we skip that round-trip and rely on the list result.)
+    if (!PORTAL.investor && allInvestors.length > 0) {
       PORTAL.investor = allInvestors[0];
     }
 
