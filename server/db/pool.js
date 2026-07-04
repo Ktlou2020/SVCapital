@@ -18,19 +18,18 @@ function getPool() {
     console.warn('⚠️  DATABASE_URL is not set — DB queries will fail until it is configured.');
   }
 
-  // SSL configuration: production uses proper cert verification by default.
+  // SSL configuration: SSL is enabled by default in production.
+  // Railway (and most managed PG hosts) use self-signed internal certs, so
+  // rejectUnauthorized defaults to false. The connection is still encrypted.
   // Set DATABASE_SSL=false to disable SSL entirely (local dev without SSL).
-  // Set DATABASE_SSL_REJECT_UNAUTHORIZED=false to allow self-signed certs.
-  // Set DATABASE_SSL_CA to a PEM CA bundle for custom certificate authorities.
+  // Set DATABASE_SSL_REJECT_UNAUTHORIZED=true to enforce CA-signed certs.
   const sslConfig = dbUrl
     ? process.env.DATABASE_SSL === 'false' ? false : {
-        rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false',
+        rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === 'true',
         ca: process.env.DATABASE_SSL_CA || undefined,
       }
     : false;
-  if (process.env.NODE_ENV === 'production' && process.env.DATABASE_SSL !== 'false') console.log('[db] SSL enabled with cert verification');
-
-  if (process.env.NODE_ENV === 'production' && process.env.DATABASE_SSL !== 'false') console.log('[db] SSL enabled with cert verification');
+  if (process.env.NODE_ENV === 'production' && process.env.DATABASE_SSL !== 'false') console.log('[db] SSL enabled');
 
   _pool = new Pool({
     connectionString: dbUrl,
