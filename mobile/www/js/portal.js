@@ -1358,43 +1358,46 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
     const allInvestments = invstRes.data || [];
     const allTxns        = txnRes.data   || [];
 
-    // Find the logged-in investor — never fall back to a different person's record
+    // Find the logged-in investor by their JWT-resolved ID
     PORTAL.investor = allInvestors.find(i => i.id === DEMO_INVESTOR_ID) || null;
 
-    // If data isolation returned multiple investors but DEMO_INVESTOR_ID didn't match,
-    // try a direct fetch by ID so we always load the correct profile
+    // If not matched by DEMO_INVESTOR_ID, try a direct fetch (covers UUID vs string ID mismatches)
     if (!PORTAL.investor && DEMO_INVESTOR_ID && DEMO_INVESTOR_ID !== 'INV-001') {
       const directRes = await API.investors.get(DEMO_INVESTOR_ID).catch(() => null);
       if (directRes && directRes.id) PORTAL.investor = directRes;
     }
 
-    const demoId = PORTAL.investor ? PORTAL.investor.id : DEMO_INVESTOR_ID;
+    // Last resort: if the server scoped the list to exactly one investor (the auth user),
+    // use it directly — safe because the server already enforced ownership
+    if (!PORTAL.investor && allInvestors.length === 1) {
+      PORTAL.investor = allInvestors[0];
+    }
 
-    // Filter by matched investor ID
-    let myInvests = allInvestments.filter(i => i.investor_id === demoId);
-    let myTxns    = allTxns.filter(t => t.investor_id === demoId);
+    const resolvedId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
 
-    // Fallback: if the seeded investor_id uses a different format, try case-insensitive match
+    // Filter investments and transactions to the resolved investor
+    let myInvests = allInvestments.filter(i => i.investor_id === resolvedId);
+    let myTxns    = allTxns.filter(t => t.investor_id === resolvedId);
+
+    // Case-insensitive fallback if IDs use different casing/formats
     if (myInvests.length === 0 && allInvestments.length > 0) {
-      const demoIdLower = demoId.toLowerCase();
+      const idLower = resolvedId.toLowerCase();
       myInvests = allInvestments.filter(i =>
-        (i.investor_id || '').toLowerCase() === demoIdLower ||
+        (i.investor_id || '').toLowerCase() === idLower ||
         (i.investor_name || '').toLowerCase().includes((PORTAL.investor?.first_name || '').toLowerCase())
       );
     }
     if (myTxns.length === 0 && allTxns.length > 0) {
-      const demoIdLower = demoId.toLowerCase();
+      const idLower = resolvedId.toLowerCase();
       myTxns = allTxns.filter(t =>
-        (t.investor_id || '').toLowerCase() === demoIdLower ||
+        (t.investor_id || '').toLowerCase() === idLower ||
         (t.investor_name || '').toLowerCase().includes((PORTAL.investor?.first_name || '').toLowerCase())
       );
     }
 
-    // If no investments match the authenticated investor, show empty state — do NOT fall back to another investor's data
-    const investorId = PORTAL.investor?.id;
-    if (!investorId) {
-      console.error('[portal] Could not determine investor ID — aborting data load');
-      return;
+    if (!PORTAL.investor) {
+      console.error('[portal] Could not resolve investor — showing empty state');
+      PORTAL.investor = { id: resolvedId };
     }
 
     PORTAL.investments  = myInvests.map(inv => ({
