@@ -53,9 +53,7 @@ router.post('/request', requireAuth, async (req, res) => {
       }
       investor = row;
 
-      const ficaOk = ['approved', 'verified', 'active'].includes((investor.fica_status || '').toLowerCase())
-        || ['approved', 'verified', 'active'].includes((investor.kyc_status || '').toLowerCase())
-        || ['approved', 'verified', 'active'].includes((investor.status || '').toLowerCase());
+      const ficaOk = investor.fica_status === 'approved' || investor.kyc_status === 'verified';
       if (!ficaOk) {
         await client.query('ROLLBACK');
         return res.status(403).json({ error: 'FICA/KYC verification is required before withdrawing funds.' });
@@ -104,27 +102,45 @@ router.post('/:txId/approve', requireAuth, requireRole('admin', 'director'), asy
   try {
     const { txId } = req.params;
 
-    // Fetch the transaction (separate queries to avoid JOIN failure if bank_name column is missing)
-    const { rows: [tx] } = await pool.query(
-      `SELECT * FROM transactions WHERE id = $1 AND type = 'withdrawal' AND status = 'pending'`,
-      [txId]
-    );
-    if (!tx) {
-      return res.status(404).json({ error: 'Pending withdrawal transaction not found.' });
-    }
-    const { rows: [investor] } = await pool.query(
-      `SELECT id, email, first_name, last_name, phone, bank_name FROM investors WHERE id = $1`,
-      [tx.investor_id]
-    );
-    if (!investor) {
-      return res.status(404).json({ error: 'Investor record not found.' });
-    }
+    let tx, investor;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    // Mark as completed
-    await pool.query(
-      `UPDATE transactions SET status = 'completed', updated_at = NOW() WHERE id = $1`,
-      [txId]
-    );
+      // Lock the row and guard against concurrent approvals
+      const { rows } = await client.query(
+        `SELECT * FROM transactions WHERE id = $1 AND type = 'withdrawal' AND status = 'pending' FOR UPDATE`,
+        [txId]
+      );
+      if (!rows[0]) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Withdrawal not found or already processed' });
+      }
+      tx = rows[0];
+
+      const { rows: [invRow] } = await client.query(
+        `SELECT id, email, first_name, last_name, phone, bank_name FROM investors WHERE id = $1`,
+        [tx.investor_id]
+      );
+      if (!invRow) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Investor record not found.' });
+      }
+      investor = invRow;
+
+      // Mark as completed with status guard
+      await client.query(
+        `UPDATE transactions SET status = 'completed', updated_at = NOW() WHERE id = $1 AND status = 'pending'`,
+        [txId]
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
 
     // Fire-and-forget notifications
     setImmediate(async () => {
@@ -173,33 +189,51 @@ router.post('/:txId/reject', requireAuth, requireRole('admin', 'director'), asyn
     const { txId } = req.params;
     const { reason } = req.body;
 
-    // Fetch transaction and investor separately (avoids JOIN failure on optional columns)
-    const { rows: [tx] } = await pool.query(
-      `SELECT * FROM transactions WHERE id = $1 AND type = 'withdrawal' AND status = 'pending'`,
-      [txId]
-    );
-    if (!tx) {
-      return res.status(404).json({ error: 'Pending withdrawal transaction not found.' });
-    }
-    const { rows: [investor] } = await pool.query(
-      `SELECT id, email, first_name, last_name, phone FROM investors WHERE id = $1`,
-      [tx.investor_id]
-    );
-    if (!investor) {
-      return res.status(404).json({ error: 'Investor record not found.' });
-    }
+    let tx, investor;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    // Mark as rejected and store reason
-    await pool.query(
-      `UPDATE transactions SET status = 'rejected', notes = $1, updated_at = NOW() WHERE id = $2`,
-      [reason || null, txId]
-    );
+      // Lock the row and guard against concurrent rejections
+      const { rows } = await client.query(
+        `SELECT * FROM transactions WHERE id = $1 AND type = 'withdrawal' AND status = 'pending' FOR UPDATE`,
+        [txId]
+      );
+      if (!rows[0]) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Withdrawal not found or already processed' });
+      }
+      tx = rows[0];
 
-    // Refund wallet — use absolute value in case amount is stored as negative
-    await pool.query(
-      'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
-      [Math.abs(parseFloat(tx.amount)), tx.investor_id]
-    );
+      const { rows: [invRow] } = await client.query(
+        `SELECT id, email, first_name, last_name, phone FROM investors WHERE id = $1`,
+        [tx.investor_id]
+      );
+      if (!invRow) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Investor record not found.' });
+      }
+      investor = invRow;
+
+      // Mark as rejected and store reason with status guard
+      await client.query(
+        `UPDATE transactions SET status = 'rejected', notes = $1, updated_at = NOW() WHERE id = $2 AND status = 'pending'`,
+        [reason || null, txId]
+      );
+
+      // Refund wallet — use absolute value in case amount is stored as negative
+      await client.query(
+        'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+        [Math.abs(parseFloat(tx.amount)), tx.investor_id]
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
 
     // Fire-and-forget notifications
     setImmediate(async () => {
