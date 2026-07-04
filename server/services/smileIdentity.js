@@ -11,7 +11,8 @@
 
 const crypto = require('crypto');
 
-const SANDBOX    = process.env.SMILE_SANDBOX !== 'false';
+const SANDBOX    = process.env.SMILE_SANDBOX === 'true';
+console.log('[Smile] Running in', SANDBOX ? 'SANDBOX' : 'PRODUCTION', 'mode');
 const PARTNER_ID = process.env.SMILE_PARTNER_ID || '';
 const API_KEY    = process.env.SMILE_API_KEY    || '';
 
@@ -38,8 +39,7 @@ function _basePayload() {
 /* ─── Verify an SA ID or international ID via Enhanced KYC ───────────── */
 async function verifyID({ idNumber, idType = 'NATIONAL_ID', country = 'ZA', firstName, lastName, dob = '' }) {
   if (!PARTNER_ID || !API_KEY) {
-    console.warn('[Smile] No credentials — returning sandbox pass.');
-    return _sandboxPass('NATIONAL_ID', idNumber);
+    throw new Error('[Smile] SMILE_PARTNER_ID and SMILE_API_KEY are required. Set these env vars before processing KYC.');
   }
 
   const body = {
@@ -80,7 +80,7 @@ async function verifyPassport({ passportNumber, country = 'ZW', firstName, lastN
 
 /* ─── Verify incoming webhook signature ──────────────────────────────── */
 function verifyWebhook(body, receivedSig) {
-  if (!API_KEY) return true; // sandbox / unconfigured: allow all
+  if (!API_KEY) return false;
   const ts       = body.timestamp;
   if (!ts) return false;
   const expected = _sig(ts);

@@ -18,16 +18,19 @@ async function enqueue(toEmail, template, payload) {
 }
 
 async function processQueue() {
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
+    await client.query('BEGIN');
+    const { rows } = await client.query(
       `SELECT * FROM email_queue
        WHERE status IN ('pending','failed')
          AND attempts < $1
          AND scheduled_at <= NOW()
        ORDER BY created_at ASC
-       LIMIT 20`,
+       LIMIT 10 FOR UPDATE SKIP LOCKED`,
       [MAX_ATTEMPTS]
     );
+    await client.query('COMMIT');
     for (const item of rows) {
       try {
         await pool.query(`UPDATE email_queue SET status='processing', attempts=attempts+1 WHERE id=$1`, [item.id]);
@@ -46,7 +49,12 @@ async function processQueue() {
         console.error(`[emailQueue] ${newStatus} item ${item.id}: ${err.message}`);
       }
     }
-  } catch (e) { console.error('[emailQueue] processQueue error:', e.message); }
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[emailQueue] processQueue error:', e.message);
+  } finally {
+    client.release();
+  }
 }
 
 module.exports = { enqueue, processQueue };

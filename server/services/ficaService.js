@@ -22,7 +22,12 @@ const NATIONALITY_TO_CODE = {
 };
 
 function nationalityToCode(nationality) {
-  return NATIONALITY_TO_CODE[(nationality || '').toLowerCase()] || 'ZW';
+  const nationalityCode = NATIONALITY_TO_CODE[(nationality || '').toLowerCase()];
+  if (!nationalityCode) {
+    console.error('[ficaService] Unknown nationality:', nationality);
+    throw new Error('Unsupported nationality: ' + nationality);
+  }
+  return nationalityCode;
 }
 
 /* ─── Generate FICA check ID ──────────────────────────── */
@@ -136,7 +141,8 @@ async function runFicaCheck(investor, trigger) {
   const newKycStatus =
     overallStatus === 'pass'           ? 'verified' :
     overallStatus === 'fail'           ? 'rejected' :
-    overallStatus === 'manual_review'  ? 'pending'  : null;
+    overallStatus === 'manual_review'  ? 'pending'  :
+    overallStatus === 'error'          ? 'pending'  : null;
 
   await pool.query(
     `UPDATE investors SET
