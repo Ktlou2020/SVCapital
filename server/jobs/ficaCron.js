@@ -127,8 +127,12 @@ function startFicaCron() {
 
   /* Daily at 02:00 SAST — cron expression uses Africa/Johannesburg TZ */
   cron.schedule('0 2 * * *', async () => {
-    await runFicaSweep();
-    await runFicaExpiryAlerts();
+    try {
+      await runFicaSweep();
+      await runFicaExpiryAlerts();
+    } catch (err) {
+      console.error('[ficaCron] cron error:', err.message);
+    }
   }, {
     timezone: 'Africa/Johannesburg',
     scheduled: true,

@@ -183,7 +183,11 @@ function startPoolCyclerCron() {
 
   // Daily at 00:01 SAST — open successor pools + reinvest matured funds.
   cron.schedule('1 0 * * *', async () => {
-    await cycleExpiredPools();
+    try {
+      await cycleExpiredPools();
+    } catch (err) {
+      console.error('[poolCycler] cron error:', err.message);
+    }
   }, {
     timezone: 'Africa/Johannesburg',
   });

@@ -355,8 +355,12 @@ async function runMaturityAlerts() {
 function startMaturityCron() {
   // 23:00 SAST — mature investments/pools + execute payout instructions.
   cron.schedule('0 23 * * *', async () => {
-    await runMaturityProcessing();
-    await runMaturityAlerts();
+    try {
+      await runMaturityProcessing();
+      await runMaturityAlerts();
+    } catch (err) {
+      console.error('[maturity] cron error:', err.message);
+    }
   }, { timezone: 'Africa/Johannesburg' });
   console.log('[maturity] scheduled: daily at 23:00 SAST — maturity processing + alerts');
 }

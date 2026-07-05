@@ -1160,6 +1160,8 @@ async function autoSetup() {
       'CREATE INDEX IF NOT EXISTS idx_investments_investor_id ON investments(investor_id)',
       'CREATE INDEX IF NOT EXISTS idx_investments_status ON investments(status)',
       'CREATE INDEX IF NOT EXISTS idx_investments_pool_id ON investments(pool_id)',
+      'CREATE INDEX IF NOT EXISTS idx_investments_end_date ON investments(end_date)',
+      'CREATE INDEX IF NOT EXISTS idx_transactions_investment_id ON transactions(investment_id)',
       'CREATE INDEX IF NOT EXISTS idx_support_tickets_investor_id ON support_tickets(investor_id)',
       'CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status)',
       'CREATE INDEX IF NOT EXISTS idx_kyc_documents_investor_id ON kyc_documents(investor_id)',
