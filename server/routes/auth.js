@@ -50,7 +50,7 @@ function generateRecoveryCodes() {
   }
   return codes;
 }
-const JWT_EXPIRES_IN     = process.env.JWT_EXPIRES_IN || '8h';
+const JWT_EXPIRES_IN     = process.env.JWT_EXPIRES_IN || '30m';
 const IS_PROD            = process.env.NODE_ENV === 'production';
 const MAX_LOGIN_ATTEMPTS = 3;
 const LOCKOUT_MINUTES    = 30;
@@ -176,19 +176,16 @@ router.post('/login', loginLimiter, async (req, res) => {
       [user.id, refreshToken, newIp || null, req.headers['user-agent'] || null]
     );
 
-    // Set cookie for web clients
-    // TODO(security): SameSite=None without CSRF tokens. Add csurf middleware or enforce
-    // Authorization: Bearer header instead of cookie for state-changing endpoints.
     res.cookie('svc_token', token, {
       httpOnly: true,
       secure:   IS_PROD,
-      sameSite: IS_PROD ? 'none' : 'lax',
-      maxAge:   8 * 60 * 60 * 1000, // 8 hours
+      sameSite: 'lax',
+      maxAge:   30 * 60 * 1000,
     });
     res.cookie('svc_refresh', refreshToken, {
       httpOnly: true,
       secure:   IS_PROD,
-      sameSite: IS_PROD ? 'none' : 'lax',
+      sameSite: 'lax',
       maxAge:   30 * 24 * 60 * 60 * 1000,
       path:     '/api/auth',
     });
@@ -363,13 +360,13 @@ router.post('/register', async (req, res) => {
     res.cookie('svc_token', token, {
       httpOnly: true,
       secure:   IS_PROD,
-      sameSite: IS_PROD ? 'none' : 'lax',
-      maxAge:   8 * 60 * 60 * 1000,
+      sameSite: 'lax',
+      maxAge:   30 * 60 * 1000,
     });
     res.cookie('svc_refresh', refreshToken, {
       httpOnly: true,
       secure:   IS_PROD,
-      sameSite: IS_PROD ? 'none' : 'lax',
+      sameSite: 'lax',
       maxAge:   30 * 24 * 60 * 60 * 1000,
       path:     '/api/auth',
     });
@@ -576,7 +573,7 @@ async function issueStaffJwt(emp, res) {
   }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
   res.cookie('svc_token', token, {
     httpOnly: true, secure: IS_PROD,
-    sameSite: IS_PROD ? 'none' : 'lax',
+    sameSite: 'lax',
     maxAge: 8 * 60 * 60 * 1000,
   });
   return { token, role: jwtRole };
@@ -875,7 +872,7 @@ router.post('/2fa/verify-login', twoFaLimiter, async (req, res) => {
       [newIp2fa || null, user.id]
     );
     const fullToken = signToken(user);
-    res.cookie('svc_token', fullToken, { httpOnly: true, secure: IS_PROD, sameSite: IS_PROD ? 'none' : 'lax', maxAge: 8*60*60*1000 });
+    res.cookie('svc_token', fullToken, { httpOnly: true, secure: IS_PROD, sameSite: 'lax', maxAge: 30 * 60 * 1000 });
     const redirectMap = { admin: '/admin/index.html', director: '/admin/index.html', investor: '/portal/', ifa: '/ifa/index.html', fund_manager: '/fund/index.html', staff: '/team/hub.html' };
     res.json({ token: fullToken, user: { id: user.id, email: user.email, role: user.role, firstName: user.first_name, lastName: user.last_name, investorId: user.investor_id }, redirect: redirectMap[user.role] || '/portal/' });
   } catch (err) { console.error('/2fa/verify-login error:', err.message); res.status(500).json({ error: 'Internal server error.' }); }
@@ -914,8 +911,8 @@ router.post('/refresh', async (req, res) => {
       [users[0].id, newRt, (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || null, req.headers['user-agent'] || null]
     );
     const token = signToken(users[0]);
-    res.cookie('svc_token', token, { httpOnly: true, secure: IS_PROD, sameSite: IS_PROD ? 'none' : 'lax', maxAge: 8 * 60 * 60 * 1000 });
-    res.cookie('svc_refresh', newRt, { httpOnly: true, secure: IS_PROD, sameSite: IS_PROD ? 'none' : 'lax', maxAge: 30 * 24 * 60 * 60 * 1000, path: '/api/auth' });
+    res.cookie('svc_token', token, { httpOnly: true, secure: IS_PROD, sameSite: 'lax', maxAge: 30 * 60 * 1000 });
+    res.cookie('svc_refresh', newRt, { httpOnly: true, secure: IS_PROD, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000, path: '/api/auth' });
     res.json({ token });
   } catch (e) { res.status(500).json({ error: 'Internal error' }); }
 });

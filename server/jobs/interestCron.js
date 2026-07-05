@@ -110,7 +110,7 @@ async function runInterestCrediting() {
 
 function startInterestCron() {
   // 1st of each month at 04:00 UTC (06:00 SAST)
-  cron.schedule('0 4 1 * *', runInterestCrediting, { timezone: 'UTC' });
+  cron.schedule('0 4 1 * *', () => runInterestCrediting().catch(err => console.error('[interestCron] error:', err.message)), { timezone: 'UTC' });
   console.log('[interestCron] Scheduled: 1st of each month at 04:00 UTC (06:00 SAST)');
 }
 

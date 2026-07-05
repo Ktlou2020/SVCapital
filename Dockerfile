@@ -29,7 +29,6 @@ COPY _data/     ./_data/
 COPY index.html      ./
 COPY login.html      ./
 COPY signup.html     ./
-COPY test.html       ./
 COPY terms.html      ./
 COPY popia.html      ./
 COPY paia.html       ./
