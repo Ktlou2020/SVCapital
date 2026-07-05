@@ -1065,6 +1065,22 @@ const DEFAULT_PRODUCTS = [
     risk_profile: 'Low-Medium', risk_color: '#22c55e', icon: 'fa-motorcycle', color: '#f97316',
     badge_class: 'badge--orange', sort_order: 7,
   },
+  {
+    product_type: 'gridfarmer', label: 'GridFarmer', headline: 'Buy a hectare, not a fund.',
+    description: 'Own a uniquely identified 1-hectare white maize GPS grid. Your return is tethered to the physical yield of your specific plot — satellite-monitored, GPS-verified at harvest. Not a pool, not an index.',
+    key_details: [
+      'Direct production rights on a named 1-ha GPS grid',
+      'Return = actual yield (tons) × SAFEX harvest-window VWAP',
+      'Fortnightly NDVI satellite monitoring during growing season',
+      'Hardware-logged yield at harvest — no manual reporting',
+      'Option B: embedded MPCI insurance underwritten by Santam Agriculture',
+      'Outside CISCA perimeter — non-pooled structure',
+      'Launching October 2026 — Maize Draft season',
+    ].join('\n'),
+    min_investment: 17000, term_months: 12, benchmark_rate: 0, performance_fee_pct: 0,
+    risk_profile: 'High', risk_color: '#ff5229', icon: 'fa-seedling', color: '#65ed00',
+    badge_class: 'badge--green', partner_name: 'GridFarmer', sort_order: 8,
+  },
 ];
 
 async function seedProducts() {
