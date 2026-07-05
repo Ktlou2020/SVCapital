@@ -3131,6 +3131,7 @@ const _POOL_META = {
   cattle:        { blurb: 'Partner with Beefcor — SA\'s premier feedlot — and earn returns as your herd grows from 200kg to 500kg.', risk: 'Aggressive',   riskColor: '#ef4444' },
   short_term:    { blurb: 'Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.', risk: 'Moderate',  riskColor: '#f59e0b' },
   delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Conservative', riskColor: '#22c55e' },
+  gridfarmer:    { blurb: 'Own a uniquely identified 1-ha white maize GPS grid. Your return is your plot\'s actual yield × SAFEX price — satellite-monitored, GPS-verified.', risk: 'High', riskColor: '#ff5229' },
 };
 // Map each product's risk label to a filter group
 // Risk profile is defined per-product in the admin console (products.risk_profile).
