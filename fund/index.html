@@ -84,6 +84,10 @@
         <i class="fa-solid fa-hand-holding-dollar"></i> Short-Term Loans
         <span style="font-size:9px;background:rgba(59,130,246,.25);color:#656565;padding:1px 6px;border-radius:8px;margin-left:auto">NAV</span>
       </a>
+      <a href="gridfarmer.html" class="nav-btn" style="text-decoration:none">
+        <i class="fa-solid fa-seedling"></i> GridFarmer
+        <span style="font-size:9px;background:rgba(101,237,0,.25);color:#65ed00;padding:1px 6px;border-radius:8px;margin-left:auto">NEW</span>
+      </a>
 
       <div class="nav-label">Operations</div>
       <button class="nav-btn" data-view="runs" onclick="navigate('runs',this);setupRunFilters()">
@@ -169,6 +173,9 @@
         </a>
         <a href="shortterm.html" class="btn btn--secondary btn--sm" title="Short-Term Loans">
           <i class="fa-solid fa-hand-holding-dollar"></i> STL
+        </a>
+        <a href="gridfarmer.html" class="btn btn--sm" title="GridFarmer Maize" style="background:rgba(101,237,0,.15);color:#65ed00;border:1px solid rgba(101,237,0,.3)">
+          <i class="fa-solid fa-seedling"></i> GF
         </a>
 
         <button class="btn btn--sm btn--secondary" onclick="openCmdPalette()" title="Command Palette (Ctrl+K)" style="font-family:monospace;letter-spacing:-0.5px">
@@ -266,7 +273,7 @@
         <div id="dashRiskStrip"></div>
 
         <!-- ── Investment Products Row ── -->
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
           <a href="cattle.html" style="text-decoration:none">
             <div style="background:linear-gradient(135deg,#0a1f0a,#0d2e0d);border:1px solid rgba(116,198,157,.2);border-radius:12px;padding:18px 20px;transition:border-color .2s;cursor:pointer" onmouseenter="this.style.borderColor='rgba(116,198,157,.5)'" onmouseleave="this.style.borderColor='rgba(116,198,157,.2)'">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
@@ -304,6 +311,19 @@
               <div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:2px">Short-Term Loans</div>
               <div style="font-size:11px;color:rgba(255,255,255,.4)">Business disbursements · overdue tracking</div>
               <div style="margin-top:10px;font-size:11px;color:#656565;font-weight:600">Open Module →</div>
+            </div>
+          </a>
+          <a href="gridfarmer.html" style="text-decoration:none">
+            <div style="background:linear-gradient(135deg,#0a1a00,#0d2800);border:1px solid rgba(101,237,0,.2);border-radius:12px;padding:18px 20px;transition:border-color .2s;cursor:pointer" onmouseenter="this.style.borderColor='rgba(101,237,0,.5)'" onmouseleave="this.style.borderColor='rgba(101,237,0,.2)'">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+                <div style="background:rgba(101,237,0,.12);width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center">
+                  <i class="fa-solid fa-seedling" style="color:#65ed00;font-size:16px"></i>
+                </div>
+                <span style="font-size:9px;background:rgba(101,237,0,.18);color:#65ed00;padding:2px 7px;border-radius:8px;font-weight:700;text-transform:uppercase">NEW</span>
+              </div>
+              <div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:2px">GridFarmer</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.4)">White maize production rights · Oct 2026</div>
+              <div style="margin-top:10px;font-size:11px;color:#65ed00;font-weight:600">Open Product Page →</div>
             </div>
           </a>
         </div>
