@@ -1,0 +1,1113 @@
+<!-- GridFarmer — SV Capital product page -->
+<title>GridFarmer | White Maize Production Rights — SV Capital</title>
+<style>
+/* ── Tokens ─────────────────────────────────────── */
+:root {
+  --bg:        #1C1C1C;
+  --bg-raised: #303030;
+  --bg-card:   #252525;
+  --border:    rgba(255,255,255,.10);
+  --border-hi: rgba(255,255,255,.20);
+  --ndvi:      #65ed00;
+  --ndvi-dim:  rgba(101,237,0,.14);
+  --gold:      #ff9b0c;
+  --gold-dim:  rgba(255,155,12,.13);
+  --sky:       #0096ff;
+  --danger:    #ff5229;
+  --text:      #FFFFFF;
+  --muted:     #656565;
+  --faint:     rgba(255,255,255,.05);
+
+  --f-display: Georgia, 'Times New Roman', serif;
+  --f-body:    -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  --f-data:    'Courier New', Consolas, monospace;
+
+  --max: 1080px;
+  --gutter: clamp(24px, 5vw, 60px);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:        #FFFFFF;
+    --bg-raised: #FFFFFF;
+    --bg-card:   #F5F5F5;
+    --border:    rgba(0,0,0,.10);
+    --border-hi: rgba(0,0,0,.20);
+    --ndvi:      #65ed00;
+    --ndvi-dim:  rgba(101,237,0,.14);
+    --gold:      #ff9b0c;
+    --gold-dim:  rgba(255,155,12,.13);
+    --sky:       #0096ff;
+    --danger:    #ff5229;
+    --text:      #303030;
+    --muted:     #656565;
+    --faint:     rgba(0,0,0,.04);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#1C1C1C; --bg-raised:#303030; --bg-card:#252525;
+  --border:rgba(255,255,255,.10); --border-hi:rgba(255,255,255,.20);
+  --ndvi:#65ed00; --ndvi-dim:rgba(101,237,0,.14);
+  --gold:#ff9b0c; --gold-dim:rgba(255,155,12,.13);
+  --sky:#0096ff; --danger:#ff5229;
+  --text:#FFFFFF; --muted:#656565; --faint:rgba(255,255,255,.05);
+}
+:root[data-theme="light"] {
+  --bg:#FFFFFF; --bg-raised:#FFFFFF; --bg-card:#F5F5F5;
+  --border:rgba(0,0,0,.10); --border-hi:rgba(0,0,0,.20);
+  --ndvi:#65ed00; --ndvi-dim:rgba(101,237,0,.14);
+  --gold:#ff9b0c; --gold-dim:rgba(255,155,12,.13);
+  --sky:#0096ff; --danger:#ff5229;
+  --text:#303030; --muted:#656565; --faint:rgba(0,0,0,.04);
+}
+
+/* ── Reset & base ───────────────────────────────── */
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { scroll-behavior:smooth; }
+body {
+  background:var(--bg); color:var(--text);
+  font-family:var(--f-body); font-size:16px; line-height:1.65;
+  overflow-x:hidden;
+}
+a { color:var(--ndvi); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img { max-width:100%; display:block; }
+:focus-visible { outline:2px solid var(--ndvi); outline-offset:3px; }
+@media (prefers-reduced-motion:reduce) { *, canvas { animation:none!important; transition:none!important; } }
+
+/* ── Typography ─────────────────────────────────── */
+.eyebrow {
+  font-family:var(--f-body); font-size:.72rem; font-weight:600;
+  letter-spacing:.14em; text-transform:uppercase;
+  color:var(--muted); display:block; margin-bottom:.9rem;
+}
+h1 {
+  font-family:var(--f-display); font-size:clamp(2.6rem,6vw,5rem);
+  font-weight:400; line-height:1.08; letter-spacing:-.02em;
+  text-wrap:balance;
+}
+h2 {
+  font-family:var(--f-display); font-size:clamp(1.8rem,3.5vw,2.8rem);
+  font-weight:400; line-height:1.15; letter-spacing:-.015em;
+  text-wrap:balance;
+}
+h3 {
+  font-family:var(--f-display); font-size:clamp(1.15rem,2vw,1.5rem);
+  font-weight:400; line-height:1.25; text-wrap:balance;
+}
+p { max-width:64ch; color:var(--text); }
+p + p { margin-top:.9rem; }
+
+/* ── Layout ─────────────────────────────────────── */
+.wrap { max-width:var(--max); margin:0 auto; padding:0 var(--gutter); }
+.section { padding:clamp(60px,8vw,110px) 0; border-top:1px solid var(--border); }
+.section:first-of-type { border-top:none; }
+
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:clamp(32px,5vw,72px); align-items:start; }
+.grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; }
+@media(max-width:680px) {
+  .grid-2,.grid-3 { grid-template-columns:1fr; }
+}
+
+/* ── Nav ─────────────────────────────────────────── */
+nav {
+  position:fixed; top:0; left:0; right:0; z-index:100;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 var(--gutter); height:56px;
+  background:rgba(28,28,28,.92); backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+}
+@media (prefers-color-scheme: light) { nav { background:rgba(255,255,255,.95); } }
+:root[data-theme="light"] nav { background:rgba(255,255,255,.95); }
+:root[data-theme="dark"]  nav { background:rgba(28,28,28,.92); }
+.nav-brand {
+  font-family:var(--f-body); font-size:.78rem; font-weight:700;
+  letter-spacing:.12em; text-transform:uppercase; color:var(--text);
+  display:flex; align-items:center; gap:10px;
+}
+.nav-brand .dot { width:8px; height:8px; border-radius:50%; background:var(--ndvi); display:inline-block; }
+.nav-links { display:flex; gap:24px; }
+.nav-links a { font-size:.8rem; font-weight:500; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+.nav-links a:hover { color:var(--text); text-decoration:none; }
+.theme-btn {
+  background:none; border:1px solid var(--border); color:var(--muted);
+  font-size:.75rem; padding:4px 10px; border-radius:3px; cursor:pointer;
+}
+.theme-btn:hover { border-color:var(--border-hi); color:var(--text); }
+
+/* ── Hero ────────────────────────────────────────── */
+.hero {
+  position:relative; min-height:100vh;
+  display:flex; align-items:center;
+  padding-top:56px; overflow:hidden;
+}
+#hero-canvas {
+  position:absolute; inset:0; width:100%; height:100%;
+  opacity:.65;
+}
+.hero-content {
+  position:relative; z-index:2;
+  padding:clamp(40px,8vw,100px) 0;
+}
+.hero-tag {
+  display:inline-flex; align-items:center; gap:8px;
+  font-size:.72rem; font-weight:600; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--ndvi); border:1px solid var(--ndvi-dim);
+  padding:5px 12px; border-radius:2px; margin-bottom:1.8rem;
+  background:var(--ndvi-dim);
+}
+.hero-tag .pulse {
+  width:6px; height:6px; border-radius:50%; background:var(--ndvi);
+  animation:pulse 2s infinite;
+}
+@keyframes pulse {
+  0%,100%{opacity:1;transform:scale(1);}
+  50%{opacity:.4;transform:scale(.7);}
+}
+.hero h1 { margin-bottom:1.4rem; }
+.hero h1 em { font-style:normal; color:var(--ndvi); }
+.hero-sub {
+  font-size:clamp(.95rem,1.5vw,1.15rem); color:var(--muted);
+  max-width:54ch; margin-bottom:2.4rem; line-height:1.7;
+}
+.hero-meta {
+  display:flex; gap:clamp(20px,4vw,48px); flex-wrap:wrap;
+  padding:20px 0; border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border); margin-bottom:2rem;
+}
+.hero-stat { }
+.hero-stat .val {
+  font-family:var(--f-data); font-size:1.4rem; font-weight:400;
+  color:var(--gold); display:block; font-variant-numeric:tabular-nums;
+}
+.hero-stat .lbl { font-size:.72rem; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); }
+.cta-row { display:flex; gap:12px; flex-wrap:wrap; }
+.btn {
+  display:inline-flex; align-items:center; gap:8px;
+  font-size:.82rem; font-weight:600; letter-spacing:.05em; text-transform:uppercase;
+  padding:11px 22px; border-radius:2px; cursor:pointer; border:none;
+  text-decoration:none;
+}
+.btn-primary { background:var(--ndvi); color:#1C1C1C; }
+.btn-primary:hover { filter:brightness(1.1); text-decoration:none; }
+.btn-outline {
+  background:transparent; color:var(--text);
+  border:1px solid var(--border-hi);
+}
+.btn-outline:hover { border-color:var(--text); text-decoration:none; }
+
+/* ── Fund flow diagram ───────────────────────────── */
+.fund-flow {
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:4px; padding:28px;
+}
+.fund-flow h4 {
+  font-family:var(--f-data); font-size:.72rem; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); margin-bottom:20px;
+}
+.flow-bar {
+  display:flex; height:42px; border-radius:3px; overflow:hidden;
+  margin-bottom:14px;
+}
+.flow-seg {
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--f-data); font-size:.78rem; font-weight:700;
+  transition:flex-basis .3s;
+}
+.flow-seg.svc { flex:1 0 5.88%; background:var(--gold); color:#1C1C1C; }
+.flow-seg.farm { flex:1 0 94.12%; background:var(--ndvi); color:#1C1C1C; }
+.flow-legend { display:flex; flex-direction:column; gap:10px; }
+.flow-item {
+  display:flex; align-items:center; gap:10px;
+  font-size:.82rem;
+}
+.flow-dot { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
+.flow-item strong { font-family:var(--f-data); font-variant-numeric:tabular-nums; }
+
+/* ── Timeline ────────────────────────────────────── */
+.timeline {
+  display:grid;
+  grid-template-columns: repeat(4,1fr);
+  gap:0;
+  position:relative;
+}
+.timeline::before {
+  content:''; position:absolute; top:22px; left:0; right:0; height:1px;
+  background:linear-gradient(to right, var(--ndvi), var(--gold), var(--ndvi));
+  opacity:.4;
+}
+@media(max-width:680px) {
+  .timeline { grid-template-columns:1fr 1fr; }
+  .timeline::before { display:none; }
+}
+.tl-node { padding:16px 16px 0 16px; }
+.tl-marker {
+  width:44px; height:44px; border-radius:50%; margin-bottom:14px;
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--f-data); font-size:.78rem; font-weight:700;
+  background:var(--bg-card); border:1px solid var(--border-hi);
+  position:relative; z-index:1;
+}
+.tl-marker.key {
+  background:var(--ndvi); color:#0C0A06; border-color:var(--ndvi);
+}
+.tl-marker.harvest { background:var(--gold); color:#0C0A06; border-color:var(--gold); }
+.tl-month {
+  font-size:.68rem; text-transform:uppercase; letter-spacing:.12em;
+  color:var(--ndvi); margin-bottom:4px; font-weight:600;
+}
+.tl-title { font-weight:600; font-size:.9rem; margin-bottom:4px; }
+.tl-desc { font-size:.8rem; color:var(--muted); line-height:1.5; }
+
+/* ── NDVI grid demo ──────────────────────────────── */
+.ndvi-demo-wrap {
+  position:relative;
+}
+#ndvi-canvas {
+  width:100%; border-radius:4px; border:1px solid var(--border);
+  display:block; cursor:crosshair;
+}
+.ndvi-tooltip {
+  position:absolute; pointer-events:none;
+  background:var(--bg-raised); border:1px solid var(--border-hi);
+  font-family:var(--f-data); font-size:.78rem; padding:8px 12px;
+  border-radius:3px; white-space:nowrap; opacity:0; z-index:10;
+  transition:opacity .15s;
+  box-shadow:0 4px 16px rgba(0,0,0,.4);
+}
+.ndvi-legend {
+  display:flex; align-items:center; gap:8px;
+  margin-top:10px; font-size:.75rem; color:var(--muted);
+}
+.ndvi-gradient {
+  height:8px; width:120px; border-radius:2px;
+  background:linear-gradient(to right, #303030, #65ed00);
+}
+
+/* ── Option cards ────────────────────────────────── */
+.option-cards { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+@media(max-width:680px) { .option-cards { grid-template-columns:1fr; } }
+.option-card {
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:4px; padding:28px; position:relative; overflow:hidden;
+}
+.option-card.shielded { border-color:var(--ndvi); }
+.option-card.shielded::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:3px;
+  background:var(--ndvi);
+}
+.option-card.bare::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:3px;
+  background:var(--gold);
+}
+.option-price {
+  font-family:var(--f-data); font-size:2rem; color:var(--gold);
+  font-variant-numeric:tabular-nums; margin:10px 0 4px;
+}
+.option-subtitle { font-size:.78rem; color:var(--muted); margin-bottom:16px; }
+.option-features { list-style:none; display:flex; flex-direction:column; gap:9px; }
+.option-features li {
+  display:flex; align-items:baseline; gap:10px; font-size:.85rem;
+}
+.option-features li::before { content:'—'; color:var(--muted); flex-shrink:0; }
+.option-badge {
+  display:inline-block; font-size:.65rem; font-weight:700;
+  letter-spacing:.1em; text-transform:uppercase;
+  padding:3px 8px; border-radius:2px; margin-bottom:8px;
+}
+.badge-bare { background:var(--gold-dim); color:var(--gold); border:1px solid var(--gold); }
+.badge-shielded { background:var(--ndvi-dim); color:var(--ndvi); border:1px solid var(--ndvi); }
+
+/* ── Comparison table ────────────────────────────── */
+.table-wrap { overflow-x:auto; }
+table {
+  width:100%; border-collapse:collapse; font-size:.88rem;
+  font-variant-numeric:tabular-nums;
+}
+th {
+  font-size:.7rem; letter-spacing:.1em; text-transform:uppercase;
+  font-weight:600; color:var(--muted); padding:10px 16px;
+  text-align:left; border-bottom:1px solid var(--border-hi);
+}
+td {
+  padding:11px 16px; border-bottom:1px solid var(--border);
+  color:var(--text);
+}
+tr:last-child td { border-bottom:none; }
+tbody tr:hover td { background:var(--bg-card); }
+.td-good { color:var(--ndvi); font-weight:600; }
+.td-neutral { color:var(--muted); }
+.td-data { font-family:var(--f-data); }
+
+/* ── Formula ─────────────────────────────────────── */
+.formula-block {
+  background:var(--bg-card); border:1px solid var(--border-hi);
+  border-radius:4px; padding:32px 28px; text-align:center;
+  margin:28px 0;
+}
+.formula-eq {
+  font-family:var(--f-data); font-size:clamp(.95rem,2vw,1.2rem);
+  color:var(--text); line-height:2.2;
+  display:flex; align-items:center; justify-content:center;
+  flex-wrap:wrap; gap:0 12px;
+}
+.formula-eq .result { color:var(--gold); font-weight:700; font-size:1.1em; }
+.formula-eq .var { color:var(--ndvi); }
+.formula-eq .op { color:var(--muted); }
+.formula-annotations {
+  display:flex; gap:24px; justify-content:center; flex-wrap:wrap;
+  margin-top:20px; padding-top:20px; border-top:1px solid var(--border);
+}
+.formula-ann {
+  font-size:.78rem; text-align:center;
+}
+.formula-ann .ann-var {
+  font-family:var(--f-data); font-size:.85rem; color:var(--ndvi);
+  display:block; margin-bottom:3px;
+}
+.formula-ann .ann-desc { color:var(--muted); max-width:180px; }
+
+/* ── Calculator ──────────────────────────────────── */
+.calc-card {
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:4px; padding:28px;
+}
+.calc-row { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+@media(max-width:600px) { .calc-row { grid-template-columns:1fr; } }
+.field { display:flex; flex-direction:column; gap:6px; }
+.field label {
+  font-size:.72rem; text-transform:uppercase; letter-spacing:.1em;
+  color:var(--muted); font-weight:600;
+}
+.field input, .field select {
+  background:var(--bg-raised); border:1px solid var(--border-hi);
+  color:var(--text); font-family:var(--f-data); font-size:.9rem;
+  padding:9px 12px; border-radius:3px; width:100%;
+}
+.field input:focus, .field select:focus {
+  outline:none; border-color:var(--ndvi);
+}
+input[type="range"] {
+  padding:0; height:4px; accent-color:var(--ndvi);
+  background:var(--border-hi); border:none; cursor:pointer;
+}
+.range-labels {
+  display:flex; justify-content:space-between;
+  font-family:var(--f-data); font-size:.7rem; color:var(--muted);
+  margin-top:3px;
+}
+.toggle-group { display:flex; border:1px solid var(--border-hi); border-radius:3px; overflow:hidden; }
+.toggle-btn {
+  flex:1; padding:9px; font-size:.8rem; font-weight:600; cursor:pointer;
+  background:transparent; border:none; color:var(--muted);
+  letter-spacing:.04em; text-align:center;
+}
+.toggle-btn.active { background:var(--ndvi); color:#1C1C1C; }
+.toggle-btn.active-gold { background:var(--gold); color:#1C1C1C; }
+.calc-result {
+  margin-top:24px; padding:20px; background:var(--bg);
+  border:1px solid var(--border-hi); border-radius:4px;
+  display:grid; grid-template-columns:repeat(3,1fr); gap:16px;
+}
+@media(max-width:600px) { .calc-result { grid-template-columns:1fr 1fr; } }
+.result-item {}
+.result-item .r-val {
+  font-family:var(--f-data); font-size:1.3rem;
+  font-variant-numeric:tabular-nums; display:block; margin-bottom:2px;
+}
+.result-item .r-lbl { font-size:.7rem; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); }
+.r-payout { color:var(--gold); }
+.r-profit-pos { color:var(--ndvi); }
+.r-profit-neg { color:var(--danger); }
+
+/* ── Regulatory section ──────────────────────────── */
+.reg-pillars { display:flex; flex-direction:column; gap:16px; margin-top:24px; }
+.reg-pillar {
+  display:flex; gap:16px; align-items:flex-start;
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:4px; padding:18px 20px;
+}
+.reg-icon {
+  width:36px; height:36px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:.9rem; font-weight:700;
+}
+.reg-icon.green { background:var(--ndvi-dim); color:var(--ndvi); }
+.reg-icon.gold  { background:var(--gold-dim);  color:var(--gold); }
+.reg-icon.sky   { background:rgba(0,150,255,.15); color:var(--sky); }
+.reg-text strong { font-size:.9rem; display:block; margin-bottom:4px; }
+.reg-text p { font-size:.85rem; color:var(--muted); max-width:60ch; }
+
+/* ── Footer ──────────────────────────────────────── */
+footer {
+  border-top:1px solid var(--border); padding:32px 0;
+  font-size:.78rem; color:var(--muted);
+}
+footer .wrap { display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+
+/* ── Utility ─────────────────────────────────────── */
+.accent   { color:var(--ndvi); }
+.gold-txt { color:var(--gold); }
+.data-txt { font-family:var(--f-data); }
+.mt-sm    { margin-top:12px; }
+.mt-md    { margin-top:24px; }
+.mt-lg    { margin-top:40px; }
+.chip {
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:.7rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+  padding:3px 9px; border-radius:2px;
+}
+.chip-ndvi  { background:var(--ndvi-dim); color:var(--ndvi); border:1px solid var(--ndvi); }
+.chip-gold  { background:var(--gold-dim);  color:var(--gold); border:1px solid var(--gold); }
+.chip-muted { background:transparent; color:var(--muted); border:1px solid var(--border-hi); }
+.divider { border:none; border-top:1px solid var(--border); margin:40px 0; }
+</style>
+
+<!-- ─────────────────────────────────────────────── -->
+<!-- NAV -->
+<nav>
+  <span class="nav-brand">
+    <span class="dot"></span>
+    SV Capital
+  </span>
+  <div class="nav-links">
+    <a href="#how-it-works">Season</a>
+    <a href="#exposure">Options</a>
+    <a href="#calculator">Returns</a>
+    <a href="#regulatory">Structure</a>
+  </div>
+  <button class="theme-btn" id="theme-toggle">☀ / ☾</button>
+</nav>
+
+<!-- ─────────────────────────────────────────────── -->
+<!-- HERO -->
+<section class="hero">
+  <canvas id="hero-canvas" aria-hidden="true"></canvas>
+  <div class="wrap hero-content">
+    <div class="hero-tag">
+      <span class="pulse"></span>
+      Launching October 2026 — Maize Season
+    </div>
+    <h1>Buy a hectare,<br><em>not a fund.</em></h1>
+    <p class="hero-sub">
+      GridFarmer converts white maize production rights into a direct-ownership asset tethered to the physical output of the exact GPS grid you chose — not a pool, not an index, not an estimate.
+    </p>
+    <div class="hero-meta">
+      <div class="hero-stat">
+        <span class="val">R 17,000</span>
+        <span class="lbl">Entry per 1-ha grid</span>
+      </div>
+      <div class="hero-stat">
+        <span class="val">1 ha</span>
+        <span class="lbl">Uniquely identified plot</span>
+      </div>
+      <div class="hero-stat">
+        <span class="val">Oct → Sep</span>
+        <span class="lbl">Full seasonal cycle</span>
+      </div>
+      <div class="hero-stat">
+        <span class="val">SAFEX VWAP</span>
+        <span class="lbl">Harvest-window pricing</span>
+      </div>
+    </div>
+    <div class="cta-row">
+      <a href="#how-it-works" class="btn btn-primary">Explore the product</a>
+      <a href="#calculator" class="btn btn-outline">Model my return</a>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────── -->
+<!-- THE ASSET -->
+<section class="section" id="the-asset">
+  <div class="wrap">
+    <div class="grid-2">
+      <div>
+        <span class="eyebrow">The asset class</span>
+        <h2>White maize<br>production rights</h2>
+        <p class="mt-sm">
+          A GridFarmer unit is a single-season <strong>Right to Plant</strong> on a mathematically defined, uniquely identified 1-hectare GPS grid. Your return is strictly tethered to what that specific plot physically yields — not what the farm averages, not what a fund manager reports.
+        </p>
+        <p>
+          This completely eliminates fund pooling, index blending, or accountant smoothing. Biological variance flows directly to you, the asset holder — which is why we call it a feature, not a bug.
+        </p>
+        <div class="mt-md" style="display:flex;gap:8px;flex-wrap:wrap;">
+          <span class="chip chip-ndvi">Non-pooled</span>
+          <span class="chip chip-ndvi">GPS-identified</span>
+          <span class="chip chip-gold">Single season</span>
+          <span class="chip chip-muted">White maize</span>
+        </div>
+      </div>
+      <div>
+        <div class="fund-flow">
+          <h4>Where your R17,000 goes</h4>
+          <div class="flow-bar">
+            <div class="flow-seg svc" title="SV Capital platform margin">R1k</div>
+            <div class="flow-seg farm" title="Farming partner inputs">R16,000 →</div>
+          </div>
+          <div class="flow-legend">
+            <div class="flow-item">
+              <span class="flow-dot" style="background:var(--gold)"></span>
+              <div>
+                <strong class="data-txt gold-txt">R 1,000</strong>
+                <span style="color:var(--muted);font-size:.82rem;margin-left:8px;">SV Capital platform margin</span>
+                <div style="font-size:.78rem;color:var(--muted);margin-top:2px;">Covers onboarding, admin, legal, satellite data infrastructure</div>
+              </div>
+            </div>
+            <div class="flow-item">
+              <span class="flow-dot" style="background:var(--ndvi)"></span>
+              <div>
+                <strong class="data-txt accent">R 16,000</strong>
+                <span style="color:var(--muted);font-size:.82rem;margin-left:8px;">Farming partner — operational inputs</span>
+                <div style="font-size:.78rem;color:var(--muted);margin-top:2px;">Seed, fertiliser, diesel, labour, crop insurance premium (Option B)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────── -->
+<!-- THE SEASON -->
+<section class="section" id="how-it-works">
+  <div class="wrap">
+    <span class="eyebrow">The season</span>
+    <h2>October to September.<br>Four moments that matter.</h2>
+    <div class="timeline mt-lg">
+      <div class="tl-node">
+        <div class="tl-marker key">Oct</div>
+        <div class="tl-month">October</div>
+        <div class="tl-title">The Maize Draft</div>
+        <p class="tl-desc">Pick your specific grid using 3–5 years of historical yield data, soil nutrient profiles, and elevation metrics. NDVI satellite imagery from prior seasons helps you identify high-performers before committing.</p>
+      </div>
+      <div class="tl-node">
+        <div class="tl-marker">Nov–May</div>
+        <div class="tl-month">Nov – May</div>
+        <div class="tl-title">Season in progress</div>
+        <p class="tl-desc">NDVI satellite telemetry refreshes every two weeks. Watch your grid change from bare soil to vibrant green directly in the app. Spot stress events — drought patches, uneven germination — as they develop.</p>
+      </div>
+      <div class="tl-node">
+        <div class="tl-marker harvest">Aug</div>
+        <div class="tl-month">August</div>
+        <div class="tl-title">Harvest &amp; verification</div>
+        <p class="tl-desc">GPS-enabled combine harvesters log yield data per grid at the hardware level. No manual reporting. No subjective estimation. The yield figure that triggers your payout is hardware-verified.</p>
+      </div>
+      <div class="tl-node">
+        <div class="tl-marker key">Sep</div>
+        <div class="tl-month">September</div>
+        <div class="tl-title">Automated payout</div>
+        <p class="tl-desc">Your payout is calculated automatically from verified yield data × SAFEX harvest-window VWAP and credited directly to your SV Capital wallet. No claim, no delay.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────── -->
+<!-- THE MAIZE DRAFT -->
+<section class="section" id="maize-draft">
+  <div class="wrap">
+    <div class="grid-2">
+      <div>
+        <span class="eyebrow">October event</span>
+        <h2>The Maize Draft</h2>
+        <p class="mt-sm">
+          Every October, before planting begins, the platform opens the Grid Selection interface. Each numbered cell represents a distinct 1-hectare plot. You're not picking a product tier — you're picking a specific piece of land with its own data history.
+        </p>
+        <p>
+          Each grid is annotated with three data dimensions:
+        </p>
+        <div class="reg-pillars mt-md" style="gap:10px;">
+          <div class="reg-pillar" style="padding:12px 16px;">
+            <div class="reg-icon green">↑</div>
+            <div class="reg-text">
+              <strong>Historical yield</strong>
+              <p>3–5 seasons of actual t/ha output for that grid cell — not the farm average.</p>
+            </div>
+          </div>
+          <div class="reg-pillar" style="padding:12px 16px;">
+            <div class="reg-icon gold">⬡</div>
+            <div class="reg-text">
+              <strong>Soil nutrient profile</strong>
+              <p>Nitrogen, phosphorus, pH index — the agronomic foundation of yield potential.</p>
+            </div>
+          </div>
+          <div class="reg-pillar" style="padding:12px 16px;">
+            <div class="reg-icon sky">▲</div>
+            <div class="reg-text">
+              <strong>Elevation &amp; drainage</strong>
+              <p>Higher ground drains faster — critical for flood and standing-water risk assessment.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ndvi-demo-wrap">
+        <canvas id="ndvi-canvas" height="280" aria-label="Interactive NDVI satellite grid demo"></canvas>
+        <div class="ndvi-tooltip" id="ndvi-tooltip"></div>
+        <div class="ndvi-legend">
+          <div class="ndvi-gradient"></div>
+          <span>Bare soil</span>
+          <span style="margin-left:auto">Peak NDVI</span>
+        </div>
+        <p class="mt-sm" style="font-size:.78rem;color:var(--muted);">
+          Hover over any cell to see yield history and soil data. Grids marked <span class="accent">green</span> are available; <span style="color:var(--muted)">grey</span> are reserved.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────── -->
+<!-- EXPOSURE OPTIONS -->
+<section class="section" id="exposure">
+  <div class="wrap">
+    <span class="eyebrow">Choose your exposure</span>
+    <h2>Two ways to hold<br>the same asset.</h2>
+    <p class="mt-sm" style="max-width:60ch;color:var(--muted);">
+      Both options grant a Right to Plant on a uniquely identified 1-hectare GPS grid. The only difference is whether biological variance is fully yours, or whether a floor is underwritten by institutional insurers.
+    </p>
+    <div class="option-cards mt-lg">
+      <div class="option-card bare">
+        <span class="option-badge badge-bare">Option A</span>
+        <h3>Bare Right</h3>
+        <div class="option-price">R 17,000</div>
+        <p class="option-subtitle">per 1-ha grid · maximum potential ROI</p>
+        <ul class="option-features mt-md">
+          <li>Full direct ownership of production rights with no embedded insurance</li>
+          <li>If your specific grid is hit by localised drought, you take the direct yield hit — no averaging across neighbouring grids</li>
+          <li>Higher ceiling: a bumper season flows entirely to you without premium drag</li>
+          <li>Suits investors comfortable holding biological variance as part of the return profile</li>
+        </ul>
+      </div>
+      <div class="option-card shielded">
+        <span class="option-badge badge-shielded">Option B</span>
+        <h3>Shielded Right</h3>
+        <div class="option-price">R 18,500</div>
+        <p class="option-subtitle">per 1-ha grid · R1,500 est. MPCI premium</p>
+        <ul class="option-features mt-md">
+          <li>Includes embedded Multi-Peril Crop Insurance (MPCI) underwritten by institutional insurers (e.g. Santam Agriculture, Standard Bank Agri)</li>
+          <li>Protects baseline recovery of the R16,000 input cost or a minimum 5&nbsp;t/ha yield value</li>
+          <li>Covered perils: drought, hail, frost, floods, and pests</li>
+          <li>Premium is not refundable — it is the cost of the floor, paid upfront</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="table-wrap mt-lg">
+      <table>
+        <thead>
+          <tr>
+            <th>Dimension</th>
+            <th>Pooled fund model</th>
+            <th class="td-good">GridFarmer (non-pooled)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Asset isolation</td>
+            <td class="td-neutral">Your return blended with all investors</td>
+            <td class="td-good">Your hectare, your yield, your return</td>
+          </tr>
+          <tr>
+            <td>Return determination</td>
+            <td class="td-neutral">Weighted average across the pool</td>
+            <td class="td-good">Hardware-logged t/ha × SAFEX VWAP</td>
+          </tr>
+          <tr>
+            <td>SV Capital balance-sheet risk</td>
+            <td class="td-neutral">Manager absorbs some smoothing</td>
+            <td class="td-good">Zero — SV Capital is a pure intermediary</td>
+          </tr>
+          <tr>
+            <td>Regulatory classification</td>
+            <td class="td-neutral">Likely a Collective Investment Scheme under CISCA</td>
+            <td class="td-good">Outside CISCA perimeter — no pooling, no CIS</td>
+          </tr>
+          <tr>
+            <td>Variance transparency</td>
+            <td class="td-neutral">Smoothed or averaged by design</td>
+            <td class="td-good">Exact physical output — satellite + GPS verified</td>
+          </tr>
+          <tr>
+            <td>Satellite visibility</td>
+            <td class="td-neutral">Not applicable</td>
+            <td class="td-good">Fortnightly NDVI per investor grid</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────── -->
+<!-- PAYOUT FORMULA + CALCULATOR -->
+<section class="section" id="calculator">
+  <div class="wrap">
+    <span class="eyebrow">Returns</span>
+    <h2>How your payout<br>is calculated.</h2>
+    <p class="mt-sm" style="max-width:60ch;color:var(--muted);">
+      There is no management discretion in the formula. The two inputs — physical yield and market price — are independently verified and publicly available.
+    </p>
+    <div class="formula-block mt-lg">
+      <div class="formula-eq">
+        <span class="result">Investor Payout</span>
+        <span class="op">=</span>
+        <span class="var">Actual Physical Yield</span>
+        <span class="op" style="font-size:.9em;">(tons)</span>
+        <span class="op">×</span>
+        <span class="var">SAFEX Harvest-Window VWAP</span>
+      </div>
+      <div class="formula-annotations">
+        <div class="formula-ann">
+          <span class="ann-var">Actual Physical Yield</span>
+          <span class="ann-desc">Tonnes logged per grid by GPS-enabled combine harvester. Hardware-verified, not estimated.</span>
+        </div>
+        <div class="formula-ann">
+          <span class="ann-var">SAFEX VWAP</span>
+          <span class="ann-desc">Volume-weighted average price of white maize futures during the harvest window on the Johannesburg Stock Exchange.</span>
+        </div>
+        <div class="formula-ann">
+          <span class="ann-var">Payout</span>
+          <span class="ann-desc">Credited directly to your SV Capital wallet in ZAR. Automatic. No claim required.</span>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="mt-lg">Model your scenario</h3>
+    <p style="font-size:.85rem;color:var(--muted);margin:.5rem 0 1.4rem;">
+      Adjust the inputs below. Historical average for this farming region: <strong class="accent">5.8 t/ha</strong>. National white maize SAFEX range (last 3 years): R3,200–R4,600/ton.
+    </p>
+    <div class="calc-card">
+      <div class="calc-row">
+        <div>
+          <div class="field">
+            <label>Yield <span id="yield-display" class="accent data-txt">5.8 t/ha</span></label>
+            <input type="range" id="yield-slider" min="2" max="10" step="0.1" value="5.8">
+            <div class="range-labels"><span>2 t/ha (drought)</span><span>10 t/ha (bumper)</span></div>
+          </div>
+          <div class="field mt-md">
+            <label>Number of grids</label>
+            <input type="number" id="grids-input" value="1" min="1" max="50">
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <label>SAFEX price (R/ton) <span id="safex-display" class="gold-txt data-txt">R 3,800</span></label>
+            <input type="range" id="safex-slider" min="2800" max="5500" step="50" value="3800">
+            <div class="range-labels"><span>R2,800</span><span>R5,500</span></div>
+          </div>
+          <div class="field mt-md">
+            <label>Option</label>
+            <div class="toggle-group">
+              <button class="toggle-btn active-gold" id="opt-a" onclick="setOption('A')">Option A — Bare · R17,000</button>
+              <button class="toggle-btn" id="opt-b" onclick="setOption('B')">Option B — Shielded · R18,500</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="calc-result" id="calc-result">
+        <!-- filled by JS -->
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────── -->
+<!-- REGULATORY -->
+<section class="section" id="regulatory">
+  <div class="wrap">
+    <div class="grid-2">
+      <div>
+        <span class="eyebrow">Risk &amp; regulatory structure</span>
+        <h2>Solvency<br>by design.</h2>
+        <p class="mt-sm">
+          GridFarmer uses a commercial sub-lease and management agreement structure. Each investor holds a contractual Right to Plant — not a participatory interest in a fund, not a share of a pool.
+        </p>
+        <p>
+          Because there is no yield pooling across investors, this structure aligns with official regulatory guidance placing it safely outside the FSCA's jurisdiction and the Collective Investment Schemes Control Act (CISCA) compliance perimeter.
+        </p>
+        <p>
+          <strong>SV Capital carries zero balance-sheet risk.</strong> Biological variance flows entirely to the asset holder — the investor. SV Capital's role is strictly that of a pure intermediary: grid allocation, infrastructure, and payout automation.
+        </p>
+        <p class="mt-md" style="font-size:.82rem;color:var(--muted);padding:14px;background:var(--bg-card);border:1px solid var(--border);border-radius:3px;">
+          <strong style="color:var(--text);">Important:</strong> Past yields are not a guarantee of future performance. White maize production is subject to weather, pest pressure, commodity price movements, and agronomic factors outside SV Capital's control. Variance is a structural feature of this asset class. Invest only what you are prepared to lose in a total crop failure.
+        </p>
+      </div>
+      <div>
+        <div class="reg-pillars">
+          <div class="reg-pillar">
+            <div class="reg-icon green">✓</div>
+            <div class="reg-text">
+              <strong>No pooling — no CIS classification</strong>
+              <p>Yield pooling across investors is the defining characteristic of a Collective Investment Scheme. GridFarmer contains none. Each grid's return is isolated.</p>
+            </div>
+          </div>
+          <div class="reg-pillar">
+            <div class="reg-icon green">✓</div>
+            <div class="reg-text">
+              <strong>Commercial sub-lease structure</strong>
+              <p>Each investor enters a direct sub-lease and management agreement with the farming partner. This is a property rights instrument, not a financial product subject to FSCA licensing.</p>
+            </div>
+          </div>
+          <div class="reg-pillar">
+            <div class="reg-icon gold">⊘</div>
+            <div class="reg-text">
+              <strong>Zero SV Capital balance-sheet exposure</strong>
+              <p>SV Capital retains R1,000 as a platform margin. We hold no yield, no inventory, no commodity risk. Our revenue is fixed; your return is variable.</p>
+            </div>
+          </div>
+          <div class="reg-pillar">
+            <div class="reg-icon sky">↗</div>
+            <div class="reg-text">
+              <strong>MPCI underwritten by licensed insurers</strong>
+              <p>Option B insurance is placed with licensed South African insurers (Santam Agriculture, Standard Bank Agri). The policy is held directly by the farming partner and assigned to the investor's grid.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────── -->
+<!-- FOOTER -->
+<footer>
+  <div class="wrap">
+    <span>© 2026 SV Capital (Pty) Ltd. GridFarmer is a pre-registration product. Not a collective investment scheme. Risk disclosure applies.</span>
+    <span>Maize Draft opens October 2026.</span>
+  </div>
+</footer>
+
+<!-- ─────────────────────────────────────────────── -->
+<script>
+/* ── Theme toggle ─────────────────────────────── */
+const root = document.documentElement;
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  const cur = root.getAttribute('data-theme');
+  const isDark = !cur || cur === 'dark';
+  root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  drawNDVI();
+});
+
+/* ── Hero canvas — growing crop grid ─────────────────── */
+(function() {
+  const canvas = document.getElementById('hero-canvas');
+  const ctx = canvas.getContext('2d');
+  const COLS = 22, ROWS = 14;
+  let cells = [], W, H, cw, ch, raf;
+
+  function getThemeColors() {
+    const dark = !root.getAttribute('data-theme') || root.getAttribute('data-theme') === 'dark';
+    const pref = window.matchMedia('(prefers-color-scheme: light)').matches;
+    const isLight = root.getAttribute('data-theme') === 'light' || (!root.getAttribute('data-theme') && pref);
+    return isLight
+      ? { soil:'#D0D0D0', grow1:'#90C830', grow2:'#65ed00', grow3:'#65ed00', bg:'#FFFFFF' }
+      : { soil:'#303030', grow1:'#1A4808', grow2:'#4AB800', grow3:'#65ed00', bg:'#1C1C1C' };
+  }
+
+  function init() {
+    cells = [];
+    for (let r=0; r<ROWS; r++) {
+      for (let c=0; c<COLS; c++) {
+        cells.push({
+          phase: Math.random() * Math.PI * 2,
+          speed: 0.0004 + Math.random() * 0.0003,
+          peak:  0.55 + Math.random() * 0.45,
+        });
+      }
+    }
+  }
+
+  function lerpColor(c1, c2, t) {
+    const h = s => parseInt(s,16);
+    const r1=h(c1.slice(1,3)),g1=h(c1.slice(3,5)),b1=h(c1.slice(5,7));
+    const r2=h(c2.slice(1,3)),g2=h(c2.slice(3,5)),b2=h(c2.slice(5,7));
+    return `rgb(${Math.round(r1+(r2-r1)*t)},${Math.round(g1+(g2-g1)*t)},${Math.round(b1+(b2-b1)*t)})`;
+  }
+
+  function cellColor(v, colors) {
+    if (v < 0.3) return lerpColor(colors.soil, colors.grow1, v/0.3);
+    if (v < 0.7) return lerpColor(colors.grow1, colors.grow2, (v-0.3)/0.4);
+    return lerpColor(colors.grow2, colors.grow3, (v-0.7)/0.3);
+  }
+
+  function resize() {
+    W = canvas.offsetWidth; H = canvas.offsetHeight;
+    canvas.width = W * devicePixelRatio;
+    canvas.height = H * devicePixelRatio;
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+    cw = W/COLS; ch = H/ROWS;
+  }
+
+  function draw(ts) {
+    const colors = getThemeColors();
+    ctx.clearRect(0,0,W,H);
+    cells.forEach((cell,i) => {
+      const v = (Math.sin(ts * cell.speed + cell.phase) * 0.5 + 0.5) * cell.peak;
+      const r = Math.floor(i/COLS), c = i%COLS;
+      ctx.fillStyle = cellColor(v, colors);
+      ctx.fillRect(c*cw+1, r*ch+1, cw-2, ch-2);
+    });
+    raf = requestAnimationFrame(draw);
+  }
+
+  resize();
+  init();
+  new ResizeObserver(resize).observe(canvas);
+  requestAnimationFrame(draw);
+})();
+
+/* ── NDVI grid demo ─────────────────────────────── */
+let ndviData = [];
+function buildNDVIData() {
+  ndviData = [];
+  for (let r=0; r<10; r++) {
+    for (let c=0; c<14; c++) {
+      const base = 4.2 + Math.random()*3.2;
+      const reserved = Math.random() < 0.15;
+      ndviData.push({
+        id: `GF-${String(r*14+c+1).padStart(3,'0')}`,
+        ndvi: reserved ? 0 : 0.3 + Math.random()*0.65,
+        yield3yr: reserved ? null : [
+          +(base+Math.random()*1.2-0.6).toFixed(1),
+          +(base+Math.random()*1.2-0.6).toFixed(1),
+          +(base+Math.random()*1.2-0.6).toFixed(1),
+        ],
+        soil: reserved ? null : (50+Math.floor(Math.random()*40)),
+        elevation: reserved ? null : (1120+Math.floor(Math.random()*80)),
+        reserved,
+      });
+    }
+  }
+}
+buildNDVIData();
+
+function ndviColor(v, isLight) {
+  if (v === 0) return isLight ? '#D0D0D0' : '#303030';
+  const stops = isLight
+    ? ['#D0D0D0','#90C830','#65ed00','#65ed00']
+    : ['#303030','#1A4808','#4AB800','#65ed00'];
+  const t = v;
+  const si = Math.min(Math.floor(t * (stops.length-1)), stops.length-2);
+  const lt = t*(stops.length-1) - si;
+  const h=s=>parseInt(s,16);
+  const r1=h(stops[si].slice(1,3)),g1=h(stops[si].slice(3,5)),b1=h(stops[si].slice(5,7));
+  const r2=h(stops[si+1].slice(1,3)),g2=h(stops[si+1].slice(3,5)),b2=h(stops[si+1].slice(5,7));
+  return `rgb(${Math.round(r1+(r2-r1)*lt)},${Math.round(g1+(g2-g1)*lt)},${Math.round(b1+(b2-b1)*lt)})`;
+}
+
+function drawNDVI() {
+  const canvas = document.getElementById('ndvi-canvas');
+  const isLight = root.getAttribute('data-theme') === 'light' || (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme:light)').matches);
+  const COLS=14, ROWS=10;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth, H = 280;
+  canvas.width = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  canvas.style.height = H + 'px';
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  const cw = W/COLS, ch = H/ROWS;
+  ctx.fillStyle = isLight ? '#F5F5F5' : '#1C1C1C';
+  ctx.fillRect(0,0,W,H);
+  ndviData.forEach((cell,i) => {
+    const r=Math.floor(i/COLS), c=i%COLS;
+    ctx.fillStyle = ndviColor(cell.reserved ? 0 : cell.ndvi, isLight);
+    ctx.fillRect(c*cw+1,r*ch+1,cw-2,ch-2);
+    ctx.fillStyle = isLight ? 'rgba(0,0,0,.25)' : 'rgba(255,255,255,.2)';
+    ctx.font = `${Math.max(8, cw*0.28)}px 'Courier New', monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    if (!cell.reserved) ctx.fillText(String(i+1), c*cw+cw/2, r*ch+ch/2);
+  });
+}
+drawNDVI();
+new ResizeObserver(drawNDVI).observe(document.getElementById('ndvi-canvas'));
+
+const ndviCanvas = document.getElementById('ndvi-canvas');
+const ndviTip = document.getElementById('ndvi-tooltip');
+ndviCanvas.addEventListener('mousemove', e => {
+  const rect = ndviCanvas.getBoundingClientRect();
+  const COLS=14, ROWS=10;
+  const c = Math.floor((e.clientX-rect.left)/rect.width*COLS);
+  const r = Math.floor((e.clientY-rect.top)/rect.height*ROWS);
+  const idx = r*COLS+c;
+  if (idx<0||idx>=ndviData.length) return;
+  const cell = ndviData[idx];
+  if (cell.reserved) {
+    ndviTip.innerHTML = `<span style="color:var(--muted)">${cell.id} — Reserved</span>`;
+  } else {
+    ndviTip.innerHTML = `
+      <strong style="color:var(--ndvi)">${cell.id}</strong><br>
+      NDVI: ${(cell.ndvi*100).toFixed(0)}%<br>
+      Yield (3yr): ${cell.yield3yr.join(', ')} t/ha<br>
+      Soil index: ${cell.soil} | Elev: ${cell.elevation}m`;
+  }
+  ndviTip.style.opacity='1';
+  let x = e.clientX - rect.left + 12;
+  let y = e.clientY - rect.top + 12;
+  if (x+160 > rect.width) x -= 170;
+  ndviTip.style.left = x+'px';
+  ndviTip.style.top  = y+'px';
+});
+ndviCanvas.addEventListener('mouseleave', () => { ndviTip.style.opacity='0'; });
+
+/* ── Return calculator ─────────────────────────── */
+let currentOption = 'A';
+function setOption(opt) {
+  currentOption = opt;
+  document.getElementById('opt-a').className = opt==='A' ? 'toggle-btn active-gold' : 'toggle-btn';
+  document.getElementById('opt-b').className = opt==='B' ? 'toggle-btn active' : 'toggle-btn';
+  recalc();
+}
+
+function fmt(n) {
+  return 'R ' + n.toLocaleString('en-ZA', {minimumFractionDigits:0, maximumFractionDigits:0});
+}
+
+function recalc() {
+  const yield_ha = parseFloat(document.getElementById('yield-slider').value);
+  const safex    = parseFloat(document.getElementById('safex-slider').value);
+  const grids    = Math.max(1, parseInt(document.getElementById('grids-input').value)||1);
+  const cost_per = currentOption === 'A' ? 17000 : 18500;
+  const total_in = cost_per * grids;
+  const gross    = yield_ha * safex * grids;
+  const net      = gross - total_in;
+  const roi      = ((net / total_in)*100).toFixed(1);
+  const profitClass = net >= 0 ? 'r-profit-pos' : 'r-profit-neg';
+
+  document.getElementById('yield-display').textContent = yield_ha.toFixed(1) + ' t/ha';
+  document.getElementById('safex-display').textContent = 'R ' + safex.toLocaleString('en-ZA');
+
+  document.getElementById('calc-result').innerHTML = `
+    <div class="result-item">
+      <span class="r-val r-payout">${fmt(Math.round(gross))}</span>
+      <span class="r-lbl">Gross payout</span>
+    </div>
+    <div class="result-item">
+      <span class="r-val ${profitClass}">${net>=0?'+':''}${fmt(Math.round(net))}</span>
+      <span class="r-lbl">Net return</span>
+    </div>
+    <div class="result-item">
+      <span class="r-val ${profitClass}">${roi}%</span>
+      <span class="r-lbl">ROI</span>
+    </div>
+    <div class="result-item">
+      <span class="r-val" style="color:var(--muted)">${fmt(total_in)}</span>
+      <span class="r-lbl">Total invested (${grids} grid${grids>1?'s':''})</span>
+    </div>
+    <div class="result-item">
+      <span class="r-val" style="color:var(--muted)">${(yield_ha*grids).toFixed(1)} t</span>
+      <span class="r-lbl">Total yield (projected)</span>
+    </div>
+    <div class="result-item">
+      <span class="r-val" style="color:var(--muted);font-size:.9rem;">${currentOption==='B'&&yield_ha*safex<16000?'Floor triggered':'—'}</span>
+      <span class="r-lbl">${currentOption==='B'?'Insurance status':'No floor (Option A)'}</span>
+    </div>
+  `;
+}
+
+document.getElementById('yield-slider').addEventListener('input', recalc);
+document.getElementById('safex-slider').addEventListener('input', recalc);
+document.getElementById('grids-input').addEventListener('input', recalc);
+recalc();
+</script>
