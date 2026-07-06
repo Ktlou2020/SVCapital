@@ -1213,6 +1213,26 @@ function navigate(view, btnEl) {
   // Sync mobile bottom nav active state
   document.querySelectorAll('.mbn-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
 
+  // Auto-expand "More" section when navigating to a secondary view
+  const _secondaryViews = ['transactions','analytics','maturity','documents','statement','subaccounts','learn','quests','gifts','policies'];
+  if (_secondaryViews.includes(view)) {
+    const sec = document.getElementById('navMoreSection');
+    const chev = document.getElementById('navMoreChevron');
+    if (sec && sec.style.display === 'none') {
+      sec.style.display = 'block';
+      if (chev) chev.style.transform = 'rotate(180deg)';
+    }
+  }
+
+}
+
+function toggleNavMore() {
+  const sec = document.getElementById('navMoreSection');
+  const chev = document.getElementById('navMoreChevron');
+  if (!sec) return;
+  const open = sec.style.display !== 'none';
+  sec.style.display = open ? 'none' : 'block';
+  if (chev) chev.style.transform = open ? '' : 'rotate(180deg)';
 }
 
 function _mbnSetActive(btn) {
