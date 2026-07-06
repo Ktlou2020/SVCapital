@@ -1183,7 +1183,10 @@ function navigate(view, btnEl) {
     gifts: loadGiftsView,
     profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderKycStatusPanel(); },
   };
-  if (loaders[view]) loaders[view]();
+  if (loaders[view]) {
+    const _res = loaders[view]();
+    if (_res && typeof _res.catch === 'function') _res.catch(e => console.warn('[navigate] loader failed:', view, e.message));
+  }
 
   // End timer for the previous view, start one for this view
   if (navigate._current) SVC.timeEnd('view_' + navigate._current, 'svc_section_time', { section: navigate._current });
@@ -1491,16 +1494,21 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
     try { SVC.setUser(PORTAL.investor); } catch (_) {}
     try { SVC.track('portal_loaded', { active_investments: PORTAL.investments.filter(i => i.status === 'active').length }); } catch (_) {}
 
-    // Cache fresh data so the next launch renders instantly from localStorage
+    // Cache fresh data so the next launch renders instantly from localStorage.
+    // Only overwrite each key when its API call succeeded — preserve the previous
+    // cached value for any endpoint that was rejected (e.g. CORS-blocked), so a
+    // partial refresh never writes an empty array over good cached data.
     try {
+      let _prev = {};
+      try { _prev = JSON.parse(localStorage.getItem('svc_portal_cache') || '{}'); } catch (_) {}
       const _safeCache = {
         cachedAt:     Date.now(),
-        investor:     PORTAL.investor,
-        investments:  PORTAL.investments,
-        transactions: PORTAL.transactions,
-        pools:        PORTAL.pools,
+        investor:     invResult.status    === 'fulfilled' ? PORTAL.investor     : (_prev.investor     || PORTAL.investor),
+        investments:  invstResult.status  === 'fulfilled' ? PORTAL.investments  : (_prev.investments  || PORTAL.investments),
+        transactions: txnResult.status    === 'fulfilled' ? PORTAL.transactions : (_prev.transactions || PORTAL.transactions),
+        pools:        poolResult.status   === 'fulfilled' ? PORTAL.pools        : (_prev.pools        || PORTAL.pools),
         waitlist:     PORTAL.waitlist,
-        products:     _portalProductsCache || [],
+        products:     (_portalProductsCache && _portalProductsCache.length) ? _portalProductsCache : (_prev.products || []),
       };
       localStorage.setItem('svc_portal_cache', JSON.stringify(_safeCache));
     } catch (_) {}
@@ -1527,7 +1535,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
       const delay = (_attempt + 1) * 3000; // 3 s, 6 s
       console.log(`[portal] Retrying data load in ${delay}ms…`);
       await new Promise(r => setTimeout(r, delay));
-      return loadPortalData(_attempt + 1);
+      return loadPortalData(_attempt + 1, _opts);
     }
 
     // All attempts exhausted — ensure investor stub exists so renderOverview clears "Loading..."
@@ -2057,10 +2065,11 @@ async function loadMyInvestments() {
 
 function renderMyInvestmentStats() {
   const d = PORTAL.investments;
-  document.getElementById('mi-capital').textContent  = Utils.rand(d.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0));
-  document.getElementById('mi-expected').textContent = Utils.rand(d.reduce((s, i) => s + (parseFloat(i.expected_return_amount) || 0), 0));
-  document.getElementById('mi-earned').textContent   = Utils.rand(d.reduce((s, i) => s + (parseFloat(i.actual_return_amount) || 0), 0));
-  document.getElementById('mi-count').textContent    = d.length;
+  const _s = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  _s('mi-capital',  Utils.rand(d.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)));
+  _s('mi-expected', Utils.rand(d.reduce((s, i) => s + (parseFloat(i.expected_return_amount) || 0), 0)));
+  _s('mi-earned',   Utils.rand(d.reduce((s, i) => s + (parseFloat(i.actual_return_amount) || 0), 0)));
+  _s('mi-count',    d.length);
 }
 
 function filterMyInvestments(filter, btn) {
@@ -2156,7 +2165,12 @@ async function loadMyTransactions() {
   if (!PORTAL.transactions.length) await loadPortalData();
   renderMyTxnTable();
 
-  document.getElementById('myTxnTypeFilter').addEventListener('change', renderMyTxnTable);
+  // Guard against duplicate listeners on repeated tab visits
+  const _tf = document.getElementById('myTxnTypeFilter');
+  if (_tf && !_tf.__txnListenerAdded) {
+    _tf.addEventListener('change', renderMyTxnTable);
+    _tf.__txnListenerAdded = true;
+  }
 }
 
 /* Icon + accent colour per transaction type */
@@ -5179,12 +5193,7 @@ async function loadQuestData() {
   try {
     const token = Auth.getToken();
     if (!token) return;
-    const res  = await fetch((window.__SVC_API_BASE__ || '/api/') + 'quests/my', {
-      headers: { 'Authorization': `Bearer ${token}` },
-      credentials: 'include',
-    });
-    if (!res.ok) return;
-    const data = await res.json();
+    const data = await API._fetch('GET', 'quests/my');
     PORTAL.quests = data;
 
     // Auto-detect and claim milestone quests silently
