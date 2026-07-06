@@ -1215,24 +1215,28 @@ async function autoSetup() {
       console.warn('⚠️  Could not upgrade transactions.reference to UNIQUE:', idxErr.message);
     }
 
-    // 1e. Backfill users.investor_id for any accounts where it is null.
-    // When this column is null the JWT carries investorId:null, the client falls back to
-    // the demo placeholder, and the server returns WHERE 1=0 for any investor-scoped query.
-    // This runs on every boot but is a no-op once all rows have a value.
+    // 1e. Repair users.investor_id for accounts where it is null OR points to a
+    // non-existent investor record (e.g. stale demo value like 'INV-001').
+    // When this is wrong the JWT carries a bad investorId, the server scopes every
+    // query to that phantom ID (WHERE 1=0 equivalent), and the portal shows nothing.
+    // Runs on every boot; is a no-op once all rows are correct.
     try {
       const { rowCount } = await pool.query(`
         UPDATE users u
         SET    investor_id = i.id
         FROM   investors i
         WHERE  LOWER(u.email) = LOWER(i.email)
-          AND  u.investor_id IS NULL
           AND  u.role = 'investor'
+          AND  (
+            u.investor_id IS NULL
+            OR NOT EXISTS (SELECT 1 FROM investors WHERE id = u.investor_id)
+          )
       `);
       if (rowCount > 0) {
-        console.log(`✅ Backfilled users.investor_id for ${rowCount} account(s).`);
+        console.log(`✅ Repaired users.investor_id for ${rowCount} account(s).`);
       }
     } catch (backfillErr) {
-      console.warn('⚠️  investor_id backfill warning:', backfillErr.message);
+      console.warn('⚠️  investor_id repair warning:', backfillErr.message);
     }
 
     // 2. Check if the COO account already exists — if so, skip seeding entirely
