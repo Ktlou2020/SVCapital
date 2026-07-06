@@ -5174,6 +5174,21 @@ async function loadQuestData() {
 
     renderXPWidget();
     _updateXPNavBadge();
+
+    // Update the pov-rewards stat tile — renderOverview() runs before this resolves
+    const _rewEl = document.getElementById('pov-rewards');
+    if (_rewEl) {
+      const _xp = PORTAL.quests?.xp || 0;
+      const _lvl = _getLevelForXP(_xp);
+      const _refTotal = (PORTAL.transactions || [])
+        .filter(t => t.type === 'referral_bonus' && t.status !== 'rejected')
+        .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+      if (_refTotal > 0) {
+        _animateNum(_rewEl, _refTotal, 'R ', '', 600);
+      } else {
+        _rewEl.textContent = `${_lvl.label} · ${_xp.toLocaleString('en-ZA')} XP`;
+      }
+    }
   } catch (e) {
     console.warn('[Quests] loadQuestData failed:', e.message);
   }
@@ -5332,7 +5347,7 @@ function renderQuestView() {
 
   // ── Quests completed count
   const questsEl = document.getElementById('questRewardsEarned');
-  const completedCount = PORTAL.quests?.completed?.length || 0;
+  const completedCount = PORTAL.quests?.completedIds?.length || 0;
   if (questsEl) questsEl.textContent = `${completedCount} Quest${completedCount !== 1 ? 's' : ''}`;
 
   // ── Rewards stats row ────────────────────────────────────────
