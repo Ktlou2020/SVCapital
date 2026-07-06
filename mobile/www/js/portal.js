@@ -4145,18 +4145,6 @@ function openInvestModal(poolId) {
         min="${pool.min_investment}" max="${walletBal}" oninput="_updateInvestCalc(parseFloat(this.value)||0,${pool.annual_rate},${pool.term_months},${pool.min_investment})" />
     </div>
 
-    <!-- Live return calculator -->
-    <div id="investCalcPreview" class="invest-calc-box">
-      <div class="invest-calc-label">Estimated return at maturity</div>
-      <div class="invest-calc-grid">
-        <div><div class="invest-calc-caption">Invested</div><div class="invest-calc-val" id="ic-invested">—</div></div>
-        <div class="invest-calc-plus">+</div>
-        <div><div class="invest-calc-caption">Returns</div><div class="invest-calc-val" id="ic-returns" style="color:var(--green)">—</div></div>
-        <div class="invest-calc-equals">=</div>
-        <div><div class="invest-calc-caption">Total payout</div><div class="invest-calc-val invest-calc-total" id="ic-total">—</div></div>
-      </div>
-      <div class="invest-calc-date" id="ic-maturity">Maturity date: <strong>${maturityStr}</strong></div>
-    </div>
 
     <!-- Wallet deduction breakdown (amount invested + platform fee) -->
     <div id="investFeeBreakdown" style="margin-top:12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:10px 14px;font-size:0.84rem">
@@ -4191,27 +4179,15 @@ function openInvestModal(poolId) {
 }
 
 function _updateInvestCalc(amt, rate, termMonths, minInvest) {
-  const preview = document.getElementById('investCalcPreview');
-  if (!preview) return;
   const feeAmtEl = document.getElementById('ic-fee-amount');
   const feeFeeEl = document.getElementById('ic-fee-fee');
   const feeTotEl = document.getElementById('ic-fee-total');
   if (amt >= minInvest) {
-    const ret = amt * rate * (termMonths / 12);
-    document.getElementById('ic-invested').textContent = Utils.rand(Math.round(amt));
-    document.getElementById('ic-returns').textContent  = '+' + Utils.rand(Math.round(ret));
-    document.getElementById('ic-total').textContent    = Utils.rand(Math.round(amt + ret));
-    preview.classList.add('invest-calc-box--visible');
-    // Wallet deduction breakdown
     const fee = _platformFee(amt);
     if (feeAmtEl) feeAmtEl.textContent = Utils.rand(amt, 2);
     if (feeFeeEl) feeFeeEl.textContent = Utils.rand(fee, 2);
     if (feeTotEl) feeTotEl.textContent = Utils.rand(amt + fee, 2);
   } else {
-    document.getElementById('ic-invested').textContent = '—';
-    document.getElementById('ic-returns').textContent  = '—';
-    document.getElementById('ic-total').textContent    = '—';
-    preview.classList.remove('invest-calc-box--visible');
     if (feeAmtEl) feeAmtEl.textContent = '—';
     if (feeFeeEl) feeFeeEl.textContent = '—';
     if (feeTotEl) feeTotEl.textContent = '—';

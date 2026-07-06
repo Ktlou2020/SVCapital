@@ -4031,18 +4031,6 @@ function openInvestModal(poolId) {
     </div>
     <div id="investInsufficientBanner" style="display:none"></div>
 
-    <!-- Live return calculator -->
-    <div id="investCalcPreview" class="invest-calc-box">
-      <div class="invest-calc-label">Estimated return at maturity</div>
-      <div class="invest-calc-grid">
-        <div><div class="invest-calc-caption">Invested</div><div class="invest-calc-val" id="ic-invested">—</div></div>
-        <div class="invest-calc-plus">+</div>
-        <div><div class="invest-calc-caption">Returns</div><div class="invest-calc-val" id="ic-returns" style="color:var(--green)">—</div></div>
-        <div class="invest-calc-equals">=</div>
-        <div><div class="invest-calc-caption">Total payout</div><div class="invest-calc-val invest-calc-total" id="ic-total">—</div></div>
-      </div>
-      <div class="invest-calc-date" id="ic-maturity">Maturity date: <strong>${maturityStr}</strong></div>
-    </div>
 
     <!-- Wallet deduction breakdown (amount invested + platform fee) -->
     <div id="investFeeBreakdown" style="margin-top:12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:10px 14px;font-size:0.84rem">
@@ -4077,26 +4065,18 @@ function openInvestModal(poolId) {
 }
 
 function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
-  const preview  = document.getElementById('investCalcPreview');
   const banner   = document.getElementById('investInsufficientBanner');
   const confirmBtn = document.getElementById('investConfirmBtn');
-  if (!preview) return;
   const feeAmtEl = document.getElementById('ic-fee-amount');
   const feeFeeEl = document.getElementById('ic-fee-fee');
   const feeTotEl = document.getElementById('ic-fee-total');
 
   const fee        = _platformFee(amt);
   const totalNeeded = amt + fee;
-  // Max the investor can invest fee-inclusive (floor to whole rands)
   const maxAffordable = walletBal ? Math.floor(walletBal / (1 + PLATFORM_FEE_RATE)) : null;
   const overBudget  = walletBal != null && totalNeeded > walletBal + 0.005;
 
   if (amt >= minInvest) {
-    const ret = amt * rate * (termMonths / 12);
-    document.getElementById('ic-invested').textContent = Utils.rand(Math.round(amt));
-    document.getElementById('ic-returns').textContent  = '+' + Utils.rand(Math.round(ret));
-    document.getElementById('ic-total').textContent    = Utils.rand(Math.round(amt + ret));
-    preview.classList.add('invest-calc-box--visible');
     if (feeAmtEl) feeAmtEl.textContent = Utils.rand(amt, 2);
     if (feeFeeEl) feeFeeEl.textContent = Utils.rand(fee, 2);
     if (feeTotEl) {
@@ -4104,8 +4084,6 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
       feeTotEl.style.color = overBudget ? '#ef4444' : '#1a1a1a';
     }
   } else {
-    ['ic-invested','ic-returns','ic-total'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
-    preview.classList.remove('invest-calc-box--visible');
     if (feeAmtEl) feeAmtEl.textContent = '—';
     if (feeFeeEl) feeFeeEl.textContent = '—';
     if (feeTotEl) { feeTotEl.textContent = '—'; feeTotEl.style.color = '#1a1a1a'; }
