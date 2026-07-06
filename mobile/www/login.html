@@ -915,6 +915,11 @@
 
   let _pending2FAToken = null;
 
+  function _isNetworkError(err) {
+    const m = (err && err.message) || '';
+    return m === 'Load failed' || m === 'Failed to fetch' || m.toLowerCase().includes('network') || m.toLowerCase().includes('timeout');
+  }
+
   async function handleLogin(e) {
     e.preventDefault();
     const email    = document.getElementById('emailInput').value.toLowerCase().trim();
@@ -925,8 +930,27 @@
     errorEl.classList.remove('show');
     btn.disabled = true; btn.classList.add('loading');
     btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Signing in…';
+
+    const _doLogin = () => fetch((window.__SVC_API_BASE__ || '/api/') + 'auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', body: JSON.stringify({ email, password })
+    });
+
     try {
-      const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ email, password }) });
+      let res;
+      try {
+        res = await _doLogin();
+      } catch (firstErr) {
+        if (_isNetworkError(firstErr)) {
+          // Railway cold start can take ~8s — retry once after a short wait
+          btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Server waking up…';
+          await new Promise(r => setTimeout(r, 5000));
+          btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Signing in…';
+          res = await _doLogin();
+        } else {
+          throw firstErr;
+        }
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Invalid credentials.');
       if (data.requires2FA) {
@@ -956,7 +980,7 @@
     } catch (err) {
       btn.disabled = false; btn.classList.remove('loading');
       btnText.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In';
-      showError(err.message || 'Login failed. Please try again.');
+      showError(_isNetworkError(err) ? 'Unable to connect to SV Capital. Please check your connection and try again.' : (err.message || 'Login failed. Please try again.'));
     }
   }
 
@@ -1012,7 +1036,9 @@
       setTimeout(() => { window.location.href = dest2fa; }, 350);
     } catch (err) {
       btn.disabled = false; btn.textContent = 'Verify Code';
-      if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }
+      const _m = err.message || '';
+      const _ne = _m === 'Load failed' || _m === 'Failed to fetch' || _m.toLowerCase().includes('network');
+      if (errEl) { errEl.textContent = _ne ? 'Unable to connect. Please check your connection.' : (_m || 'Verification failed.'); errEl.style.display = 'block'; }
     }
   }
 
