@@ -2186,14 +2186,14 @@ async function loadMyTransactions() {
 
 /* Icon + accent colour per transaction type */
 const _TXN_META = {
-  deposit:        { icon: 'fa-arrow-down-to-line',  color: '#22c55e', label: 'Deposit' },
+  deposit:        { icon: 'fa-download',            color: '#22c55e', label: 'Deposit' },
   investment:     { icon: 'fa-chart-line',          color: '#3b82f6', label: 'Investment' },
   return:         { icon: 'fa-arrow-trend-up',      color: '#eab308', label: 'Return Payment' },
   payout:         { icon: 'fa-money-bill-wave',     color: '#22c55e', label: 'Payout' },
   reinvestment:   { icon: 'fa-arrows-rotate',       color: '#3b82f6', label: 'Re-investment' },
   fee:            { icon: 'fa-receipt',             color: '#f59e0b', label: 'Platform Fee' },
   referral_bonus: { icon: 'fa-user-group',          color: '#a855f7', label: 'Referral Bonus' },
-  withdrawal:     { icon: 'fa-arrow-up-from-line',  color: '#ef4444', label: 'Withdrawal' },
+  withdrawal:     { icon: 'fa-upload',              color: '#ef4444', label: 'Withdrawal' },
   gift_sent:      { icon: 'fa-gift',                color: '#f59e0b', label: 'Gift Sent' },
   gift_received:  { icon: 'fa-gift',                color: '#22c55e', label: 'Gift Received' },
   reward:         { icon: 'fa-award',               color: '#a855f7', label: 'Reward' },
@@ -7541,8 +7541,8 @@ function _saNormalDetail(sa, meta) {
     .slice(0, 5);
 
   const txnTypeIcon = t => ({
-    deposit: 'fa-arrow-down-to-line', investment: 'fa-chart-line',
-    withdrawal: 'fa-arrow-up-from-line', return: 'fa-coins',
+    deposit: 'fa-download', investment: 'fa-chart-line',
+    withdrawal: 'fa-upload', return: 'fa-coins',
   }[t.type] || 'fa-circle-dot');
 
   return `
