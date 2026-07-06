@@ -435,10 +435,10 @@
       ══════════════════════════════════ -->
       <div class="view" id="view-investments">
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
-          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div><div class="stat-card__value" id="mi-capital">—</div><div class="stat-card__label">Capital Deployed</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="mi-expected">—</div><div class="stat-card__label">Target Returns</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-double"></i></div></div><div class="stat-card__value" id="mi-earned">—</div><div class="stat-card__label">Returns Earned</div></div>
-          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-layer-group"></i></div></div><div class="stat-card__value" id="mi-count">—</div><div class="stat-card__label">Total Investments</div></div>
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('analytics',document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div><div class="stat-card__value" id="mi-capital">—</div><div class="stat-card__label">Capital Deployed</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('analytics',document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="mi-expected">—</div><div class="stat-card__label">Target Returns</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('transactions',document.querySelector('[data-view=transactions]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-double"></i></div></div><div class="stat-card__value" id="mi-earned">—</div><div class="stat-card__label">Returns Earned</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-layer-group"></i></div></div><div class="stat-card__value" id="mi-count">—</div><div class="stat-card__label">Total Investments</div></div>
         </div>
 
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px">
@@ -466,22 +466,22 @@
 
         <!-- KPI tiles -->
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
-          <div class="stat-card stat-card--gold">
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))">
             <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-trend-up"></i></div></div>
             <div class="stat-card__value" id="an-moic">—</div>
             <div class="stat-card__label">Portfolio MOIC</div>
           </div>
-          <div class="stat-card stat-card--green">
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))">
             <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div>
             <div class="stat-card__value" id="an-irr">—</div>
             <div class="stat-card__label">Annualised Return</div>
           </div>
-          <div class="stat-card stat-card--blue">
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('marketplace',document.querySelector('[data-view=marketplace]'))">
             <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-trophy"></i></div></div>
             <div class="stat-card__value" id="an-best">—</div>
             <div class="stat-card__label">Best Performing Pool</div>
           </div>
-          <div class="stat-card stat-card--purple">
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))">
             <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-calendar-days"></i></div></div>
             <div class="stat-card__value" id="an-avgdays">—</div>
             <div class="stat-card__label">Avg Holding Period</div>

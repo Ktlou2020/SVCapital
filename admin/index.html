@@ -248,7 +248,7 @@
         </div>
 
         <div class="stats-row" id="dashStats">
-          <div class="stat-card stat-card--gold">
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('investors', document.querySelector('[data-view=investors]'))">
             <div class="stat-card__header">
               <div class="stat-card__icon"><i class="fa-solid fa-users"></i></div>
               <div class="stat-card__trend up" id="ds-trend-investors"><i class="fa-solid fa-arrow-trend-up"></i> —</div>
@@ -256,7 +256,7 @@
             <div class="stat-card__value" id="ds-investors">—</div>
             <div class="stat-card__label">Total Investors</div>
           </div>
-          <div class="stat-card stat-card--green">
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('investments', document.querySelector('[data-view=investments]'))">
             <div class="stat-card__header">
               <div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div>
               <div class="stat-card__trend up" id="ds-trend-invested"><i class="fa-solid fa-arrow-trend-up"></i> —</div>
@@ -264,7 +264,7 @@
             <div class="stat-card__value" id="ds-invested">—</div>
             <div class="stat-card__label">Total Invested (AUM)</div>
           </div>
-          <div class="stat-card stat-card--blue">
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('transactions', document.querySelector('[data-view=transactions]'))">
             <div class="stat-card__header">
               <div class="stat-card__icon"><i class="fa-solid fa-money-bill-transfer"></i></div>
               <div class="stat-card__trend up" id="ds-trend-returns"><i class="fa-solid fa-arrow-trend-up"></i> —</div>
@@ -272,7 +272,7 @@
             <div class="stat-card__value" id="ds-returns">—</div>
             <div class="stat-card__label">Total Returns Paid</div>
           </div>
-          <div class="stat-card stat-card--purple">
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('pools', document.querySelector('[data-view=pools]'))">
             <div class="stat-card__header">
               <div class="stat-card__icon"><i class="fa-solid fa-layer-group"></i></div>
               <div class="stat-card__trend neutral">Live</div>
@@ -374,12 +374,12 @@
       ══════════════════════════════════ -->
       <div class="view" id="view-investors">
         <div class="stats-row" style="grid-template-columns:repeat(6,1fr)" id="investorStats">
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-users"></i></div></div><div class="stat-card__value" id="is-total">—</div><div class="stat-card__label">Total Investors</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-check"></i></div></div><div class="stat-card__value" id="is-active">—</div><div class="stat-card__label">Active</div></div>
-          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-clock"></i></div></div><div class="stat-card__value" id="is-pending">—</div><div class="stat-card__label">Pending KYC</div></div>
-          <div class="stat-card stat-card--red" style="--red:#ef4444"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-user-slash"></i></div></div><div class="stat-card__value" id="is-suspended">—</div><div class="stat-card__label">Suspended</div></div>
-          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-wallet"></i></div></div><div class="stat-card__value" id="is-wallet">—</div><div class="stat-card__label">Total Wallets</div></div>
-          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="is-aum">—</div><div class="stat-card__label">AUM</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="document.getElementById('investorStatusFilter').value='';document.getElementById('investorStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-users"></i></div></div><div class="stat-card__value" id="is-total">—</div><div class="stat-card__label">Total Investors</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="document.getElementById('investorStatusFilter').value='active';document.getElementById('investorStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-check"></i></div></div><div class="stat-card__value" id="is-active">—</div><div class="stat-card__label">Active</div></div>
+          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('kyc', document.querySelector('[data-view=kyc]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-clock"></i></div></div><div class="stat-card__value" id="is-pending">—</div><div class="stat-card__label">Pending KYC</div></div>
+          <div class="stat-card stat-card--red" style="--red:#ef4444;cursor:pointer" onclick="document.getElementById('investorStatusFilter').value='suspended';document.getElementById('investorStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-user-slash"></i></div></div><div class="stat-card__value" id="is-suspended">—</div><div class="stat-card__label">Suspended</div></div>
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('transactions', document.querySelector('[data-view=transactions]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-wallet"></i></div></div><div class="stat-card__value" id="is-wallet">—</div><div class="stat-card__label">Total Wallets</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('analytics', document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="is-aum">—</div><div class="stat-card__label">AUM</div></div>
         </div>
 
         <div class="table-card">
@@ -461,12 +461,12 @@
             <div class="stat-card__value" id="ifa-active">—</div>
             <div class="stat-card__label">Active IFAs</div>
           </div>
-          <div class="stat-card stat-card--blue">
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('investors', document.querySelector('[data-view=investors]'))">
             <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-users-between-lines"></i></div></div>
             <div class="stat-card__value" id="ifa-clients">—</div>
             <div class="stat-card__label">Total IFA Clients</div>
           </div>
-          <div class="stat-card stat-card--purple">
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('analytics', document.querySelector('[data-view=analytics]'))">
             <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div>
             <div class="stat-card__value" id="ifa-aum">—</div>
             <div class="stat-card__label">IFA-Managed AUM</div>
@@ -514,10 +514,10 @@
       ══════════════════════════════════ -->
       <div class="view" id="view-kyc">
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
-          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hourglass-half"></i></div></div><div class="stat-card__value" id="kyc-pending">—</div><div class="stat-card__label">Pending Review</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-magnifying-glass"></i></div></div><div class="stat-card__value" id="kyc-review">—</div><div class="stat-card__label">Under Review</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-circle"></i></div></div><div class="stat-card__value" id="kyc-approved">—</div><div class="stat-card__label">Approved</div></div>
-          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-circle-xmark"></i></div></div><div class="stat-card__value" id="kyc-rejected">—</div><div class="stat-card__label">Rejected</div></div>
+          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="document.getElementById('kycStatusFilter').value='pending';document.getElementById('kycStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hourglass-half"></i></div></div><div class="stat-card__value" id="kyc-pending">—</div><div class="stat-card__label">Pending Review</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="document.getElementById('kycStatusFilter').value='under_review';document.getElementById('kycStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-magnifying-glass"></i></div></div><div class="stat-card__value" id="kyc-review">—</div><div class="stat-card__label">Under Review</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="document.getElementById('kycStatusFilter').value='approved';document.getElementById('kycStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-circle"></i></div></div><div class="stat-card__value" id="kyc-approved">—</div><div class="stat-card__label">Approved</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="document.getElementById('kycStatusFilter').value='rejected';document.getElementById('kycStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-circle-xmark"></i></div></div><div class="stat-card__value" id="kyc-rejected">—</div><div class="stat-card__label">Rejected</div></div>
         </div>
 
         <div class="table-card">
@@ -610,11 +610,11 @@
       ══════════════════════════════════ -->
       <div class="view" id="view-investments">
         <div class="stats-row" style="grid-template-columns:repeat(5,1fr)">
-          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="inv-total">—</div><div class="stat-card__label">Total Investments</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-play"></i></div></div><div class="stat-card__value" id="inv-active">—</div><div class="stat-card__label">Active</div></div>
-          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hourglass-end"></i></div></div><div class="stat-card__value" id="inv-matured">—</div><div class="stat-card__label">Matured</div></div>
-          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div><div class="stat-card__value" id="inv-capital">—</div><div class="stat-card__label">Capital Deployed</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div><div class="stat-card__value" id="inv-avgrate">—</div><div class="stat-card__label">Avg. Annual Rate</div></div>
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="document.getElementById('investmentStatusFilter').value='';document.getElementById('investmentStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="inv-total">—</div><div class="stat-card__label">Total Investments</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="document.getElementById('investmentStatusFilter').value='active';document.getElementById('investmentStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-play"></i></div></div><div class="stat-card__value" id="inv-active">—</div><div class="stat-card__label">Active</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="document.getElementById('investmentStatusFilter').value='matured';document.getElementById('investmentStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hourglass-end"></i></div></div><div class="stat-card__value" id="inv-matured">—</div><div class="stat-card__label">Matured</div></div>
+          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('analytics', document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div><div class="stat-card__value" id="inv-capital">—</div><div class="stat-card__label">Capital Deployed</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('analytics', document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div><div class="stat-card__value" id="inv-avgrate">—</div><div class="stat-card__label">Avg. Annual Rate</div></div>
         </div>
 
         <div class="table-card">
@@ -697,10 +697,10 @@
       ══════════════════════════════════ -->
       <div class="view" id="view-transactions">
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-down"></i></div></div><div class="stat-card__value" id="txn-deposits">—</div><div class="stat-card__label">Total Deposits</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-up"></i></div></div><div class="stat-card__value" id="txn-invested">—</div><div class="stat-card__label">Capital Invested</div></div>
-          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-star"></i></div></div><div class="stat-card__value" id="txn-returns">—</div><div class="stat-card__label">Returns Paid</div></div>
-          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-receipt"></i></div></div><div class="stat-card__value" id="txn-count">—</div><div class="stat-card__label">Total Transactions</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="document.getElementById('txnTypeFilter').value='deposit';document.getElementById('txnTypeFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-down"></i></div></div><div class="stat-card__value" id="txn-deposits">—</div><div class="stat-card__label">Total Deposits</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="document.getElementById('txnTypeFilter').value='investment';document.getElementById('txnTypeFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-up"></i></div></div><div class="stat-card__value" id="txn-invested">—</div><div class="stat-card__label">Capital Invested</div></div>
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="document.getElementById('txnTypeFilter').value='return';document.getElementById('txnTypeFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-star"></i></div></div><div class="stat-card__value" id="txn-returns">—</div><div class="stat-card__label">Returns Paid</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="document.getElementById('txnTypeFilter').value='';document.getElementById('txnTypeFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-receipt"></i></div></div><div class="stat-card__value" id="txn-count">—</div><div class="stat-card__label">Total Transactions</div></div>
         </div>
 
         <div class="table-card">
@@ -796,10 +796,10 @@
       ══════════════════════════════════ -->
       <div class="view" id="view-support">
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
-          <div class="stat-card stat-card--red" style="--red:#ef4444"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-ticket"></i></div></div><div class="stat-card__value" id="tkt-open">—</div><div class="stat-card__label">Open Tickets</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-spinner"></i></div></div><div class="stat-card__value" id="tkt-inprogress">—</div><div class="stat-card__label">In Progress</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check"></i></div></div><div class="stat-card__value" id="tkt-resolved">—</div><div class="stat-card__label">Resolved</div></div>
-          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-exclamation-triangle"></i></div></div><div class="stat-card__value" id="tkt-urgent">—</div><div class="stat-card__label">High/Urgent</div></div>
+          <div class="stat-card stat-card--red" style="--red:#ef4444;cursor:pointer" onclick="document.getElementById('ticketStatusFilter').value='open';document.getElementById('ticketStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-ticket"></i></div></div><div class="stat-card__value" id="tkt-open">—</div><div class="stat-card__label">Open Tickets</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="document.getElementById('ticketStatusFilter').value='in_progress';document.getElementById('ticketStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-spinner"></i></div></div><div class="stat-card__value" id="tkt-inprogress">—</div><div class="stat-card__label">In Progress</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="document.getElementById('ticketStatusFilter').value='resolved';document.getElementById('ticketStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check"></i></div></div><div class="stat-card__value" id="tkt-resolved">—</div><div class="stat-card__label">Resolved</div></div>
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="document.getElementById('ticketPriorityFilter').value='high';document.getElementById('ticketPriorityFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-exclamation-triangle"></i></div></div><div class="stat-card__value" id="tkt-urgent">—</div><div class="stat-card__label">High/Urgent</div></div>
         </div>
 
         <div class="table-card">
@@ -858,12 +858,12 @@
 
         <!-- KPI tiles row -->
         <div class="stats-row mb-16" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))" id="opsKpiRow">
-          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">AUM</span></div><div class="stat-card__value" id="ops-aum">—</div><div class="stat-card__label">Active Under Management</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-wallet"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">WALLETS</span></div><div class="stat-card__value" id="ops-wallets">—</div><div class="stat-card__label">Total Wallet Pool</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-down-to-arc"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">DEPOSITS</span></div><div class="stat-card__value" id="ops-dep-val">—</div><div class="stat-card__label">Pending Deposits</div></div>
-          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-up-from-arc"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">WITHDRAWALS</span></div><div class="stat-card__value" id="ops-with-val">—</div><div class="stat-card__label">Pending Withdrawals</div></div>
-          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-id-card"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">FICA</span></div><div class="stat-card__value" id="ops-fica">—</div><div class="stat-card__label">FICA Pending</div></div>
-          <div class="stat-card stat-card--red" style="--red:#ef4444"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-headset"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">SUPPORT</span></div><div class="stat-card__value" id="ops-tickets">—</div><div class="stat-card__label">Open Tickets</div></div>
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">AUM</span></div><div class="stat-card__value" id="ops-aum">—</div><div class="stat-card__label">Active Under Management</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('investors',document.querySelector('[data-view=investors]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-wallet"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">WALLETS</span></div><div class="stat-card__value" id="ops-wallets">—</div><div class="stat-card__label">Total Wallet Pool</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('transactions',document.querySelector('[data-view=transactions]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-down-to-arc"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">DEPOSITS</span></div><div class="stat-card__value" id="ops-dep-val">—</div><div class="stat-card__label">Pending Deposits</div></div>
+          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('withdrawals',document.querySelector('[data-view=withdrawals]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-up-from-arc"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">WITHDRAWALS</span></div><div class="stat-card__value" id="ops-with-val">—</div><div class="stat-card__label">Pending Withdrawals</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('kyc',document.querySelector('[data-view=kyc]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-id-card"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">FICA</span></div><div class="stat-card__value" id="ops-fica">—</div><div class="stat-card__label">FICA Pending</div></div>
+          <div class="stat-card stat-card--red" style="--red:#ef4444;cursor:pointer" onclick="navigate('support',document.querySelector('[data-view=support]'))"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-headset"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">SUPPORT</span></div><div class="stat-card__value" id="ops-tickets">—</div><div class="stat-card__label">Open Tickets</div></div>
         </div>
 
         <!-- Money in Motion + Investor Growth side-by-side -->
@@ -987,10 +987,10 @@
       ══════════════════════════════════ -->
       <div class="view" id="view-aml">
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr)" id="amlStats">
-          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-flag"></i></div></div><div class="stat-card__value" id="aml-total">—</div><div class="stat-card__label">Total Flags</div></div>
-          <div class="stat-card stat-card--red" style="--red:#ef4444"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i></div></div><div class="stat-card__value" id="aml-open">—</div><div class="stat-card__label">Open</div></div>
-          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-triangle-exclamation"></i></div></div><div class="stat-card__value" id="aml-high">—</div><div class="stat-card__label">High Priority</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-circle"></i></div></div><div class="stat-card__value" id="aml-resolved">—</div><div class="stat-card__label">Resolved This Month</div></div>
+          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-flag"></i></div></div><div class="stat-card__value" id="aml-total">—</div><div class="stat-card__label">Total Flags</div></div>
+          <div class="stat-card stat-card--red" style="--red:#ef4444;cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i></div></div><div class="stat-card__value" id="aml-open">—</div><div class="stat-card__label">Open</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-triangle-exclamation"></i></div></div><div class="stat-card__value" id="aml-high">—</div><div class="stat-card__label">High Priority</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-circle"></i></div></div><div class="stat-card__value" id="aml-resolved">—</div><div class="stat-card__label">Resolved This Month</div></div>
         </div>
 
         <div class="table-card">
@@ -1044,10 +1044,10 @@
         </div>
 
         <div class="stats-row">
-          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div><div class="stat-card__value">14.83%</div><div class="stat-card__label">Avg Cattle Return</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-bolt"></i></div></div><div class="stat-card__value">R500</div><div class="stat-card__label">Lowest Min. Investment</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-plus"></i></div></div><div class="stat-card__value" id="an-monthlynew">—</div><div class="stat-card__label">New Investors (30d)</div></div>
-          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-handshake"></i></div></div><div class="stat-card__value" id="an-referrals">—</div><div class="stat-card__label">Referred Investors</div></div>
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div><div class="stat-card__value">14.83%</div><div class="stat-card__label">Avg Cattle Return</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('products',document.querySelector('[data-view=products]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-bolt"></i></div></div><div class="stat-card__value">R500</div><div class="stat-card__label">Lowest Min. Investment</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('investors',document.querySelector('[data-view=investors]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-plus"></i></div></div><div class="stat-card__value" id="an-monthlynew">—</div><div class="stat-card__label">New Investors (30d)</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('investors',document.querySelector('[data-view=investors]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-handshake"></i></div></div><div class="stat-card__value" id="an-referrals">—</div><div class="stat-card__label">Referred Investors</div></div>
         </div>
 
         <div class="grid-2">
@@ -1654,9 +1654,9 @@
         </div>
 
         <div class="stats-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px" id="intlInterestStats">
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-earth-africa"></i></div></div><div class="stat-card__value" id="ii-total">—</div><div class="stat-card__label">Total Registrations</div></div>
-          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-globe"></i></div></div><div class="stat-card__value" id="ii-countries">—</div><div class="stat-card__label">Countries</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-calendar-plus"></i></div></div><div class="stat-card__value" id="ii-this-month">—</div><div class="stat-card__label">This Month</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('international',document.querySelector('[data-view=international]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-earth-africa"></i></div></div><div class="stat-card__value" id="ii-total">—</div><div class="stat-card__label">Total Registrations</div></div>
+          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('international',document.querySelector('[data-view=international]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-globe"></i></div></div><div class="stat-card__value" id="ii-countries">—</div><div class="stat-card__label">Countries</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('international',document.querySelector('[data-view=international]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-calendar-plus"></i></div></div><div class="stat-card__value" id="ii-this-month">—</div><div class="stat-card__label">This Month</div></div>
         </div>
 
         <div class="table-card">
