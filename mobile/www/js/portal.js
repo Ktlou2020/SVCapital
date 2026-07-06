@@ -1456,6 +1456,17 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
         (t.investor_name || '').toLowerCase().includes((PORTAL.investor?.first_name || '').toLowerCase())
       );
     }
+    // Last-resort: if the client ID (DEMO_INVESTOR_ID fallback) doesn't match anything
+    // but the server already returned scoped data, trust the server's result directly.
+    // This handles the case where users.investor_id is null in the DB so the JWT carries
+    // investorId: null and the client falls back to the legacy 'INV-001' placeholder.
+    if (myInvests.length === 0 && allInvestments.length > 0) {
+      console.warn('[portal] Client ID mismatch — using server-scoped investments directly');
+      myInvests = allInvestments;
+    }
+    if (myTxns.length === 0 && allTxns.length > 0) {
+      myTxns = allTxns;
+    }
 
     if (!PORTAL.investor) {
       console.error('[portal] Could not resolve investor — showing empty state');
