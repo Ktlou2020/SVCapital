@@ -348,11 +348,11 @@ function renderTaskCompletionPanel() {
   const riskReady = !!inv.risk_profile;
   const ficaReady = (inv.fica_status || inv.kyc_status || inv.status || '').toLowerCase() === 'approved';
   const tasks = [
-    { label: 'Complete FICA verification', done: ficaReady, tone: '#FF8215', action: 'openKycUploadModal()', cta: 'Upload documents' },
+    { label: 'Complete identity verification', done: ficaReady, tone: '#FF8215', action: 'openKycUploadModal()', cta: 'Upload documents' },
     { label: 'Add a withdrawal bank account', done: bankReady, tone: '#656565', action: 'openBankDetailsModal()', cta: 'Add bank account' },
-    { label: 'Fund your wallet', done: hasWallet, tone: '#22c55e', action: 'openTopUpModal()', cta: 'Top up wallet' },
+    { label: 'Add funds to your wallet', done: hasWallet, tone: '#22c55e', action: 'openTopUpModal()', cta: 'Add funds' },
     { label: 'Confirm your risk profile', done: riskReady, tone: '#a855f7', action: 'navigate(\'profile\', document.querySelector(\'[data-view=profile]\'))', cta: 'Review profile' },
-    { label: 'Make your next investment', done: hasInvestments, tone: '#D4AF37', action: 'navigate(\'marketplace\', document.querySelector(\'[data-view=marketplace]\'))', cta: 'Browse pools' },
+    { label: 'Make your first investment', done: hasInvestments, tone: '#D4AF37', action: 'navigate(\'marketplace\', document.querySelector(\'[data-view=marketplace]\'))', cta: 'Browse products' },
   ];
   const doneCount = tasks.filter(t => t.done).length;
   const pending = tasks.filter(t => !t.done);
@@ -1157,7 +1157,7 @@ function navigate(view, btnEl) {
     overview: 'Portfolio Overview', investments: 'My Investments',
     analytics: 'Portfolio Analytics',
     transactions: 'Transactions', wallet: 'Wallet', marketplace: 'Browse Pools',
-    maturity: 'Maturity Instructions', profile: 'My Profile',
+    maturity: 'When Your Investment Ends', profile: 'My Profile',
     support: 'Support', referral: 'Refer & Earn', statement: 'Account Statement',
     quests: 'Earn Rewards', learn: 'Learning Hub', subaccounts: 'My Accounts',
     documents: 'Document Vault', policies: 'Platform Policies',
@@ -1600,7 +1600,7 @@ function renderOverview(skipCharts) {
     const nextEl = document.getElementById('wchipNext');
     const nextTxt = document.getElementById('wchipNextText');
     if (nextEl && nextTxt && days !== null) {
-      nextTxt.textContent = `Next maturity in ${days}d`;
+      nextTxt.textContent = `Payout in ${days}d`;
       nextEl.style.display = 'inline-flex';
     }
   }
@@ -1623,8 +1623,8 @@ function renderOverview(skipCharts) {
     ficaBanner.innerHTML = `
       <div class="fica-alert-banner__icon"><i class="fa-solid fa-id-card"></i></div>
       <div class="fica-alert-banner__body">
-        <div class="fica-alert-banner__title">FICA/KYC Verification Pending</div>
-        <div class="fica-alert-banner__sub">Your identity documents are under review (1–2 business days). You can invest once approved.</div>
+        <div class="fica-alert-banner__title">Identity Verification Pending</div>
+        <div class="fica-alert-banner__sub">Your documents are being reviewed — usually 1–2 business days. You can still browse products and invest in the meantime. Withdrawals unlock once your identity is verified.</div>
       </div>
       <div class="fica-alert-banner__action">
         <button class="btn btn--primary btn--sm" onclick="navigate('support', document.querySelector('[data-view=support]'))">
@@ -1642,7 +1642,7 @@ function renderOverview(skipCharts) {
   const perfPools    = document.getElementById('perf-pools');
   if (perfInvested) perfInvested.textContent = Utils.rand(totalInvested);
   if (perfReturns)  perfReturns.textContent  = '+' + Utils.rand(totalRet);
-  if (perfRate)     perfRate.textContent     = returnPct + '% p.a.';
+  if (perfRate)     perfRate.textContent     = returnPct + '% per year';
   if (perfPools)    perfPools.textContent    = activeCount + ' active';
 
   renderOverviewInvestments();
@@ -1653,6 +1653,50 @@ function renderOverview(skipCharts) {
   }
   renderXPWidget();
   renderTaskCompletionPanel();
+
+  // "How SV Capital works" panel — shown only to users who have never invested
+  const _neverInvested = !(PORTAL.investments && PORTAL.investments.length);
+  let _howPanel = document.getElementById('howItWorksPanel');
+  if (_neverInvested && !_howPanel) {
+    _howPanel = document.createElement('div');
+    _howPanel.id = 'howItWorksPanel';
+    _howPanel.style.cssText = 'margin-bottom:20px';
+    _howPanel.innerHTML = `
+      <div class="panel" style="border:1.5px solid rgba(0,150,255,0.2);background:linear-gradient(135deg,rgba(0,150,255,0.04),rgba(0,150,255,0.01))">
+        <div class="panel__header" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div>
+            <span class="panel__title"><i class="fa-solid fa-seedling" style="color:#0096ff;margin-right:8px"></i>How SV Capital works</span>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px">From sign-up to earning a return — here is the full picture.</div>
+          </div>
+          <button class="btn btn--ghost btn--sm" style="margin-left:auto" onclick="navigate('learn', document.querySelector('[data-view=learn]'))">
+            <i class="fa-solid fa-graduation-cap"></i> Learning Hub
+          </button>
+        </div>
+        <div class="panel__body">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px">
+            <div style="padding:14px;border-radius:12px;background:rgba(0,0,0,0.03)">
+              <div style="width:30px;height:30px;border-radius:50%;background:rgba(0,150,255,0.12);color:#0096ff;display:flex;align-items:center;justify-content:center;margin-bottom:10px"><i class="fa-solid fa-id-card" style="font-size:0.85rem"></i></div>
+              <div style="font-weight:700;font-size:0.86rem;margin-bottom:5px">1. Verify your identity</div>
+              <div style="font-size:0.77rem;color:var(--text-muted);line-height:1.55">Upload your ID documents once. Required by law — usually approved within 1–2 business days.</div>
+            </div>
+            <div style="padding:14px;border-radius:12px;background:rgba(0,0,0,0.03)">
+              <div style="width:30px;height:30px;border-radius:50%;background:rgba(0,150,255,0.12);color:#0096ff;display:flex;align-items:center;justify-content:center;margin-bottom:10px"><i class="fa-solid fa-wallet" style="font-size:0.85rem"></i></div>
+              <div style="font-weight:700;font-size:0.86rem;margin-bottom:5px">2. Add funds</div>
+              <div style="font-size:0.77rem;color:var(--text-muted);line-height:1.55">Transfer money into your wallet via EFT or card. Your funds sit in your wallet until you choose to invest.</div>
+            </div>
+            <div style="padding:14px;border-radius:12px;background:rgba(0,0,0,0.03)">
+              <div style="width:30px;height:30px;border-radius:50%;background:rgba(0,150,255,0.12);color:#0096ff;display:flex;align-items:center;justify-content:center;margin-bottom:10px"><i class="fa-solid fa-chart-line" style="font-size:0.85rem"></i></div>
+              <div style="font-weight:700;font-size:0.86rem;margin-bottom:5px">3. Choose an investment</div>
+              <div style="font-size:0.77rem;color:var(--text-muted);line-height:1.55">Browse products and invest. Your capital is locked for a set term and earns a return. At the end of the term, everything is returned to your wallet.</div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    const _heroEl = document.querySelector('#view-overview .portfolio-hero');
+    if (_heroEl) _heroEl.before(_howPanel);
+  } else if (!_neverInvested && _howPanel) {
+    _howPanel.remove();
+  }
 }
 
 /* ─── Onboarding Wizard ──────────────────────────────────────────── */
@@ -1689,7 +1733,7 @@ function renderOnboardingWizard() {
 
   const stepDefs = [
     {
-      label: 'FICA / KYC Verification',
+      label: 'Identity Verification',
       icon: 'id-card',
       done: ficaDone,
       action: 'openKycUploadModal()',
@@ -1703,18 +1747,18 @@ function renderOnboardingWizard() {
       actionLabel: 'Add Account'
     },
     {
-      label: 'Top Up Wallet',
+      label: 'Add Funds',
       icon: 'wallet',
       done: walletDone,
       action: 'openTopUpModal()',
-      actionLabel: 'Top Up'
+      actionLabel: 'Add Funds'
     },
     {
       label: 'Make First Investment',
       icon: 'coins',
       done: investDone,
       action: "navigate('marketplace', document.querySelector('[data-view=marketplace]'))",
-      actionLabel: 'Browse Pools'
+      actionLabel: 'Browse Products'
     }
   ];
 
@@ -3207,6 +3251,29 @@ function renderProductsGrid() {
     if (balEl) { balEl.textContent = Utils.rand(walletBal); balEl.style.color = walletBal >= 500 ? 'var(--green)' : 'var(--gold)'; }
   }
 
+  // First-time explainer strip — for users who have never invested
+  const _mktHasInvested = (PORTAL.investments || []).length > 0;
+  let _mktLearnStrip = document.getElementById('mktFirstTimeStrip');
+  if (!_mktHasInvested) {
+    if (!_mktLearnStrip) {
+      _mktLearnStrip = document.createElement('div');
+      _mktLearnStrip.id = 'mktFirstTimeStrip';
+      _mktLearnStrip.style.cssText = 'margin-bottom:16px;padding:14px 16px;border-radius:12px;background:rgba(0,150,255,0.05);border:1px solid rgba(0,150,255,0.15);display:flex;gap:12px;align-items:flex-start';
+      _mktLearnStrip.innerHTML = `
+        <i class="fa-solid fa-circle-info" style="color:#0096ff;font-size:1rem;flex-shrink:0;margin-top:1px"></i>
+        <div style="font-size:0.82rem;color:var(--text-muted);line-height:1.6">
+          <strong style="color:var(--text)">New here?</strong>
+          Each product has a minimum investment amount and a term — the period your money stays invested.
+          At the end of the term, your capital is returned to your wallet along with a return based on the product's performance.
+          Returns are not guaranteed and may vary.
+          <a style="color:#0096ff;cursor:pointer;font-weight:600;text-decoration:none" onclick="navigate('learn', document.querySelector('[data-view=learn]'))"> Learning Hub →</a>
+        </div>`;
+      grid.before(_mktLearnStrip);
+    }
+  } else if (_mktLearnStrip) {
+    _mktLearnStrip.remove();
+  }
+
   // All active products (details + factsheets browsable even with no open pool),
   // sorted by sort order. Products with open pools rank first.
   // Risk filter reads the product's own risk_profile (set in the admin console).
@@ -3332,7 +3399,7 @@ async function renderProductDetailView(type) {
           <div class="mpc2-metrics" style="margin-bottom:16px">
             <div class="mpc2-metric">
               <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(2) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : '—')}</div>
-              <div class="mpc2-metric__lbl">${avg != null ? 'avg return p.a.' : 'target return'}</div>
+              <div class="mpc2-metric__lbl">${avg != null ? 'avg return per year' : 'target return'}</div>
             </div>
             <div class="mpc2-metric-sep"></div>
             <div class="mpc2-metric"><div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(product.min_investment || 0)}</div><div class="mpc2-metric__lbl">minimum</div></div>
@@ -3997,7 +4064,7 @@ function openInvestModal(poolId) {
       <div class="invest-modal-pool-info">
         <div class="invest-modal-pool-name">${pool.name}</div>
         <div class="invest-modal-pool-meta">
-          <span style="color:${pi.color};font-weight:700">${Utils.pct(pool.annual_rate)} p.a.</span>
+          <span style="color:${pi.color};font-weight:700">${Utils.pct(pool.annual_rate)} per year</span>
           <span>·</span>
           <span>${pool.term_months}-month term</span>
           <span>·</span>
