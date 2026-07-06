@@ -4079,6 +4079,16 @@ function _minPlusFee(pool) {
   return min + _platformFee(min);
 }
 
+/* Quick-pick chip selection helper */
+function setInvestAmount(val, rate, termMonths, minInvest) {
+  const inp = document.getElementById('investAmount');
+  if (inp) inp.value = val;
+  document.querySelectorAll('.im-chip').forEach(c =>
+    c.classList.toggle('im-chip--active', Number(c.dataset.val) === val)
+  );
+  _updateInvestCalc(val, rate, termMonths, minInvest);
+}
+
 function openInvestModal(poolId) {
   const pool = PORTAL.pools.find(p => p.id === poolId);
   if (!pool) return;
@@ -4089,86 +4099,121 @@ function openInvestModal(poolId) {
   const _activeSa  = _pmSaId ? PORTAL.subAccounts.find(s => s.id === _pmSaId) : null;
   const walletBal  = _activeSa ? (parseFloat(_activeSa.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
   const pi         = Utils.productInfo(pool.product_type);
-  const meta       = _POOL_META[pool.product_type] || { risk: 'Medium', riskColor: '#f59e0b' };
-  const pr         = _productRisk(pool.product_type);   // risk from the product (admin console)
+  const pr         = _productRisk(pool.product_type);
   const maturityDt = new Date();
   maturityDt.setMonth(maturityDt.getMonth() + pool.term_months);
   const maturityStr = maturityDt.toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric' });
+  const walletOk   = walletBal >= _minPlusFee(pool);
 
   document.getElementById('investModalTitle').textContent = `Invest in ${pool.name}`;
 
   document.getElementById('investModalBody').innerHTML = `
-    ${_activeSa ? `<div style="background:rgba(255,155,12,0.1);border:1px solid rgba(255,155,12,0.3);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:0.82rem;color:#ff9b0c;display:flex;align-items:center;gap:8px"><i class="fa-solid fa-wallet"></i><span>Investing from <strong>${_esc(_activeSa.name)}</strong> sub-account &mdash; available: <strong>${Utils.rand(walletBal)}</strong></span></div>` : ''}
-    <!-- Pool summary card -->
-    <div class="invest-modal-pool-card">
-      <div class="invest-modal-pool-icon" style="background:${pi.color}20;color:${pi.color}">
+    ${_activeSa ? `
+    <div class="im-sa-banner">
+      <i class="fa-solid fa-wallet"></i>
+      Investing from <strong>${_esc(_activeSa.name)}</strong> &mdash; available: <strong>${Utils.rand(walletBal)}</strong>
+    </div>` : ''}
+
+    <!-- ── Pool header ── -->
+    <div class="im-pool-header">
+      <div class="im-pool-icon" style="background:${pi.color}1a;color:${pi.color}">
         <i class="fa-solid ${pi.icon}"></i>
       </div>
-      <div class="invest-modal-pool-info">
-        <div class="invest-modal-pool-name">${pool.name}</div>
-        <div class="invest-modal-pool-meta">
-          <span style="color:${pi.color};font-weight:700">${Utils.pct(pool.annual_rate)} per year</span>
-          <span>·</span>
-          <span>${pool.term_months}-month term</span>
-          <span>·</span>
-          <span class="pool-risk-badge" style="background:${pr.color}18;color:${pr.color}">${pr.risk} risk</span>
+      <div style="flex:1;min-width:0">
+        <div class="im-pool-name">${_esc(pool.name)}</div>
+        <div class="im-pool-meta">
+          <span style="color:${pi.color};font-weight:700">${Utils.pct(pool.annual_rate)}/yr</span>
+          <span class="im-pool-sep">·</span>
+          <span>${pool.term_months} months</span>
+          <span class="im-pool-sep">·</span>
+          <span class="im-pool-risk" style="background:${pr.color}18;color:${pr.color}">${pr.risk} risk</span>
         </div>
       </div>
     </div>
 
-    ${pool.product_type === 'cattle' ? '<div id="cattleHerdStatus"></div>' : ''}
+    ${pool.product_type === 'cattle' ? '<div id="cattleHerdStatus" style="margin-bottom:16px"></div>' : ''}
 
-    <!-- Wallet balance indicator (needs to cover the minimum + 1% platform fee) -->
-    <div class="invest-wallet-indicator ${walletBal >= _minPlusFee(pool) ? 'invest-wallet-ok' : 'invest-wallet-low'}">
-      <i class="fa-solid fa-wallet"></i>
-      <span>Your wallet: <strong>${Utils.rand(walletBal)}</strong></span>
-      ${walletBal < _minPlusFee(pool)
-        ? `<button class="btn btn--ghost btn--sm" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))">
-             <i class="fa-solid fa-plus"></i> Top Up
-           </button>`
-        : `<span class="invest-wallet-ok-badge"><i class="fa-solid fa-circle-check"></i> Sufficient</span>`}
-    </div>
-    ${walletBal >= pool.min_investment && walletBal < _minPlusFee(pool)
-      ? `<div style="font-size:0.74rem;color:#ef4444;margin-top:6px"><i class="fa-solid fa-circle-info"></i> You need ${Utils.rand(_minPlusFee(pool))} to invest the minimum — that's ${Utils.rand(pool.min_investment)} plus the ${Utils.rand(_platformFee(pool.min_investment))} (1%) platform fee.</div>`
-      : ''}
-
-    <!-- Quick-pick amount buttons -->
-    <div class="form-group" style="margin-top:14px">
-      <label class="form-label">How much would you like to invest?</label>
-      <div class="invest-quickpick mb-8">
-        ${[pool.min_investment, 5000, 10000, 25000].filter(v => v <= walletBal || v === pool.min_investment).map(v =>
-          `<button class="invest-qp-btn" onclick="document.getElementById('investAmount').value=${v};_updateInvestCalc(${v},${pool.annual_rate},${pool.term_months},${pool.min_investment})">${Utils.rand(v)}</button>`
-        ).join('')}
+    <!-- ── Amount hero ── -->
+    <div class="im-hero">
+      <div class="im-hero__eyebrow">AMOUNT TO INVEST</div>
+      <div class="im-hero__row">
+        <span class="im-hero__r">R</span>
+        <input type="number" id="investAmount" class="im-hero__input"
+          placeholder="0" min="${pool.min_investment}" max="${walletBal}"
+          oninput="_updateInvestCalc(parseFloat(this.value)||0,${pool.annual_rate},${pool.term_months},${pool.min_investment})" />
       </div>
-      <input type="number" class="form-input" id="investAmount"
-        placeholder="Enter amount (min ${Utils.rand(pool.min_investment)})"
-        min="${pool.min_investment}" max="${walletBal}" oninput="_updateInvestCalc(parseFloat(this.value)||0,${pool.annual_rate},${pool.term_months},${pool.min_investment})" />
+      <div class="im-hero__hint" id="im-hint">Minimum ${Utils.rand(pool.min_investment)}</div>
     </div>
 
+    <!-- ── Quick-pick chips ── -->
+    <div class="im-chips">
+      ${[pool.min_investment, 5000, 10000, 25000].filter(v => v <= walletBal || v === pool.min_investment).map(v =>
+        `<button class="im-chip" data-val="${v}" onclick="setInvestAmount(${v},${pool.annual_rate},${pool.term_months},${pool.min_investment})">${Utils.rand(v)}</button>`
+      ).join('')}
+    </div>
 
-    <!-- Wallet deduction breakdown (amount invested + platform fee) -->
-    <div id="investFeeBreakdown" style="margin-top:12px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:10px 14px;font-size:0.84rem">
-      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--text-muted)">
-        <span>Amount invested</span><span id="ic-fee-amount" style="font-weight:600;color:#1a1a1a">—</span>
+    <!-- ── Wallet + fee summary card ── -->
+    <div class="im-summary">
+      <div class="im-summary__wallet ${walletOk ? 'im-summary__wallet--ok' : 'im-summary__wallet--low'}">
+        <i class="fa-solid fa-wallet"></i>
+        <span>Your wallet: <strong>${Utils.rand(walletBal)}</strong></span>
+        ${walletOk
+          ? '<span class="im-w-ok"><i class="fa-solid fa-circle-check"></i> Sufficient</span>'
+          : `<button class="im-w-topup" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))"><i class="fa-solid fa-plus"></i> Top Up</button>`}
       </div>
-      <div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--text-muted)">
-        <span>Platform fee (1%)</span><span id="ic-fee-fee" style="font-weight:600;color:#1a1a1a">—</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:7px 0 1px;margin-top:5px;border-top:1px dashed rgba(0,0,0,0.12);font-weight:700">
-        <span>Total deducted from ${_activeSa ? 'sub-account' : 'wallet'}</span><span id="ic-fee-total" style="color:#1a1a1a">—</span>
+      ${!walletOk && walletBal >= pool.min_investment ? `
+      <div class="im-summary__fee-warn">
+        <i class="fa-solid fa-circle-info"></i>
+        You need ${Utils.rand(_minPlusFee(pool))} (${Utils.rand(pool.min_investment)} + ${Utils.rand(_platformFee(pool.min_investment))} fee) to invest the minimum.
+      </div>` : ''}
+      <div class="im-summary__body">
+        <div class="im-summary__row">
+          <span>Amount invested</span>
+          <span id="ic-fee-amount" class="im-summary__val">—</span>
+        </div>
+        <div class="im-summary__row">
+          <span>Platform fee (1%)</span>
+          <span id="ic-fee-fee" class="im-summary__val">—</span>
+        </div>
+        <div class="im-summary__divider"></div>
+        <div class="im-summary__row im-summary__row--total">
+          <span>Total from ${_activeSa ? 'sub-account' : 'wallet'}</span>
+          <span id="ic-fee-total" class="im-summary__total">—</span>
+        </div>
       </div>
     </div>
 
-    <!-- What happens next timeline -->
-    <div class="invest-next-steps">
-      <div class="ins-step"><div class="ins-dot ins-dot--active"></div><div class="ins-label"><b>Now</b> — funds deducted from ${_activeSa ? `<em>${_activeSa.name}</em> sub-account` : 'wallet'}</div></div>
-      <div class="ins-step"><div class="ins-dot"></div><div class="ins-label"><b>Ongoing</b> — returns accrue daily</div></div>
-      <div class="ins-step"><div class="ins-dot"></div><div class="ins-label"><b>${maturityStr}</b> — payout to your wallet</div></div>
+    <!-- ── Timeline ── -->
+    <div class="im-timeline">
+      <div class="im-tl-item im-tl-item--active">
+        <div class="im-tl-icon"><i class="fa-solid fa-bolt"></i></div>
+        <div class="im-tl-line"></div>
+        <div class="im-tl-text">
+          <strong>Now</strong>
+          <span>Funds locked from ${_activeSa ? `<em>${_esc(_activeSa.name)}</em>` : 'your wallet'}</span>
+        </div>
+      </div>
+      <div class="im-tl-item">
+        <div class="im-tl-icon"><i class="fa-solid fa-chart-line"></i></div>
+        <div class="im-tl-line"></div>
+        <div class="im-tl-text">
+          <strong>Ongoing</strong>
+          <span>Returns accrue daily</span>
+        </div>
+      </div>
+      <div class="im-tl-item im-tl-item--last">
+        <div class="im-tl-icon"><i class="fa-solid fa-coins"></i></div>
+        <div class="im-tl-text">
+          <strong>${maturityStr}</strong>
+          <span>Payout to your wallet</span>
+        </div>
+      </div>
     </div>
 
-    <div class="invest-lock-note">
-      <i class="fa-solid fa-lock" style="color:var(--gold)"></i>
-      Capital is locked for <strong>${pool.term_months} months</strong>. Early withdrawal is not available. Returns are not guaranteed.
+    <!-- ── Lock note ── -->
+    <div class="im-lock">
+      <i class="fa-solid fa-lock"></i>
+      <span>Capital locked for <strong>${pool.term_months} months</strong>. Early withdrawal not available. Returns not guaranteed.</span>
     </div>
   `;
 
@@ -4179,6 +4224,7 @@ function openInvestModal(poolId) {
 }
 
 function _updateInvestCalc(amt, rate, termMonths, minInvest) {
+  const hint    = document.getElementById('im-hint');
   const feeAmtEl = document.getElementById('ic-fee-amount');
   const feeFeeEl = document.getElementById('ic-fee-fee');
   const feeTotEl = document.getElementById('ic-fee-total');
@@ -4187,10 +4233,12 @@ function _updateInvestCalc(amt, rate, termMonths, minInvest) {
     if (feeAmtEl) feeAmtEl.textContent = Utils.rand(amt, 2);
     if (feeFeeEl) feeFeeEl.textContent = Utils.rand(fee, 2);
     if (feeTotEl) feeTotEl.textContent = Utils.rand(amt + fee, 2);
+    if (hint) { hint.textContent = `${Utils.rand(amt)} will be invested`; hint.className = 'im-hero__hint im-hero__hint--ok'; }
   } else {
     if (feeAmtEl) feeAmtEl.textContent = '—';
     if (feeFeeEl) feeFeeEl.textContent = '—';
     if (feeTotEl) feeTotEl.textContent = '—';
+    if (hint) { hint.textContent = `Minimum ${Utils.rand(minInvest)}`; hint.className = 'im-hero__hint'; }
   }
 }
 
