@@ -1117,7 +1117,7 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     // For transaction completion use a conditional UPDATE to prevent race-condition
     // double-credits: only applies if the row is not already completed.
     // The WHERE AND condition is atomic so two concurrent PATCHes cannot both succeed.
-    let rows, _skipWalletCredit = false;
+    let rows, _skipWalletCredit = false, _withdrawalRefundDone = false;
     if (table === 'transactions' && body.status === 'completed') {
       const { rows: updated } = await pool.query(
         `UPDATE ${table} SET ${sets} WHERE ${key} = $${values.length} AND status <> 'completed' RETURNING *`,
@@ -1138,6 +1138,15 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
       );
       rows = result.rows;
       if (!rows[0]) return res.status(404).json({ error: 'Record not found.' });
+      // Withdrawal rejection: refund wallet here (before response) so it is atomic
+      // and survives a process restart between response and setImmediate.
+      if (table === 'transactions' && body.status === 'rejected' && rows[0].type === 'withdrawal' && rows[0].investor_id) {
+        await pool.query(
+          'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
+          [rows[0].amount, rows[0].investor_id]
+        );
+        _withdrawalRefundDone = true;
+      }
     }
     const [clean] = stripSensitive(table, rows, req.user?.empId, req.user?.role);
     res.json(clean);
@@ -1177,15 +1186,16 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
               'UPDATE investors SET wallet_balance = wallet_balance + $1, updated_at = NOW() WHERE id = $2',
               [parseFloat(updated.amount), updated.investor_id]
             );
-          }
-          if (updated.type === 'deposit') {
-            const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
-            if (inv[0]) {
-              const gateway = updated.description?.includes('Paystack') ? 'Paystack'
-                            : updated.description?.includes('Ozow')     ? 'Ozow'
-                            : 'EFT';
-              await emailService.sendDepositConfirmed(inv[0], updated.amount, updated.reference || updated.id, gateway);
-              await smsService.sendDepositConfirmed(inv[0].phone, inv[0].first_name, updated.amount);
+            // Only send confirmation email/SMS on the PATCH that actually credited the wallet
+            if (updated.type === 'deposit') {
+              const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
+              if (inv[0]) {
+                const gateway = updated.description?.includes('Paystack') ? 'Paystack'
+                              : updated.description?.includes('Ozow')     ? 'Ozow'
+                              : 'EFT';
+                await emailService.sendDepositConfirmed(inv[0], updated.amount, updated.reference || updated.id, gateway);
+                await smsService.sendDepositConfirmed(inv[0].phone, inv[0].first_name, updated.amount);
+              }
             }
           }
         }
@@ -1279,12 +1289,8 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           }
         }
 
-        // Withdrawal rejected → refund wallet + email + SMS investor
-        if (table === 'transactions' && body.status === 'rejected' && updated.type === 'withdrawal' && updated.investor_id) {
-          await pool.query(
-            'UPDATE investors SET wallet_balance = wallet_balance + $1 WHERE id = $2',
-            [updated.amount, updated.investor_id]
-          );
+        // Withdrawal rejected → email + SMS investor (wallet already refunded before response)
+        if (table === 'transactions' && body.status === 'rejected' && updated.type === 'withdrawal' && updated.investor_id && _withdrawalRefundDone) {
           const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
           if (inv[0]) {
             await emailService.sendWithdrawalRejected(inv[0], {

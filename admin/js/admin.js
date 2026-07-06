@@ -208,7 +208,18 @@ function _syncAdminNotifDot() {
   }
 }
 
+const _ADMIN_NOTIF_READ_KEY = 'svc_admin_dismissed_notifs';
+function _getAdminReadNotifs() {
+  try { return new Set(JSON.parse(localStorage.getItem(_ADMIN_NOTIF_READ_KEY) || '[]')); } catch(_) { return new Set(); }
+}
+function _saveAdminReadNotifs(s) {
+  try { localStorage.setItem(_ADMIN_NOTIF_READ_KEY, JSON.stringify([...s])); } catch(_) {}
+}
+
 function adminMarkAllRead() {
+  const dismissed = _getAdminReadNotifs();
+  document.querySelectorAll('#adminNotifPanel .notif-item[data-nid]').forEach(el => { if (el.dataset.nid) dismissed.add(el.dataset.nid); });
+  _saveAdminReadNotifs(dismissed);
   const body = document.getElementById('adminNotifBody');
   if (body) body.innerHTML = '<div style="padding:24px 18px;text-align:center;color:#888;font-size:0.82rem"><i class="fa-solid fa-circle-check" style="color:#22c55e;margin-right:6px"></i>No pending actions — all clear!</div>';
   const dot = document.getElementById('adminNotifDot');
@@ -226,6 +237,8 @@ function loadAdminNotifications(investors, transactions, tickets) {
 
   const now    = new Date();
   const notifs = [];
+  const _aDismissed = _getAdminReadNotifs();
+  const _an = (obj) => { if (obj.nid && _aDismissed.has(obj.nid)) obj.unread = false; return obj; };
 
   // 1. Pending KYC / FICA
   const pendingKyc = investors.filter(i =>
@@ -233,57 +246,62 @@ function loadAdminNotifications(investors, transactions, tickets) {
     i.status === 'pending_fica' || i.status === 'fica_submitted'
   );
   if (pendingKyc.length) {
-    notifs.push({
+    notifs.push(_an({
+      nid: `kyc-${pendingKyc.map(i=>i.id).sort().join('-')}`,
       icon: 'fa-user-clock', iconBg: 'rgba(239,68,68,0.1)', iconColor: '#ef4444',
       title: `${pendingKyc.length} KYC ${pendingKyc.length === 1 ? 'application' : 'applications'} pending`,
       sub: `${pendingKyc.slice(0,2).map(i => _esc(i.first_name)).join(', ')}${pendingKyc.length > 2 ? ` +${pendingKyc.length - 2} more` : ''} awaiting FICA review.`,
       action: "navigate('kyc',document.querySelector('[data-view=kyc]'));toggleAdminNotif()",
       unread: true,
-    });
+    }));
   }
 
   // 2. Bank accounts awaiting verification
   const pendingBank = investors.filter(i => i.bank_account_status === 'pending');
   if (pendingBank.length) {
-    notifs.push({
+    notifs.push(_an({
+      nid: `bank-${pendingBank.map(i=>i.id).sort().join('-')}`,
       icon: 'fa-building-columns', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#656565',
       title: `${pendingBank.length} bank account${pendingBank.length === 1 ? '' : 's'} to verify`,
       sub: `${pendingBank.slice(0,2).map(i => `${_esc(i.first_name)} ${_esc(i.last_name)}`).join(', ')}${pendingBank.length > 2 ? ` +${pendingBank.length - 2} more` : ''}.`,
       action: "navigate('investors',document.querySelector('[data-view=investors]'));toggleAdminNotif()",
       unread: true,
-    });
+    }));
   }
 
   // 3. Pending withdrawals
   const pendingWith = transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending');
   if (pendingWith.length) {
     const total = pendingWith.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
-    notifs.push({
+    notifs.push(_an({
+      nid: `with-${pendingWith.map(t=>t.id).sort().join('-')}`,
       icon: 'fa-money-bill-transfer', iconBg: 'rgba(239,68,68,0.1)', iconColor: '#ef4444',
       title: `${pendingWith.length} withdrawal${pendingWith.length === 1 ? '' : 's'} pending`,
       sub: `${Utils.rand(total)} total awaiting processing.`,
       action: "navigate('withdrawals',document.querySelector('[data-view=withdrawals]'));toggleAdminNotif()",
       unread: true,
-    });
+    }));
   }
 
   // 4. Bank verification support tickets
   const bankTkts = tickets.filter(t => t.category === 'bank_verification' && t.status === 'open');
   if (bankTkts.length) {
-    notifs.push({
+    notifs.push(_an({
+      nid: `btkt-${bankTkts.map(t=>t.id).sort().join('-')}`,
       icon: 'fa-file-invoice', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
       title: `${bankTkts.length} bank verification ticket${bankTkts.length === 1 ? '' : 's'}`,
       sub: `${bankTkts.slice(0,2).map(t => _esc(t.investor_name || 'Investor')).join(', ')} submitted bank details.`,
       action: "navigate('support',document.querySelector('[data-view=support]'));toggleAdminNotif()",
       unread: true,
-    });
+    }));
   }
 
   // 5. Other open support tickets (unanswered)
   const openTkts = tickets.filter(t => t.status === 'open' && t.category !== 'bank_verification' && !t.admin_response);
   if (openTkts.length) {
     const urgent = openTkts.filter(t => t.priority === 'high' || t.priority === 'urgent');
-    notifs.push({
+    notifs.push(_an({
+      nid: `tkt-${openTkts.map(t=>t.id).sort().join('-')}`,
       icon: 'fa-headset', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#656565',
       title: `${openTkts.length} open ticket${openTkts.length === 1 ? '' : 's'} awaiting reply`,
       sub: urgent.length
@@ -291,7 +309,7 @@ function loadAdminNotifications(investors, transactions, tickets) {
         : `&ldquo;${_esc(openTkts[0].subject)}&rdquo;`,
       action: "navigate('support',document.querySelector('[data-view=support]'));toggleAdminNotif()",
       unread: true,
-    });
+    }));
   }
 
   // 6. Recent deposits (last 24 h) — informational
@@ -317,7 +335,7 @@ function loadAdminNotifications(investors, transactions, tickets) {
   }
 
   body.innerHTML = notifs.map(n => `
-    <div class="notif-item${n.unread ? ' unread' : ''}" ${n.action ? `onclick="${n.action}" style="cursor:pointer"` : ''}>
+    <div class="notif-item${n.unread ? ' unread' : ''}" data-nid="${_esc(n.nid || '')}" ${n.action ? `onclick="${n.action}" style="cursor:pointer"` : ''}>
       <div class="notif-icon" style="background:${n.iconBg}"><i class="fa-solid ${n.icon}" style="color:${n.iconColor}"></i></div>
       <div class="notif-body">
         <div class="notif-title">${n.title}</div>
