@@ -8411,7 +8411,7 @@ async function confirm2FASetup() {
     const footer = document.getElementById('twoFAModalFooter');
     if (body) body.innerHTML = `
   <div style="text-align:center;margin-bottom:12px">
-    <i class="fa-solid fa-shield-check" style="font-size:2rem;color:var(--green)"></i>
+    <i class="fa-solid fa-shield-halved" style="font-size:2rem;color:var(--green)"></i>
     <h3 style="margin:10px 0 4px;font-size:1rem">2FA Enabled!</h3>
     <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px">Save these backup codes somewhere safe. Each code can only be used once if you lose access to your authenticator app.</p>
   </div>
@@ -8857,7 +8857,7 @@ async function _renderKycStatusPanel(preloadedDocs) {
   body.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(0,0,0,0.07);margin-bottom:12px">
       <div style="width:40px;height:40px;border-radius:50%;background:${color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <i class="fa-solid fa-${overallStatus === 'approved' ? 'shield-check' : overallStatus === 'rejected' ? 'shield-xmark' : 'clock'}" style="color:${color};font-size:1.1rem"></i>
+        <i class="fa-solid fa-${overallStatus === 'approved' ? 'shield-halved' : overallStatus === 'rejected' ? 'circle-xmark' : 'clock'}" style="color:${color};font-size:1.1rem"></i>
       </div>
       <div>
         <div style="font-size:0.88rem;font-weight:700;color:#1a1a1a">FICA / KYC Verification</div>
@@ -9295,7 +9295,7 @@ function _renderCertificatesTable() {
 
   const investments = PORTAL.investments;
   if (!investments.length) {
-    body.innerHTML = `<div class="empty-state" style="padding:20px 0;border:none;background:transparent"><i class="fa-solid fa-file-certificate"></i><div class="empty-state__title">No investment certificates yet</div><div class="empty-state__sub">Your first completed investment will unlock downloadable certificates and term sheets here.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-layer-group"></i> Browse pools</button><button class="btn btn--secondary btn--sm" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))"><i class="fa-solid fa-wallet"></i> Fund wallet</button></div></div>`;
+    body.innerHTML = `<div class="empty-state" style="padding:20px 0;border:none;background:transparent"><i class="fa-solid fa-file-circle-check"></i><div class="empty-state__title">No investment certificates yet</div><div class="empty-state__sub">Your first completed investment will unlock downloadable certificates and term sheets here.</div><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px"><button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-layer-group"></i> Browse pools</button><button class="btn btn--secondary btn--sm" onclick="navigate('wallet', document.querySelector('[data-view=wallet]'))"><i class="fa-solid fa-wallet"></i> Fund wallet</button></div></div>`;
     return;
   }
 
