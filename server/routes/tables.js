@@ -298,6 +298,12 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         const uRow = await pool.query('SELECT investor_id FROM users WHERE id = $1', [req.user.id]);
         investorId = uRow.rows[0]?.investor_id || null;
       }
+      // Verify the ID actually exists — stale/demo values like 'INV-001' look non-null
+      // but point to no real investor, causing WHERE 1=0 on every scoped query.
+      if (investorId) {
+        const vRow = await pool.query('SELECT id FROM investors WHERE id = $1 LIMIT 1', [investorId]);
+        if (!vRow.rows[0]) investorId = null; // invalid — fall through to email match
+      }
       // Last resort: match investor by email (case-insensitive) and auto-repair the broken users.investor_id link
       if (!investorId && req.user.email) {
         const eRow = await pool.query('SELECT id FROM investors WHERE LOWER(email) = LOWER($1) LIMIT 1', [req.user.email]);
