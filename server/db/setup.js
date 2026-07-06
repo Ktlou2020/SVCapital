@@ -1215,6 +1215,26 @@ async function autoSetup() {
       console.warn('⚠️  Could not upgrade transactions.reference to UNIQUE:', idxErr.message);
     }
 
+    // 1e. Backfill users.investor_id for any accounts where it is null.
+    // When this column is null the JWT carries investorId:null, the client falls back to
+    // the demo placeholder, and the server returns WHERE 1=0 for any investor-scoped query.
+    // This runs on every boot but is a no-op once all rows have a value.
+    try {
+      const { rowCount } = await pool.query(`
+        UPDATE users u
+        SET    investor_id = i.id
+        FROM   investors i
+        WHERE  LOWER(u.email) = LOWER(i.email)
+          AND  u.investor_id IS NULL
+          AND  u.role = 'investor'
+      `);
+      if (rowCount > 0) {
+        console.log(`✅ Backfilled users.investor_id for ${rowCount} account(s).`);
+      }
+    } catch (backfillErr) {
+      console.warn('⚠️  investor_id backfill warning:', backfillErr.message);
+    }
+
     // 2. Check if the COO account already exists — if so, skip seeding entirely
     const { rows: existing } = await pool.query(
       "SELECT id FROM users WHERE email = 'coo@svcapital.co.za' LIMIT 1"
