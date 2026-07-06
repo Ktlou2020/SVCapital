@@ -1278,14 +1278,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (avEl && firstName) avEl.textContent = ((firstName[0] || '') + (lastName[0] || '')).toUpperCase() || '?';
   } catch (_) {}
 
-  // Try to render from cache immediately — hides cover instantly on repeat launches
+  // Try to render from cache immediately — hides cover instantly on repeat launches.
+  // We always use cached data if it exists (even if stale) and always refresh in
+  // background. This keeps the UI populated during CORS outages or server downtime.
   let _cacheRendered = false;
-  const _CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+  const _CACHE_TTL   = 10 * 60 * 1000;   // 10 min — "fresh" (skip charts on BG refresh)
+  const _CACHE_STALE = 24 * 60 * 60 * 1000; // 24 h  — "stale" (show data, still refresh)
   try {
     const raw = localStorage.getItem('svc_portal_cache');
     if (raw) {
       const c = JSON.parse(raw);
-      if (c && c.cachedAt && (Date.now() - c.cachedAt) < _CACHE_TTL) {
+      const age = c && c.cachedAt ? (Date.now() - c.cachedAt) : Infinity;
+      if (c && age < _CACHE_STALE) {
         PORTAL.investor     = c.investor     || null;
         PORTAL.investments  = c.investments  || [];
         PORTAL.transactions = c.transactions || [];
@@ -1295,14 +1299,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         try { renderOverview(); } catch (_) {}
         if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
         _cacheRendered = true;
+        // Fresh cache → background refresh silently; stale → refresh but still no blocking
+        const _skipCharts = age < _CACHE_TTL;
+        loadPortalData(0, { skipCharts: _skipCharts }).catch(() => {});
       }
     }
   } catch (_) {}
 
-  if (_cacheRendered) {
-    // Silently refresh data in the background — don't block UI or re-render charts
-    loadPortalData(0, { skipCharts: true }).catch(() => {});
-  } else {
+  if (!_cacheRendered) {
     // First load or expired cache — show progressive status text during cold-start waits
     const _coverText = document.getElementById('_nativeCoverText');
     const _t1 = _coverText ? setTimeout(() => {
@@ -1398,15 +1402,17 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
     const allInvestments = invstRes.data || [];
     const allTxns        = txnRes.data   || [];
 
-    // Find the logged-in investor by their JWT-resolved ID
-    PORTAL.investor = allInvestors.find(i => i.id === DEMO_INVESTOR_ID) || null;
+    // Only overwrite PORTAL.investor when the investors call succeeded; if it failed
+    // (e.g. CORS block), keep whatever is already in PORTAL.investor from the cache.
+    if (invResult.status === 'fulfilled') {
+      // Find the logged-in investor by their JWT-resolved ID
+      PORTAL.investor = allInvestors.find(i => i.id === DEMO_INVESTOR_ID) || null;
 
-    // Fallback: the server already scopes investor-role list results to the authenticated user,
-    // so any item in allInvestors belongs to this user — use the first one when find-by-ID fails.
-    // (A direct GET with DEMO_INVESTOR_ID='INV-001' would always 404 when the investor's real
-    //  ID is different, so we skip that round-trip and rely on the list result.)
-    if (!PORTAL.investor && allInvestors.length > 0) {
-      PORTAL.investor = allInvestors[0];
+      // Fallback: the server already scopes investor-role list results to the authenticated user,
+      // so any item in allInvestors belongs to this user — use the first one when find-by-ID fails.
+      if (!PORTAL.investor && allInvestors.length > 0) {
+        PORTAL.investor = allInvestors[0];
+      }
     }
 
     // Last resort: if the list returned empty (server could not resolve investor from JWT),
@@ -1459,19 +1465,21 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
       Utils.setProductCache(_portalProductsCache);
     }
 
-    PORTAL.investments  = myInvests.map(inv => ({
-      ...inv,
-      // Normalise DB column names to the aliases used throughout the portal
-      // Always coerce to Number so reduce() never does string concatenation
-      amount:                 parseFloat(inv.amount || inv.investment_amount || inv.principal || 0) || 0,
-      maturity_date:          inv.end_date         || inv.maturity_date,
-      investment_date:        inv.start_date        || inv.investment_date,
-      expected_return_amount: parseFloat(inv.expected_return   != null ? inv.expected_return   : (inv.expected_return_amount   || 0)) || 0,
-      actual_return_amount:   parseFloat(inv.actual_return     != null ? inv.actual_return     : (inv.actual_return_amount     || 0)) || 0,
-      expected_return_rate:   parseFloat(inv.annual_rate       != null ? inv.annual_rate       : (inv.expected_return_rate     || 0)) || 0,
-    }));
-    PORTAL.transactions = myTxns;
-    PORTAL.pools        = poolRes.data || [];
+    // Only overwrite PORTAL state when the API call actually succeeded.
+    // A rejected/CORS-blocked call returns [] which would wipe valid cached data.
+    if (invstResult.status === 'fulfilled') {
+      PORTAL.investments = myInvests.map(inv => ({
+        ...inv,
+        amount:                 parseFloat(inv.amount || inv.investment_amount || inv.principal || 0) || 0,
+        maturity_date:          inv.end_date         || inv.maturity_date,
+        investment_date:        inv.start_date        || inv.investment_date,
+        expected_return_amount: parseFloat(inv.expected_return   != null ? inv.expected_return   : (inv.expected_return_amount   || 0)) || 0,
+        actual_return_amount:   parseFloat(inv.actual_return     != null ? inv.actual_return     : (inv.actual_return_amount     || 0)) || 0,
+        expected_return_rate:   parseFloat(inv.annual_rate       != null ? inv.annual_rate       : (inv.expected_return_rate     || 0)) || 0,
+      }));
+    }
+    if (txnResult.status === 'fulfilled') PORTAL.transactions = myTxns;
+    if (poolResult.status === 'fulfilled' && (poolRes.data || []).length) PORTAL.pools = poolRes.data;
 
     // Ensure investor object is never null so statement guard passes
     if (!PORTAL.investor) PORTAL.investor = { id: DEMO_INVESTOR_ID };
