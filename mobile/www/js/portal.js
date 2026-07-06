@@ -1816,7 +1816,6 @@ function renderOverviewInvestments() {
         </div>
         <div class="ov-inv__right">
           <div class="ov-inv__amount">${Utils.rand(inv.amount)}</div>
-          <div class="ov-inv__return">+${Utils.rand(inv.expected_return_amount)}</div>
         </div>
       </div>`;
   }).join('');
