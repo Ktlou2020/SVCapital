@@ -1291,6 +1291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         PORTAL.transactions = c.transactions || [];
         PORTAL.pools        = c.pools        || [];
         PORTAL.waitlist     = c.waitlist     || [];
+        if (c.products && c.products.length) { _portalProductsCache = c.products; Utils.setProductCache(c.products); }
         try { renderOverview(); } catch (_) {}
         if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
         _cacheRendered = true;
@@ -1367,24 +1368,27 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
   const MAX_ATTEMPTS = 3;
   try {
     // allSettled so a single failing endpoint never kills the whole portal load.
-    const [invResult, invstResult, txnResult, poolResult, payResult] = await Promise.allSettled([
+    const [invResult, invstResult, txnResult, poolResult, payResult, prodResult] = await Promise.allSettled([
       API.investors.list({ limit: 100 }),
       API.investments.list({ limit: 200 }),
       API.transactions.list({ limit: 200 }),
       API.pools.list({ limit: 100 }),
       loadPaymentConfig(),  // load Paystack key from server env var
+      API._fetch('GET', 'products'),
     ]);
 
     const invRes   = invResult.status   === 'fulfilled' ? invResult.value   : { data: [] };
     const invstRes = invstResult.status === 'fulfilled' ? invstResult.value : { data: [] };
     const txnRes   = txnResult.status   === 'fulfilled' ? txnResult.value   : { data: [] };
     const poolRes  = poolResult.status  === 'fulfilled' ? poolResult.value  : { data: [] };
+    const prodRes  = prodResult.status  === 'fulfilled' ? prodResult.value  : { data: [] };
 
     if (invResult.status === 'rejected')   console.warn('[portal] investors API failed:', invResult.reason?.message);
     if (invstResult.status === 'rejected') console.warn('[portal] investments API failed:', invstResult.reason?.message);
     if (txnResult.status === 'rejected')   console.warn('[portal] transactions API failed:', txnResult.reason?.message);
     if (poolResult.status === 'rejected')  console.warn('[portal] pools API failed:', poolResult.reason?.message);
     if (payResult.status  === 'rejected')  console.warn('[portal] payment config failed:', payResult.reason?.message);
+    if (prodResult.status === 'rejected')  console.warn('[portal] products API failed:', prodResult.reason?.message);
 
     if (invResult.status === 'rejected' && invstResult.status === 'rejected' && txnResult.status === 'rejected') {
       throw invResult.reason;
@@ -1449,6 +1453,12 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
       PORTAL.investor = { id: resolvedId };
     }
 
+    // Populate products cache from the parallel fetch so marketplace uses it immediately
+    if (prodRes.data && prodRes.data.length) {
+      _portalProductsCache = prodRes.data;
+      Utils.setProductCache(_portalProductsCache);
+    }
+
     PORTAL.investments  = myInvests.map(inv => ({
       ...inv,
       // Normalise DB column names to the aliases used throughout the portal
@@ -1482,6 +1492,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
         transactions: PORTAL.transactions,
         pools:        PORTAL.pools,
         waitlist:     PORTAL.waitlist,
+        products:     _portalProductsCache || [],
       };
       localStorage.setItem('svc_portal_cache', JSON.stringify(_safeCache));
     } catch (_) {}
