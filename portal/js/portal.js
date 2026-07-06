@@ -871,7 +871,18 @@ function _syncNotifDot() {
   if (dot) dot.classList.toggle('has-unread', unread > 0);
 }
 
+const _NOTIF_READ_KEY = 'svc_dismissed_notifs';
+function _getReadNotifs() {
+  try { return new Set(JSON.parse(localStorage.getItem(_NOTIF_READ_KEY) || '[]')); } catch(_) { return new Set(); }
+}
+function _saveReadNotifs(s) {
+  try { localStorage.setItem(_NOTIF_READ_KEY, JSON.stringify([...s])); } catch(_) {}
+}
+
 function markAllRead() {
+  const dismissed = _getReadNotifs();
+  document.querySelectorAll('#notifList .notif-item[data-nid]').forEach(el => { if (el.dataset.nid) dismissed.add(el.dataset.nid); });
+  _saveReadNotifs(dismissed);
   const list = document.getElementById('notifList');
   if (list) list.innerHTML = '<div style="padding:24px 18px;text-align:center;color:#999;font-size:0.82rem">You\'re all caught up!</div>';
   const dot = document.getElementById('notifDot');
@@ -915,16 +926,20 @@ function loadNotifications() {
   const transactions= PORTAL.transactions || [];
   const pools       = PORTAL.pools        || [];
 
+  const _dismissed = _getReadNotifs();
+  const _notif = (obj) => { if (obj.nid && _dismissed.has(obj.nid)) obj.unread = false; return obj; };
+
   // 1. Low wallet balance
   if (inv && parseFloat(inv.wallet_balance) < 500) {
-    notifs.push({
+    notifs.push(_notif({
+      nid: 'low-bal',
       icon: 'fa-wallet', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
       title: 'Low wallet balance',
       sub: `Your balance is ${Utils.rand(parseFloat(inv.wallet_balance) || 0)}. Top up to keep investing.`,
       time: 'Now',
       action: "openTopUpModal()",
       unread: true,
-    });
+    }));
   }
 
   // 2. Investments maturing within 60 days
@@ -939,27 +954,29 @@ function loadNotifications() {
   if (soon.length) {
     const s = soon[0];
     const daysLeft = Math.round((new Date(s.end_date || s.maturity_date) - now) / 86400000);
-    notifs.push({
+    notifs.push(_notif({
+      nid: `mat-soon-${s.id}`,
       icon: 'fa-coins', iconBg: 'rgba(34,197,94,0.1)', iconColor: '#22c55e',
       title: 'Investment maturing soon',
       sub: `${s.pool_name || 'An investment'} matures in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Submit your maturity instruction.`,
       time: `${daysLeft}d away`,
       action: "navigate('investments',document.querySelector('[data-view=investments]'))",
       unread: true,
-    });
+    }));
   }
 
   // 3. FICA / KYC status notifications
   if (inv) {
     if (inv.fica_status === 'rejected' || inv.kyc_status === 'rejected') {
-      notifs.push({
+      notifs.push(_notif({
+        nid: 'fica-rej',
         icon: 'fa-triangle-exclamation', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
         title: 'FICA/KYC verification unsuccessful',
         sub: 'Your documents could not be verified. Please re-upload and resubmit.',
         time: 'Action required',
         action: "navigate('fica',document.querySelector('[data-view=fica]'))",
         unread: true,
-      });
+      }));
     } else if (inv.fica_status === 'pending' || inv.kyc_status === 'pending' || inv.status === 'fica_submitted') {
       notifs.push({
         icon: 'fa-clock', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
@@ -993,23 +1010,25 @@ function loadNotifications() {
         unread: false,
       });
     } else if (inv.bank_account_status === 'approved') {
-      notifs.push({
+      notifs.push(_notif({
+        nid: 'bank-app',
         icon: 'fa-building-columns', iconBg: 'rgba(34,197,94,0.1)', iconColor: '#22c55e',
         title: 'Bank account verified',
         sub: `Your ${inv.bank_name || 'bank'} account has been verified. You can now request withdrawals.`,
         time: 'Approved',
         action: "navigate('wallet',document.querySelector('[data-view=wallet]'))",
         unread: true,
-      });
+      }));
     } else if (inv.bank_account_status === 'rejected') {
-      notifs.push({
+      notifs.push(_notif({
+        nid: 'bank-rej',
         icon: 'fa-building-columns', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
         title: 'Bank account not verified',
         sub: inv.bank_account_notes || 'Your bank details could not be verified. Please update and resubmit.',
         time: 'Action required',
         action: "navigate('profile',document.querySelector('[data-view=profile]'))",
         unread: true,
-      });
+      }));
     }
   }
 
@@ -1019,27 +1038,29 @@ function loadNotifications() {
     return !i.maturity_instruction;
   });
   if (overdue.length) {
-    notifs.push({
+    notifs.push(_notif({
+      nid: `mat-due-${overdue.map(i=>i.id).sort().join('-')}`,
       icon: 'fa-exclamation-circle', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
       title: `${overdue.length} investment${overdue.length === 1 ? '' : 's'} awaiting instruction`,
       sub: `${overdue.map(i => i.pool_name || 'Investment').slice(0,2).join(', ')} ha${overdue.length === 1 ? 's' : 've'} matured — submit your payout instruction now.`,
       time: 'Urgent',
       action: "navigate('maturity',document.querySelector('[data-view=maturity]'))",
       unread: true,
-    });
+    }));
   }
 
   // 6. Support ticket responses — one notification per answered ticket
   const answered = tickets.filter(t => t.admin_response && t.admin_response.trim());
   answered.forEach(t => {
-    notifs.push({
+    notifs.push(_notif({
+      nid: `tkt-${t.id}-${t.responded_at || 'x'}`,
       icon: 'fa-reply', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#656565',
       title: 'Support reply received',
       sub: `"${t.subject}" — our team has responded.`,
       time: t.responded_at ? Utils.timeAgo(t.responded_at) : 'Recently',
       action: "navigate('support',document.querySelector('[data-view=support]'))",
       unread: true,
-    });
+    }));
   });
 
   // 7. Pending withdrawal submitted
@@ -1079,12 +1100,12 @@ function loadNotifications() {
   }
 
   list.innerHTML = notifs.map((n, i) => `
-    <div class="notif-item${n.unread ? ' unread' : ''}" data-id="n${i}" ${n.action ? `onclick="${n.action};toggleNotifPanel()" style="cursor:pointer"` : ''}>
+    <div class="notif-item${n.unread ? ' unread' : ''}" data-id="n${i}" data-nid="${_esc(n.nid || '')}" ${n.action ? `onclick="${n.action};toggleNotifPanel()" style="cursor:pointer"` : ''}>
       <div class="notif-icon" style="background:${n.iconBg}"><i class="fa-solid ${n.icon}" style="color:${n.iconColor}"></i></div>
       <div class="notif-body">
         <div class="notif-title">${_esc(n.title)}</div>
         <div class="notif-sub">${_esc(n.sub)}</div>
-        <div class="notif-time">${n.time}</div>
+        <div class="notif-time">${_esc(n.time)}</div>
       </div>
     </div>
   `).join('');
@@ -1221,6 +1242,7 @@ function _startPolling() {
         }
       }
     } catch(_) {}
+    loadNotifications();
   }, 30000);
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && _pollTimer) {} });
@@ -6456,7 +6478,7 @@ PAIAComplaints.IR@justice.gov.za (for PAIA complaints)</p>`,
   },
   {
     id: 'pol_complaints',
-    icon: 'fa-comment-exclamation',
+    icon: 'fa-circle-exclamation',
     color: '#ef4444',
     title: 'Complaints Procedure',
     staticContent: `<p><em>Version 1.0 &nbsp;·&nbsp; Effective June 2025</em></p>
