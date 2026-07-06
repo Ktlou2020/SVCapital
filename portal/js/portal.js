@@ -6456,7 +6456,7 @@ PAIAComplaints.IR@justice.gov.za (for PAIA complaints)</p>`,
   },
   {
     id: 'pol_complaints',
-    icon: 'fa-comment-exclamation',
+    icon: 'fa-circle-exclamation',
     color: '#ef4444',
     title: 'Complaints Procedure',
     staticContent: `<p><em>Version 1.0 &nbsp;·&nbsp; Effective June 2025</em></p>
