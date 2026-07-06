@@ -117,69 +117,71 @@
     </div>
 
     <nav class="sidebar__nav">
-      <div class="nav-section-label">My Account</div>
+      <!-- Primary: 6 core items always visible -->
       <button class="nav-item active" data-view="overview" onclick="navigate('overview', this)">
         <i class="fa-solid fa-table-cells-large"></i> Portfolio Overview
       </button>
-      <button class="nav-item" data-view="investments" onclick="navigate('investments', this)">
-        <i class="fa-solid fa-chart-line"></i> My Investments
-      </button>
-      <button class="nav-item" data-view="analytics" onclick="navigate('analytics', this)">
-        <i class="fa-solid fa-chart-column"></i> Analytics
-      </button>
-      <button class="nav-item" data-view="transactions" onclick="navigate('transactions', this)">
-        <i class="fa-solid fa-arrows-rotate"></i> Transactions
+      <button class="nav-item" data-view="marketplace" onclick="navigate('marketplace', this)">
+        <i class="fa-solid fa-box-open"></i> Invest
       </button>
       <button class="nav-item" data-view="wallet" onclick="navigate('wallet', this)">
         <i class="fa-solid fa-wallet"></i> Wallet
       </button>
-
-      <button class="nav-item" data-view="subaccounts" onclick="navigate('subaccounts', this)">
-        <i class="fa-solid fa-layer-group"></i> My Accounts
-        <span class="nav-badge" id="subacctsBadge" style="display:none"></span>
-      </button>
-
-      <div class="nav-section-label">Invest</div>
-      <button class="nav-item" data-view="marketplace" onclick="navigate('marketplace', this)">
-        <i class="fa-solid fa-box-open"></i> Products
-      </button>
-      <button class="nav-item" data-view="maturity" onclick="navigate('maturity', this)">
-        <i class="fa-solid fa-hourglass-end"></i> Maturity Instructions
-      </button>
-
-      <div class="nav-section-label">Grow</div>
-      <button class="nav-item" data-view="learn" onclick="navigate('learn', this)">
-        <i class="fa-solid fa-graduation-cap"></i> Learning Hub
-      </button>
-      <button class="nav-item" data-view="quests" onclick="navigate('quests', this)" id="navQuests">
-        <i class="fa-solid fa-trophy"></i> Earn Rewards
-        <span class="xp-nav-badge" id="xpNavBadge" style="display:none"></span>
-      </button>
-
-      <button class="nav-item" data-view="gifts" onclick="navigate('gifts', this)">
-        <i class="fa-solid fa-gift"></i> Send a Gift
-        <span class="nav-badge" id="giftsBadge" style="display:none"></span>
-      </button>
-
-      <div class="nav-section-label">Account</div>
-      <button class="nav-item" data-view="profile" onclick="navigate('profile', this)">
-        <i class="fa-solid fa-user-circle"></i> My Profile
+      <button class="nav-item" data-view="investments" onclick="navigate('investments', this)">
+        <i class="fa-solid fa-chart-line"></i> My Investments
       </button>
       <button class="nav-item" data-view="support" onclick="navigate('support', this)">
         <i class="fa-solid fa-headset"></i> Support
       </button>
-      <button class="nav-item" data-view="policies" onclick="navigate('policies', this)">
-        <i class="fa-solid fa-file-shield"></i> Platform Policies
+      <button class="nav-item" data-view="profile" onclick="navigate('profile', this)">
+        <i class="fa-solid fa-user-circle"></i> My Profile
       </button>
+
+      <!-- More toggle -->
+      <button class="nav-item nav-more-toggle" id="navMoreToggle" onclick="toggleNavMore()" style="margin-top:6px;opacity:0.7;font-size:0.82rem">
+        <i class="fa-solid fa-ellipsis"></i> More
+        <i class="fa-solid fa-chevron-down" id="navMoreChevron" style="margin-left:auto;font-size:0.7rem;transition:transform 0.2s"></i>
+      </button>
+
+      <!-- Secondary: everything else, collapsed by default -->
+      <div id="navMoreSection" style="display:none;border-top:1px solid rgba(255,255,255,0.07);padding-top:6px;margin-top:2px">
+        <button class="nav-item" data-view="transactions" onclick="navigate('transactions', this)">
+          <i class="fa-solid fa-arrows-rotate"></i> Transactions
+        </button>
+        <button class="nav-item" data-view="analytics" onclick="navigate('analytics', this)">
+          <i class="fa-solid fa-chart-column"></i> Analytics
+        </button>
+        <button class="nav-item" data-view="maturity" onclick="navigate('maturity', this)">
+          <i class="fa-solid fa-hourglass-end"></i> Maturity Instructions
+        </button>
+        <button class="nav-item" data-view="documents" onclick="navigate('documents', this)">
+          <i class="fa-solid fa-folder-open"></i> Documents &amp; Legal
+        </button>
+        <button class="nav-item" data-view="statement" onclick="navigate('statement', this)">
+          <i class="fa-solid fa-file-invoice"></i> My Statement
+        </button>
+        <button class="nav-item" data-view="subaccounts" onclick="navigate('subaccounts', this)">
+          <i class="fa-solid fa-layer-group"></i> My Accounts
+          <span class="nav-badge" id="subacctsBadge" style="display:none"></span>
+        </button>
+        <button class="nav-item" data-view="learn" onclick="navigate('learn', this)">
+          <i class="fa-solid fa-graduation-cap"></i> Learning Hub
+        </button>
+        <button class="nav-item" data-view="quests" onclick="navigate('quests', this)" id="navQuests">
+          <i class="fa-solid fa-trophy"></i> Earn Rewards
+          <span class="xp-nav-badge" id="xpNavBadge" style="display:none"></span>
+        </button>
+        <button class="nav-item" data-view="gifts" onclick="navigate('gifts', this)">
+          <i class="fa-solid fa-gift"></i> Send a Gift
+          <span class="nav-badge" id="giftsBadge" style="display:none"></span>
+        </button>
+        <button class="nav-item" data-view="policies" onclick="navigate('policies', this)">
+          <i class="fa-solid fa-file-shield"></i> Platform Policies
+        </button>
+      </div>
       <!-- Referral nav hidden — feature not yet live -->
       <button class="nav-item" data-view="referral" onclick="navigate('referral', this)" style="display:none">
-        <i class="fa-solid fa-share-nodes"></i> Refer & Earn
-      </button>
-      <button class="nav-item" data-view="documents" onclick="navigate('documents', this)">
-        <i class="fa-solid fa-folder-open"></i> Documents
-      </button>
-      <button class="nav-item" data-view="statement" onclick="navigate('statement', this)">
-        <i class="fa-solid fa-file-invoice"></i> My Statement
+        <i class="fa-solid fa-share-nodes"></i> Refer &amp; Earn
       </button>
     </nav>
 
@@ -2886,9 +2888,9 @@
       <i class="fa-solid fa-wallet"></i>
       <span>Wallet</span>
     </button>
-    <button class="mbn-item" data-view="transactions" onclick="navigate('transactions', this)" aria-label="History">
-      <i class="fa-solid fa-receipt"></i>
-      <span>History</span>
+    <button class="mbn-item" data-view="support" onclick="navigate('support', this)" aria-label="Support">
+      <i class="fa-solid fa-headset"></i>
+      <span>Support</span>
     </button>
     <button class="mbn-item" data-view="profile" onclick="navigate('profile', this)" aria-label="Profile">
       <i class="fa-solid fa-user-circle"></i>
