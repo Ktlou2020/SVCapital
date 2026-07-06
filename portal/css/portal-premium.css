@@ -3001,9 +3001,9 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
 
 /* Gift card preview */
 .gift-card-label   { font-size:0.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);font-weight:600;margin-bottom:6px; }
-.gift-card         { width:280px;min-height:380px;border-radius:22px;background:linear-gradient(145deg,#1a1a2e 0%,#16213e 40%,#0f3460 70%,#533483 100%);padding:28px 24px 24px;position:relative;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08);display:flex;flex-direction:column;gap:12px; }
+.gift-card         { width:280px;min-height:380px;border-radius:22px;background:linear-gradient(145deg,#303030 0%,#303030 40%,#0096ff 100%);padding:28px 24px 24px;position:relative;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08);display:flex;flex-direction:column;gap:12px; }
 .gift-card::before { content:'';position:absolute;top:-40px;right:-40px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,rgba(255,155,12,.25) 0%,transparent 70%);pointer-events:none; }
-.gift-card::after  { content:'';position:absolute;bottom:-30px;left:-30px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(83,52,131,.4) 0%,transparent 70%);pointer-events:none; }
+.gift-card::after  { content:'';position:absolute;bottom:-30px;left:-30px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(0,150,255,.3) 0%,transparent 70%);pointer-events:none; }
 .gift-card__ribbon { position:absolute;top:0;right:32px;display:flex;flex-direction:column;align-items:center;gap:0; }
 .gift-card__ribbon-h { width:44px;height:10px;background:linear-gradient(135deg,#ff5229,#ff9b0c);border-radius:0 0 4px 4px; }
 .gift-card__ribbon-v { width:10px;height:30px;background:linear-gradient(180deg,#ff9b0c,#ff5229);border-radius:0 0 4px 4px; }
