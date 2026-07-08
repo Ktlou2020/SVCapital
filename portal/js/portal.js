@@ -5748,7 +5748,7 @@ Returns are driven by weight gain and the market price at sale. SV Capital manag
 Because cattle depends on biological growth and market prices, it carries a higher (Aggressive) risk profile than solar — with the potential for stronger returns over a shorter, roughly 12-month term.`,
     quiz: [
       { q: 'How long is a typical SV Capital cattle investment cycle?', options: ['30–60 days', 'About 12 months', '3–5 years', '10 years'], correct: 1 },
-      { q: 'What drives the returns on a cattle investment?', options: ['Fixed monthly interest', 'Weight gain and the market price at sale', 'Government subsidies', 'Rental income'], correct: 1 },
+      { q: 'What drives the returns on a cattle investment?', options: ['Fixed monthly returns', 'Weight gain and the market price at sale', 'Government subsidies', 'Rental income'], correct: 1 },
       { q: 'What risk profile does the cattle product carry?', options: ['Low', 'Medium', 'Aggressive', 'No risk'], correct: 2 },
     ],
   },
@@ -7108,8 +7108,8 @@ const _SA_TIPS = {
     { emoji: '💡', title: 'Start Early, Win Big', body: 'If you save R50 a month from now until you\'re 18, you could have more than R5 000 before you even finish school!' },
   ],
   growing: [
-    { emoji: '🔮', title: 'The Magic of Compound Interest', body: 'When your money earns interest, that interest also earns interest. It\'s money multiplying itself!' },
-    { emoji: '📊', title: 'Rule of 72', body: 'Divide 72 by your interest rate to see how many years to double your money. At 14%: 72 ÷ 14 = just over 5 years!' },
+    { emoji: '🔮', title: 'The Power of Compounding Returns', body: 'When your returns are reinvested, those returns also generate returns. It\'s money multiplying itself!' },
+    { emoji: '📊', title: 'Rule of 72', body: 'Divide 72 by your annual return rate to see how many years to double your money. At 14%: 72 ÷ 14 = just over 5 years!' },
     { emoji: '🧺', title: 'Don\'t Put All Eggs in One Basket', body: 'Spreading money across different investments (diversifying) reduces risk. SV Capital does this across sectors.' },
     { emoji: '⏰', title: 'Time is Your Biggest Advantage', body: 'Starting to invest at 12 vs 22 can mean twice as much money at retirement. You have a head start!' },
   ],
@@ -8024,7 +8024,7 @@ function generateTaxCertificate() {
   const from = new Date(taxYear - 1, 2, 1);   // 1 March (year-1)
   const to   = new Date(taxYear,     1, 28, 23, 59, 59); // 28 Feb (year)
 
-  // Total interest = returns + payouts in the tax year
+  // Total returns = returns + payouts in the tax year
   const interestTxns = (PORTAL.transactions || []).filter(t => {
     if (!['return', 'payout'].includes(t.type)) return false;
     const d = new Date(t.created_at || t.transaction_date || 0);
@@ -8116,7 +8116,7 @@ td:last-child{text-align:right;font-weight:600}
       <tr style="background:#f8fafc"><td colspan="2" style="font-weight:700;text-align:right">TOTAL INTEREST</td><td style="color:#15803d;font-weight:800">${Utils.rand(totalInterest)}</td></tr>
     </tbody>
   </table>
-  ` : `<div style="text-align:center;padding:24px;background:#f8fafc;border-radius:10px;color:#6b7280;font-size:0.85rem;margin-bottom:24px">No interest income recorded for this tax year.</div>`}
+  ` : `<div style="text-align:center;padding:24px;background:#f8fafc;border-radius:10px;color:#6b7280;font-size:0.85rem;margin-bottom:24px">No returns recorded for this tax year.</div>`}
 
   <div class="footer">
     <strong>SV Capital (Pty) Ltd</strong> is a registered financial services provider regulated by the Financial Sector Conduct Authority (FSCA).<br>
@@ -8504,7 +8504,7 @@ function updateCalc() {
   set('calcMonthly', Utils.rand(monthly));
   set('calcYield',   effYield.toFixed(2) + '%');
 
-  // Visual capital vs interest bar
+  // Visual capital vs returns bar
   const capBar = document.getElementById('calcBarCapital');
   const intBar = document.getElementById('calcBarInterest');
   if (capBar && intBar && total > 0) {
