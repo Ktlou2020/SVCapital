@@ -3763,6 +3763,20 @@ async function _getCattleStats() {
   return _cattleStatsCache;
 }
 
+function _cattleHerdStatusCompactHtml(s) {
+  if (!s || !s.total_purchased) return '';
+  const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
+  const survival = (100 - mortRate).toFixed(1);
+  const weight = s.avg_current_weight || s.avg_entry_weight;
+  return `<div style="background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:0.82rem;flex-wrap:wrap">
+    <i class="fa-solid fa-cow" style="color:#b8902a;flex-shrink:0"></i>
+    <span style="color:var(--text)"><strong>${(s.live_count || 0).toLocaleString('en-ZA')}</strong> cattle live</span>
+    ${weight ? `<span style="color:var(--text-muted)">·</span><span style="color:var(--text)">avg <strong>${weight}kg</strong></span>` : ''}
+    <span style="color:var(--text-muted)">·</span>
+    <span style="color:#65ed00;font-weight:700"><i class="fa-solid fa-heart-pulse" style="font-size:0.72rem"></i> ${survival}% survival</span>
+  </div>`;
+}
+
 function _cattleHerdStatusHtml(s) {
   if (!s || !s.total_purchased) return '';
   const weight   = s.avg_current_weight || s.avg_entry_weight;
@@ -3807,12 +3821,12 @@ function _cattleHerdStatusHtml(s) {
     </div>`;
 }
 
-async function _renderCattleHerdStatus(containerId) {
+async function _renderCattleHerdStatus(containerId, compact = false) {
   const el = document.getElementById(containerId);
   if (!el) return;
   el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted);padding:6px 0"><i class="fa-solid fa-spinner fa-spin"></i> Loading herd status…</div>`;
   const s = await _getCattleStats();
-  el.innerHTML = _cattleHerdStatusHtml(s);
+  el.innerHTML = compact ? _cattleHerdStatusCompactHtml(s) : _cattleHerdStatusHtml(s);
 }
 
 // Live solar telematics (FoxESS/FoxCloud) — shared across all solar terms
@@ -4003,18 +4017,24 @@ function openInvestModal(poolId) {
     ${pool.product_type === 'cattle' ? '<div id="cattleHerdStatus"></div>' : ''}
 
     <!-- Wallet balance indicator (needs to cover the minimum + 1% platform fee) -->
-    <div class="invest-wallet-indicator ${walletBal >= _minPlusFee(pool) ? 'invest-wallet-ok' : 'invest-wallet-low'}">
-      <i class="fa-solid fa-wallet"></i>
-      <span>Your wallet: <strong>${Utils.rand(walletBal)}</strong></span>
-      ${walletBal < _minPlusFee(pool)
-        ? `<button class="btn btn--ghost btn--sm" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))">
-             <i class="fa-solid fa-plus"></i> Top Up
-           </button>`
-        : `<span class="invest-wallet-ok-badge"><i class="fa-solid fa-circle-check"></i> Sufficient</span>`}
-    </div>
-    ${walletBal >= pool.min_investment && walletBal < _minPlusFee(pool)
-      ? `<div style="font-size:0.74rem;color:#ef4444;margin-top:6px"><i class="fa-solid fa-circle-info"></i> You need ${Utils.rand(_minPlusFee(pool))} to invest the minimum — that's ${Utils.rand(pool.min_investment)} plus the ${Utils.rand(_platformFee(pool.min_investment))} (1%) platform fee.</div>`
-      : ''}
+    ${walletBal < _minPlusFee(pool)
+      ? `<div style="background:rgba(239,68,68,0.07);border:1.5px solid rgba(239,68,68,0.3);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+             <i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;font-size:1.1rem;flex-shrink:0"></i>
+             <div>
+               <div style="font-weight:700;color:#ef4444;font-size:0.9rem">Wallet top-up required</div>
+               <div style="font-size:0.78rem;color:#6b7280;margin-top:2px">You have <strong style="color:#1a1a1a">${Utils.rand(walletBal)}</strong> — you need <strong style="color:#1a1a1a">${Utils.rand(_minPlusFee(pool))}</strong> to invest the minimum (${Utils.rand(pool.min_investment)} + ${Utils.rand(_platformFee(pool.min_investment))} fee).</div>
+             </div>
+           </div>
+           <button class="btn btn--primary btn--sm" style="width:100%" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))">
+             <i class="fa-solid fa-plus"></i> Top Up Wallet
+           </button>
+         </div>`
+      : `<div class="invest-wallet-indicator invest-wallet-ok" style="margin-bottom:14px">
+           <i class="fa-solid fa-wallet"></i>
+           <span>Wallet: <strong>${Utils.rand(walletBal)}</strong></span>
+           <span class="invest-wallet-ok-badge"><i class="fa-solid fa-circle-check"></i> Sufficient</span>
+         </div>`}
 
     <!-- Quick-pick amount buttons -->
     <div class="form-group" style="margin-top:14px">
@@ -4045,23 +4065,14 @@ function openInvestModal(poolId) {
       </div>
     </div>
 
-    <!-- What happens next timeline -->
-    <div class="invest-next-steps">
-      <div class="ins-step"><div class="ins-dot ins-dot--active"></div><div class="ins-label"><b>Now</b> — funds deducted from ${_activeSa ? `<em>${_activeSa.name}</em> sub-account` : 'wallet'}</div></div>
-      <div class="ins-step"><div class="ins-dot"></div><div class="ins-label"><b>Ongoing</b> — returns accrue daily</div></div>
-      <div class="ins-step"><div class="ins-dot"></div><div class="ins-label"><b>${maturityStr}</b> — payout to your wallet</div></div>
-    </div>
-
-    <div class="invest-lock-note">
-      <i class="fa-solid fa-lock" style="color:var(--gold)"></i>
-      Capital is locked for <strong>${pool.term_months} months</strong>. Early withdrawal is not available. Returns are not guaranteed.
-    </div>
   `;
 
   const invBtn = document.getElementById('investConfirmBtn');
   invBtn.onclick = () => _withBtn(invBtn, () => confirmInvestment(pool));
   Modal.open('investModal');
-  if (pool.product_type === 'cattle') _renderCattleHerdStatus('cattleHerdStatus');
+  if (pool.product_type === 'cattle') {
+    _renderCattleHerdStatus('cattleHerdStatus', true); // true = compact mode
+  }
 }
 
 function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
