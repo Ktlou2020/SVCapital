@@ -8542,6 +8542,51 @@ async function downloadMyData() {
    ═══════════════════════════════════════════════ */
 let _calcPoolId = null;
 
+function openInvestNowPicker() {
+  const body = document.getElementById('investNowPickerBody');
+  if (!body) return;
+
+  // Build product list: use live _mktProducts if loaded, else derive from pools
+  const products = (_mktProducts && _mktProducts.length)
+    ? _mktProducts
+    : [...new Set((PORTAL.pools || []).map(p => p.product_type))].map(t => ({ product_type: t }));
+
+  // Count open pools per product
+  const openCounts = {};
+  (PORTAL.pools || []).forEach(p => {
+    if (p.status === 'open') openCounts[p.product_type] = (openCounts[p.product_type] || 0) + 1;
+  });
+
+  body.innerHTML = products.map(prod => {
+    const pi = Utils.productInfo(prod.product_type);
+    const meta = _POOL_META[prod.product_type] || {};
+    const open = openCounts[prod.product_type] || 0;
+    return `
+      <div onclick="selectInvestNowProduct('${_esc(prod.product_type)}')" style="display:flex;align-items:center;gap:14px;padding:14px;border:1.5px solid rgba(0,0,0,0.07);border-radius:14px;cursor:pointer;background:#fff;transition:border-color 0.15s" onmousedown="this.style.borderColor='#ff9b0c'" onmouseup="this.style.borderColor='rgba(0,0,0,0.07)'" ontouchstart="this.style.borderColor='#ff9b0c'" ontouchend="this.style.borderColor='rgba(0,0,0,0.07)'">
+        <div style="width:46px;height:46px;border-radius:12px;background:${pi.color}1a;color:${pi.color};display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">
+          <i class="fa-solid ${pi.icon}"></i>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.92rem;font-weight:800;color:#303030">${prod.label || pi.label}</div>
+          ${meta.blurb ? `<div style="font-size:0.75rem;color:#656565;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${meta.blurb}</div>` : ''}
+          <div style="font-size:0.72rem;margin-top:4px;font-weight:600;${open ? 'color:#65ed00' : 'color:#656565'}">
+            <i class="fa-solid ${open ? 'fa-circle-check' : 'fa-clock'}" style="font-size:0.65rem"></i>
+            ${open ? `${open} open pool${open !== 1 ? 's' : ''}` : 'No open pools currently'}
+          </div>
+        </div>
+        <i class="fa-solid fa-chevron-right" style="color:#656565;font-size:0.8rem;flex-shrink:0"></i>
+      </div>`;
+  }).join('');
+
+  Modal.open('investNowPickerModal');
+}
+
+function selectInvestNowProduct(type) {
+  Modal.close('investNowPickerModal');
+  navigate('marketplace', document.querySelector('[data-view=marketplace]'));
+  setTimeout(() => openProductDetail(type), 200);
+}
+
 function openCalcModal() {
   const sel = document.getElementById('calcPoolSelect');
   if (sel) {

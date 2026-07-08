@@ -757,6 +757,9 @@
           <button class="mkt-calc-btn" onclick="openCalcModal()">
             <i class="fa-solid fa-calculator"></i> Calculate Returns
           </button>
+          <button class="mkt-calc-btn mkt-invest-now-btn" onclick="openInvestNowPicker()" style="margin-top:8px;background:linear-gradient(135deg,#ff9b0c,#ff5229);color:#fff;border:none">
+            <i class="fa-solid fa-bolt"></i> Invest Now
+          </button>
           <select id="marketRiskSelect" style="display:none">
             <option value="all"></option><option value="risk_conservative"></option><option value="risk_moderate"></option><option value="risk_aggressive"></option>
           </select>
@@ -2543,6 +2546,22 @@
 .risk-opt input[type=radio] { accent-color: #FF9B0C; width: 15px; height: 15px; flex-shrink: 0; }
 .risk-opt:has(input:checked) { background: rgba(255,155,12,0.08); border-color: #FF9B0C; font-weight: 600; }
 </style>
+
+<!-- Invest Now — Product Picker Modal -->
+<div class="modal-overlay" id="investNowPickerModal" onclick="if(event.target===this)Modal.close('investNowPickerModal')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-bolt" style="color:#ff9b0c;margin-right:8px"></i>Choose a Product</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Select the investment product you'd like to invest in</div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('investNowPickerModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="investNowPickerBody" style="display:flex;flex-direction:column;gap:10px;padding-bottom:8px">
+      <!-- populated by openInvestNowPicker() -->
+    </div>
+  </div>
+</div>
 
 <!-- Investment Calculator Modal -->
 <div class="modal-overlay" id="calcModal" onclick="if(event.target===this)Modal.close('calcModal')">
