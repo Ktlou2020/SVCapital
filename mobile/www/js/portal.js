@@ -6895,9 +6895,9 @@ let _tourStep = 0;
 let _tourActive = false;
 
 function _checkAutoStartTour() {
-  // Tour auto-start is disabled on mobile — the overlay is built for
-  // desktop and doesn't translate well to a small screen. Users can
-  // still tap the tour button in the top bar to launch it manually.
+  // Tour is fully disabled on mobile (Android + iOS). Mark as done so
+  // quest indicators don't show an incomplete state on first install.
+  localStorage.setItem('svc_tour_done', '1');
   return;
   const inv = PORTAL.investor;
   if (!inv || (!inv.first_name && !inv.last_name && !inv.email)) return;
