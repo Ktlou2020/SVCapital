@@ -1726,7 +1726,7 @@ let _draftStatusTimer = null;
 /* ── Signup Friction Tracker ── */
 const _FT = (function() {
   const SESSION_ID = (Math.random().toString(36).slice(2) + Date.now().toString(36)).slice(0, 32);
-  const ENDPOINT   = '/api/analytics/signup-friction';
+  const ENDPOINT   = (window.__SVC_API_BASE__ || '/api/') + 'analytics/signup-friction';
   let _queue = [];
   const _stepEnterAt = {};
   let _complete = false;
@@ -2599,7 +2599,9 @@ async function _doSubmit(skippedFica) {
       } catch (_) {}
     }
 
-    setTimeout(() => { window.location.href = '/portal/index.html'; }, 4000);
+    setTimeout(() => {
+      window.location.href = window.__SVC_NATIVE__ ? '/index.html' : '/portal/index.html';
+    }, 4000);
 
   } catch (err) {
     console.error('Registration error:', err);

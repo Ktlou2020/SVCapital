@@ -724,6 +724,9 @@
             <button class="btn btn--sm" onclick="openCalcModal()" style="white-space:nowrap;background:linear-gradient(135deg,#FF8215,#FF9B0C);color:#fff;border:none;font-weight:700">
               <i class="fa-solid fa-calculator"></i> Calculate Returns
             </button>
+            <button class="btn btn--sm" onclick="openInvestNowPicker()" style="white-space:nowrap;background:linear-gradient(135deg,#ff9b0c,#ff5229);color:#fff;border:none;font-weight:700">
+              <i class="fa-solid fa-bolt"></i> Invest Now
+            </button>
           </div>
         </div>
 
@@ -2480,6 +2483,22 @@
 .risk-opt:has(input:checked) { background: rgba(255,155,12,0.08); border-color: #FF9B0C; font-weight: 600; }
 </style>
 
+<!-- Invest Now — Product Picker Modal -->
+<div class="modal-overlay" id="investNowPickerModal" onclick="if(event.target===this)Modal.close('investNowPickerModal')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-bolt" style="color:#ff9b0c;margin-right:8px"></i>Choose a Product</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Select the investment product you'd like to invest in</div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('investNowPickerModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="investNowPickerBody" style="display:flex;flex-direction:column;gap:10px;padding-bottom:8px">
+      <!-- populated by openInvestNowPicker() -->
+    </div>
+  </div>
+</div>
+
 <!-- Investment Calculator Modal -->
 <div class="modal-overlay" id="calcModal" onclick="if(event.target===this)Modal.close('calcModal')">
   <div class="modal" style="max-width:520px">
@@ -2539,7 +2558,7 @@
       <div style="background:linear-gradient(135deg,rgba(255,155,12,0.08),rgba(255,82,41,0.05));border:1px solid rgba(255,155,12,0.25);border-radius:12px;padding:18px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;text-align:center;margin-bottom:14px">
           <div>
-            <div style="font-size:0.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Monthly Interest</div>
+            <div style="font-size:0.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Monthly Returns</div>
             <div id="calcMonthly" style="font-size:1.1rem;font-weight:700;color:#22c55e">—</div>
           </div>
           <div>
@@ -2547,7 +2566,7 @@
             <div id="calcYield" style="font-size:1.1rem;font-weight:700;color:#6b7280">—</div>
           </div>
           <div>
-            <div style="font-size:0.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Total Interest Earned</div>
+            <div style="font-size:0.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Total Returns Earned</div>
             <div id="calcReturn" style="font-size:1.55rem;font-weight:800;color:#FF9B0C">—</div>
           </div>
           <div>
@@ -2555,11 +2574,11 @@
             <div id="calcTotal" style="font-size:1.55rem;font-weight:800;color:#303030">—</div>
           </div>
         </div>
-        <!-- Capital vs Interest visual bar -->
+        <!-- Capital vs Returns visual bar -->
         <div style="margin-top:4px">
           <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#6b7280;margin-bottom:4px">
             <span><span style="display:inline-block;width:10px;height:10px;background:#303030;border-radius:2px;margin-right:4px"></span>Capital</span>
-            <span><span style="display:inline-block;width:10px;height:10px;background:#FF9B0C;border-radius:2px;margin-right:4px"></span>Interest</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#FF9B0C;border-radius:2px;margin-right:4px"></span>Returns</span>
           </div>
           <div style="height:10px;border-radius:6px;overflow:hidden;background:#e5e7eb;display:flex">
             <div id="calcBarCapital" style="background:#303030;transition:width 0.4s ease;height:100%"></div>

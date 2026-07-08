@@ -3763,6 +3763,20 @@ async function _getCattleStats() {
   return _cattleStatsCache;
 }
 
+function _cattleHerdStatusCompactHtml(s) {
+  if (!s || !s.total_purchased) return '';
+  const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
+  const survival = (100 - mortRate).toFixed(1);
+  const weight = s.avg_current_weight || s.avg_entry_weight;
+  return `<div style="background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:0.82rem;flex-wrap:wrap">
+    <i class="fa-solid fa-cow" style="color:#b8902a;flex-shrink:0"></i>
+    <span style="color:var(--text)"><strong>${(s.live_count || 0).toLocaleString('en-ZA')}</strong> cattle live</span>
+    ${weight ? `<span style="color:var(--text-muted)">·</span><span style="color:var(--text)">avg <strong>${weight}kg</strong></span>` : ''}
+    <span style="color:var(--text-muted)">·</span>
+    <span style="color:#65ed00;font-weight:700"><i class="fa-solid fa-heart-pulse" style="font-size:0.72rem"></i> ${survival}% survival</span>
+  </div>`;
+}
+
 function _cattleHerdStatusHtml(s) {
   if (!s || !s.total_purchased) return '';
   const weight   = s.avg_current_weight || s.avg_entry_weight;
@@ -3807,12 +3821,12 @@ function _cattleHerdStatusHtml(s) {
     </div>`;
 }
 
-async function _renderCattleHerdStatus(containerId) {
+async function _renderCattleHerdStatus(containerId, compact = false) {
   const el = document.getElementById(containerId);
   if (!el) return;
   el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted);padding:6px 0"><i class="fa-solid fa-spinner fa-spin"></i> Loading herd status…</div>`;
   const s = await _getCattleStats();
-  el.innerHTML = _cattleHerdStatusHtml(s);
+  el.innerHTML = compact ? _cattleHerdStatusCompactHtml(s) : _cattleHerdStatusHtml(s);
 }
 
 // Live solar telematics (FoxESS/FoxCloud) — shared across all solar terms
@@ -4003,18 +4017,24 @@ function openInvestModal(poolId) {
     ${pool.product_type === 'cattle' ? '<div id="cattleHerdStatus"></div>' : ''}
 
     <!-- Wallet balance indicator (needs to cover the minimum + 1% platform fee) -->
-    <div class="invest-wallet-indicator ${walletBal >= _minPlusFee(pool) ? 'invest-wallet-ok' : 'invest-wallet-low'}">
-      <i class="fa-solid fa-wallet"></i>
-      <span>Your wallet: <strong>${Utils.rand(walletBal)}</strong></span>
-      ${walletBal < _minPlusFee(pool)
-        ? `<button class="btn btn--ghost btn--sm" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))">
-             <i class="fa-solid fa-plus"></i> Top Up
-           </button>`
-        : `<span class="invest-wallet-ok-badge"><i class="fa-solid fa-circle-check"></i> Sufficient</span>`}
-    </div>
-    ${walletBal >= pool.min_investment && walletBal < _minPlusFee(pool)
-      ? `<div style="font-size:0.74rem;color:#ef4444;margin-top:6px"><i class="fa-solid fa-circle-info"></i> You need ${Utils.rand(_minPlusFee(pool))} to invest the minimum — that's ${Utils.rand(pool.min_investment)} plus the ${Utils.rand(_platformFee(pool.min_investment))} (1%) platform fee.</div>`
-      : ''}
+    ${walletBal < _minPlusFee(pool)
+      ? `<div style="background:rgba(239,68,68,0.07);border:1.5px solid rgba(239,68,68,0.3);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+             <i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;font-size:1.1rem;flex-shrink:0"></i>
+             <div>
+               <div style="font-weight:700;color:#ef4444;font-size:0.9rem">Wallet top-up required</div>
+               <div style="font-size:0.78rem;color:#6b7280;margin-top:2px">You have <strong style="color:#1a1a1a">${Utils.rand(walletBal)}</strong> — you need <strong style="color:#1a1a1a">${Utils.rand(_minPlusFee(pool))}</strong> to invest the minimum (${Utils.rand(pool.min_investment)} + ${Utils.rand(_platformFee(pool.min_investment))} fee).</div>
+             </div>
+           </div>
+           <button class="btn btn--primary btn--sm" style="width:100%" onclick="Modal.close('investModal');navigate('wallet',document.querySelector('[data-view=wallet]'))">
+             <i class="fa-solid fa-plus"></i> Top Up Wallet
+           </button>
+         </div>`
+      : `<div class="invest-wallet-indicator invest-wallet-ok" style="margin-bottom:14px">
+           <i class="fa-solid fa-wallet"></i>
+           <span>Wallet: <strong>${Utils.rand(walletBal)}</strong></span>
+           <span class="invest-wallet-ok-badge"><i class="fa-solid fa-circle-check"></i> Sufficient</span>
+         </div>`}
 
     <!-- Quick-pick amount buttons -->
     <div class="form-group" style="margin-top:14px">
@@ -4045,23 +4065,14 @@ function openInvestModal(poolId) {
       </div>
     </div>
 
-    <!-- What happens next timeline -->
-    <div class="invest-next-steps">
-      <div class="ins-step"><div class="ins-dot ins-dot--active"></div><div class="ins-label"><b>Now</b> — funds deducted from ${_activeSa ? `<em>${_activeSa.name}</em> sub-account` : 'wallet'}</div></div>
-      <div class="ins-step"><div class="ins-dot"></div><div class="ins-label"><b>Ongoing</b> — returns accrue daily</div></div>
-      <div class="ins-step"><div class="ins-dot"></div><div class="ins-label"><b>${maturityStr}</b> — payout to your wallet</div></div>
-    </div>
-
-    <div class="invest-lock-note">
-      <i class="fa-solid fa-lock" style="color:var(--gold)"></i>
-      Capital is locked for <strong>${pool.term_months} months</strong>. Early withdrawal is not available. Returns are not guaranteed.
-    </div>
   `;
 
   const invBtn = document.getElementById('investConfirmBtn');
   invBtn.onclick = () => _withBtn(invBtn, () => confirmInvestment(pool));
   Modal.open('investModal');
-  if (pool.product_type === 'cattle') _renderCattleHerdStatus('cattleHerdStatus');
+  if (pool.product_type === 'cattle') {
+    _renderCattleHerdStatus('cattleHerdStatus', true); // true = compact mode
+  }
 }
 
 function _updateInvestCalc(amt, rate, termMonths, minInvest, walletBal) {
@@ -5748,7 +5759,7 @@ Returns are driven by weight gain and the market price at sale. SV Capital manag
 Because cattle depends on biological growth and market prices, it carries a higher (Aggressive) risk profile than solar — with the potential for stronger returns over a shorter, roughly 12-month term.`,
     quiz: [
       { q: 'How long is a typical SV Capital cattle investment cycle?', options: ['30–60 days', 'About 12 months', '3–5 years', '10 years'], correct: 1 },
-      { q: 'What drives the returns on a cattle investment?', options: ['Fixed monthly interest', 'Weight gain and the market price at sale', 'Government subsidies', 'Rental income'], correct: 1 },
+      { q: 'What drives the returns on a cattle investment?', options: ['Fixed monthly returns', 'Weight gain and the market price at sale', 'Government subsidies', 'Rental income'], correct: 1 },
       { q: 'What risk profile does the cattle product carry?', options: ['Low', 'Medium', 'Aggressive', 'No risk'], correct: 2 },
     ],
   },
@@ -7108,8 +7119,8 @@ const _SA_TIPS = {
     { emoji: '💡', title: 'Start Early, Win Big', body: 'If you save R50 a month from now until you\'re 18, you could have more than R5 000 before you even finish school!' },
   ],
   growing: [
-    { emoji: '🔮', title: 'The Magic of Compound Interest', body: 'When your money earns interest, that interest also earns interest. It\'s money multiplying itself!' },
-    { emoji: '📊', title: 'Rule of 72', body: 'Divide 72 by your interest rate to see how many years to double your money. At 14%: 72 ÷ 14 = just over 5 years!' },
+    { emoji: '🔮', title: 'The Power of Compounding Returns', body: 'When your returns are reinvested, those returns also generate returns. It\'s money multiplying itself!' },
+    { emoji: '📊', title: 'Rule of 72', body: 'Divide 72 by your annual return rate to see how many years to double your money. At 14%: 72 ÷ 14 = just over 5 years!' },
     { emoji: '🧺', title: 'Don\'t Put All Eggs in One Basket', body: 'Spreading money across different investments (diversifying) reduces risk. SV Capital does this across sectors.' },
     { emoji: '⏰', title: 'Time is Your Biggest Advantage', body: 'Starting to invest at 12 vs 22 can mean twice as much money at retirement. You have a head start!' },
   ],
@@ -8024,7 +8035,7 @@ function generateTaxCertificate() {
   const from = new Date(taxYear - 1, 2, 1);   // 1 March (year-1)
   const to   = new Date(taxYear,     1, 28, 23, 59, 59); // 28 Feb (year)
 
-  // Total interest = returns + payouts in the tax year
+  // Total returns = returns + payouts in the tax year
   const interestTxns = (PORTAL.transactions || []).filter(t => {
     if (!['return', 'payout'].includes(t.type)) return false;
     const d = new Date(t.created_at || t.transaction_date || 0);
@@ -8116,7 +8127,7 @@ td:last-child{text-align:right;font-weight:600}
       <tr style="background:#f8fafc"><td colspan="2" style="font-weight:700;text-align:right">TOTAL INTEREST</td><td style="color:#15803d;font-weight:800">${Utils.rand(totalInterest)}</td></tr>
     </tbody>
   </table>
-  ` : `<div style="text-align:center;padding:24px;background:#f8fafc;border-radius:10px;color:#6b7280;font-size:0.85rem;margin-bottom:24px">No interest income recorded for this tax year.</div>`}
+  ` : `<div style="text-align:center;padding:24px;background:#f8fafc;border-radius:10px;color:#6b7280;font-size:0.85rem;margin-bottom:24px">No returns recorded for this tax year.</div>`}
 
   <div class="footer">
     <strong>SV Capital (Pty) Ltd</strong> is a registered financial services provider regulated by the Financial Sector Conduct Authority (FSCA).<br>
@@ -8381,6 +8392,49 @@ async function downloadMyData() {
    ═══════════════════════════════════════════════ */
 let _calcPoolId = null;
 
+function openInvestNowPicker() {
+  const body = document.getElementById('investNowPickerBody');
+  if (!body) return;
+
+  const products = (_mktProducts && _mktProducts.length)
+    ? _mktProducts
+    : [...new Set((PORTAL.pools || []).map(p => p.product_type))].map(t => ({ product_type: t }));
+
+  const openCounts = {};
+  (PORTAL.pools || []).forEach(p => {
+    if (p.status === 'open') openCounts[p.product_type] = (openCounts[p.product_type] || 0) + 1;
+  });
+
+  body.innerHTML = products.map(prod => {
+    const pi = Utils.productInfo(prod.product_type);
+    const meta = _POOL_META[prod.product_type] || {};
+    const open = openCounts[prod.product_type] || 0;
+    return `
+      <div onclick="selectInvestNowProduct('${_esc(prod.product_type)}')" style="display:flex;align-items:center;gap:14px;padding:14px;border:1.5px solid rgba(0,0,0,0.07);border-radius:14px;cursor:pointer;background:var(--panel-bg,#fff);transition:border-color 0.15s" onmouseenter="this.style.borderColor='#ff9b0c'" onmouseleave="this.style.borderColor='rgba(0,0,0,0.07)'">
+        <div style="width:46px;height:46px;border-radius:12px;background:${pi.color}1a;color:${pi.color};display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">
+          <i class="fa-solid ${pi.icon}"></i>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.92rem;font-weight:800;color:var(--text-primary,#1a1a1a)">${prod.label || pi.label}</div>
+          ${meta.blurb ? `<div style="font-size:0.75rem;color:var(--text-muted,#6b7280);margin-top:2px">${meta.blurb}</div>` : ''}
+          <div style="font-size:0.72rem;margin-top:4px;font-weight:600;${open ? 'color:#65ed00' : 'color:#9ca3af'}">
+            <i class="fa-solid ${open ? 'fa-circle-check' : 'fa-clock'}" style="font-size:0.65rem"></i>
+            ${open ? `${open} open pool${open !== 1 ? 's' : ''}` : 'No open pools currently'}
+          </div>
+        </div>
+        <i class="fa-solid fa-chevron-right" style="color:#9ca3af;font-size:0.8rem;flex-shrink:0"></i>
+      </div>`;
+  }).join('');
+
+  Modal.open('investNowPickerModal');
+}
+
+function selectInvestNowProduct(type) {
+  Modal.close('investNowPickerModal');
+  navigate('marketplace', document.querySelector('[data-view=marketplace]'));
+  setTimeout(() => openProductDetail(type), 200);
+}
+
 function openCalcModal() {
   const sel = document.getElementById('calcPoolSelect');
   if (sel) {
@@ -8461,7 +8515,7 @@ function updateCalc() {
   set('calcMonthly', Utils.rand(monthly));
   set('calcYield',   effYield.toFixed(2) + '%');
 
-  // Visual capital vs interest bar
+  // Visual capital vs returns bar
   const capBar = document.getElementById('calcBarCapital');
   const intBar = document.getElementById('calcBarInterest');
   if (capBar && intBar && total > 0) {
