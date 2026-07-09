@@ -570,7 +570,7 @@ async function issueStaffJwt(emp, res) {
     lastName:  emp.last_name,
     empId:     emp.id,
     apps,
-  }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  }, JWT_SECRET, { expiresIn: '8h' }); // staff tokens must match cookie duration
   res.cookie('svc_token', token, {
     httpOnly: true, secure: IS_PROD,
     sameSite: 'lax',

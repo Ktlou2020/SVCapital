@@ -6,7 +6,22 @@
 
 /* ─── API helpers ────────────────────────────────────────────────────── */
 const BASE = '/api/';
-const get    = async p => { try { const r = await fetch(BASE+p); return r.ok ? r.json() : {data:[],total:0}; } catch { return {data:[],total:0}; } };
+let _authFailed = false;
+const get = async p => {
+  if (_authFailed) return { data: [], total: 0 };
+  try {
+    const r = await fetch(BASE + p);
+    if (r.status === 401) {
+      if (!_authFailed) {
+        _authFailed = true;
+        if (typeof StaffAuth !== 'undefined') StaffAuth.clearSession();
+        window.location.replace('login.html');
+      }
+      return { data: [], total: 0 };
+    }
+    return r.ok ? r.json() : { data: [], total: 0 };
+  } catch { return { data: [], total: 0 }; }
+};
 const post   = async (p,b) => { const r = await fetch(BASE+p,{method:'POST',  headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
 const patch  = async (p,b) => { const r = await fetch(BASE+p,{method:'PATCH', headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
 const put    = async (p,b) => { const r = await fetch(BASE+p,{method:'PUT',   headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
