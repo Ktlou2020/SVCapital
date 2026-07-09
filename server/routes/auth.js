@@ -414,41 +414,6 @@ router.get('/me', requireAuth, async (req, res) => {
   }
 });
 
-/* ─── GET /api/auth/investor-debug — temporary diagnostic ─── */
-router.get('/investor-debug', requireAuth, async (req, res) => {
-  try {
-    const userRow = await pool.query(
-      'SELECT id, email, role, investor_id FROM users WHERE id = $1', [req.user.id]
-    );
-    const user = userRow.rows[0] || {};
-    const investorId = user.investor_id;
-
-    let investor = null, investmentCount = 0, emailMatch = null;
-    if (investorId) {
-      const ir = await pool.query('SELECT id, email, first_name, last_name FROM investors WHERE id = $1', [investorId]);
-      investor = ir.rows[0] || null;
-      const cr = await pool.query('SELECT COUNT(*) FROM investments WHERE investor_id = $1', [investorId]);
-      investmentCount = parseInt(cr.rows[0].count, 10);
-    }
-    if (!investor && user.email) {
-      const er = await pool.query('SELECT id, email FROM investors WHERE LOWER(email) = LOWER($1) LIMIT 1', [user.email]);
-      emailMatch = er.rows[0] || null;
-    }
-    res.json({
-      user_id:          user.id,
-      user_email:       user.email,
-      users_investor_id: investorId || null,
-      jwt_investor_id:  req.user.investorId || null,
-      investor_exists:  !!investor,
-      investor_id:      investor?.id || null,
-      investment_count: investmentCount,
-      email_match_id:   emailMatch?.id || null,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 /* ─── POST /api/auth/logout ─── */
 router.post('/logout', async (req, res) => {
   // TODO(security): JWT denylist — add this token's jti to a Redis/DB denylist (TTL = token expiry)

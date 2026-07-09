@@ -971,9 +971,9 @@
       localStorage.setItem('svc_user',  JSON.stringify(data.user));
       localStorage.setItem('svc_last_login_email', email);
 
-      // Save for biometric re-login
+      // Save for biometric re-login — always use the native redirect path
       if (window.__SVC_NATIVE__) {
-        localStorage.setItem('svc_bio_token', JSON.stringify({ token: data.token, user: data.user, redirect: data.redirect || '/portal/' }));
+        localStorage.setItem('svc_bio_token', JSON.stringify({ token: data.token, user: data.user, redirect: '/index.html' }));
       }
 
       btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
@@ -989,16 +989,47 @@
     }
   }
 
+  function _jwtExpired(token) {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return !!(payload.exp && payload.exp * 1000 < Date.now());
+    } catch { return true; }
+  }
+
   async function loginWithBiometric() {
     const saved = localStorage.getItem('svc_bio_token');
     if (!saved) { showError('Please sign in with your password first to enable biometric login.'); return; }
     try {
-      // Use Capacitor NativeBiometric if available
       if (window.Capacitor && window.Capacitor.Plugins.NativeBiometric) {
         await window.Capacitor.Plugins.NativeBiometric.verifyIdentity({ reason: 'Sign in to SV Capital', title: 'Biometric Login', subtitle: 'Use Face ID or fingerprint' });
       }
-      // Token validated — proceed
-      const data = JSON.parse(saved);
+
+      let data = JSON.parse(saved);
+
+      // If the cached token is expired, try a silent refresh before giving up.
+      if (_jwtExpired(data.token)) {
+        try {
+          const base = window.__SVC_API_BASE__ || '/api/';
+          const rr = await fetch(base + 'auth/refresh', { method: 'POST', credentials: 'include' });
+          if (rr.ok) {
+            const rd = await rr.json();
+            data = { ...data, token: rd.token, user: rd.user || data.user };
+            localStorage.setItem('svc_bio_token', JSON.stringify(data));
+          } else {
+            // Refresh failed — cached session is fully expired; force password login.
+            localStorage.removeItem('svc_bio_token');
+            document.getElementById('biometricBtn').style.display = 'none';
+            showError('Your session has expired. Please sign in with your password to re-enable biometric login.');
+            return;
+          }
+        } catch {
+          localStorage.removeItem('svc_bio_token');
+          document.getElementById('biometricBtn').style.display = 'none';
+          showError('Unable to refresh your session. Please sign in with your password.');
+          return;
+        }
+      }
+
       localStorage.setItem('svc_token', data.token);
       localStorage.setItem('svc_user', JSON.stringify(data.user));
       window.location.href = window.__SVC_NATIVE__ ? '/index.html' : (data.redirect || '/portal/');

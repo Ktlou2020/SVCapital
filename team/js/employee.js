@@ -2843,10 +2843,14 @@ function renderCalendarView(container, leaveList, year, month) {
   const dayNames   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
   // Build leave map: date-str → [employee records]
+  // Use string-based date arithmetic to avoid timezone shifts (toISOString
+  // converts to UTC, which can move a local-midnight date to the previous day).
   const leaveMap = {};
   leaveList.forEach(l => {
-    const start = new Date(l.start_date+'T00:00:00');
-    const end   = new Date(l.end_date+'T00:00:00');
+    // Normalise to YYYY-MM-DD regardless of whether pg returned a Date object
+    // or an ISO timestamp string (e.g. "2026-07-09T00:00:00.000Z").
+    const startStr = (l.start_date instanceof Date ? l.start_date : new Date(l.start_date + (String(l.start_date).length === 10 ? 'T12:00:00Z' : ''))).toISOString().slice(0,10);
+    const endStr   = (l.end_date   instanceof Date ? l.end_date   : new Date(l.end_date   + (String(l.end_date  ).length === 10 ? 'T12:00:00Z' : ''))).toISOString().slice(0,10);
     // The shared calendar embeds the employee's display fields on each leave
     // row (staff can't read other employees' records directly).
     const emp = _employees.find(e=>e.id===l.employee_id) || {
@@ -2856,11 +2860,15 @@ function renderCalendarView(container, leaveList, year, month) {
       avatar_color: l.avatar_color || '#7c5cfc',
       avatar_initials: l.avatar_initials || ((l.first_name||'E')[0] + (l.last_name||'')[0]).toUpperCase(),
     };
-    if (!emp) return;
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
-      const key = d.toISOString().slice(0,10);
-      if (!leaveMap[key]) leaveMap[key] = [];
-      leaveMap[key].push({ emp, leave: l });
+    // Iterate every calendar day in the leave range using UTC noon to stay
+    // safely inside the intended calendar day regardless of client timezone.
+    let cur = startStr;
+    while (cur <= endStr) {
+      if (!leaveMap[cur]) leaveMap[cur] = [];
+      leaveMap[cur].push({ emp, leave: l });
+      const next = new Date(cur + 'T12:00:00Z');
+      next.setUTCDate(next.getUTCDate() + 1);
+      cur = next.toISOString().slice(0,10);
     }
   });
 
@@ -2955,12 +2963,14 @@ function renderCalendarView(container, leaveList, year, month) {
     <!-- Who is on leave this month -->
     <div class="section-head mt-3"><i class="fa-solid fa-calendar-xmark"></i> Leave This Month</div>
     ${leaveList.filter(l=>{
-        const s=new Date(l.start_date+'T00:00:00'); const e=new Date(l.end_date+'T00:00:00');
-        return (s.getFullYear()===year&&s.getMonth()===month)||(e.getFullYear()===year&&e.getMonth()===month);
+        const sm=l.start_date.slice(0,7); const em=l.end_date.slice(0,7);
+        const ym=`${year}-${String(month+1).padStart(2,'0')}`;
+        return sm===ym||em===ym||(sm<ym&&em>ym);
       }).length
       ? leaveList.filter(l=>{
-          const s=new Date(l.start_date+'T00:00:00'); const e=new Date(l.end_date+'T00:00:00');
-          return (s.getFullYear()===year&&s.getMonth()===month)||(e.getFullYear()===year&&e.getMonth()===month);
+          const sm=l.start_date.slice(0,7); const em=l.end_date.slice(0,7);
+          const ym=`${year}-${String(month+1).padStart(2,'0')}`;
+          return sm===ym||em===ym||(sm<ym&&em>ym);
         }).map(l=>{
           const emp=_employees.find(e=>e.id===l.employee_id)||{ first_name:l.first_name, last_name:l.last_name, avatar_color:l.avatar_color, avatar_initials:l.avatar_initials };
           const sc={approved:'chip-green',pending:'chip-gold',rejected:'chip-red'};
@@ -2972,7 +2982,7 @@ function renderCalendarView(container, leaveList, year, month) {
                 <span class="kudos-kpi">${l.leave_type||'Leave'}</span>
                 <span class="chip ${sc[l.status]||'chip-gray'}" style="margin-left:auto">${l.status}</span>
               </div>
-              <div class="kudos-msg">${l.start_date} → ${l.end_date} &nbsp;·&nbsp; ${l.days_requested||'?'} days
+              <div class="kudos-msg">${l.start_date.slice(0,10)} → ${l.end_date.slice(0,10)} &nbsp;·&nbsp; ${l.days_requested||'?'} days
                 ${l.reason?` &nbsp;·&nbsp; "${l.reason}"`:''}
               </div>
             </div>

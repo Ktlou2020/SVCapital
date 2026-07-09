@@ -234,12 +234,15 @@ router.get('/leave-calendar', requireAuth, async (req, res) => {
   }
   try {
     const { rows } = await pool.query(
-      `SELECT lr.id, lr.employee_id, lr.leave_type, lr.start_date, lr.end_date,
-              lr.days_requested, lr.status,
+      `SELECT lr.id, lr.employee_id, lr.leave_type,
+              TO_CHAR(lr.start_date, 'YYYY-MM-DD') AS start_date,
+              TO_CHAR(lr.end_date,   'YYYY-MM-DD') AS end_date,
+              lr.days_requested, lr.status, lr.reason,
               e.first_name, e.last_name, e.avatar_color, e.avatar_initials
        FROM leave_requests lr
        JOIN employees e ON e.id = lr.employee_id
        WHERE lr.status = 'approved'
+         AND lr.end_date >= (NOW() - INTERVAL '60 days')
        ORDER BY lr.start_date`
     );
     res.json({ data: rows, total: rows.length });
