@@ -863,6 +863,23 @@ function renderDashboard() {
   const pr   = getXpProgress(xp);
   const streak = Number(_emp.streak_days)||0;
   const thisMonth = new Date().toISOString().slice(0,7);
+  const todayStr  = new Date().toISOString().slice(0,10);
+
+  // Upcoming birthdays in the next 30 days (all employees)
+  const upcomingBirthdays = _employees
+    .filter(e => e.birth_date)
+    .map(e => {
+      const thisYear = new Date().getFullYear();
+      const [,bm,bd] = e.birth_date.split('-');
+      let bdStr = `${thisYear}-${bm}-${bd}`;
+      if (bdStr < todayStr) bdStr = `${thisYear+1}-${bm}-${bd}`;
+      const daysUntil = Math.round(
+        (new Date(bdStr+'T12:00:00Z') - new Date(todayStr+'T12:00:00Z')) / 864e5
+      );
+      return { emp: e, bdStr, daysUntil };
+    })
+    .filter(x => x.daysUntil <= 30)
+    .sort((a, b) => a.daysUntil - b.daysUntil);
   const kpi  = _kpiScores.find(k=>k.period_month===thisMonth)||_kpiScores[0]||{};
   const done = _progress.filter(p=>p.status==='completed').length;
   const eva  = calcMyEVA();
@@ -1042,7 +1059,74 @@ function renderDashboard() {
         </div>
       </div>
 
+    </div>
+
+    <!-- Team Events -->
+    <div class="section-head" style="margin-top:28px;display:flex;align-items:center">
+      <i class="fa-solid fa-calendar-star"></i> Team Events
+      <a href="#" onclick="navigate('calendar',document.querySelector('[data-view=calendar]'));return false"
+         style="margin-left:auto;font-size:0.72rem;font-weight:600;color:var(--accent);text-decoration:none">
+        Full calendar <i class="fa-solid fa-arrow-right" style="font-size:0.65rem"></i>
+      </a>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:8px">
+
+      <!-- Upcoming Birthdays -->
+      <div class="chart-container" style="padding:20px">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px">
+          <i class="fa-solid fa-cake-candles" style="color:#f9c846;margin-right:5px"></i>Upcoming Birthdays
+        </div>
+        ${upcomingBirthdays.length ? upcomingBirthdays.map(({ emp, bdStr, daysUntil }) => {
+          const label = daysUntil === 0 ? '🎉 Today!' : daysUntil === 1 ? 'Tomorrow' : `in ${daysUntil} day${daysUntil!==1?'s':''}`;
+          const dateLabel = new Date(bdStr+'T12:00:00Z').toLocaleDateString('en-ZA',{day:'numeric',month:'short'});
+          return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+            <div style="width:32px;height:32px;border-radius:50%;background:${emp.avatar_color||'#7c5cfc'};display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:800;color:#fff;flex-shrink:0">${emp.avatar_initials||(emp.first_name||'?')[0]}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${emp.first_name} ${emp.last_name}</div>
+              <div style="font-size:0.72rem;color:var(--muted)">${dateLabel}</div>
+            </div>
+            <span style="font-size:0.7rem;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap;background:rgba(249,200,70,0.12);color:#f9c846">${label}</span>
+          </div>`;
+        }).join('')
+        : `<div style="font-size:0.82rem;color:var(--muted);padding:8px 0"><i class="fa-solid fa-calendar-check" style="margin-right:6px"></i>No birthdays in the next 30 days.</div>`}
+      </div>
+
+      <!-- On Leave Today -->
+      <div class="chart-container" style="padding:20px">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px">
+          <i class="fa-solid fa-umbrella-beach" style="color:var(--accent);margin-right:5px"></i>On Leave Today
+        </div>
+        <div id="dash-leave-today" style="font-size:0.82rem;color:var(--muted)">
+          <i class="fa-solid fa-circle-notch fa-spin" style="font-size:0.85rem;margin-right:6px"></i>Loading…
+        </div>
+      </div>
+
     </div>`;
+
+  // Populate "On Leave Today" async after the DOM is painted
+  get('tables/leave-calendar').then(res => {
+    const leaveToday = (res.data || []).filter(l => l.start_date <= todayStr && l.end_date >= todayStr);
+    const slot = document.getElementById('dash-leave-today');
+    if (!slot) return;
+    if (!leaveToday.length) {
+      slot.innerHTML = `<span style="color:var(--accent2)"><i class="fa-solid fa-circle-check" style="margin-right:5px"></i>Nobody on leave today.</span>`;
+      return;
+    }
+    slot.innerHTML = leaveToday.map(l => {
+      const emp = _employees.find(e => e.id === l.employee_id) || l;
+      const initials = emp.avatar_initials || ((emp.first_name||'?')[0] + (emp.last_name||'')[0]).toUpperCase();
+      return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="width:32px;height:32px;border-radius:50%;background:${emp.avatar_color||'#7c5cfc'};display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:800;color:#fff;flex-shrink:0">${initials}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${emp.first_name||''} ${emp.last_name||''}</div>
+          <div style="font-size:0.72rem;color:var(--muted)">${l.leave_type||'Leave'} · back ${l.end_date}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }).catch(() => {
+    const slot = document.getElementById('dash-leave-today');
+    if (slot) slot.innerHTML = `<span style="color:var(--muted)">Could not load leave data.</span>`;
+  });
 }
 
 /* ═══ VIEW: COURSES ═════════════════════════════════════════════════ */
