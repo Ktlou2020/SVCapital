@@ -70,8 +70,20 @@ async function _send({ to, subject, html, text }) {
       }),
     });
     const data = await r.json();
-    if (!r.ok) console.error('[email] Resend error:', JSON.stringify(data));
-    else       console.log(`[email] ✓ "${subject}" → ${Array.isArray(to) ? to[0] : to}`);
+    if (!r.ok) {
+      if (r.status === 403 && data.name === 'validation_error') {
+        console.error(
+          `[email] ⚠️  DOMAIN NOT VERIFIED in Resend — all emails are blocked.\n` +
+          `  FROM: ${FROM}\n` +
+          `  Fix: verify the domain at https://resend.com/domains, or set the\n` +
+          `  FROM_EMAIL env var to "onboarding@resend.dev" as a temporary workaround.`
+        );
+      } else {
+        console.error('[email] Resend error:', JSON.stringify(data));
+      }
+    } else {
+      console.log(`[email] ✓ "${subject}" → ${Array.isArray(to) ? to[0] : to}`);
+    }
   } catch (err) {
     console.error('[email] send failed:', err.message);
   }

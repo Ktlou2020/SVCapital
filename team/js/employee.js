@@ -863,7 +863,7 @@ function renderDashboard() {
   const pr   = getXpProgress(xp);
   const streak = Number(_emp.streak_days)||0;
   const thisMonth = new Date().toISOString().slice(0,7);
-  const todayStr  = new Date().toISOString().slice(0,10);
+  const todayISO  = new Date().toISOString().slice(0,10); // YYYY-MM-DD for date comparisons
 
   // Upcoming birthdays in the next 30 days (all employees)
   const upcomingBirthdays = _employees
@@ -872,9 +872,9 @@ function renderDashboard() {
       const thisYear = new Date().getFullYear();
       const [,bm,bd] = e.birth_date.split('-');
       let bdStr = `${thisYear}-${bm}-${bd}`;
-      if (bdStr < todayStr) bdStr = `${thisYear+1}-${bm}-${bd}`;
+      if (bdStr < todayISO) bdStr = `${thisYear+1}-${bm}-${bd}`;
       const daysUntil = Math.round(
-        (new Date(bdStr+'T12:00:00Z') - new Date(todayStr+'T12:00:00Z')) / 864e5
+        (new Date(bdStr+'T12:00:00Z') - new Date(todayISO+'T12:00:00Z')) / 864e5
       );
       return { emp: e, bdStr, daysUntil };
     })
@@ -1105,7 +1105,7 @@ function renderDashboard() {
 
   // Populate "On Leave Today" async after the DOM is painted
   get('tables/leave-calendar').then(res => {
-    const leaveToday = (res.data || []).filter(l => l.start_date <= todayStr && l.end_date >= todayStr);
+    const leaveToday = (res.data || []).filter(l => l.start_date <= todayISO && l.end_date >= todayISO);
     const slot = document.getElementById('dash-leave-today');
     if (!slot) return;
     if (!leaveToday.length) {

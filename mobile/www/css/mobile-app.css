@@ -1982,10 +1982,56 @@ body,
   font-weight: 900 !important;
   color: #1a1a1a !important;
   letter-spacing: -0.02em !important;
+  padding-left: 31px !important; /* align with label text after icon (24px + 7px gap) */
 }
 .perf-row__value.positive { color: #22c55e !important; }
 .perf-row__value.neutral  { color: #1a1a1a !important; }
 .perf-row__value.warning  { color: #ff9b0c !important; }
+
+/* ── Create modal: type selector strong active state (mobile) ── */
+.sa-type-btn {
+  background: rgba(0,0,0,0.03) !important;
+  border: 2px solid rgba(0,0,0,0.1) !important;
+  color: #1a1a1a !important;
+  border-radius: 14px !important;
+  padding: 16px 12px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 6px !important;
+  cursor: pointer !important;
+  font-family: inherit !important;
+  width: 100% !important;
+  transition: border-color .15s, background .15s, box-shadow .15s !important;
+  position: relative !important;
+}
+.sa-type-btn i { font-size: 1.4rem !important; }
+.sa-type-btn strong { font-size: 0.85rem !important; font-weight: 700 !important; color: #1a1a1a !important; }
+.sa-type-btn span { font-size: 0.7rem !important; color: #6b7280 !important; text-align: center !important; line-height: 1.4 !important; }
+.sa-type-btn.active {
+  background: rgba(255,155,12,0.12) !important;
+  border-color: #ff9b0c !important;
+  border-width: 2.5px !important;
+  box-shadow: 0 0 0 4px rgba(255,155,12,0.2) !important;
+}
+.sa-type-btn.active::after {
+  content: '✓' !important;
+  position: absolute !important;
+  top: 8px !important;
+  right: 10px !important;
+  font-size: 0.75rem !important;
+  font-weight: 900 !important;
+  color: #ff9b0c !important;
+  background: rgba(255,155,12,0.15) !important;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+}
+.sa-type-btn.active strong { color: #ff9b0c !important; }
 
 /* ═══════════════════════════════════════════════════════════════
    SECTION 31 — MY ACCOUNTS (Sub-accounts) — MOBILE REDESIGN
