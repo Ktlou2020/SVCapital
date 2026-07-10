@@ -351,7 +351,7 @@ function renderTaskCompletionPanel() {
     { label: 'Complete identity verification', done: ficaReady, tone: '#FF8215', action: 'openKycUploadModal()', cta: 'Upload documents' },
     { label: 'Add a withdrawal bank account', done: bankReady, tone: '#656565', action: 'openBankDetailsModal()', cta: 'Add bank account' },
     { label: 'Add funds to your wallet', done: hasWallet, tone: '#22c55e', action: 'openTopUpModal()', cta: 'Add funds' },
-    { label: 'Confirm your risk profile', done: riskReady, tone: '#a855f7', action: 'navigate(\'profile\', document.querySelector(\'[data-view=profile]\'))', cta: 'Review profile' },
+    { label: 'Confirm your risk profile', done: riskReady, tone: '#eda5ff', action: 'navigate(\'profile\', document.querySelector(\'[data-view=profile]\'))', cta: 'Review profile' },
     { label: 'Make your first investment', done: hasInvestments, tone: '#D4AF37', action: 'navigate(\'marketplace\', document.querySelector(\'[data-view=marketplace]\'))', cta: 'Browse products' },
   ];
   const doneCount = tasks.filter(t => t.done).length;
@@ -561,7 +561,7 @@ function renderMarketConversionPanel(pools) {
     sub = 'Use the waitlist options below or switch category to keep your momentum.';
     action = "filterMarket('all')";
     actionLabel = 'Show all pools';
-    accent = '#A855F7';
+    accent = '#eda5ff';
   }
 
   panel.innerHTML = `
@@ -974,7 +974,7 @@ function loadNotifications() {
       });
     } else if (inv.fica_status === 'approved') {
       notifs.push({
-        icon: 'fa-shield-halved', iconBg: 'rgba(168,85,247,0.1)', iconColor: '#a855f7',
+        icon: 'fa-shield-halved', iconBg: 'rgba(237,165,255,0.13)', iconColor: '#eda5ff',
         title: 'Identity verified',
         sub: 'Your FICA/KYC verification is complete. You can invest in all available pools.',
         time: inv.fica_verified_at ? Utils.timeAgo(inv.fica_verified_at) : 'Approved',
@@ -1266,6 +1266,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (el) el.innerHTML = _skelSpan;
   });
 
+  // Restore nav badge counts from cache so they appear instantly before API data arrives
+  _restoreNavBadgesFromCache();
+
   // Immediately populate greeting from cached user so name never stays "Loading..."
   try {
     const cached = JSON.parse(localStorage.getItem('svc_user') || '{}');
@@ -1535,6 +1538,9 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
 
     // Load gamification data (non-blocking — don't fail portal if quests fail)
     loadQuestData().catch(err => console.warn('[Quests] load error:', err.message));
+
+    // Pre-populate nav badges non-blocking so counts appear without navigating
+    _prefetchNavBadges();
   } catch (e) {
     console.error(`loadPortalData error (attempt ${_attempt + 1}):`, e);
 
@@ -2192,11 +2198,11 @@ const _TXN_META = {
   payout:         { icon: 'fa-money-bill-wave',     color: '#22c55e', label: 'Payout' },
   reinvestment:   { icon: 'fa-arrows-rotate',       color: '#3b82f6', label: 'Re-investment' },
   fee:            { icon: 'fa-receipt',             color: '#f59e0b', label: 'Platform Fee' },
-  referral_bonus: { icon: 'fa-user-group',          color: '#a855f7', label: 'Referral Bonus' },
+  referral_bonus: { icon: 'fa-user-group',          color: '#eda5ff', label: 'Referral Bonus' },
   withdrawal:     { icon: 'fa-upload',              color: '#ef4444', label: 'Withdrawal' },
   gift_sent:      { icon: 'fa-gift',                color: '#f59e0b', label: 'Gift Sent' },
   gift_received:  { icon: 'fa-gift',                color: '#22c55e', label: 'Gift Received' },
-  reward:         { icon: 'fa-award',               color: '#a855f7', label: 'Reward' },
+  reward:         { icon: 'fa-award',               color: '#eda5ff', label: 'Reward' },
 };
 
 function _setTxnFilter(type, btn) {
@@ -2302,7 +2308,7 @@ function _renderReturnHistory() {
 
   let running = 0;
   const typeLabel = { return: 'Return Payment', payout: 'Payout', referral_bonus: 'Referral Bonus' };
-  const typeColor = { return: '#22c55e', payout: '#ff9b0c', referral_bonus: '#a855f7' };
+  const typeColor = { return: '#22c55e', payout: '#ff9b0c', referral_bonus: '#eda5ff' };
 
   el.innerHTML = `
     <div class="panel mb-16">
@@ -3429,7 +3435,7 @@ async function renderProductDetailView(type) {
 
       <div class="market-pool-card mpc-v2" style="cursor:default">
         <div class="mpc2-accent" style="background:linear-gradient(90deg,${color},${color}88)"></div>
-        <div style="padding:4px 2px">
+        <div style="padding:16px 16px 8px">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
             <div class="mpc2-icon" style="background:${color}18;color:${color}"><i class="fa-solid ${icon}"></i></div>
             <div>
@@ -4986,8 +4992,8 @@ function buildStatementHTML(opts) {
 
     sections += `
       <section style="margin-bottom:36px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #A855F7">
-          <div style="width:4px;height:22px;background:linear-gradient(180deg,#A855F7,#7C3AED);border-radius:2px"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #eda5ff">
+          <div style="width:4px;height:22px;background:linear-gradient(180deg,#eda5ff,#eda5ff);border-radius:2px"></div>
           <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Transaction Ledger</h3>
           <span style="margin-left:auto;font-size:10px;color:#9ca3af">${transactions.length} transactions · ${fmtDate(from)} — ${fmtDate(to)}</span>
         </div>
@@ -5102,48 +5108,33 @@ function printStatement() {
     Toast.error('Please generate a statement first, then print.');
     return;
   }
-  const htmlContent = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>SV Capital — Account Statement</title>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#1a1a1a}
-    @page{size:A4;margin:0}
-    @media print{.no-print{display:none!important}.print-body{padding-top:0!important}}
-    .no-print{position:fixed;top:0;left:0;right:0;background:#1a1a1a;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;z-index:999;box-shadow:0 2px 12px rgba(0,0,0,0.3)}
-    .no-print span{color:#fff;font-size:13px;font-weight:600}
-    .no-print button{background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;padding:8px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
-    .no-print button:hover{opacity:0.9}
-    .print-body{padding-top:52px}
-  </style>
-</head>
-<body>
-  <div class="no-print">
-    <span>SV Capital — Account Statement</span>
-    <button onclick="window.print()">⬇&nbsp; Save as PDF / Print</button>
-  </div>
-  <div class="print-body">${stmtDoc.innerHTML}</div>
-</body>
-</html>`;
-  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  // Open as new tab (no width/height = new tab, not popup → avoids popup blocker)
-  const win = window.open(url, '_blank');
-  if (!win) {
-    // Blocked or native app — download the file directly
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `SVC-Statement-${new Date().toISOString().slice(0,10)}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    Toast.success('Statement downloaded — open in a browser to save as PDF.');
-  }
-  setTimeout(() => URL.revokeObjectURL(url), 120000);
+  // Inject a temporary print-only area — avoids popup blockers entirely
+  const styleEl = document.createElement('style');
+  styleEl.id = '_svc_print_css';
+  styleEl.textContent = [
+    '@media print{',
+    '  body { visibility: hidden !important; }',
+    '  #_svc_print_area, #_svc_print_area * { visibility: visible !important; }',
+    '  #_svc_print_area {',
+    '    position: fixed !important; inset: 0 !important; width: 100% !important;',
+    '    font-family: Poppins, sans-serif !important;',
+    '    background: #fff !important;',
+    '    -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;',
+    '  }',
+    '  @page { size: A4; margin: 0; }',
+    '}'
+  ].join('');
+  document.head.appendChild(styleEl);
+
+  const area = document.createElement('div');
+  area.id = '_svc_print_area';
+  area.innerHTML = stmtDoc.innerHTML;
+  document.body.appendChild(area);
+
+  window.print();
+
+  // Clean up after the print dialog closes
+  setTimeout(() => { styleEl.remove(); area.remove(); }, 1000);
 }
 
 /* ── Sub-account deposit ─────────────────────── */
@@ -5209,7 +5200,7 @@ const XP_LEVELS = [
   { id: 'cultivator', label: 'Cultivator', min: 600,  icon: 'fa-spa',              color: '#656565' },
   { id: 'harvester',  label: 'Harvester',  min: 1000, icon: 'fa-wheat-awn',        color: '#ff9b0c' },
   { id: 'pioneer',    label: 'Pioneer',    min: 1500, icon: 'fa-compass',          color: '#f59e0b' },
-  { id: 'architect',  label: 'Architect',  min: 2500, icon: 'fa-building-columns', color: '#a855f7' },
+  { id: 'architect',  label: 'Architect',  min: 2500, icon: 'fa-building-columns', color: '#eda5ff' },
   { id: 'luminary',   label: 'Luminary',   min: 5000, icon: 'fa-crown',            color: '#D4AF37' },
 ];
 
@@ -5373,10 +5364,62 @@ function _updateXPNavBadge() {
     if (readyCount > 0) {
       badge.textContent = readyCount;
       badge.style.display = 'inline-flex';
+      _saveNavBadgeCache('xp', readyCount);
     } else {
       badge.style.display = 'none';
+      _saveNavBadgeCache('xp', 0);
     }
   }
+}
+
+/* ─── Nav badge cache — persists counts so they show instantly on next load ─── */
+const _NAV_BADGE_KEY = 'svc_nav_badges';
+function _saveNavBadgeCache(key, value) {
+  try {
+    const cur = JSON.parse(localStorage.getItem(_NAV_BADGE_KEY) || '{}');
+    cur[key] = value;
+    localStorage.setItem(_NAV_BADGE_KEY, JSON.stringify(cur));
+  } catch (_) {}
+}
+function _restoreNavBadgesFromCache() {
+  try {
+    const cache = JSON.parse(localStorage.getItem(_NAV_BADGE_KEY) || '{}');
+    const set = (id, val) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (val > 0) { el.textContent = val; el.style.display = 'inline-flex'; }
+      else el.style.display = 'none';
+    };
+    set('subacctsBadge', cache.subaccounts || 0);
+    set('xpNavBadge',    cache.xp || 0);
+    set('giftsBadge',    cache.gifts || 0);
+  } catch (_) {}
+}
+async function _prefetchNavBadges() {
+  try {
+    // Sub-accounts count
+    const myId = PORTAL.investor?.id;
+    if (myId) {
+      const res = await API._fetch('GET', 'tables/sub_accounts', null, { parent_investor_id: myId, limit: 200 });
+      const all = (res.data || []).filter(a => a.parent_investor_id === myId || a.investor_id === myId);
+      PORTAL.subAccounts = all;
+      const sb = document.getElementById('subacctsBadge');
+      if (sb) {
+        sb.textContent = all.length || '';
+        sb.style.display = all.length ? '' : 'none';
+      }
+      _saveNavBadgeCache('subaccounts', all.length);
+    }
+    // Received gifts count (unclaimed = pending)
+    const giftsRes = await API._fetch('GET', 'gifts/received');
+    const pending = (giftsRes.data || []).filter(g => g.status === 'pending').length;
+    const gb = document.getElementById('giftsBadge');
+    if (gb) {
+      if (pending > 0) { gb.textContent = pending; gb.style.display = 'inline-flex'; }
+      else gb.style.display = 'none';
+    }
+    _saveNavBadgeCache('gifts', pending);
+  } catch (_) {}
 }
 
 /* ═════════════════════════════════════════════════════════
@@ -5757,7 +5800,7 @@ function _launchConfettiParticles() {
   const container = document.getElementById('levelupConfetti');
   if (!container) return;
   container.innerHTML = '';
-  const colors = ['#ff9b0c', '#22c55e', '#656565', '#D4AF37', '#a855f7'];
+  const colors = ['#ff9b0c', '#22c55e', '#656565', '#D4AF37', '#eda5ff'];
   for (let i = 0; i < 40; i++) {
     const p = document.createElement('span');
     p.style.cssText = `
@@ -5845,7 +5888,7 @@ Each solar project undergoes technical assessment, legal review, and business vi
   {
     id: 'learn_cattle', track: 'explorer', order: 4,
     title: 'Cattle Farming', readTime: 8, xp: 50,
-    icon: 'fa-cow', color: '#a855f7',
+    icon: 'fa-cow', color: '#eda5ff',
     keyPoints: [
       'Cattle are bought at auction, raised on a commercial feedlot, and sold at market',
       'A cattle cycle typically runs around 12 months at 12–16% p.a.',
@@ -5889,7 +5932,7 @@ Our data shows that investors with 3+ active product types consistently achieve 
   {
     id: 'learn_risk', track: 'builder', order: 1,
     title: 'Risk vs Return', readTime: 8, xp: 50,
-    icon: 'fa-scale-balanced', color: '#a855f7',
+    icon: 'fa-scale-balanced', color: '#eda5ff',
     keyPoints: [
       'Higher potential returns always come with higher risk',
       'Each product has a published risk profile — Low, Medium, Medium-High or High',
@@ -5998,7 +6041,7 @@ For larger portfolios (R500,000+), consider consulting an estate planner about s
 const LEARN_TRACKS = [
   { id: 'explorer',   label: 'Explorer',   desc: 'New to investing — start here',        icon: 'fa-compass',          color: '#656565',  minInvested: 0 },
   { id: 'builder',    label: 'Builder',    desc: 'Growing your portfolio',                icon: 'fa-hammer',           color: '#22c55e',  minInvested: 5000 },
-  { id: 'strategist', label: 'Strategist', desc: 'Advanced portfolio management',         icon: 'fa-chess-knight',     color: '#a855f7',  minInvested: 50000 },
+  { id: 'strategist', label: 'Strategist', desc: 'Advanced portfolio management',         icon: 'fa-chess-knight',     color: '#eda5ff',  minInvested: 50000 },
 ];
 
 let _learnActiveTrack = null;
@@ -6419,7 +6462,7 @@ const POLICY_SECTIONS = [
   {
     id: 'pol_popia',
     icon: 'fa-lock',
-    color: '#7c3aed',
+    color: '#eda5ff',
     title: 'POPIA Notice',
     staticContent: `<p><em>Issued in compliance with Section 18 of the Protection of Personal Information Act 4 of 2013 (POPIA) &nbsp;·&nbsp; Version 1.0</em></p>
 
@@ -7247,6 +7290,7 @@ async function loadSubAccounts() {
   if (badge) {
     badge.textContent = PORTAL.subAccounts.length || '';
     badge.style.display = PORTAL.subAccounts.length ? '' : 'none';
+    _saveNavBadgeCache('subaccounts', PORTAL.subAccounts.length);
   }
 }
 
@@ -9307,7 +9351,7 @@ async function cancelGift(giftId) {
 }
 
 function _launchGiftConfetti() {
-  const colours = ['#ff9b0c','#ff5229','#D4AF37','#22c55e','#a855f7'];
+  const colours = ['#ff9b0c','#ff5229','#D4AF37','#22c55e','#eda5ff'];
   for (let i = 0; i < 60; i++) {
     const el = document.createElement('div');
     el.style.cssText = `position:fixed;top:${Math.random()*40}%;left:${Math.random()*100}%;
@@ -10807,7 +10851,7 @@ function _renderAnalyticsAllocChart() {
   });
   const entries = Object.entries(byPool).sort((a, b) => b[1] - a[1]);
   const total   = entries.reduce((s, [, v]) => s + v, 0);
-  const COLORS  = ['#FF9B0C','#a855f7','#656565','#22c55e','#ef4444','#656565','#f97316','#8b5cf6'];
+  const COLORS  = ['#FF9B0C','#eda5ff','#656565','#22c55e','#ef4444','#656565','#f97316','#eda5ff'];
 
   if (PORTAL.charts.analyticsAlloc) { PORTAL.charts.analyticsAlloc.destroy(); }
   PORTAL.charts.analyticsAlloc = new Chart(ctx, {
@@ -10842,7 +10886,7 @@ function _renderAnalyticsTimeline() {
     return;
   }
   const statusMeta = s => {
-    const map = { active:'#22c55e', paid_out:'#656565', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316' };
+    const map = { active:'#22c55e', paid_out:'#656565', matured:'#eda5ff', cancelled:'#ef4444', pending:'#f97316' };
     return map[s] || '#9ca3af';
   };
   const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';
