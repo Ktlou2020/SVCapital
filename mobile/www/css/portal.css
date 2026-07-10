@@ -4,8 +4,8 @@
 
 /* ─── Portfolio Hero ─── */
 .portfolio-hero {
-  background: linear-gradient(135deg, var(--dark-3) 0%, var(--dark-4) 100%);
-  border: 1px solid var(--border-gold);
+  background: linear-gradient(135deg, #707070 0%, #565656 100%);
+  border: 1px solid rgba(255,255,255,0.12);
   border-radius: var(--radius-xl);
   padding: 28px;
   display: grid;
@@ -21,7 +21,7 @@
   position: absolute;
   top: -60px; right: -60px;
   width: 200px; height: 200px;
-  background: radial-gradient(circle, rgba(212,175,55,0.12), transparent 70%);
+  background: radial-gradient(circle, rgba(255,155,12,0.10), transparent 70%);
   border-radius: 50%;
   pointer-events: none;
 }

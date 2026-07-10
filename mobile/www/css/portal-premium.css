@@ -170,7 +170,7 @@
 .stat-card--gold::after  { background: linear-gradient(90deg, #FF9B0C, #D4AF37); }
 .stat-card--green::after { background: linear-gradient(90deg, #22c55e, #16a34a); }
 .stat-card--blue::after  { background: linear-gradient(90deg, #656565, #656565); }
-.stat-card--purple::after{ background: linear-gradient(90deg, #a855f7, #656565); }
+.stat-card--purple::after{ background: linear-gradient(90deg, #eda5ff, #c070d8); }
 
 .stat-card__value {
   font-size: 1.65rem !important;

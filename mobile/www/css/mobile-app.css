@@ -366,6 +366,8 @@ input, textarea, [contenteditable] {
   border-radius: 16px !important;
   margin-bottom: 10px !important;
   gap: 12px !important;
+  background: linear-gradient(135deg, #707070 0%, #565656 100%) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
   /* Create a stacking context so any inner GPU layers (charts) don't bleed
      out into the parent stacking context and cause sibling content to blank. */
   position: relative !important;
@@ -1918,7 +1920,7 @@ body,
 }
 /* Icon colours per button (nth-child within the flex column) */
 #view-overview .panel .panel__body .btn--secondary:nth-child(2) i { background: rgba(255,155,12,0.12) !important; color: #ff9b0c !important; }
-#view-overview .panel .panel__body .btn--secondary:nth-child(3) i { background: rgba(168,85,247,0.1) !important; color: #a855f7 !important; }
+#view-overview .panel .panel__body .btn--secondary:nth-child(3) i { background: rgba(168,85,247,0.1) !important; color: #eda5ff !important; }
 #view-overview .panel .panel__body .btn--secondary:nth-child(4) i { background: rgba(47,140,155,0.1) !important; color: #2f8c9b !important; }
 
 /* ── Performance panel — 2×2 stat grid ──────────────────── */
@@ -4489,8 +4491,12 @@ body,
   box-sizing: border-box !important;
 }
 
-/* Include-sections grid: keep 2-up but allow wrap on very small */
-#view-statement div[style*="grid-template-columns:1fr 1fr"] {
+/* Date-period inputs: stack vertically to prevent overlap */
+#view-statement div[style*="gap:14px"] {
+  grid-template-columns: 1fr !important;
+}
+/* Include-sections checkboxes: keep 2 columns */
+#view-statement div[style*="grid-template-columns:1fr 1fr"][style*="gap:8px"] {
   grid-template-columns: 1fr 1fr !important;
 }
 
@@ -4503,6 +4509,9 @@ body,
 /* Ensure the rendered statement document scrolls horizontally rather than
    breaking the page layout */
 #statementDocument { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
+/* Render the statement body at its intended desktop width so grids/tables
+   are never squished — it scrolls inside the auto wrapper above */
+#stmtPrintArea { min-width: 700px !important; box-sizing: border-box !important; }
 
 /* ═══════════════════════════════════════════════════════════════
    SECTION 44 — MATURITY INSTRUCTIONS: HEADER + NOTICE + CARDS
@@ -5483,7 +5492,7 @@ i.fa, i.fas, i.far, i.fab, i.fal, i.fa-solid, i.fa-regular, i.fa-brands,
   top: 0 !important; left: 0 !important; width: 100% !important; height: 3px !important;
   background: linear-gradient(90deg,#FF8215,#ff5229) !important;
 }
-#view-quests .rewards-stat:nth-child(2)::before { background: linear-gradient(90deg,#a855f7,#7c3aed) !important; }
+#view-quests .rewards-stat:nth-child(2)::before { background: linear-gradient(90deg,#eda5ff,#eda5ff) !important; }
 #view-quests .rewards-stat:nth-child(3)::before { background: linear-gradient(90deg,#22c55e,#16a34a) !important; }
 #view-quests .rewards-stat:nth-child(4)::before { background: linear-gradient(90deg,#f59e0b,#d97706) !important; }
 #view-quests .rewards-stat:nth-child(5)::before { background: linear-gradient(90deg,#D4AF37,#b8860b) !important; }
