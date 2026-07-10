@@ -1988,7 +1988,12 @@ body,
 .perf-row__value.neutral  { color: #1a1a1a !important; }
 .perf-row__value.warning  { color: #ff9b0c !important; }
 
-/* ── Create modal: type selector strong active state (mobile) ── */
+/* ── Create modal: type selector grid + active state (mobile) ── */
+.sa-type-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 12px !important;
+}
 .sa-type-btn {
   background: rgba(0,0,0,0.03) !important;
   border: 2px solid rgba(0,0,0,0.1) !important;

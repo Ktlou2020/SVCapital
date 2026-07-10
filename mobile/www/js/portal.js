@@ -1266,6 +1266,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (el) el.innerHTML = _skelSpan;
   });
 
+  // Restore nav badge counts from cache so they appear instantly before API data arrives
+  _restoreNavBadgesFromCache();
+
   // Immediately populate greeting from cached user so name never stays "Loading..."
   try {
     const cached = JSON.parse(localStorage.getItem('svc_user') || '{}');
@@ -1535,6 +1538,9 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
 
     // Load gamification data (non-blocking — don't fail portal if quests fail)
     loadQuestData().catch(err => console.warn('[Quests] load error:', err.message));
+
+    // Pre-populate nav badges non-blocking so counts appear without navigating
+    _prefetchNavBadges();
   } catch (e) {
     console.error(`loadPortalData error (attempt ${_attempt + 1}):`, e);
 
@@ -5373,10 +5379,62 @@ function _updateXPNavBadge() {
     if (readyCount > 0) {
       badge.textContent = readyCount;
       badge.style.display = 'inline-flex';
+      _saveNavBadgeCache('xp', readyCount);
     } else {
       badge.style.display = 'none';
+      _saveNavBadgeCache('xp', 0);
     }
   }
+}
+
+/* ─── Nav badge cache — persists counts so they show instantly on next load ─── */
+const _NAV_BADGE_KEY = 'svc_nav_badges';
+function _saveNavBadgeCache(key, value) {
+  try {
+    const cur = JSON.parse(localStorage.getItem(_NAV_BADGE_KEY) || '{}');
+    cur[key] = value;
+    localStorage.setItem(_NAV_BADGE_KEY, JSON.stringify(cur));
+  } catch (_) {}
+}
+function _restoreNavBadgesFromCache() {
+  try {
+    const cache = JSON.parse(localStorage.getItem(_NAV_BADGE_KEY) || '{}');
+    const set = (id, val) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (val > 0) { el.textContent = val; el.style.display = 'inline-flex'; }
+      else el.style.display = 'none';
+    };
+    set('subacctsBadge', cache.subaccounts || 0);
+    set('xpNavBadge',    cache.xp || 0);
+    set('giftsBadge',    cache.gifts || 0);
+  } catch (_) {}
+}
+async function _prefetchNavBadges() {
+  try {
+    // Sub-accounts count
+    const myId = PORTAL.investor?.id;
+    if (myId) {
+      const res = await API._fetch('GET', 'tables/sub_accounts', null, { parent_investor_id: myId, limit: 200 });
+      const all = (res.data || []).filter(a => a.parent_investor_id === myId || a.investor_id === myId);
+      PORTAL.subAccounts = all;
+      const sb = document.getElementById('subacctsBadge');
+      if (sb) {
+        sb.textContent = all.length || '';
+        sb.style.display = all.length ? '' : 'none';
+      }
+      _saveNavBadgeCache('subaccounts', all.length);
+    }
+    // Received gifts count (unclaimed = pending)
+    const giftsRes = await API._fetch('GET', 'gifts/received');
+    const pending = (giftsRes.data || []).filter(g => g.status === 'pending').length;
+    const gb = document.getElementById('giftsBadge');
+    if (gb) {
+      if (pending > 0) { gb.textContent = pending; gb.style.display = 'inline-flex'; }
+      else gb.style.display = 'none';
+    }
+    _saveNavBadgeCache('gifts', pending);
+  } catch (_) {}
 }
 
 /* ═════════════════════════════════════════════════════════
@@ -7247,6 +7305,7 @@ async function loadSubAccounts() {
   if (badge) {
     badge.textContent = PORTAL.subAccounts.length || '';
     badge.style.display = PORTAL.subAccounts.length ? '' : 'none';
+    _saveNavBadgeCache('subaccounts', PORTAL.subAccounts.length);
   }
 }
 
