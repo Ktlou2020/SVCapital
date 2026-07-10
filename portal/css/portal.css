@@ -388,7 +388,7 @@
   background: radial-gradient(circle, rgba(255,130,21,0.10), transparent 70%) !important;
 }
 
-/* Wallet card – CI teal */
+/* Wallet card – CI purple */
 .wallet-card {
   background: linear-gradient(135deg, #656565 0%, #656565 100%) !important;
 }
@@ -987,3 +987,41 @@ h1, h2, h3, h4, h5, h6, a, li, td, th, option {
   font-size: 0.8rem !important;
   line-height: 34px;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Portfolio hero — brand purple (CI lilac #eda5ff)
+   html+body prefix raises specificity to (0,1,2) — beats every
+   (0,1,0) !important rule in portal-premium.css
+   ═══════════════════════════════════════════════════════════════ */
+:root { --ci-lilac: #eda5ff; }
+
+html body .portfolio-hero {
+  background: linear-gradient(140deg, #eda5ff 0%, #d882f8 50%, #c055e0 100%) !important;
+  border: 1px solid rgba(255,255,255,0.30) !important;
+  box-shadow: 0 24px 64px rgba(192,85,224,0.22), inset 0 1px 0 rgba(255,255,255,0.25) !important;
+}
+html body .portfolio-hero::before {
+  background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 68%) !important;
+}
+html body .portfolio-hero::after {
+  background: radial-gradient(circle, rgba(255,255,255,0.10) 0%, transparent 68%) !important;
+}
+html body .portfolio-hero__value {
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  -webkit-text-fill-color: #1a0030 !important;
+  color: #1a0030 !important;
+}
+html body .portfolio-hero__label { color: rgba(60,0,80,0.6) !important; }
+html body .ph-stat {
+  background: rgba(255,255,255,0.22) !important;
+  border: 1px solid rgba(255,255,255,0.35) !important;
+}
+html body .ph-stat:hover { background: rgba(255,255,255,0.30) !important; }
+html body .ph-stat__label { color: rgba(60,0,80,0.6) !important; }
+html body .ph-stat__value {
+  color: #1a0030 !important;
+  -webkit-text-fill-color: #1a0030 !important;
+}
+html body .ph-stat__value.text-green { color: #15803d !important; -webkit-text-fill-color: #15803d !important; }

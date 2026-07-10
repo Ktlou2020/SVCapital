@@ -529,7 +529,6 @@
     pointer-events: auto;
     opacity: 1;
   }
-  /* Sidebar sits above backdrop on mobile */
   .sidebar { z-index: 200; }
 }
 
@@ -547,11 +546,8 @@
    MOBILE LAYOUT OVERRIDES
    ═══════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  /* Prevent horizontal overflow */
   body { overflow-x: hidden; }
   .page-content { padding: 12px 14px !important; }
-
-  /* Portfolio hero: single column on small screens */
   .portfolio-hero {
     grid-template-columns: 1fr !important;
     padding: 20px 16px !important;
@@ -570,19 +566,11 @@
   .portfolio-hero__stats::-webkit-scrollbar { display: none; }
   .ph-stat { flex-shrink: 0; }
   .portfolio-hero__value { font-size: 2rem !important; }
-
-  /* Topbar: hide website link on mobile */
   .topbar__actions .btn[href*="index.html"] { display: none; }
-
-  /* Larger tap targets for nav items */
   .nav-item { min-height: 44px !important; padding: 10px 16px !important; }
   .topbar-btn { min-width: 40px !important; min-height: 40px !important; }
-
-  /* Tables: horizontal scroll */
   .data-table { font-size: 0.78rem; }
   .table-card { overflow-x: auto; }
-
-  /* Modals: full width on mobile */
   .modal__box {
     width: calc(100% - 24px) !important;
     max-width: 100% !important;
@@ -590,18 +578,10 @@
     max-height: 92vh;
     overflow-y: auto;
   }
-
-  /* Grid layouts stack on mobile */
   .grid-layout { grid-template-columns: 1fr !important; }
-
-  /* Wallet sub-tabs: full width */
   .wallet-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-
-  /* Quest view rewards stats */
   .rewards-stats-row { overflow-x: auto; flex-wrap: nowrap !important; }
   .rewards-stat { flex-shrink: 0; }
-
-  /* Hide sign out text on very small screens, keep icon */
   .topbar__actions .btn--secondary[href*="login"] .fa-arrow-right-from-bracket + * { display: none; }
 }
 
@@ -610,7 +590,6 @@
   .ph-stat__value { font-size: 0.85rem !important; }
   .welcome-name { font-size: 1.2rem !important; }
   .topbar { padding: 10px 12px !important; }
-  /* Sign out button: icon only */
   .topbar__actions .btn--secondary[href*="login"] { padding: 6px 8px !important; }
 }
 
@@ -696,10 +675,9 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   MOBILE UX ENHANCEMENTS — world-class mobile experience
+   MOBILE UX ENHANCEMENTS
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Touch devices: remove hover effects, add press states ──── */
 @media (hover: none) and (pointer: coarse) {
   .btn:hover { transform: none !important; }
   .market-pool-card:hover,
@@ -715,7 +693,6 @@
   .nav-item:active { background: rgba(255,155,12,0.08) !important; }
 }
 
-/* ── Modal bottom sheets on mobile ──────────────────────────── */
 @media (max-width: 640px) {
   .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
   .modal__box {
@@ -737,7 +714,6 @@
     overflow-y: auto !important;
     padding-bottom: max(20px, env(safe-area-inset-bottom)) !important;
   }
-  /* Drag handle pill on bottom sheets */
   .modal__box::before,
   .survey-modal-box::before {
     content: '';
@@ -749,12 +725,10 @@
     margin: 10px auto 2px;
     flex-shrink: 0;
   }
-  /* Level-up celebration: stays centered */
   .modal-overlay:has(.levelup-modal-box) { align-items: center !important; padding: 20px !important; }
   .levelup-modal-box { border-radius: 22px !important; width: calc(100% - 32px) !important; margin: auto !important; }
 }
 
-/* ── Touch target enforcement: 44px minimum ─────────────────── */
 @media (max-width: 768px) {
   .form-input,
   .form-select,
@@ -771,7 +745,6 @@
   .faq-item summary { min-height: 44px !important; padding: 12px 16px !important; }
 }
 
-/* ── Typography floor — minimum legible sizes ───────────────── */
 @media (max-width: 640px) {
   .form-label { font-size: 0.8rem !important; }
   .panel__body { font-size: 0.85rem !important; }
@@ -780,7 +753,6 @@
   .rewards-stat__val { font-size: 1rem !important; }
 }
 
-/* ── Topbar: tighter on very small screens ───────────────────── */
 @media (max-width: 420px) {
   #tourBtn { display: none !important; }
   .topbar__actions { gap: 2px !important; }
@@ -788,12 +760,10 @@
   .topbar__title { font-size: 0.92rem !important; }
 }
 
-/* ── Portfolio stats: right-edge scroll hint ─────────────────── */
 @media (max-width: 768px) {
   .portfolio-hero { position: relative; overflow: hidden; }
 }
 
-/* ── Quest cards: single column on mobile ───────────────────── */
 @media (max-width: 640px) {
   .quest-cards-grid { grid-template-columns: 1fr !important; }
   .xp-hero { flex-direction: column !important; align-items: flex-start !important; gap: 14px !important; }
@@ -803,13 +773,11 @@
   .level-step__icon { width: 36px !important; height: 36px !important; font-size: 0.9rem !important; }
 }
 
-/* ── PWA install banner: float above MBN ────────────────────── */
 @media (max-width: 768px) {
   #pwaInstallBanner,
   #iosPwaBanner { bottom: calc(72px + env(safe-area-inset-bottom) + 10px) !important; }
 }
 
-/* ── Notification panel: anchored bottom on mobile ──────────── */
 @media (max-width: 540px) {
   #notifPanel {
     position: fixed !important;
@@ -821,7 +789,6 @@
   }
 }
 
-/* ── Tab bars: smooth horizontal scroll ─────────────────────── */
 @media (max-width: 768px) {
   .wallet-tabs,
   .tab-bar {
@@ -835,33 +802,26 @@
   .tab-bar::-webkit-scrollbar-thumb { background: rgba(255,130,21,0.3); border-radius: 3px; }
 }
 
-/* ── Panel body spacing on mobile ───────────────────────────── */
 @media (max-width: 640px) {
   .panel { margin-bottom: 12px !important; }
   .market-pool-card,
   .investment-card { padding: 14px 14px !important; }
 }
 
-/* ── Sidebar footer legal links: better touch spacing ───────── */
 @media (max-width: 900px) {
   .sidebar__footer { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 }
 
-/* ── Invest guide strip: scroll on mobile ───────────────────── */
 @media (max-width: 640px) {
   .invest-guide-strip { overflow-x: auto !important; flex-wrap: nowrap !important; -webkit-overflow-scrolling: touch; }
   .invest-step { flex-shrink: 0 !important; min-width: 120px !important; }
 }
 
-/* ── Better active states for list items ────────────────────── */
 @media (hover: none) {
   .my-ticket-item:active,
   .faq-quick-item:active { background: rgba(255,155,12,0.05) !important; }
 }
 
-/* ─────────────────────────────────────────────────────────────
-   Poppins font enforcement — override DM Serif Display globally
-   ───────────────────────────────────────────────────────────── */
 body, button, input, select, textarea, label, p, span, div,
 h1, h2, h3, h4, h5, h6, a, li, td, th, option {
   font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
@@ -871,9 +831,6 @@ h1, h2, h3, h4, h5, h6, a, li, td, th, option {
   font-family: 'Poppins', sans-serif !important;
 }
 
-/* ─────────────────────────────────────────────────────────────
-   Learning Hub Quiz
-   ───────────────────────────────────────────────────────────── */
 .learn-quiz-section {
   background: #f8fafc;
   border-top: 1.5px solid rgba(0,0,0,0.08);
@@ -925,9 +882,6 @@ h1, h2, h3, h4, h5, h6, a, li, td, th, option {
   border: 1.5px solid #fecaca; border-radius: 10px; margin-top: 14px; line-height: 1.45;
 }
 
-/* ─────────────────────────────────────────────────────────────
-   Platform Policies View
-   ───────────────────────────────────────────────────────────── */
 .policies-header {
   display: flex; align-items: center; gap: 16px;
   margin-bottom: 24px; padding-bottom: 20px;
@@ -977,7 +931,6 @@ h1, h2, h3, h4, h5, h6, a, li, td, th, option {
 }
 .policy-accordion__content strong { font-weight: 700; color: #1a1a1a; }
 
-/* Investment filter product select — ID specificity beats !important class rules */
 #myInvProductFilter {
   width: 160px !important;
   height: 34px !important;
@@ -986,3 +939,37 @@ h1, h2, h3, h4, h5, h6, a, li, td, th, option {
   font-size: 0.8rem !important;
   line-height: 34px;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Portfolio hero — brand purple (CI lilac #eda5ff)
+   html+body prefix raises specificity to (0,1,2) — beats every
+   (0,1,0) !important rule in mobile-app.css
+   ═══════════════════════════════════════════════════════════════ */
+:root { --ci-lilac: #eda5ff; }
+
+html body .portfolio-hero {
+  background: linear-gradient(140deg, #eda5ff 0%, #d882f8 55%, #c870e8 100%) !important;
+  border: 1px solid rgba(237,165,255,0.4) !important;
+  box-shadow: 0 12px 40px rgba(192,85,224,0.22) !important;
+}
+html body .portfolio-hero::before {
+  background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 68%) !important;
+}
+html body .portfolio-hero::after {
+  background: radial-gradient(circle, rgba(255,255,255,0.10) 0%, transparent 68%) !important;
+}
+html body .portfolio-hero__value {
+  -webkit-text-fill-color: #1a0030 !important;
+  background: none !important;
+  background-clip: unset !important;
+  -webkit-background-clip: unset !important;
+  color: #1a0030 !important;
+}
+html body .portfolio-hero__label { color: rgba(26,0,48,0.55) !important; }
+html body .ph-stat {
+  background: rgba(255,255,255,0.22) !important;
+  border: 1px solid rgba(255,255,255,0.35) !important;
+}
+html body .ph-stat__label { color: rgba(26,0,48,0.55) !important; }
+html body .ph-stat__value { color: #1a0030 !important; -webkit-text-fill-color: #1a0030 !important; }
+html body .ph-stat__value.text-green { color: #15803d !important; -webkit-text-fill-color: #15803d !important; }

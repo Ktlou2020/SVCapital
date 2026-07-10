@@ -354,6 +354,11 @@
     .form-input-wrap .form-input {
       padding-left: 48px !important;
     }
+    /* Higher specificity to survive mobile-app.css !important padding resets on iOS/Android */
+    .form-input-wrap input,
+    .form-input-wrap input.form-input {
+      padding-left: 48px !important;
+    }
 
     .form-input-icon {
       position: absolute;
