@@ -1952,3 +1952,114 @@ html body .wallet-card {
   background: linear-gradient(165deg, #20232e 0%, #15171f 48%, #0d0e14 100%) !important;
   border-color: rgba(255,255,255,0.08) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   My-investments cards — world-class dark treatment (mobile)
+   Overrides portal-premium.css §2231 white default (#ffffff)
+   html body prefix → specificity (0,1,2) beats (0,1,0)
+   ═══════════════════════════════════════════════════════════════ */
+html body .my-inv-card {
+  background: linear-gradient(145deg, #1e1e1e 0%, #161616 100%) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.40) !important;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease !important;
+}
+html body .my-inv-card:hover {
+  border-color: rgba(212,175,55,0.50) !important;
+  box-shadow: 0 6px 32px rgba(0,0,0,0.55) !important;
+  transform: translateY(-2px) !important;
+}
+html body .my-inv-card--paidout { opacity: 0.55 !important; }
+html body .my-inv-card__header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  margin-bottom: 14px !important;
+}
+html body .my-inv-card__name {
+  color: #ffffff !important;
+  font-size: 0.92rem !important;
+  font-weight: 700 !important;
+}
+html body .my-inv-card__partner {
+  color: rgba(255,255,255,0.32) !important;
+  font-size: 0.70rem !important;
+  letter-spacing: 0.03em !important;
+  margin-top: 3px !important;
+}
+html body .my-inv-progress { margin: 0 0 14px !important; }
+html body .my-inv-progress__label {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 7px !important;
+}
+html body .my-inv-progress__label span {
+  font-size: 0.66rem !important;
+  color: rgba(255,255,255,0.42) !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.07em !important;
+}
+html body .my-inv-card .progress-bar {
+  background: rgba(255,255,255,0.07) !important;
+  border-radius: 100px !important;
+  height: 3px !important;
+  overflow: hidden !important;
+}
+html body .my-inv-card .progress-fill {
+  height: 100% !important;
+  border-radius: 100px !important;
+  background: linear-gradient(90deg, #d4af37 0%, #f5d060 100%) !important;
+}
+html body .my-inv-card__stats {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 7px !important;
+  margin: 14px 0 !important;
+}
+html body .my-inv-card .mic-stat {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.06) !important;
+  border-radius: 10px !important;
+  padding: 9px 10px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+html body .my-inv-card .mic-stat__label {
+  display: block !important;
+  font-size: 0.58rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.09em !important;
+  color: rgba(255,255,255,0.38) !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+}
+html body .my-inv-card .mic-stat__value {
+  display: block !important;
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+html body .my-inv-card .mic-stat__value--gold {
+  color: #d4af37 !important;
+  -webkit-text-fill-color: #d4af37 !important;
+}
+html body .my-inv-card .mic-stat__value--green {
+  color: #4ade80 !important;
+  -webkit-text-fill-color: #4ade80 !important;
+}
+html body .my-inv-card .btn--secondary {
+  background: rgba(255,255,255,0.05) !important;
+  border-color: rgba(255,255,255,0.12) !important;
+  color: rgba(255,255,255,0.70) !important;
+  margin-top: 4px !important;
+}
+html body .my-inv-card .btn--secondary:hover {
+  background: rgba(212,175,55,0.10) !important;
+  border-color: rgba(212,175,55,0.40) !important;
+  color: #d4af37 !important;
+}
