@@ -105,7 +105,7 @@ function sendWelcome(investor) {
         <div class="row"><span class="lbl">Email</span><span class="val">${email}</span></div>
         <div class="row"><span class="lbl">Account Status</span><span class="val green">Active</span></div>
       </div>
-      <p><strong>1. Complete FICA verification</strong> — upload your ID and proof of address to unlock all products.<br>
+      <p><strong>1. Complete FICA/KYC verification</strong> — upload your ID and proof of address to unlock all products.<br>
          <strong>2. Top up your wallet</strong> — via Paystack, Ozow, or bank transfer.<br>
          <strong>3. Start investing</strong> — browse our open pools and put your money to work.</p>
       <a href="${BASE_URL}/portal/" class="btn">Go to My Portal →</a>
@@ -553,7 +553,7 @@ function sendKycApproved(investor) {
     to: email,
     subject: 'Identity Verified — You\'re Ready to Invest ✅',
     html: _wrap(`
-      <h2>FICA Verification Approved ✅</h2>
+      <h2>FICA/KYC Verification Approved ✅</h2>
       <p>Hi ${first_name}, great news! Your identity documents have been reviewed and approved by our compliance team.</p>
       <div class="box">
         <div class="row"><span class="lbl">Status</span><span class="val green">Approved</span></div>
@@ -602,9 +602,9 @@ function sendKycRejected(investor, { reason, notes } = {}) {
   const detail = notes || reason || 'The documents provided did not meet our verification requirements.';
   return _send({
     to: email,
-    subject: 'Action Required: FICA Documents Need Attention',
+    subject: 'Action Required: FICA/KYC Documents Need Attention',
     html: _wrap(`
-      <h2>FICA Verification Unsuccessful</h2>
+      <h2>FICA/KYC Verification Unsuccessful</h2>
       <p>Hi ${first_name}, unfortunately we could not verify your identity documents at this time.</p>
       <div class="box">
         <div class="row"><span class="lbl">Status</span><span class="val" style="color:#ef4444">Requires Re-submission</span></div>
@@ -622,12 +622,12 @@ function sendFicaResubmitReminder(investor) {
   const BASE_URL = process.env.BASE_URL || 'https://portal.svcapital.co.za';
   return _send({
     to: investor.email,
-    subject: 'Action Required: Please resubmit your FICA documents',
+    subject: 'Action Required: Please resubmit your FICA/KYC documents',
     html: _wrap(`
-      <h2>FICA Document Re-verification Required</h2>
+      <h2>FICA/KYC Document Re-verification Required</h2>
       <p>Dear ${investor.first_name},</p>
-      <p>Your FICA verification documents are approaching their 3-year validity period. To comply with South African regulatory requirements, we kindly request that you resubmit your identity documents.</p>
-      <p>Please log in to your SV Capital investor portal and navigate to <strong>My Profile → KYC Documents</strong> to upload updated documents.</p>
+      <p>Your FICA/KYC verification documents are approaching their 3-year validity period. To comply with South African regulatory requirements, we kindly request that you resubmit your identity documents.</p>
+      <p>Please log in to your SV Capital investor portal and navigate to <strong>My Profile → FICA/KYC Documents</strong> to upload updated documents.</p>
       <a href="${BASE_URL}/portal/" class="btn">Resubmit Documents</a>
       <p>If you have any questions, please contact our support team.</p>
     `),
