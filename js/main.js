@@ -1013,12 +1013,12 @@ async function _applyLiveProductAverages() {
     delivery: 'delivery',
   };
 
-  // A home key is visible if at least one of its product_types has display_on_homepage=true
+  // A home key is visible only if at least one of its product_types has display_on_homepage === true
   const homeVisible = {};
   Object.keys(calcKeyMap).forEach(homeKey => {
     homeVisible[homeKey] = calcKeyMap[homeKey].some(t => {
       const p = prodByType[t];
-      return p && p.display_on_homepage !== false;
+      return p && !!p.display_on_homepage;
     });
   });
 
@@ -1026,6 +1026,20 @@ async function _applyLiveProductAverages() {
   document.querySelectorAll('.product-card[data-product]').forEach(card => {
     const key = card.dataset.product;
     if (key in homeVisible) card.style.display = homeVisible[key] ? '' : 'none';
+  });
+
+  // Hide/show footer product links
+  document.querySelectorAll('[data-footer-product]').forEach(li => {
+    const key = li.dataset.footerProduct;
+    if (key in homeVisible) li.style.display = homeVisible[key] ? '' : 'none';
+  });
+
+  // Update "X+ Products" stat in the deposit prompt modal
+  const visibleCount = Object.values(homeVisible).filter(Boolean).length;
+  document.querySelectorAll('.dp-stat__val').forEach(el => {
+    if (el.textContent.includes('+') && !isNaN(parseInt(el.textContent))) {
+      el.textContent = visibleCount + '+';
+    }
   });
 
   // Hide/show calculator tabs; if active tab hidden, activate first visible one
