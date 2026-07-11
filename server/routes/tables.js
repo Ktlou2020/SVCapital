@@ -1352,7 +1352,7 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
               );
               for (const entry of waitlist) {
                 await emailService.sendWaitlistNotification(
-                  { email: entry.email, first_name: entry.first_name, last_name: entry.last_name },
+                  { email: entry.email, first_name: entry.first_name, last_name: entry.last_name, id: entry.investor_id },
                   { poolName: updated.pool_name || updated.id }
                 ).catch(e => console.error('[waitlist] email error:', e.message));
                 await pool.query(

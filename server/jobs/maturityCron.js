@@ -338,7 +338,7 @@ async function runMaturityAlerts() {
       if (!(daysLeft <= 31 && daysLeft >= 29) && !(daysLeft <= 8 && daysLeft >= 6)) continue;
 
       await emailService.sendMaturityAlert(
-        { email: inv.email, first_name: inv.first_name },
+        { email: inv.email, first_name: inv.first_name, id: inv.investor_id },
         { poolName: inv.pool_name || inv.pool_id || 'your investment',
           amount: inv.amount, expectedReturn: inv.expected_return || 0,
           endDate: inv.end_date, daysLeft }

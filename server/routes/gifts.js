@@ -115,6 +115,7 @@ router.post('/send', requireAuth, async (req, res) => {
       email.sendGiftReceived(recipientEmail, {
         senderName, amount: amt, message: message?.trim() || null,
         recipientName: `${recipient.first_name} ${recipient.last_name}`.trim(),
+        investorId: recipient.id,
       }).catch(() => {});
     } else {
       const BASE = process.env.BASE_URL || 'https://platform.svcapital.co.za';
