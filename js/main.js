@@ -1022,16 +1022,21 @@ async function _applyLiveProductAverages() {
     });
   });
 
+  // Resolve visibility for any key — homeMap group first, then direct product_type lookup
+  const resolveVisible = key => {
+    if (key in homeVisible) return homeVisible[key];
+    const p = prodByType[key]; // card data-product matches product_type directly
+    return p ? !!p.display_on_homepage : true; // unknown product defaults to shown
+  };
+
   // Hide/show product cards
   document.querySelectorAll('.product-card[data-product]').forEach(card => {
-    const key = card.dataset.product;
-    if (key in homeVisible) card.style.display = homeVisible[key] ? '' : 'none';
+    card.style.display = resolveVisible(card.dataset.product) ? '' : 'none';
   });
 
   // Hide/show footer product links
   document.querySelectorAll('[data-footer-product]').forEach(li => {
-    const key = li.dataset.footerProduct;
-    if (key in homeVisible) li.style.display = homeVisible[key] ? '' : 'none';
+    li.style.display = resolveVisible(li.dataset.footerProduct) ? '' : 'none';
   });
 
   // Update "X+ Products" stat in the deposit prompt modal
