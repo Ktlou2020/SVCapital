@@ -1981,10 +1981,12 @@ html body .wallet-card {
    html body prefix → specificity (0,1,2) beats (0,1,0)
    ═══════════════════════════════════════════════════════════════ */
 html body .my-inv-card {
-  background: linear-gradient(145deg, #1e1e1e 0%, #161616 100%) !important;
+  background: linear-gradient(145deg, #1e2027 0%, #16181e 100%) !important;
   border: 1px solid rgba(255,255,255,0.07) !important;
-  border-radius: 16px !important;
+  border-radius: 18px !important;
   box-shadow: 0 2px 20px rgba(0,0,0,0.35) !important;
+  padding: 18px 20px !important;
+  overflow: visible !important;
   transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease !important;
 }
 html body .my-inv-card:hover {
@@ -1997,12 +1999,13 @@ html body .my-inv-card__header {
   display: flex !important;
   justify-content: space-between !important;
   align-items: flex-start !important;
-  margin-bottom: 14px !important;
+  margin-bottom: 16px !important;
 }
 html body .my-inv-card__name {
   color: #ffffff !important;
   font-size: 0.93rem !important;
   font-weight: 700 !important;
+  line-height: 1.3 !important;
 }
 html body .my-inv-card__partner {
   color: rgba(255,255,255,0.32) !important;
@@ -2010,12 +2013,12 @@ html body .my-inv-card__partner {
   letter-spacing: 0.03em !important;
   margin-top: 3px !important;
 }
-html body .my-inv-progress { margin: 0 0 14px !important; }
+html body .my-inv-progress { margin: 0 0 16px !important; }
 html body .my-inv-progress__label {
   display: flex !important;
   justify-content: space-between !important;
   align-items: center !important;
-  margin-bottom: 7px !important;
+  margin-bottom: 8px !important;
 }
 html body .my-inv-progress__label span {
   font-size: 0.68rem !important;
@@ -2027,7 +2030,7 @@ html body .my-inv-progress__label span {
 html body .my-inv-card .progress-bar {
   background: rgba(255,255,255,0.07) !important;
   border-radius: 100px !important;
-  height: 3px !important;
+  height: 4px !important;
   overflow: hidden !important;
 }
 html body .my-inv-card .progress-fill {
@@ -2039,32 +2042,36 @@ html body .my-inv-card__stats {
   display: grid !important;
   grid-template-columns: repeat(3, 1fr) !important;
   gap: 8px !important;
-  margin: 14px 0 !important;
+  margin: 16px 0 !important;
 }
 html body .my-inv-card .mic-stat {
   background: rgba(255,255,255,0.04) !important;
   border: 1px solid rgba(255,255,255,0.06) !important;
   border-radius: 10px !important;
-  padding: 10px 12px !important;
+  padding: 11px 12px !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 4px !important;
+  gap: 5px !important;
+  min-width: 0 !important;
 }
 html body .my-inv-card .mic-stat__label {
   display: block !important;
-  font-size: 0.60rem !important;
+  font-size: 0.58rem !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.09em !important;
+  letter-spacing: 0.08em !important;
   color: rgba(255,255,255,0.38) !important;
   font-weight: 700 !important;
-  white-space: nowrap !important;
+  line-height: 1.3 !important;
+  white-space: normal !important;
+  word-break: break-word !important;
 }
 html body .my-inv-card .mic-stat__value {
   display: block !important;
-  font-size: 0.88rem !important;
+  font-size: 0.90rem !important;
   font-weight: 700 !important;
   color: #ffffff !important;
   -webkit-text-fill-color: #ffffff !important;
+  line-height: 1.2 !important;
 }
 html body .my-inv-card .mic-stat__value--gold {
   color: #d4af37 !important;
@@ -2078,7 +2085,7 @@ html body .my-inv-card .btn--secondary {
   background: rgba(255,255,255,0.05) !important;
   border-color: rgba(255,255,255,0.12) !important;
   color: rgba(255,255,255,0.70) !important;
-  margin-top: 4px !important;
+  margin-top: 6px !important;
 }
 html body .my-inv-card .btn--secondary:hover {
   background: rgba(212,175,55,0.10) !important;
