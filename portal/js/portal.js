@@ -5491,6 +5491,94 @@ function renderQuestView() {
   const refList    = document.getElementById('rewardsReferralList');
   const refTxns    = PORTAL.transactions.filter(t => t.type === 'referral_bonus').sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   if (refSection) refSection.style.display = 'none';   // Referral Rewards History hidden (feature not live)
+
+  // Load existing feedback state for the Leave a Review card
+  loadMyFeedback();
+}
+
+/* ─── Feedback Form ─────────────────────────────────────── */
+let _fbRating = 0;
+
+function setFbStar(n) {
+  _fbRating = n;
+  document.querySelectorAll('.fb-star').forEach(s => {
+    s.style.color = parseInt(s.dataset.v) <= n ? '#ff9b0c' : '#d1d5db';
+  });
+}
+
+async function loadMyFeedback() {
+  try {
+    const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'testimonials/my', {
+      headers: { Authorization: 'Bearer ' + (localStorage.getItem('svc_token') || '') },
+    });
+    const { data } = await res.json();
+    if (data) {
+      const wrap = document.getElementById('feedbackFormWrap');
+      const done = document.getElementById('feedbackSubmitted');
+      const statusEl = document.getElementById('feedbackSubmittedStatus');
+      if (wrap) wrap.style.display = 'none';
+      if (done) done.style.display = '';
+      if (statusEl) {
+        const msgs = { pending: 'Your review is pending admin approval.', approved: '✓ Your review is live on the homepage!', rejected: 'Your review was not approved. You can resubmit.' };
+        statusEl.textContent = msgs[data.status] || '';
+        if (data.status === 'rejected') {
+          statusEl.innerHTML += ` <button class="btn btn--sm btn--ghost" style="margin-top:8px;display:block" onclick="document.getElementById('feedbackFormWrap').style.display='';document.getElementById('feedbackSubmitted').style.display='none'">Edit & Resubmit</button>`;
+          if (wrap) wrap.style.display = '';
+          if (done) done.style.display = 'none';
+          // Pre-fill
+          const bodyEl = document.getElementById('feedbackBody');
+          const lblEl = document.getElementById('feedbackProductLabel');
+          if (bodyEl) bodyEl.value = data.body || '';
+          if (lblEl) lblEl.value = data.product_label || '';
+          setFbStar(data.rating || 0);
+        }
+      }
+    }
+  } catch (_) {}
+}
+
+async function submitFeedback() {
+  const btn = document.getElementById('feedbackSubmitBtn');
+  const msg = document.getElementById('feedbackMsg');
+  const body = document.getElementById('feedbackBody')?.value?.trim();
+  const productLabel = document.getElementById('feedbackProductLabel')?.value?.trim();
+
+  if (!_fbRating) { if (msg) { msg.style.display = ''; msg.style.color = '#ef4444'; msg.textContent = 'Please select a star rating.'; } return; }
+  if (!body || body.length < 20) { if (msg) { msg.style.display = ''; msg.style.color = '#ef4444'; msg.textContent = 'Please write at least 20 characters.'; } return; }
+
+  if (btn) btn.disabled = true;
+  if (msg) msg.style.display = 'none';
+
+  try {
+    const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'testimonials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (localStorage.getItem('svc_token') || '') },
+      body: JSON.stringify({ rating: _fbRating, body, product_label: productLabel }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Submission failed');
+
+    const wrap = document.getElementById('feedbackFormWrap');
+    const done = document.getElementById('feedbackSubmitted');
+    const statusEl = document.getElementById('feedbackSubmittedStatus');
+    if (wrap) wrap.style.display = 'none';
+    if (done) done.style.display = '';
+    if (statusEl) statusEl.textContent = 'Your review is pending admin approval.';
+
+    if (data.xpAwarded > 0) {
+      Toast.success(`+${data.xpAwarded} XP earned for your feedback! 🌟`);
+      if (PORTAL.quests) {
+        PORTAL.quests.xp = (PORTAL.quests.xp || 0) + data.xpAwarded;
+        renderXPWidget && renderXPWidget();
+        _updateXPNavBadge && _updateXPNavBadge();
+      }
+    } else {
+      Toast.success('Feedback submitted — thank you!');
+    }
+  } catch (err) {
+    if (msg) { msg.style.display = ''; msg.style.color = '#ef4444'; msg.textContent = err.message; }
+    if (btn) btn.disabled = false;
+  }
 }
 
 /* ─── Claim a milestone quest via button ─────────────────── */

@@ -363,7 +363,7 @@ function navigate(view, btnEl) {
     auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications', aml: 'AML Compliance Review',
     migrate: 'Data Migration', compliance: 'Compliance Calendar', reconciliation: 'Financial Reconciliation',
     terms: 'Terms of Use', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest',
-    opsconsole: 'Operations Console'
+    opsconsole: 'Operations Console', feedback: 'Client Feedback',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -393,6 +393,7 @@ function navigate(view, btnEl) {
     'accepted-docs': loadAcceptedDocuments,
     intlinterest: loadIntlInterest,
     opsconsole: loadOpsConsole,
+    feedback: () => loadFeedback('pending'),
   };
   if (loaders[view]) loaders[view]();
   // Close mobile sidebar after navigation
@@ -7571,3 +7572,86 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey||e.metaKey) && e.key==='k') { e.preventDefault(); openAdminCmd(); }
   if (e.key==='Escape') { const ov=document.getElementById('adminCmdOverlay'); if(ov&&ov.style.display!=='none') closeAdminCmd(); }
 });
+
+
+/* ══════════════════════════════════════════════════════════════
+   FEEDBACK / TESTIMONIALS REVIEW
+══════════════════════════════════════════════════════════════ */
+let _fbCurrentFilter = 'pending';
+
+async function loadFeedback(filter = 'pending') {
+  _fbCurrentFilter = filter;
+  ['pending','approved','rejected','all'].forEach(f => {
+    const btn = document.getElementById(`fbFilter${f.charAt(0).toUpperCase()+f.slice(1)}`);
+    if (btn) btn.style.fontWeight = f === filter ? '800' : '';
+  });
+  const list = document.getElementById('feedbackList');
+  if (!list) return;
+  list.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px 0">Loading…</p>';
+  try {
+    const data = await API.get('/api/testimonials');
+    let rows = data.data || [];
+    if (filter !== 'all') rows = rows.filter(r => r.status === filter);
+
+    const badge = document.getElementById('feedbackBadge');
+    const pendingCount = (data.data || []).filter(r => r.status === 'pending').length;
+    if (badge) { badge.textContent = pendingCount; badge.style.display = pendingCount ? '' : 'none'; }
+
+    if (!rows.length) {
+      list.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:40px 0">No ${filter === 'all' ? '' : filter+' '}feedback yet.</p>`;
+      return;
+    }
+
+    const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+    const statusColor = { pending: '#f59e0b', approved: '#10b981', rejected: '#ef4444' };
+
+    list.innerHTML = rows.map(r => `
+      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:20px;position:relative">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#FF9B0C,#FF5229);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;color:#1a1a1a;flex-shrink:0">${r.initials}</div>
+            <div>
+              <div style="font-weight:700;font-size:0.9rem">${r.first_name} ${r.last_name}</div>
+              <div style="font-size:0.75rem;color:var(--text-muted)">${r.email}</div>
+              <div style="font-size:0.78rem;color:#f59e0b;letter-spacing:1px;margin-top:2px">${stars(r.rating)}</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;background:${statusColor[r.status]}20;color:${statusColor[r.status]};text-transform:uppercase">${r.status}</span>
+            <span style="font-size:0.72rem;color:var(--text-muted)">${new Date(r.created_at).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'})}</span>
+          </div>
+        </div>
+        <p style="margin:14px 0 0;font-size:0.88rem;line-height:1.6;font-style:italic;color:var(--text-body)">"${r.body}"</p>
+        ${r.product_label ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px">Product label: ${r.product_label}</div>` : ''}
+        ${r.rejection_reason ? `<div style="font-size:0.75rem;color:#ef4444;margin-top:6px">Rejection reason: ${r.rejection_reason}</div>` : ''}
+        ${r.status === 'pending' ? `
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+          <button class="btn btn--sm" style="background:#10b981;color:#fff;border:none" onclick="reviewFeedback('${r.id}','approved')">✓ Approve & Publish</button>
+          <button class="btn btn--sm btn--ghost" onclick="reviewFeedback('${r.id}','rejected')">✗ Reject</button>
+        </div>` : r.status === 'approved' ? `
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn btn--sm btn--ghost" onclick="reviewFeedback('${r.id}','rejected')">Remove from homepage</button>
+        </div>` : `
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn btn--sm" style="background:#10b981;color:#fff;border:none" onclick="reviewFeedback('${r.id}','approved')">✓ Approve & Publish</button>
+        </div>`}
+      </div>
+    `).join('');
+  } catch (err) {
+    list.innerHTML = `<p style="color:#ef4444;text-align:center;padding:40px 0">Failed to load feedback: ${err.message}</p>`;
+  }
+}
+
+async function reviewFeedback(id, status) {
+  let rejection_reason = null;
+  if (status === 'rejected') {
+    rejection_reason = prompt('Reason for rejection (optional):') || null;
+  }
+  try {
+    await API.patch(`/api/testimonials/${id}`, { status, rejection_reason });
+    Toast.success(status === 'approved' ? 'Testimonial published to homepage ✓' : 'Testimonial rejected');
+    loadFeedback(_fbCurrentFilter);
+  } catch (err) {
+    Toast.error(err.message);
+  }
+}

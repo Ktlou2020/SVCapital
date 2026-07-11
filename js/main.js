@@ -1067,6 +1067,48 @@ async function _applyLiveProductAverages() {
   _showNextPoolClosing(products);
 }
 
+// ── Testimonials (dynamic) ────────────────────────────────────────────────
+(async function loadTestimonials() {
+  const grid = document.getElementById('testimonialsGrid');
+  if (!grid) return;
+
+  const FALLBACKS = [
+    { rating: 5, body: 'I started with R1,000 in the cattle investment three years ago. The consistent returns have helped me build an emergency fund I never had before. SV Capital made investing real for me.', display_name: 'Nomsa M.', initials: 'NM', product_label: 'Cattle since 2022', featured: false },
+    { rating: 5, body: "As someone sceptical of 'alternative' investments, what won me over was the transparency. I can see exactly where my money goes, who manages the assets, and what the real risks are. That's rare.", display_name: 'Thabo K.', initials: 'TK', product_label: 'Solar + Cattle', featured: true },
+    { rating: 5, body: 'The 7-year solar investment is a long commitment, but at 21.4% annualised, it\'s the best return I\'ve found anywhere. My money is funding clean energy — that means something to me.', display_name: 'Lerato P.', initials: 'LP', product_label: 'Solar 7yr', featured: false },
+    { rating: 5, body: 'The delivery bike investment was my entry point — R3,100 and I started earning weekly. Two years later I have a diversified portfolio across cattle and solar too. The platform makes it so easy to track everything.', display_name: 'Sipho K.', initials: 'SK', product_label: 'Delivery + Cattle', featured: false },
+  ];
+
+  const renderCards = (items) => {
+    grid.innerHTML = items.map((t, i) => `
+      <div class="testimonial-card${t.featured ? ' testimonial-card--featured' : ''}" data-reveal="up" data-reveal-delay="${(i + 1) * 100}">
+        <div class="testimonial-stars">${'★'.repeat(t.rating || 5)}</div>
+        <p>"${t.body}"</p>
+        <div class="testimonial-author">
+          <div class="author-avatar">${t.initials}</div>
+          <div>
+            <strong>${t.display_name}</strong>
+            <div class="testimonial-verified">Verified Investor${t.product_label ? ' · ' + t.product_label : ''}</div>
+          </div>
+        </div>
+      </div>`).join('');
+  };
+
+  try {
+    const apiBase = (typeof window.__SVC_API_BASE__ !== 'undefined' ? window.__SVC_API_BASE__ : '/api/');
+    const res = await fetch(apiBase + 'testimonials/public');
+    if (res.ok) {
+      const data = await res.json();
+      const items = Array.isArray(data) ? data : (data.testimonials || []);
+      renderCards(items.length >= 2 ? items : FALLBACKS);
+    } else {
+      renderCards(FALLBACKS);
+    }
+  } catch (_) {
+    renderCards(FALLBACKS);
+  }
+})();
+
 function _showNextPoolClosing(products) {
   let soonest = null, soonestProduct = null;
   (products || []).forEach(p => {
