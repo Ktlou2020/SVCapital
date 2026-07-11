@@ -2114,10 +2114,22 @@ html body #view-statement div[style*="gap:8px"] {
 html body #view-statement div[style*="gap:10px"][style*="display:flex"] {
   flex-wrap: wrap !important;
 }
+/* Date grid — centred, not full-width */
+html body #view-statement div[style*="grid-template-columns:1fr 1fr"] {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: center !important;
+  gap: 12px !important;
+  width: auto !important;
+}
+html body #view-statement div[style*="grid-template-columns:1fr 1fr"] > div {
+  flex: 0 0 auto !important;
+  width: 130px !important;
+}
 /* Date inputs — constrain size and fix border clipping */
 html body #view-statement #stmtFrom,
 html body #view-statement #stmtTo {
-  width: 100% !important;
+  width: 130px !important;
   box-sizing: border-box !important;
   display: block !important;
   padding: 4px 8px !important;
