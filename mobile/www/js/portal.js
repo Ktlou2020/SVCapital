@@ -7212,7 +7212,7 @@ function _positionTour(step) {
 /* ═══════════════════════════════════════════════════════════════
    FIRST DEPOSIT PROMPT
    ═══════════════════════════════════════════════════════════════ */
-function checkFirstDepositPrompt() {
+async function checkFirstDepositPrompt() {
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
   const neverKey   = `svc_deposit_never_${investorId}`;
   const laterKey   = `svc_deposit_later_${investorId}`;
@@ -7224,6 +7224,18 @@ function checkFirstDepositPrompt() {
 
   const hasDeposit = PORTAL.transactions.some(t => t.type === 'deposit');
   if (hasDeposit) return;  // already deposited
+
+  // Populate product pills from products marked display_on_homepage
+  try {
+    const products = await _getPortalProducts();
+    const el = document.getElementById('depositPromptProducts');
+    if (el) {
+      const visible = products.filter(p => p.display_on_homepage && p.is_active);
+      el.innerHTML = visible.map(p =>
+        `<span><i class="fa-solid ${p.icon || 'fa-circle'}"></i> ${p.label}</span>`
+      ).join('');
+    }
+  } catch (_) {}
 
   // Show with a short delay so overview loads first
   setTimeout(() => {
