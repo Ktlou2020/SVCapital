@@ -456,7 +456,7 @@ router.post('/forgot-password', async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `SELECT u.id, u.email, i.first_name
+      `SELECT u.id, u.email, COALESCE(u.first_name, i.first_name) AS first_name
        FROM users u
        LEFT JOIN investors i ON i.email = u.email
        WHERE u.email = $1`,
@@ -466,11 +466,11 @@ router.post('/forgot-password', async (req, res) => {
     if (rows.length > 0) {
       const user = rows[0];
       const jti = crypto.randomBytes(16).toString('hex');
-      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 min
       const token = jwt.sign(
         { sub: user.id, purpose: 'password_reset', jti },
         JWT_SECRET,
-        { expiresIn: '15m' }
+        { expiresIn: '30m' }
       );
       // Invalidate any previous unused tokens for this user
       await pool.query('DELETE FROM password_reset_tokens WHERE user_id=$1 AND used=false', [user.id]);

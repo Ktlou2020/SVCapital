@@ -1021,6 +1021,10 @@ if (window.Capacitor) {
         if (window.SVC) SVC.track('svc_login_attempted', {});
       });
     }
+    if (sessionStorage.getItem('openForgot') === '1' || location.hash === '#forgot') {
+      sessionStorage.removeItem('openForgot');
+      showForgotPassword({ preventDefault: function(){} });
+    }
   });
 </script>
 </body>
