@@ -214,6 +214,19 @@ app.get('/api/health', async (req, res) => {
   app.get(`/${page}.html`, handler);
 });
 
+/* ─── Password reset page — must be before the .html redirect middleware ─── */
+// The email link contains /reset-password.html?token=... which the redirect
+// middleware would strip to /reset-password, then fall back to index.html.
+// Register it explicitly here so the token query string is preserved.
+{
+  const resetFile = path.join(__dirname, '..', 'portal', 'reset-password.html');
+  const resetHandler = (_req, res) => res.sendFile(resetFile, {
+    headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', Pragma: 'no-cache', Expires: '0' },
+  });
+  app.get('/reset-password', resetHandler);
+  app.get('/reset-password.html', resetHandler);
+}
+
 /* ─── Redirect legacy .html URLs to clean equivalents ─── */
 // /login.html → /login  |  /fund/index.html → /fund  |  /team/director.html → /team/director
 app.use((req, res, next) => {
