@@ -21,7 +21,7 @@ async function runDirectorReport() {
     );
     const monthStart = dateRow.month_start;
     const monthEnd   = dateRow.month_end;
-    const monthLabel = new Date(monthStart).toLocaleString('en-ZA', { month: 'long', year: 'numeric' });
+    const monthLabel = new Date(monthStart).toLocaleString('en-ZA', { month: 'long', year: 'numeric', timeZone: 'Africa/Johannesburg' });
 
     // Total AUM (all active investments)
     const { rows: [aumRow] } = await pool.query(

@@ -90,7 +90,7 @@ async function _send({ to, subject, html, text }) {
 
 const _fmt  = v => `R${parseFloat(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const _pct  = v => `${(parseFloat(v || 0) * 100).toFixed(2)}%`;
-const _date = v => v ? new Date(v).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+const _date = v => v ? new Date(v).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Johannesburg' }) : '—';
 
 /* ── 1. Welcome ───────────────────────────────────────────── */
 function sendWelcome(investor) {
@@ -380,7 +380,7 @@ function sendMonthlyStatement(investor, { investments, recentTransactions }) {
   if (!email) return Promise.resolve();
 
   const now = new Date();
-  const monthName = now.toLocaleString('en-ZA', { month: 'long', year: 'numeric' });
+  const monthName = now.toLocaleString('en-ZA', { month: 'long', year: 'numeric', timeZone: 'Africa/Johannesburg' });
   if (id) setImmediate(() => push.sendPushToInvestor(id, {
     title: '📊 Monthly Statement Ready',
     body: `Your ${monthName} portfolio statement has been sent to your email.`,
@@ -388,7 +388,7 @@ function sendMonthlyStatement(investor, { investments, recentTransactions }) {
   }).catch(() => {}));
   const rand = (n) => 'R' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   const pct = (r) => (Number(r || 0) * 100).toFixed(2) + '%';
-  const fmtDate = (s) => s ? new Date(s).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  const fmtDate = (s) => s ? new Date(s).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Johannesburg' }) : '—';
   const statusColor = (s) => ({ active: '#10b981', matured: '#7c5cfc', pending: '#f59e0b', cancelled: '#ef4444' }[s] || '#6b7280');
 
   const activeInvestments = investments.filter(i => i.status === 'active');
@@ -574,7 +574,7 @@ function sendWaitlistNotification(investor, { poolName }) {
 function sendKycApproved(investor) {
   const { email, first_name } = investor;
   if (!email) return Promise.resolve();
-  const today = new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' });
+  const today = new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Africa/Johannesburg' });
   return _send({
     to: email,
     subject: 'Identity Verified — You\'re Ready to Invest ✅',
@@ -605,7 +605,7 @@ function sendLoginAlert(recipient, { ip, time }) {
   }).catch(() => {}));
   const fmtTime    = time ? new Date(time).toLocaleString('en-ZA', {
     day: 'numeric', month: 'long', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+    hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Johannesburg', timeZoneName: 'short',
   }) : 'Unknown time';
   return _send({
     to: email,
