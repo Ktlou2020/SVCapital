@@ -2072,7 +2072,32 @@ html body .my-inv-card .btn--secondary:hover {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   §C — Invest guide strip (How to Invest steps)
+   §C — Create Sub-Account modal — centred, not bottom sheet
+   ═══════════════════════════════════════════════════════════════ */
+#createSaModal.modal-overlay {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px 16px !important;
+}
+#createSaModal .modal {
+  width: 100% !important;
+  max-width: 480px !important;
+  max-height: 88vh !important;
+  border-radius: 20px !important;
+  margin: auto !important;
+}
+#createSaModal .modal__header::before {
+  display: none !important;
+}
+#createSaModal .modal__body {
+  padding-bottom: 16px !important;
+}
+#createSaModal .modal__footer {
+  padding-bottom: 16px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   §D — Invest guide strip (How to Invest steps)
    Replaces conflicting 2x2-grid vs flex rules in mobile-app.css
    ═══════════════════════════════════════════════════════════════ */
 html body .invest-guide-strip {
