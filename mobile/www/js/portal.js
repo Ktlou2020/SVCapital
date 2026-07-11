@@ -7390,7 +7390,7 @@ function _saCard(sa) {
     </div>
     <div class="sa-card__actions">
       <button class="btn btn--sm btn--primary" onclick="openSaDeposit('${sa.id}')"><i class="fa-solid fa-wallet"></i> Deposit</button>
-      <button class="btn btn--sm btn--secondary" onclick="openSaInvest('${sa.id}')" ${sa.kyc_status !== 'approved' ? 'disabled title="FICA required before investing"' : ''}><i class="fa-solid fa-chart-line"></i> Invest</button>
+      <button class="btn btn--sm btn--secondary" onclick="openSaInvest('${sa.id}')"><i class="fa-solid fa-chart-line"></i> Invest</button>
       <button class="btn btn--sm btn--secondary" onclick="openSaDetail('${sa.id}')"><i class="fa-solid fa-${isMinor ? 'star' : 'eye'}"></i> ${isMinor ? 'Hub' : 'Details'}</button>
     </div>
   </div>`;
@@ -7879,7 +7879,6 @@ async function confirmSaDeposit() {
 function openSaInvest(saId) {
   const sa = PORTAL.subAccounts.find(a => a.id === saId);
   if (!sa) return;
-  if (sa.kyc_status !== 'approved') { Toast.warn('FICA documents must be approved before investing'); return; }
   if ((parseFloat(sa.wallet_balance) || 0) <= 0) { Toast.warn('Please deposit funds first'); return; }
 
   _pmSaId = saId;  // tag all investments made after this to the sub-account
