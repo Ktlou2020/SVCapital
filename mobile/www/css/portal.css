@@ -2072,7 +2072,51 @@ html body .my-inv-card .btn--secondary:hover {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   §C — Create Sub-Account modal — centred, not bottom sheet
+   §C — Account Statement page — prevent overflow on mobile
+   ═══════════════════════════════════════════════════════════════ */
+html body #view-statement {
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+  overflow: hidden !important;
+}
+/* Collapse the desktop 1fr/340px two-column grid to a single column */
+html body #view-statement > div[style*="340px"] {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  gap: 16px !important;
+}
+/* Each panel (options card + sidebar) fills full width */
+html body #view-statement > div[style*="340px"] > div {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+}
+/* Options card inner padding — tighten on narrow screens */
+html body #view-statement > div[style*="340px"] > div:first-child > div[style*="padding:24px"] {
+  padding: 16px !important;
+}
+/* Stack the date inputs (From / To) into a single column */
+html body #view-statement div[style*="gap:14px"] {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+}
+/* Keep Include Sections as 2-column grid but constrain width */
+html body #view-statement div[style*="gap:8px"] {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+/* Action buttons row — stack on very narrow screens */
+html body #view-statement div[style*="gap:10px"][style*="display:flex"] {
+  flex-wrap: wrap !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   §D — Create Sub-Account modal — centred, not bottom sheet
    ═══════════════════════════════════════════════════════════════ */
 #createSaModal.modal-overlay {
   align-items: center !important;
@@ -2097,7 +2141,7 @@ html body .my-inv-card .btn--secondary:hover {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   §D — Invest guide strip (How to Invest steps)
+   §E — Invest guide strip (How to Invest steps)
    Replaces conflicting 2x2-grid vs flex rules in mobile-app.css
    ═══════════════════════════════════════════════════════════════ */
 html body .invest-guide-strip {
