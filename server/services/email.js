@@ -5,6 +5,7 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
+const push = require('./pushService');
 const BASE_URL = process.env.BASE_URL || 'https://platform.svcapital.co.za';
 const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 // FROM_EMAIL must come from a domain verified in your Resend dashboard.
@@ -94,6 +95,11 @@ const _date = v => v ? new Date(v).toLocaleDateString('en-ZA', { day: 'numeric',
 /* ── 1. Welcome ───────────────────────────────────────────── */
 function sendWelcome(investor) {
   const { email, first_name, id } = investor;
+  setImmediate(() => push.sendPushToInvestor(id, {
+    title: 'Welcome to SV Capital 🎉',
+    body: 'Complete your FICA/KYC verification to unlock all investment products.',
+    url: `${BASE_URL}/portal/`,
+  }).catch(() => {}));
   return _send({
     to: email,
     subject: `Welcome to SV Capital, ${first_name}! 🎉`,
@@ -164,7 +170,12 @@ function sendInvestmentCreated(investor, { poolName, amount, annualRate, termMon
 
 /* ── 4. Maturity alert (N days before end) ────────────────── */
 function sendMaturityAlert(investor, { poolName, amount, expectedReturn, endDate, daysLeft }) {
-  const { email, first_name } = investor;
+  const { email, first_name, id } = investor;
+  if (id) setImmediate(() => push.sendPushToInvestor(id, {
+    title: 'Investment Maturing Soon ⏰',
+    body: `${poolName} matures in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Submit your maturity instruction now.`,
+    url: `${BASE_URL}/portal/`,
+  }).catch(() => {}));
   return _send({
     to: email,
     subject: `Action required: ${poolName} matures in ${daysLeft} days`,
@@ -338,8 +349,13 @@ function sendWithdrawalRejected(investor, { amount, reference, reason }) {
 
 /* ── 11. Bank account approved ───────────────────────────────── */
 function sendBankAccountApproved(investor, { bankName, accountNumber }) {
-  const { email, first_name } = investor;
+  const { email, first_name, id } = investor;
   const masked = accountNumber ? '••••••' + String(accountNumber).slice(-4) : '—';
+  if (id) setImmediate(() => push.sendPushToInvestor(id, {
+    title: '✅ Bank Account Verified',
+    body: `Your ${bankName || 'bank'} account has been approved. You can now withdraw funds.`,
+    url: `${BASE_URL}/portal/`,
+  }).catch(() => {}));
   return _send({
     to: email,
     subject: 'Your bank account has been verified ✅',
@@ -360,11 +376,16 @@ function sendBankAccountApproved(investor, { bankName, accountNumber }) {
 
 /* ── 12. Monthly portfolio statement ─────────────────────── */
 function sendMonthlyStatement(investor, { investments, recentTransactions }) {
-  const { email, first_name, last_name, wallet_balance, total_invested, total_returns } = investor;
+  const { email, first_name, last_name, wallet_balance, total_invested, total_returns, id } = investor;
   if (!email) return Promise.resolve();
 
   const now = new Date();
   const monthName = now.toLocaleString('en-ZA', { month: 'long', year: 'numeric' });
+  if (id) setImmediate(() => push.sendPushToInvestor(id, {
+    title: '📊 Monthly Statement Ready',
+    body: `Your ${monthName} portfolio statement has been sent to your email.`,
+    url: `${BASE_URL}/portal/`,
+  }).catch(() => {}));
   const rand = (n) => 'R' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   const pct = (r) => (Number(r || 0) * 100).toFixed(2) + '%';
   const fmtDate = (s) => s ? new Date(s).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -525,7 +546,12 @@ function sendDirectorReport(director, data) {
 
 /* ── 14. Waitlist notification ───────────────────────────── */
 function sendWaitlistNotification(investor, { poolName }) {
-  const { email, first_name } = investor;
+  const { email, first_name, id } = investor;
+  if (id) setImmediate(() => push.sendPushToInvestor(id, {
+    title: `🎉 ${poolName} is Now Open!`,
+    body: 'The investment pool you waitlisted for is now accepting investments. Secure your spot now.',
+    url: `${BASE_URL}/portal/`,
+  }).catch(() => {}));
   return _send({
     to: email,
     subject: `Good news — ${poolName} is open again!`,
@@ -571,6 +597,12 @@ function sendLoginAlert(recipient, { ip, time }) {
   // recipient can be an investor row (email, first_name) or a user row (email, first_name)
   const email      = recipient.email;
   const firstName  = recipient.first_name || 'there';
+  if (recipient.id) setImmediate(() => push.sendPushToInvestor(recipient.id, {
+    title: '🔐 New Login Detected',
+    body: `A login was detected from ${ip || 'an unknown location'}. Tap to review if this wasn't you.`,
+    url: `${BASE_URL}/portal/`,
+    tag: 'login-alert',
+  }).catch(() => {}));
   const fmtTime    = time ? new Date(time).toLocaleString('en-ZA', {
     day: 'numeric', month: 'long', year: 'numeric',
     hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
@@ -620,6 +652,11 @@ function sendKycRejected(investor, { reason, notes } = {}) {
 /* ── 16. FICA re-verification reminder ───────────────────── */
 function sendFicaResubmitReminder(investor) {
   const BASE_URL = process.env.BASE_URL || 'https://portal.svcapital.co.za';
+  if (investor.id) setImmediate(() => push.sendPushToInvestor(investor.id, {
+    title: '📋 FICA/KYC Renewal Required',
+    body: 'Your verification documents are approaching their 3-year renewal date. Please resubmit via My Profile.',
+    url: `${BASE_URL}/portal/`,
+  }).catch(() => {}));
   return _send({
     to: investor.email,
     subject: 'Action Required: Please resubmit your FICA/KYC documents',
@@ -635,8 +672,13 @@ function sendFicaResubmitReminder(investor) {
 }
 
 /* ── Gift: received by existing investor ──────────────────── */
-function sendGiftReceived(to, { senderName, amount, message, recipientName }) {
+function sendGiftReceived(to, { senderName, amount, message, recipientName, investorId }) {
   const amt = parseFloat(amount).toLocaleString('en-ZA', { minimumFractionDigits: 2 });
+  if (investorId) setImmediate(() => push.sendPushToInvestor(investorId, {
+    title: `🎁 ${senderName} sent you a gift!`,
+    body: `R${Math.round(amount)} has been added to your SV Capital wallet.`,
+    url: `${BASE_URL}/portal/`,
+  }).catch(() => {}));
   return _send({
     to,
     subject: `🎁 ${senderName} sent you a R${Math.round(amount)} investment gift`,
@@ -731,8 +773,13 @@ function sendLeaveOutcome(employee, { status, leaveType, startDate, endDate, day
 
 /* ── Generic alert (used by cron jobs) ───────────────────── */
 function sendAlert(investor, { subject, message }) {
-  const { email, first_name } = investor;
+  const { email, first_name, id } = investor;
   if (!email) return Promise.resolve();
+  if (id) setImmediate(() => push.sendPushToInvestor(id, {
+    title: subject,
+    body: String(message || '').slice(0, 120),
+    url: `${BASE_URL}/portal/`,
+  }).catch(() => {}));
   return _send({
     to: email,
     subject,
