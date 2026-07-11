@@ -1254,11 +1254,56 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && _p
 // Expose stop function so Auth.logout() can kill the interval before redirecting
 window._stopPolling = function () { if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; } };
 
+// ─── Idle auto-logout (mobile) ───
+// Signs the investor out after 10 minutes of no activity.
+function initIdleAutoLogout() {
+  const IDLE_MS = 10 * 60 * 1000;     // 10 minutes
+  const WARN_MS = 30 * 1000;          // warn 30s before signing out
+  let idleTimer = null, warnTimer = null;
+
+  const doAutoLogout = () => {
+    try { if (typeof Toast !== 'undefined') Toast.info?.('Signed out due to inactivity'); } catch (_) {}
+    localStorage.removeItem('svc_portal_cache');
+    localStorage.removeItem('svc_user');
+    sessionStorage.clear();
+    Auth.logout('../login.html?reason=timeout');
+  };
+
+  const reset = () => {
+    clearTimeout(idleTimer);
+    clearTimeout(warnTimer);
+    warnTimer = setTimeout(() => {
+      try { if (typeof Toast !== 'undefined') Toast.info?.('You will be signed out in 30 seconds due to inactivity.'); } catch (_) {}
+    }, IDLE_MS - WARN_MS);
+    idleTimer = setTimeout(doAutoLogout, IDLE_MS);
+  };
+
+  const markActivity = () => {
+    try { localStorage.setItem('svc_last_activity', String(Date.now())); } catch (_) {}
+    reset();
+  };
+
+  ['touchstart', 'touchmove', 'mousedown', 'keydown', 'scroll', 'click'].forEach(ev =>
+    window.addEventListener(ev, markActivity, { passive: true }));
+
+  window.addEventListener('storage', e => { if (e.key === 'svc_last_activity') reset(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    let last = 0;
+    try { last = parseInt(localStorage.getItem('svc_last_activity') || '0', 10) || 0; } catch (_) {}
+    if (last && (Date.now() - last) >= IDLE_MS) { doAutoLogout(); return; }
+    reset();
+  });
+
+  markActivity();
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   _preloadLogo(); // warm logo cache for PDF generation
   Toast.init();
   initDarkMode();
   initPortalFormUX();
+  initIdleAutoLogout();
   // Set skeleton placeholders on overview stats while data loads
   const _skelSpan = '<span class="skeleton" style="display:inline-block;width:80px;height:20px;border-radius:4px"></span>';
   ['pov-total','pov-invested','pov-wallet','pov-returns'].forEach(id => {
@@ -5025,12 +5070,12 @@ function buildStatementHTML(opts) {
     <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%">
 
       <!-- Header Band -->
-      <div style="background:linear-gradient(135deg,#1a3a4a 0%,#0d2535 100%);padding:28px 40px;display:flex;align-items:center;justify-content:space-between">
+      <div style="background:#303030;padding:28px 40px;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:14px">
           <img src="${logoUrl}" alt="" style="height:52px;width:52px;object-fit:contain;display:block">
           <div>
             <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:0.06em;line-height:1">SV CAPITAL</div>
-            <div style="font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:0.12em;margin-top:3px;font-weight:500">VENTURE BEYOND THE ORDINARY</div>
+            <div style="font-size:10px;color:rgba(255,155,12,0.75);letter-spacing:0.12em;margin-top:3px;font-weight:600">VENTURE BEYOND THE ORDINARY</div>
           </div>
         </div>
         <div style="text-align:right">

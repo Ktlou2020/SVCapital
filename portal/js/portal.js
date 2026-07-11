@@ -1278,7 +1278,7 @@ function initIdleAutoLogout() {
                    (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
   if (isNative) return;
 
-  const IDLE_MS = 5 * 60 * 1000;      // 5 minutes
+  const IDLE_MS = 10 * 60 * 1000;     // 10 minutes
   const WARN_MS = 30 * 1000;          // warn 30s before signing out
   let idleTimer = null, warnTimer = null;
 
