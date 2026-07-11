@@ -2114,17 +2114,34 @@ html body #view-statement div[style*="gap:8px"] {
 html body #view-statement div[style*="gap:10px"][style*="display:flex"] {
   flex-wrap: wrap !important;
 }
-/* Date grid — centred, not full-width */
-html body #view-statement div[style*="grid-template-columns:1fr 1fr"] {
+/* Date grid (gap:14px) — centred, not full-width */
+html body #view-statement div[style*="gap:14px"] {
   display: flex !important;
   flex-direction: row !important;
   justify-content: center !important;
   gap: 12px !important;
   width: auto !important;
 }
-html body #view-statement div[style*="grid-template-columns:1fr 1fr"] > div {
+html body #view-statement div[style*="gap:14px"] > div {
   flex: 0 0 auto !important;
   width: 130px !important;
+}
+/* Include Sections grid (gap:8px) — keep as proper 2×2 grid, contained */
+html body #view-statement div[style*="gap:8px"] {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+html body #view-statement div[style*="gap:8px"] > label {
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+html body #view-statement div[style*="gap:8px"] > label span {
+  font-size: 0.75rem !important;
+  white-space: normal !important;
+  word-break: break-word !important;
 }
 /* Date inputs — constrain size and fix border clipping */
 html body #view-statement #stmtFrom,
