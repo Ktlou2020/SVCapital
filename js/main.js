@@ -1026,7 +1026,7 @@ async function _applyLiveProductAverages() {
   const resolveVisible = key => {
     if (key in homeVisible) return homeVisible[key];
     const p = prodByType[key]; // card data-product matches product_type directly
-    return p ? !!p.display_on_homepage : true; // unknown product defaults to shown
+    return p ? !!p.display_on_homepage : false; // not in API (inactive) → hide
   };
 
   // Hide/show product cards
