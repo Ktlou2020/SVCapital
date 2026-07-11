@@ -2114,18 +2114,26 @@ html body #view-statement div[style*="gap:8px"] {
 html body #view-statement div[style*="gap:10px"][style*="display:flex"] {
   flex-wrap: wrap !important;
 }
-/* Date inputs — reduce size on mobile */
-html body #view-statement input[type="date"],
-html body #view-statement select {
-  padding: 6px 10px !important;
+/* Date inputs — constrain size and fix border clipping */
+html body #view-statement #stmtFrom,
+html body #view-statement #stmtTo {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  display: block !important;
+  padding: 7px 10px !important;
   font-size: 0.8rem !important;
-  height: auto !important;
+  margin: 0 !important;
 }
-/* From / To labels — tighten spacing */
-html body #view-statement div[style*="gap:14px"] label[style*="margin-bottom:5px"],
-html body #view-statement div[style*="gap:14px"] > div > label {
-  font-size: 0.72rem !important;
-  margin-bottom: 3px !important;
+/* Remove overflow:hidden on the options card so input borders aren't clipped */
+html body #view-statement > div[style*="340px"] > div:first-child {
+  overflow: visible !important;
+}
+/* Currency select */
+html body #view-statement #stmtCurrency {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 7px 10px !important;
+  font-size: 0.8rem !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════
