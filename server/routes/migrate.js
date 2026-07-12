@@ -1,8 +1,12 @@
 'use strict';
-const express = require('express');
-const multer  = require('multer');
+const express      = require('express');
+const multer       = require('multer');
+const bcrypt       = require('bcrypt');
+const crypto       = require('crypto');
+const jwt          = require('jsonwebtoken');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const pool    = require('../db/pool');
+const pool         = require('../db/pool');
+const emailService = require('../services/email');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -166,6 +170,50 @@ router.post('/run',
     );
     counts.investors = investorResult.ok;
     allErrors.push(...investorResult.errors.slice(0, 10).map(e => `investor: ${e}`));
+
+    /* ── 1b. Users (login accounts) for migrated investors ── */
+    const JWT_SECRET  = process.env.JWT_SECRET;
+    const BASE_URL    = process.env.BASE_URL || 'https://platform.svcapital.co.za';
+    const tempHash    = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+
+    const userResult = await inBatches(
+      users.filter(u => u.userAccountNumber && u.email),
+      async u => {
+        const email     = (u.email || '').toLowerCase().trim();
+        const firstName = u.name    || (u.display_name || '').split(' ')[0] || '';
+        const lastName  = u.surname || (u.display_name || '').split(' ').slice(1).join(' ') || '';
+
+        // Upsert user — skip if already has an account
+        const { rows: [newUser] } = await pool.query(`
+          INSERT INTO users (email, password_hash, role, first_name, last_name)
+          VALUES ($1, $2, 'investor', $3, $4)
+          ON CONFLICT (email) DO NOTHING
+          RETURNING id, email, first_name
+        `, [email, tempHash, firstName, lastName]);
+
+        // Only send setup email for newly created users (not pre-existing accounts)
+        if (newUser && JWT_SECRET) {
+          const jti       = crypto.randomBytes(16).toString('hex');
+          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+          const token     = jwt.sign(
+            { sub: newUser.id, purpose: 'password_reset', jti },
+            JWT_SECRET,
+            { expiresIn: '7d' }
+          );
+          await pool.query(
+            'INSERT INTO password_reset_tokens (jti, user_id, expires_at) VALUES ($1, $2, $3)',
+            [jti, newUser.id, expiresAt]
+          );
+          const resetLink = `${BASE_URL}/reset-password?token=${token}`;
+          setImmediate(() =>
+            emailService.sendAccountSetup(newUser.email, newUser.first_name || firstName, resetLink)
+              .catch(err => console.error('[migrate] setup email failed:', newUser.email, err.message))
+          );
+        }
+      }
+    );
+    counts.users = userResult.ok;
+    allErrors.push(...userResult.errors.slice(0, 10).map(e => `user: ${e}`));
 
     /* ── 2. Pools ── */
     const poolResult = await inBatches(

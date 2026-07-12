@@ -363,7 +363,7 @@ function navigate(view, btnEl) {
     auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications', aml: 'AML Compliance Review',
     migrate: 'Data Migration', compliance: 'Compliance Calendar', reconciliation: 'Financial Reconciliation',
     terms: 'Terms of Use', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest',
-    opsconsole: 'Operations Console', feedback: 'Client Feedback',
+    opsconsole: 'Operations Console', feedback: 'Client Feedback', emaillogs: 'Email Logs',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -394,6 +394,7 @@ function navigate(view, btnEl) {
     intlinterest: loadIntlInterest,
     opsconsole: loadOpsConsole,
     feedback: () => loadFeedback('pending'),
+    emaillogs: loadEmailLogs,
   };
   if (loaders[view]) loaders[view]();
   // Close mobile sidebar after navigation
@@ -7653,5 +7654,110 @@ async function reviewFeedback(id, status) {
     loadFeedback(_fbCurrentFilter);
   } catch (err) {
     Toast.error(err.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EMAIL LOGS
+   ═══════════════════════════════════════════════════════════ */
+let _emailLogsOffset = 0;
+const _emailLogsLimit = 50;
+
+const EMAIL_TYPE_LABELS = {
+  welcome: 'Welcome', account_setup: 'Account Setup', password_reset: 'Password Reset',
+  deposit_confirmed: 'Deposit Confirmed', investment_created: 'Investment Created',
+  maturity_alert: 'Maturity Alert', withdrawal: 'Withdrawal', bank_approved: 'Bank Approved',
+  monthly_statement: 'Monthly Statement', director_report: 'Director Report',
+  kyc: 'KYC / FICA', support: 'Support', login_alert: 'Login Alert',
+  gift: 'Gift', waitlist: 'Waitlist', staff_leave: 'Staff Leave', general: 'General',
+};
+
+async function loadEmailLogs(resetPage = true) {
+  if (resetPage) _emailLogsOffset = 0;
+
+  const search = (document.getElementById('emailLogSearch') || {}).value || '';
+  const type   = (document.getElementById('emailLogType')   || {}).value || '';
+  const status = (document.getElementById('emailLogStatus') || {}).value || '';
+  const tbody  = document.getElementById('emailLogsList');
+  const pager  = document.getElementById('emailLogsPager');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="padding:40px;text-align:center;color:var(--text-muted)">Loading…</td></tr>';
+
+  try {
+    const params = new URLSearchParams({ limit: _emailLogsLimit, offset: _emailLogsOffset });
+    if (search) params.set('search', search);
+    if (type)   params.set('type', type);
+    if (status) params.set('status', status);
+
+    const [logsRes, statsRes] = await Promise.all([
+      API.get('/api/email-logs?' + params),
+      _emailLogsOffset === 0 ? API.get('/api/email-logs/stats') : Promise.resolve(null),
+    ]);
+
+    // Stats chips
+    if (statsRes) {
+      const statsEl = document.getElementById('emailLogStats');
+      if (statsEl) {
+        const t = statsRes.totals || {};
+        statsEl.innerHTML = `
+          <div style="background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px">
+            <div style="font-size:1.4rem;font-weight:800">${parseInt(t.total||0).toLocaleString('en-ZA')}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">Total Emails</div>
+          </div>
+          <div style="background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px">
+            <div style="font-size:1.4rem;font-weight:800;color:#22c55e">${parseInt(t.sent||0).toLocaleString('en-ZA')}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">Sent</div>
+          </div>
+          <div style="background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px">
+            <div style="font-size:1.4rem;font-weight:800;color:#ef4444">${parseInt(t.failed||0).toLocaleString('en-ZA')}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">Failed</div>
+          </div>
+          ${(statsRes.byType||[]).slice(0,4).map(b => `
+          <div style="background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px">
+            <div style="font-size:1.2rem;font-weight:800">${parseInt(b.total).toLocaleString('en-ZA')}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">${EMAIL_TYPE_LABELS[b.type] || b.type}</div>
+          </div>`).join('')}`;
+      }
+    }
+
+    // Table rows
+    const logs = logsRes.data || [];
+    if (!tbody) return;
+    if (!logs.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="padding:40px;text-align:center;color:var(--text-muted)">No emails found.</td></tr>';
+      if (pager) pager.innerHTML = '';
+      return;
+    }
+
+    tbody.innerHTML = logs.map(l => {
+      const sent = l.sent_at ? new Date(l.sent_at).toLocaleString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Johannesburg' }) : '—';
+      const statusPill = l.status === 'sent'
+        ? `<span style="background:#dcfce7;color:#166534;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600">Sent</span>`
+        : `<span style="background:#fee2e2;color:#991b1b;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600" title="${l.error || ''}">Failed</span>`;
+      const typePill = `<span style="background:rgba(255,155,12,0.1);color:#b45309;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600">${EMAIL_TYPE_LABELS[l.type] || l.type}</span>`;
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:10px 12px">${l.to_email}</td>
+        <td style="padding:10px 12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.subject}">${l.subject}</td>
+        <td style="padding:10px 12px">${typePill}</td>
+        <td style="padding:10px 12px">${statusPill}</td>
+        <td style="padding:10px 12px;white-space:nowrap">${sent}</td>
+      </tr>`;
+    }).join('');
+
+    // Pager
+    const total = logsRes.total || 0;
+    const page  = Math.floor(_emailLogsOffset / _emailLogsLimit) + 1;
+    const pages = Math.ceil(total / _emailLogsLimit);
+    if (pager) {
+      pager.innerHTML = `
+        <span>${total.toLocaleString('en-ZA')} email${total !== 1 ? 's' : ''} · Page ${page} of ${pages || 1}</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn--sm btn--ghost" ${_emailLogsOffset === 0 ? 'disabled' : ''}
+            onclick="_emailLogsOffset=Math.max(0,_emailLogsOffset-${_emailLogsLimit});loadEmailLogs(false)">← Prev</button>
+          <button class="btn btn--sm btn--ghost" ${_emailLogsOffset + _emailLogsLimit >= total ? 'disabled' : ''}
+            onclick="_emailLogsOffset+=${_emailLogsLimit};loadEmailLogs(false)">Next →</button>
+        </div>`;
+    }
+  } catch (err) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="padding:40px;text-align:center;color:#ef4444">${err.message}</td></tr>`;
   }
 }

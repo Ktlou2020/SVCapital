@@ -176,6 +176,7 @@ app.use('/api/settings',  require('./routes/settings'));
 app.use('/api/legal',     require('./routes/legal'));
 app.use('/api/quests',        require('./routes/quests'));
 app.use('/api/testimonials',  require('./routes/testimonials'));
+app.use('/api/email-logs',    require('./routes/emailLogs'));
 app.use('/api/investments', require('./routes/investments'));
 app.use('/api/gifts',        require('./routes/gifts'));
 app.use('/api/factsheets',   require('./routes/factsheets'));
