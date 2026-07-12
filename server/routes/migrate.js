@@ -1,7 +1,7 @@
 'use strict';
 const express      = require('express');
 const multer       = require('multer');
-const bcrypt       = require('bcrypt');
+const bcrypt       = require('bcryptjs');
 const crypto       = require('crypto');
 const jwt          = require('jsonwebtoken');
 const { requireAuth, requireRole } = require('../middleware/auth');
