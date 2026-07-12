@@ -2,9 +2,11 @@
 
 const router = require('express').Router();
 const pool   = require('../db/pool');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireRole } = require('../middleware/auth');
+const requireAdmin = requireRole('admin');
 
 const FEEDBACK_XP = 50;
+const QUEST_ID    = 'leave_feedback';
 const XP_LEVELS = [
   { id: 'seed', min: 0 }, { id: 'sprout', min: 100 }, { id: 'grower', min: 300 },
   { id: 'cultivator', min: 600 }, { id: 'harvester', min: 1000 },
@@ -116,7 +118,7 @@ router.get('/public', async (req, res) => {
        FROM testimonials WHERE status = 'approved'
        ORDER BY approved_at DESC LIMIT 20`
     );
-    res.json({ data: rows });
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -130,7 +132,7 @@ router.get('/my', requireAuth, async (req, res) => {
       'SELECT id, rating, body, product_label, status, rejection_reason, created_at FROM testimonials WHERE investor_id = $1',
       [investorId]
     );
-    res.json({ data: t || null });
+    res.json({ testimonial: t || null });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
