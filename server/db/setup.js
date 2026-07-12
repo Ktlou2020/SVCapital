@@ -955,6 +955,24 @@ CREATE INDEX IF NOT EXISTS gifts_recipient_idx       ON gifts(recipient_id);
 CREATE INDEX IF NOT EXISTS gifts_recipient_email_idx ON gifts(recipient_email);
 CREATE INDEX IF NOT EXISTS gifts_claim_token_idx     ON gifts(claim_token);
 
+CREATE TABLE IF NOT EXISTS testimonials (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  investor_id      TEXT NOT NULL REFERENCES investors(id) ON DELETE CASCADE,
+  rating           INT  NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  body             TEXT NOT NULL,
+  display_name     TEXT NOT NULL,
+  initials         TEXT NOT NULL,
+  product_label    TEXT,
+  status           TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  rejection_reason TEXT,
+  approved_by      TEXT,
+  approved_at      TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS testimonials_investor_uidx ON testimonials(investor_id);
+CREATE INDEX        IF NOT EXISTS testimonials_status_idx    ON testimonials(status);
+
 CREATE TABLE IF NOT EXISTS product_factsheets (
   id          TEXT PRIMARY KEY,
   pool_id     TEXT REFERENCES investment_pools(id) ON DELETE CASCADE,

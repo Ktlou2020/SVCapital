@@ -5679,6 +5679,76 @@ function renderQuestView() {
   const refList    = document.getElementById('rewardsReferralList');
   const refTxns    = PORTAL.transactions.filter(t => t.type === 'referral_bonus').sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   if (refSection) refSection.style.display = 'none';   // Referral Rewards History hidden (feature not live)
+
+  // Load existing feedback state for the Leave a Review card
+  loadMyFeedback();
+}
+
+/* ─── Feedback Form ─────────────────────────────────────── */
+let _fbRating = 0;
+
+function setFbStar(n) {
+  _fbRating = n;
+  document.querySelectorAll('.fb-star').forEach(s => {
+    s.style.color = parseInt(s.dataset.v) <= n ? '#ff9b0c' : '#d1d5db';
+  });
+}
+
+async function loadMyFeedback() {
+  try {
+    const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'testimonials/my', {
+      headers: { Authorization: 'Bearer ' + (localStorage.getItem('svc_token') || '') },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const t = data.testimonial;
+    if (!t) return;
+    const formWrap = document.getElementById('feedbackFormWrap');
+    const submitted = document.getElementById('feedbackSubmitted');
+    const statusEl  = document.getElementById('feedbackSubmittedStatus');
+    if (formWrap) formWrap.style.display = 'none';
+    if (submitted) submitted.style.display = '';
+    if (statusEl) {
+      if (t.status === 'approved') statusEl.textContent = 'Your review has been published. Thank you!';
+      else if (t.status === 'rejected') statusEl.textContent = 'Your review was not approved' + (t.rejection_reason ? ': ' + t.rejection_reason : '.') + ' You may resubmit after updating.';
+      else statusEl.textContent = 'Your review is pending approval.';
+    }
+  } catch (_) {}
+}
+
+async function submitFeedback() {
+  const btn  = document.getElementById('feedbackSubmitBtn');
+  const msg  = document.getElementById('feedbackMsg');
+  const body = (document.getElementById('feedbackBody') || {}).value || '';
+  const label = (document.getElementById('feedbackProductLabel') || {}).value || '';
+  if (!_fbRating) { if (msg) { msg.textContent = 'Please select a star rating.'; msg.style.color = '#ef4444'; msg.style.display = ''; } return; }
+  if (body.trim().length < 20) { if (msg) { msg.textContent = 'Please write at least 20 characters.'; msg.style.color = '#ef4444'; msg.style.display = ''; } return; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting…'; }
+  try {
+    const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'testimonials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (localStorage.getItem('svc_token') || '') },
+      body: JSON.stringify({ rating: _fbRating, body: body.trim(), product_label: label.trim() || undefined }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      const formWrap  = document.getElementById('feedbackFormWrap');
+      const submitted = document.getElementById('feedbackSubmitted');
+      if (formWrap)  formWrap.style.display  = 'none';
+      if (submitted) submitted.style.display = '';
+      if (data.xpAwarded) {
+        if (PORTAL.quests) PORTAL.quests.xp = (PORTAL.quests.xp || 0) + data.xpAwarded;
+        renderXPWidget && renderXPWidget();
+        _updateXPNavBadge && _updateXPNavBadge();
+      }
+    } else {
+      if (msg) { msg.textContent = data.error || 'Could not submit feedback. Please try again.'; msg.style.color = '#ef4444'; msg.style.display = ''; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Feedback'; }
+    }
+  } catch (_) {
+    if (msg) { msg.textContent = 'Network error. Please try again.'; msg.style.color = '#ef4444'; msg.style.display = ''; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Feedback'; }
+  }
 }
 
 /* ─── Claim a milestone quest via button ─────────────────── */

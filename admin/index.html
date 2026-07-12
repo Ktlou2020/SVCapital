@@ -110,6 +110,10 @@
       <button class="nav-item" data-view="comms" onclick="navigate('comms', this)">
         <i class="fa-solid fa-paper-plane"></i><span>Communications</span>
       </button>
+      <button class="nav-item" data-view="feedback" onclick="navigate('feedback', this)">
+        <i class="fa-solid fa-star"></i><span>Feedback</span>
+        <span class="nav-badge" id="feedbackBadge" style="display:none">0</span>
+      </button>
       <button class="nav-item" data-view="analytics" onclick="navigate('analytics', this)">
         <i class="fa-solid fa-chart-pie"></i> Analytics
       </button>
@@ -1321,6 +1325,27 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: FEEDBACK / TESTIMONIALS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-feedback">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+          <div>
+            <h2 style="font-size:1.1rem;font-weight:800;margin:0">Client Feedback</h2>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin:4px 0 0">Review and approve investor testimonials for the homepage.</p>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn--sm btn--ghost" onclick="loadFeedback('pending')" id="fbFilterPending" style="font-weight:700">Pending</button>
+            <button class="btn btn--sm btn--ghost" onclick="loadFeedback('approved')" id="fbFilterApproved">Approved</button>
+            <button class="btn btn--sm btn--ghost" onclick="loadFeedback('rejected')" id="fbFilterRejected">Rejected</button>
+            <button class="btn btn--sm btn--ghost" onclick="loadFeedback('all')">All</button>
+          </div>
+        </div>
+        <div id="feedbackList" style="display:flex;flex-direction:column;gap:14px">
+          <p style="color:var(--text-muted);text-align:center;padding:40px 0">Loading…</p>
         </div>
       </div>
 

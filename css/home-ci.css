@@ -506,7 +506,7 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
    ═══════════════════════════════════════════════════════════════ */
 .author-avatar {
   background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
-  color: #fff !important;
+  color: #1a1a1a !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════

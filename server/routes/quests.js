@@ -136,6 +136,8 @@ const QUESTS = [
   { id: 'milestone_100k', title: 'R100,000 Invested',         category: 'milestone', xp: 200, icon: 'fa-crown',             color: '#fec24f', description: 'Reach R100,000 in total investments.' },
   { id: 'set_maturity',   title: 'Set Maturity Instructions', category: 'milestone', xp: 75,  icon: 'fa-hourglass-half',    color: '#ff9b0c', description: 'Configure what happens when your investment matures.' },
   { id: 'first_referral', title: 'Refer Your First Friend',   category: 'milestone', xp: 100, icon: 'fa-share-nodes',       color: '#0096ff', description: 'Get someone to join SV Capital via your referral link.' },
+  // Community
+  { id: 'leave_feedback', title: 'Leave Us a Review', category: 'community', xp: 50, icon: 'fa-star', color: '#ff9b0c', description: 'Share your experience with SV Capital to help other investors.' },
   // Learning Modules — marked complete by investor
   { id: 'learn_what_is_svc',      title: 'What is SV Capital?',       category: 'learning', xp: 50, icon: 'fa-building-columns', color: '#0096ff' },
   { id: 'learn_how_returns',      title: 'How Your Returns Work',      category: 'learning', xp: 50, icon: 'fa-percent',          color: '#65ed00' },
