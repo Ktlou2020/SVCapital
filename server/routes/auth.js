@@ -93,7 +93,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     const user = rows[0];
 
     if (!user)
-      return res.status(401).json({ error: 'Invalid credentials.' });
+      return res.status(401).json({ error: 'Incorrect email or password.' });
 
     if (!user.is_active)
       return res.status(403).json({ error: 'Account is deactivated. Contact support.' });
@@ -124,7 +124,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       await pool.query('UPDATE users SET login_attempts = $1 WHERE id = $2', [newAttempts, user.id]);
       const left = MAX_LOGIN_ATTEMPTS - newAttempts;
       return res.status(401).json({
-        error: `Invalid credentials. ${left} attempt${left !== 1 ? 's' : ''} remaining.`,
+        error: `Incorrect email or password. ${left} attempt${left !== 1 ? 's' : ''} remaining.`,
         attemptsLeft: left,
       });
     }
