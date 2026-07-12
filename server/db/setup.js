@@ -973,6 +973,19 @@ CREATE TABLE IF NOT EXISTS testimonials (
 CREATE UNIQUE INDEX IF NOT EXISTS testimonials_investor_uidx ON testimonials(investor_id);
 CREATE INDEX        IF NOT EXISTS testimonials_status_idx    ON testimonials(status);
 
+CREATE TABLE IF NOT EXISTS email_logs (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  to_email    TEXT NOT NULL,
+  subject     TEXT NOT NULL,
+  type        TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('sent','failed')),
+  error       TEXT,
+  resend_id   TEXT,
+  sent_at     TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS email_logs_sent_at_idx  ON email_logs(sent_at DESC);
+CREATE INDEX IF NOT EXISTS email_logs_to_email_idx ON email_logs(to_email);
+
 CREATE TABLE IF NOT EXISTS product_factsheets (
   id          TEXT PRIMARY KEY,
   pool_id     TEXT REFERENCES investment_pools(id) ON DELETE CASCADE,

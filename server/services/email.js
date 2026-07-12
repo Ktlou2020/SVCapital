@@ -6,6 +6,7 @@
 'use strict';
 
 const push = require('./pushService');
+const pool = require('../db/pool');
 const BASE_URL = process.env.BASE_URL || 'https://platform.svcapital.co.za';
 const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 // FROM_EMAIL must come from a domain verified in your Resend dashboard.
@@ -49,27 +50,50 @@ p{font-size:0.93rem;color:#444;line-height:1.65;margin-bottom:14px}
 }
 
 /* ── Core send ────────────────────────────────────────────── */
-async function _send({ to, subject, html, text }) {
+function _inferType(subject) {
+  const s = (subject || '').toLowerCase();
+  if (s.includes('welcome'))              return 'welcome';
+  if (s.includes('set up your'))         return 'account_setup';
+  if (s.includes('reset') || s.includes('password')) return 'password_reset';
+  if (s.includes('deposit') && s.includes('confirm')) return 'deposit_confirmed';
+  if (s.includes('investment') && (s.includes('confirmed') || s.includes('active'))) return 'investment_created';
+  if (s.includes('matur'))               return 'maturity_alert';
+  if (s.includes('withdrawal'))          return 'withdrawal';
+  if (s.includes('bank account'))        return 'bank_approved';
+  if (s.includes('statement'))           return 'monthly_statement';
+  if (s.includes('director') || s.includes('monthly report')) return 'director_report';
+  if (s.includes('kyc') || s.includes('fica') || s.includes('verif')) return 'kyc';
+  if (s.includes('support') || s.includes('ticket') || s.includes('response')) return 'support';
+  if (s.includes('login') || s.includes('sign-in') || s.includes('new device')) return 'login_alert';
+  if (s.includes('gift'))                return 'gift';
+  if (s.includes('waitlist'))            return 'waitlist';
+  if (s.includes('leave') || s.includes('time off')) return 'staff_leave';
+  return 'general';
+}
+
+async function _send({ to, subject, html, text, type }) {
+  const recipient = Array.isArray(to) ? to[0] : to;
+  const emailType = type || _inferType(subject);
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     if (process.env.NODE_ENV === 'production') throw new Error('[email] RESEND_API_KEY is required in production');
     console.warn('[email] RESEND_API_KEY not set — email suppressed:', to, subject);
+    pool.query(
+      'INSERT INTO email_logs (to_email, subject, type, status, error) VALUES ($1,$2,$3,$4,$5)',
+      [recipient, subject, emailType, 'failed', 'RESEND_API_KEY not set']
+    ).catch(() => {});
     return;
   }
+  let resendId = null, errorMsg = null;
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: FROM,
-        to: Array.isArray(to) ? to : [to],
-        subject,
-        html,
-        text,
-      }),
+      body: JSON.stringify({ from: FROM, to: Array.isArray(to) ? to : [to], subject, html, text }),
     });
     const data = await r.json();
     if (!r.ok) {
+      errorMsg = JSON.stringify(data);
       if (r.status === 403 && data.name === 'validation_error') {
         console.error(
           `[email] ⚠️  DOMAIN NOT VERIFIED in Resend — all emails are blocked.\n` +
@@ -78,14 +102,20 @@ async function _send({ to, subject, html, text }) {
           `  FROM_EMAIL env var to "onboarding@resend.dev" as a temporary workaround.`
         );
       } else {
-        console.error('[email] Resend error:', JSON.stringify(data));
+        console.error('[email] Resend error:', errorMsg);
       }
     } else {
-      console.log(`[email] ✓ "${subject}" → ${Array.isArray(to) ? to[0] : to}`);
+      resendId = data.id || null;
+      console.log(`[email] ✓ "${subject}" → ${recipient}`);
     }
   } catch (err) {
+    errorMsg = err.message;
     console.error('[email] send failed:', err.message);
   }
+  pool.query(
+    'INSERT INTO email_logs (to_email, subject, type, status, error, resend_id) VALUES ($1,$2,$3,$4,$5,$6)',
+    [recipient, subject, emailType, errorMsg ? 'failed' : 'sent', errorMsg || null, resendId]
+  ).catch(() => {});
 }
 
 const _fmt  = v => `R${parseFloat(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
