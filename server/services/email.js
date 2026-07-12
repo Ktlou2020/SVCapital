@@ -279,7 +279,25 @@ function sendPasswordReset(email, firstName, resetLink) {
   });
 }
 
-/* ── 8. Withdrawal requested (investor notification) ────────── */
+/* ── 8. Account setup (migrated investors) ──────────────────── */
+function sendAccountSetup(email, firstName, setupLink) {
+  return _send({
+    to: email,
+    subject: 'Set up your SV Capital account',
+    html: _wrap(`
+      <h2>Welcome to SV Capital 👋</h2>
+      <p>Hi ${firstName || 'there'}, your SV Capital account has been created and your investment history has been migrated to our new platform.</p>
+      <p>Click the button below to set your password and access your portfolio. This link expires in <strong>7 days</strong>.</p>
+      <a href="${setupLink}" class="btn">Set Up My Account →</a>
+      <p style="margin-top:24px;font-size:0.82rem;color:#999">
+        If you were not expecting this email, please contact us at support@svcapital.co.za.
+      </p>
+    `),
+    text: `Hi ${firstName || 'there'}, set up your SV Capital account here (expires in 7 days): ${setupLink}`,
+  });
+}
+
+/* ── 9. Withdrawal requested (investor notification) ────────── */
 function sendWithdrawalRequested(investor, { amount, reference }) {
   const { email, first_name } = investor;
   return _send({
@@ -804,6 +822,7 @@ module.exports = {
   sendTicketResponse,
   sendTicketAssigned,
   sendPasswordReset,
+  sendAccountSetup,
   sendWithdrawalRequested,
   sendWithdrawalProcessed,
   sendWithdrawalRejected,
