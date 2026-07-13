@@ -29,12 +29,11 @@ body{background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',
 h2{font-size:1.2rem;font-weight:700;color:#303030;margin-bottom:14px}
 p{font-size:0.93rem;color:#444;line-height:1.65;margin-bottom:14px}
 .big{font-size:2.1rem;font-weight:800;color:#ff9b0c;display:block;margin:10px 0 18px}
-.box{background:#f7f9fc;border-radius:12px;padding:18px 22px;margin:18px 0}
-.row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #eee;font-size:0.87rem}
+.box{background:#f7f9fc;border-radius:12px;padding:12px 22px;margin:18px 0}
+.row{overflow:hidden;padding:9px 0;border-bottom:1px solid #eee;font-size:0.87rem}
 .row:last-child{border-bottom:none}
-.lbl{color:#888;white-space:nowrap}
-.lbl:after{content:'\\00a0\\00a0'}
-.val{font-weight:600;color:#303030;text-align:right}
+.lbl{color:#888;float:left;padding-right:24px;white-space:nowrap}
+.val{font-weight:600;color:#303030;float:right;text-align:right}
 .btn{display:inline-block;background:#ff9b0c;color:#fff!important;text-decoration:none!important;padding:13px 30px;border-radius:10px;font-weight:700;font-size:0.94rem;margin:10px 0}
 .green{color:#22c55e}
 .gold{color:#ff9b0c}

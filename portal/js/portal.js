@@ -3750,7 +3750,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
         <div class="mpc2-progress">
           ${Utils.poolIsDateTarget(pool) ? (() => {
             // Date-targeted pools have no funding goal — show days to closure, no bar.
-            const left = days === null ? '—' : (days === 0 ? 'Closed' : `${days} day${days === 1 ? '' : 's'} to closure`);
+            const left = days === null ? '—' : (days === 0 ? (pool.status === 'open' || pool.status === 'waitlist' ? 'Closing today' : 'Closed') : `${days} day${days === 1 ? '' : 's'} to closure`);
             return `
               <div class="mpc2-progress__labels">
                 <span><i class="fa-solid fa-clock" style="margin-right:4px"></i>${left}</span>
