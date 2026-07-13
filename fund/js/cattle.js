@@ -78,12 +78,17 @@ const fmt = {
 
 /* ── STATE ─────────────────────────────────────────────────── */
 const S = {
-  animals:  [],
+  animals:      [],
+  animalTotal:  0,
+  animalPages:  0,
+  animalStats:  { total: 0, sold: 0, mortalities: 0, avg_mass: null },
+  animalBatches: [],
+  animalBreeds:  [],
   cycles:   [],
   navSettings: {},
   currentView: 'nav',
   animalPage: 1,
-  animalPageSize: 50,
+  animalPageSize: 75,
   animalFilter: { search: '', batch: '', status: '', breed: '' },
   cyclePage: 1,
   cycleFilter: { search: '', company: '', status: '' },
@@ -661,58 +666,83 @@ function renderAnimalBar(cycle) {
 async function loadAnimals() {
   const el = document.getElementById('view-animals');
   if (!el) return;
-  el.innerHTML = `<div class="loading-state"><div class="spinner"></div> <span id="animalLoadStatus">Loading animals…</span></div>`;
+  el.innerHTML = `<div class="loading-state"><div class="spinner"></div><span>Loading animals…</span></div>`;
   try {
-    S.animals = await fetchAll('cattle_animals', (loaded, total) => {
-      const lbl = document.getElementById('animalLoadStatus');
-      if (lbl) lbl.textContent = total > 0 ? `Loading animals… ${loaded} of ${total}` : `Loading animals… ${loaded} found`;
-    });
-    S.animalPage = 1;
+    await Promise.all([_fetchAnimalStats(), _fetchAnimalPage()]);
     renderAnimalsView();
   } catch (err) {
     el.innerHTML = `<div class="empty-state"><i class="fa-solid fa-triangle-exclamation"></i><h3>Error loading animals</h3><p>${escapeHtml(err.message)}</p></div>`;
   }
 }
 
+async function _fetchAnimalStats() {
+  const q = new URLSearchParams();
+  if (S.animalFilter.search) q.set('search', S.animalFilter.search);
+  if (S.animalFilter.status) q.set('status', S.animalFilter.status);
+  if (S.animalFilter.batch)  q.set('batch_no', S.animalFilter.batch);
+  if (S.animalFilter.breed)  q.set('breed', S.animalFilter.breed);
+  const data = await apiGet(`cattle/animals/stats?${q}`);
+  S.animalStats   = data;
+  if (data.batches) S.animalBatches = data.batches;
+  if (data.breeds)  S.animalBreeds  = data.breeds;
+}
+
+async function _fetchAnimalPage() {
+  const q = new URLSearchParams({ page: S.animalPage, limit: S.animalPageSize, sort: 'tag_number', order: 'ASC' });
+  if (S.animalFilter.search) q.set('search', S.animalFilter.search);
+  if (S.animalFilter.status) q.set('status', S.animalFilter.status);
+  if (S.animalFilter.batch)  q.set('batch_no', S.animalFilter.batch);
+  if (S.animalFilter.breed)  q.set('breed', S.animalFilter.breed);
+  const res   = await apiGet(`tables/cattle_animals?${q}`);
+  S.animals     = res.data  || [];
+  S.animalTotal = res.total || 0;
+  S.animalPages = res.pages || 0;
+}
+
+let _animalSearchTimer = null;
+function _animalFilterChange(key, val) {
+  S.animalFilter[key] = val;
+  S.animalPage = 1;
+  if (key === 'search') {
+    clearTimeout(_animalSearchTimer);
+    _animalSearchTimer = setTimeout(_reloadAnimalPage, 350);
+  } else {
+    _reloadAnimalPage();
+  }
+}
+
+async function _reloadAnimalPage() {
+  const tbody = document.querySelector('#view-animals tbody');
+  if (tbody) tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:24px;color:var(--text-muted)"><div class="spinner" style="display:inline-block;margin-right:8px"></div>Loading…</td></tr>`;
+  try {
+    await Promise.all([_fetchAnimalStats(), _fetchAnimalPage()]);
+    renderAnimalsView();
+  } catch (err) {
+    CToast.show('Failed to load animals: ' + err.message, 'error');
+  }
+}
+
 function renderAnimalsView() {
   const el = document.getElementById('view-animals');
   if (!el) return;
-  const batches = [...new Set(S.animals.map(a => a.batch_no).filter(Boolean))].sort();
-  const breeds  = [...new Set(S.animals.map(a => a.breed).filter(Boolean))].sort();
-
-  let filtered = S.animals.filter(a => {
-    const q = S.animalFilter.search.toLowerCase();
-    const matchSearch  = !q || (a.tag_number||'').toLowerCase().includes(q) || (a.batch_name||'').toLowerCase().includes(q);
-    const matchBatch   = !S.animalFilter.batch  || a.batch_no === S.animalFilter.batch;
-    const matchStatus  = !S.animalFilter.status || a.status   === S.animalFilter.status;
-    const matchBreed   = !S.animalFilter.breed  || a.breed    === S.animalFilter.breed;
-    return matchSearch && matchBatch && matchStatus && matchBreed;
-  });
-
-  const totalPages = Math.ceil(filtered.length / S.animalPageSize);
-  const page = totalPages === 0 ? 0 : Math.min(S.animalPage, Math.max(1, totalPages));
-  const start = (page - 1) * S.animalPageSize;
-  const paged = page > 0 ? filtered.slice(start, start + S.animalPageSize) : [];
-
-  const totalMass = filtered.reduce((s,a) => s+(parseFloat(a.entry_mass)||0), 0);
-  const avgMass   = filtered.length > 0 ? totalMass / filtered.length : 0;
-  const sold      = filtered.filter(a => isTrue(a.sold)      || a.status === 'sold').length;
-  const mort      = filtered.filter(a => isTrue(a.mortality) || a.status === 'mortality').length;
+  const st   = S.animalStats;
+  const mort = st.mortalities || 0;
+  const tot  = st.total || 0;
 
   el.innerHTML = `
     <div class="stat-row">
-      <div class="stat-item"><div class="stat-item-label">Total Animals</div><div class="stat-item-value">${fmt.num(filtered.length)}</div></div>
-      <div class="stat-item"><div class="stat-item-label">Avg Entry Mass</div><div class="stat-item-value">${avgMass.toFixed(0)} kg</div></div>
-      <div class="stat-item"><div class="stat-item-label">Sold</div><div class="stat-item-value green">${fmt.num(sold)}</div></div>
+      <div class="stat-item"><div class="stat-item-label">Total Animals</div><div class="stat-item-value">${fmt.num(tot)}</div></div>
+      <div class="stat-item"><div class="stat-item-label">Avg Entry Mass</div><div class="stat-item-value">${st.avg_mass ? parseFloat(st.avg_mass).toFixed(0) + ' kg' : '—'}</div></div>
+      <div class="stat-item"><div class="stat-item-label">Sold</div><div class="stat-item-value green">${fmt.num(st.sold || 0)}</div></div>
       <div class="stat-item"><div class="stat-item-label">Mortalities</div><div class="stat-item-value red">${fmt.num(mort)}</div></div>
-      <div class="stat-item"><div class="stat-item-label">Mortality Rate</div><div class="stat-item-value">${filtered.length > 0 ? (mort/filtered.length*100).toFixed(2) : 0}%</div></div>
+      <div class="stat-item"><div class="stat-item-label">Mortality Rate</div><div class="stat-item-value">${tot > 0 ? (mort/tot*100).toFixed(2) : 0}%</div></div>
     </div>
 
     <div class="filter-bar">
-      <div class="search-box"><i class="fa-solid fa-search"></i><input type="text" placeholder="Search tag or batch…" value="${escapeHtml(S.animalFilter.search)}" oninput="S.animalFilter.search=this.value;S.animalPage=1;renderAnimalsView()"></div>
-      <select class="filter-select" onchange="S.animalFilter.batch=this.value;S.animalPage=1;renderAnimalsView()"><option value="">All Batches</option>${batches.map(b=>`<option value="${escapeHtml(b)}" ${S.animalFilter.batch===b?'selected':''}>${escapeHtml(b)}</option>`).join('')}</select>
-      <select class="filter-select" onchange="S.animalFilter.status=this.value;S.animalPage=1;renderAnimalsView()"><option value="">All Statuses</option><option value="active">Active</option><option value="sold">Sold</option><option value="mortality">Mortality</option></select>
-      <select class="filter-select" onchange="S.animalFilter.breed=this.value;S.animalPage=1;renderAnimalsView()"><option value="">All Breeds</option>${breeds.map(b=>`<option value="${escapeHtml(b)}" ${S.animalFilter.breed===b?'selected':''}>${escapeHtml(b)}</option>`).join('')}</select>
+      <div class="search-box"><i class="fa-solid fa-search"></i><input type="text" placeholder="Search tag or batch…" value="${escapeHtml(S.animalFilter.search)}" oninput="_animalFilterChange('search',this.value)"></div>
+      <select class="filter-select" onchange="_animalFilterChange('batch',this.value)"><option value="">All Batches</option>${S.animalBatches.map(b=>`<option value="${escapeHtml(b)}" ${S.animalFilter.batch===b?'selected':''}>${escapeHtml(b)}</option>`).join('')}</select>
+      <select class="filter-select" onchange="_animalFilterChange('status',this.value)"><option value="">All Statuses</option><option value="active" ${S.animalFilter.status==='active'?'selected':''}>Active</option><option value="sold" ${S.animalFilter.status==='sold'?'selected':''}>Sold</option><option value="mortality" ${S.animalFilter.status==='mortality'?'selected':''}>Mortality</option></select>
+      <select class="filter-select" onchange="_animalFilterChange('breed',this.value)"><option value="">All Breeds</option>${S.animalBreeds.map(b=>`<option value="${escapeHtml(b)}" ${S.animalFilter.breed===b?'selected':''}>${escapeHtml(b)}</option>`).join('')}</select>
       <button class="btn btn-primary btn-sm" onclick="openAddAnimalModal()"><i class="fa-solid fa-plus"></i> Add Animal</button>
     </div>
 
@@ -720,7 +750,7 @@ function renderAnimalsView() {
       <div class="table-wrap">
         <table class="data-table">
           <thead><tr><th>Tag Number</th><th>Batch</th><th>Batch Name</th><th>Breed</th><th>Gender</th><th class="num">Entry Mass</th><th class="num">Exit Mass</th><th>Status</th><th>Sale Batch</th><th>Sale Date</th><th class="num">NAV Value</th><th>Actions</th></tr></thead>
-          <tbody>${paged.map(a => {
+          <tbody>${S.animals.map(a => {
             const status = isTrue(a.mortality) ? 'mortality' : isTrue(a.sold) ? 'sold' : (a.status || 'active');
             const statusBadge = { sold:'badge-green', mortality:'badge-red', active:'badge-blue' };
             const nav = status === 'active' ? NAV.animalNAV(a, 30) : null;
@@ -741,7 +771,7 @@ function renderAnimalsView() {
           }).join('')}</tbody>
         </table>
       </div>
-      ${renderPagination(page, totalPages, 'animalPage', 'renderAnimalsView')}
+      ${renderPagination(S.animalPage, S.animalPages, 'animalPage', '_reloadAnimalPage')}
     </div>
   `;
 }
@@ -879,8 +909,8 @@ function cleanDate(val) {
 /* ── Gender helper ───────────────────────────────────────── */
 function parseGender(raw) {
   const v = String(raw || '').trim();
-  if (v === '1') return 'Male';
-  if (v === '3') return 'Female';
+  if (v === '1' || v.toLowerCase() === 'male')   return 'Male';
+  if (v === '3' || v.toLowerCase() === 'female') return 'Female';
   return v || null;
 }
 
@@ -1398,18 +1428,15 @@ async function saveAnimalForm() {
 
   try {
     if (_editingAnimalId) {
-      const updated = await apiPatch(`tables/cattle_animals/${_editingAnimalId}`, data);
-      const idx = S.animals.findIndex(x => x.id === _editingAnimalId);
-      if (idx !== -1) S.animals[idx] = { ...S.animals[idx], ...updated };
+      await apiPatch(`tables/cattle_animals/${_editingAnimalId}`, data);
       CToast.show('Animal updated', 'success');
     } else {
-      const created = await apiPost('tables/cattle_animals', data);
-      S.animals.unshift(created);
+      await apiPost('tables/cattle_animals', data);
       CToast.show('Animal added', 'success');
     }
     closeAnimalForm();
     S.animalPage = 1;
-    renderAnimalsView();
+    await _reloadAnimalPage();
   } catch(e) {
     CToast.show('Error saving animal: ' + e.message, 'error');
   } finally {
@@ -1422,9 +1449,8 @@ async function deleteAnimal(id) {
   if (!confirm('Delete this animal record? This cannot be undone.')) return;
   try {
     await apiDelete(`tables/cattle_animals/${id}`);
-    S.animals = S.animals.filter(a => a.id !== id);
-    renderAnimalsView();
     CToast.show('Animal deleted', 'success');
+    await _reloadAnimalPage();
   } catch(e) {
     CToast.show('Error deleting animal', 'error');
   }
