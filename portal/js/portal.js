@@ -3027,7 +3027,7 @@ async function confirmEftDeposit() {
     let description = `EFT wallet top-up of R${amount.toLocaleString('en-ZA',{minimumFractionDigits:2})} submitted by ${investorName} (${investorId}). Reference: ${ref}.`;
 
     if (_eftProofFile && _eftProofBase64) {
-      description += `\n\nProof of payment attached: ${_eftProofFile.name} (${(_eftProofFile.size/1024).toFixed(1)} KB).\nData URL: ${_eftProofBase64.substring(0, 200)}...`;
+      description += `\n\nProof of payment attached: ${_eftProofFile.name} (${(_eftProofFile.size/1024).toFixed(1)} KB).`;
     } else {
       description += '\n\nNo proof of payment was uploaded. Investor was advised to email admin@svcapital.co.za.';
     }
@@ -3043,6 +3043,7 @@ async function confirmEftDeposit() {
       message:       description,
       proof_filename: _eftProofFile ? _eftProofFile.name : '',
       proof_attached: !!_eftProofFile,
+      file_url:       _eftProofBase64 || null,
       created_at:    new Date().toISOString(),
     });
   } catch (ticketErr) {
@@ -4635,11 +4636,8 @@ async function submitTicket(btn) {
   if (message.length > 1200) { Toast.error('Please keep your message under 1,200 characters'); return; }
 
   let attachmentInfo = '';
-  if (_tktAttachFile && _tktAttachBase64) {
-    attachmentInfo = `
-
-📎 Attachment: ${_tktAttachFile.name} (${(_tktAttachFile.size/1024).toFixed(1)} KB)
-Data: ${_tktAttachBase64}`;
+  if (_tktAttachFile) {
+    attachmentInfo = `\n\n📎 Attachment: ${_tktAttachFile.name} (${(_tktAttachFile.size/1024).toFixed(1)} KB)`;
   }
 
   await _withBtn(btn, async () => {
@@ -4655,6 +4653,7 @@ Data: ${_tktAttachBase64}`;
         message:        message + attachmentInfo,
         proof_attached: !!_tktAttachFile,
         proof_filename: _tktAttachFile ? _tktAttachFile.name : '',
+        file_url:       _tktAttachBase64 || null,
         status:         'open',
       });
       Toast.success('Support ticket submitted. We\'ll respond within 1 business day.');

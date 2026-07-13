@@ -1169,6 +1169,7 @@ async function autoSetup() {
         BEGIN ALTER TABLE support_tickets ADD COLUMN admin_response TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE support_tickets ADD COLUMN proof_attached BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE support_tickets ADD COLUMN proof_filename TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE support_tickets ADD COLUMN file_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE kyc_documents ADD COLUMN sub_account_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE kyc_documents ADD COLUMN file_data TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE kyc_documents ADD COLUMN investor_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
