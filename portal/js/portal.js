@@ -4449,8 +4449,9 @@ async function openMaturityModal(investmentId) {
   if (!inv) return;
 
   const isDeliveryBike = (inv.product_type || '').includes('delivery_bike');
-  const isActive  = inv.status === 'active';
-  const total     = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
+  const isActive      = inv.status === 'active';
+  const hasActualRate = !!(inv.actual_return_amount && inv.actual_return_amount > 0);
+  const total         = hasActualRate ? inv.amount + inv.actual_return_amount : null;
 
   // Delivery bike: force payout_all — no reinvest options
   const existing = isDeliveryBike
@@ -4474,8 +4475,10 @@ async function openMaturityModal(investmentId) {
     <div class="info-list mb-16">
       <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(inv.pool_name)}</span></div>
       <div class="info-row"><span class="info-row__label">Capital</span><span class="info-row__value">${Utils.rand(inv.amount)}</span></div>
-      <div class="info-row"><span class="info-row__label">Returns</span><span class="info-row__value text-green">${Utils.rand(inv.actual_return_amount || inv.expected_return_amount)}</span></div>
+      ${hasActualRate ? `
+      <div class="info-row"><span class="info-row__label">Actual Rate (Achieved)</span><span class="info-row__value text-green">${Utils.rand(inv.actual_return_amount)}</span></div>
       <div class="info-row"><span class="info-row__label">Total Payout</span><span class="info-row__value text-gold fw-700">${Utils.rand(total)}</span></div>
+      ` : ''}
     </div>
 
     <div class="form-group">
@@ -4517,7 +4520,7 @@ async function openMaturityModal(investmentId) {
     <div id="customPayoutGroup" style="display:${(existing==='payout_custom'||existing==='custom_switch')?'block':'none'}">
       <div class="form-group">
         <label class="form-label">Amount to Pay Out (R)</label>
-        <input type="number" class="form-input" id="matCustomAmount" placeholder="Amount to withdraw" max="${total}" value="${inv.custom_payout_amount || ''}" />
+        <input type="number" class="form-input" id="matCustomAmount" placeholder="Amount to withdraw" max="${total ?? ''}" value="${inv.custom_payout_amount || ''}" />
         ${!isDeliveryBike ? `<div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px"><i class="fa-solid fa-info-circle"></i> The remaining balance is reinvested (Custom Payout) or switched to the chosen product (Custom Switch).</div>` : ''}
       </div>
     </div>
