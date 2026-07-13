@@ -909,8 +909,8 @@ function cleanDate(val) {
 /* ── Gender helper ───────────────────────────────────────── */
 function parseGender(raw) {
   const v = String(raw || '').trim();
-  if (v === '1') return 'Male';
-  if (v === '3') return 'Female';
+  if (v === '1' || v.toLowerCase() === 'male')   return 'Male';
+  if (v === '3' || v.toLowerCase() === 'female') return 'Female';
   return v || null;
 }
 
