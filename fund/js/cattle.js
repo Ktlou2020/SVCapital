@@ -853,6 +853,30 @@ function cleanDate(val) {
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+/* ── Gender helper ───────────────────────────────────────── */
+function parseGender(raw) {
+  const v = String(raw || '').trim();
+  if (v === '1') return 'Male';
+  if (v === '3') return 'Female';
+  return v || null;
+}
+
+/* ── Batch sender: send records to endpoint in chunks ────── */
+async function sendInChunks(endpoint, records, bar, lbl, chunkSize = 200) {
+  let totalInserted = 0, totalSkipped = 0;
+  for (let i = 0; i < records.length; i += chunkSize) {
+    const chunk = records.slice(i, i + chunkSize);
+    const result = await apiPost(endpoint, { records: chunk });
+    totalInserted += result.inserted || 0;
+    totalSkipped  += result.skipped  || 0;
+    const pct = Math.min(100, Math.round((i + chunk.length) / records.length * 100));
+    bar.style.width = pct + '%';
+    lbl.textContent = `Importing… ${Math.min(i + chunkSize, records.length)} / ${records.length} — ${totalInserted} saved, ${totalSkipped} skipped`;
+    await new Promise(r => setTimeout(r, 0));
+  }
+  return { inserted: totalInserted, skipped: totalSkipped };
+}
+
 let _cyclesData = [];
 function handleCyclesFile(file) {
   if (!file) return;
@@ -862,12 +886,29 @@ function handleCyclesFile(file) {
     _cyclesData = rows;
     const statusCounts = {};
     rows.forEach(r => { const s = (r['Status']||'unknown').toLowerCase(); statusCounts[s]=(statusCounts[s]||0)+1; });
+    const sold    = statusCounts['sold']   || 0;
+    const active  = statusCounts['active'] || statusCounts['open'] || (rows.length - sold);
     document.getElementById('cyclesImportPreview').innerHTML = `
       <div class="import-preview">
         <h4><i class="fa-solid fa-check-circle" style="color:var(--green-mid)"></i> File ready: ${escapeHtml(file.name)}</h4>
-        <div class="import-stats"><div class="import-stat">Rows found: <strong>${rows.length}</strong></div>${Object.entries(statusCounts).map(([k,v]) => `<div class="import-stat">${escapeHtml(k)}: <strong>${v}</strong></div>`).join('')}</div>
-        <p style="font-size:12px;color:var(--text-muted)">Preview (first 3):</p>
-        <table class="data-table" style="font-size:11px;margin-top:6px"><thead><tr><th>Name</th><th>Company</th><th>Purchased</th><th>Live</th><th>Purchase Value</th><th>Status</th></tr></thead><tbody>${rows.slice(0,3).map(r=>`<tr><td>${escapeHtml(r['Name']||'—')}</td><td>${escapeHtml(r['Company']||'—')}</td><td>${escapeHtml(r['No of Purchased cattle']||'—')}</td><td>${escapeHtml(r['Live # of cattle']||'—')}</td><td>${escapeHtml(r['Purchase Value']||'—')}</td><td>${escapeHtml(r['Status']||'—')}</td></tr>`).join('')}</tbody></table>
+        <div class="import-stats">
+          <div class="import-stat">Batches found: <strong>${rows.length}</strong></div>
+          <div class="import-stat">Sold: <strong>${sold}</strong></div>
+          <div class="import-stat">Active: <strong>${active}</strong></div>
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:10px">Preview (first 3):</p>
+        <table class="data-table" style="font-size:11px;margin-top:6px">
+          <thead><tr><th>Batch Name</th><th>INV No</th><th>Company</th><th>Purchased</th><th>Live</th><th>Purchase Value</th><th>Status</th></tr></thead>
+          <tbody>${rows.slice(0,3).map(r=>`<tr>
+            <td>${escapeHtml(r['Name']||'—')}</td>
+            <td>${escapeHtml(r['INV No (IN0)']||r['INV No']||'—')}</td>
+            <td>${escapeHtml(r['Company']||'—')}</td>
+            <td>${escapeHtml(r['No of Purchased cattle']||'—')}</td>
+            <td>${escapeHtml(r['Live # of cattle']||'—')}</td>
+            <td>${escapeHtml(r['Purchase Value']||'—')}</td>
+            <td>${escapeHtml(r['Status']||'—')}</td>
+          </tr>`).join('')}</tbody>
+        </table>
       </div>`;
     document.getElementById('cyclesImportActions').style.display = 'flex';
     document.getElementById('cyclesImportActions').style.gap = '10px';
@@ -883,55 +924,46 @@ async function importCycles() {
   prog.style.display = 'block';
   document.getElementById('cyclesImportActions').style.display = 'none';
 
-  let imported = 0, errors = 0;
+  const records = _cyclesData.map(r => ({
+    batch_name:             r['Name'] || '',
+    inv_no:                 r['INV No (IN0)'] || r['INV No'] || '',
+    invoice_date:           cleanDate(r['Invoice Date_'] || r['Invoice Date']),
+    cycle_start_date:       cleanDate(r['Cycle Start Date']),
+    end_date:               cleanDate(r['End date']),
+    sale_date:              cleanDate(r['Sale Date']),
+    cycle_no:               r['Cycle No'] || '',
+    days_in_cycle:          parseInt(r['Final No of days for cycle']) || parseInt(r['# of days left']) || null,
+    company:                r['Company'] || '',
+    no_purchased:           parseInt(r['No of Purchased cattle']) || 0,
+    mortalities:            parseInt(r['Mortalities']) || 0,
+    no_live:                parseInt(r['Live # of cattle']) || 0,
+    no_sold:                parseInt(r['No of cattle sold']) || 0,
+    unsold_cattle:          parseInt(r['Unsold Cattle']) || 0,
+    avg_cattle_cost:        cleanZAR(r['Average Cattle Cost']),
+    purchase_value:         cleanZAR(r['Purchase Value']),
+    expected_sale_value:    cleanZAR(r['Expected Sale value']),
+    total_selling_price:    cleanZAR(r['Total Selling Price']),
+    selling_price_per_head: cleanZAR(r['Selling price per head of cattle']),
+    svc_standing_fee:       cleanZAR(r['SVC Standing Fee']),
+    net_return_pct:         parseFloat((r['Return']||'').replace(/[%,\s]/g,'')) || null,
+    outstanding_invoice:    cleanZAR(r['Outstanding Invoice PMT']),
+    invoice_paid:           r['Invoice paid'] || 'Pending',
+    status:                 (r['Status']||'').toLowerCase() === 'sold' ? 'sold' : 'active',
+    notes:                  (r['Additional Notes']||r['Notes']||'').substring(0,500),
+  }));
 
-  for (let i = 0; i < _cyclesData.length; i++) {
-    const r = _cyclesData[i];
-    try {
-      const record = {
-        batch_name:          r['Name'] || '',
-        inv_no:              r['INV No (IN0)'] || r['INV No'] || '',
-        invoice_date:        cleanDate(r['Invoice Date_'] || r['Invoice Date']),
-        cycle_start_date:    cleanDate(r['Cycle Start Date']),
-        end_date:            cleanDate(r['End date']),
-        sale_date:           cleanDate(r['Sale Date']),
-        cycle_no:            r['Cycle No'] || '',
-        days_in_cycle:       parseInt(r['Final No of days for cycle']) || parseInt(r['# of days left']) || null,
-        company:             r['Company'] || '',
-        no_purchased:        parseInt(r['No of Purchased cattle']) || 0,
-        mortalities:         parseInt(r['Mortalities']) || 0,
-        no_live:             parseInt(r['Live # of cattle']) || 0,
-        no_sold:             parseInt(r['No of cattle sold']) || 0,
-        unsold_cattle:       parseInt(r['Unsold Cattle']) || 0,
-        avg_cattle_cost:     cleanZAR(r['Average Cattle Cost']),
-        purchase_value:      cleanZAR(r['Purchase Value']),
-        expected_sale_value: cleanZAR(r['Expected Sale value']),
-        total_selling_price: cleanZAR(r['Total Selling Price']),
-        selling_price_per_head: cleanZAR(r['Selling price per head of cattle']),
-        svc_standing_fee:    cleanZAR(r['SVC Standing Fee']),
-        net_return_pct:      parseFloat((r['Return']||'').replace(/[%,\s]/g,'')) || null,
-        outstanding_invoice: cleanZAR(r['Outstanding Invoice PMT']),
-        invoice_paid:        r['Invoice paid'] || 'Pending',
-        status:              (r['Status']||'').toLowerCase() === 'sold' ? 'sold' : 'active',
-        notes:               (r['Additional Notes']||r['Notes']||'').substring(0,500)
-      };
-      // No ID sent – backend will generate
-      await apiPost('tables/cattle_cycles', record);
-      imported++;
-    } catch(e) { errors++; }
-    if (i % 5 === 0 || i === _cyclesData.length - 1) {
-      const pct = Math.round((i + 1) / _cyclesData.length * 100);
-      bar.style.width = pct + '%';
-      lbl.textContent = `Importing… ${i + 1} / ${_cyclesData.length} — ${imported} saved, ${errors} errors`;
-      await new Promise(r => setTimeout(r, 0));
-    }
+  try {
+    const { inserted, skipped } = await sendInChunks('cattle/import/cycles', records, bar, lbl);
+    bar.style.width = '100%';
+    lbl.textContent = `✅ Done — ${inserted} cycles imported, ${skipped} already existed`;
+    CToast.show(`${inserted} cattle cycles imported`, 'success');
+  } catch(err) {
+    lbl.textContent = `❌ Import failed: ${err.message}`;
+    CToast.show('Import failed — check console', 'error');
   }
 
-  bar.style.width = '100%';
-  lbl.textContent = `✅ Done — ${imported} cycles imported, ${errors} errors`;
-  CToast.show(`${imported} cattle cycles imported successfully`, 'success');
   _cyclesData = [];
-  await loadCycles(); // refresh view
+  await loadCycles();
 }
 
 function clearCyclesPreview() {
@@ -951,33 +983,38 @@ function handleAnimalsFile(file) {
     _animalsData = rows;
     const breedCounts = {};
     rows.forEach(r => { const b = (r['Breed']||'Unknown'); breedCounts[b]=(breedCounts[b]||0)+1; });
-    const topBreeds = Object.entries(breedCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const topBreeds   = Object.entries(breedCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
     const mortalities = rows.filter(r => r['Mortality'] && r['Mortality'].trim()).length;
     const sold        = rows.filter(r => (r['Sold']||'').toLowerCase()==='checked').length;
-    const preview3    = rows.slice(0, 3);
+    const males       = rows.filter(r => String(r['Gender']).trim() === '1').length;
+    const females     = rows.filter(r => String(r['Gender']).trim() === '3').length;
+    const batches     = new Set(rows.map(r => r['Name']).filter(Boolean)).size;
     document.getElementById('animalsImportPreview').innerHTML = `
       <div class="import-preview">
         <h4><i class="fa-solid fa-check-circle" style="color:var(--green-mid)"></i> File ready: ${escapeHtml(file.name)}</h4>
         <div class="import-stats">
-          <div class="import-stat">Animals found: <strong>${rows.length}</strong></div>
-          <div class="import-stat">Sold: <strong>${sold}</strong></div>
+          <div class="import-stat">Animals: <strong>${rows.length.toLocaleString()}</strong></div>
+          <div class="import-stat">Batches: <strong>${batches}</strong></div>
+          <div class="import-stat">Male: <strong>${males.toLocaleString()}</strong></div>
+          <div class="import-stat">Female: <strong>${females.toLocaleString()}</strong></div>
+          <div class="import-stat">Sold: <strong>${sold.toLocaleString()}</strong></div>
           <div class="import-stat">Mortalities: <strong>${mortalities}</strong></div>
           ${topBreeds.map(([b,c])=>`<div class="import-stat">${escapeHtml(b)}: <strong>${c}</strong></div>`).join('')}
         </div>
         <p style="font-size:12px;color:var(--text-muted);margin-top:10px">Preview (first 3 rows):</p>
         <table class="data-table" style="font-size:11px;margin-top:6px">
-          <thead><tr><th>Tag #</th><th>Batch No</th><th>Batch Name</th><th>Breed</th><th>Gender</th><th>Mass (kg)</th><th>Sold</th><th>Status</th></tr></thead>
-          <tbody>${preview3.map(r => {
+          <thead><tr><th>Tag #</th><th>Batch Name</th><th>Breed</th><th>Gender</th><th>Mass (kg)</th><th>Dim Tag</th><th>Sold</th><th>Status</th></tr></thead>
+          <tbody>${rows.slice(0,3).map(r => {
             const isMort = r['Mortality'] && r['Mortality'].trim();
             const isSold = (r['Sold']||'').toLowerCase() === 'checked';
             const status = isMort ? 'mortality' : isSold ? 'sold' : 'active';
             return `<tr>
               <td>${escapeHtml(r['Main tag number']||'—')}</td>
-              <td>${escapeHtml(r['Batch No']||'—')}</td>
               <td>${escapeHtml(r['Name']||'—')}</td>
               <td>${escapeHtml(r['Breed']||'—')}</td>
-              <td>${escapeHtml(r['Gender']||'—')}</td>
+              <td>${escapeHtml(parseGender(r['Gender']))}</td>
               <td>${escapeHtml(r['Entry Mass']||'—')}</td>
+              <td style="font-size:10px">${escapeHtml(r['Dim Tag']||'—')}</td>
               <td>${isSold ? '✅' : '—'}</td>
               <td>${status}</td>
             </tr>`;
@@ -998,54 +1035,40 @@ async function importAnimals() {
   prog.style.display = 'block';
   document.getElementById('animalsImportActions').style.display = 'none';
 
-  // Build a lookup from batch_name → cycle id so imported animals auto-link to their cycle
-  const cycleByName = {};
-  (S.cycles || []).forEach(c => { if (c.batch_name) cycleByName[c.batch_name.toLowerCase()] = c.id; });
+  const records = _animalsData.map(r => {
+    const isMortality = !!(r['Mortality'] && r['Mortality'].trim());
+    const isSold      = (r['Sold']||'').toLowerCase() === 'checked';
+    return {
+      tag_number:       r['Main tag number'] || '',
+      batch_no:         r['Batch No']        || '',
+      batch_name:       r['Name']            || '',
+      entry_mass:       parseFloat(r['Entry Mass']) || null,
+      gender:           parseGender(r['Gender']),
+      breed:            r['Breed']           || '',
+      dim_tag:          r['Dim Tag']         || '',
+      extra_colour_tag: r['Extra Colour Tag']|| '',
+      mortality:        isMortality,
+      mortality_date:   cleanDate(r['Date']),
+      mortality_report: r['Mortality Report']|| '',
+      sold:             isSold,
+      sale_batch:       r['Sale Batch']      || '',
+      sale_date:        cleanDate(r['Sale date']),
+      notes:            '',
+    };
+  });
 
-  let imported = 0, errors = 0, lastErr = '';
-
-  for (let i = 0; i < _animalsData.length; i++) {
-    const r  = _animalsData[i];
-    try {
-      const isMortality = r['Mortality'] && r['Mortality'].trim() !== '';
-      const isSold      = (r['Sold']||'').toLowerCase() === 'checked';
-      const batchName   = r['Name'] || '';
-      const record = {
-        tag_number:      r['Main tag number'] || '',
-        batch_no:        r['Batch No'] || '',
-        batch_name:      batchName,
-        cycle_id:        cycleByName[batchName.toLowerCase()] || null,
-        entry_mass:      parseFloat(r['Entry Mass']) || null,
-        gender:          r['Gender'] || '',
-        breed:           r['Breed'] || '',
-        status:          isMortality ? 'mortality' : isSold ? 'sold' : 'active',
-        mortality:       isMortality,
-        mortality_date:  cleanDate(r['Date']),
-        mortality_report:r['Mortality Report'] || '',
-        sold:            isSold,
-        sale_batch:      r['Sale Batch'] || '',
-        sale_date:       cleanDate(r['Sale date']),
-        notes:           r['Notes'] || ''
-      };
-      await apiPost('tables/cattle_animals', record);
-      imported++;
-    } catch(e) { errors++; lastErr = e.message; }
-    if (i % 10 === 0 || i === _animalsData.length - 1) {
-      const pct = Math.round((i + 1) / _animalsData.length * 100);
-      bar.style.width = pct + '%';
-      lbl.textContent = `Importing… ${i + 1} / ${_animalsData.length} — ${imported} saved, ${errors} errors`;
-      await new Promise(r => setTimeout(r, 0));
-    }
+  try {
+    const { inserted, skipped } = await sendInChunks('cattle/import/animals', records, bar, lbl);
+    bar.style.width = '100%';
+    lbl.textContent = `✅ Done — ${inserted.toLocaleString()} animals imported, ${skipped.toLocaleString()} already existed`;
+    CToast.show(`${inserted.toLocaleString()} animals imported`, 'success');
+  } catch(err) {
+    lbl.textContent = `❌ Import failed: ${err.message}`;
+    CToast.show('Import failed — check console', 'error');
   }
 
-  bar.style.width = '100%';
-  const linked = Object.keys(cycleByName).length > 0 ? ' (auto-linked to cycles)' : '';
-  lbl.textContent = errors === 0
-    ? `✅ Done — ${imported} animals imported${linked}`
-    : `⚠️ Done — ${imported} imported, ${errors} errors${lastErr ? ': ' + lastErr : ''}`;
-  CToast.show(`${imported} individual animals imported successfully`, 'success');
   _animalsData = [];
-  await loadAnimals(); // refresh view
+  await loadAnimals();
 }
 
 function clearAnimalsPreview() {
