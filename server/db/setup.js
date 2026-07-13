@@ -1270,27 +1270,31 @@ async function autoSetup() {
       console.warn('⚠️  investor_id repair warning:', backfillErr.message);
     }
 
-    // 2. Check if the COO account already exists — if so, skip seeding entirely
+    // 2. Ensure the COO account exists — upsert so existing users are never wiped
+    const cooPassword = process.env.COO_PASSWORD;
+    if (!cooPassword) throw new Error('[setup] COO_PASSWORD env var must be set before seeding the database');
+
     const { rows: existing } = await pool.query(
       "SELECT id FROM users WHERE email = 'coo@svcapital.co.za' LIMIT 1"
     );
+
     if (existing.length > 0) {
       const { rows: count } = await pool.query('SELECT COUNT(*) FROM users');
       console.log(`✅ Database already provisioned (${count[0].count} users) — skipping seed.`);
       return;
     }
 
-    // 3. Wipe all legacy / demo users and re-provision with COO only
-    console.log('🌱 Provisioning production user accounts…');
-    await pool.query('DELETE FROM users');
-
-    const cooPassword = process.env.COO_PASSWORD;
-    if (!cooPassword) throw new Error('[setup] COO_PASSWORD env var must be set before seeding the database');
+    // First-time setup: COO account missing — create it without touching other users
+    console.log('🌱 Provisioning COO account…');
     const cooHash = await bcrypt.hash(cooPassword, 12);
 
     await pool.query(`
       INSERT INTO users (email, password_hash, role, first_name, last_name)
       VALUES ('coo@svcapital.co.za', $1, 'director', 'COO', 'SV Capital')
+      ON CONFLICT (email) DO UPDATE SET
+        password_hash = EXCLUDED.password_hash,
+        role          = 'director',
+        is_active     = true
     `, [cooHash]);
 
     // 4. Seed investment pools (operational reference data — not personal)
