@@ -595,7 +595,7 @@ function renderMarketConversionPanel(pools) {
               <span style="font-size:0.68rem;font-weight:800;color:${idx === 0 ? accent : '#6b7280'};background:${idx === 0 ? accent + '14' : 'rgba(107,114,128,0.1)'};padding:3px 8px;border-radius:999px;border:1px solid ${idx === 0 ? accent + '33' : 'rgba(107,114,128,0.15)'}">${idx === 0 ? 'Best next step' : pool.status === 'waitlist' ? 'Waitlist' : 'Worth comparing'}</span>
             </div>
             <div style="font-size:0.83rem;font-weight:800;color:#1a1a1a;line-height:1.35">${_esc(pool.name || 'Pool')}</div>
-            <div style="display:flex;justify-content:space-between;gap:8px;margin-top:10px;font-size:0.73rem;color:var(--text-muted)"><span>${Utils.pct(pool.annual_rate)} p.a.</span><span>${pool.term_months || '—'} months</span></div>
+            <div style="display:flex;justify-content:space-between;gap:8px;margin-top:10px;font-size:0.73rem;color:var(--text-muted)"><span>${Utils.pct(pool.annual_rate)} benchmark</span><span>${pool.term_months || '—'} months</span></div>
             <div style="display:flex;justify-content:space-between;gap:8px;margin-top:4px;font-size:0.73rem;color:var(--text-muted)"><span>Minimum</span><span style="font-weight:800;color:${affordableNow ? '#22c55e' : '#1a1a1a'}">${Utils.rand(min)}</span></div>
             <div style="display:flex;justify-content:space-between;gap:8px;margin-top:4px;font-size:0.73rem;color:var(--text-muted)"><span>Closes in</span><span>${days === null ? '—' : days + 'd'}</span></div>
           </div>`;
@@ -1080,7 +1080,7 @@ function loadNotifications() {
     notifs.push({
       icon: 'fa-chart-line', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#656565',
       title: 'New investment pool available',
-      sub: `${np.name || np.pool_name} — ${Utils.pct(np.annual_rate || np.benchmark_rate)} p.a. over ${np.term_months} months.`,
+      sub: `${np.name || np.pool_name} — ${Utils.pct(np.annual_rate || np.benchmark_rate)} benchmark over ${np.term_months} months.`,
       time: Utils.timeAgo(np.created_at),
       action: "navigate('marketplace',document.querySelector('[data-view=marketplace]'))",
       unread: false,
@@ -3880,7 +3880,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
         <div class="mpc2-metrics">
           <div class="mpc2-metric">
             <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${pi.color},${pi.color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${Utils.pct(pool.annual_rate)}</div>
-            <div class="mpc2-metric__lbl">per annum</div>
+            <div class="mpc2-metric__lbl">benchmark</div>
           </div>
           <div class="mpc2-metric-sep"></div>
           <div class="mpc2-metric">
@@ -4207,7 +4207,7 @@ function openInvestModal(poolId) {
       <div class="invest-modal-pool-info">
         <div class="invest-modal-pool-name">${pool.name}</div>
         <div class="invest-modal-pool-meta">
-          <span style="color:${pi.color};font-weight:700">${Utils.pct(pool.annual_rate)} per year</span>
+          <span style="color:${pi.color};font-weight:700">${Utils.pct(pool.annual_rate)} benchmark</span>
           <span>·</span>
           <span>${pool.term_months}-month term</span>
           <span>·</span>
