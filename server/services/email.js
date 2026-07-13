@@ -33,7 +33,7 @@ p{font-size:0.93rem;color:#444;line-height:1.65;margin-bottom:14px}
 .row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #eee;font-size:0.87rem}
 .row:last-child{border-bottom:none}
 .lbl{color:#888;white-space:nowrap}
-.lbl:after{content:'\00a0\00a0'}
+.lbl:after{content:'\\00a0\\00a0'}
 .val{font-weight:600;color:#303030;text-align:right}
 .btn{display:inline-block;background:#ff9b0c;color:#fff!important;text-decoration:none!important;padding:13px 30px;border-radius:10px;font-weight:700;font-size:0.94rem;margin:10px 0}
 .green{color:#22c55e}
