@@ -404,12 +404,20 @@ function _isInvestorFicaApproved(inv = PORTAL.investor) {
   return ['approved', 'verified', 'active'].includes(state);
 }
 
+function _poolEndMs(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) d.setHours(23, 58, 0, 0);
+  return d.getTime();
+}
+
 function _getOpenMarketplacePools() {
   const now = Date.now();
   return (PORTAL.pools || []).filter(p => {
     if (!p) return false;
     if (p.status !== 'open' && p.status !== 'waitlist') return false;
-    if (p.end_date && new Date(p.end_date).getTime() < now) return false;
+    const end = _poolEndMs(p.end_date);
+    if (end !== null && end < now) return false;
     return true;
   });
 }
@@ -3341,7 +3349,8 @@ function _openPoolsForProduct(type) {
   return PORTAL.pools.filter(p => {
     if (p.product_type !== type) return false;
     if (p.status !== 'open' && p.status !== 'waitlist') return false;
-    if (p.end_date && new Date(p.end_date).getTime() < now) return false;
+    const end = _poolEndMs(p.end_date);
+    if (end !== null && end < now) return false;
     return true;
   });
 }
