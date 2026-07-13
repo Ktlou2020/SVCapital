@@ -3568,8 +3568,22 @@ async function viewTicket(id) {
 
   const isBankVerification = tkt.category === 'bank_verification';
   const isFicaSubmission   = tkt.category === 'fica_submission' || tkt.category === 'fica';
-  const hasProof           = !!(tkt.proof_attached || tkt.proof_filename || tkt.file_url);
-  const showActionBtns     = (isBankVerification || isFicaSubmission || hasProof) && tkt.status !== 'resolved' && tkt.status !== 'closed';
+
+  // Extract base64 data URL embedded in message (format: "\nData URL:\ndata:...")
+  const msgStr = tkt.message || '';
+  const dataMarkerIdx = msgStr.indexOf('\nData URL:');
+  let attachDataUrl  = tkt.file_url || null;
+  let cleanMessage   = msgStr;
+  if (dataMarkerIdx !== -1) {
+    const rawUrl = msgStr.slice(dataMarkerIdx + '\nData URL:'.length).trim();
+    if (rawUrl.startsWith('data:')) {
+      attachDataUrl = attachDataUrl || rawUrl;
+      cleanMessage  = msgStr.slice(0, dataMarkerIdx).trim();
+    }
+  }
+
+  const hasProof       = !!(tkt.proof_attached || tkt.proof_filename || tkt.file_url || attachDataUrl);
+  const showActionBtns = (isBankVerification || isFicaSubmission || hasProof) && tkt.status !== 'resolved' && tkt.status !== 'closed';
 
   document.getElementById('ticketModalTitle').textContent = `Ticket #${tkt.id} — ${tkt.subject}`;
   document.getElementById('ticketModalBody').innerHTML = `
@@ -3582,10 +3596,17 @@ async function viewTicket(id) {
       ${tkt.responded_at ? `<div class="info-row"><span class="info-row__label">Last Response</span><span class="info-row__value td-muted">${Utils.date(tkt.responded_at)}</span></div>` : ''}
     </div>
     ${hasProof ? `<div class="panel mb-12" style="border:1.5px solid rgba(255,155,12,0.3)">
-      <div class="panel__header" style="background:rgba(255,155,12,0.08)"><span class="panel__title"><i class="fa-solid fa-paperclip" style="color:#ff9b0c;margin-right:6px"></i>Document Attached</span></div>
-      <div class="panel__body">
-        ${tkt.file_url ? `<a href="${_esc(tkt.file_url)}" target="_blank" class="btn btn--secondary btn--sm"><i class="fa-solid fa-eye"></i> View Document</a>` : ''}
-        ${tkt.proof_filename ? `<span style="font-size:0.8rem;color:var(--text-muted);margin-left:8px">${_esc(tkt.proof_filename)}</span>` : ''}
+      <div class="panel__header" style="background:rgba(255,155,12,0.08)">
+        <span class="panel__title"><i class="fa-solid fa-paperclip" style="color:#ff9b0c;margin-right:6px"></i>Document Attached</span>
+      </div>
+      <div class="panel__body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        ${tkt.proof_filename ? `<span style="font-size:0.85rem;font-weight:600"><i class="fa-solid fa-file" style="color:#ff9b0c;margin-right:6px"></i>${_esc(tkt.proof_filename)}</span>` : ''}
+        ${attachDataUrl
+          ? `<button class="btn btn--secondary btn--sm" onclick="_openDocumentData(${JSON.stringify(attachDataUrl)},${JSON.stringify(tkt.proof_filename||'attachment')})"><i class="fa-solid fa-eye"></i> View</button>
+             <a href="${attachDataUrl.startsWith('data:') ? '#' : _esc(attachDataUrl)}"
+                ${attachDataUrl.startsWith('data:') ? `onclick="event.preventDefault();const a=document.createElement('a');a.href=${JSON.stringify(attachDataUrl)};a.download=${JSON.stringify(tkt.proof_filename||'attachment')};a.click()"` : `target="_blank" rel="noopener"`}
+                class="btn btn--ghost btn--sm"><i class="fa-solid fa-download"></i> Download</a>`
+          : ''}
       </div>
     </div>` : ''}
     ${showActionBtns ? `<div style="display:flex;gap:10px;margin-bottom:16px;padding:12px;background:rgba(99,102,241,0.06);border-radius:8px;border:1px solid rgba(99,102,241,0.15)">
@@ -3598,7 +3619,7 @@ async function viewTicket(id) {
     </div>` : ''}
     <div class="panel mb-12">
       <div class="panel__header"><span class="panel__title">Investor Message</span></div>
-      <div class="panel__body" style="font-size:0.85rem;color:var(--text-muted);white-space:pre-wrap">${_esc(tkt.message) || '—'}</div>
+      <div class="panel__body" style="font-size:0.85rem;color:var(--text-muted);white-space:pre-wrap">${_esc(cleanMessage) || '—'}</div>
     </div>
     <div class="form-group">
       <label class="form-label">Admin Response</label>
