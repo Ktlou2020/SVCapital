@@ -411,13 +411,10 @@ function _poolEndMs(dateStr) {
 }
 
 function _getOpenMarketplacePools() {
-  const now = Date.now();
   return (PORTAL.pools || []).filter(p => {
     if (!p) return false;
-    if (p.status !== 'open' && p.status !== 'waitlist') return false;
-    const end = _poolEndMs(p.end_date);
-    if (end !== null && end < now) return false;
-    return true;
+    // Trust status from the database — the cron manages transitions.
+    return p.status === 'open' || p.status === 'waitlist';
   });
 }
 
@@ -3282,13 +3279,9 @@ function renderMarketplace() {
 
 // Count of open/waitlist pools for a product type
 function _openPoolsForProduct(type) {
-  const now = Date.now();
   return PORTAL.pools.filter(p => {
     if (p.product_type !== type) return false;
-    if (p.status !== 'open' && p.status !== 'waitlist') return false;
-    const end = _poolEndMs(p.end_date);
-    if (end !== null && end < now) return false;
-    return true;
+    return p.status === 'open' || p.status === 'waitlist';
   });
 }
 

@@ -2494,7 +2494,9 @@ function renderPoolsGrid() {
           if (Utils.poolIsDateTarget(p)) {
             // Date-targeted pools have no funding goal — show days to closure, no bar.
             const days  = Utils.daysRemaining(p.end_date);
-            const left  = days === null ? '—' : (days === 0 ? 'Closed' : `${days} day${days === 1 ? '' : 's'} to closure`);
+            const left  = days === null ? '—'
+              : days === 0 ? (p.status === 'open' || p.status === 'waitlist' ? 'Closing today' : 'Closed')
+              : `${days} day${days === 1 ? '' : 's'} to closure`;
             return `
               <div class="pool-card__progress-label">
                 <span><i class="fa-solid fa-clock" style="margin-right:4px"></i>${left}</span>
