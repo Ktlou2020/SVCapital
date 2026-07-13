@@ -403,9 +403,11 @@ function _isInvestorFicaApproved(inv = PORTAL.investor) {
 
 function _poolEndMs(dateStr) {
   if (!dateStr) return null;
-  const d = new Date(dateStr);
-  if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) d.setHours(23, 58, 0, 0);
-  return d.getTime();
+  if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, mo, dy] = dateStr.split('-').map(Number);
+    return new Date(y, mo - 1, dy, 23, 58, 0, 0).getTime();
+  }
+  return new Date(dateStr).getTime();
 }
 
 function _getOpenMarketplacePools() {

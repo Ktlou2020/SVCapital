@@ -570,9 +570,14 @@ const Utils = {
      23:58 local time on that day so pools stay open all day until close. */
   daysRemaining(dateStr) {
     if (!dateStr) return null;
-    const d = new Date(dateStr);
+    let d;
     if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      d.setHours(23, 58, 0, 0);
+      // Use local-date constructor — new Date('YYYY-MM-DD') parses as UTC midnight
+      // which shifts the calendar day backward in UTC+ zones like SAST.
+      const [y, mo, dy] = dateStr.split('-').map(Number);
+      d = new Date(y, mo - 1, dy, 23, 58, 0, 0);
+    } else {
+      d = new Date(dateStr);
     }
     const diff = d - Date.now();
     return Math.max(0, Math.ceil(diff / 86400000));
