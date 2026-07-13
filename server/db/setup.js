@@ -1357,6 +1357,24 @@ async function autoSetup() {
         avatar_initials = 'CO', avatar_color = '#7c5cfc'
     `);
 
+    // 7. Backfill investments.end_date to match pool's canonical maturity_date.
+    //    The portal previously computed end_date client-side (today + term_months),
+    //    causing each investor in the same pool to have a different maturity date.
+    try {
+      const { rowCount } = await pool.query(`
+        UPDATE investments i
+        SET end_date = ip.maturity_date
+        FROM investment_pools ip
+        WHERE ip.id = i.pool_id
+          AND ip.maturity_date IS NOT NULL
+          AND i.status IN ('active', 'waitlist')
+          AND (i.end_date IS DISTINCT FROM ip.maturity_date)
+      `);
+      if (rowCount > 0) console.log(`✅ Backfilled maturity dates for ${rowCount} investment(s).`);
+    } catch (bfErr) {
+      console.warn('⚠️  Maturity date backfill skipped:', bfErr.message);
+    }
+
     console.log('✅ Provisioning complete — COO account ready.');
 
   } catch (err) {
