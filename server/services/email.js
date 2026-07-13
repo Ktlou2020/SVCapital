@@ -175,7 +175,7 @@ function sendDepositConfirmed(investor, amount, reference, gateway = 'EFT') {
 }
 
 /* ── 3. Investment created ────────────────────────────────── */
-function sendInvestmentCreated(investor, { poolName, amount, annualRate, termMonths, expectedReturn, endDate }) {
+function sendInvestmentCreated(investor, { poolName, amount, termMonths, endDate, startDate }) {
   const { email, first_name } = investor;
   return _send({
     to: email,
@@ -187,15 +187,14 @@ function sendInvestmentCreated(investor, { poolName, amount, annualRate, termMon
       <div class="box">
         <div class="row"><span class="lbl">Pool</span><span class="val">${poolName}</span></div>
         <div class="row"><span class="lbl">Amount Invested</span><span class="val gold">${_fmt(amount)}</span></div>
-        <div class="row"><span class="lbl">Annual Rate</span><span class="val green">${_pct(annualRate)}</span></div>
         <div class="row"><span class="lbl">Term</span><span class="val">${termMonths} months</span></div>
-        <div class="row"><span class="lbl">Target Return</span><span class="val green">${_fmt(expectedReturn)}</span></div>
+        ${startDate ? `<div class="row"><span class="lbl">Investment Start Date</span><span class="val">${_date(startDate)}</span></div>` : ''}
         <div class="row"><span class="lbl">Maturity Date</span><span class="val">${_date(endDate)}</span></div>
       </div>
       <p>Track the performance of your investment in your portal at any time.</p>
       <a href="${BASE_URL}/portal/" class="btn">View My Investments →</a>
     `),
-    text: `Hi ${first_name}, your investment of ${_fmt(amount)} in ${poolName} at ${_pct(annualRate)} p.a. is confirmed. Maturity: ${_date(endDate)}.`,
+    text: `Hi ${first_name}, your investment of ${_fmt(amount)} in ${poolName} is confirmed.${startDate ? ' Starts: ' + _date(startDate) + '.' : ''} Maturity: ${_date(endDate)}.`,
   });
 }
 
