@@ -566,10 +566,15 @@ const Utils = {
     return Math.min(100, Math.round((raised / pool.target_amount) * 100));
   },
 
-  /* Days remaining */
+  /* Days remaining — treats a date-only string (YYYY-MM-DD) as expiring at
+     23:58 local time on that day so pools stay open all day until close. */
   daysRemaining(dateStr) {
     if (!dateStr) return null;
-    const diff = new Date(dateStr) - Date.now();
+    const d = new Date(dateStr);
+    if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      d.setHours(23, 58, 0, 0);
+    }
+    const diff = d - Date.now();
     return Math.max(0, Math.ceil(diff / 86400000));
   },
 
