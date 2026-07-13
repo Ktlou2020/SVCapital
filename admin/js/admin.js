@@ -3691,16 +3691,22 @@ async function viewTicket(id) {
   const isBankVerification = tkt.category === 'bank_verification';
   const isFicaSubmission   = tkt.category === 'fica_submission' || tkt.category === 'fica';
 
-  // Extract base64 data URL embedded in message (format: "\nData URL:\ndata:...")
+  // Extract base64 data URL embedded in message.
+  // EFT format:     "\nData URL: data:..."
+  // Ticket format:  "\nData: data:..."
   const msgStr = tkt.message || '';
-  const dataMarkerIdx = msgStr.indexOf('\nData URL:');
-  let attachDataUrl  = tkt.file_url || null;
-  let cleanMessage   = msgStr;
-  if (dataMarkerIdx !== -1) {
-    const rawUrl = msgStr.slice(dataMarkerIdx + '\nData URL:'.length).trim();
-    if (rawUrl.startsWith('data:')) {
-      attachDataUrl = attachDataUrl || rawUrl;
-      cleanMessage  = msgStr.slice(0, dataMarkerIdx).trim();
+  let attachDataUrl = tkt.file_url || null;
+  let cleanMessage  = msgStr;
+  const MARKERS = ['\nData URL:', '\nData:'];
+  for (const marker of MARKERS) {
+    const idx = msgStr.indexOf(marker);
+    if (idx !== -1) {
+      const rawUrl = msgStr.slice(idx + marker.length).trim();
+      if (rawUrl.startsWith('data:')) {
+        attachDataUrl = attachDataUrl || rawUrl;
+        cleanMessage  = msgStr.slice(0, idx).trim();
+        break;
+      }
     }
   }
 
@@ -7832,8 +7838,8 @@ async function loadEmailLogs(resetPage = true) {
     if (status) params.set('status', status);
 
     const [logsRes, statsRes] = await Promise.all([
-      API.get('/api/email-logs?' + params),
-      _emailLogsOffset === 0 ? API.get('/api/email-logs/stats') : Promise.resolve(null),
+      API._fetch('GET', 'email-logs', null, Object.fromEntries(params)),
+      _emailLogsOffset === 0 ? API._fetch('GET', 'email-logs/stats') : Promise.resolve(null),
     ]);
 
     // Stats chips

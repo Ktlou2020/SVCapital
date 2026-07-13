@@ -2561,16 +2561,14 @@ async function _doSubmit(skippedFica) {
       }).catch(() => {});
     }
 
-    await API.tickets.create({
-      investor_id: assignedId,
-      subject: skippedFica
-        ? `New Registration — FICA Pending — ${firstName} ${lastName}`
-        : `FICA Documents Submitted — ${firstName} ${lastName}`,
-      category: 'kyc', priority: 'high', status: 'open',
-      message: skippedFica
-        ? `New investor ${firstName} ${lastName} (${assignedId}) registered — no FICA docs uploaded yet.`
-        : `New investor ${firstName} ${lastName} (${assignedId}) submitted FICA docs: ${uploadedDocs.join(', ')}.`,
-    }).catch(() => {});
+    if (!skippedFica) {
+      await API.tickets.create({
+        investor_id: assignedId,
+        subject: `FICA Documents Submitted — ${firstName} ${lastName}`,
+        category: 'kyc', priority: 'high', status: 'open',
+        message: `New investor ${firstName} ${lastName} (${assignedId}) submitted FICA docs: ${uploadedDocs.join(', ')}.`,
+      }).catch(() => {});
+    }
 
     document.getElementById('step4').style.display = 'none';
     document.getElementById('formSteps').style.display = 'none';
