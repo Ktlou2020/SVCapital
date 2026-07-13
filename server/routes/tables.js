@@ -379,6 +379,10 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         conditions.push(`(first_name ILIKE $${params.length} OR last_name ILIKE $${params.length} OR email ILIKE $${params.length} OR company_name ILIKE $${params.length} OR license_number ILIKE $${params.length})`);
       } else if (table === 'audit_events') {
         conditions.push(`(event_type ILIKE $${params.length} OR user_email ILIKE $${params.length} OR description ILIKE $${params.length} OR entity_type ILIKE $${params.length} OR ip_address ILIKE $${params.length})`);
+      } else if (table === 'cattle_animals') {
+        conditions.push(`(tag_number ILIKE $${params.length} OR batch_name ILIKE $${params.length} OR batch_no::text ILIKE $${params.length} OR breed ILIKE $${params.length})`);
+      } else if (table === 'cattle_cycles') {
+        conditions.push(`(batch_name ILIKE $${params.length} OR company ILIKE $${params.length} OR inv_no::text ILIKE $${params.length})`);
       } else {
         conditions.push(`id::text ILIKE $${params.length}`);
       }
@@ -388,10 +392,13 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
 
     // Sort — use the original date column for tables that have one
     const defaultSort = {
-      transactions: 'COALESCE(transaction_date, created_at)',
-      investments:  'COALESCE(start_date, created_at)',
+      transactions:   'COALESCE(transaction_date, created_at)',
+      investments:    'COALESCE(start_date, created_at)',
+      cattle_animals: 'tag_number',
+      cattle_cycles:  'batch_name',
     };
-    let orderClause = `ORDER BY ${defaultSort[table] || 'created_at'} DESC NULLS LAST`;
+    const defaultDir = (table === 'cattle_animals' || table === 'cattle_cycles') ? 'ASC' : 'DESC';
+    let orderClause = `ORDER BY ${defaultSort[table] || 'created_at'} ${defaultDir} NULLS LAST`;
     if (sort && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(sort)) {
       const dir = order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
       orderClause = `ORDER BY ${sort} ${dir} NULLS LAST`;

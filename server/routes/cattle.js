@@ -34,6 +34,50 @@ async function bulkInsert(client, table, rows) {
   return inserted;
 }
 
+/* ── GET /api/cattle/animals/stats ──────────────────────────
+   Returns aggregate stats + distinct batches/breeds for the
+   animals filter bar. Accepts the same filter params as the
+   table API: search, status, batch_no, breed.             */
+router.get('/animals/stats', requireAuth, async (req, res) => {
+  try {
+    const { search, status, batch_no, breed } = req.query;
+    const conds = [], params = [];
+
+    if (search) {
+      params.push(`%${search}%`);
+      conds.push(`(tag_number ILIKE $${params.length} OR batch_name ILIKE $${params.length} OR batch_no::text ILIKE $${params.length} OR breed ILIKE $${params.length})`);
+    }
+    if (status)   { params.push(status);   conds.push(`status = $${params.length}`); }
+    if (batch_no) { params.push(batch_no); conds.push(`batch_no = $${params.length}`); }
+    if (breed)    { params.push(breed);    conds.push(`breed = $${params.length}`); }
+
+    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+
+    const [agg, batches, breeds] = await Promise.all([
+      pool.query(
+        `SELECT
+           COUNT(*)::int                                                             AS total,
+           COUNT(*) FILTER (WHERE status='sold'      OR sold=true)::int             AS sold,
+           COUNT(*) FILTER (WHERE status='mortality' OR mortality=true)::int        AS mortalities,
+           ROUND(AVG(entry_mass)::numeric, 1)                                       AS avg_mass
+         FROM cattle_animals ${where}`,
+        params
+      ),
+      pool.query(`SELECT DISTINCT batch_no FROM cattle_animals WHERE batch_no IS NOT NULL ORDER BY batch_no`),
+      pool.query(`SELECT DISTINCT breed    FROM cattle_animals WHERE breed    IS NOT NULL ORDER BY breed`),
+    ]);
+
+    res.json({
+      ...agg.rows[0],
+      batches: batches.rows.map(r => r.batch_no),
+      breeds:  breeds.rows.map(r => r.breed),
+    });
+  } catch (err) {
+    console.error('[cattle/animals/stats]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ── POST /api/cattle/import/cycles ─────────────────────────
    Body: { records: [...] }
    Skips rows whose batch_name already exists.             */
