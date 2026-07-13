@@ -6,6 +6,9 @@
 /* Escape user-controlled strings before inserting into innerHTML */
 const _esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
+/* Cache for ticket document data — avoids embedding large base64 in onclick attributes */
+const _ticketDocCache = {};
+
 /* ─── State ─── */
 let STATE = {
   investors: [],
@@ -2000,10 +2003,14 @@ function _openDocumentData(rawData, fileName) {
         a.click();
       }
     } catch (e) {
-      // Fallback: open data URL directly
+      // Fallback: open data URL directly (use embed for PDF, img for images)
       const w = window.open('', '_blank');
       if (w) {
-        w.document.write(`<title>${_esc(fileName)}</title><body style="margin:0;background:#000"><img src="${rawData}" style="max-width:100%;display:block;margin:auto"></body>`);
+        const isPdf = mime === 'application/pdf' || (fileName || '').toLowerCase().endsWith('.pdf');
+        w.document.write(isPdf
+          ? `<title>${_esc(fileName)}</title><body style="margin:0;height:100vh"><embed src="${rawData}" type="application/pdf" style="width:100%;height:100%"></body>`
+          : `<title>${_esc(fileName)}</title><body style="margin:0;background:#000"><img src="${rawData}" style="max-width:100%;display:block;margin:auto"></body>`
+        );
       }
     }
     return;
@@ -2014,6 +2021,43 @@ function _openDocumentData(rawData, fileName) {
   a.href = rawData;
   a.download = fileName;
   a.click();
+}
+
+function _openTicketDoc(ticketId, fileName) {
+  const data = _ticketDocCache[ticketId];
+  if (!data) { Toast.error('No file data available. Please ask the investor to re-upload.'); return; }
+  _openDocumentData(data, fileName);
+}
+
+function _downloadTicketDoc(ticketId, fileName) {
+  const data = _ticketDocCache[ticketId];
+  if (!data) { Toast.error('No file data available.'); return; }
+  const a = document.createElement('a');
+  a.href = data;
+  a.download = fileName || 'attachment';
+  a.click();
+}
+
+async function _reuploadTicketFile(event, ticketId) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const dataUrl = e.target.result;
+    try {
+      await API._fetch('PATCH', `tables/support_tickets/${ticketId}`, null, {
+        file_url:       dataUrl,
+        proof_filename: file.name,
+        proof_attached: true,
+      });
+      _ticketDocCache[ticketId] = dataUrl;
+      Toast.success('Document re-uploaded — click View to open it');
+      viewTicket(ticketId);
+    } catch (err) {
+      Toast.error('Re-upload failed: ' + err.message);
+    }
+  };
+  reader.readAsDataURL(file);
 }
 
 // FICA/KYC is only fully verified once ALL of these document types are approved.
@@ -3713,7 +3757,11 @@ async function viewTicket(id) {
   }
 
   const hasProof       = !!(tkt.proof_attached || tkt.proof_filename || tkt.file_url || attachDataUrl);
-  const showActionBtns = (isBankVerification || isFicaSubmission || hasProof) && tkt.status !== 'resolved' && tkt.status !== 'closed';
+  const isPaymentProof = tkt.category === 'payment_proof';
+  const showActionBtns = (isBankVerification || isFicaSubmission || isPaymentProof || hasProof) && tkt.status !== 'resolved' && tkt.status !== 'closed';
+
+  // Cache doc data to avoid embedding large base64 strings in onclick attributes
+  _ticketDocCache[tkt.id] = attachDataUrl || null;
 
   document.getElementById('ticketModalTitle').textContent = `Ticket #${tkt.id} — ${tkt.subject}`;
   document.getElementById('ticketModalBody').innerHTML = `
@@ -3732,19 +3780,21 @@ async function viewTicket(id) {
       <div class="panel__body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         ${tkt.proof_filename ? `<span style="font-size:0.85rem;font-weight:600"><i class="fa-solid fa-file" style="color:#ff9b0c;margin-right:6px"></i>${_esc(tkt.proof_filename)}</span>` : ''}
         ${attachDataUrl
-          ? `<button class="btn btn--secondary btn--sm" onclick="_openDocumentData(${JSON.stringify(attachDataUrl)},${JSON.stringify(tkt.proof_filename||'attachment')})"><i class="fa-solid fa-eye"></i> View</button>
-             <a href="${attachDataUrl.startsWith('data:') ? '#' : _esc(attachDataUrl)}"
-                ${attachDataUrl.startsWith('data:') ? `onclick="event.preventDefault();const a=document.createElement('a');a.href=${JSON.stringify(attachDataUrl)};a.download=${JSON.stringify(tkt.proof_filename||'attachment')};a.click()"` : `target="_blank" rel="noopener"`}
-                class="btn btn--ghost btn--sm"><i class="fa-solid fa-download"></i> Download</a>`
-          : ''}
+          ? `<button class="btn btn--secondary btn--sm" onclick="_openTicketDoc(${JSON.stringify(tkt.id)},${JSON.stringify(tkt.proof_filename||'attachment')})"><i class="fa-solid fa-eye"></i> View</button>
+             <button class="btn btn--ghost btn--sm" onclick="_downloadTicketDoc(${JSON.stringify(tkt.id)},${JSON.stringify(tkt.proof_filename||'attachment')})"><i class="fa-solid fa-download"></i> Download</button>`
+          : `<span style="font-size:0.75rem;color:var(--text-muted);font-style:italic">File data unavailable — re-upload below</span>`}
+        <label class="btn btn--ghost btn--sm" style="cursor:pointer;margin-left:auto" title="Replace document">
+          <i class="fa-solid fa-upload"></i> Re-upload
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="_reuploadTicketFile(event,${JSON.stringify(tkt.id)})">
+        </label>
       </div>
     </div>` : ''}
-    ${showActionBtns ? `<div style="display:flex;gap:10px;margin-bottom:16px;padding:12px;background:rgba(99,102,241,0.06);border-radius:8px;border:1px solid rgba(99,102,241,0.15)">
+    ${showActionBtns ? `<div style="display:flex;gap:10px;margin-bottom:16px;padding:12px;background:${isPaymentProof ? 'rgba(34,197,94,0.06)' : 'rgba(99,102,241,0.06)'};border-radius:8px;border:1px solid ${isPaymentProof ? 'rgba(34,197,94,0.2)' : 'rgba(99,102,241,0.15)'}">
       <div style="flex:1">
-        <div style="font-size:0.78rem;font-weight:700;color:var(--text);margin-bottom:4px">${isBankVerification ? 'Bank Account Verification' : 'Document Review'}</div>
-        <div style="font-size:0.72rem;color:var(--text-muted)">Approve or decline the submitted ${isBankVerification ? 'bank account details' : 'documents'}. This will update the investor record.</div>
+        <div style="font-size:0.78rem;font-weight:700;color:var(--text);margin-bottom:4px">${isPaymentProof ? 'EFT Deposit Approval' : isBankVerification ? 'Bank Account Verification' : 'Document Review'}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">${isPaymentProof ? 'Approving will credit the investor\'s wallet with the EFT amount and resolve this ticket.' : `Approve or decline the submitted ${isBankVerification ? 'bank account details' : 'documents'}. This will update the investor record.`}</div>
       </div>
-      <button class="btn btn--success btn--sm" id="ticketApproveBtn"><i class="fa-solid fa-check"></i> Approve</button>
+      <button class="btn btn--success btn--sm" id="ticketApproveBtn"><i class="fa-solid fa-check"></i> Approve${isPaymentProof ? ' &amp; Credit Wallet' : ''}</button>
       <button class="btn btn--danger btn--sm" id="ticketDeclineBtn"><i class="fa-solid fa-xmark"></i> Decline</button>
     </div>` : ''}
     <div class="panel mb-12">
@@ -3775,12 +3825,57 @@ async function viewTicket(id) {
 
   if (showActionBtns && tkt.investor_id) {
     const _doTicketAction = async (approve) => {
-      const confirmMsg = approve
+      let confirmMsg, invUpdate = null;
+
+      if (isPaymentProof) {
+        // Parse amount from subject: "EFT Proof of Payment — Name — R10 000 — EFT-..."
+        const amtMatch = (tkt.subject || '').match(/R([\d\s,]+)/);
+        const rawAmt   = amtMatch ? amtMatch[1].replace(/[\s,]/g, '') : null;
+        const amount   = rawAmt ? parseFloat(rawAmt) : null;
+        const refMatch = (tkt.subject || '').match(/EFT-[\w]+/);
+        const ref      = refMatch ? refMatch[0] : (tkt.id || '');
+
+        if (approve && (!amount || amount <= 0)) {
+          Toast.error('Could not parse EFT amount from ticket subject. Please verify manually.');
+          return;
+        }
+        confirmMsg = approve
+          ? `Credit R${amount?.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} to ${tktInvName}'s wallet? This cannot be undone.`
+          : 'Decline this EFT deposit? The investor will be notified to resubmit proof.';
+        if (!await Confirm.ask(approve ? 'Approve EFT Deposit' : 'Decline EFT Deposit', { body: confirmMsg, confirmLabel: approve ? 'Approve & Credit' : 'Decline', danger: !approve })) return;
+        try {
+          if (approve) {
+            await API._fetch('POST', 'tables/transactions', null, {
+              id:           Utils.genId('TXN'),
+              investor_id:  tkt.investor_id,
+              type:         'deposit',
+              amount:       amount,
+              status:       'completed',
+              description:  `EFT wallet top-up approved by admin. Ref: ${ref}`,
+              reference:    ref,
+              transaction_date: new Date().toISOString(),
+            });
+          }
+          await API.tickets.update(id, {
+            status:         'resolved',
+            admin_response: document.getElementById('ticketResponse').value ||
+              (approve ? `Your EFT deposit of R${amount?.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} has been approved and credited to your wallet.`
+                       : 'Your EFT proof of payment was declined. Please resubmit with a clear, complete proof of payment.'),
+            responded_at:   new Date().toISOString(),
+          });
+          Toast.success(approve ? `R${amount?.toLocaleString('en-ZA', { minimumFractionDigits: 2 })} credited to wallet — ticket resolved` : 'Declined — investor will be notified');
+          Modal.close('ticketModal');
+          await Promise.all([loadSupport(), loadInvestors()]);
+        } catch (e) { Toast.error('Action failed: ' + (e.message || 'Unknown error')); }
+        return;
+      }
+
+      confirmMsg = approve
         ? (isBankVerification ? 'Approve this bank account? The investor will be notified.' : 'Approve FICA documents? The investor will be marked as KYC-verified.')
         : (isBankVerification ? 'Decline this bank account? The investor will be asked to resubmit.' : 'Decline these documents? The investor will be asked to resubmit.');
       if (!await Confirm.ask(approve ? 'Confirm Approval' : 'Confirm Decline', { body: confirmMsg, confirmLabel: approve ? 'Approve' : 'Decline', danger: !approve })) return;
       try {
-        const invUpdate = isBankVerification
+        invUpdate = isBankVerification
           ? (approve ? { bank_account_status: 'approved' } : { bank_account_status: 'rejected' })
           : (approve ? { kyc_status: 'approved', status: 'active' } : { kyc_status: 'rejected' });
         await API.investors.update(tkt.investor_id, invUpdate);
