@@ -182,6 +182,7 @@ app.use('/api/gifts',        require('./routes/gifts'));
 app.use('/api/factsheets',   require('./routes/factsheets'));
 app.use('/api/products',     require('./routes/products'));
 app.use('/api/opsconsole',  require('./routes/opsconsole'));
+app.use('/api/cattle',      require('./routes/cattle'));
 
 
 /* ─── Health Check ─────────────────────────────────────────────────────────
