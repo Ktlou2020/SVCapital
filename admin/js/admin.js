@@ -1072,10 +1072,19 @@ let investorPage = 1;
 const INV_PAGE_SIZE = 8;
 let filteredInvestors = [];
 
+let selectedInvestors = new Set();
+
 async function loadInvestors() {
   try {
-    const res = await API.investors.list({ limit: 5000 });
+    const [res, uRes] = await Promise.all([
+      API.investors.list({ limit: 5000 }),
+      API._fetch('GET', 'tables/users', null, { limit: 10000, role: 'investor' }).catch(() => ({ data: [] })),
+    ]);
     STATE.investors = res.data || [];
+    // Build set of investor_ids that have a login account
+    STATE.investorLoginSet = new Set(
+      (uRes.data || []).filter(u => u.investor_id).map(u => u.investor_id)
+    );
     filteredInvestors = [...STATE.investors];
     _markRefreshed('investors');
     renderInvestorStats();
@@ -1083,6 +1092,64 @@ async function loadInvestors() {
     setupInvestorFilters();
     _setRefreshLabel('investorsRefreshed', 'investors');
   } catch (e) { Toast.error('Failed to load investors'); }
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('invBulkBar');
+  const cnt = document.getElementById('invBulkCount');
+  if (bar) bar.style.display = selectedInvestors.size ? 'flex' : 'none';
+  if (cnt) cnt.textContent = `${selectedInvestors.size} investor${selectedInvestors.size !== 1 ? 's' : ''} selected`;
+}
+
+function toggleInvestorSelect(id, checked) {
+  if (checked) selectedInvestors.add(id);
+  else selectedInvestors.delete(id);
+  updateBulkBar();
+  const allCb = document.getElementById('invSelectAll');
+  if (allCb) {
+    const start = (investorPage - 1) * INV_PAGE_SIZE;
+    const page  = filteredInvestors.slice(start, start + INV_PAGE_SIZE);
+    allCb.checked = page.length > 0 && page.every(i => selectedInvestors.has(i.id));
+    allCb.indeterminate = !allCb.checked && page.some(i => selectedInvestors.has(i.id));
+  }
+}
+
+function toggleAllInvestors(cb) {
+  const start = (investorPage - 1) * INV_PAGE_SIZE;
+  const page  = filteredInvestors.slice(start, start + INV_PAGE_SIZE);
+  page.forEach(inv => { if (cb.checked) selectedInvestors.add(inv.id); else selectedInvestors.delete(inv.id); });
+  renderInvestorsTable();
+  updateBulkBar();
+}
+
+function clearInvestorSelection() {
+  selectedInvestors.clear();
+  renderInvestorsTable();
+  updateBulkBar();
+}
+
+async function bulkSendLoginInvites() {
+  const ids = [...selectedInvestors];
+  if (!ids.length) return;
+  const names = STATE.investors.filter(i => ids.includes(i.id))
+    .map(i => `${i.first_name || ''} ${i.last_name || ''}`.trim()).filter(Boolean);
+  const preview = names.slice(0, 5).join(', ') + (names.length > 5 ? ` and ${names.length - 5} more` : '');
+  if (!await Confirm.ask(`Send login invites to ${ids.length} investor${ids.length !== 1 ? 's' : ''}?`, {
+    body: `This creates login accounts and emails a setup link to: ${preview}. Links are valid for 7 days.`,
+    confirmLabel: 'Send Invites',
+  })) return;
+  try {
+    const res = await API._fetch('POST', 'auth/bulk-invite-investors', { investor_ids: ids });
+    const msg = `${res.sent} invite${res.sent !== 1 ? 's' : ''} sent` +
+      (res.skipped ? `, ${res.skipped} skipped (no email)` : '') +
+      (res.failed?.length ? `, ${res.failed.length} failed` : '');
+    Toast.success(msg);
+    // Update login set so newly invited investors show "Has Login" immediately
+    ids.forEach(id => STATE.investorLoginSet.add(id));
+    selectedInvestors.clear();
+    renderInvestorsTable();
+    updateBulkBar();
+  } catch (e) { Toast.error('Bulk invite failed: ' + (e.message || 'unknown error')); }
 }
 
 function renderInvestorStats() {
@@ -1130,21 +1197,38 @@ function renderInvestorsTable() {
     if (i.status === 'active') liveActiveCountMap[i.investor_id] = (liveActiveCountMap[i.investor_id] || 0) + 1;
   });
 
+  // Sync select-all checkbox state
+  const allCb = document.getElementById('invSelectAll');
+  if (allCb) {
+    allCb.checked = page.length > 0 && page.every(i => selectedInvestors.has(i.id));
+    allCb.indeterminate = !allCb.checked && page.some(i => selectedInvestors.has(i.id));
+  }
+
+  const loginSet = STATE.investorLoginSet || new Set();
+
   body.innerHTML = page.map(inv => {
     const fullName = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || '—';
     const color = _invAvatarColor(fullName);
     const activeInvCount = liveActiveCountMap[inv.id] || 0;
     const totalInvCount  = liveTotalCountMap[inv.id] || 0;
     const liveInvested   = liveInvestedMap[inv.id] || 0;
+    const hasLogin       = loginSet.has(inv.id);
+    const isSelected     = selectedInvestors.has(inv.id);
     const kycBadge = inv.kyc_status === 'approved'
       ? '<span class="badge badge--green" style="font-size:0.68rem;padding:2px 6px"><i class="fa-solid fa-shield-check"></i> KYC</span>'
       : inv.kyc_status === 'rejected'
       ? '<span class="badge badge--red" style="font-size:0.68rem;padding:2px 6px">KYC Fail</span>'
       : '<span class="badge badge--yellow" style="font-size:0.68rem;padding:2px 6px">KYC Pending</span>';
-    const stBadge = Utils.statusBadge(inv.status);
+    const stBadge   = Utils.statusBadge(inv.status);
+    const loginBadge = hasLogin
+      ? ''
+      : '<span class="badge badge--grey" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-user-slash"></i> No Login</span>';
     const province = (inv.province||'').replace(/\s+$/,'');
     const _trunc = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block';
-    return `<tr style="cursor:pointer" tabindex="0" onclick="viewInvestor('${inv.id}')" onkeydown="if(event.key==='Enter')viewInvestor('${inv.id}')">
+    return `<tr style="cursor:pointer;${isSelected ? 'background:rgba(255,155,12,0.06)' : ''}" tabindex="0" onclick="viewInvestor('${inv.id}')" onkeydown="if(event.key==='Enter')viewInvestor('${inv.id}')">
+      <td style="overflow:hidden;padding:8px 10px" onclick="event.stopPropagation()">
+        <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleInvestorSelect('${inv.id}', this.checked)">
+      </td>
       <td style="overflow:hidden" onclick="event.stopPropagation()">
         <div class="flex-center gap-8" style="min-width:0">
           <div style="width:30px;height:30px;border-radius:50%;background:${color};color:#fff;font-size:0.63rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${Utils.initials(fullName)}</div>
@@ -1160,7 +1244,7 @@ function renderInvestorsTable() {
         <div class="td-muted" style="font-size:0.71rem;${_trunc}">${inv.phone || '—'}</div>
       </td>
       <td style="overflow:hidden">
-        <div style="display:flex;flex-direction:column;gap:3px">${kycBadge}${stBadge}</div>
+        <div style="display:flex;flex-direction:column;gap:3px">${kycBadge}${stBadge}${loginBadge}</div>
       </td>
       <td style="overflow:hidden">
         <div class="td-gold fw-700" style="font-size:0.81rem;${_trunc}">${Utils.rand(parseFloat(inv.wallet_balance) || 0)}</div>
@@ -1193,6 +1277,7 @@ function setupInvestorFilters() {
   const statusF = document.getElementById('investorStatusFilter');
   const kycF    = document.getElementById('investorKycFilter');
   const provF   = document.getElementById('investorProvinceFilter');
+  const loginF  = document.getElementById('investorLoginFilter');
 
   // Restore saved filter state
   const saved = STATE.filters.investors;
@@ -1201,6 +1286,7 @@ function setupInvestorFilters() {
     if (saved.st) statusF.value = saved.st;
     if (saved.ky) kycF.value    = saved.ky;
     if (saved.pv) provF.value   = saved.pv;
+    if (saved.lo && loginF) loginF.value = saved.lo;
   }
 
   const filter = Utils.debounce(() => {
@@ -1208,7 +1294,9 @@ function setupInvestorFilters() {
     const st = statusF.value;
     const ky = kycF.value;
     const pv = provF.value;
-    STATE.filters.investors = { q, st, ky, pv };
+    const lo = loginF ? loginF.value : '';
+    const loginSet = STATE.investorLoginSet || new Set();
+    STATE.filters.investors = { q, st, ky, pv, lo };
     filteredInvestors = STATE.investors.filter(inv => {
       const name = `${inv.first_name||''} ${inv.last_name||''}`.toLowerCase();
       const matchQ  = !q  || name.includes(q)
@@ -1219,9 +1307,14 @@ function setupInvestorFilters() {
       const matchSt = !st || inv.status === st;
       const matchKy = !ky || inv.kyc_status === ky;
       const matchPv = !pv || (inv.province||'').toLowerCase().includes(pv.toLowerCase());
-      return matchQ && matchSt && matchKy && matchPv;
+      const matchLo = !lo
+        || (lo === 'no_login'  && !loginSet.has(inv.id))
+        || (lo === 'has_login' &&  loginSet.has(inv.id));
+      return matchQ && matchSt && matchKy && matchPv && matchLo;
     });
     investorPage = 1;
+    selectedInvestors.clear();
+    updateBulkBar();
     renderInvestorsTable();
   }, 250);
 
@@ -1229,9 +1322,10 @@ function setupInvestorFilters() {
   statusF.addEventListener('change', filter);
   kycF.addEventListener('change', filter);
   provF.addEventListener('change', filter);
+  if (loginF) loginF.addEventListener('change', filter);
 
   // Apply saved filters immediately if any
-  if (saved && (saved.q || saved.st || saved.ky || saved.pv)) filter();
+  if (saved && (saved.q || saved.st || saved.ky || saved.pv || saved.lo)) filter();
 }
 
 async function viewInvestor(id) {

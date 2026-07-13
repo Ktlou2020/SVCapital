@@ -421,6 +421,11 @@
                 <option value="Free State">Free State</option>
                 <option value="Northern Cape">Northern Cape</option>
               </select>
+              <select class="tbl-filter" id="investorLoginFilter">
+                <option value="">All Accounts</option>
+                <option value="no_login">No Login Yet</option>
+                <option value="has_login">Has Login</option>
+              </select>
               <button class="btn btn--primary btn--sm" onclick="openAddInvestorModal()">
                 <i class="fa-solid fa-plus"></i> Add Investor
               </button>
@@ -435,10 +440,17 @@
               </button>
             </div>
           </div>
+          <div id="invBulkBar" style="display:none;align-items:center;gap:10px;padding:8px 14px;background:rgba(255,155,12,0.07);border:1px solid rgba(255,155,12,0.22);border-radius:8px;margin:0 0 10px">
+            <i class="fa-solid fa-envelope" style="color:var(--orange)"></i>
+            <span id="invBulkCount" style="font-weight:700;font-size:0.82rem;color:var(--text)">0 selected</span>
+            <button class="btn btn--primary btn--sm" onclick="bulkSendLoginInvites()"><i class="fa-solid fa-paper-plane"></i> Send Login Invite</button>
+            <button class="btn btn--ghost btn--sm" onclick="clearInvestorSelection()"><i class="fa-solid fa-xmark"></i> Clear</button>
+          </div>
           <div style="overflow-x:auto" id="investorsCard">
             <table class="data-table" id="investorsTable" style="table-layout:fixed;width:100%">
               <thead><tr>
-                <th style="width:25%">Investor</th><th style="width:21%">Contact</th><th style="width:16%">KYC / Status</th><th style="width:16%">Portfolio</th><th style="width:10%">Investments</th><th style="width:12%">Actions</th>
+                <th style="width:3%;padding:8px 10px"><input type="checkbox" id="invSelectAll" onchange="toggleAllInvestors(this)" title="Select all on this page"></th>
+                <th style="width:23%">Investor</th><th style="width:20%">Contact</th><th style="width:16%">KYC / Status</th><th style="width:15%">Portfolio</th><th style="width:10%">Investments</th><th style="width:13%">Actions</th>
               </tr></thead>
               <tbody id="investorsBody">
                 <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading...</td></tr>

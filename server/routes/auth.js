@@ -925,6 +925,62 @@ router.post('/signout-all', requireAuth, async (req, res) => {
   res.json({ success: true });
 });
 
+/* ─── POST /api/auth/bulk-invite-investors ──────────────────────────────────
+   Admin-only: create login accounts and send setup emails to multiple investors
+   in one call. Returns { sent, skipped, failed[] }. */
+router.post('/bulk-invite-investors', requireAuth, async (req, res) => {
+  if (!['admin', 'director'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Forbidden.' });
+  }
+  const { investor_ids } = req.body;
+  if (!Array.isArray(investor_ids) || !investor_ids.length) {
+    return res.status(400).json({ error: 'investor_ids array is required.' });
+  }
+
+  const BASE_URL = process.env.BASE_URL || 'https://platform.svcapital.co.za';
+  const tempHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+  const results  = { sent: 0, skipped: 0, failed: [] };
+
+  for (const investor_id of investor_ids.slice(0, 500)) {
+    try {
+      const { rows: invRows } = await pool.query(
+        'SELECT id, first_name, last_name, email FROM investors WHERE id = $1',
+        [investor_id]
+      );
+      const inv = invRows[0];
+      if (!inv || !inv.email) { results.skipped++; continue; }
+
+      const email = inv.email.toLowerCase().trim();
+      const { rows: [newUser] } = await pool.query(`
+        INSERT INTO users (email, password_hash, role, first_name, last_name, investor_id)
+        VALUES ($1, $2, 'investor', $3, $4, $5)
+        ON CONFLICT (email) DO UPDATE
+          SET investor_id = COALESCE(users.investor_id, EXCLUDED.investor_id)
+        RETURNING id, email, first_name, investor_id
+      `, [email, tempHash, inv.first_name || '', inv.last_name || '', investor_id]);
+
+      const jti       = crypto.randomBytes(16).toString('hex');
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const token     = jwt.sign(
+        { sub: newUser.id, purpose: 'password_reset', jti }, JWT_SECRET, { expiresIn: '7d' }
+      );
+      await pool.query('DELETE FROM password_reset_tokens WHERE user_id=$1 AND used=false', [newUser.id]);
+      await pool.query(
+        'INSERT INTO password_reset_tokens (jti, user_id, expires_at) VALUES ($1,$2,$3)',
+        [jti, newUser.id, expiresAt]
+      );
+      const setupLink = `${BASE_URL}/reset-password.html?token=${token}`;
+      await emailService.sendAccountSetup(email, inv.first_name || email, setupLink);
+      results.sent++;
+    } catch (err) {
+      results.failed.push({ investor_id, error: err.message });
+    }
+  }
+
+  console.log(`[bulk-invite] sent:${results.sent} skipped:${results.skipped} failed:${results.failed.length}`);
+  res.json({ ok: true, ...results });
+});
+
 /* ─── POST /api/auth/invite-investor ────────────────────────────────────────
    Admin-only: create a login account for an investor who has no users row,
    then send them a setup email with a 7-day password-set link.
