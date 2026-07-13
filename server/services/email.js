@@ -32,7 +32,8 @@ p{font-size:0.93rem;color:#444;line-height:1.65;margin-bottom:14px}
 .box{background:#f7f9fc;border-radius:12px;padding:18px 22px;margin:18px 0}
 .row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #eee;font-size:0.87rem}
 .row:last-child{border-bottom:none}
-.lbl{color:#888}
+.lbl{color:#888;white-space:nowrap}
+.lbl:after{content:'\00a0\00a0'}
 .val{font-weight:600;color:#303030;text-align:right}
 .btn{display:inline-block;background:#ff9b0c;color:#fff!important;text-decoration:none!important;padding:13px 30px;border-radius:10px;font-weight:700;font-size:0.94rem;margin:10px 0}
 .green{color:#22c55e}
@@ -135,18 +136,18 @@ function sendWelcome(investor) {
     subject: `Welcome to SV Capital, ${first_name}! 🎉`,
     html: _wrap(`
       <h2>Welcome, ${first_name}! 👋</h2>
-      <p>Your SV Capital investor account is live. Here's what to do next:</p>
+      <p>Your SV Capital account is live. Here's what to do next:</p>
       <div class="box">
-        <div class="row"><span class="lbl">Investor ID</span><span class="val">${id}</span></div>
+        <div class="row"><span class="lbl">Account Number</span><span class="val">${id}</span></div>
         <div class="row"><span class="lbl">Email</span><span class="val">${email}</span></div>
         <div class="row"><span class="lbl">Account Status</span><span class="val green">Active</span></div>
       </div>
-      <p><strong>1. Complete FICA/KYC verification</strong> — upload your ID and proof of address to unlock all products.<br>
-         <strong>2. Top up your wallet</strong> — via Paystack, Ozow, or bank transfer.<br>
+      <p><strong>1. Complete FICA/KYC verification</strong> — upload your ID, proof of address and proof of bank details to verify your account.<br>
+         <strong>2. Top up your wallet</strong> — via Paystack or bank transfer.<br>
          <strong>3. Start investing</strong> — browse our open pools and put your money to work.</p>
       <a href="${BASE_URL}/portal/" class="btn">Go to My Portal →</a>
     `),
-    text: `Welcome to SV Capital, ${first_name}! Your investor account (${id}) is ready. Visit ${BASE_URL}/portal/ to get started.`,
+    text: `Welcome to SV Capital, ${first_name}! Your account number is ${id}. Visit ${BASE_URL}/portal/ to get started.`,
   });
 }
 
