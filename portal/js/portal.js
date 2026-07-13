@@ -4261,6 +4261,29 @@ async function confirmInvestment(pool) {
 /* ═══════════════════════════════════════════════
    MATURITY
    ═══════════════════════════════════════════════ */
+
+function _maturityProductIcon(type) {
+  const t = (type || '').toLowerCase();
+  if (t.includes('cattle'))   return 'cow';
+  if (t.includes('solar'))    return 'solar-panel';
+  if (t.includes('delivery')) return 'bicycle';
+  if (t.includes('short'))    return 'clock-rotate-left';
+  return 'chart-line';
+}
+function _maturityProductColor(type) {
+  const t = (type || '').toLowerCase();
+  if (t.includes('cattle'))   return '#fec24f';   // brand gold
+  if (t.includes('solar'))    return '#65ed00';   // brand green
+  if (t.includes('delivery')) return '#eda5ff';   // brand lavender
+  if (t.includes('short'))    return '#0096ff';   // brand blue
+  return '#ff9b0c';                               // brand orange
+}
+function _maturityInstructionLabel(key) {
+  const map = { reinvest: 'Reinvest on maturity', payout_all: 'Full cash payout',
+    partial_reinvest: 'Partial reinvest', switch_product: 'Switch product' };
+  return map[key] || (key || '').replace(/_/g,' ');
+}
+
 async function loadMaturity() {
   if (!PORTAL.investments.length) await loadPortalData();
 
@@ -4271,42 +4294,145 @@ async function loadMaturity() {
   let html = '';
 
   if (active.length) {
-    html += `<h3 style="font-size:0.85rem;font-weight:700;color:var(--text-muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em"><i class="fa-solid fa-hourglass-half"></i> Upcoming Maturities (${active.length})</h3>`;
+    html += `
+      <div class="mc2-section-header">
+        <span class="mc2-section-header__icon"><i class="fa-solid fa-hourglass-half"></i></span>
+        <span class="mc2-section-header__title">Upcoming Maturities</span>
+        <span class="mc2-section-header__count">${active.length}</span>
+      </div>`;
+
     html += active.map(inv => {
-      const days = Utils.daysRemaining(inv.maturity_date);
-      const hasInstruction = !!inv.maturity_instruction;
-      return `<div class="maturity-card" style="border-color:var(--border)">
-        <div class="maturity-card__info">
-          <div class="maturity-card__name">${_esc(inv.pool_name)}</div>
-          <div class="maturity-card__detail">Matures: ${Utils.date(inv.maturity_date)} · ${days} days remaining</div>
-          ${hasInstruction ? `<div style="font-size:0.72rem;color:var(--green);margin-top:4px"><i class="fa-solid fa-check-circle"></i> Instruction set: ${inv.maturity_instruction.replace(/_/g,' ')}</div>` : ''}
+      const days        = Utils.daysRemaining(inv.maturity_date);
+      const hasInstr    = !!inv.maturity_instruction;
+      const color       = _maturityProductColor(inv.product_type);
+      const icon        = _maturityProductIcon(inv.product_type);
+      const urgencyCls  = days <= 7 ? 'soon' : days <= 30 ? 'near' : 'far';
+      const stripColor  = days <= 7 ? '#ff5229' : days <= 30 ? '#fec24f' : '#65ed00';
+      const fillColor   = stripColor;
+
+      // Progress through the term
+      const start    = new Date(inv.start_date || inv.created_at).getTime();
+      const end      = new Date(inv.maturity_date).getTime();
+      const progress = (start && end && end > start)
+        ? Math.min(100, Math.max(2, Math.round((Date.now() - start) / (end - start) * 100)))
+        : 50;
+
+      const expectedReturn = inv.expected_return || inv.expected_return_amount || 0;
+      const productLabel   = Utils.productInfo ? (Utils.productInfo(inv.product_type)||{}).label : inv.product_type;
+
+      return `
+      <div class="mc2 mc2--active" data-id="${_esc(inv.id)}">
+        <div class="mc2__strip" style="background:${stripColor}"></div>
+        <div class="mc2__body">
+          <div class="mc2__header">
+            <div class="mc2__icon" style="background:${color}1a;color:${color}">
+              <i class="fa-solid fa-${icon}"></i>
+            </div>
+            <div class="mc2__titles">
+              <div class="mc2__name">${_esc(inv.pool_name)}</div>
+              <div class="mc2__sub">${inv.term_months ? inv.term_months + '-month term' : ''}${productLabel ? ' · ' + _esc(productLabel) : ''}</div>
+            </div>
+            <div class="mc2__badge mc2__badge--${urgencyCls}">
+              <i class="fa-solid fa-clock"></i>
+              ${days === 0 ? 'Today' : days === 1 ? '1 day' : days + ' days'}
+            </div>
+          </div>
+
+          <div class="mc2__stats">
+            <div class="mc2__stat">
+              <div class="mc2__stat-val">${Utils.rand(inv.amount)}</div>
+              <div class="mc2__stat-lbl">Invested</div>
+            </div>
+            <div class="mc2__stat">
+              <div class="mc2__stat-val mc2__stat-val--gold">${expectedReturn ? '+' + Utils.rand(expectedReturn) : '—'}</div>
+              <div class="mc2__stat-lbl">Expected return</div>
+            </div>
+            <div class="mc2__stat">
+              <div class="mc2__stat-val">${Utils.date(inv.maturity_date)}</div>
+              <div class="mc2__stat-lbl">Maturity date</div>
+            </div>
+          </div>
+
+          <div class="mc2__progress-wrap">
+            <div class="mc2__progress-meta">
+              <span>${Utils.date(inv.start_date)}</span>
+              <span>${progress}% complete</span>
+              <span>${Utils.date(inv.maturity_date)}</span>
+            </div>
+            <div class="mc2__progress-bar">
+              <div class="mc2__progress-fill" style="width:${progress}%;background:${fillColor}"></div>
+            </div>
+          </div>
+
+          <div class="mc2__footer">
+            <div class="mc2__instruction ${hasInstr ? 'mc2__instruction--set' : 'mc2__instruction--unset'}">
+              <i class="fa-solid fa-${hasInstr ? 'circle-check' : 'circle-exclamation'}"></i>
+              ${hasInstr ? _maturityInstructionLabel(inv.maturity_instruction) : 'No instruction set yet'}
+            </div>
+            <button class="mc2__cta ${hasInstr ? 'mc2__cta--secondary' : 'mc2__cta--primary'}"
+                    onclick='openMaturityModal(${JSON.stringify(inv.id)})'>
+              <i class="fa-solid fa-${hasInstr ? 'pen' : 'paper-plane'}"></i>
+              ${hasInstr ? 'Update' : 'Set Instruction'}
+            </button>
+          </div>
         </div>
-        <button class="btn ${hasInstruction ? 'btn--secondary' : 'btn--primary'}" onclick='openMaturityModal(${JSON.stringify(inv.id)})'>
-          <i class="fa-solid fa-${hasInstruction ? 'pen' : 'paper-plane'}"></i> ${hasInstruction ? 'Update Instruction' : 'Set Instruction'}
-        </button>
       </div>`;
     }).join('');
   }
 
   if (matured.length) {
-    html += `<h3 style="font-size:0.85rem;font-weight:700;color:var(--red);margin-top:${active.length ? '24px' : '0'};margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em"><i class="fa-solid fa-exclamation-circle"></i> Matured (${matured.length})</h3>`;
+    if (active.length) {
+      html += `<div class="mc2-section-divider">
+        <div class="mc2-section-divider__line"></div>
+        <div class="mc2-section-divider__label"><i class="fa-solid fa-circle-check"></i> Matured (${matured.length})</div>
+        <div class="mc2-section-divider__line"></div>
+      </div>`;
+    } else {
+      html += `<div class="mc2-section-header">
+        <span class="mc2-section-header__icon" style="color:#22c55e"><i class="fa-solid fa-circle-check"></i></span>
+        <span class="mc2-section-header__title" style="color:#22c55e">Matured</span>
+        <span class="mc2-section-header__count" style="background:rgba(34,197,94,0.1);color:#16a34a">${matured.length}</span>
+      </div>`;
+    }
+
     html += matured.map(inv => {
-      const total = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
+      const total       = inv.amount + (inv.actual_return_amount || inv.expected_return_amount || 0);
+      const color       = _maturityProductColor(inv.product_type);
+      const icon        = _maturityProductIcon(inv.product_type);
       const instruction = inv.maturity_instruction;
-      return `<div class="maturity-card">
-        <div class="maturity-card__info">
-          <div class="maturity-card__name">${_esc(inv.pool_name)}</div>
-          <div class="maturity-card__detail">Matured: ${Utils.date(inv.maturity_date)} · Rate: ${Utils.pct(inv.expected_return_rate)}</div>
-          ${instruction ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px"><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> Instruction: ${instruction.replace(/_/g,' ')}</div>` : ''}
+
+      return `
+      <div class="mc2 mc2--matured">
+        <div class="mc2__strip" style="background:#65ed00"></div>
+        <div class="mc2__body">
+          <div class="mc2__header">
+            <div class="mc2__icon" style="background:${color}1a;color:${color}">
+              <i class="fa-solid fa-${icon}"></i>
+            </div>
+            <div class="mc2__titles">
+              <div class="mc2__name">${_esc(inv.pool_name)}</div>
+              <div class="mc2__sub">Matured ${Utils.date(inv.maturity_date)}</div>
+            </div>
+            <div class="mc2__badge mc2__badge--done">
+              <i class="fa-solid fa-circle-check"></i> Matured
+            </div>
+          </div>
+
+          <div class="mc2__payout">
+            <i class="fa-solid fa-sack-dollar" style="color:#22c55e;font-size:1.1rem"></i>
+            <div>
+              <div class="mc2__payout-val">${Utils.rand(total)}</div>
+              <div class="mc2__payout-lbl">Total payout value</div>
+            </div>
+          </div>
+
+          <div class="mc2__footer">
+            <div class="mc2__instruction ${instruction ? 'mc2__instruction--set' : 'mc2__instruction--unset'}">
+              <i class="fa-solid fa-${instruction ? 'circle-check' : 'circle-exclamation'}"></i>
+              ${instruction ? _maturityInstructionLabel(instruction) : 'Awaiting instruction'}
+            </div>
+          </div>
         </div>
-        <div class="maturity-card__payout">
-          <div class="maturity-card__payout-value">${Utils.rand(total)}</div>
-          <div class="maturity-card__payout-label">Total payout value</div>
-        </div>
-        ${instruction
-          ? `<span class="badge badge--gray" style="text-transform:capitalize">${instruction.replace(/_/g,' ')}</span>`
-          : `<span class="badge" style="background:rgba(239,68,68,0.12);color:#b91c1c">Awaiting instruction</span>`
-        }
       </div>`;
     }).join('');
   }

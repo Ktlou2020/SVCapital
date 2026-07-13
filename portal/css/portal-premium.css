@@ -461,14 +461,173 @@
 .btn--primary:active { transform: scale(0.97) !important; }
 .btn--secondary:active { transform: scale(0.97) !important; }
 
-/* ─── 21. Maturity card polish ──────────────────────────────── */
-.maturity-card {
-  border-radius: 14px !important;
-  transition: transform 0.22s ease, box-shadow 0.22s ease !important;
+/* ─── 21. Maturity card v2 ──────────────────────────────────── */
+.mc2-section-header {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 16px;
 }
-.maturity-card:hover {
-  transform: translateX(4px) !important;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.09) !important;
+.mc2-section-header__title {
+  font-size: 0.72rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text-muted);
+}
+.mc2-section-header__count {
+  font-size: 0.72rem; font-weight: 700; padding: 2px 8px;
+  border-radius: 20px; background: rgba(255,155,12,0.12);
+  color: var(--gold, #ff9b0c);
+}
+.mc2-section-header__icon { font-size: 0.88rem; opacity: 0.55; }
+
+.mc2 {
+  display: flex; border-radius: 18px; overflow: hidden;
+  background: var(--panel, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  margin-bottom: 12px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.mc2:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+  border-color: var(--gold, #ff9b0c);
+}
+.mc2--matured { border-color: rgba(34,197,94,0.3); }
+.mc2--matured:hover { border-color: #22c55e; }
+.mc2--alert { border-color: rgba(239,68,68,0.3); }
+.mc2--alert:hover { border-color: #ef4444; }
+
+.mc2__strip {
+  width: 5px; flex-shrink: 0;
+}
+.mc2__body {
+  flex: 1; padding: 18px 20px; min-width: 0;
+}
+
+/* Header row */
+.mc2__header {
+  display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px;
+}
+.mc2__icon {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+}
+.mc2__titles { flex: 1; min-width: 0; }
+.mc2__name {
+  font-size: 0.96rem; font-weight: 800; color: var(--text, #111);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mc2__sub {
+  font-size: 0.73rem; color: var(--text-muted, #9ca3af); margin-top: 2px;
+}
+
+/* Urgency badge */
+.mc2__badge {
+  flex-shrink: 0; display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700;
+}
+.mc2__badge--soon  { background: rgba(255,82,41,0.1);   color: #cc3e1e; }
+.mc2__badge--near  { background: rgba(254,194,79,0.18); color: #7a5800; }
+.mc2__badge--far   { background: rgba(101,237,0,0.12);  color: #3d8a00; }
+.mc2__badge--done  { background: rgba(101,237,0,0.12);  color: #3d8a00; }
+
+/* Stats row */
+.mc2__stats {
+  display: grid; grid-template-columns: repeat(3,1fr);
+  gap: 0; margin-bottom: 14px;
+}
+.mc2__stat { padding: 0 12px; }
+.mc2__stat:first-child { padding-left: 0; }
+.mc2__stat:not(:last-child) { border-right: 1px solid var(--border, #e5e7eb); }
+.mc2__stat-val {
+  font-size: 0.88rem; font-weight: 800; color: var(--text, #111);
+  font-variant-numeric: tabular-nums;
+}
+.mc2__stat-val--gold { color: var(--gold, #ff9b0c); }
+.mc2__stat-val--green { color: #22c55e; }
+.mc2__stat-lbl {
+  font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--text-muted, #9ca3af); font-weight: 600; margin-top: 2px;
+}
+
+/* Progress bar */
+.mc2__progress-wrap { margin-bottom: 14px; }
+.mc2__progress-meta {
+  display: flex; justify-content: space-between;
+  font-size: 0.67rem; color: var(--text-muted, #9ca3af);
+  font-weight: 600; margin-bottom: 5px;
+}
+.mc2__progress-bar {
+  height: 4px; border-radius: 99px;
+  background: var(--border, #e5e7eb); overflow: hidden;
+}
+.mc2__progress-fill {
+  height: 100%; border-radius: 99px;
+  transition: width 0.6s ease;
+}
+
+/* Footer */
+.mc2__footer {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap;
+}
+.mc2__instruction {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.75rem; font-weight: 700; padding: 5px 12px;
+  border-radius: 20px;
+}
+.mc2__instruction--set {
+  background: rgba(101,237,0,0.1); color: #3d8a00;
+}
+.mc2__instruction--unset {
+  background: rgba(254,194,79,0.15); color: #7a5800;
+}
+.mc2__cta {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 16px; border-radius: 10px; font-size: 0.78rem; font-weight: 700;
+  border: none; cursor: pointer; transition: all 0.15s ease; flex-shrink: 0;
+}
+.mc2__cta--primary {
+  background: #ff9b0c; color: #fff;
+}
+.mc2__cta--primary:hover { filter: brightness(1.08); transform: scale(1.02); }
+.mc2__cta--secondary {
+  background: transparent; color: var(--text-muted, #6b7280);
+  border: 1.5px solid var(--border, #e5e7eb);
+}
+.mc2__cta--secondary:hover {
+  border-color: var(--gold, #ff9b0c); color: var(--gold, #ff9b0c);
+}
+
+/* Payout total (matured) */
+.mc2__payout {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-radius: 12px;
+  background: rgba(101,237,0,0.07); border: 1px solid rgba(101,237,0,0.25);
+  margin-bottom: 14px;
+}
+.mc2__payout-val {
+  font-size: 1.1rem; font-weight: 900; color: #3d8a00;
+  font-variant-numeric: tabular-nums;
+}
+.mc2__payout-lbl { font-size: 0.7rem; color: var(--text-muted); font-weight: 600; }
+
+/* Matured section divider */
+.mc2-section-divider {
+  display: flex; align-items: center; gap: 12px; margin: 24px 0 16px;
+}
+.mc2-section-divider__line {
+  flex: 1; height: 1px; background: var(--border, #e5e7eb);
+}
+.mc2-section-divider__label {
+  font-size: 0.68rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.1em; color: #3d8a00; white-space: nowrap;
+}
+
+@media (max-width: 500px) {
+  .mc2__stats { grid-template-columns: repeat(2,1fr); gap: 8px; }
+  .mc2__stat:not(:last-child) { border-right: none; }
+  .mc2__stat { padding: 0; }
+  .mc2__footer { flex-direction: column; align-items: stretch; }
+  .mc2__cta { justify-content: center; }
 }
 
 /* ─── 22. Empty state polish ────────────────────────────────── */

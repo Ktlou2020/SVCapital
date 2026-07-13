@@ -170,4 +170,25 @@ router.post('/import/animals', requireAuth, async (req, res) => {
   }
 });
 
+/* ── DELETE /api/cattle/purge ───────────────────────────────
+   Truncates cattle_animals and cattle_cycles.
+   Requires authenticated director session.               */
+router.delete('/purge', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rowCount: animals } = await client.query('DELETE FROM cattle_animals');
+    const { rowCount: cycles  } = await client.query('DELETE FROM cattle_cycles');
+    await client.query('COMMIT');
+    console.log(`[cattle/purge] Deleted ${animals} animal(s) and ${cycles} cycle(s)`);
+    res.json({ deleted: { animals, cycles } });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[cattle/purge]', err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
