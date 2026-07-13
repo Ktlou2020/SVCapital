@@ -1243,6 +1243,13 @@ async function viewInvestor(id) {
 
   document.getElementById('invDetailTitle').textContent = `${inv.first_name} ${inv.last_name} — ${inv.id}`;
 
+  // Check whether this investor has a login account (users row)
+  let hasLoginAccount = null;
+  try {
+    const uRes = await API.list('users', { limit: 1, email: inv.email });
+    hasLoginAccount = (uRes.data || []).length > 0;
+  } catch (_) { hasLoginAccount = null; }
+
   /* Parse bank details stored in notes JSON by migration */
   let bankNotes = {};
   try { if (inv.notes && inv.notes.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
@@ -1387,6 +1394,7 @@ async function viewInvestor(id) {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn--success btn--sm" onclick='depositToInvestor(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, ${inv.wallet_balance || 0})'><i class="fa-solid fa-wallet"></i> Add Funds</button>
         <button class="btn btn--secondary btn--sm" onclick='approveInvestorFica(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-id-card"></i> Approve FICA</button>
+        ${hasLoginAccount === false ? `<button class="btn btn--secondary btn--sm" id="invInviteBtn" onclick='sendLoginInvite(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.email)}, this)'><i class="fa-solid fa-envelope"></i> Send Login Invite</button>` : hasLoginAccount === true ? `<span class="badge badge--green" style="padding:6px 10px"><i class="fa-solid fa-circle-check"></i> Has login account</span>` : ''}
         <button class="btn btn--danger btn--sm" onclick='confirmDeleteInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-trash"></i> Delete</button>
       </div>
       <button class="btn btn--primary btn--sm" onclick='Modal.close("investorDetailModal")'><i class="fa-solid fa-check"></i> Done</button>
@@ -1437,6 +1445,26 @@ async function approveInvestorFica(investorId, btn) {
     } catch (e) {
       Toast.error('Failed to approve FICA: ' + (e.message || 'unknown error'));
       console.error('[approveInvestorFica]', e);
+    }
+  });
+}
+
+async function sendLoginInvite(investorId, email, btn) {
+  if (!await Confirm.ask('Send login invite?', {
+    body: `This will create a login account for ${email || investorId} (if one doesn't exist) and email them a secure link to set their password. The link is valid for 7 days.`,
+    confirmLabel: 'Send Invite',
+  })) return;
+  await _withBtn(btn, async () => {
+    try {
+      const res = await API._fetch('POST', 'auth/invite-investor', { investor_id: investorId });
+      Toast.success(res.message || 'Invite sent');
+      // Refresh the badge in place
+      const badgeEl = document.getElementById('invInviteBtn');
+      if (badgeEl) {
+        badgeEl.outerHTML = `<span class="badge badge--green" style="padding:6px 10px"><i class="fa-solid fa-circle-check"></i> Invite sent</span>`;
+      }
+    } catch (e) {
+      Toast.error('Failed to send invite: ' + (e.message || 'unknown error'));
     }
   });
 }
