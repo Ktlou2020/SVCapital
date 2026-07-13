@@ -3202,6 +3202,27 @@ async function loadMarketplace() {
     // Render with whatever is cached — show empty state rather than "Loading..."
   }
   try { _mktProducts = await _getPortalProducts(); } catch (_) { _mktProducts = []; }
+
+  // Fallback: if the products table has no active entries, synthesise a virtual
+  // product for each distinct product_type that has at least one pool so the
+  // marketplace always shows what's available.
+  if (!_mktProducts.length && PORTAL.pools.length) {
+    const seen = new Set();
+    _mktProducts = PORTAL.pools
+      .filter(p => p && p.product_type && !seen.has(p.product_type) && seen.add(p.product_type))
+      .map(p => {
+        const pi = Utils.productInfo(p.product_type);
+        return {
+          product_type: p.product_type,
+          label:        pi.label || p.product_type,
+          is_active:    true,
+          sort_order:   0,
+          min_investment: p.min_investment,
+          annual_rate:    p.annual_rate,
+        };
+      });
+  }
+
   _selectedProductType = null;   // always land on the product grid
   try {
     renderMarketplace();
