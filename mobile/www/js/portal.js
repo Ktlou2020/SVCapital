@@ -405,7 +405,13 @@ function _isInvestorFicaApproved(inv = PORTAL.investor) {
 }
 
 function _getOpenMarketplacePools() {
-  return (PORTAL.pools || []).filter(p => p && (p.status === 'open' || p.status === 'waitlist'));
+  const now = Date.now();
+  return (PORTAL.pools || []).filter(p => {
+    if (!p) return false;
+    if (p.status !== 'open' && p.status !== 'waitlist') return false;
+    if (p.end_date && new Date(p.end_date).getTime() < now) return false;
+    return true;
+  });
 }
 
 function _rankMarketPools(pools, walletBalance = parseFloat(PORTAL.investor?.wallet_balance || 0)) {
@@ -3331,7 +3337,13 @@ function renderMarketplace() {
 
 // Count of open/waitlist pools for a product type
 function _openPoolsForProduct(type) {
-  return PORTAL.pools.filter(p => p.product_type === type && (p.status === 'open' || p.status === 'waitlist'));
+  const now = Date.now();
+  return PORTAL.pools.filter(p => {
+    if (p.product_type !== type) return false;
+    if (p.status !== 'open' && p.status !== 'waitlist') return false;
+    if (p.end_date && new Date(p.end_date).getTime() < now) return false;
+    return true;
+  });
 }
 
 function renderProductsGrid() {
