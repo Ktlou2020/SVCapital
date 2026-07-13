@@ -572,6 +572,13 @@ const Utils = {
     if (!dateStr) return null;
     let d;
     if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      // If end_date is today's local date return 0 so callers show "Closing today".
+      // Math.ceil on a sub-day fraction would otherwise return 1 all day.
+      const now = new Date();
+      const todayStr = now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0');
+      if (dateStr === todayStr) return 0;
       // Use local-date constructor — new Date('YYYY-MM-DD') parses as UTC midnight
       // which shifts the calendar day backward in UTC+ zones like SAST.
       const [y, mo, dy] = dateStr.split('-').map(Number);
