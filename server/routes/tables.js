@@ -829,21 +829,23 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         if (table === 'investments' && created.investor_id) {
           const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [created.investor_id]);
           if (inv[0]) {
-            // Investment start = pool closing date + 1 day
+            // Investment start = pool closing date + 1 day; maturity = pool maturity_date
             let startDate = null;
+            let maturityDate = created.end_date;
             if (created.pool_id) {
-              const { rows: pr } = await pool.query('SELECT end_date FROM investment_pools WHERE id = $1', [created.pool_id]);
+              const { rows: pr } = await pool.query('SELECT end_date, maturity_date FROM investment_pools WHERE id = $1', [created.pool_id]);
               if (pr[0]?.end_date) {
                 const d = new Date(pr[0].end_date);
                 d.setDate(d.getDate() + 1);
                 startDate = d.toISOString().split('T')[0];
               }
+              if (pr[0]?.maturity_date) maturityDate = pr[0].maturity_date;
             }
             await emailService.sendInvestmentCreated(inv[0], {
               poolName:   created.pool_name || created.pool_id || 'Investment Pool',
               amount:     created.amount,
               termMonths: created.term_months,
-              endDate:    created.end_date,
+              endDate:    maturityDate,
               startDate,
             });
           }
