@@ -839,7 +839,15 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
                 d.setDate(d.getDate() + 1);
                 startDate = d.toISOString().split('T')[0];
               }
-              if (pr[0]?.maturity_date) maturityDate = pr[0].maturity_date;
+              if (pr[0]?.maturity_date) {
+                maturityDate = pr[0].maturity_date;
+                // Overwrite the client-computed end_date with the pool's canonical maturity date
+                // so the cron, portal display, and alert emails all use the same date.
+                await pool.query(
+                  'UPDATE investments SET end_date = $1 WHERE id = $2',
+                  [maturityDate, created.id]
+                );
+              }
             }
             await emailService.sendInvestmentCreated(inv[0], {
               poolName:   created.pool_name || created.pool_id || 'Investment Pool',
