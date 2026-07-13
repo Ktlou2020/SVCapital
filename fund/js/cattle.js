@@ -789,9 +789,32 @@ function setupImportView() {
           <div id="animalsImportActions" style="display:none;margin-top:12px"><button class="btn btn-primary" onclick="importAnimals()"><i class="fa-solid fa-database"></i> Import Animals</button><button class="btn btn-secondary" onclick="clearAnimalsPreview()">Cancel</button></div>
         </div>
       </div>
+      <div class="card" style="margin-top:20px;border:1px solid rgba(255,82,41,0.35)">
+        <div class="card-header" style="background:rgba(255,82,41,0.06);color:#cc3e1e"><i class="fa-solid fa-triangle-exclamation"></i> Danger Zone</div>
+        <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;gap:16px">
+          <div>
+            <div style="font-weight:600;font-size:14px;color:#cc3e1e;margin-bottom:3px">Remove all cattle data</div>
+            <div style="font-size:12px;color:var(--text-muted)">Permanently deletes all cycles and animals from the database. This cannot be undone.</div>
+          </div>
+          <button class="btn" onclick="purgeAllCattleData()" style="white-space:nowrap;background:rgba(255,82,41,0.1);color:#cc3e1e;border:1px solid rgba(255,82,41,0.4);flex-shrink:0"><i class="fa-solid fa-trash"></i> Clear All Data</button>
+        </div>
+      </div>
     </div>`;
   setupDropZone('dropZoneCycles', 'fileCycles', handleCyclesFile);
   setupDropZone('dropZoneAnimals', 'fileAnimals', handleAnimalsFile);
+}
+
+async function purgeAllCattleData() {
+  const confirmed = confirm('This will permanently delete ALL cattle cycles and animals from the database.\n\nType OK to confirm.');
+  if (!confirmed) return;
+  try {
+    const r = await apiFetch('cattle/purge', { method: 'DELETE' });
+    const data = await r.json();
+    CToast.show(`Deleted ${data.deleted.animals} animal(s) and ${data.deleted.cycles} cycle(s).`, 'success');
+    loadCattleView();
+  } catch (err) {
+    CToast.show('Purge failed: ' + err.message, 'error');
+  }
 }
 
 function setupDropZone(zoneId, inputId, handler) {
