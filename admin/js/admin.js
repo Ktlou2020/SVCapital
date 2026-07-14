@@ -860,9 +860,13 @@ function renderPendingActions() {
     </button>`).join('');
 }
 
-function renderActivityFeed() {
+let _activityPage = 1;
+const _ACTIVITY_PAGE_SIZE = 5;
+
+function renderActivityFeed(page) {
   const el = document.getElementById('activityFeedWidget');
   if (!el) return;
+  if (page !== undefined) _activityPage = page;
 
   const events = [];
 
@@ -918,14 +922,18 @@ function renderActivityFeed() {
     });
   });
 
-  // Sort descending and take top 12
+  // Sort descending; keep all for pagination
   events.sort((a, b) => b.ts - a.ts);
-  const recent = events.slice(0, 12);
 
-  if (!recent.length) {
+  if (!events.length) {
     el.innerHTML = '<div class="empty-state" style="padding:12px"><i class="fa-solid fa-bolt"></i><div class="empty-state__title">No activity yet</div></div>';
     return;
   }
+
+  const totalPages = Math.ceil(events.length / _ACTIVITY_PAGE_SIZE);
+  _activityPage = Math.max(1, Math.min(_activityPage, totalPages));
+  const start = (_activityPage - 1) * _ACTIVITY_PAGE_SIZE;
+  const page_items = events.slice(start, start + _ACTIVITY_PAGE_SIZE);
 
   const _fmtRelative = (ts) => {
     const s = Math.floor((Date.now() - ts) / 1000);
@@ -935,8 +943,8 @@ function renderActivityFeed() {
     return ts.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
   };
 
-  el.innerHTML = recent.map((e, i) => `
-    <div style="display:flex;align-items:flex-start;gap:12px;padding:11px 16px;${i < recent.length-1 ? 'border-bottom:1px solid var(--border)' : ''};cursor:pointer;transition:background 0.15s"
+  const rows = page_items.map((e, i) => `
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:11px 16px;${i < page_items.length-1 ? 'border-bottom:1px solid var(--border)' : ''};cursor:pointer;transition:background 0.15s"
          onmouseover="this.style.background='var(--dark-2)'" onmouseout="this.style.background=''"
          onclick="navigate('${e.view}', document.querySelector('[data-view=${e.view}]'))">
       <div style="width:30px;height:30px;border-radius:50%;background:${e.color}18;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
@@ -949,6 +957,19 @@ function renderActivityFeed() {
       <div style="font-size:0.68rem;color:var(--text-dim);white-space:nowrap;flex-shrink:0;margin-top:2px">${_fmtRelative(e.ts)}</div>
     </div>
   `).join('');
+
+  const pagination = totalPages > 1 ? `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-top:1px solid var(--border)">
+      <button class="btn btn--ghost btn--sm" onclick="renderActivityFeed(${_activityPage - 1})" ${_activityPage <= 1 ? 'disabled' : ''} style="font-size:0.72rem">
+        <i class="fa-solid fa-chevron-left"></i> Prev
+      </button>
+      <span style="font-size:0.72rem;color:var(--text-muted)">${_activityPage} / ${totalPages}</span>
+      <button class="btn btn--ghost btn--sm" onclick="renderActivityFeed(${_activityPage + 1})" ${_activityPage >= totalPages ? 'disabled' : ''} style="font-size:0.72rem">
+        Next <i class="fa-solid fa-chevron-right"></i>
+      </button>
+    </div>` : '';
+
+  el.innerHTML = rows + pagination;
 
   _setRefreshLabel('activityRefreshed', 'activity');
 }

@@ -2164,6 +2164,28 @@ function populateMyInvProductFilter() {
   if (types.includes(cur)) sel.value = cur;
 }
 
+function _groupInvsByPool(investments) {
+  const map = new Map();
+  for (const inv of investments) {
+    const key = inv.pool_id || ('_solo_' + inv.id);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(inv);
+  }
+  for (const group of map.values()) {
+    group.sort((a, b) => new Date(a.investment_date || a.start_date || a.created_at) - new Date(b.investment_date || b.start_date || b.created_at));
+  }
+  return [...map.values()];
+}
+
+function toggleInvBreakdown(uid) {
+  const el = document.getElementById('breakdown-' + uid);
+  const icon = document.getElementById('icon-' + uid);
+  if (!el) return;
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  if (icon) icon.className = open ? 'fa-solid fa-list' : 'fa-solid fa-list-ul';
+}
+
 function renderMyInvestmentCards() {
   populateMyInvProductFilter();
   const grid = document.getElementById('myInvestmentsGrid');
@@ -2181,11 +2203,24 @@ function renderMyInvestmentCards() {
     return;
   }
 
-  grid.innerHTML = items.map(inv => {
+  const groups = _groupInvsByPool(items);
+
+  grid.innerHTML = groups.map(group => {
+    const inv = group[0];
     const pi = Utils.productInfo(inv.product_type);
     const days = Utils.daysRemaining(inv.maturity_date);
-    const progress = days !== null && inv.amount ? Math.min(100, Math.max(0, 100 - (days / (365 * 1.5) * 100))) : 100;
+    const progress = days !== null ? Math.min(100, Math.max(0, 100 - (days / (365 * 1.5) * 100))) : 100;
     const isPaidOut = inv.status === 'matured' || inv.status === 'paid_out';
+    const multiple = group.length > 1;
+    const totalAmount = group.reduce((s, i) => s + (i.amount || 0), 0);
+    const totalReturn = group.reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
+    const uid = 'pool_' + (inv.pool_id || inv.id);
+
+    const breakdownRows = multiple ? group.map(i => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);font-size:0.78rem">
+        <span style="color:var(--text-muted)">${Utils.date(i.investment_date || i.start_date || i.created_at)}</span>
+        <span style="color:var(--gold);font-weight:700">${Utils.rand(Math.round(i.amount * 0.99 * 100) / 100)}</span>
+      </div>`).join('') : '';
 
     return `
       <div class="my-inv-card ${isPaidOut ? 'my-inv-card--paidout' : ''}">
@@ -2195,7 +2230,7 @@ function renderMyInvestmentCards() {
               <i class="fa-solid ${pi.icon}" style="color:${pi.color}"></i>
               <span class="my-inv-card__name">${_esc(inv.pool_name)}</span>
             </div>
-            <div class="my-inv-card__partner">${inv.investor_id}</div>
+            <div class="my-inv-card__partner">${inv.investor_id}${multiple ? ` · <span style="color:var(--gold)">${group.length} investments</span>` : ''}</div>
           </div>
           ${Utils.statusBadge(inv.status)}
         </div>
@@ -2211,17 +2246,26 @@ function renderMyInvestmentCards() {
         ` : ''}
 
         <div class="my-inv-card__stats">
-          <div class="mic-stat"><span class="mic-stat__label">Amount Invested</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(Math.round(inv.amount * 0.99 * 100) / 100)}</span></div>
+          <div class="mic-stat"><span class="mic-stat__label">${multiple ? 'Total Invested' : 'Amount Invested'}</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(Math.round(totalAmount * 0.99 * 100) / 100)}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Launch Date</span><span class="mic-stat__value">${Utils.date(inv.investment_date || inv.start_date)}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Maturity Date</span><span class="mic-stat__value">${Utils.date(inv.maturity_date)}</span></div>
           ${isPaidOut ? `
           <div class="mic-stat"><span class="mic-stat__label">Return Rate</span><span class="mic-stat__value">${Utils.pct(inv.annual_rate || inv.expected_return_rate)}</span></div>
-          <div class="mic-stat"><span class="mic-stat__label">Capital + Return</span><span class="mic-stat__value" style="color:var(--green)">${Utils.rand(inv.amount + (inv.actual_return_amount || inv.expected_return_amount || 0))}</span></div>
+          <div class="mic-stat"><span class="mic-stat__label">Capital + Return</span><span class="mic-stat__value" style="color:var(--green)">${Utils.rand(totalAmount + totalReturn)}</span></div>
           ` : ''}
         </div>
 
+        ${multiple ? `
+          <button class="btn btn--ghost btn--full btn--sm" onclick="toggleInvBreakdown('${uid}')" style="margin-top:4px;font-size:0.73rem">
+            <i class="fa-solid fa-list" id="icon-${uid}"></i> View ${group.length} investments
+          </button>
+          <div id="breakdown-${uid}" style="display:none;padding:0 2px">
+            ${breakdownRows}
+          </div>
+        ` : ''}
+
         ${inv.status === 'active' ? `
-          <button class="btn btn--secondary btn--full btn--sm" onclick='openMaturityModal(${JSON.stringify(inv.id)})' style="margin-top:6px;font-size:0.76rem">
+          <button class="btn btn--secondary btn--full btn--sm" onclick='${multiple ? `openPoolMaturityModal(${JSON.stringify(inv.pool_id)})` : `openMaturityModal(${JSON.stringify(inv.id)})`}' style="margin-top:6px;font-size:0.76rem">
             <i class="fa-solid fa-hourglass-half"></i> Set Maturity Instruction
           </button>
         ` : ''}
@@ -4432,36 +4476,94 @@ async function loadMaturity() {
   let html = '';
 
   if (active.length) {
-    html += `<h3 style="font-size:0.85rem;font-weight:700;color:var(--text-muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em"><i class="fa-solid fa-hourglass-half"></i> Upcoming Maturities (${active.length})</h3>`;
-    html += active.map(inv => {
+    const activeGroups = _groupInvsByPool(active);
+    html += `<h3 style="font-size:0.85rem;font-weight:700;color:var(--text-muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em"><i class="fa-solid fa-hourglass-half"></i> Upcoming Maturities (${activeGroups.length})</h3>`;
+    html += activeGroups.map(group => {
+      const inv = group[0];
       const days = Utils.daysRemaining(inv.maturity_date);
-      const hasInstruction = !!inv.maturity_instruction;
-      return `<div class="maturity-card" style="border-color:var(--border)">
-        <div class="maturity-card__info">
-          <div class="maturity-card__name">${_esc(inv.pool_name)}</div>
-          <div class="maturity-card__detail">Matures: ${Utils.date(inv.maturity_date)} · ${days} days remaining</div>
-          ${hasInstruction ? `<div style="font-size:0.72rem;color:var(--green);margin-top:4px"><i class="fa-solid fa-check-circle"></i> Instruction set: ${inv.maturity_instruction.replace(/_/g,' ')}</div>` : ''}
+      const multiple = group.length > 1;
+      const uid = 'mat_' + (inv.pool_id || inv.id);
+      const totalAmount = group.reduce((s, i) => s + (i.amount || 0), 0);
+
+      const allInstrs   = group.map(i => i.maturity_instruction).filter(Boolean);
+      const uniqueInstrs = [...new Set(allInstrs)];
+      const poolInstr   = uniqueInstrs.length === 1 ? uniqueInstrs[0] : null;
+      const hasMixed    = uniqueInstrs.length > 1;
+      const instrSet    = !!poolInstr || hasMixed;
+      const instrLabel  = hasMixed
+        ? `Mixed — ${allInstrs.length} of ${group.length} set`
+        : (poolInstr ? poolInstr.replace(/_/g,' ') : null);
+
+      const modalCall = multiple
+        ? `openPoolMaturityModal(${JSON.stringify(inv.pool_id)})`
+        : `openMaturityModal(${JSON.stringify(inv.id)})`;
+
+      const indivRows = multiple ? group.map(i => {
+        const hasInstr = !!i.maturity_instruction;
+        return `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border);gap:8px">
+            <div style="font-size:0.78rem;min-width:0">
+              <div style="color:var(--gold);font-weight:700">${Utils.rand(i.amount)}</div>
+              <div style="color:var(--text-muted);font-size:0.72rem">${Utils.date(i.investment_date || i.start_date || i.created_at)}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+              <span style="font-size:0.72rem;color:${hasInstr ? 'var(--green)' : 'var(--text-muted)'}">
+                ${hasInstr ? i.maturity_instruction.replace(/_/g,' ') : 'Not set'}
+              </span>
+              <button class="btn btn--ghost btn--sm" style="font-size:0.72rem;padding:3px 8px" onclick='openMaturityModal(${JSON.stringify(i.id)})'>
+                ${hasInstr ? 'Update' : 'Set'}
+              </button>
+            </div>
+          </div>`;
+      }).join('') : '';
+
+      return `<div class="maturity-card" style="border-color:var(--border);display:block">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">
+          <div class="maturity-card__info" style="flex:1;min-width:0">
+            <div class="maturity-card__name">${_esc(inv.pool_name)}${multiple ? ` <span style="color:var(--gold);font-size:0.78rem">(${group.length})</span>` : ''}</div>
+            <div class="maturity-card__detail">Matures: ${Utils.date(inv.maturity_date)} · ${days} days · ${Utils.rand(totalAmount)}</div>
+            ${instrSet ? `<div style="font-size:0.72rem;color:var(--green);margin-top:4px"><i class="fa-solid fa-check-circle"></i> ${instrLabel}</div>` : ''}
+          </div>
+          <button class="btn ${instrSet ? 'btn--secondary' : 'btn--primary'}" style="flex-shrink:0" onclick='${modalCall}'>
+            <i class="fa-solid fa-${instrSet ? 'pen' : 'paper-plane'}"></i> ${instrSet ? 'Update' : 'Set'}
+          </button>
         </div>
-        <button class="btn ${hasInstruction ? 'btn--secondary' : 'btn--primary'}" onclick='openMaturityModal(${JSON.stringify(inv.id)})'>
-          <i class="fa-solid fa-${hasInstruction ? 'pen' : 'paper-plane'}"></i> ${hasInstruction ? 'Update Instruction' : 'Set Instruction'}
-        </button>
+        ${multiple ? `
+        <div style="border-top:1px solid var(--border);padding-top:4px">
+          <button class="btn btn--ghost btn--full btn--sm" onclick="toggleInvBreakdown('${uid}')" style="font-size:0.73rem;color:var(--text-muted)">
+            <i class="fa-solid fa-list" id="icon-${uid}"></i> Individual instructions (${group.length})
+          </button>
+          <div id="breakdown-${uid}" style="display:none">
+            ${indivRows}
+          </div>
+        </div>` : ''}
       </div>`;
     }).join('');
   }
 
   if (matured.length) {
-    html += `<h3 style="font-size:0.85rem;font-weight:700;color:var(--red);margin-top:${active.length ? '24px' : '0'};margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em"><i class="fa-solid fa-exclamation-circle"></i> Matured (${matured.length})</h3>`;
-    html += matured.map(inv => {
-      const total = inv.amount + (inv.actual_return_amount || inv.expected_return_amount);
-      const instruction = inv.maturity_instruction;
+    const maturedGroups = _groupInvsByPool(matured);
+    html += `<h3 style="font-size:0.85rem;font-weight:700;color:var(--red);margin-top:${active.length ? '24px' : '0'};margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em"><i class="fa-solid fa-exclamation-circle"></i> Matured (${maturedGroups.length})</h3>`;
+    html += maturedGroups.map(group => {
+      const inv         = group[0];
+      const totalAmount = group.reduce((s, i) => s + (i.amount || 0), 0);
+      const totalReturn = group.reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
+      const total       = totalAmount + totalReturn;
+      const allInstrs   = group.map(i => i.maturity_instruction).filter(Boolean);
+      const uniqueInstrs = [...new Set(allInstrs)];
+      const poolInstr   = uniqueInstrs.length === 1 ? uniqueInstrs[0] : null;
+      const hasMixed    = uniqueInstrs.length > 1;
+      const instrSet    = !!poolInstr || hasMixed;
+      const instrLabel  = hasMixed ? `Mixed (${allInstrs.length}/${group.length})` : (poolInstr ? poolInstr.replace(/_/g,' ') : null);
+
       return `<div class="maturity-card">
         <div class="maturity-card__info">
-          <div class="maturity-card__name">${_esc(inv.pool_name)}</div>
-          <div class="maturity-card__detail">Matured: ${Utils.date(inv.maturity_date)} · Rate: ${Utils.pct(inv.expected_return_rate)}</div>
-          ${instruction ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px"><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> Instruction: ${instruction.replace(/_/g,' ')}</div>` : ''}
+          <div class="maturity-card__name">${_esc(inv.pool_name)}${group.length > 1 ? ` <span style="color:var(--gold);font-size:0.78rem">(${group.length})</span>` : ''}</div>
+          <div class="maturity-card__detail">Matured: ${Utils.date(inv.maturity_date)} · ${Utils.rand(total)}</div>
+          ${instrSet ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px"><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> ${instrLabel}</div>` : ''}
         </div>
-        ${instruction
-          ? `<span class="badge badge--gray" style="text-transform:capitalize">${instruction.replace(/_/g,' ')}</span>`
+        ${instrSet
+          ? `<span class="badge badge--gray" style="text-transform:capitalize">${instrLabel}</span>`
           : `<span class="badge" style="background:rgba(239,68,68,0.12);color:#b91c1c">Awaiting instruction</span>`
         }
       </div>`;
@@ -4612,6 +4714,116 @@ async function submitMaturityInstruction(inv) {
     loadMaturity();
   } catch (e) {
     console.error('[maturity]', e);
+    Toast.error(e.message || 'Failed to save instruction');
+  }
+}
+
+async function openPoolMaturityModal(poolId) {
+  const poolInvs = PORTAL.investments.filter(i => i.pool_id === poolId && i.status === 'active');
+  if (!poolInvs.length) return;
+  const first = poolInvs[0];
+  const totalAmount = poolInvs.reduce((s, i) => s + (i.amount || 0), 0);
+
+  const allInstrs   = poolInvs.map(i => i.maturity_instruction).filter(Boolean);
+  const uniqueInstrs = [...new Set(allInstrs)];
+  const existing    = uniqueInstrs.length === 1 ? uniqueInstrs[0] : '';
+
+  const _seenPt = new Set();
+  const switchProductsHtml = (_mktProducts || [])
+    .filter(p => p.is_active && p.product_type !== first.product_type && !_seenPt.has(p.product_type) && _seenPt.add(p.product_type))
+    .map(p => `<option value="${p.product_type}">${_esc(p.label || p.product_type)}</option>`).join('')
+    || `<option value="" disabled>No other products available</option>`;
+
+  document.getElementById('maturityModalBody').innerHTML = `
+    <div class="info-list mb-16">
+      <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value">${_esc(first.pool_name)}</span></div>
+      <div class="info-row"><span class="info-row__label">Investments</span><span class="info-row__value">${poolInvs.length}</span></div>
+      <div class="info-row"><span class="info-row__label">Total Capital</span><span class="info-row__value text-gold fw-700">${Utils.rand(totalAmount)}</span></div>
+    </div>
+    <div style="font-size:0.8rem;color:var(--text-muted);background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.2);border-radius:8px;padding:10px 12px;margin-bottom:16px">
+      <i class="fa-solid fa-layer-group" style="color:var(--gold);margin-right:6px"></i>
+      This instruction applies to all ${poolInvs.length} investments. To set per-investment instructions, expand <strong>Individual instructions</strong>.
+    </div>
+    <div class="form-group">
+      <label class="form-label">Instruction Type *</label>
+      <select class="form-select" id="matInstructionType">
+        <option value="payout_all" ${existing==='payout_all'?'selected':''}>Payout All — Receive full capital + returns</option>
+        <option value="payout_return" ${existing==='payout_return'?'selected':''}>Payout Returns Only — Keep capital reinvested</option>
+        <option value="reinvest" ${existing==='reinvest'?'selected':''}>Reinvest — Roll over into same product</option>
+        <option value="payout_custom" ${existing==='payout_custom'?'selected':''}>Custom Payout — Specify amount per investment</option>
+        <option value="custom_switch" ${existing==='custom_switch'?'selected':''}>Custom Switch — Payout a portion &amp; switch the rest</option>
+      </select>
+    </div>
+    <div id="switchProductGroup" style="display:${existing==='custom_switch'?'block':'none'}">
+      <div class="form-group">
+        <label class="form-label">Switch Remaining Funds Into *</label>
+        <select class="form-select" id="matSwitchProduct">${switchProductsHtml}</select>
+      </div>
+    </div>
+    <div id="customPayoutGroup" style="display:${(existing==='payout_custom'||existing==='custom_switch')?'block':'none'}">
+      <div class="form-group">
+        <label class="form-label">Amount to Pay Out (R) — per investment</label>
+        <input type="number" class="form-input" id="matCustomAmount" placeholder="Amount per investment" />
+      </div>
+    </div>
+    <div style="font-size:0.72rem;color:var(--text-dim);line-height:1.6;margin-top:8px">
+      <i class="fa-solid fa-clock" style="color:var(--gold)"></i>
+      You can update this instruction at any time before maturity. If not submitted, funds will be automatically reinvested.
+    </div>
+  `;
+
+  document.getElementById('matInstructionType').addEventListener('change', e => {
+    const v = e.target.value;
+    document.getElementById('customPayoutGroup').style.display  = (v === 'payout_custom' || v === 'custom_switch') ? 'block' : 'none';
+    const sg = document.getElementById('switchProductGroup'); if (sg) sg.style.display = v === 'custom_switch' ? 'block' : 'none';
+  });
+
+  const matBtn = document.getElementById('maturityConfirmBtn');
+  matBtn.onclick = () => _withBtn(matBtn, () => submitPoolMaturityInstruction(poolId));
+  Modal.open('maturityModal');
+}
+
+async function submitPoolMaturityInstruction(poolId) {
+  const poolInvs = PORTAL.investments.filter(i => i.pool_id === poolId && i.status === 'active');
+  if (!poolInvs.length) return;
+
+  const type              = document.getElementById('matInstructionType').value;
+  const needsCustom       = (type === 'payout_custom' || type === 'custom_switch');
+  const customAmt         = needsCustom ? parseFloat(document.getElementById('matCustomAmount')?.value || 0) : null;
+  const switchProductType = type === 'custom_switch' ? (document.getElementById('matSwitchProduct')?.value || null) : null;
+
+  if (needsCustom && (!customAmt || customAmt <= 0)) { Toast.error('Please enter a valid payout amount'); return; }
+  if (type === 'custom_switch' && !switchProductType) { Toast.error('Please choose a product to switch the remaining funds into'); return; }
+
+  try {
+    await Promise.all(poolInvs.map(async inv => {
+      await API._fetch('POST', 'investments/' + inv.id + '/instruction', { instruction: type });
+      const extra = {};
+      if (customAmt)         extra.custom_payout_amount = customAmt;
+      if (switchProductType) extra.switch_product_type  = switchProductType;
+      if (Object.keys(extra).length) await API.investments.update(inv.id, extra);
+      await API.maturityInstructions.create({
+        id: Utils.genId('MAT'),
+        investment_id: inv.id,
+        investor_id: PORTAL.investor?.id,
+        investor_name: `${PORTAL.investor.first_name} ${PORTAL.investor.last_name}`,
+        pool_name: inv.pool_name,
+        instruction: type,
+        instruction_type: type,
+        custom_payout_amount: customAmt || 0,
+        status: 'submitted',
+        submitted_date: new Date().toISOString(),
+        total_payout: inv.amount + (inv.actual_return_amount || inv.expected_return_amount || 0)
+      });
+    }));
+    Toast.success(`Maturity instruction applied to all ${poolInvs.length} investments!`);
+    SVC.track('svc_pool_maturity_instruction', { pool_id: poolId, action: type });
+    Modal.close('maturityModal');
+    PORTAL.investments = [];
+    await loadPortalData();
+    loadMaturity();
+  } catch (e) {
+    console.error('[pool maturity]', e);
     Toast.error(e.message || 'Failed to save instruction');
   }
 }
