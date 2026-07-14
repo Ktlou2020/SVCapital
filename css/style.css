@@ -2375,6 +2375,9 @@ section { position: relative; padding: 100px 0; }
 
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
 
+  .app-btns { flex-direction: column; }
+  .app-store-btn { width: 100%; }
+
   .team-grid { grid-template-columns: 1fr; }
   .testimonials-grid { grid-template-columns: 1fr; }
 
