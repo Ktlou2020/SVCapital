@@ -3845,15 +3845,14 @@ async function viewTicket(id) {
         if (!await Confirm.ask(approve ? 'Approve EFT Deposit' : 'Decline EFT Deposit', { body: confirmMsg, confirmLabel: approve ? 'Approve & Credit' : 'Decline', danger: !approve })) return;
         try {
           if (approve) {
-            await API._fetch('POST', 'tables/transactions', null, {
-              id:           Utils.genId('TXN'),
-              investor_id:  tkt.investor_id,
-              type:         'deposit',
-              amount:       amount,
-              status:       'completed',
-              description:  `EFT wallet top-up approved by admin. Ref: ${ref}`,
-              reference:    ref,
-              transaction_date: new Date().toISOString(),
+            await API.transactions.create({
+              id:          Utils.genId('TXN'),
+              investor_id: tkt.investor_id,
+              type:        'deposit',
+              amount:      amount,
+              status:      'completed',
+              description: `EFT wallet top-up approved by admin. Ref: ${ref}`,
+              reference:   ref,
             });
           }
           await API.tickets.update(id, {
