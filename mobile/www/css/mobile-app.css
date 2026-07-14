@@ -562,7 +562,7 @@ body.dark-mode .igs-step--active .igs-text b { color: #656565 !important; }
    15. Buttons
    ───────────────────────────────────────────────────────────── */
 .btn     { font-size: 0.78rem !important; }
-.btn--sm { padding: 5px 10px !important; font-size: 0.65rem !important; min-height: 32px !important; white-space: nowrap !important; }
+.btn--sm { padding: 5px 10px !important; font-size: 0.62rem !important; min-height: 32px !important; white-space: nowrap !important; max-width: 160px !important; overflow: hidden !important; text-overflow: ellipsis !important; }
 .btn:active:not(:disabled) {
   transform: scale(0.96) !important;
   transition: transform 0.08s ease !important;
