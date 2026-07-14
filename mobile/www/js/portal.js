@@ -3550,14 +3550,18 @@ function renderProductsGrid() {
 function openProductDetail(type) {
   _selectedProductType = type;
   renderMarketplace();
-  const v = document.getElementById('view-marketplace');
-  if (v) v.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Scroll to the grid (not the full view) so the detail content is visible,
+  // not the hero/filter bar that sits above it.
+  const grid = document.getElementById('marketplaceGrid');
+  if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
   SVC.track('select_item', { item_list_id: 'products', items: [{ item_id: type }] });
 }
 
 function backToProducts() {
   _selectedProductType = null;
   renderMarketplace();
+  const grid = document.getElementById('marketplaceGrid');
+  if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function renderProductDetailView(type) {
