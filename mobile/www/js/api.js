@@ -31,7 +31,7 @@ function _showSessionExpiredOverlay() {
       <div style="font-size:2.5rem;margin-bottom:16px">🔒</div>
       <div style="color:#fff;font-weight:800;font-size:1.1rem;margin-bottom:8px">Session Expired</div>
       <div style="color:#9ca3af;font-size:0.85rem;line-height:1.6;margin-bottom:24px">Your session has expired. Please log in again to continue.</div>
-      <button id="_svcSessionExpiredBtn" style="background:#ff9b0c;color:#000;border:none;border-radius:12px;padding:14px 32px;font-weight:800;font-size:0.95rem;cursor:pointer;width:100%">Log In Again</button>
+      <button id="_svcSessionExpiredBtn" style="background:linear-gradient(135deg,#ff9b0c,#ff5229);color:#fff;border:none;border-radius:12px;padding:14px 32px;font-weight:800;font-size:0.95rem;cursor:pointer;width:100%;box-shadow:0 6px 18px rgba(255,82,41,0.28)">Log In Again</button>
     </div>`;
   document.body.appendChild(el);
   document.getElementById('_svcSessionExpiredBtn').addEventListener('click', function () {

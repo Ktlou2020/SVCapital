@@ -496,7 +496,7 @@ function renderWalletReadinessPanel() {
   panel.innerHTML = `
     <div class="panel__header" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span class="panel__title"><i class="fa-solid fa-bolt" style="color:${accent}"></i> Wallet Readiness</span>
-      <span style="margin-left:auto;font-size:0.72rem;font-weight:700;color:${accent};background:${accent}14;padding:4px 10px;border-radius:999px;border:1px solid ${accent}2f">${ficaApproved ? 'Investment ready checks' : 'FICA pending — withdrawals locked'}</span>
+      <span style="margin-left:auto;font-size:0.72rem;font-weight:700;color:${accent};background:${accent}14;padding:4px 10px;border-radius:999px;border:1px solid ${accent}2f">${ficaApproved ? 'Investment ready checks' : 'KYC/FICA pending — withdrawals locked'}</span>
     </div>
     <div class="panel__body" style="display:flex;flex-direction:column;gap:14px">
       <div style="border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(255,255,255,0.98),rgba(255,155,12,0.05))">
@@ -516,7 +516,7 @@ function renderWalletReadinessPanel() {
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Verification</div>
           <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#656565'};margin-top:6px">${ficaApproved ? 'FICA/KYC approved' : 'FICA/KYC pending'}</div>
-          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${ficaApproved ? (bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.') : 'You can invest and top up. Withdrawals unlock once FICA is approved.'}</div>
+          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${ficaApproved ? (bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.') : 'You can invest and top up. Withdrawals unlock once KYC/FICA is approved.'}</div>
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Money in motion</div>
@@ -2508,12 +2508,12 @@ async function loadWallet() {
     const statusTag = t.status === 'pending' ? ' <span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:1px 6px;border-radius:4px;font-weight:600">Pending</span>' :
                       t.status === 'rejected' ? ' <span style="font-size:0.7rem;background:rgba(239,68,68,0.12);color:#ef4444;padding:1px 6px;border-radius:4px;font-weight:600">Rejected</span>' : '';
     return `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
-      <div>
-        <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${t.description || t.type?.replace(/_/g, ' ')}${statusTag}</div>
-        <div style="font-size:0.7rem;color:#9ca3af">${Utils.date(t.created_at || t.transaction_date)}</div>
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a;white-space:normal;overflow-wrap:break-word;word-break:break-word;padding-right:8px">${_toSentenceCase(t.description || t.type?.replace(/_/g, ' '))}${statusTag}</div>
+        <div style="font-size:0.7rem;color:#9ca3af;margin-top:2px">${Utils.date(t.created_at || t.transaction_date)}</div>
       </div>
-      <span style="font-weight:700;color:${colour}">${sign}${Utils.rand(Math.abs(t.amount))}</span>
+      <span style="font-weight:700;color:${colour};white-space:nowrap;flex-shrink:0">${sign}${Utils.rand(Math.abs(t.amount))}</span>
     </div>
   `}).join('');
 }
@@ -7626,7 +7626,7 @@ const SA_TYPE_META = {
   },
   stokvel:  {
     icon: 'fa-people-group',    label: 'Stokvel',
-    color: '#22c55e',           bg: 'linear-gradient(135deg,#064e1e 0%,#22c55e 100%)',
+    color: '#65ed00',           bg: 'linear-gradient(135deg,#1a4200 0%,#65ed00 100%)',
     tagline: 'Community savings club investing together',
     ficaDocs: ['Stokvel constitution / rules', 'Proof of banking account', 'Two or more members\' ID documents', 'NASASA certificate (if applicable)'],
   },
@@ -7719,10 +7719,10 @@ function _saCard(sa) {
   const balance = parseFloat(sa.wallet_balance) || 0;
   const invested= parseFloat(sa.total_invested)  || 0;
   const kycBadge = sa.kyc_status === 'approved'
-    ? `<span class="sa-kyc-badge sa-kyc-badge--ok"><i class="fa-solid fa-circle-check"></i> FICA Verified</span>`
+    ? `<span class="sa-kyc-badge sa-kyc-badge--ok"><i class="fa-solid fa-circle-check"></i> KYC/FICA Verified</span>`
     : sa.kyc_status === 'under_review'
     ? `<span class="sa-kyc-badge sa-kyc-badge--pending"><i class="fa-solid fa-clock"></i> Under Review</span>`
-    : `<span class="sa-kyc-badge sa-kyc-badge--missing"><i class="fa-solid fa-triangle-exclamation"></i> FICA Required</span>`;
+    : `<span class="sa-kyc-badge sa-kyc-badge--missing"><i class="fa-solid fa-triangle-exclamation"></i> KYC/FICA Required</span>`;
 
   const isMinor = sa.account_type === 'minor';
   const age     = isMinor ? _saAgeGroup(sa.date_of_birth) : null;
@@ -8000,9 +8000,9 @@ function _saNormalDetail(sa, meta) {
 
   const kycStatus = sa.kyc_status || 'missing';
   const kycMeta = {
-    approved:     { label: 'FICA Verified',    icon: 'fa-circle-check',        color: '#22c55e', bg: 'rgba(34,197,94,0.15)',  border: 'rgba(34,197,94,0.3)' },
+    approved:     { label: 'KYC/FICA Verified',    icon: 'fa-circle-check',        color: '#22c55e', bg: 'rgba(34,197,94,0.15)',  border: 'rgba(34,197,94,0.3)' },
     under_review: { label: 'Under Review',     icon: 'fa-clock',               color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.3)' },
-    missing:      { label: 'FICA Required',    icon: 'fa-triangle-exclamation', color: '#ef4444', bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.25)' },
+    missing:      { label: 'KYC/FICA Required',    icon: 'fa-triangle-exclamation', color: '#ef4444', bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.25)' },
   }[kycStatus] || { label: kycStatus, icon: 'fa-circle-info', color: '#9ca3af', bg: 'rgba(156,163,175,0.1)', border: 'rgba(156,163,175,0.2)' };
 
   const ficaDocs = SA_TYPE_META[sa.account_type]?.ficaDocs || [];
@@ -8465,7 +8465,7 @@ function openWithdrawalModal() {
     content.innerHTML = `
       <div style="text-align:center;padding:20px 0">
         <i class="fa-solid fa-shield-halved" style="font-size:2.5rem;color:#656565;margin-bottom:16px"></i>
-        <p style="font-size:0.9rem;font-weight:700;color:#1a1a1a;margin-bottom:8px">FICA verification required</p>
+        <p style="font-size:0.9rem;font-weight:700;color:#1a1a1a;margin-bottom:8px">KYC/FICA verification required</p>
         <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px">You need to complete FICA/KYC verification before you can withdraw funds. You can still top up your wallet and invest in the meantime.</p>
         <button class="btn btn--primary" onclick="Modal.close('withdrawalModal');navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()"><i class="fa-solid fa-upload"></i> Complete FICA/KYC</button>
       </div>`;
@@ -8892,7 +8892,7 @@ function renderOnboardingChecklist() {
   const steps = [
     {
       id: 'fica',
-      label: 'Complete your FICA verification',
+      label: 'Complete your KYC/FICA verification',
       desc: 'Submit your ID document and proof of address.',
       done: inv.fica_status === 'approved',
       action: "navigate('profile', document.querySelector('[data-view=profile]'))",
@@ -9349,7 +9349,7 @@ async function _renderKycStatusPanel(preloadedDocs) {
         <i class="fa-solid fa-${overallStatus === 'approved' ? 'shield-halved' : overallStatus === 'rejected' ? 'circle-xmark' : 'clock'}" style="color:${color};font-size:1.1rem"></i>
       </div>
       <div>
-        <div style="font-size:0.88rem;font-weight:700;color:#1a1a1a">FICA / KYC Verification</div>
+        <div style="font-size:0.88rem;font-weight:700;color:#1a1a1a">KYC/FICA Verification</div>
         <div style="font-size:0.78rem;color:#6b7280;margin-top:1px">${Utils.statusBadge(overallStatus)}</div>
       </div>
     </div>
@@ -9835,10 +9835,9 @@ function _renderReceiptsTable() {
       <div class="doc-card__icon" style="background:rgba(34,197,94,0.14);color:#16a34a"><i class="fa-solid fa-arrow-down-to-line"></i></div>
       <div class="doc-card__head">
         <div class="doc-card__title">${t.description || 'Wallet Deposit'}</div>
-        <div class="doc-card__sub">${Utils.date(t.transaction_date || t.created_at)} · ${t.reference || 'No ref'}</div>
       </div>
       <div class="doc-card__receipt-right">
-        <div class="doc-card__amount" style="color:#16a34a">+${Utils.rand(Math.abs(t.amount))}</div>
+        <div class="doc-card__amount" style="color:#1a1a1a;font-weight:700">+${Utils.rand(Math.abs(t.amount))}</div>
         <button class="doc-card__btn doc-card__btn--ghost doc-card__btn--sm" onclick="downloadReceipt('${t.id}')"><i class="fa-solid fa-download"></i> Receipt</button>
       </div>
     </div>`).join('');

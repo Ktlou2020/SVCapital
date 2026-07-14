@@ -787,7 +787,10 @@ body.dark-mode .mbn-item.active { color: #ff9b0c !important; }
 h2 { font-size: 1rem !important; }
 h3 { font-size: 0.9rem !important; }
 /* Quests */
-.xp-hero       { flex-wrap: wrap !important; gap: 12px !important; padding: 16px !important; }
+.xp-hero       { flex-wrap: wrap !important; gap: 12px !important; padding: 16px !important; align-items: flex-start !important; }
+.xp-hero__left { text-align: left !important; }
+.xp-hero__level-name { text-align: left !important; }
+.xp-hero__xp   { text-align: left !important; }
 .level-track   { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
 /* Rewards stats: horizontal scroll so all 5 stats fit without cramping */
 .rewards-stats-row {
@@ -1365,3 +1368,130 @@ input[type="file"] { font-size: 16px !important; }
 }
 #view-marketplace .mkt-calc-btn i { color: #fff !important; }
 #view-marketplace .mkt-calc-btn:active { transform: scale(0.98) !important; opacity: 0.92 !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   PROFILE HERO — SV Capital grey (#303030) background
+   ───────────────────────────────────────────────────────────── */
+.profile-hero {
+  background: #303030 !important;
+  border-radius: 18px !important;
+  padding: 28px 20px 24px !important;
+  text-align: center !important;
+  position: relative !important;
+  overflow: hidden !important;
+  margin-bottom: 20px !important;
+}
+.profile-hero::before {
+  content: '';
+  position: absolute;
+  top: -40px; right: -40px;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(255,155,12,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.profile-hero__avatar {
+  width: 72px !important; height: 72px !important;
+  border-radius: 50% !important;
+  background: linear-gradient(135deg,#ff9b0c,#ff5229) !important;
+  color: #fff !important;
+  font-size: 1.6rem !important; font-weight: 900 !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  margin: 0 auto 14px !important;
+  box-shadow: 0 4px 16px rgba(255,155,12,0.35) !important;
+}
+.profile-hero__name {
+  color: #fff !important;
+  font-size: 1.15rem !important; font-weight: 800 !important;
+  margin-bottom: 4px !important;
+}
+.profile-hero__email {
+  color: rgba(255,255,255,0.55) !important;
+  font-size: 0.8rem !important;
+  margin-bottom: 14px !important;
+}
+.profile-hero__chips {
+  display: flex !important; flex-wrap: wrap !important;
+  gap: 8px !important; justify-content: center !important;
+}
+.profile-hero__chip {
+  display: inline-flex !important; align-items: center !important; gap: 5px !important;
+  background: rgba(255,255,255,0.1) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  border-radius: 20px !important;
+  padding: 4px 10px !important;
+  font-size: 0.72rem !important; font-weight: 600 !important;
+  color: rgba(255,255,255,0.85) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SUPPORT HERO — SV Capital grey (#303030) background
+   ───────────────────────────────────────────────────────────── */
+.support-hero {
+  background: #303030 !important;
+  border-radius: 18px !important;
+  padding: 28px 20px 24px !important;
+  text-align: center !important;
+  position: relative !important;
+  overflow: hidden !important;
+  margin-bottom: 20px !important;
+}
+.support-hero::before {
+  content: '';
+  position: absolute;
+  top: -40px; right: -40px;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(255,155,12,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.support-hero__icon {
+  width: 64px !important; height: 64px !important;
+  border-radius: 18px !important;
+  background: rgba(255,155,12,0.18) !important;
+  color: #ff9b0c !important;
+  font-size: 1.6rem !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  margin: 0 auto 16px !important;
+}
+.support-hero__title {
+  color: #fff !important;
+  font-size: 1.25rem !important; font-weight: 800 !important;
+  margin-bottom: 8px !important;
+}
+.support-hero__sub {
+  color: rgba(255,255,255,0.55) !important;
+  font-size: 0.82rem !important; line-height: 1.5 !important;
+  margin-bottom: 20px !important;
+  max-width: 280px !important; margin-left: auto !important; margin-right: auto !important;
+}
+.support-hero__actions {
+  display: flex !important; gap: 10px !important; justify-content: center !important; flex-wrap: wrap !important;
+}
+.support-quick {
+  display: inline-flex !important; align-items: center !important; gap: 7px !important;
+  padding: 11px 20px !important; border-radius: 12px !important;
+  font-size: 0.85rem !important; font-weight: 700 !important;
+  text-decoration: none !important;
+}
+.support-quick--whatsapp {
+  background: #25d366 !important; color: #fff !important;
+}
+.support-quick--email {
+  background: rgba(255,255,255,0.12) !important;
+  border: 1px solid rgba(255,255,255,0.2) !important;
+  color: #fff !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MY INVESTMENTS stats — force equal column widths
+   ───────────────────────────────────────────────────────────── */
+.my-inv-card__stats {
+  grid-template-columns: repeat(3, 1fr) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   FORM INPUTS — consistent font size (including readonly email)
+   ───────────────────────────────────────────────────────────── */
+input[readonly].form-input,
+input[disabled].form-input {
+  font-size: 16px !important;
+}
