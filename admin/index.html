@@ -2462,15 +2462,15 @@
 <div class="modal-overlay" id="rejectModal" style="z-index:10001" onclick="if(event.target===this){this.style.display='none';this.classList.remove('open')}">
   <div class="modal" style="max-width:440px">
     <div class="modal__header">
-      <span class="modal__title"><i class="fa-solid fa-xmark" style="color:var(--red,#ef4444);margin-right:8px"></i>Reject Withdrawal</span>
+      <span class="modal__title"><i class="fa-solid fa-xmark" style="color:var(--red,#ef4444);margin-right:8px"></i><span id="rejectModalTitle">Reject</span></span>
     </div>
     <div class="modal__body">
-      <p style="color:var(--text-muted);font-size:0.88rem;margin:0 0 12px">The investor will be notified and the funds returned to their wallet. Provide a reason below (optional).</p>
-      <textarea id="rejectReasonInput" class="form-input" rows="3" placeholder="e.g. Bank account details not verified — please update your banking information and resubmit." style="width:100%;resize:vertical;font-size:0.88rem"></textarea>
+      <p id="rejectModalBody" style="color:var(--text-muted);font-size:0.88rem;margin:0 0 12px">Provide a reason below (optional).</p>
+      <textarea id="rejectReasonInput" class="form-input" rows="3" placeholder="Reason for rejection…" style="width:100%;resize:vertical;font-size:0.88rem"></textarea>
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="document.getElementById('rejectModal').style.display='none';document.getElementById('rejectModal').classList.remove('open')">Cancel</button>
-      <button class="btn btn--danger" onclick="_submitRejection()"><i class="fa-solid fa-xmark"></i> Reject &amp; Notify</button>
+      <button class="btn btn--danger" onclick="_submitRejection()"><i class="fa-solid fa-xmark"></i> Confirm Reject</button>
     </div>
   </div>
 </div>

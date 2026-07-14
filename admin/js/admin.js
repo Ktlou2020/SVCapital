@@ -1860,14 +1860,20 @@ async function approveWithdrawal(txnId, btn) {
   });
 }
 
-/* Reject: collect reason via in-page modal, then call the dedicated endpoint */
+/* Shared in-page rejection modal — used for both withdrawals and KYC docs */
 let _rejectingTxnId = null;
+let _rejectingKycId = null;
 let _rejectBtn = null;
+let _rejectMode = 'withdrawal'; // 'withdrawal' | 'kyc'
 
 function rejectWithdrawalPrompt(txnId, btn) {
   if (!txnId) { Toast.error('Invalid withdrawal ID'); return; }
   _rejectingTxnId = txnId;
+  _rejectingKycId = null;
+  _rejectMode = 'withdrawal';
   _rejectBtn = btn;
+  document.getElementById('rejectModalTitle').textContent = 'Reject Withdrawal';
+  document.getElementById('rejectModalBody').textContent = 'The investor will be notified and the funds returned to their wallet. Provide a reason below (optional).';
   document.getElementById('rejectReasonInput').value = '';
   const overlay = document.getElementById('rejectModal');
   overlay.style.display = 'flex';
@@ -1878,12 +1884,44 @@ function rejectWithdrawalPrompt(txnId, btn) {
 
 async function _submitRejection() {
   const reason = (document.getElementById('rejectReasonInput')?.value || '').trim();
-  const txnId = _rejectingTxnId;
-  const btn   = _rejectBtn;
+  const txnId  = _rejectingTxnId;
+  const kycId  = _rejectingKycId;
+  const btn    = _rejectBtn;
+  const mode   = _rejectMode;
   const rm = document.getElementById('rejectModal');
   rm.style.display = 'none';
   rm.classList.remove('open');
   document.body.style.overflow = '';
+
+  if (mode === 'kyc' && kycId) {
+    await _withBtn(btn, async () => {
+      try {
+        const reviewedBy = _getAdminName();
+        await API.kyc.update(kycId, {
+          status: 'rejected',
+          notes: reason || 'Document rejected by admin.',
+          reviewed_by: reviewedBy,
+          reviewed_at: new Date().toISOString(),
+        });
+        const doc = STATE.kyc.find(k => k.id === kycId);
+        if (doc?.investor_id && doc?.doc_type === 'proof_of_bank') {
+          await API._fetch('PATCH', `tables/investors/${doc.investor_id}`, {
+            bank_account_status: 'rejected',
+            bank_account_notes: reason || 'Bank account details could not be verified.',
+          }).catch(e => console.warn('[rejectKyc] bank status update failed:', e.message));
+        }
+        await _recomputeInvestorFicaStatus(doc?.investor_id).catch(() => {});
+        Toast.success('Document rejected');
+        await loadKYC();
+      } catch (e) {
+        Toast.error('Failed to reject document: ' + (e.message || 'unknown error'));
+        console.error('[rejectKyc]', e);
+        await loadKYC().catch(() => {});
+      }
+    });
+    return;
+  }
+
   if (!txnId) return;
   await _withBtn(btn, async () => {
     try {
@@ -2428,28 +2466,20 @@ async function approveKyc(id, btn) {
   });
 }
 
-async function rejectKyc(id, btn) {
-  const reason = prompt('Rejection reason:');
-  if (reason === null) return;
-  const reviewedBy = _getAdminName();
-  await _withBtn(btn, async () => {
-    try {
-      await API.kyc.update(id, { status: 'rejected', notes: reason, reviewed_by: reviewedBy, reviewed_at: new Date().toISOString() });
-      const doc = STATE.kyc.find(k => k.id === id);
-      if (doc?.investor_id && doc?.doc_type === 'proof_of_bank') {
-        await API._fetch('PATCH', `tables/investors/${doc.investor_id}`, {
-          bank_account_status: 'rejected',
-          bank_account_notes: reason || 'Bank account details could not be verified.',
-        });
-      }
-      await _recomputeInvestorFicaStatus(doc?.investor_id);
-      Toast.success('Document rejected');
-      await loadKYC();
-    } catch (e) {
-      Toast.error('Failed to reject document: ' + (e.message || 'unknown error'));
-      console.error('[rejectKyc]', e);
-    }
-  });
+function rejectKyc(id, btn) {
+  if (!id) { Toast.error('Invalid document ID'); return; }
+  _rejectingKycId = id;
+  _rejectingTxnId = null;
+  _rejectMode = 'kyc';
+  _rejectBtn = btn;
+  document.getElementById('rejectModalTitle').textContent = 'Reject KYC Document';
+  document.getElementById('rejectModalBody').textContent = 'The document will be marked as rejected. Provide a reason for the investor (optional).';
+  document.getElementById('rejectReasonInput').value = '';
+  const overlay = document.getElementById('rejectModal');
+  overlay.style.display = 'flex';
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('rejectReasonInput')?.focus(), 100);
 }
 
 /* ═══════════════════════════════════════════════
