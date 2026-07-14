@@ -148,11 +148,16 @@ const ADMIN_WRITE_TABLES = new Set([
   'fica_checks', 'compliance_calendar', 'accepted_client_documents',
 ]);
 
-/* ─── Columns that must never be set via the generic API ─── */
-const PROTECTED_WRITE_COLS = new Set([
-  'pin_hash', 'password_hash', 'staff_pin',
-  'fica_status', 'kyc_status', 'wallet_balance', 'total_invested', 'totp_enabled',
+/* ─── Columns that must never be written via the generic API (any role) ─── */
+const ALWAYS_PROTECTED_COLS = new Set([
+  'pin_hash', 'password_hash', 'staff_pin', 'totp_enabled',
 ]);
+/* ─── Columns that non-admin roles (investor, ifa, staff) cannot write ─── */
+const INVESTOR_PROTECTED_COLS = new Set([
+  'fica_status', 'kyc_status', 'wallet_balance', 'total_invested',
+]);
+/* ─── Combined set used by legacy references ─── */
+const PROTECTED_WRITE_COLS = new Set([...ALWAYS_PROTECTED_COLS, ...INVESTOR_PROTECTED_COLS]);
 
 /* ─── Investor-owned tables: column that ties a row to an investor ─── */
 const INVESTOR_COLS = {
@@ -640,10 +645,11 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
 
     const body = { ...req.body };
 
-    // Strip columns that must never be set via the generic API
-    PROTECTED_WRITE_COLS.forEach(c => delete body[c]);
+    const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
+    ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
+    if (!isPrivileged) INVESTOR_PROTECTED_COLS.forEach(c => delete body[c]);
 
-    const validationErrors = validateBody(table, req.body, true);
+    const validationErrors = validateBody(table, body, true);
     if (validationErrors.length) return res.status(400).json({ error: validationErrors.join('; ') });
 
     const _badPostKey = Object.keys(body).find(k => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k));
@@ -1065,13 +1071,12 @@ router.put('/:table/:id', requireAuth, validateTable, async (req, res) => {
     const body   = { ...req.body };
     delete body[key]; // don't update PK
     delete body.created_at;
-    // auto updated_at
     body.updated_at = new Date().toISOString();
 
-    // FIX 2b: strip columns that must never be set via the generic API
-    PROTECTED_WRITE_COLS.forEach(c => delete body[c]);
+    const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
+    ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
+    if (!isPrivileged) INVESTOR_PROTECTED_COLS.forEach(c => delete body[c]);
 
-    // FIX 1: validate column names to prevent SQL injection
     const _badKey = Object.keys(body).find(k => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k));
     if (_badKey) return res.status(400).json({ error: 'Invalid field name: ' + _badKey });
 
@@ -1134,10 +1139,10 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     delete body.created_at;
     body.updated_at = new Date().toISOString();
 
-    // FIX 2b: strip columns that must never be set via the generic API
-    PROTECTED_WRITE_COLS.forEach(c => delete body[c]);
+    const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
+    ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
+    if (!isPrivileged) INVESTOR_PROTECTED_COLS.forEach(c => delete body[c]);
 
-    // FIX 1: validate column names to prevent SQL injection
     const _badKey = Object.keys(body).find(k => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k));
     if (_badKey) return res.status(400).json({ error: 'Invalid field name: ' + _badKey });
 
