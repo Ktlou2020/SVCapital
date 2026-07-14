@@ -8387,11 +8387,6 @@ async function saveBankDetails() {
       bank_account_status: 'pending',
       bank_account_notes: null,
     };
-    // Submitting bank proof puts FICA back into "in progress" unless already verified
-    if (PORTAL.investor && PORTAL.investor.kyc_status !== 'approved' && PORTAL.investor.fica_status !== 'approved') {
-      bankPatch.kyc_status = 'in_progress';
-      bankPatch.fica_status = 'in_progress';
-    }
     const updated = await API._fetch('PATCH', `tables/investors/${investorId}`, bankPatch);
     if (PORTAL.investor) Object.assign(PORTAL.investor, updated);
 
