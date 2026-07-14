@@ -1970,13 +1970,14 @@ function viewFicaDocument(kycId) {
 /** Open a base64 data URL / HTTP URL document in a new tab (with download fallback). */
 function _openDocumentData(rawData, fileName) {
   fileName = fileName || 'Document';
-  const isDataUrl = rawData.startsWith('data:');
-  const isHttpUrl = rawData.startsWith('https://') || rawData.startsWith('http://');
 
   if (!rawData) {
     Toast.error('No file attached to this document record.');
     return;
   }
+
+  const isDataUrl = rawData.startsWith('data:');
+  const isHttpUrl = rawData.startsWith('https://') || rawData.startsWith('http://');
 
   if (isHttpUrl) {
     // HTTP URLs: open directly in new tab
@@ -1985,10 +1986,12 @@ function _openDocumentData(rawData, fileName) {
   }
 
   if (isDataUrl) {
-    // Data URLs: convert to blob and open in new tab
+    // Determine MIME type before entering try/catch so it's accessible in the catch block
+    const mime = rawData.split(',')[0].match(/:(.*?);/)?.[1] || 'application/octet-stream';
+    const isPdf = mime === 'application/pdf' || (fileName || '').toLowerCase().endsWith('.pdf');
+
     try {
-      const [header, b64] = rawData.split(',');
-      const mime = header.match(/:(.*?);/)?.[1] || 'application/octet-stream';
+      const b64 = rawData.split(',')[1];
       const binary = atob(b64);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -1996,17 +1999,16 @@ function _openDocumentData(rawData, fileName) {
       const blobUrl = URL.createObjectURL(blob);
       const w = window.open(blobUrl, '_blank', 'noopener');
       if (!w) {
-        // Popup blocked fallback: download the file instead
+        // Popup blocked — download as blob URL instead
         const a = document.createElement('a');
-        a.href = rawData;
+        a.href = blobUrl;
         a.download = fileName;
         a.click();
       }
     } catch (e) {
-      // Fallback: open data URL directly (use embed for PDF, img for images)
+      // atob/Blob failed — write data URL directly into a new window
       const w = window.open('', '_blank');
       if (w) {
-        const isPdf = mime === 'application/pdf' || (fileName || '').toLowerCase().endsWith('.pdf');
         w.document.write(isPdf
           ? `<title>${_esc(fileName)}</title><body style="margin:0;height:100vh"><embed src="${rawData}" type="application/pdf" style="width:100%;height:100%"></body>`
           : `<title>${_esc(fileName)}</title><body style="margin:0;background:#000"><img src="${rawData}" style="max-width:100%;display:block;margin:auto"></body>`
@@ -2045,7 +2047,7 @@ async function _reuploadTicketFile(event, ticketId) {
   reader.onload = async e => {
     const dataUrl = e.target.result;
     try {
-      await API._fetch('PATCH', `tables/support_tickets/${ticketId}`, null, {
+      await API._fetch('PATCH', `tables/support_tickets/${ticketId}`, {
         file_url:       dataUrl,
         proof_filename: file.name,
         proof_attached: true,
@@ -3732,8 +3734,19 @@ function setupTicketFilters() {
 }
 
 async function viewTicket(id) {
-  const tkt = STATE.tickets.find(t => t.id === id);
+  let tkt = STATE.tickets.find(t => t.id === id);
   if (!tkt) return;
+
+  // Fetch the full ticket record directly to get file_url (list responses may omit large columns)
+  try {
+    const fresh = await API.tickets.get(id);
+    if (fresh && fresh.id) {
+      // Merge into STATE so subsequent calls see the data too
+      const idx = STATE.tickets.findIndex(t => t.id === id);
+      if (idx !== -1) STATE.tickets[idx] = { ...tkt, ...fresh };
+      tkt = STATE.tickets[idx] || fresh;
+    }
+  } catch (_) {}
 
   const tktInv     = STATE.investors.find(i => i.id === tkt.investor_id);
   const tktInvName = tkt.investor_name || (tktInv ? `${tktInv.first_name} ${tktInv.last_name}` : tkt.investor_id || '—');
