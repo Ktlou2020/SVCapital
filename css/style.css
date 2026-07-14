@@ -1737,6 +1737,7 @@ section { position: relative; padding: 100px 0; }
   padding: 4px 10px;
   border-radius: var(--radius-sm);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .award-card__content strong { display: block; color: var(--white); font-size: 0.9rem; margin-bottom: 4px; }
