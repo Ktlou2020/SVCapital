@@ -8284,7 +8284,9 @@ async function loadFeedback(filter = 'pending') {
   if (!list) return;
   list.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px 0">Loading…</p>';
   try {
-    const data = await API.get('/api/testimonials');
+    const _tr = await fetch('/api/testimonials', { headers: { Authorization: `Bearer ${Auth.getToken()}` } });
+    if (!_tr.ok) { const e = await _tr.json().catch(()=>({})); throw new Error(e.error || `HTTP ${_tr.status}`); }
+    const data = await _tr.json();
     let rows = data.data || [];
     if (filter !== 'all') rows = rows.filter(r => r.status === filter);
 
@@ -8343,7 +8345,8 @@ async function reviewFeedback(id, status) {
     rejection_reason = prompt('Reason for rejection (optional):') || null;
   }
   try {
-    await API.patch(`/api/testimonials/${id}`, { status, rejection_reason });
+    const _pr = await fetch(`/api/testimonials/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Auth.getToken()}` }, body: JSON.stringify({ status, rejection_reason }) });
+    if (!_pr.ok) { const e = await _pr.json().catch(()=>({})); throw new Error(e.error || `HTTP ${_pr.status}`); }
     Toast.success(status === 'approved' ? 'Testimonial published to homepage ✓' : 'Testimonial rejected');
     loadFeedback(_fbCurrentFilter);
   } catch (err) {
