@@ -14,7 +14,7 @@ const PRODUCTS = {
     termUnit: 'months',
     termYears: 1,
     icon: 'fa-cow',
-    color: '#D4AF37',
+    color: '#fec24f',
     partner: 'Beefcor',
     infoItems: [
       { label: 'Partner', value: 'Beefcor Feedlot' },
@@ -399,13 +399,13 @@ function initHeroChart() {
       labels,
       datasets: [{
         data,
-        borderColor: '#D4AF37',
+        borderColor: '#fec24f',
         borderWidth: 2,
         fill: true,
         backgroundColor: (ctx) => {
           const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 80);
-          gradient.addColorStop(0, 'rgba(212,175,55,0.25)');
-          gradient.addColorStop(1, 'rgba(212,175,55,0)');
+          gradient.addColorStop(0, 'rgba(254,194,79,0.25)');
+          gradient.addColorStop(1, 'rgba(254,194,79,0)');
           return gradient;
         },
         tension: 0.4,
@@ -1174,16 +1174,16 @@ async function _applyCattleHerdStatus() {
     if (entry && current && target && target > entry) {
       const wp = Math.min(100, Math.max(0, Math.round((current - entry) / (target - entry) * 100)));
       weightBar = `<div style="margin-bottom:14px">
-        <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--text-dim);margin-bottom:5px"><span>Entry ${entry}kg</span><span style="color:#E0B43A;font-weight:700">Now ~${current}kg</span><span>Target ${target}kg</span></div>
-        <div style="height:9px;border-radius:5px;background:rgba(255,255,255,0.08);overflow:hidden"><div style="height:100%;width:${wp}%;background:linear-gradient(90deg,#E0B43A,#b8902a)"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--text-dim);margin-bottom:5px"><span>Entry ${entry}kg</span><span style="color:#fec24f;font-weight:700">Now ~${current}kg</span><span>Target ${target}kg</span></div>
+        <div style="height:9px;border-radius:5px;background:rgba(255,255,255,0.08);overflow:hidden"><div style="height:100%;width:${wp}%;background:linear-gradient(90deg,#fec24f,#f59e0b)"></div></div>
         <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">${wp}% of the way to market weight</div></div>`;
     }
     const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
     const mortLine = `<div style="font-size:0.76rem;color:var(--text-dim);margin-top:10px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:#fff">${(100 - mortRate).toFixed(1)}%</strong>${s.mortality_count ? ` · ${s.mortality_count} of ${num(s.total_purchased)}` : ''}</div>`;
 
     MODAL_DATA.cattle.herdHtml = `
-      <div style="background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.28);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
-        <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#E0B43A;margin-bottom:12px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
+      <div style="background:rgba(254,194,79,0.08);border:1px solid rgba(254,194,79,0.28);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
+        <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#fec24f;margin-bottom:12px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
           <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.total_purchased)}</div><div style="font-size:0.72rem;color:var(--text-dim)">purchased to date</div></div>
           <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.live_count)}</div><div style="font-size:0.72rem;color:var(--text-dim)">currently live</div></div>
