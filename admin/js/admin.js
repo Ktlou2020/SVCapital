@@ -3918,7 +3918,7 @@ async function viewTicket(id) {
             let pendingTxn = null;
             try {
               const existing = await API._fetch('GET', `tables/transactions?investor_id=${encodeURIComponent(tkt.investor_id)}&reference=${encodeURIComponent(ref)}`);
-              pendingTxn = Array.isArray(existing) ? existing.find(t => t.reference === ref && t.type === 'deposit') : null;
+              pendingTxn = (existing?.data ?? []).find(t => t.reference === ref && t.type === 'deposit') || null;
             } catch (_) {}
 
             if (pendingTxn) {
