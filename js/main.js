@@ -714,7 +714,7 @@ window.openModal = function(productKey) {
     <ul>
       ${data.points.map(p => `<li>${p}</li>`).join('')}
     </ul>
-    <a href="https://app.svcapital.co.za/register" class="btn btn--gold btn--full" target="_blank" style="margin-top:8px;">
+    <a href="signup.html" class="btn btn--gold btn--full" style="margin-top:8px;">
       Start Investing <i class="fa-solid fa-arrow-right"></i>
     </a>
     <p style="font-size:0.72rem; color:var(--text-dim); margin-top:12px; text-align:center;">
