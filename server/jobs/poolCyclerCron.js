@@ -50,19 +50,21 @@ const PRODUCT_LABELS = {
 async function cycleExpiredPools() {
   console.log('[poolCycler] scanning for expired pools…');
 
-  // Pools are set to 'matured' at 23:00 by the maturity engine. At 00:01 we open
-  // their successors. cycled_at prevents re-opening a successor every night.
+  // Trigger on end_date (close date) passing, regardless of maturity status.
+  // cycled_at prevents re-opening a successor every night.
+  // Pools already closed or already cycled are excluded.
   const { rows: expired } = await pool.query(`
     SELECT *
     FROM investment_pools
-    WHERE status = 'matured'
-      AND end_date <= NOW()
+    WHERE end_date IS NOT NULL
+      AND end_date < CURRENT_DATE
       AND cycled_at IS NULL
       AND product_type IN ('cattle','short_term')
+      AND status NOT IN ('closed')
   `);
 
   if (!expired.length) {
-    console.log('[poolCycler] no matured pools awaiting a successor');
+    console.log('[poolCycler] no expired pools awaiting a successor');
     return 0;
   }
 
@@ -78,15 +80,18 @@ async function cycleExpiredPools() {
         `SELECT id, status, cycled_at FROM investment_pools WHERE id = $1 FOR UPDATE`,
         [p.id]
       );
-      if (!locked || locked.status !== 'matured' || locked.cycled_at) {
+      if (!locked || locked.cycled_at) {
         await client.query('ROLLBACK');
         continue;
       }
 
-      // Mark the matured pool as cycled (keeps status 'matured'; the maturity
-      // engine already set it). This prevents re-opening a successor nightly.
+      // Close the raising window: mark expired pool 'active' if still 'open'
+      // (investments are locked in; payout happens at maturity_date via maturityCron).
       await client.query(
-        `UPDATE investment_pools SET cycled_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        `UPDATE investment_pools
+            SET cycled_at = NOW(), updated_at = NOW(),
+                status = CASE WHEN status = 'open' THEN 'active' ELSE status END
+          WHERE id = $1`,
         [p.id]
       );
 
@@ -114,13 +119,17 @@ async function cycleExpiredPools() {
       const newId   = `${p.id}-CYC-${Date.now()}`;
       const newName = `${productLabel} - ${closeLabel}`;
 
+      // Maturity date = closeDate + term_months (same convention as the original pool)
+      const maturityDate = new Date(closeDate);
+      maturityDate.setMonth(maturityDate.getMonth() + (p.term_months || 1));
+
       await client.query(
         `INSERT INTO investment_pools
            (id, name, product_type, status,
             target_amount, raised_amount, current_invested,
             min_investment, max_investment,
             annual_rate, actual_rate, term_months,
-            start_date, end_date, description,
+            start_date, end_date, maturity_date, description,
             risk_level, partner_name,
             management_fee_pct, management_fee_frequency,
             operational_fee_pct, operational_fee_frequency,
@@ -130,17 +139,17 @@ async function cycleExpiredPools() {
             $4,0,0,
             $5,$6,
             $7,$8,$9,
-            $10,$11,$12,
-            $13,$14,
-            $15,$16,
-            $17,$18,
+            $10,$11,$12,$13,
+            $14,$15,
+            $16,$17,
+            $18,$19,
             0,NOW(),NOW())`,
         [
           newId, newName, p.product_type,
           p.target_amount  || 0,
           p.min_investment || 1000, p.max_investment || null,
           p.annual_rate    || 0, p.actual_rate || 0, p.term_months || 6,
-          toISO(openDate), toISO(closeDate), p.description || null,
+          toISO(openDate), toISO(closeDate), toISO(maturityDate), p.description || null,
           p.risk_level     || 'medium', p.partner_name || null,
           p.management_fee_pct       || 0, p.management_fee_frequency       || 'once',
           p.operational_fee_pct      || 0, p.operational_fee_frequency      || 'annual',
@@ -158,7 +167,7 @@ async function cycleExpiredPools() {
       );
 
       await client.query('COMMIT');
-      console.log(`[poolCycler] matured ${p.id} → opened successor ${newId} (${toISO(openDate)} – ${toISO(closeDate)})`);
+      console.log(`[poolCycler] cycled ${p.id} → opened successor ${newId} (${toISO(openDate)} – ${toISO(closeDate)}, matures ${toISO(maturityDate)})`);
       cycled++;
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {});

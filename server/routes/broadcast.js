@@ -251,4 +251,16 @@ router.post('/broadcast', async (req, res) => {
   }
 });
 
+/* ── Manual pool cycler trigger ─────────────────────────────── */
+router.post('/run-pool-cycler', async (req, res) => {
+  try {
+    const { cycleExpiredPools } = require('../jobs/poolCyclerCron');
+    const count = await cycleExpiredPools();
+    res.json({ ok: true, cycled: count });
+  } catch (err) {
+    console.error('[admin] manual pool cycler error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

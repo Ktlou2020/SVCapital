@@ -2839,6 +2839,28 @@ async function deleteFactsheet(fsId, poolId) {
   }
 }
 
+async function runPoolCycler(btn) {
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-rotate fa-spin"></i> Running…'; }
+  try {
+    const res = await fetch('/api/admin/run-pool-cycler', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + localStorage.getItem('svc_token') },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Server error');
+    if (data.cycled > 0) {
+      Toast.success(`Pool cycler ran — ${data.cycled} pool(s) cycled`);
+      await loadPools();
+    } else {
+      Toast.info('Pool cycler ran — no pools needed cycling');
+    }
+  } catch (e) {
+    Toast.error('Pool cycler failed: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Run Pool Cycler'; }
+  }
+}
+
 async function reopenPool(id) {
   if (!await Confirm.ask('Reopen pool?', { body: 'This pool will accept new investments again.', confirmLabel: 'Reopen' })) return;
   try {
