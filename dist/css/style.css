@@ -2257,6 +2257,8 @@ section { position: relative; padding: 100px 0; }
 
   .hero-scroll { display: none; }
 
+  #nextPoolClosing { font-size: 0.72rem !important; padding: 7px 12px !important; gap: 6px !important; }
+
   .featured-in { padding: 14px 0; }
   .featured-in .container { gap: 12px; }
   .featured-logos { gap: 16px; }
