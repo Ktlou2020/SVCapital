@@ -80,28 +80,6 @@
   if(window.__SVC_NATIVE__)return;
 })();</script>
 
-<!-- PWA Install Banner -->
-<div id="pwaInstallBanner" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#1a2332;border:1px solid rgba(255,155,12,0.4);border-radius:14px;padding:14px 20px;align-items:center;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,0.4);max-width:420px;width:calc(100% - 40px)">
-  <img src="../assets/logo-192.png" width="36" height="36" style="border-radius:8px;flex-shrink:0">
-  <div style="flex:1;min-width:0">
-    <div style="color:#fff;font-weight:700;font-size:0.88rem">Add SV Capital to your home screen</div>
-    <div style="color:rgba(255,255,255,0.55);font-size:0.75rem;margin-top:2px">Get instant notifications and faster access</div>
-  </div>
-  <button onclick="pwaInstall()" style="background:#ff9b0c;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:0.8rem;cursor:pointer;white-space:nowrap;flex-shrink:0">Install</button>
-  <button onclick="_dismissPwaPrompt()" style="background:transparent;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:1.1rem;line-height:1;padding:4px;flex-shrink:0">&#x2715;</button>
-</div>
-
-<!-- iOS PWA Install Banner (Safari "Add to Home Screen") -->
-<div id="iosPwaBanner" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#1a2332;border:1px solid rgba(255,155,12,0.4);border-radius:14px;padding:14px 18px;align-items:flex-start;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);max-width:360px;width:calc(100% - 40px)">
-  <img src="../assets/logo-192.png" width="36" height="36" style="border-radius:8px;flex-shrink:0;margin-top:2px">
-  <div style="flex:1;min-width:0">
-    <div style="color:#fff;font-weight:700;font-size:0.88rem">Add SV Capital to your home screen</div>
-    <div style="color:rgba(255,255,255,0.7);font-size:0.78rem;margin-top:5px;line-height:1.5">
-      Tap <span style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:4px;padding:1px 6px;font-size:0.8rem">&#x2191; Share</span> at the bottom of your browser, then tap <strong style="color:#ff9b0c">Add to Home Screen</strong>.
-    </div>
-  </div>
-  <button onclick="_dismissIosBanner()" style="background:transparent;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:1.1rem;line-height:1;padding:4px;flex-shrink:0">&#x2715;</button>
-</div>
 
 <div class="app-layout">
 
