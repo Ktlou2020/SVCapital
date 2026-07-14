@@ -773,17 +773,24 @@ function renderRecentInvestments() {
   if (!recent.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No investments yet</td></tr>'; return; }
 
   body.innerHTML = recent.map(inv => {
-    const pi = Utils.productInfo(inv.product_type);
+    const investor = STATE.investors.find(i => i.id === inv.investor_id);
+    const name = inv.investor_name
+      || (investor ? `${investor.first_name || ''} ${investor.last_name || ''}`.trim() : '')
+      || inv.investor_id || '—';
+    // Resolve product_type from the investment, falling back to the associated pool
+    const pool = inv.pool_id ? STATE.pools.find(p => p.id === inv.pool_id) : null;
+    const productType = inv.product_type || pool?.product_type || '';
+    const pi = Utils.productInfo(productType);
     return `<tr>
       <td><div class="flex-center gap-8">
-        <div class="avatar avatar--sm avatar--gold" style="flex-shrink:0">${Utils.initials(inv.investor_name)}</div>
-        <span class="td-strong clip">${inv.investor_name}</span>
+        <div class="avatar avatar--sm avatar--gold" style="flex-shrink:0">${Utils.initials(name)}</div>
+        <span class="td-strong clip">${_esc(name)}</span>
       </div></td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td class="td-gold fw-700 clip">${Utils.rand(inv.amount)}</td>
-      <td class="td-green clip">${Utils.pct(inv.expected_return_rate)}</td>
+      <td class="td-green clip">${Utils.pct(inv.annual_rate || inv.expected_return_rate)}</td>
       <td>${Utils.statusBadge(inv.status)}</td>
-      <td class="td-muted clip">${Utils.date(inv.investment_date)}</td>
+      <td class="td-muted clip">${Utils.date(inv.start_date || inv.created_at)}</td>
     </tr>`;
   }).join('');
 }
@@ -1042,9 +1049,14 @@ function renderProductMixChart() {
   const ctx = document.getElementById('productMixChart');
   if (!ctx) return;
 
-  const products = { cattle: 0, solar_7yr: 0, solar_6yr: 0, solar_5yr: 0, short_term: 0, delivery_bike: 0 };
+  const products = { cattle: 0, solar_7yr: 0, solar_6yr: 0, solar_5yr: 0, short_term: 0, delivery_bikes: 0 };
   STATE.investments.filter(i => i.status === 'active').forEach(i => {
-    if (products[i.product_type] !== undefined) products[i.product_type] += i.amount;
+    // Resolve product_type from investment, falling back to the linked pool
+    const pool = i.pool_id ? STATE.pools.find(p => p.id === i.pool_id) : null;
+    const type = i.product_type || pool?.product_type || '';
+    // Normalise delivery_bike → delivery_bikes
+    const key = type === 'delivery_bike' ? 'delivery_bikes' : type;
+    if (key && products[key] !== undefined) products[key] += (parseFloat(i.amount) || 0);
   });
 
   const labels = ['Cattle Investment', 'Solar Investment (7yr)', 'Solar Investment (6yr)', 'Solar Investment (5yr)', 'Short Term Investment', 'Delivery Bikes'];
