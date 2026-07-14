@@ -8051,7 +8051,9 @@ async function saveBankDetails() {
   if (!bank_name || !bank_account_holder || !bank_account_number || !bank_branch_code) {
     Toast.error('Please fill in all required fields'); return;
   }
-  if (!proofFile) {
+  // Proof is required for first-time submission; optional when updating existing details
+  const hasExistingBank = !!(PORTAL.investor?.bank_account_number);
+  if (!proofFile && !hasExistingBank) {
     Toast.error('Please attach a proof of bank account'); return;
   }
 
@@ -8059,12 +8061,15 @@ async function saveBankDetails() {
   const investorName = `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim();
   try {
     // Read the proof of bank file as a base64 data URL so admin can view & approve it
-    const proofData = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = e => resolve(e.target.result);
-      reader.onerror = () => reject(new Error('Could not read file'));
-      reader.readAsDataURL(proofFile);
-    });
+    let proofData = null;
+    if (proofFile) {
+      proofData = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = e => resolve(e.target.result);
+        reader.onerror = () => reject(new Error('Could not read file'));
+        reader.readAsDataURL(proofFile);
+      });
+    }
 
     const bankPatch = {
       bank_name,
@@ -8083,30 +8088,31 @@ async function saveBankDetails() {
     const updated = await API._fetch('PATCH', `tables/investors/${investorId}`, bankPatch);
     if (PORTAL.investor) Object.assign(PORTAL.investor, updated);
 
-    // Submit the proof of bank as a KYC document for admin review.
-    // Once approved (with ID + Proof of Address), the investor becomes FICA-verified.
-    await API.kyc.create({
-      investor_id:   investorId,
-      investor_name: investorName || undefined,
-      doc_type:      'proof_of_bank',
-      status:        'pending',
-      file_name:     proofFile.name,
-      file_data:     proofData,
-      notes:         `Proof of bank account for ${bank_name} — submitted with banking details.`,
-    }).catch(e => console.warn('[bank details] proof upload failed:', e.message));
+    if (proofData) {
+      // Submit the proof of bank as a KYC document for admin review.
+      await API.kyc.create({
+        investor_id:   investorId,
+        investor_name: investorName || undefined,
+        doc_type:      'proof_of_bank',
+        status:        'pending',
+        file_name:     proofFile.name,
+        file_data:     proofData,
+        notes:         `Proof of bank account for ${bank_name} — submitted with banking details.`,
+      }).catch(e => console.warn('[bank details] proof upload failed:', e.message));
 
-    // Create support ticket so admin can see and verify the bank details
-    const maskedAccNum = bank_account_number.slice(-4).padStart(bank_account_number.length, '•');
-    await API.post('support_tickets', {
-      investor_id:    investorId,
-      investor_name:  investorName,
-      investor_email: PORTAL.investor?.email || '',
-      subject:        `Bank Account Verification — ${bank_name}`,
-      message:        `Investor has submitted bank details for verification.\n\nBank: ${bank_name}\nAccount Holder: ${bank_account_holder}\nAccount Number: ${maskedAccNum}\nAccount Type: ${bank_account_type}\nBranch Code: ${bank_branch_code}\n\nPlease verify and approve or reject in the investor's profile.`,
-      status:         'open',
-      priority:       'medium',
-      category:       'bank_verification',
-    }).catch(e => console.warn('[bank details] ticket creation failed:', e.message));
+      // Create support ticket so admin can see and verify the bank details
+      const maskedAccNum = bank_account_number.slice(-4).padStart(bank_account_number.length, '•');
+      await API.post('support_tickets', {
+        investor_id:    investorId,
+        investor_name:  investorName,
+        investor_email: PORTAL.investor?.email || '',
+        subject:        `Bank Account Verification — ${bank_name}`,
+        message:        `Investor has submitted bank details for verification.\n\nBank: ${bank_name}\nAccount Holder: ${bank_account_holder}\nAccount Number: ${maskedAccNum}\nAccount Type: ${bank_account_type}\nBranch Code: ${bank_branch_code}\n\nPlease verify and approve or reject in the investor's profile.`,
+        status:         'open',
+        priority:       'medium',
+        category:       'bank_verification',
+      }).catch(e => console.warn('[bank details] ticket creation failed:', e.message));
+    }
 
     _renderBankDetailsPanel();
     Toast.success('Bank details saved! The admin team will verify them within 1–2 business days.');
