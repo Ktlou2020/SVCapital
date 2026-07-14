@@ -582,12 +582,7 @@ function updateCalcChart(amount, totalReturns, product) {
         {
           label: 'Returns',
           data: returnsData,
-          backgroundColor: (ctx) => {
-            const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 180);
-            gradient.addColorStop(0, 'rgba(254,194,79,0.9)');
-            gradient.addColorStop(1, 'rgba(254,194,79,0.3)');
-            return gradient;
-          },
+          backgroundColor: '#fec24f',
           borderColor: '#fec24f',
           borderWidth: 1,
           borderRadius: 4,
