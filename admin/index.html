@@ -1450,10 +1450,10 @@
             <p style="font-size:0.8rem;color:var(--text-muted);margin:4px 0 0">Review and approve investor testimonials for the homepage.</p>
           </div>
           <div style="display:flex;gap:8px">
-            <button class="btn btn--sm btn--ghost" onclick="loadFeedback('pending')" id="fbFilterPending" style="font-weight:700">Pending</button>
+            <button class="btn btn--sm btn--ghost" onclick="loadFeedback('pending')" id="fbFilterPending">Pending</button>
             <button class="btn btn--sm btn--ghost" onclick="loadFeedback('approved')" id="fbFilterApproved">Approved</button>
             <button class="btn btn--sm btn--ghost" onclick="loadFeedback('rejected')" id="fbFilterRejected">Rejected</button>
-            <button class="btn btn--sm btn--ghost" onclick="loadFeedback('all')">All</button>
+            <button class="btn btn--sm btn--ghost" onclick="loadFeedback('all')" id="fbFilterAll" style="font-weight:700">All</button>
           </div>
         </div>
         <div id="feedbackList" style="display:flex;flex-direction:column;gap:14px">
