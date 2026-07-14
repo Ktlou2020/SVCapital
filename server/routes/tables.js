@@ -1141,7 +1141,7 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     const _badKey = Object.keys(body).find(k => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k));
     if (_badKey) return res.status(400).json({ error: 'Invalid field name: ' + _badKey });
 
-    const validationErrors = validateBody(table, req.body, false);
+    const validationErrors = validateBody(table, body, false);
     if (validationErrors.length) return res.status(400).json({ error: validationErrors.join('; ') });
 
     const keys   = Object.keys(body);
