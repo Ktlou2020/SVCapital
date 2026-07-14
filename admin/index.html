@@ -778,13 +778,38 @@
               <button class="btn btn--secondary btn--sm" onclick="loadWithdrawals()"><i class="fa-solid fa-rotate"></i> Refresh</button>
             </div>
           </div>
+          <!-- Filter bar -->
+          <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input type="text"   id="wdFilterName" placeholder="Investor name / ID…"  class="form-input" style="height:30px;font-size:0.78rem;width:170px" oninput="renderWithdrawalsTable()">
+            <input type="text"   id="wdFilterRef"  placeholder="Reference…"           class="form-input" style="height:30px;font-size:0.78rem;width:130px" oninput="renderWithdrawalsTable()">
+            <input type="number" id="wdFilterMin"  placeholder="Min R"                class="form-input" style="height:30px;font-size:0.78rem;width:80px"  oninput="renderWithdrawalsTable()">
+            <input type="number" id="wdFilterMax"  placeholder="Max R"                class="form-input" style="height:30px;font-size:0.78rem;width:80px"  oninput="renderWithdrawalsTable()">
+            <input type="date"   id="wdFilterFrom"                                    class="form-input" style="height:30px;font-size:0.78rem;width:130px" oninput="renderWithdrawalsTable()">
+            <input type="date"   id="wdFilterTo"                                      class="form-input" style="height:30px;font-size:0.78rem;width:130px" oninput="renderWithdrawalsTable()">
+            <button class="btn btn--ghost btn--sm" onclick="clearWithdrawalFilters()"><i class="fa-solid fa-xmark"></i> Clear</button>
+            <span id="wdFilterCount" style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)"></span>
+          </div>
+          <!-- Bulk action bar (shown when rows are selected) -->
+          <div id="wdBulkBar" style="display:none;padding:8px 16px;background:rgba(99,102,241,0.07);border-bottom:1px solid rgba(99,102,241,0.18);align-items:center;gap:10px;flex-wrap:wrap">
+            <i class="fa-solid fa-circle-check" style="color:#6366f1"></i>
+            <span id="wdSelCount" style="font-weight:700;font-size:0.82rem;color:#6366f1">0 selected</span>
+            <select id="wdBulkStatus" class="form-select" style="height:30px;font-size:0.78rem;width:190px">
+              <option value="">— Apply status —</option>
+              <option value="completed">Mark as Completed</option>
+              <option value="rejected">Mark as Rejected</option>
+              <option value="pending">Reset to Pending</option>
+            </select>
+            <button class="btn btn--primary btn--sm" onclick="_bulkApplyWithdrawalStatus()"><i class="fa-solid fa-bolt"></i> Apply to Selected</button>
+            <button class="btn btn--ghost btn--sm" onclick="_clearWithdrawalSelection()">Deselect All</button>
+          </div>
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th style="width:12%">Date</th><th style="width:26%">Investor</th><th style="width:12%">Amount</th><th style="width:18%">Bank</th><th style="width:18%">Reference</th><th style="width:14%">Actions</th>
+                <th style="width:3%;padding-left:14px"><input type="checkbox" id="wdSelectAll" onchange="_toggleSelectAllWithdrawals(this)" title="Select all"></th>
+                <th style="width:11%">Date</th><th style="width:22%">Investor</th><th style="width:11%">Amount</th><th style="width:16%">Bank</th><th style="width:16%">Reference</th><th style="width:21%">Actions</th>
               </tr></thead>
               <tbody id="withdrawalsPendingBody">
-                <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+                <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
               </tbody>
             </table>
           </div>
@@ -2423,7 +2448,7 @@
 </div>
 
 <!-- Withdrawal Rejection Modal -->
-<div class="modal-overlay" id="rejectModal" style="z-index:10001;display:none" onclick="if(event.target===this){this.style.display='none';this.classList.remove('active')}">
+<div class="modal-overlay" id="rejectModal" style="z-index:10001" onclick="if(event.target===this){this.style.display='none';this.classList.remove('open')}">
   <div class="modal" style="max-width:440px">
     <div class="modal__header">
       <span class="modal__title"><i class="fa-solid fa-xmark" style="color:var(--red,#ef4444);margin-right:8px"></i>Reject Withdrawal</span>
@@ -2433,7 +2458,7 @@
       <textarea id="rejectReasonInput" class="form-input" rows="3" placeholder="e.g. Bank account details not verified — please update your banking information and resubmit." style="width:100%;resize:vertical;font-size:0.88rem"></textarea>
     </div>
     <div class="modal__footer">
-      <button class="btn btn--secondary" onclick="document.getElementById('rejectModal').style.display='none';document.getElementById('rejectModal').classList.remove('active')">Cancel</button>
+      <button class="btn btn--secondary" onclick="document.getElementById('rejectModal').style.display='none';document.getElementById('rejectModal').classList.remove('open')">Cancel</button>
       <button class="btn btn--danger" onclick="_submitRejection()"><i class="fa-solid fa-xmark"></i> Reject &amp; Notify</button>
     </div>
   </div>

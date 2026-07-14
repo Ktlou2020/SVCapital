@@ -1682,30 +1682,66 @@ async function loadWithdrawals() {
 }
 
 function renderWithdrawalsTable() {
-  const pendingBody    = document.getElementById('withdrawalsPendingBody');
-  const completedBody  = document.getElementById('withdrawalsCompletedBody');
-  const withdrawals    = STATE.withdrawals || [];
-  const pending        = withdrawals.filter(w => w.status === 'pending');
-  const completed      = withdrawals.filter(w => w.status !== 'pending');
+  const pendingBody   = document.getElementById('withdrawalsPendingBody');
+  const completedBody = document.getElementById('withdrawalsCompletedBody');
+  const withdrawals   = STATE.withdrawals || [];
+
+  // ── Read filter values ──────────────────────────────────────────────────
+  const fName = (document.getElementById('wdFilterName')?.value || '').toLowerCase().trim();
+  const fRef  = (document.getElementById('wdFilterRef')?.value  || '').toLowerCase().trim();
+  const fMin  = parseFloat(document.getElementById('wdFilterMin')?.value) || 0;
+  const fMax  = parseFloat(document.getElementById('wdFilterMax')?.value) || Infinity;
+  const fFrom = document.getElementById('wdFilterFrom')?.value || '';
+  const fTo   = document.getElementById('wdFilterTo')?.value   || '';
+
+  const _matchesFilter = (w) => {
+    const inv  = STATE.investors.find(i => i.id === w.investor_id);
+    const name = inv ? `${inv.first_name} ${inv.last_name}`.toLowerCase() : '';
+    const id   = (w.investor_id || '').toLowerCase();
+    if (fName && !name.includes(fName) && !id.includes(fName)) return false;
+    if (fRef  && !(w.reference || '').toLowerCase().includes(fRef))  return false;
+    const amt = Math.abs(parseFloat(w.amount) || 0);
+    if (fMin  && amt < fMin) return false;
+    if (fMax !== Infinity && amt > fMax) return false;
+    const d = (w.created_at || w.transaction_date || '').slice(0, 10);
+    if (fFrom && d < fFrom) return false;
+    if (fTo   && d > fTo)   return false;
+    return true;
+  };
+
+  const allPending   = withdrawals.filter(w => w.status === 'pending');
+  const pending      = allPending.filter(_matchesFilter);
+  const completed    = withdrawals.filter(w => w.status !== 'pending');
+
+  // Update filter count label
+  const countEl = document.getElementById('wdFilterCount');
+  if (countEl) {
+    const hasFilter = fName || fRef || fMin || fMax !== Infinity || fFrom || fTo;
+    countEl.textContent = hasFilter ? `${pending.length} of ${allPending.length} shown` : `${allPending.length} pending`;
+  }
 
   const _row = (w, showActions) => {
     const inv  = STATE.investors.find(i => i.id === w.investor_id);
     const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id || '—';
 
-    // Parse bank from investor notes (migration) or direct fields
     let bankNotes = {};
     try { if (inv?.notes?.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
-    const bankName   = inv?.bank_name    || bankNotes.bank_name    || '—';
+    const bankName   = inv?.bank_name           || bankNotes.bank_name    || '—';
     const bankAcct   = inv?.bank_account_number || bankNotes.account_number || '';
     const bankHolder = inv?.bank_account_holder || bankNotes.account_holder || (inv ? `${inv.first_name} ${inv.last_name}` : '—');
-    const branchCode = inv?.bank_branch_code || bankNotes.branch_code || '—';
+    const branchCode = inv?.bank_branch_code    || bankNotes.branch_code  || '—';
     const bankDisplay = bankAcct
       ? `<div style="font-size:0.78rem;font-weight:600;color:var(--text)">${bankName}</div>
          <div style="font-size:0.7rem;color:var(--text-muted)">${bankHolder}</div>
          <div style="font-size:0.68rem;font-family:monospace;color:var(--gold)">${String(bankAcct)} · ${branchCode}</div>`
       : `<div class="clip">${bankName}</div>`;
 
+    const checkCol = showActions
+      ? `<td style="padding-left:14px;width:36px"><input type="checkbox" class="wd-check" data-id='${w.id}' onchange="_updateWithdrawalSelection()"></td>`
+      : `<td></td>`;
+
     return `<tr>
+      ${checkCol}
       <td class="td-muted clip">${Utils.date(w.created_at || w.transaction_date)}</td>
       <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${w.investor_id||''}</div></td>
       <td class="td-gold fw-700 clip">${Utils.rand(Math.abs(w.amount))}</td>
@@ -1725,14 +1761,78 @@ function renderWithdrawalsTable() {
   if (pendingBody) {
     pendingBody.innerHTML = pending.length
       ? pending.map(w => _row(w, true)).join('')
-      : '<tr><td colspan="6" class="text-center text-muted" style="padding:24px"><i class="fa-solid fa-check-circle" style="color:var(--green);margin-right:6px"></i>No pending withdrawals</td></tr>';
+      : `<tr><td colspan="7" class="text-center text-muted" style="padding:24px"><i class="fa-solid fa-check-circle" style="color:var(--green);margin-right:6px"></i>${allPending.length ? 'No withdrawals match the current filter' : 'No pending withdrawals'}</td></tr>`;
+    _updateWithdrawalSelection();
   }
 
   if (completedBody) {
     completedBody.innerHTML = completed.length
       ? completed.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(w => _row(w, false)).join('')
-      : '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No completed withdrawals</td></tr>';
+      : '<tr><td colspan="7" class="text-center text-muted" style="padding:24px">No completed withdrawals</td></tr>';
   }
+}
+
+function clearWithdrawalFilters() {
+  ['wdFilterName','wdFilterRef','wdFilterMin','wdFilterMax','wdFilterFrom','wdFilterTo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  renderWithdrawalsTable();
+}
+
+function _updateWithdrawalSelection() {
+  const checks   = [...document.querySelectorAll('.wd-check')];
+  const selected = checks.filter(c => c.checked);
+  const bulkBar  = document.getElementById('wdBulkBar');
+  const selCount = document.getElementById('wdSelCount');
+  const selAll   = document.getElementById('wdSelectAll');
+
+  if (bulkBar) bulkBar.style.display = selected.length ? 'flex' : 'none';
+  if (selCount) selCount.textContent = `${selected.length} selected`;
+  if (selAll) {
+    selAll.indeterminate = selected.length > 0 && selected.length < checks.length;
+    selAll.checked = checks.length > 0 && selected.length === checks.length;
+  }
+}
+
+function _toggleSelectAllWithdrawals(masterCb) {
+  document.querySelectorAll('.wd-check').forEach(c => { c.checked = masterCb.checked; });
+  _updateWithdrawalSelection();
+}
+
+function _clearWithdrawalSelection() {
+  document.querySelectorAll('.wd-check').forEach(c => { c.checked = false; });
+  _updateWithdrawalSelection();
+}
+
+async function _bulkApplyWithdrawalStatus() {
+  const status = document.getElementById('wdBulkStatus')?.value;
+  if (!status) { Toast.error('Choose a status to apply'); return; }
+
+  const ids = [...document.querySelectorAll('.wd-check:checked')].map(c => c.dataset.id).filter(Boolean);
+  if (!ids.length) { Toast.error('No withdrawals selected'); return; }
+
+  const labelMap = { completed: 'completed', rejected: 'rejected', pending: 'reset to pending' };
+  if (!await Confirm.ask(`Apply to ${ids.length} withdrawal${ids.length > 1 ? 's' : ''}?`, {
+    body: `This will mark ${ids.length} withdrawal${ids.length > 1 ? 's' : ''} as ${labelMap[status] || status}.`,
+    confirmLabel: 'Apply',
+    danger: status === 'rejected',
+  })) return;
+
+  let done = 0, failed = 0;
+  await Promise.all(ids.map(async (id) => {
+    try {
+      await API._fetch('PATCH', `tables/transactions/${id}`, { status });
+      done++;
+    } catch {
+      failed++;
+    }
+  }));
+
+  if (failed) Toast.error(`${done} updated, ${failed} failed`);
+  else Toast.success(`${done} withdrawal${done > 1 ? 's' : ''} marked as ${status}`);
+
+  await loadWithdrawals();
 }
 
 async function approveWithdrawal(txnId, btn) {
@@ -1770,6 +1870,7 @@ function rejectWithdrawalPrompt(txnId, btn) {
   _rejectBtn = btn;
   document.getElementById('rejectReasonInput').value = '';
   const overlay = document.getElementById('rejectModal');
+  overlay.style.display = 'flex';
   overlay.classList.add('open');
   document.body.style.overflow = 'hidden';
   setTimeout(() => document.getElementById('rejectReasonInput')?.focus(), 100);
@@ -1779,7 +1880,9 @@ async function _submitRejection() {
   const reason = (document.getElementById('rejectReasonInput')?.value || '').trim();
   const txnId = _rejectingTxnId;
   const btn   = _rejectBtn;
-  document.getElementById('rejectModal').classList.remove('open');
+  const rm = document.getElementById('rejectModal');
+  rm.style.display = 'none';
+  rm.classList.remove('open');
   document.body.style.overflow = '';
   if (!txnId) return;
   await _withBtn(btn, async () => {
@@ -2064,6 +2167,18 @@ function viewFicaDocument(kycId) {
   const doc = STATE.kyc.find(k => k.id === kycId);
   if (!doc) return;
   _openDocumentData(doc.file_data || doc.attachment_data || doc.file_url || '', doc.file_name || 'Document');
+}
+
+/** Convert a data: URL to a Blob, returns null on failure. */
+function _dataUrlToBlob(dataUrl) {
+  try {
+    const mime = dataUrl.split(',')[0].match(/:(.*?);/)?.[1] || 'application/octet-stream';
+    const b64  = dataUrl.split(',')[1];
+    const bin  = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  } catch (_) { return null; }
 }
 
 /** Open a base64 data URL / HTTP URL document in a new tab (with download fallback). */
@@ -3868,8 +3983,9 @@ async function viewTicket(id) {
     }),
   ].join('');
 
-  const isBankVerification = tkt.category === 'bank_verification';
-  const isFicaSubmission   = tkt.category === 'fica_submission' || tkt.category === 'fica';
+  const _cat = (tkt.category || '').replace(/ /g, '_').toLowerCase();
+  const isBankVerification = _cat === 'bank_verification';
+  const isFicaSubmission   = _cat === 'fica_submission' || _cat === 'fica';
 
   // Extract base64 data URL embedded in message.
   // EFT format:     "\nData URL: data:..."
@@ -3927,11 +4043,11 @@ async function viewTicket(id) {
       <div class="panel__header" style="background:rgba(99,102,241,0.07);display:flex;align-items:center;gap:10px">
         <span class="panel__title"><i class="fa-solid fa-building-columns" style="color:#6366f1;margin-right:6px"></i>Proof of Bank Account</span>
         <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-          <button class="btn btn--secondary btn--sm" onclick='viewBankProof(${JSON.stringify(tkt.investor_id)})'><i class="fa-solid fa-eye"></i> View Document</button>
           <button class="btn btn--secondary btn--sm" id="bankAutoVerifyBtn" onclick='_runBankAutoVerify(${JSON.stringify(tkt.investor_id)})'><i class="fa-solid fa-robot"></i> Auto-Verify</button>
         </div>
       </div>
-      <div id="bankVerifyResult" style="padding:12px 16px;font-size:0.82rem;color:var(--text-muted)">Click <strong>Auto-Verify</strong> to check if the uploaded document matches the submitted details.</div>
+      <div id="bankProofPreview" style="padding:12px 16px;font-size:0.82rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading document…</div>
+      <div id="bankVerifyResult" style="padding:0 16px 12px;font-size:0.82rem;color:var(--text-muted)"></div>
     </div>` : ''}
     ${showActionBtns ? `<div style="display:flex;gap:10px;margin-bottom:16px;padding:12px;background:${isPaymentProof ? 'rgba(34,197,94,0.06)' : 'rgba(99,102,241,0.06)'};border-radius:8px;border:1px solid ${isPaymentProof ? 'rgba(34,197,94,0.2)' : 'rgba(99,102,241,0.15)'}">
       <div style="flex:1">
@@ -4073,6 +4189,39 @@ async function viewTicket(id) {
   };
 
   Modal.open('ticketModal');
+
+  // Inline proof-of-bank preview
+  if (isBankVerification && tkt.investor_id) {
+    const previewEl = document.getElementById('bankProofPreview');
+    if (previewEl) {
+      try {
+        const res = await API.kyc.list({ investor_id: tkt.investor_id, limit: 200 });
+        const proofs = (res.data || [])
+          .filter(d => d.doc_type === 'proof_of_bank')
+          .sort((a, b) => new Date(b.submitted_at || b.created_at || 0) - new Date(a.submitted_at || a.created_at || 0));
+        if (!proofs.length) {
+          previewEl.innerHTML = '<span style="color:var(--text-muted)"><i class="fa-solid fa-file-slash" style="margin-right:6px"></i>No document uploaded yet.</span>';
+        } else {
+          const doc = proofs[0];
+          const src = doc.file_data || doc.attachment_data || doc.file_url || '';
+          const name = doc.file_name || 'Proof of Bank';
+          if (!src) {
+            previewEl.innerHTML = `<span style="color:var(--text-muted)"><i class="fa-solid fa-file-slash" style="margin-right:6px"></i>Document on file has no viewable data.</span>`;
+          } else if (src.startsWith('data:image/') || src.match(/\.(png|jpg|jpeg|gif|webp)$/i)) {
+            previewEl.innerHTML = `<img src="${src}" alt="${_esc(name)}" style="max-width:100%;border-radius:6px;display:block">`;
+          } else {
+            const blob = _dataUrlToBlob(src);
+            const blobUrl = blob ? URL.createObjectURL(blob) : src;
+            previewEl.innerHTML = `<iframe src="${blobUrl}" style="width:100%;height:520px;border:none;border-radius:6px" title="${_esc(name)}"></iframe>
+              <div style="margin-top:6px;text-align:right"><a href="${blobUrl}" target="_blank" rel="noopener" style="font-size:0.78rem;color:#6366f1"><i class="fa-solid fa-arrow-up-right-from-square" style="margin-right:4px"></i>Open full screen</a></div>`;
+          }
+        }
+      } catch (e) {
+        const previewEl2 = document.getElementById('bankProofPreview');
+        if (previewEl2) previewEl2.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>Could not load document: ${_esc(e.message || 'unknown error')}</span>`;
+      }
+    }
+  }
 }
 
 /* ═══════════════════════════════════════════════
