@@ -2393,6 +2393,9 @@ section { position: relative; padding: 100px 0; }
 
   .whatsapp-label { display: none; }
   .whatsapp-float { border-radius: 50%; padding: 16px; }
+
+  /* Prevent iOS auto-zoom on input focus */
+  input, select, textarea { font-size: 16px !important; }
 }
 
 @media (max-width: 480px) {

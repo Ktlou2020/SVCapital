@@ -11052,63 +11052,7 @@ async function togglePushNotifications(checked) {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   PWA INSTALL PROMPT
-   ═══════════════════════════════════════════════════════════════ */
-let _pwaPromptEvt = null;
-
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  _pwaPromptEvt = e;
-  if (!localStorage.getItem('pwa_installed') && !localStorage.getItem('pwa_dismissed')) {
-    setTimeout(() => {
-      const banner = document.getElementById('pwaInstallBanner');
-      if (banner) banner.style.display = 'flex';
-    }, 8000);
-  }
-});
-
-window.addEventListener('appinstalled', () => {
-  localStorage.setItem('pwa_installed', '1');
-  const banner = document.getElementById('pwaInstallBanner');
-  if (banner) banner.style.display = 'none';
-  Toast.success('App installed! You can now open SV Capital from your home screen.');
-});
-
-function pwaInstall() {
-  if (!_pwaPromptEvt) return;
-  _pwaPromptEvt.prompt();
-  _pwaPromptEvt.userChoice.then(({ outcome }) => {
-    if (outcome === 'accepted') localStorage.setItem('pwa_installed', '1');
-    _pwaPromptEvt = null;
-    const banner = document.getElementById('pwaInstallBanner');
-    if (banner) banner.style.display = 'none';
-  });
-}
-
-function _dismissPwaPrompt() {
-  const banner = document.getElementById('pwaInstallBanner');
-  if (banner) banner.style.display = 'none';
-  localStorage.setItem('pwa_dismissed', Date.now().toString());
-}
-
-/* ── iOS / Safari "Add to Home Screen" prompt ── */
-(function _initIOSBanner() {
-  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
-  const isStandalone = window.navigator.standalone === true;
-  if (!isIOS || isStandalone) return;
-  if (localStorage.getItem('ios_pwa_dismissed')) return;
-  setTimeout(() => {
-    const el = document.getElementById('iosPwaBanner');
-    if (el) el.style.display = 'flex';
-  }, 8000);
-})();
-
-function _dismissIosBanner() {
-  const el = document.getElementById('iosPwaBanner');
-  if (el) el.style.display = 'none';
-  localStorage.setItem('ios_pwa_dismissed', '1');
-}
+/* PWA install prompts removed — users are directed to App Store / Google Play */
 
 /* ═══════════════════════════════════════════════════════════════
    PORTFOLIO ANALYTICS VIEW

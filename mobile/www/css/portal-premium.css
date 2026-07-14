@@ -2090,8 +2090,8 @@ body {
 
 /* ─── PORTFOLIO HERO — Flagship element ─── */
 .portfolio-hero {
-  background: linear-gradient(140deg, #0d1724 0%, #122438 50%, #0a1c2e 100%) !important;
-  border: 1px solid rgba(255,255,255,0.07) !important;
+  background: #303030 !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
   border-radius: 24px !important;
   box-shadow: 0 24px 64px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.06) !important;
   position: relative !important;
@@ -3074,7 +3074,7 @@ body.dark-mode .wallet-card__label { color: #9ca3af !important; }
 body.dark-mode .wallet-card__value { color: #e2e8f0 !important; }
 body.dark-mode .wallet-card__sub   { color: #6b7280 !important; }
 
-body.dark-mode .portfolio-hero { background: linear-gradient(135deg, #1a1f2e 0%, #0d1117 100%) !important; }
+body.dark-mode .portfolio-hero { background: #303030 !important; }
 body.dark-mode .portfolio-hero .pov-label { color: #6b7280 !important; }
 body.dark-mode .portfolio-hero .pov-value { color: #e2e8f0 !important; }
 

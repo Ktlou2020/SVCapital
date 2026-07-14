@@ -3574,3 +3574,9 @@ body.dark-mode .policy-accordion__content { color: #9ca3af !important; }
 body.dark-mode .policy-accordion__content h4 { color: #e2e8f0 !important; }
 body.dark-mode .policy-accordion__content strong { color: #e2e8f0 !important; }
 body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.03) !important; }
+
+
+/* Prevent iOS auto-zoom on input focus */
+@media (max-width: 768px) {
+  input, select, textarea { font-size: 16px !important; }
+}
