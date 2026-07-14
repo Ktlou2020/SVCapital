@@ -2265,17 +2265,24 @@ section { position: relative; padding: 100px 0; }
     border-left: 1px solid var(--border);
     box-shadow: var(--shadow-lg);
     flex-direction: column;
-    padding: 88px 24px 32px;
+    align-items: stretch;
+    gap: 4px;
+    padding: 88px 20px 32px;
     transition: right 0.3s ease;
     z-index: 999;
-    align-items: flex-start;
+    overflow-y: auto;
   }
 
   .nav-links.open { right: 0; }
   .nav-mobile-toggle { display: flex; }
 
-  .nav-link { font-size: 1rem; padding: 12px 0; width: 100%; }
-  .nav-btn { font-size: 1rem; padding: 12px 20px; width: 100%; text-align: center; margin-top: 8px; }
+  .nav-links > li { width: 100%; }
+
+  .nav-link { display: block; font-size: 1rem; padding: 12px 8px; width: 100%; }
+
+  .nav-links > li:nth-last-child(2) { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+
+  .nav-btn { display: block; font-size: 1rem; padding: 13px 20px; width: 100%; text-align: center; margin-top: 4px; }
 
   .hero-headline { font-size: 2.5rem; }
 
