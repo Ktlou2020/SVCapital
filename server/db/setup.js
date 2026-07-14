@@ -1378,6 +1378,21 @@ async function autoSetup() {
       console.warn('⚠️  Maturity date backfill skipped:', bfErr.message);
     }
 
+    // 8. Backfill cattle_cycles.cycle_start_date from invoice_date.
+    //    "Invoice Date_" in the import CSV is the cycle start date — previously
+    //    it only populated invoice_date; now we also copy it to cycle_start_date.
+    try {
+      const { rowCount } = await pool.query(`
+        UPDATE cattle_cycles
+        SET cycle_start_date = invoice_date
+        WHERE invoice_date IS NOT NULL
+          AND cycle_start_date IS NULL
+      `);
+      if (rowCount > 0) console.log(`✅ Backfilled cycle_start_date for ${rowCount} cattle cycle(s).`);
+    } catch (bfErr) {
+      console.warn('⚠️  Cattle cycle start date backfill skipped:', bfErr.message);
+    }
+
     console.log('✅ Provisioning complete — COO account ready.');
 
   } catch (err) {
