@@ -1327,7 +1327,14 @@ section { position: relative; padding: 100px 0; }
   border-radius: var(--radius);
   padding: 16px;
   overflow: hidden;
-  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.calc-chart-wrap canvas {
+  display: block;
+  max-width: 100% !important;
+  width: 100% !important;
 }
 
 .calc-disclaimer {

@@ -596,7 +596,7 @@ function updateCalcChart(amount, totalReturns, product) {
     },
     options: {
       responsive: true,
-      maintainAspectRatio: true,
+      maintainAspectRatio: false,
       plugins: {
         legend: {
           labels: {
