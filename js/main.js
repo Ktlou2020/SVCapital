@@ -1137,7 +1137,7 @@ function _showNextPoolClosing(products) {
 
   const el = document.createElement('div');
   el.id = 'nextPoolClosing';
-  el.style.cssText = 'display:inline-flex;align-items:center;gap:10px;margin-top:16px;padding:9px 18px;border-radius:999px;background:rgba(255,155,12,0.12);border:1px solid rgba(255,155,12,0.3);color:#b8702a;font-weight:700;font-size:0.86rem';
+  el.style.cssText = 'display:inline-flex;align-items:center;gap:10px;margin-top:16px;padding:9px 18px;border-radius:999px;background:rgba(255,155,12,0.12);border:1px solid rgba(255,155,12,0.3);color:#b8702a;font-weight:700;font-size:0.86rem;white-space:nowrap;max-width:calc(100vw - 48px);overflow-x:auto';
   el.innerHTML = `<i class="fa-solid fa-clock"></i> Next pool closes ${dateStr}${days <= 60 ? ` — <span style="color:#e0571a">${days} day${days === 1 ? '' : 's'} left</span>` : ''}${soonestProduct && soonestProduct.label ? ` · ${soonestProduct.label}` : ''}`;
   header.appendChild(el);
 }
