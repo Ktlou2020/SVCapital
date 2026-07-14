@@ -1353,10 +1353,20 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           ).catch(() => {});
         }
 
-        // KYC document approved → email investor
+        // KYC document approved → email investor ONLY once all 3 required docs are approved
         if (table === 'kyc_documents' && body.status === 'approved' && updated.investor_id) {
-          const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
-          if (inv[0]) await emailService.sendKycApproved(inv[0]);
+          const REQUIRED_DOCS = ['id_document', 'proof_of_address', 'proof_of_bank'];
+          const { rows: approvedDocs } = await pool.query(
+            `SELECT DISTINCT doc_type FROM kyc_documents
+             WHERE investor_id = $1 AND status = 'approved' AND doc_type = ANY($2)`,
+            [updated.investor_id, REQUIRED_DOCS]
+          );
+          const approvedSet = new Set(approvedDocs.map(d => d.doc_type));
+          const allApproved = REQUIRED_DOCS.every(t => approvedSet.has(t));
+          if (allApproved) {
+            const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
+            if (inv[0]) await emailService.sendKycApproved(inv[0]);
+          }
         }
 
         // KYC document rejected → email investor with reason from notes
