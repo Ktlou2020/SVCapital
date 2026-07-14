@@ -539,11 +539,22 @@
           <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="document.getElementById('kycStatusFilter').value='rejected';document.getElementById('kycStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-circle-xmark"></i></div></div><div class="stat-card__value" id="kyc-rejected">—</div><div class="stat-card__label">Rejected</div></div>
         </div>
 
+        <!-- Doc-type breakdown stats -->
+        <div id="kycDocTypeStats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px"></div>
+
         <div class="table-card">
-          <div class="table-card__header">
-            <div><div class="table-card__title">KYC Documents</div><div class="table-card__sub">FICA verification queue</div></div>
-            <div class="table-card__controls" style="gap:8px">
-              <select class="tbl-filter" id="kycStatusFilter">
+          <div class="table-card__header" style="flex-wrap:wrap;gap:8px">
+            <div><div class="table-card__title">KYC / FICA Documents</div><div class="table-card__sub">All submitted documents including bank verification</div></div>
+            <div class="table-card__controls" style="gap:8px;flex-wrap:wrap">
+              <input type="text" class="tbl-filter" id="kycSearch" placeholder="Search investor…" style="min-width:160px" oninput="renderKYCTable()">
+              <select class="tbl-filter" id="kycDocTypeFilter" onchange="renderKYCTable()">
+                <option value="">All Doc Types</option>
+                <option value="id_document">ID Document</option>
+                <option value="proof_of_address">Proof of Address</option>
+                <option value="proof_of_bank">Proof of Bank</option>
+                <option value="other">Other</option>
+              </select>
+              <select class="tbl-filter" id="kycStatusFilter" onchange="renderKYCTable()">
                 <option value="">All Status</option>
                 <option value="pending">Pending</option>
                 <option value="under_review">Under Review</option>
@@ -551,10 +562,10 @@
                 <option value="rejected">Rejected</option>
               </select>
               <button class="btn btn--primary btn--sm" onclick="openKycUploadModal('','')">
-                <i class="fa-solid fa-upload"></i> Upload Document
+                <i class="fa-solid fa-upload"></i> Upload
               </button>
               <button class="btn btn--secondary btn--sm" onclick="exportKYCCSV()">
-                <i class="fa-solid fa-file-csv"></i> Export CSV
+                <i class="fa-solid fa-file-csv"></i> Export
               </button>
             </div>
           </div>
@@ -826,7 +837,7 @@
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th style="width:12%">Date</th><th style="width:26%">Investor</th><th style="width:12%">Amount</th><th style="width:18%">Bank</th><th style="width:18%">Reference</th><th style="width:14%">Status</th>
+                <th style="width:3%"></th><th style="width:11%">Date</th><th style="width:24%">Investor</th><th style="width:11%">Amount</th><th style="width:17%">Bank</th><th style="width:17%">Reference</th><th style="width:17%">Status</th>
               </tr></thead>
               <tbody id="withdrawalsCompletedBody">
                 <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
