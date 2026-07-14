@@ -1152,9 +1152,9 @@ section { position: relative; padding: 100px 0; }
 .calc-term-btn:hover:not(.active) { background: #3d3d3d; color: var(--white); }
 
 .calc-term-btn.active {
-  background: var(--gold);
+  background: #fec24f;
   color: #1a1200;
-  border-color: var(--gold);
+  border-color: #fec24f;
 }
 
 .calc-label {
@@ -1188,10 +1188,10 @@ section { position: relative; padding: 100px 0; }
   -webkit-appearance: none;
   width: 22px;
   height: 22px;
-  background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+  background: linear-gradient(135deg, #fec24f, #f59e0b);
   border-radius: 50%;
   cursor: pointer;
-  box-shadow: 0 0 12px rgba(212,175,55,0.4);
+  box-shadow: 0 0 12px rgba(254,194,79,0.4);
   transition: var(--transition);
 }
 
