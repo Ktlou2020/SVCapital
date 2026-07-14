@@ -59,7 +59,7 @@
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
   </script>
   <script src="/js/native.js"></script>
-  <link rel="stylesheet" href="/css/mobile-app.css">
+  <link rel="stylesheet" href="/css/mobile-app.css?v=2">
   <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
   <script>
   (function(){
@@ -735,7 +735,7 @@
           <button class="mkt-calc-btn" onclick="openCalcModal()">
             <i class="fa-solid fa-calculator"></i> Calculate Returns
           </button>
-          <button class="mkt-calc-btn mkt-invest-now-btn" onclick="openInvestNowPicker()" style="margin-top:8px;background:linear-gradient(135deg,#ff9b0c,#ff5229);color:#fff;border:none">
+          <button class="mkt-calc-btn mkt-invest-now-btn" onclick="openInvestNowPicker()" style="margin-top:8px">
             <i class="fa-solid fa-bolt"></i> Invest Now
           </button>
           <select id="marketRiskSelect" style="display:none">
