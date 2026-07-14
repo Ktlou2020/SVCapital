@@ -8272,9 +8272,9 @@ document.addEventListener('keydown', e => {
 /* ══════════════════════════════════════════════════════════════
    FEEDBACK / TESTIMONIALS REVIEW
 ══════════════════════════════════════════════════════════════ */
-let _fbCurrentFilter = 'pending';
+let _fbCurrentFilter = 'all';
 
-async function loadFeedback(filter = 'pending') {
+async function loadFeedback(filter = 'all') {
   _fbCurrentFilter = filter;
   ['pending','approved','rejected','all'].forEach(f => {
     const btn = document.getElementById(`fbFilter${f.charAt(0).toUpperCase()+f.slice(1)}`);
@@ -8323,14 +8323,15 @@ async function loadFeedback(filter = 'pending') {
         ${r.rejection_reason ? `<div style="font-size:0.75rem;color:#ef4444;margin-top:6px">Rejection reason: ${r.rejection_reason}</div>` : ''}
         ${r.status === 'pending' ? `
         <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
-          <button class="btn btn--sm" style="background:#10b981;color:#fff;border:none" onclick="reviewFeedback('${r.id}','approved')">✓ Approve & Publish</button>
+          <button class="btn btn--sm" style="background:#10b981;color:#fff;border:none" onclick="reviewFeedback('${r.id}','approved')">✓ Approve &amp; Publish</button>
           <button class="btn btn--sm btn--ghost" onclick="reviewFeedback('${r.id}','rejected')">✗ Reject</button>
         </div>` : r.status === 'approved' ? `
-        <div style="display:flex;gap:8px;margin-top:14px">
-          <button class="btn btn--sm btn--ghost" onclick="reviewFeedback('${r.id}','rejected')">Remove from homepage</button>
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+          <span style="font-size:0.72rem;color:#10b981;font-weight:700;align-self:center">✓ Live on homepage</span>
+          <button class="btn btn--sm" style="background:#ef4444;color:#fff;border:none;margin-left:auto" onclick="reviewFeedback('${r.id}','remove')">🗑 Remove from homepage</button>
         </div>` : `
         <div style="display:flex;gap:8px;margin-top:14px">
-          <button class="btn btn--sm" style="background:#10b981;color:#fff;border:none" onclick="reviewFeedback('${r.id}','approved')">✓ Approve & Publish</button>
+          <button class="btn btn--sm" style="background:#10b981;color:#fff;border:none" onclick="reviewFeedback('${r.id}','approved')">✓ Approve &amp; Publish</button>
         </div>`}
       </div>
     `).join('');
@@ -8341,13 +8342,18 @@ async function loadFeedback(filter = 'pending') {
 
 async function reviewFeedback(id, status) {
   let rejection_reason = null;
-  if (status === 'rejected') {
+  let effectiveStatus = status;
+  // "Remove from homepage" on an approved review — send back to pending so it can be re-reviewed
+  if (status === 'remove') {
+    effectiveStatus = 'pending';
+  } else if (status === 'rejected') {
     rejection_reason = prompt('Reason for rejection (optional):') || null;
   }
   try {
-    const _pr = await fetch(`/api/testimonials/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Auth.getToken()}` }, body: JSON.stringify({ status, rejection_reason }) });
+    const _pr = await fetch(`/api/testimonials/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Auth.getToken()}` }, body: JSON.stringify({ status: effectiveStatus, rejection_reason }) });
     if (!_pr.ok) { const e = await _pr.json().catch(()=>({})); throw new Error(e.error || `HTTP ${_pr.status}`); }
-    Toast.success(status === 'approved' ? 'Testimonial published to homepage ✓' : 'Testimonial rejected');
+    const msg = effectiveStatus === 'approved' ? 'Testimonial published to homepage ✓' : effectiveStatus === 'pending' ? 'Removed from homepage — moved back to pending' : 'Testimonial rejected';
+    Toast.success(msg);
     loadFeedback(_fbCurrentFilter);
   } catch (err) {
     Toast.error(err.message);

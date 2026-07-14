@@ -1111,7 +1111,7 @@ async function _applyLiveProductAverages() {
     if (res.ok) {
       const data = await res.json();
       const items = Array.isArray(data) ? data : (data.testimonials || []);
-      renderCards(items.length >= 2 ? items : FALLBACKS);
+      renderCards(items.length > 0 ? items : FALLBACKS);
     } else {
       renderCards(FALLBACKS);
     }

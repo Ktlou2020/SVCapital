@@ -187,6 +187,8 @@ section { position: relative; padding: 100px 0; }
   z-index: 1000;
   padding: 16px 0;
   transition: var(--transition);
+  background: rgba(8,11,16,0.88);
+  backdrop-filter: blur(12px);
 }
 
 .navbar.scrolled {
@@ -663,7 +665,7 @@ section { position: relative; padding: 100px 0; }
    FEATURED IN
    ═══════════════════════════════════════════════ */
 .featured-in {
-  padding: 32px 0;
+  padding: 18px 0;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   background: var(--dark-1);
@@ -672,7 +674,7 @@ section { position: relative; padding: 100px 0; }
 .featured-in .container {
   display: flex;
   align-items: center;
-  gap: 40px;
+  gap: 20px;
   flex-wrap: wrap;
   justify-content: center;
 }
@@ -2252,6 +2254,12 @@ section { position: relative; padding: 100px 0; }
   .nav-btn { display: block; font-size: 1rem; padding: 13px 20px; width: 100%; text-align: center; margin-top: 4px; }
 
   .hero-headline { font-size: 2.5rem; }
+
+  .hero-scroll { display: none; }
+
+  .featured-in { padding: 14px 0; }
+  .featured-in .container { gap: 12px; }
+  .featured-logos { gap: 16px; }
 
   .products-grid { grid-template-columns: 1fr; }
 
