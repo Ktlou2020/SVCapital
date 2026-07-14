@@ -1934,13 +1934,13 @@ function renderOverviewTxns() {
   const _txnIsPositive = t => !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
   body.innerHTML = recent.map(t => {
     const pos = _txnIsPositive(t);
-    const meta = _TXN_META[t.type] || { icon: 'fa-circle-dot', color: '#9ca3af', label: (t.type || 'Transaction').replace(/_/g, ' ') };
+    const meta = _TXN_META[t.type] || { icon: 'fa-circle-dot', color: '#9ca3af', label: _toSentenceCase((t.type || 'transaction').replace(/_/g, ' ')) };
     return `
       <div class="ov-txn">
         <div class="ov-txn__icon" style="background:${meta.color}1a;color:${meta.color}"><i class="fa-solid ${meta.icon}"></i></div>
         <div class="ov-txn__main">
           <div class="ov-txn__label">${meta.label}</div>
-          <div class="ov-txn__date">${t.description ? _esc(t.description) + ' · ' : ''}${Utils.date(t.transaction_date)}</div>
+          <div class="ov-txn__date">${t.description ? _esc(_toSentenceCase(t.description)) + ' · ' : ''}${Utils.date(t.transaction_date)}</div>
         </div>
         <div class="ov-txn__amount" style="color:${pos ? '#16a34a' : '#dc2626'}">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</div>
       </div>`;
@@ -2293,6 +2293,9 @@ async function loadMyTransactions() {
   }
 }
 
+/* Capitalise first letter, lowercase the rest */
+const _toSentenceCase = s => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
+
 /* Icon + accent colour per transaction type */
 const _TXN_META = {
   deposit:        { icon: 'fa-download',            color: '#22c55e', label: 'Deposit' },
@@ -2363,11 +2366,12 @@ function renderMyTxnTable() {
   let lastMonth = '';
   body.innerHTML = sorted.map(t => {
     const pos  = _isPosTxn(t);
-    const meta = _TXN_META[t.type] || { icon: 'fa-circle-dot', color: '#9ca3af', label: (t.type || 'Transaction').replace(/_/g, ' ') };
+    const meta = _TXN_META[t.type] || { icon: 'fa-circle-dot', color: '#9ca3af', label: _toSentenceCase((t.type || 'transaction').replace(/_/g, ' ')) };
     const d    = new Date(t.transaction_date || t.created_at || 0);
     const month = d.toLocaleString('default', { month: 'long', year: 'numeric' });
     let header = '';
     if (month !== lastMonth) { header = `<div class="txn-month">${month}</div>`; lastMonth = month; }
+    const desc = _toSentenceCase(t.description || t.reference) || '—';
 
     return `${header}
       <div class="txn-card">
@@ -2376,7 +2380,7 @@ function renderMyTxnTable() {
         </div>
         <div class="txn-card__main">
           <div class="txn-card__title">${meta.label}</div>
-          <div class="txn-card__meta">${t.description || t.reference || '—'}</div>
+          <div class="txn-card__meta">${_esc(desc)}</div>
         </div>
         <div class="txn-card__right">
           <div class="txn-card__amount" style="color:${pos ? '#16a34a' : '#dc2626'}">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</div>

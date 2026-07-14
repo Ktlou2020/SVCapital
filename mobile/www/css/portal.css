@@ -323,6 +323,190 @@
 .tx-amount.negative { color: #ef4444; }
 .tx-amount.neutral { color: var(--white); }
 
+/* ─── Overview Transaction List (ov-txn) ─── */
+.ov-txn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ov-txn:last-child { border-bottom: none; }
+
+.ov-txn__icon {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.ov-txn__main { flex: 1; min-width: 0; }
+
+.ov-txn__label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ov-txn__date {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ov-txn__amount {
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding-right: 4px;
+}
+
+/* ─── Overview Investment List (ov-inv) ─── */
+.ov-inv {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ov-inv:last-child { border-bottom: none; }
+
+.ov-inv__icon {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.ov-inv__main { flex: 1; min-width: 0; }
+
+.ov-inv__name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ov-inv__sub {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.ov-inv__bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-top: 5px;
+}
+.ov-inv__bar-fill {
+  height: 100%;
+  background: var(--gold);
+  border-radius: 2px;
+}
+
+.ov-inv__right { flex-shrink: 0; text-align: right; padding-right: 4px; }
+
+.ov-inv__amount {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--white);
+  white-space: nowrap;
+}
+
+/* ─── Transaction Cards (Transactions view) ─── */
+.txn-month {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 14px 0 6px;
+}
+
+.txn-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.txn-card:last-child { border-bottom: none; }
+
+.txn-card__icon {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.txn-card__main { flex: 1; min-width: 0; }
+
+.txn-card__title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.txn-card__meta {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.txn-card__right {
+  flex-shrink: 0;
+  text-align: right;
+  padding-right: 4px;
+}
+
+.txn-card__amount {
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.txn-card__status {
+  font-size: 0.68rem;
+  margin-top: 2px;
+  text-transform: capitalize;
+}
+.txn-card__status--completed { color: #16a34a; }
+.txn-card__status--pending   { color: #d97706; }
+.txn-card__status--rejected,
+.txn-card__status--failed    { color: #dc2626; }
+
+/* Transaction summary strip */
+.txn-summary__item { display: flex; align-items: center; gap: 10px; }
+.txn-summary__icon {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+.txn-summary__label { font-size: 0.72rem; color: var(--text-muted); }
+.txn-summary__value { font-size: 0.9rem; font-weight: 700; }
+.txn-summary__divider { width: 1px; background: var(--border); align-self: stretch; margin: 0 4px; }
+
 /* ─── KYC Banner ─── */
 .kyc-banner {
   background: linear-gradient(135deg, rgba(239,68,68,0.1) 0%, rgba(239,68,68,0.05) 100%);
