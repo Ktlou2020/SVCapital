@@ -2383,7 +2383,8 @@ section { position: relative; padding: 100px 0; }
   .testimonials-grid { grid-template-columns: 1fr; }
 
   .faq-layout { grid-template-columns: 1fr; }
-  .faq-categories { flex-direction: row; flex-wrap: wrap; position: static; }
+  .faq-categories { flex-direction: row; flex-wrap: wrap; position: static; justify-content: center; }
+  .faq-cat { text-align: center; }
 
   .footer-top { grid-template-columns: 1fr; }
   .footer-legal-row { flex-direction: column; text-align: center; }
