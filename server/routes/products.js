@@ -40,6 +40,7 @@ router.get('/', async (req, res) => {
       ${includeInactive ? '' : 'WHERE p.is_active = true'}
       ORDER BY p.sort_order, p.label
     `);
+    res.set('Cache-Control', 'no-store');
     res.json({ data: rows });
   } catch (err) {
     console.error('[products] error:', err.message);
