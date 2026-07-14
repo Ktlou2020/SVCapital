@@ -3408,7 +3408,7 @@ function renderProductsGrid() {
             <span class="mpc2-badge" style="background:${color}14;color:${color};border-color:${color}30">${open.length ? `${open.length} open pool${open.length === 1 ? '' : 's'}` : 'Details & factsheets'}</span>
           </div>
           <div style="margin-top:14px">
-            <div class="mpc2-title">${_esc(p.label)}</div>
+            <div class="mpc2-title">${_esc((p.label || '').replace(/\s*\(\d+yr\)/gi, '').trim())}</div>
             <div class="mpc2-blurb">${_esc(p.headline || p.description || '')}</div>
           </div>
         </div>
@@ -3482,8 +3482,8 @@ async function renderProductDetailView(type) {
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
             <div class="mpc2-icon" style="background:${color}18;color:${color}"><i class="fa-solid ${icon}"></i></div>
             <div>
-              <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${color}">${_esc(product.label || '')}</div>
-              <div class="mpc2-title" style="font-size:1.3rem">${_esc(product.headline || product.label || '')}</div>
+              <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${color}">${_esc((product.label || '').replace(/\s*\(\d+yr\)/gi, '').trim())}</div>
+              <div class="mpc2-title" style="font-size:1.3rem">${_esc(product.headline || (product.label || '').replace(/\s*\(\d+yr\)/gi, '').trim() || '')}</div>
             </div>
           </div>
           ${product.description ? `<p style="font-size:0.9rem;color:var(--text-muted);line-height:1.6;margin-bottom:14px">${_esc(product.description)}</p>` : ''}
