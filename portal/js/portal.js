@@ -346,7 +346,7 @@ function renderTaskCompletionPanel() {
   const hasWallet = (parseFloat(inv.wallet_balance) || 0) > 0;
   const bankReady = !!(inv.bank_account_number || (inv.bank_account_status && inv.bank_account_status !== 'none' && inv.bank_account_status !== 'pending'));
   const riskReady = !!inv.risk_profile;
-  const ficaReady = (inv.fica_status || inv.kyc_status || inv.status || '').toLowerCase() === 'approved';
+  const ficaReady = _isInvestorFicaApproved(inv);
   const tasks = [
     { label: 'Complete identity verification', done: ficaReady, tone: '#FF8215', action: 'openKycUploadModal()', cta: 'Upload documents' },
     { label: 'Add a withdrawal bank account', done: bankReady, tone: '#656565', action: 'openBankDetailsModal()', cta: 'Add bank account' },
@@ -397,8 +397,10 @@ function renderTaskCompletionPanel() {
 
 
 function _isInvestorFicaApproved(inv = PORTAL.investor) {
-  const state = String(inv?.fica_status || inv?.kyc_status || inv?.status || '').toLowerCase();
-  return ['approved', 'verified', 'active'].includes(state);
+  const OK = ['approved', 'verified', 'active'];
+  return OK.includes(String(inv?.fica_status || '').toLowerCase())
+      || OK.includes(String(inv?.kyc_status  || '').toLowerCase())
+      || OK.includes(String(inv?.status      || '').toLowerCase());
 }
 
 function _poolEndMs(dateStr) {
