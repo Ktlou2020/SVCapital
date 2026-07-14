@@ -1133,6 +1133,51 @@ section { position: relative; padding: 100px 0; }
 
 .calc-tab:hover:not(.active) { color: var(--white); background: var(--surface); }
 
+/* Solar term selector */
+.calc-solar-terms {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding: 8px 10px;
+  background: var(--dark-4);
+  border-radius: var(--radius-sm);
+}
+
+.calc-solar-terms__label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.calc-term-btn {
+  padding: 7px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: #303030;
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: var(--transition);
+  cursor: pointer;
+}
+
+.calc-term-btn:hover:not(.active) {
+  background: #3d3d3d;
+  color: var(--white);
+}
+
+.calc-term-btn.active {
+  background: var(--gold);
+  color: #1a1200;
+  border-color: var(--gold);
+}
+
 .calc-label {
   display: flex;
   justify-content: space-between;
@@ -2302,6 +2347,10 @@ section { position: relative; padding: 100px 0; }
 
   .calc-product-tabs { grid-template-columns: repeat(2, 1fr); }
   .calc-result-main { grid-template-columns: 1fr; }
+  .calc-controls { max-width: 100%; overflow: hidden; }
+  .calc-result-card { padding: 20px 16px; position: static; }
+  .calc-solar-terms { gap: 6px; }
+  .calc-term-btn { padding: 6px 12px; font-size: 0.78rem; }
 
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
 
