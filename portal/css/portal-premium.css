@@ -3347,6 +3347,35 @@ body.dark-mode .fs-row__name { color:#f3f4f6 !important; }
 /* Sub-account stat tiles: space between label and value */
 #view-subaccounts .sa-stat__label { margin-right: 6px; }
 
+/* ── Feedback / review card — match quest-card rounding ───────── */
+#feedbackCard {
+  background: #fff;
+  border: 1.5px solid rgba(0,0,0,0.07);
+  border-radius: 18px;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+#feedbackCard .card__header {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+#feedbackCard .card__body {
+  padding: 16px 16px;
+}
+#feedbackCard textarea,
+#feedbackCard input[type="text"],
+#feedbackCard input:not([type]) {
+  border-radius: 12px !important;
+}
+#feedbackCard .btn--primary {
+  border-radius: 12px !important;
+}
+body.dark-mode #feedbackCard {
+  background: #161b27 !important;
+  border-color: rgba(255,255,255,0.08) !important;
+}
+body.dark-mode #feedbackCard .card__header { border-color: rgba(255,255,255,0.06) !important; }
+
 /* ══════════════════════════════════════════════════════════════
    XP STATS ROW — world-class 4-tile metric strip
    ══════════════════════════════════════════════════════════════ */

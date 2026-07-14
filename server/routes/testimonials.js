@@ -3,7 +3,7 @@
 const router = require('express').Router();
 const pool   = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const requireAdmin = requireRole('admin');
+const requireAdmin = requireRole('admin', 'director', 'fund_manager');
 
 const FEEDBACK_XP = 50;
 const QUEST_ID    = 'leave_feedback';
