@@ -8194,19 +8194,6 @@ async function saveBankDetails() {
         file_data:     proofData,
         notes:         `Proof of bank account for ${bank_name} — submitted with banking details.`,
       }).catch(e => console.warn('[bank details] proof upload failed:', e.message));
-
-      // Create support ticket so admin can see and verify the bank details
-      const maskedAccNum = bank_account_number.slice(-4).padStart(bank_account_number.length, '•');
-      await API.post('support_tickets', {
-        investor_id:    investorId,
-        investor_name:  investorName,
-        investor_email: PORTAL.investor?.email || '',
-        subject:        `Bank Account Verification — ${bank_name}`,
-        message:        `Investor has submitted bank details for verification.\n\nBank: ${bank_name}\nAccount Holder: ${bank_account_holder}\nAccount Number: ${maskedAccNum}\nAccount Type: ${bank_account_type}\nBranch Code: ${bank_branch_code}\n\nPlease verify and approve or reject in the investor's profile.`,
-        status:         'open',
-        priority:       'medium',
-        category:       'bank_verification',
-      }).catch(e => console.warn('[bank details] ticket creation failed:', e.message));
     }
 
     _renderBankDetailsPanel();
