@@ -1291,8 +1291,9 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           );
         }
 
-        // Support ticket response → email investor
-        if (table === 'support_tickets' && body.admin_response && updated.investor_id) {
+        // Support ticket response → email investor (skip internal admin-only categories)
+        const _skipResponseEmail = ['bank_verification', 'fica_submission', 'fica'].includes(updated.category);
+        if (table === 'support_tickets' && body.admin_response && updated.investor_id && !_skipResponseEmail) {
           const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
           if (inv[0]) {
             await emailService.sendTicketResponse(inv[0], {
