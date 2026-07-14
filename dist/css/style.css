@@ -2294,7 +2294,10 @@ section { position: relative; padding: 100px 0; }
   .modal { padding: 24px; }
   .modal-stats { grid-template-columns: 1fr; }
 
-  .product-card__stats { grid-template-columns: 1fr; }
+  .product-card__stats { grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 12px 10px; }
+  .product-card__stats .stat__label { font-size: 0.62rem; letter-spacing: 0.05em; }
+  .product-card__stats .stat__value { font-size: 1rem; }
+  .product-card__stats .stat__sub { font-size: 0.7rem; }
   .product-card__tiers { grid-template-columns: 1fr; }
 }
 
