@@ -1251,6 +1251,32 @@ input[type="file"] { font-size: 16px !important; }
    MARKETPLACE (Browse Pools) VIEW
    ═══════════════════════════════════════════════════════════════ */
 
+/* Wallet balance strip — flex row with icon, text, and Top Up button */
+.mkt-wallet-strip {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  background: rgba(255,155,12,0.06) !important;
+  border: 1px solid rgba(255,155,12,0.18) !important;
+  border-radius: 14px !important;
+  padding: 10px 14px !important;
+}
+.mkt-wallet-strip > i { color: var(--gold); font-size: 0.9rem; flex-shrink: 0; }
+.mkt-wallet-strip > span { flex: 1; font-size: 0.82rem; color: var(--text-muted); }
+.mkt-wallet-strip > span strong { color: var(--text); }
+/* Override btn--sm clip so the + icon is always visible */
+.mkt-wallet-strip .btn {
+  flex-shrink: 0 !important;
+  max-width: none !important;
+  overflow: visible !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  white-space: nowrap !important;
+  font-size: 0.78rem !important;
+  padding: 6px 12px !important;
+}
+
 /* Hero block — SV Capital grey (#303030) */
 #view-marketplace .mkt-hero {
   background: #303030 !important;

@@ -3419,6 +3419,25 @@ function _openPoolsForProduct(type) {
   });
 }
 
+/* Compute annualised average actual return rate from this investor's
+   paid-out / matured investments for a given product type.
+   Returns a decimal (e.g. 0.13 = 13%) or null if no data. */
+function _computeAvgActualRate(productType) {
+  const matured = (PORTAL.investments || []).filter(i =>
+    i.product_type === productType &&
+    (i.status === 'paid_out' || i.status === 'matured') &&
+    parseFloat(i.actual_return_amount) > 0 &&
+    parseFloat(i.amount) > 0
+  );
+  if (!matured.length) return null;
+  const sumRate = matured.reduce((s, i) => {
+    const rate    = parseFloat(i.actual_return_amount) / parseFloat(i.amount);
+    const termYrs = (parseFloat(i.term_months) || 12) / 12;
+    return s + rate / termYrs;
+  }, 0);
+  return sumRate / matured.length;
+}
+
 function renderProductsGrid() {
   const grid = document.getElementById('marketplaceGrid');
   if (!grid) return;
@@ -3480,9 +3499,9 @@ function renderProductsGrid() {
     const pi = Utils.productInfo(p.product_type);
     const color = Utils.productColor(p);
     const icon = p.icon || pi.icon;
-    const avg = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : null;
-    const rateLabel = avg != null ? `${(avg * 100).toFixed(2)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : '—');
-    const rateSub = avg != null ? 'avg return (matured)' : 'target return';
+    const avg = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : _computeAvgActualRate(p.product_type);
+    const rateLabel = avg != null ? `${(avg * 100).toFixed(1)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : '—');
+    const rateSub = avg != null ? 'average return' : 'target return';
     // soonest closing among the open pools
     const days = open.map(o => Utils.daysRemaining(o.end_date)).filter(d => d !== null);
     const soonest = days.length ? Math.min(...days) : null;
@@ -3549,7 +3568,7 @@ async function renderProductDetailView(type) {
   const color = Utils.productColor(product);
   const icon = product.icon || pi.icon;
   const open = _openPoolsForProduct(type);
-  const avg = product.avg_actual_rate != null ? parseFloat(product.avg_actual_rate) : null;
+  const avg = product.avg_actual_rate != null ? parseFloat(product.avg_actual_rate) : _computeAvgActualRate(type);
   const projRate = avg != null ? avg : (product.benchmark_rate ? parseFloat(product.benchmark_rate) : (open[0] ? parseFloat(open[0].annual_rate) : 0.13));
   const keyDetails = (product.key_details || '').split('\n').map(s => s.trim()).filter(Boolean);
 
@@ -3577,8 +3596,8 @@ async function renderProductDetailView(type) {
 
           <div class="mpc2-metrics" style="margin-bottom:16px">
             <div class="mpc2-metric">
-              <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(2) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : '—')}</div>
-              <div class="mpc2-metric__lbl">${avg != null ? 'avg return per year' : 'target return'}</div>
+              <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(1) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : '—')}</div>
+              <div class="mpc2-metric__lbl">${avg != null ? 'average return' : 'target return'}</div>
             </div>
             <div class="mpc2-metric-sep"></div>
             <div class="mpc2-metric"><div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(product.min_investment || 0)}</div><div class="mpc2-metric__lbl">minimum</div></div>
