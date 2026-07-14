@@ -331,11 +331,42 @@
       box-shadow: 0 8px 40px rgba(245,158,11,0.25), 0 0 0 1px #f59e0b;
     }
 
+    /* ── Notifications ── */
+    .notif-list { display: flex; flex-direction: column; gap: 10px; }
+    .notif-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-left: 3px solid var(--notif-color, var(--purple));
+      border-radius: 12px; padding: 14px 18px;
+      display: flex; align-items: flex-start; gap: 14px;
+    }
+    .notif-icon-wrap {
+      width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+      background: color-mix(in srgb, var(--notif-color, var(--purple)) 15%, transparent);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.9rem; color: var(--notif-color, var(--purple));
+    }
+    .notif-body { flex: 1; min-width: 0; }
+    .notif-title { font-size: 0.88rem; font-weight: 700; margin-bottom: 2px; }
+    .notif-text { font-size: 0.8rem; color: var(--muted2); line-height: 1.45; }
+    .notif-meta { font-size: 0.72rem; color: var(--muted); margin-top: 5px; }
+    .notif-action {
+      flex-shrink: 0; align-self: center;
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 0.75rem; font-weight: 700; color: var(--purple);
+      text-decoration: none; padding: 5px 13px; border-radius: 20px;
+      background: color-mix(in srgb, var(--purple) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--purple) 25%, transparent);
+      transition: background 0.15s;
+    }
+    .notif-action:hover { background: color-mix(in srgb, var(--purple) 22%, transparent); }
+
     /* Responsive */
     @media (max-width: 640px) {
       .hero { flex-direction: column; gap: 16px; }
       .app-tile--primary { flex-direction: column; }
       .topbar-right .session-pill .session-role { display: none; }
+      .notif-card { flex-wrap: wrap; }
+      .notif-action { margin-top: 4px; }
     }
   </style>
   <!-- Google Analytics 4 -->
@@ -368,7 +399,7 @@
   <!-- ── Topbar ── -->
   <header class="topbar">
     <div class="topbar-brand">
-      <div class="topbar-icon"><img src="../assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="height:36px;width:auto"></div>
+      <div class="topbar-icon"><img src="../assets/logo-192.png" alt="SV Capital"></div>
       <div>
         <div class="topbar-sub">Staff Portal</div>
       </div>
@@ -424,6 +455,15 @@
     <div class="session-bar-sep"></div>
     <div class="session-bar-item"><i class="fa-solid fa-clock"></i> Login at <strong id="loginTime"></strong></div>
     <div class="session-expire" id="sessionExpire"></div>
+  </div>
+
+  <!-- ── Notifications ── -->
+  <div id="hubNotifications" style="display:none; margin-bottom:40px">
+    <div class="section-head">
+      <div class="section-title"><i class="fa-solid fa-bell" style="margin-right:6px;font-size:0.75rem"></i>Notifications</div>
+      <div class="section-count" id="notifCountBadge"></div>
+    </div>
+    <div id="notifList" class="notif-list"></div>
   </div>
 
   <!-- ── Permitted apps ── -->
@@ -579,6 +619,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   populateSession(session);
   renderApps(session);
   checkDeniedRedirect();
+  loadNotifications(session);
 
   // Hide loader, show content
   document.getElementById('globalLoader').style.display = 'none';
@@ -722,6 +763,125 @@ function showToast(msg) {
   document.getElementById('toastMsg').textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+/* ── Notifications ── */
+async function loadNotifications(session) {
+  const token = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+  if (!token || !session.empId) return;
+
+  let jwtRole = '';
+  try { jwtRole = JSON.parse(atob(token.split('.')[1])).role || ''; } catch(_) {}
+  const isDirector = ['admin', 'director'].includes(jwtRole);
+
+  const h = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const api = url => fetch(url, { headers: h, credentials: 'include' });
+
+  try {
+    const reqs = [
+      api(`/api/tables/activity_feed?employee_id=${encodeURIComponent(session.empId)}&sort=created_at&order=desc&limit=10`),
+    ];
+    if (isDirector) {
+      reqs.push(api('/api/tables/leave_requests?status=pending&sort=created_at&order=desc&limit=20'));
+    }
+
+    const [feedRes, leaveRes] = await Promise.all(reqs);
+    const feed    = feedRes.ok  ? (await feedRes.json()).data  || [] : [];
+    const pending = leaveRes && leaveRes.ok ? (await leaveRes.json()).data || [] : [];
+
+    if (!feed.length && !pending.length) return;
+
+    let empMap = {};
+    if (pending.length) {
+      try {
+        const er = await api('/api/tables/employees?limit=500');
+        if (er.ok) (await er.json()).data?.forEach(e => { empMap[e.id] = e; });
+      } catch(_) {}
+    }
+
+    _renderNotifications(feed, pending, empMap);
+  } catch(e) {
+    console.error('[hub] notifications error:', e);
+  }
+}
+
+function _notifTimeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const h = Math.floor(mins / 60);
+  if (h < 24)    return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+function _esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _renderNotifications(feed, pending, empMap) {
+  const total = feed.length + pending.length;
+  if (!total) return;
+
+  document.getElementById('hubNotifications').style.display = 'block';
+  document.getElementById('notifCountBadge').textContent = total;
+
+  const list = document.getElementById('notifList');
+  list.innerHTML = '';
+
+  const TYPE_CFG = {
+    leave_approved:  { icon: 'fa-solid fa-circle-check',  color: '#10b981' },
+    leave_rejected:  { icon: 'fa-solid fa-circle-xmark',  color: '#ef4444' },
+    leave_submitted: { icon: 'fa-solid fa-paper-plane',   color: '#7c5cfc' },
+    achievement:     { icon: 'fa-solid fa-trophy',        color: '#f59e0b' },
+    xp_gain:         { icon: 'fa-solid fa-bolt',          color: '#7c5cfc' },
+    kpi_update:      { icon: 'fa-solid fa-chart-line',    color: '#00d4aa' },
+  };
+  const DEFAULT_CFG = { icon: 'fa-solid fa-bell', color: '#6b7280' };
+
+  // Director: pending leave requests first (need action)
+  pending.forEach(lr => {
+    const emp  = empMap[lr.employee_id];
+    const name = emp ? `${emp.first_name} ${emp.last_name}` : `Employee`;
+    const startFmt = lr.start_date ? new Date(lr.start_date + 'T00:00:00').toLocaleDateString('en-ZA', { day:'numeric', month:'short' }) : '';
+    const endFmt   = lr.end_date   ? new Date(lr.end_date   + 'T00:00:00').toLocaleDateString('en-ZA', { day:'numeric', month:'short' }) : '';
+    const days = lr.days_requested || '?';
+
+    const card = document.createElement('div');
+    card.className = 'notif-card';
+    card.style.setProperty('--notif-color', '#f59e0b');
+    card.innerHTML = `
+      <div class="notif-icon-wrap"><i class="fa-solid fa-calendar-clock"></i></div>
+      <div class="notif-body">
+        <div class="notif-title">Leave Request — ${_esc(name)}</div>
+        <div class="notif-text">${_esc(lr.leave_type || 'Leave')}: ${_esc(startFmt)}–${_esc(endFmt)} &nbsp;·&nbsp; ${_esc(days)} day${days !== 1 ? 's' : ''}</div>
+        <div class="notif-meta">${_notifTimeAgo(lr.created_at)} &nbsp;·&nbsp; Awaiting approval</div>
+      </div>
+      <a href="director.html" class="notif-action"><i class="fa-solid fa-arrow-up-right"></i> Review</a>
+    `;
+    list.appendChild(card);
+  });
+
+  // Activity feed items
+  feed.forEach(item => {
+    const cfg   = TYPE_CFG[item.type] || DEFAULT_CFG;
+    const color = item.color || cfg.color;
+    const icon  = item.icon  || cfg.icon;
+
+    const card = document.createElement('div');
+    card.className = 'notif-card';
+    card.style.setProperty('--notif-color', color);
+    card.innerHTML = `
+      <div class="notif-icon-wrap"><i class="${_esc(icon)}"></i></div>
+      <div class="notif-body">
+        <div class="notif-title">${_esc(item.title || 'Notification')}</div>
+        ${item.body ? `<div class="notif-text">${_esc(item.body)}</div>` : ''}
+        <div class="notif-meta">${_notifTimeAgo(item.created_at)}</div>
+      </div>
+    `;
+    list.appendChild(card);
+  });
 }
 
 </script>
