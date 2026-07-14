@@ -2021,27 +2021,103 @@ async function loadKYC() {
     renderKYCStats();
     renderKYCTable();
 
+    // Filters are wired via inline onchange/oninput in HTML; guard against double-wiring the status filter
     const kycFilterEl = document.getElementById('kycStatusFilter');
-    if (kycFilterEl && !kycFilterEl._wired) { kycFilterEl._wired = true; kycFilterEl.addEventListener('change', renderKYCTable); }
+    if (kycFilterEl && !kycFilterEl._wired) { kycFilterEl._wired = true; }
   } catch (e) { Toast.error('Failed to load KYC data'); }
 }
 
 function renderKYCStats() {
-  const pending = STATE.kyc.filter(k => k.status === 'pending').length;
-  const review = STATE.kyc.filter(k => k.status === 'under_review').length;
-  const approved = STATE.kyc.filter(k => k.status === 'approved').length;
-  const rejected = STATE.kyc.filter(k => k.status === 'rejected').length;
-  document.getElementById('kyc-pending').textContent = pending;
-  document.getElementById('kyc-review').textContent = review;
+  const d = STATE.kyc;
+  const pending  = d.filter(k => k.status === 'pending').length;
+  const review   = d.filter(k => k.status === 'under_review').length;
+  const approved = d.filter(k => k.status === 'approved').length;
+  const rejected = d.filter(k => k.status === 'rejected').length;
+  document.getElementById('kyc-pending').textContent  = pending;
+  document.getElementById('kyc-review').textContent   = review;
   document.getElementById('kyc-approved').textContent = approved;
   document.getElementById('kyc-rejected').textContent = rejected;
-  document.getElementById('kycBadge').textContent = pending + review;
+  document.getElementById('kycBadge').textContent     = pending + review;
+
+  // Per-doc-type breakdown with avg processing time
+  const DOC_LABELS = {
+    id_document: 'ID Document', proof_of_address: 'Proof of Address',
+    proof_of_bank: 'Proof of Bank', other: 'Other',
+  };
+  const DOC_ICONS = {
+    id_document: 'fa-id-card', proof_of_address: 'fa-house',
+    proof_of_bank: 'fa-building-columns', other: 'fa-file',
+  };
+  const knownTypes = ['id_document', 'proof_of_address', 'proof_of_bank'];
+  const typeGroups = {};
+  for (const k of d) {
+    const t = knownTypes.includes(k.doc_type) ? k.doc_type : 'other';
+    if (!typeGroups[t]) typeGroups[t] = [];
+    typeGroups[t].push(k);
+  }
+
+  function _avgHours(docs) {
+    const reviewed = docs.filter(k => {
+      const sub = k.submitted_at || k.submitted_date || k.created_at;
+      const rev = k.reviewed_at  || k.reviewed_date;
+      return sub && rev;
+    });
+    if (!reviewed.length) return null;
+    const ms = reviewed.reduce((s, k) => {
+      const sub = new Date(k.submitted_at || k.submitted_date || k.created_at);
+      const rev = new Date(k.reviewed_at  || k.reviewed_date);
+      return s + Math.max(0, rev - sub);
+    }, 0) / reviewed.length;
+    const h = ms / 3600000;
+    return h < 24 ? `${Math.round(h)}h` : `${(h / 24).toFixed(1)}d`;
+  }
+
+  const container = document.getElementById('kycDocTypeStats');
+  if (!container) return;
+  const allTypes = [...new Set(['id_document', 'proof_of_address', 'proof_of_bank', ...Object.keys(typeGroups)])];
+  container.innerHTML = allTypes.map(t => {
+    const docs    = typeGroups[t] || [];
+    const pend    = docs.filter(k => ['pending', 'under_review'].includes(k.status)).length;
+    const total   = docs.length;
+    const avg     = _avgHours(docs);
+    const icon    = DOC_ICONS[t] || 'fa-file';
+    const label   = DOC_LABELS[t] || t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const pendClr = pend > 0 ? '#FF9B0C' : 'var(--text-muted)';
+    return `<div class="stat-card" style="cursor:pointer;padding:12px 14px" onclick="document.getElementById('kycDocTypeFilter').value=${JSON.stringify(t)};renderKYCTable()">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <i class="fa-solid ${icon}" style="color:#6366f1;font-size:0.9rem"></i>
+        <span style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${label}</span>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:8px">
+        <span style="font-size:1.4rem;font-weight:800;color:var(--text)">${total}</span>
+        <span style="font-size:0.75rem;font-weight:600;color:${pendClr};margin-bottom:2px">${pend} pending</span>
+      </div>
+      ${avg ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px"><i class="fa-solid fa-clock" style="margin-right:3px"></i>Avg review: <strong>${avg}</strong></div>` : `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">No reviewed docs yet</div>`}
+    </div>`;
+  }).join('');
 }
 
 function renderKYCTable() {
-  const body = document.getElementById('kycBody');
-  const filter = document.getElementById('kycStatusFilter').value;
-  const items = filter ? STATE.kyc.filter(k => k.status === filter) : STATE.kyc;
+  const body       = document.getElementById('kycBody');
+  const stFilter   = (document.getElementById('kycStatusFilter')?.value  || '').trim();
+  const dtFilter   = (document.getElementById('kycDocTypeFilter')?.value || '').trim();
+  const search     = (document.getElementById('kycSearch')?.value        || '').trim().toLowerCase();
+  const knownTypes = ['id_document', 'proof_of_address', 'proof_of_bank'];
+
+  const items = STATE.kyc.filter(k => {
+    if (stFilter && k.status !== stFilter) return false;
+    if (dtFilter) {
+      const kt = knownTypes.includes(k.doc_type) ? k.doc_type : 'other';
+      if (kt !== dtFilter) return false;
+    }
+    if (search) {
+      const inv  = STATE.investors.find(i => i.id === k.investor_id);
+      const name = (k.investor_name || (inv ? `${inv.first_name} ${inv.last_name}` : '') || '').toLowerCase();
+      const id   = (k.investor_id || '').toLowerCase();
+      if (!name.includes(search) && !id.includes(search)) return false;
+    }
+    return true;
+  });
 
   if (!items.length) {
     body.innerHTML = filter === 'pending'
@@ -2314,9 +2390,10 @@ async function approveKyc(id, btn) {
   await _withBtn(btn, async () => {
     try {
       await API.kyc.update(id, { status: 'approved', reviewed_by: reviewedBy, reviewed_at: new Date().toISOString() });
-      // Recompute the investor's overall FICA status — verified only once
-      // ID, Proof of Address and Proof of Bank Details are all approved.
       const doc = STATE.kyc.find(k => k.id === id);
+      if (doc?.investor_id && doc?.doc_type === 'proof_of_bank') {
+        await API._fetch('PATCH', `tables/investors/${doc.investor_id}`, { bank_account_status: 'approved', bank_account_notes: null });
+      }
       const result = await _recomputeInvestorFicaStatus(doc?.investor_id);
       Toast.success(result.verified
         ? 'Document approved — investor is now FICA-verified'
@@ -2336,8 +2413,13 @@ async function rejectKyc(id, btn) {
   await _withBtn(btn, async () => {
     try {
       await API.kyc.update(id, { status: 'rejected', notes: reason, reviewed_by: reviewedBy, reviewed_at: new Date().toISOString() });
-      // A rejected required document means the investor can no longer be verified.
       const doc = STATE.kyc.find(k => k.id === id);
+      if (doc?.investor_id && doc?.doc_type === 'proof_of_bank') {
+        await API._fetch('PATCH', `tables/investors/${doc.investor_id}`, {
+          bank_account_status: 'rejected',
+          bank_account_notes: reason || 'Bank account details could not be verified.',
+        });
+      }
       await _recomputeInvestorFicaStatus(doc?.investor_id);
       Toast.success('Document rejected');
       await loadKYC();
@@ -3899,23 +3981,29 @@ async function loadSupport() {
     renderTicketStats();
     renderTicketsTable();
     setupTicketFilters();
-    document.getElementById('ticketBadge').textContent = STATE.tickets.filter(t => ['open', 'in_progress'].includes(t.status)).length;
+    document.getElementById('ticketBadge').textContent = _supportTickets().filter(t => ['open', 'in_progress'].includes(t.status)).length;
   } catch (e) { Toast.error('Failed to load support tickets'); }
 }
 
+const _SUPPORT_EXCLUDED_CATS = new Set(['bank_verification', 'bank verification']);
+
+function _supportTickets() {
+  return STATE.tickets.filter(t => !_SUPPORT_EXCLUDED_CATS.has((t.category || '').toLowerCase()));
+}
+
 function renderTicketStats() {
-  const d = STATE.tickets;
-  document.getElementById('tkt-open').textContent = d.filter(t => t.status === 'open').length;
-  document.getElementById('tkt-inprogress').textContent = d.filter(t => t.status === 'in_progress').length;
-  document.getElementById('tkt-resolved').textContent = d.filter(t => t.status === 'resolved').length;
-  document.getElementById('tkt-urgent').textContent = d.filter(t => ['high', 'urgent'].includes(t.priority)).length;
+  const d = _supportTickets();
+  document.getElementById('tkt-open').textContent        = d.filter(t => t.status === 'open').length;
+  document.getElementById('tkt-inprogress').textContent  = d.filter(t => t.status === 'in_progress').length;
+  document.getElementById('tkt-resolved').textContent    = d.filter(t => t.status === 'resolved').length;
+  document.getElementById('tkt-urgent').textContent      = d.filter(t => ['high', 'urgent'].includes(t.priority)).length;
 }
 
 function renderTicketsTable() {
   const body = document.getElementById('ticketsBody');
   const stFilter = document.getElementById('ticketStatusFilter').value;
   const prFilter = document.getElementById('ticketPriorityFilter').value;
-  const items = STATE.tickets.filter(t => (!stFilter || t.status === stFilter) && (!prFilter || t.priority === prFilter));
+  const items = _supportTickets().filter(t => (!stFilter || t.status === stFilter) && (!prFilter || t.priority === prFilter));
 
   if (!items.length) { body.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:32px">No tickets found</td></tr>'; return; }
 
