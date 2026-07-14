@@ -2120,7 +2120,7 @@ function renderKYCTable() {
   });
 
   if (!items.length) {
-    body.innerHTML = filter === 'pending'
+    body.innerHTML = stFilter === 'pending'
       ? _emptyRow('fa-circle-check', 'All clear — no pending KYC', 'All submitted documents have been reviewed.', 8)
       : _emptyRow('fa-id-card', 'No KYC documents found', 'Documents will appear here once investors submit them.', 8);
     return;
@@ -2133,11 +2133,33 @@ function renderKYCTable() {
     const kInv = STATE.investors.find(i => i.id === k.investor_id);
     const kName = k.investor_name || (kInv ? `${kInv.first_name} ${kInv.last_name}`.trim() : k.investor_id || '—');
     const canSelect = ['pending', 'under_review'].includes(k.status);
+    const isBankDoc = k.doc_type === 'proof_of_bank';
+
+    // For proof_of_bank rows, surface the bank details the investor submitted
+    let docTypeCell = k.doc_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—';
+    if (isBankDoc && kInv) {
+      const bankName    = _esc(kInv.bank_name || '—');
+      const bankHolder  = _esc(kInv.bank_account_holder || '—');
+      const rawAcct     = kInv.bank_account_number || '';
+      const masked      = rawAcct ? '••••' + String(rawAcct).slice(-4) : '—';
+      const acctType    = _esc(kInv.bank_account_type || '—');
+      const branchCode  = _esc(kInv.bank_branch_code  || '—');
+      const bkStatus    = kInv.bank_account_status || 'pending';
+      const bkCls       = { approved: 'badge--green', rejected: 'badge--red', pending: 'badge--yellow' }[bkStatus] || 'badge--grey';
+      docTypeCell = `<div style="font-size:0.78rem;font-weight:700;color:var(--text);margin-bottom:4px">Proof of Bank</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.6">
+          <span style="display:block"><strong>${bankName}</strong></span>
+          <span style="display:block">${bankHolder} &bull; ${masked}</span>
+          <span style="display:block">${acctType} &bull; Branch ${branchCode}</span>
+          <span class="badge ${bkCls}" style="font-size:0.62rem;margin-top:2px">Bank ${bkStatus}</span>
+        </div>`;
+    }
+
     return `
     <tr>
       <td><input type="checkbox" class="kyc-cb" value="${k.id}" ${!canSelect ? 'disabled' : ''} ${_kycSelected.has(k.id) ? 'checked' : ''} onchange="toggleKycRow('${k.id}', this.checked)" style="${canSelect ? 'cursor:pointer;width:16px;height:16px;accent-color:#FF9B0C' : 'opacity:0.3;width:16px;height:16px'}"></td>
       <td><div class="td-strong clip">${kName}</div><div class="td-muted clip">${k.investor_id}</div></td>
-      <td class="clip">${k.doc_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || k.document_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—'}</td>
+      <td>${docTypeCell}</td>
       <td class="td-muted clip">${k.file_name || 'Not uploaded'}</td>
       <td>${Utils.statusBadge(k.status)}</td>
       <td class="td-muted">${Utils.date(k.submitted_at || k.submitted_date || k.created_at)}</td>

@@ -981,7 +981,7 @@ async function importCycles() {
     batch_name:             r['Name'] || '',
     inv_no:                 r['INV No (IN0)'] || r['INV No'] || '',
     invoice_date:           cleanDate(r['Invoice Date_'] || r['Invoice Date']),
-    cycle_start_date:       cleanDate(r['Cycle Start Date']),
+    cycle_start_date:       cleanDate(r['Cycle Start Date'] || r['Invoice Date_'] || r['Invoice Date']),
     end_date:               cleanDate(r['End date']),
     sale_date:              cleanDate(r['Sale Date']),
     cycle_no:               r['Cycle No'] || '',
