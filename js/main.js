@@ -908,14 +908,22 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
    achieved average across each product's matured pools. Falls back silently
    to the static copy when there is no matured-pool data yet. */
 async function _applyLiveProductAverages() {
-  let products = [];
+  // Hide all product cards immediately so nothing flashes while the API fetch
+  // is in-flight. Cards are selectively un-hidden after the response arrives.
+  // Using visibility:hidden (not display:none) preserves grid layout during load.
+  const _allCards = document.querySelectorAll('.product-card[data-product]');
+  _allCards.forEach(c => { c.style.visibility = 'hidden'; });
+
+  let products = [], fetchOk = false;
   try {
-    const r = await fetch('/api/products');
-    if (!r.ok) return;
-    const d = await r.json();
-    products = d.data || [];
-  } catch (_) { return; }
-  if (!products.length) return;
+    const r = await fetch('/api/products?_=' + Date.now());
+    if (r.ok) { const d = await r.json(); products = d.data || []; fetchOk = true; }
+  } catch (_) {}
+
+  // If the fetch failed entirely, restore cards so a network error doesn't
+  // produce a blank product section. The admin's hide setting will apply on
+  // the next successful load.
+  if (!fetchOk) { _allCards.forEach(c => { c.style.visibility = ''; }); return; }
 
   // Populate the shared Utils cache so productInfo() returns API colors everywhere
   if (typeof Utils !== 'undefined') Utils.setProductCache(products);
@@ -1029,9 +1037,12 @@ async function _applyLiveProductAverages() {
     return p ? !!p.display_on_homepage : false; // not in API (inactive) → hide
   };
 
-  // Hide/show product cards
+  // Hide/show product cards — restore visibility first, then set display:none on
+  // hidden ones. (visibility was pre-set to hidden above to prevent flash.)
   document.querySelectorAll('.product-card[data-product]').forEach(card => {
-    card.style.display = resolveVisible(card.dataset.product) ? '' : 'none';
+    const visible = resolveVisible(card.dataset.product);
+    card.style.visibility = '';
+    card.style.display    = visible ? '' : 'none';
   });
 
   // Hide/show footer product links
