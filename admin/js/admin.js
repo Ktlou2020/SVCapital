@@ -3848,12 +3848,12 @@ async function viewTicket(id) {
       <div class="panel__body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         ${tkt.proof_filename ? `<span style="font-size:0.85rem;font-weight:600"><i class="fa-solid fa-file" style="color:#ff9b0c;margin-right:6px"></i>${_esc(tkt.proof_filename)}</span>` : ''}
         ${attachDataUrl
-          ? `<button class="btn btn--secondary btn--sm" onclick="_openTicketDoc(${JSON.stringify(tkt.id)},${JSON.stringify(tkt.proof_filename||'attachment')})"><i class="fa-solid fa-eye"></i> View</button>
-             <button class="btn btn--ghost btn--sm" onclick="_downloadTicketDoc(${JSON.stringify(tkt.id)},${JSON.stringify(tkt.proof_filename||'attachment')})"><i class="fa-solid fa-download"></i> Download</button>`
+          ? `<button class="btn btn--secondary btn--sm" onclick='_openTicketDoc(${JSON.stringify(tkt.id)},${JSON.stringify(tkt.proof_filename||"attachment")})'><i class="fa-solid fa-eye"></i> View</button>
+             <button class="btn btn--ghost btn--sm" onclick='_downloadTicketDoc(${JSON.stringify(tkt.id)},${JSON.stringify(tkt.proof_filename||"attachment")})'><i class="fa-solid fa-download"></i> Download</button>`
           : `<span style="font-size:0.75rem;color:var(--text-muted);font-style:italic">File data unavailable — re-upload below</span>`}
         <label class="btn btn--ghost btn--sm" style="cursor:pointer;margin-left:auto" title="Replace document">
           <i class="fa-solid fa-upload"></i> Re-upload
-          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="_reuploadTicketFile(event,${JSON.stringify(tkt.id)})">
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange='_reuploadTicketFile(event,${JSON.stringify(tkt.id)})'>
         </label>
       </div>
     </div>` : ''}
