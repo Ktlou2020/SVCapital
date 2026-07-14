@@ -443,7 +443,7 @@ function updateCalculator() {
   const max = parseInt(sliderEl.max);
   const val = parseInt(sliderEl.value);
   const pct = ((val - min) / (max - min)) * 100;
-  sliderEl.style.background = `linear-gradient(to right, #D4AF37 0%, #D4AF37 ${pct}%, #243040 ${pct}%, #243040 100%)`;
+  sliderEl.style.background = `linear-gradient(to right, #fec24f 0%, #fec24f ${pct}%, #243040 ${pct}%, #243040 100%)`;
 
   // Update chart
   updateCalcChart(amount, returnsEarned, product);
@@ -489,11 +489,11 @@ function updateCalcChart(amount, totalReturns, product) {
           data: returnsData,
           backgroundColor: (ctx) => {
             const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 180);
-            gradient.addColorStop(0, 'rgba(212,175,55,0.9)');
-            gradient.addColorStop(1, 'rgba(212,175,55,0.3)');
+            gradient.addColorStop(0, 'rgba(254,194,79,0.9)');
+            gradient.addColorStop(1, 'rgba(254,194,79,0.3)');
             return gradient;
           },
-          borderColor: '#D4AF37',
+          borderColor: '#fec24f',
           borderWidth: 1,
           borderRadius: 4,
         }
@@ -515,7 +515,7 @@ function updateCalcChart(amount, totalReturns, product) {
           backgroundColor: 'rgba(13,17,23,0.95)',
           titleColor: '#f0f4f8',
           bodyColor: '#8ea3b8',
-          borderColor: 'rgba(212,175,55,0.3)',
+          borderColor: 'rgba(254,194,79,0.3)',
           borderWidth: 1,
           callbacks: {
             label: (ctx) => ` ${ctx.dataset.label}: ${formatRand(ctx.parsed.y)}`

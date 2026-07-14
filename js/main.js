@@ -538,7 +538,7 @@ function updateCalculator() {
   const max = parseInt(sliderEl.max);
   const val = parseInt(sliderEl.value);
   const pct = ((val - min) / (max - min)) * 100;
-  sliderEl.style.background = `linear-gradient(to right, #D4AF37 0%, #D4AF37 ${pct}%, #243040 ${pct}%, #243040 100%)`;
+  sliderEl.style.background = `linear-gradient(to right, #fec24f 0%, #fec24f ${pct}%, #243040 ${pct}%, #243040 100%)`;
 
   // Update chart
   updateCalcChart(amount, returnsEarned, product);
