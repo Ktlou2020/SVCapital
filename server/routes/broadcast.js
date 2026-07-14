@@ -11,36 +11,47 @@ const smsService  = require('../services/sms');
 const pushService = require('../services/pushService');
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const FROM = process.env.FROM_EMAIL || 'SV Capital <noreply@svcapital.co.za>';
-const BATCH_SIZE = 50;
+const FROM          = process.env.FROM_EMAIL || 'SV Capital <noreply@svcapital.co.za>';
+const BASE_URL      = process.env.BASE_URL   || 'https://platform.svcapital.co.za';
+const BATCH_SIZE    = 50;
 
 /* ── Auth guard: admin + director only ─────────────────────── */
 router.use(requireAuth, requireRole('admin', 'director'));
+
+/* ── Shared email wrapper — matches transactional email template ─── */
+function _wrapBroadcast(message) {
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#222}
+.shell{max-width:580px;margin:32px auto;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 6px 32px rgba(0,0,0,.10)}
+.hdr{background:linear-gradient(135deg,#303030 0%,#303030 100%);padding:30px 40px;text-align:center}
+.logo img{height:48px;width:auto;object-fit:contain;display:block;margin:0 auto}
+.bdy{padding:38px 40px;font-size:0.95rem;color:#444;line-height:1.7;white-space:pre-wrap}
+.ftr{background:#f7f9fc;border-top:1px solid #eee;padding:18px 40px;text-align:center;font-size:0.76rem;color:#aaa}
+.ftr a{color:#ff9b0c;text-decoration:none}
+@media(max-width:600px){.bdy,.hdr,.ftr{padding:24px 20px}}
+</style></head><body>
+<div class="shell">
+  <div class="hdr"><div class="logo"><img src="${BASE_URL}/assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" /></div></div>
+  <div class="bdy">${message.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+  <div class="ftr">SV Capital (Pty) Ltd &nbsp;·&nbsp; <a href="${BASE_URL}">platform.svcapital.co.za</a><br>
+  This is a broadcast message from the SV Capital team.</div>
+</div></body></html>`;
+}
 
 /* ── Helper: send one email via Resend ──────────────────────── */
 async function _sendEmail(to, subject, message) {
   if (!RESEND_API_KEY || !to) return { ok: false, reason: 'no_key_or_email' };
   try {
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;padding:32px">
-<div style="max-width:580px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
-  <div style="background:linear-gradient(135deg,#303030,#303030);padding:28px 36px;text-align:center">
-    <div style="font-size:1.4rem;font-weight:800;color:#ff9b0c">SV <span style="color:#fff">Capital</span></div>
-  </div>
-  <div style="padding:36px">
-    <div style="font-size:0.95rem;color:#333;line-height:1.7;white-space:pre-wrap">${message.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-  </div>
-  <div style="background:#f7f9fc;border-top:1px solid #eee;padding:16px 36px;text-align:center;font-size:0.74rem;color:#aaa">
-    SV Capital (Pty) Ltd &nbsp;·&nbsp; This is a broadcast message from the SV Capital team.
-  </div>
-</div></body></html>`;
-
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from: FROM, to: [to], subject, html }),
+      body: JSON.stringify({ from: FROM, to: [to], subject, html: _wrapBroadcast(message) }),
     });
     return r.ok ? { ok: true } : { ok: false, reason: await r.text() };
   } catch (err) {

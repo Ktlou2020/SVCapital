@@ -3913,15 +3913,31 @@ async function viewTicket(id) {
         if (!await Confirm.ask(approve ? 'Approve EFT Deposit' : 'Decline EFT Deposit', { body: confirmMsg, confirmLabel: approve ? 'Approve & Credit' : 'Decline', danger: !approve })) return;
         try {
           if (approve) {
-            await API.transactions.create({
-              id:          Utils.genId('TXN'),
-              investor_id: tkt.investor_id,
-              type:        'deposit',
-              amount:      amount,
-              status:      'completed',
-              description: `EFT wallet top-up approved by admin. Ref: ${ref}`,
-              reference:   ref,
-            });
+            // The portal pre-creates a pending transaction when the investor submits EFT proof.
+            // Updating it (not inserting) avoids a UNIQUE constraint violation on `reference`.
+            let pendingTxn = null;
+            try {
+              const existing = await API._fetch('GET', `tables/transactions?investor_id=${encodeURIComponent(tkt.investor_id)}&reference=${encodeURIComponent(ref)}`);
+              pendingTxn = Array.isArray(existing) ? existing.find(t => t.reference === ref && t.type === 'deposit') : null;
+            } catch (_) {}
+
+            if (pendingTxn) {
+              await API._fetch('PATCH', `tables/transactions/${pendingTxn.id}`, {
+                status:      'completed',
+                amount:      amount,
+                description: `EFT wallet top-up approved by admin. Ref: ${ref}`,
+              });
+            } else {
+              await API.transactions.create({
+                id:          Utils.genId('TXN'),
+                investor_id: tkt.investor_id,
+                type:        'deposit',
+                amount:      amount,
+                status:      'completed',
+                description: `EFT wallet top-up approved by admin. Ref: ${ref}`,
+                reference:   ref,
+              });
+            }
           }
           await API.tickets.update(id, {
             status:         'resolved',
