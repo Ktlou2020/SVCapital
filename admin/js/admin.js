@@ -1994,6 +1994,72 @@ async function viewBankProof(investorId) {
   }
 }
 
+async function _runBankAutoVerify(investorId) {
+  const resultEl = document.getElementById('bankVerifyResult');
+  const btn      = document.getElementById('bankAutoVerifyBtn');
+  if (!resultEl || !btn) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying…';
+  resultEl.innerHTML = '<span style="color:var(--text-muted);font-size:0.82rem"><i class="fa-solid fa-spinner fa-spin"></i> Sending document to AI for analysis…</span>';
+
+  try {
+    const r = await API._fetch('POST', `admin/bank-verify/${investorId}`, {});
+
+    const verdictCfg = {
+      match:       { icon: 'fa-circle-check',   color: '#22c55e', label: 'Details Match',          bg: 'rgba(34,197,94,0.08)',   border: 'rgba(34,197,94,0.25)'   },
+      partial:     { icon: 'fa-circle-exclamation', color: '#f59e0b', label: 'Partial Match',      bg: 'rgba(245,158,11,0.08)',  border: 'rgba(245,158,11,0.25)'  },
+      mismatch:    { icon: 'fa-circle-xmark',   color: '#ef4444', label: 'Details Do Not Match',   bg: 'rgba(239,68,68,0.08)',   border: 'rgba(239,68,68,0.25)'   },
+      unreadable:  { icon: 'fa-file-circle-question', color: '#9ca3af', label: 'Document Unreadable', bg: 'rgba(156,163,175,0.08)', border: 'rgba(156,163,175,0.25)' },
+    };
+    const vc = verdictCfg[r.verdict] || verdictCfg.unreadable;
+
+    const rows = Object.entries(r.checks || {}).map(([, c]) => {
+      const statusIcon = c.status === 'match'    ? '<i class="fa-solid fa-check" style="color:#22c55e"></i>'
+                       : c.status === 'mismatch' ? '<i class="fa-solid fa-xmark" style="color:#ef4444"></i>'
+                       : '<i class="fa-solid fa-minus" style="color:#9ca3af"></i>';
+      const extracted = c.extracted || '<span style="color:#9ca3af;font-style:italic">not found</span>';
+      return `<tr>
+        <td style="padding:5px 8px;font-weight:600;white-space:nowrap">${_esc(c.label)}</td>
+        <td style="padding:5px 8px">${_esc(c.submitted || '—')}</td>
+        <td style="padding:5px 8px">${typeof extracted === 'string' && extracted.startsWith('<') ? extracted : _esc(extracted)}</td>
+        <td style="padding:5px 8px;text-align:center">${statusIcon}</td>
+      </tr>`;
+    }).join('');
+
+    resultEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${vc.bg};border:1px solid ${vc.border};border-radius:8px;margin-bottom:10px">
+        <i class="fa-solid ${vc.icon}" style="color:${vc.color};font-size:1.1rem"></i>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:0.85rem;color:${vc.color}">${vc.label}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Confidence: ${r.confidence ?? '—'}% · Doc: ${_esc(r.docName || 'proof_of_bank')}</div>
+        </div>
+        ${r.verdict === 'match' || r.verdict === 'partial'
+          ? `<button class="btn btn--success btn--sm" onclick="document.getElementById('ticketApproveBtn')?.click()"><i class="fa-solid fa-check"></i> Approve</button>`
+          : r.verdict === 'mismatch'
+          ? `<button class="btn btn--danger btn--sm" onclick="document.getElementById('ticketDeclineBtn')?.click()"><i class="fa-solid fa-xmark"></i> Decline</button>`
+          : ''}
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+          <thead><tr style="border-bottom:1px solid var(--border);color:var(--text-muted)">
+            <th style="padding:4px 8px;text-align:left;font-weight:700">Field</th>
+            <th style="padding:4px 8px;text-align:left;font-weight:700">Submitted</th>
+            <th style="padding:4px 8px;text-align:left;font-weight:700">In Document</th>
+            <th style="padding:4px 8px;text-align:center;font-weight:700">✓</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  } catch (e) {
+    const msg = e.message || 'Unknown error';
+    resultEl.innerHTML = `<div style="color:#ef4444;font-size:0.82rem"><i class="fa-solid fa-triangle-exclamation"></i> ${_esc(msg)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-robot"></i> Auto-Verify';
+  }
+}
+
 function viewFicaDocument(kycId) {
   const doc = STATE.kyc.find(k => k.id === kycId);
   if (!doc) return;
@@ -3856,6 +3922,16 @@ async function viewTicket(id) {
           <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange='_reuploadTicketFile(event,${JSON.stringify(tkt.id)})'>
         </label>
       </div>
+    </div>` : ''}
+    ${isBankVerification && tkt.investor_id ? `<div class="panel mb-12" style="border:1.5px solid rgba(99,102,241,0.25)">
+      <div class="panel__header" style="background:rgba(99,102,241,0.07);display:flex;align-items:center;gap:10px">
+        <span class="panel__title"><i class="fa-solid fa-building-columns" style="color:#6366f1;margin-right:6px"></i>Proof of Bank Account</span>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <button class="btn btn--secondary btn--sm" onclick='viewBankProof(${JSON.stringify(tkt.investor_id)})'><i class="fa-solid fa-eye"></i> View Document</button>
+          <button class="btn btn--secondary btn--sm" id="bankAutoVerifyBtn" onclick='_runBankAutoVerify(${JSON.stringify(tkt.investor_id)})'><i class="fa-solid fa-robot"></i> Auto-Verify</button>
+        </div>
+      </div>
+      <div id="bankVerifyResult" style="padding:12px 16px;font-size:0.82rem;color:var(--text-muted)">Click <strong>Auto-Verify</strong> to check if the uploaded document matches the submitted details.</div>
     </div>` : ''}
     ${showActionBtns ? `<div style="display:flex;gap:10px;margin-bottom:16px;padding:12px;background:${isPaymentProof ? 'rgba(34,197,94,0.06)' : 'rgba(99,102,241,0.06)'};border-radius:8px;border:1px solid ${isPaymentProof ? 'rgba(34,197,94,0.2)' : 'rgba(99,102,241,0.15)'}">
       <div style="flex:1">
