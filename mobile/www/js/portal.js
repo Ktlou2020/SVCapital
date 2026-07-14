@@ -3579,8 +3579,8 @@ async function renderProductDetailView(type) {
   // Live data panels: cattle herd status / solar telematics
   const isSolar = (type || '').startsWith('solar');
   const herdSlot = type === 'cattle'
-    ? '<div id="prodHerdStatus" style="margin-bottom:16px"></div>'
-    : (isSolar ? '<div id="prodSolarStatus" style="margin-bottom:16px"></div>' : '');
+    ? '<div id="prodHerdStatus" style="margin-top:20px;margin-bottom:16px"></div>'
+    : (isSolar ? '<div id="prodSolarStatus" style="margin-top:20px;margin-bottom:16px"></div>' : '');
 
   grid.innerHTML = `
     <div style="grid-column:1/-1">
