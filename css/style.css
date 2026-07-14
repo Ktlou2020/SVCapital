@@ -1974,7 +1974,7 @@ section { position: relative; padding: 100px 0; }
    FINAL CTA
    ═══════════════════════════════════════════════ */
 .final-cta {
-  background: linear-gradient(135deg, #0d1117 0%, #303030 50%, #0d1117 100%);
+  background: linear-gradient(135deg, #111111 0%, #303030 50%, #111111 100%);
   text-align: center;
   overflow: hidden;
   padding: 120px 0;
@@ -1990,7 +1990,7 @@ section { position: relative; padding: 100px 0; }
   position: absolute;
   width: 600px;
   height: 600px;
-  background: radial-gradient(circle, rgba(212,175,55,0.12) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(254,194,79,0.12) 0%, transparent 70%);
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -2064,8 +2064,8 @@ section { position: relative; padding: 100px 0; }
    FOOTER
    ═══════════════════════════════════════════════ */
 .footer {
-  background: var(--black);
-  border-top: 1px solid var(--border);
+  background: #1a1a1a;
+  border-top: 1px solid rgba(255,255,255,0.08);
   padding: 60px 0 32px;
 }
 
