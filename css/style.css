@@ -1326,6 +1326,8 @@ section { position: relative; padding: 100px 0; }
   background: var(--dark-3);
   border-radius: var(--radius);
   padding: 16px;
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .calc-disclaimer {
