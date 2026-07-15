@@ -532,6 +532,12 @@
   <script>
     window.__SVC_NATIVE__ = true;
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
+    // Pre-warm Railway server the instant the login page opens so it's awake by
+    // the time the user submits their credentials. A single lightweight request
+    // (products are public) is enough to end Railway's sleep cycle.
+    (function() {
+      fetch(window.__SVC_API_BASE__ + 'products', { method: 'GET', credentials: 'include' }).catch(function(){});
+    })();
   </script>
 </head>
 <body>
@@ -749,12 +755,12 @@
         const redirectMap = {
           admin:        'admin/index.html',
           director:     'admin/index.html',
-          investor:     'portal/',
+          investor:     'index.html',
           ifa:          'ifa/index.html',
           fund_manager: 'fund/index.html',
           staff:        'team/hub.html',
         };
-        window.location.replace(redirectMap[payload.role] || 'portal/');
+        window.location.replace(redirectMap[payload.role] || 'index.html');
       }
     } catch (_) {}
   })();
@@ -934,11 +940,23 @@
 
       // Save for biometric re-login
       if (window.__SVC_NATIVE__) {
-        localStorage.setItem('svc_bio_token', JSON.stringify({ token: data.token, user: data.user, redirect: data.redirect || '/portal/' }));
+        const bioRedirect = data.user?.role === 'investor' ? 'index.html' : (data.redirect || 'index.html');
+        localStorage.setItem('svc_bio_token', JSON.stringify({ token: data.token, user: data.user, redirect: bioRedirect }));
       }
 
-      btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
-      setTimeout(() => { window.location.href = data.redirect || 'portal/'; }, 350);
+      // For investors: pre-populate the portal cache right now so the portal
+      // opens to instant data. The login API call already woke the Railway server
+      // so these requests complete quickly (no cold-start wait in the portal).
+      if (data.user?.role === 'investor') {
+        btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Loading your portfolio…';
+        await _preCachePortalData(data.token);
+        btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Ready!';
+        // Go directly to the portal root — skips the portal/ redirect stub
+        setTimeout(() => { window.location.href = 'index.html'; }, 200);
+      } else {
+        btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
+        setTimeout(() => { window.location.href = data.redirect || 'index.html'; }, 350);
+      }
     } catch (err) {
       btn.disabled = false; btn.classList.remove('loading');
       btnText.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In';
@@ -958,7 +976,7 @@
       const data = JSON.parse(saved);
       localStorage.setItem('svc_token', data.token);
       localStorage.setItem('svc_user', JSON.stringify(data.user));
-      window.location.href = data.redirect || '/portal/';
+      window.location.href = data.redirect || 'index.html';
     } catch (err) {
       showError('Biometric authentication failed. Please sign in with your password.');
     }
@@ -987,8 +1005,15 @@
       localStorage.setItem('svc_user',  JSON.stringify(data.user));
       const savedLoginEmail = document.getElementById('emailInput')?.value?.trim().toLowerCase();
       if (savedLoginEmail) localStorage.setItem('svc_last_login_email', savedLoginEmail);
-      btn.textContent = 'Verified ✓';
-      setTimeout(() => { window.location.href = data.redirect || 'portal/'; }, 350);
+      if (data.user?.role === 'investor') {
+        btn.textContent = 'Loading portfolio…';
+        await _preCachePortalData(data.token);
+        btn.textContent = 'Verified ✓';
+        setTimeout(() => { window.location.href = 'index.html'; }, 200);
+      } else {
+        btn.textContent = 'Verified ✓';
+        setTimeout(() => { window.location.href = data.redirect || 'index.html'; }, 350);
+      }
     } catch (err) {
       btn.disabled = false; btn.textContent = 'Verify Code';
       if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }
@@ -999,6 +1024,48 @@
     _pending2FAToken = null;
     document.getElementById('twoFAStep').style.display = 'none';
     document.getElementById('loginForm').style.display = 'block';
+  }
+
+  // Pre-fetch and cache the investor's portal data immediately after login so
+  // the portal view opens to instant data rather than a blank loading screen.
+  // The login request already woke Railway, so these parallel calls complete fast.
+  async function _preCachePortalData(token) {
+    const base = window.__SVC_API_BASE__ || 'https://svcapital-production.up.railway.app/api/';
+    const headers = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
+    const controller = new AbortController();
+    const tId = setTimeout(function() { controller.abort(); }, 16000);
+    var sig = controller.signal;
+    function get(path) {
+      return fetch(base + path, { headers: headers, credentials: 'include', signal: sig })
+        .then(function(r) { return r.ok ? r.json() : { data: [] }; })
+        .catch(function() { return { data: [] }; });
+    }
+    try {
+      var results = await Promise.all([
+        get('tables/investors?limit=100'),
+        get('tables/investments?limit=200'),
+        get('tables/transactions?limit=200'),
+        get('products'),
+      ]);
+      clearTimeout(tId);
+      var investors    = (results[0] && Array.isArray(results[0].data))  ? results[0].data : [];
+      var investments  = (results[1] && Array.isArray(results[1].data))  ? results[1].data : [];
+      var transactions = (results[2] && Array.isArray(results[2].data))  ? results[2].data : [];
+      var prodData     = results[3];
+      var products     = (prodData && Array.isArray(prodData.data)) ? prodData.data : (Array.isArray(prodData) ? prodData : []);
+      localStorage.setItem('svc_portal_cache', JSON.stringify({
+        cachedAt:     Date.now(),
+        investor:     investors[0] || null,
+        investments:  investments,
+        transactions: transactions,
+        pools:        [],
+        waitlist:     [],
+        products:     products,
+      }));
+    } catch (_) {
+      clearTimeout(tId);
+      // Cache failed — portal will load normally on first open
+    }
   }
 </script>
 <script>
