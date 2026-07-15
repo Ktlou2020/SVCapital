@@ -6,10 +6,10 @@
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
   <link rel="apple-touch-icon" sizes="192x192" href="assets/logo-192.png" />
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SV Capital — Sign In</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -19,8 +19,8 @@
       --orange-light:   #FF9B0C;
       --orange-pale:    rgba(255,130,21,0.08);
       --orange-shadow:  0 8px 32px rgba(255,130,21,0.25);
-      --teal:           #656565;
-      --teal-dark:      #656565;
+      --teal:           #2F8C9B;
+      --teal-dark:      #1E6E7A;
       --green:          #22C55E;
       --text-h:         #1a1a1a;
       --text-body:      #303030;
@@ -35,8 +35,8 @@
       --radius:         12px;
       --radius-lg:      18px;
       --radius-xl:      24px;
-      --font:           'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
-      --serif:          'Poppins', Georgia, serif;
+      --font:           'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --serif:          'DM Serif Display', Georgia, serif;
       --ease:           0.25s cubic-bezier(0.4,0,0.2,1);
     }
 
@@ -60,7 +60,7 @@
     /* ─── Left Panel (Brand) ─── */
     .login-left {
       flex: 1;
-      background: linear-gradient(145deg, #2a2a2a 0%, #1a1a1a 60%, #222222 100%);
+      background: linear-gradient(145deg, #1a3a4a 0%, #0d2535 60%, #162030 100%);
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -86,7 +86,7 @@
       position: absolute;
       bottom: -80px; left: -80px;
       width: 400px; height: 400px;
-      background: radial-gradient(circle, rgba(101,101,101,0.10) 0%, transparent 65%);
+      background: radial-gradient(circle, rgba(47,140,155,0.12) 0%, transparent 65%);
       border-radius: 50%;
       pointer-events: none;
     }
@@ -99,7 +99,7 @@
       opacity: 0.06;
     }
     .login-deco--1 { width: 280px; height: 280px; border: 2px solid rgba(255,155,12,1); top: 10%; right: 5%; }
-    .login-deco--2 { width: 160px; height: 160px; border: 2px solid rgba(255,255,255,1); bottom: 15%; right: 15%; opacity: 0.1; }
+    .login-deco--2 { width: 160px; height: 160px; border: 2px solid rgba(47,140,155,1); bottom: 15%; right: 15%; opacity: 0.1; }
 
     .login-left__content {
       position: relative;
@@ -116,8 +116,9 @@
     }
 
     .login-brand img {
-      height: 64px;
-      width: auto;
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
     }
 
     .login-brand__name {
@@ -229,7 +230,7 @@
 
     .login-product-tag--cattle  { background: rgba(217,119,6,0.15);  color: #F59E0B; border: 1px solid rgba(217,119,6,0.25);  }
     .login-product-tag--solar   { background: rgba(234,88,12,0.12);  color: #FB923C; border: 1px solid rgba(234,88,12,0.20);  }
-    .login-product-tag--smme    { background: rgba(37,99,235,0.12);  color: #656565; border: 1px solid rgba(37,99,235,0.20);  }
+    .login-product-tag--smme    { background: rgba(37,99,235,0.12);  color: #60A5FA; border: 1px solid rgba(37,99,235,0.20);  }
 
     /* FSCA badge */
     .login-fsca {
@@ -336,9 +337,6 @@
       font-family: var(--font);
       transition: all var(--ease);
       outline: none;
-      -webkit-appearance: none;
-      appearance: none;
-      box-sizing: border-box;
     }
 
     .form-input:focus {
@@ -352,23 +350,17 @@
     }
 
     .form-input-wrap .form-input {
-      padding-left: 48px !important;
-    }
-    /* Higher specificity to survive mobile-app.css !important padding resets on iOS/Android */
-    .form-input-wrap input,
-    .form-input-wrap input.form-input {
-      padding-left: 48px !important;
+      padding-left: 42px;
     }
 
     .form-input-icon {
       position: absolute;
-      left: 16px;
+      left: 14px;
       top: 50%;
       transform: translateY(-50%);
       color: var(--text-dim);
       font-size: 0.85rem;
       pointer-events: none;
-      z-index: 1;
     }
 
     .form-input-toggle {
@@ -386,9 +378,6 @@
     }
 
     .form-input-toggle:hover { color: var(--orange); }
-
-    /* Biometric button — permanently removed */
-    #biometricBtn, .btn-biometric, [onclick*="loginWithBiometric"] { display: none !important; }
 
     /* Submit button */
     .btn-login {
@@ -539,21 +528,10 @@
     });
   </script>
   <script src="/js/analytics.js"></script>
-
-  <!-- ── Capacitor native config injected by build.js ── -->
+  <!-- ── Capacitor native config ── -->
   <script>
     window.__SVC_NATIVE__ = true;
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
-  </script>
-  <script src="/js/native.js"></script>
-  <link rel="stylesheet" href="/css/mobile-app.css?v=14">
-  <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
-  <script>
-  (function(){
-    var s=document.createElement('style');
-    s.textContent='@keyframes viewFadeIn{from{opacity:1;transform:none}to{opacity:1;transform:none}}@-webkit-keyframes viewFadeIn{from{opacity:1;transform:none}to{opacity:1;transform:none}}.view{animation:none!important;-webkit-animation:none!important;transform:none!important}.view.active{animation:none!important;-webkit-animation:none!important;opacity:1!important;transform:none!important}';
-    document.head.appendChild(s);
-  })();
   </script>
 </head>
 <body>
@@ -568,7 +546,11 @@
 
       <!-- Brand -->
       <div class="login-brand">
-        <img src="assets/full-colour-logo-horizontal-white-text.png" alt="SV Capital logo">
+        <img src="assets/logo.png" alt="SV Capital logo">
+        <div>
+          <div class="login-brand__name">SV Capital</div>
+          <div class="login-brand__tagline">Investments that make sense</div>
+        </div>
       </div>
 
       <!-- Hero -->
@@ -597,6 +579,13 @@
         </div>
       </div>
 
+      <!-- Products -->
+      <div style="margin-bottom:12px;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:700">Available Investment Products</div>
+      <div class="login-products">
+        <span class="login-product-tag login-product-tag--cattle">Cattle Finance</span>
+        <span class="login-product-tag login-product-tag--solar">Solar Energy</span>
+        <span class="login-product-tag login-product-tag--smme">SMME Short-Term</span>
+      </div>
 
       <!-- FSCA -->
       <div class="login-fsca">
@@ -654,15 +643,14 @@
         <button type="submit" class="btn-login" id="loginBtn">
           <span id="loginBtnText"><i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In</span>
         </button>
+        <button type="button" class="btn-biometric" id="biometricBtn" style="display:none;width:100%;padding:12px;margin-top:8px;background:transparent;border:1.5px solid rgba(255,155,12,0.3);border-radius:10px;color:#FF9B0C;font-size:0.9rem;font-weight:600;cursor:pointer;align-items:center;justify-content:center;gap:8px" onclick="loginWithBiometric()">
+          <i class="fa-solid fa-fingerprint" style="font-size:1.1rem"></i>
+          Sign in with Face ID / Fingerprint
+        </button>
 
         <div class="login-links">
           <a href="#" class="login-link" onclick="showForgotPassword(event)">Forgot password?</a>
           <a href="index.html" class="login-link"><i class="fa-solid fa-arrow-left" style="font-size:0.7rem;margin-right:4px"></i>Back to website</a>
-        </div>
-
-        <div style="text-align:center;margin-top:20px;padding-top:18px;border-top:1px solid rgba(0,0,0,0.08)">
-          <span style="font-size:0.85rem;color:#656565">Don't have an account?</span>
-          <a href="signup.html" style="font-size:0.85rem;font-weight:700;color:#ff9b0c;margin-left:6px;text-decoration:none">Create account <i class="fa-solid fa-arrow-right" style="font-size:0.7rem"></i></a>
         </div>
       </form>
 
@@ -670,7 +658,7 @@
       <div id="twoFAStep" style="display:none">
         <div style="text-align:center;margin-bottom:20px">
           <i class="fa-solid fa-mobile-screen-button" style="font-size:2rem;color:#FF9B0C;margin-bottom:10px;display:block"></i>
-          <div style="font-size:1rem;font-weight:700;color:#303030">Two-Factor Authentication</div>
+          <div style="font-size:1rem;font-weight:700;color:#1a2235">Two-Factor Authentication</div>
           <div style="font-size:0.82rem;color:#6b7280;margin-top:6px">Enter the 6-digit code from your authenticator app</div>
         </div>
         <div style="margin-bottom:14px">
@@ -725,14 +713,8 @@
 
       <!-- Footer -->
       <div class="login-footer">
-        <a href="https://www.svcapital.co.za" target="_blank" rel="noopener">www.svcapital.co.za</a>
-        <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:6px">
-          <a href="https://www.svcapital.co.za/terms.html" target="_blank" rel="noopener">Terms of Use</a>
-          <a href="https://www.svcapital.co.za/popia.html" target="_blank" rel="noopener">Privacy Policy</a>
-          <a href="https://www.svcapital.co.za/paia.html" target="_blank" rel="noopener">PAIA Manual</a>
-          <a href="https://www.svcapital.co.za/complaints.html" target="_blank" rel="noopener">Complaints</a>
-        </div>
-        <div class="login-footer__copy">© <span class="yr"></span> SmartVest Financial Services (Pty) Ltd. All rights reserved.</div>
+        <a href="index.html">www.svcapital.co.za</a>
+        <div class="login-footer__copy">© 2025 SmartVest Financial Services (Pty) Ltd. All rights reserved.</div>
       </div>
 
     </div>
@@ -740,7 +722,6 @@
 
 </div>
 
-<script>document.querySelectorAll('.yr').forEach(function(e){e.textContent=new Date().getFullYear();});</script>
 <script src="js/api.js?v=2"></script>
 <script>
   'use strict';
@@ -924,11 +905,6 @@
 
   let _pending2FAToken = null;
 
-  function _isNetworkError(err) {
-    const m = (err && err.message) || '';
-    return m === 'Load failed' || m === 'Failed to fetch' || m.toLowerCase().includes('network') || m.toLowerCase().includes('timeout');
-  }
-
   async function handleLogin(e) {
     e.preventDefault();
     const email    = document.getElementById('emailInput').value.toLowerCase().trim();
@@ -939,27 +915,8 @@
     errorEl.classList.remove('show');
     btn.disabled = true; btn.classList.add('loading');
     btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Signing in…';
-
-    const _doLogin = () => fetch((window.__SVC_API_BASE__ || '/api/') + 'auth/login', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      credentials: 'include', body: JSON.stringify({ email, password })
-    });
-
     try {
-      let res;
-      try {
-        res = await _doLogin();
-      } catch (firstErr) {
-        if (_isNetworkError(firstErr)) {
-          // Railway cold start can take ~8s — retry once after a short wait
-          btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Server waking up…';
-          await new Promise(r => setTimeout(r, 5000));
-          btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Signing in…';
-          res = await _doLogin();
-        } else {
-          throw firstErr;
-        }
-      }
+      const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ email, password }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Invalid credentials.');
       if (data.requires2FA) {
@@ -975,34 +932,45 @@
       localStorage.setItem('svc_user',  JSON.stringify(data.user));
       localStorage.setItem('svc_last_login_email', email);
 
-      // Save for biometric re-login — always use the native redirect path
+      // Save for biometric re-login
       if (window.__SVC_NATIVE__) {
-        localStorage.setItem('svc_bio_token', JSON.stringify({ token: data.token, user: data.user, redirect: '/index.html' }));
+        localStorage.setItem('svc_bio_token', JSON.stringify({ token: data.token, user: data.user, redirect: data.redirect || '/portal/' }));
       }
 
       btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
-      // On native Android, bypass the /portal/ → / redirect chain and go straight
-      // to index.html. The extra navigation triggers a second native.js load which
-      // re-fires initPush() before Firebase is ready, crashing the app.
-      const dest = window.__SVC_NATIVE__ ? '/index.html' : (data.redirect || 'portal/');
-      setTimeout(() => { window.location.href = dest; }, 350);
+      setTimeout(() => { window.location.href = data.redirect || 'portal/'; }, 350);
     } catch (err) {
       btn.disabled = false; btn.classList.remove('loading');
       btnText.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In';
-      showError(_isNetworkError(err) ? 'Unable to connect to SV Capital. Please check your connection and try again.' : (err.message || 'Login failed. Please try again.'));
+      showError(err.message || 'Login failed. Please try again.');
     }
   }
 
-  function _jwtExpired(token) {
+  async function loginWithBiometric() {
+    const saved = localStorage.getItem('svc_bio_token');
+    if (!saved) { showError('Please sign in with your password first to enable biometric login.'); return; }
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      return !!(payload.exp && payload.exp * 1000 < Date.now());
-    } catch { return true; }
+      // Use Capacitor NativeBiometric if available
+      if (window.Capacitor && window.Capacitor.Plugins.NativeBiometric) {
+        await window.Capacitor.Plugins.NativeBiometric.verifyIdentity({ reason: 'Sign in to SV Capital', title: 'Biometric Login', subtitle: 'Use Face ID or fingerprint' });
+      }
+      // Token validated — proceed
+      const data = JSON.parse(saved);
+      localStorage.setItem('svc_token', data.token);
+      localStorage.setItem('svc_user', JSON.stringify(data.user));
+      window.location.href = data.redirect || '/portal/';
+    } catch (err) {
+      showError('Biometric authentication failed. Please sign in with your password.');
+    }
   }
 
-  // Biometric login removed — function kept as no-op so old cached HTML doesn't throw
-  function loginWithBiometric() { return; }
-
+  // Show biometric button if native and token saved
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('biometricBtn');
+    if (btn && window.__SVC_NATIVE__ && localStorage.getItem('svc_bio_token')) {
+      btn.style.display = 'flex';
+    }
+  });
 
   function show2FAStep() {
     document.getElementById('loginForm').style.display = 'none';
@@ -1026,13 +994,10 @@
       const savedLoginEmail = document.getElementById('emailInput')?.value?.trim().toLowerCase();
       if (savedLoginEmail) localStorage.setItem('svc_last_login_email', savedLoginEmail);
       btn.textContent = 'Verified ✓';
-      const dest2fa = window.__SVC_NATIVE__ ? '/index.html' : (data.redirect || 'portal/');
-      setTimeout(() => { window.location.href = dest2fa; }, 350);
+      setTimeout(() => { window.location.href = data.redirect || 'portal/'; }, 350);
     } catch (err) {
       btn.disabled = false; btn.textContent = 'Verify Code';
-      const _m = err.message || '';
-      const _ne = _m === 'Load failed' || _m === 'Failed to fetch' || _m.toLowerCase().includes('network');
-      if (errEl) { errEl.textContent = _ne ? 'Unable to connect. Please check your connection.' : (_m || 'Verification failed.'); errEl.style.display = 'block'; }
+      if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }
     }
   }
 
@@ -1050,11 +1015,6 @@
       loginForm.addEventListener('submit', function() {
         if (window.SVC) SVC.track('svc_login_attempted', {});
       });
-    }
-    // Auto-open forgot panel when redirected from the reset-password error page
-    if (sessionStorage.getItem('openForgot') === '1' || location.hash === '#forgot') {
-      sessionStorage.removeItem('openForgot');
-      showForgotPassword({ preventDefault: function(){} });
     }
   });
 </script>
