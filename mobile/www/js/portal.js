@@ -1344,6 +1344,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (greetEl2) greetEl2.textContent = _timeGreeting();
     const avEl = document.getElementById('welcomeAvatar');
     if (avEl) avEl.textContent = ((dispFirst[0] || '') + (lastName[0] || '')).toUpperCase() || '?';
+    // Pre-fill PORTAL.investor with identity from login cache so renderOverview()
+    // has a name to display even if the first API call fails or times out.
+    // loadPortalData() will overwrite this with the full investor record on success.
+    if (!PORTAL.investor) {
+      PORTAL.investor = {
+        id:         cached.investorId || cached.investor_id || DEMO_INVESTOR_ID,
+        first_name: firstName,
+        last_name:  lastName,
+        email:      cached.email || '',
+      };
+    }
   } catch (_) {}
 
   // Try to render from cache immediately — hides cover instantly on repeat launches.
@@ -1643,11 +1654,11 @@ function renderOverview(skipCharts) {
   const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0) + totalRet;
   const returnPct     = totalInvested > 0 ? (totalRet / totalInvested * 100).toFixed(1) : '0';
   const activeCount = PORTAL.investments.filter(i => i.status === 'active').length;
-  const firstName   = inv.first_name || 'Investor';
+  const firstName   = inv.first_name || '';
 
   // ── Topbar greeting ──────────────────────────────────────────
   const greetEl = document.getElementById('topbarGreeting');
-  if (greetEl) greetEl.textContent = `${_timeGreeting()}, ${firstName} 👋`;
+  if (greetEl && firstName) greetEl.textContent = `${_timeGreeting()}, ${firstName} 👋`;
 
   // ── Portfolio hero values ────────────────────────────────────
   // Animate portfolio hero
@@ -1682,11 +1693,16 @@ function renderOverview(skipCharts) {
   }
 
   // ── Welcome banner ───────────────────────────────────────────
-  const initials = `${(inv.first_name || '')[0] || '?'}${(inv.last_name || '')[0] || ''}`.toUpperCase();
   const avatarEl = document.getElementById('welcomeAvatar');
-  if (avatarEl) avatarEl.textContent = initials;
+  if (avatarEl && (inv.first_name || inv.last_name)) {
+    const initials = `${(inv.first_name || '')[0]}${(inv.last_name || '')[0]}`.toUpperCase();
+    if (initials) avatarEl.textContent = initials;
+  }
   const nameEl = document.getElementById('welcomeName');
-  if (nameEl) nameEl.textContent = `${inv.first_name || ''} ${inv.last_name || ''}`.trim() || 'Investor';
+  if (nameEl) {
+    const _n = `${inv.first_name || ''} ${inv.last_name || ''}`.trim();
+    if (_n) nameEl.textContent = _n;
+  }
   const greetEl2 = document.getElementById('welcomeGreeting');
   if (greetEl2) greetEl2.textContent = _timeGreeting();
   const chipId = document.getElementById('wchipIdText');
