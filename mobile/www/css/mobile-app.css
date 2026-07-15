@@ -2993,15 +2993,15 @@ input[disabled].form-input {
   border-radius: 16px !important;
 }
 .pending-section__title {
-  color: #ffffff !important;
+  color: #1a1a1a !important;
   font-size: 1rem !important;
   font-weight: 800 !important;
 }
-.pending-section__sub { color: rgba(255,255,255,0.42) !important; }
+.pending-section__sub { color: #656565 !important; }
 .pending-group__label {
   font-size: 0.76rem !important;
   font-weight: 700 !important;
-  color: rgba(255,255,255,0.50) !important;
+  color: #656565 !important;
   margin-bottom: 10px !important;
   padding: 6px 0 !important;
 }
