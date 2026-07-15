@@ -1053,6 +1053,14 @@
       var transactions = (results[2] && Array.isArray(results[2].data))  ? results[2].data : [];
       var prodData     = results[3];
       var products     = (prodData && Array.isArray(prodData.data)) ? prodData.data : (Array.isArray(prodData) ? prodData : []);
+      // Normalize investments to match the shape that loadPortalData() produces
+      investments = investments.map(function(inv) {
+        return Object.assign({}, inv, {
+          amount:           parseFloat(inv.amount || inv.investment_amount || inv.principal || 0) || 0,
+          maturity_date:    inv.end_date          || inv.maturity_date,
+          investment_date:  inv.start_date         || inv.investment_date,
+        });
+      });
       localStorage.setItem('svc_portal_cache', JSON.stringify({
         cachedAt:     Date.now(),
         investor:     investors[0] || null,

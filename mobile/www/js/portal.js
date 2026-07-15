@@ -1700,11 +1700,9 @@ function renderOverview(skipCharts) {
   }
 
   // ── Welcome banner ───────────────────────────────────────────
+  const initials = `${(inv.first_name || '')[0] || ''}${(inv.last_name || '')[0] || ''}`.toUpperCase();
   const avatarEl = document.getElementById('welcomeAvatar');
-  if (avatarEl && (inv.first_name || inv.last_name)) {
-    const initials = `${(inv.first_name || '')[0]}${(inv.last_name || '')[0]}`.toUpperCase();
-    if (initials) avatarEl.textContent = initials;
-  }
+  if (avatarEl && initials) avatarEl.textContent = initials;
   const nameEl = document.getElementById('welcomeName');
   if (nameEl) {
     const _n = `${inv.first_name || ''} ${inv.last_name || ''}`.trim();
