@@ -183,13 +183,25 @@ async function _ensureVapid() {
 
   _vapidPublicKey  = pub;
   _vapidPrivateKey = priv;
-  _vapidInitDone   = true;
 
-  webPush.setVapidDetails(
-    'mailto:admin@svcapital.co.za',
-    _vapidPublicKey,
-    _vapidPrivateKey
-  );
+  try {
+    webPush.setVapidDetails(
+      'mailto:admin@svcapital.co.za',
+      _vapidPublicKey,
+      _vapidPrivateKey
+    );
+    _vapidInitDone = true;
+  } catch (e) {
+    console.error('[pushService] setVapidDetails failed (bad keys?) — regenerating:', e.message);
+    // Keys are unusable — clear them so next call auto-generates fresh ones
+    _vapidPublicKey  = null;
+    _vapidPrivateKey = null;
+    _vapidInitDone   = false;
+    // Wipe bad keys from DB so the next request auto-generates valid ones
+    pool.query(
+      `DELETE FROM platform_settings WHERE key IN ('vapid_public_key','vapid_private_key')`
+    ).catch(() => {});
+  }
 }
 
 /* ─── Public API ─── */
