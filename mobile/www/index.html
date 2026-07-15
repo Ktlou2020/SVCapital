@@ -59,7 +59,7 @@
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
   </script>
   <script src="/js/native.js"></script>
-  <link rel="stylesheet" href="/css/mobile-app.css?v=10">
+  <link rel="stylesheet" href="/css/mobile-app.css?v=11">
   <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
   <script>
   (function(){
@@ -1559,11 +1559,9 @@
       ══════════════════════════════════ -->
       <div class="view" id="view-subaccounts">
         <div class="sa-view-header">
-          <div>
-            <div class="sa-view-title">My Accounts</div>
-            <div class="sa-view-sub">Business · Trust · Stokvel · Minor — each with their own wallet, investments and FICA</div>
-          </div>
-          <button class="btn btn--primary" onclick="openCreateSubAccountModal()">
+          <div class="sa-view-title">My Accounts</div>
+          <div class="sa-view-sub">Business · Trust · Stokvel · Minor — each with their own wallet, investments and FICA</div>
+          <button class="btn btn--primary sa-view-add-btn" onclick="openCreateSubAccountModal()">
             <i class="fa-solid fa-plus"></i> Add Account
           </button>
         </div>
@@ -1572,12 +1570,12 @@
         <div id="subacctsEmpty">
           <div class="sa-empty-intro">You don't have any sub-accounts yet. Choose a type to get started:</div>
           <div class="sa-type-showcase">
-            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#656565;--tile-bg:linear-gradient(135deg,#1a3d42,#656565)">
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#303030;--tile-bg:linear-gradient(135deg,#1a1a1a,#303030)">
               <i class="fa-solid fa-building sa-type-tile__icon"></i>
               <div class="sa-type-tile__label">Business</div>
               <div class="sa-type-tile__desc">Invest through your registered company</div>
             </div>
-            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#7c5cfc;--tile-bg:linear-gradient(135deg,#2d1d6e,#7c5cfc)">
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#eda5ff;--tile-bg:linear-gradient(135deg,#3d1280,#eda5ff)">
               <i class="fa-solid fa-scale-balanced sa-type-tile__icon"></i>
               <div class="sa-type-tile__label">Trust</div>
               <div class="sa-type-tile__desc">Grow assets in a family or business trust</div>
@@ -1587,7 +1585,7 @@
               <div class="sa-type-tile__label">Stokvel</div>
               <div class="sa-type-tile__desc">Community savings club investing together</div>
             </div>
-            <div class="sa-type-tile sa-type-tile--minor" onclick="openCreateSubAccountModal()" style="--tile-color:#ff9b0c;--tile-bg:linear-gradient(135deg,#ff5229,#ff9b0c)">
+            <div class="sa-type-tile sa-type-tile--minor" onclick="openCreateSubAccountModal()" style="--tile-color:#ff9b0c;--tile-bg:linear-gradient(135deg,#ff5229,#fec24f)">
               <i class="fa-solid fa-child-reaching sa-type-tile__icon"></i>
               <div class="sa-type-tile__label">Minor 🌟</div>
               <div class="sa-type-tile__desc">Start your child's investment journey today</div>

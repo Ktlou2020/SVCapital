@@ -1638,6 +1638,56 @@ input[disabled].form-input {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   MY ACCOUNTS — centered header, full-width CTA, CI tile colours
+   ───────────────────────────────────────────────────────────── */
+#view-subaccounts .sa-view-header {
+  flex-direction: column !important;
+  align-items: center !important;
+  text-align: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  margin-bottom: 20px !important;
+}
+#view-subaccounts .sa-view-title {
+  font-size: 1.75rem !important;
+  font-weight: 800 !important;
+  color: #1a1a1a !important;
+  line-height: 1.15 !important;
+}
+#view-subaccounts .sa-view-sub {
+  font-size: 0.84rem !important;
+  color: #6b7280 !important;
+  line-height: 1.45 !important;
+  max-width: 320px !important;
+}
+.sa-view-add-btn {
+  width: 100% !important;
+  padding: 16px 20px !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  border-radius: 14px !important;
+  margin-top: 4px !important;
+}
+.sa-type-tile {
+  min-height: 170px !important;
+  padding: 28px 18px 24px !important;
+  border-radius: 18px !important;
+}
+.sa-type-tile__icon {
+  font-size: 2.4rem !important;
+  margin-bottom: 6px !important;
+}
+.sa-type-tile__label {
+  font-size: 1.1rem !important;
+  font-weight: 800 !important;
+}
+.sa-type-tile__desc {
+  font-size: 0.76rem !important;
+  color: rgba(255,255,255,0.80) !important;
+  line-height: 1.45 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
    ACCOUNT STATEMENT — single-column layout on mobile, hide sidebar
    ───────────────────────────────────────────────────────────── */
 #stmtLayout {
