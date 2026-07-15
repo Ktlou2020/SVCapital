@@ -59,7 +59,7 @@
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
   </script>
   <script src="/js/native.js"></script>
-  <link rel="stylesheet" href="/css/mobile-app.css?v=11">
+  <link rel="stylesheet" href="/css/mobile-app.css?v=12">
   <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
   <script>
   (function(){
@@ -1542,12 +1542,11 @@
            VIEW: LEARNING HUB
       ══════════════════════════════════ -->
       <div class="view" id="view-learn">
-        <div class="learn-header">
-          <div>
-            <div class="learn-header__title">Learning Hub</div>
-            <div class="learn-header__sub" id="learnTrackLabel">Your personalised learning track</div>
-          </div>
-          <div class="learn-header__xp-note">Complete modules to earn <strong>+50 XP</strong> each</div>
+        <!-- Dark hero banner -->
+        <div class="learn-hero">
+          <div class="learn-hero__title">Learning Hub</div>
+          <div class="learn-hero__sub" id="learnTrackLabel">Your personalised learning track</div>
+          <div class="learn-hero__xp-pill">Complete modules to earn <span class="learn-hero__xp-amt">+50 XP</span> each</div>
         </div>
         <div id="learnContent">
           <!-- rendered by JS -->
@@ -2923,7 +2922,7 @@
 </nav>
 
 <script src="../js/api.js?v=3"></script>
-<script src="js/portal.js?v=9"></script>
+<script src="js/portal.js?v=10"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {

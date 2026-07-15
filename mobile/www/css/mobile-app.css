@@ -1638,6 +1638,101 @@ input[disabled].form-input {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   LEARNING HUB — dark hero banner + vertical track tab cards
+   ───────────────────────────────────────────────────────────── */
+.learn-hero {
+  background: linear-gradient(135deg, #1a1a1a 0%, #1c0d05 60%, #281200 100%) !important;
+  border-radius: 18px !important;
+  padding: 28px 22px !important;
+  margin-bottom: 20px !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+.learn-hero::after {
+  content: '' !important;
+  position: absolute !important;
+  top: -40px !important; right: -40px !important;
+  width: 180px !important; height: 180px !important;
+  background: radial-gradient(circle, rgba(255,140,20,0.28) 0%, transparent 68%) !important;
+  pointer-events: none !important;
+}
+.learn-hero__title {
+  font-size: 1.75rem !important;
+  font-weight: 900 !important;
+  color: #ffffff !important;
+  letter-spacing: -0.02em !important;
+  margin-bottom: 5px !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+.learn-hero__sub {
+  font-size: 0.83rem !important;
+  color: rgba(255,255,255,0.55) !important;
+  margin-bottom: 18px !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+.learn-hero__xp-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  background: rgba(255,255,255,0.07) !important;
+  border: 1px solid rgba(255,155,12,0.40) !important;
+  border-radius: 100px !important;
+  padding: 9px 18px !important;
+  font-size: 0.81rem !important;
+  color: rgba(255,255,255,0.80) !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+.learn-hero__xp-amt {
+  color: #ff9b0c !important;
+  font-weight: 800 !important;
+}
+
+/* Vertical card layout for track tabs */
+.learn-track-tab {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 6px !important;
+  padding: 16px 14px !important;
+  min-width: 155px !important;
+  min-height: 140px !important;
+}
+.learn-tab-recommended {
+  margin-left: 0 !important;
+  margin-bottom: 2px !important;
+  font-size: 0.58rem !important;
+}
+.learn-tab-icon-wrap {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 11px !important;
+  background: #f0f0f0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #303030 !important;
+  font-size: 1.2rem !important;
+  margin-bottom: 2px !important;
+}
+.learn-track-tab.active .learn-tab-icon-wrap {
+  background: rgba(255,155,12,0.12) !important;
+  color: #ff9b0c !important;
+}
+.learn-tab-name {
+  font-size: 0.9rem !important;
+  font-weight: 800 !important;
+  color: #1a1a1a !important;
+}
+.learn-tab-sub {
+  font-size: 0.72rem !important;
+  color: #9ca3af !important;
+  line-height: 1.35 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
    MY ACCOUNTS — centered header, full-width CTA, CI tile colours
    ───────────────────────────────────────────────────────────── */
 #view-subaccounts .sa-view-header {

@@ -6460,13 +6460,11 @@ function renderLearnView() {
   const tabs = LEARN_TRACKS.map(t => `
     <button class="learn-track-tab ${_learnActiveTrack === t.id ? 'active' : ''}"
             onclick="_setLearnTrack('${t.id}')"
-            style="${_learnActiveTrack === t.id ? `border-color:${t.color};color:${t.color}` : ''}">
-      <i class="fa-solid ${t.icon}"></i>
-      <div>
-        <div class="learn-tab-name">${t.label}</div>
-        <div class="learn-tab-sub">${t.desc}</div>
-      </div>
-      ${t.id === recommended.id ? `<span class="learn-tab-recommended">Recommended</span>` : ''}
+            style="${_learnActiveTrack === t.id ? `border-color:${t.color}` : ''}">
+      ${t.id === recommended.id ? `<span class="learn-tab-recommended">RECOMMENDED</span>` : ''}
+      <div class="learn-tab-icon-wrap"><i class="fa-solid ${t.icon}"></i></div>
+      <div class="learn-tab-name">${t.label}</div>
+      <div class="learn-tab-sub">${t.desc}</div>
     </button>`).join('');
 
   const activeTrack = LEARN_TRACKS.find(t => t.id === _learnActiveTrack) || LEARN_TRACKS[0];
