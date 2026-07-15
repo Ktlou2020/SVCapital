@@ -636,7 +636,7 @@
           <label class="form-label" for="emailInput">Email Address</label>
           <div class="form-input-wrap">
             <i class="fa-solid fa-envelope form-input-icon"></i>
-            <input type="email" id="emailInput" class="form-input" placeholder="your@email.co.za" required autocomplete="email" />
+            <input type="email" id="emailInput" class="form-input" style="padding-left:48px!important" placeholder="your@email.co.za" required autocomplete="email" />
           </div>
         </div>
 
@@ -644,7 +644,7 @@
           <label class="form-label" for="passwordInput">Password</label>
           <div class="form-input-wrap">
             <i class="fa-solid fa-lock form-input-icon"></i>
-            <input type="password" id="passwordInput" class="form-input" placeholder="Enter your password" required autocomplete="current-password" />
+            <input type="password" id="passwordInput" class="form-input" style="padding-left:48px!important" placeholder="Enter your password" required autocomplete="current-password" />
             <button type="button" class="form-input-toggle" id="pwToggle" onclick="togglePassword()">
               <i class="fa-solid fa-eye" id="pwEyeIcon"></i>
             </button>
@@ -1000,47 +1000,8 @@
     } catch { return true; }
   }
 
-  async function loginWithBiometric() {
-    const saved = localStorage.getItem('svc_bio_token');
-    if (!saved) { showError('Please sign in with your password first to enable biometric login.'); return; }
-    try {
-      if (window.Capacitor && window.Capacitor.Plugins.NativeBiometric) {
-        await window.Capacitor.Plugins.NativeBiometric.verifyIdentity({ reason: 'Sign in to SV Capital', title: 'Biometric Login', subtitle: 'Use Face ID or fingerprint' });
-      }
-
-      let data = JSON.parse(saved);
-
-      // If the cached token is expired, try a silent refresh before giving up.
-      if (_jwtExpired(data.token)) {
-        try {
-          const base = window.__SVC_API_BASE__ || '/api/';
-          const rr = await fetch(base + 'auth/refresh', { method: 'POST', credentials: 'include' });
-          if (rr.ok) {
-            const rd = await rr.json();
-            data = { ...data, token: rd.token, user: rd.user || data.user };
-            localStorage.setItem('svc_bio_token', JSON.stringify(data));
-          } else {
-            // Refresh failed — cached session is fully expired; force password login.
-            localStorage.removeItem('svc_bio_token');
-            document.getElementById('biometricBtn').style.display = 'none';
-            showError('Your session has expired. Please sign in with your password to re-enable biometric login.');
-            return;
-          }
-        } catch {
-          localStorage.removeItem('svc_bio_token');
-          document.getElementById('biometricBtn').style.display = 'none';
-          showError('Unable to refresh your session. Please sign in with your password.');
-          return;
-        }
-      }
-
-      localStorage.setItem('svc_token', data.token);
-      localStorage.setItem('svc_user', JSON.stringify(data.user));
-      window.location.href = window.__SVC_NATIVE__ ? '/index.html' : (data.redirect || '/portal/');
-    } catch (err) {
-      showError('Biometric authentication failed. Please sign in with your password.');
-    }
-  }
+  // Biometric login removed — function kept as no-op so old cached HTML doesn't throw
+  function loginWithBiometric() { return; }
 
 
   function show2FAStep() {
