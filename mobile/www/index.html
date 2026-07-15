@@ -59,7 +59,7 @@
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
   </script>
   <script src="/js/native.js"></script>
-  <link rel="stylesheet" href="/css/mobile-app.css?v=9">
+  <link rel="stylesheet" href="/css/mobile-app.css?v=10">
   <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
   <script>
   (function(){
@@ -1262,16 +1262,16 @@
         </div>
 
         <!-- Two-column layout: options + sidebar -->
-        <div style="display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start">
+        <div id="stmtLayout" style="display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start">
 
           <!-- ── Left: Options panel ── -->
           <div style="background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden">
             <!-- Header band -->
-            <div style="padding:16px 22px;border-bottom:1px solid rgba(0,0,0,0.07);background:#F7F8FA;display:flex;align-items:center;gap:10px">
-              <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#FF9B0C,#FF5229);display:flex;align-items:center;justify-content:center">
-                <i class="fa-solid fa-sliders" style="color:#fff;font-size:0.85rem"></i>
+            <div style="padding:16px 22px;border-bottom:1px solid rgba(0,0,0,0.07);background:#F7F8FA;display:flex;align-items:center;gap:14px">
+              <div id="stmtOptionIcon" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#FF9B0C,#FF5229);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 14px rgba(255,90,41,0.30)">
+                <i class="fa-solid fa-sliders" style="color:#fff;font-size:1.25rem"></i>
               </div>
-              <span style="font-size:0.9rem;font-weight:800;color:#1a1a1a">Statement Options</span>
+              <span style="font-size:1rem;font-weight:800;color:#1a1a1a">Statement Options</span>
             </div>
 
             <div style="padding:24px;display:flex;flex-direction:column;gap:22px">
@@ -1336,7 +1336,7 @@
           </div>
 
           <!-- ── Right: Stats sidebar ── -->
-          <div style="display:flex;flex-direction:column;gap:16px">
+          <div id="stmtSidebar" style="display:flex;flex-direction:column;gap:16px">
 
             <!-- Portfolio snapshot -->
             <div style="background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden">

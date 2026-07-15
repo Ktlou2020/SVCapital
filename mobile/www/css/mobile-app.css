@@ -1638,6 +1638,16 @@ input[disabled].form-input {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   ACCOUNT STATEMENT — single-column layout on mobile, hide sidebar
+   ───────────────────────────────────────────────────────────── */
+#stmtLayout {
+  display: block !important;
+}
+#stmtSidebar {
+  display: none !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
    MATURITY INSTRUCTIONS — header icon badge + deadline notice
    ───────────────────────────────────────────────────────────── */
 .maturity-header {
