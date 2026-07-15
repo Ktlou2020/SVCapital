@@ -2246,9 +2246,10 @@ input[disabled].form-input {
   font-weight: 700 !important;
   letter-spacing: 0.1em !important;
   text-transform: uppercase !important;
-  color: rgba(255,255,255,0.38) !important;
+  color: #656565 !important;
   padding: 6px 2px 10px !important;
   margin-bottom: 0 !important;
+  margin-top: 0 !important;
 }
 .maturity-card {
   background: linear-gradient(145deg, #1c2333 0%, #141a24 100%) !important;
@@ -2365,6 +2366,32 @@ input[disabled].form-input {
   justify-content: center !important;
   font-size: 1.1rem !important;
   flex-shrink: 0 !important;
+  /* Default icon fallback — overridden by badge variants below */
+  background: rgba(255,255,255,0.10) !important;
+  color: rgba(255,255,255,0.70) !important;
+}
+/* Badge variants inside dark doc-cards */
+.doc-card .doc-card__icon.badge--gold,
+.doc-card .doc-card__icon.badge--orange {
+  background: rgba(255,155,12,0.18) !important;
+  color: #fec24f !important;
+  border: 1px solid rgba(255,155,12,0.25) !important;
+}
+.doc-card .doc-card__icon.badge--green {
+  background: rgba(101,237,0,0.14) !important;
+  color: #65ed00 !important;
+  border: 1px solid rgba(101,237,0,0.22) !important;
+}
+.doc-card .doc-card__icon.badge--gray {
+  background: rgba(101,101,101,0.18) !important;
+  color: #a0a0a0 !important;
+  border: 1px solid rgba(101,101,101,0.22) !important;
+}
+/* Receipt icon: override inline style with white icon on translucent green */
+.doc-card--receipt .doc-card__icon {
+  background: rgba(101,237,0,0.14) !important;
+  color: #65ed00 !important;
+  border: 1px solid rgba(101,237,0,0.22) !important;
 }
 .doc-card__head { flex: 1 !important; min-width: 0 !important; }
 .doc-card__title {
