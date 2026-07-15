@@ -787,7 +787,10 @@ body.dark-mode .mbn-item.active { color: #ff9b0c !important; }
 h2 { font-size: 1rem !important; }
 h3 { font-size: 0.9rem !important; }
 /* Quests */
-.xp-hero       { flex-wrap: wrap !important; gap: 12px !important; padding: 16px !important; }
+.xp-hero       { flex-wrap: wrap !important; gap: 12px !important; padding: 16px !important; align-items: flex-start !important; }
+.xp-hero__left { text-align: left !important; }
+.xp-hero__level-name { text-align: left !important; }
+.xp-hero__xp   { text-align: left !important; }
 .level-track   { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
 /* Rewards stats: horizontal scroll so all 5 stats fit without cramping */
 .rewards-stats-row {
@@ -1246,3 +1249,249 @@ input[type="file"] { font-size: 16px !important; }
   gap: 5px;
 }
 .policy-accordion__content strong { font-weight: 700; color: #1a1a1a; }
+
+/* ═══════════════════════════════════════════════════════════════
+   MARKETPLACE (Browse Pools) VIEW
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Wallet balance strip — flex row with icon, text, and Top Up button */
+.mkt-wallet-strip {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  background: rgba(255,155,12,0.06) !important;
+  border: 1px solid rgba(255,155,12,0.18) !important;
+  border-radius: 14px !important;
+  padding: 10px 14px !important;
+}
+.mkt-wallet-strip > i { color: var(--gold); font-size: 0.9rem; flex-shrink: 0; }
+.mkt-wallet-strip > span { flex: 1; font-size: 0.82rem; color: var(--text-muted); }
+.mkt-wallet-strip > span strong { color: var(--text); }
+/* Override btn--sm clip so the + icon is always visible */
+.mkt-wallet-strip .btn {
+  flex-shrink: 0 !important;
+  max-width: none !important;
+  overflow: visible !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  white-space: nowrap !important;
+  font-size: 0.78rem !important;
+  padding: 6px 12px !important;
+}
+
+/* Hero block — SV Capital grey (#303030) */
+#view-marketplace .mkt-hero {
+  background: #303030 !important;
+  border-radius: 22px !important;
+  padding: 22px 20px !important;
+  position: relative !important;
+  overflow: hidden !important;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.22) !important;
+}
+#view-marketplace .mkt-hero::before {
+  content: '' !important; position: absolute !important;
+  top: -50px !important; right: -40px !important;
+  width: 180px !important; height: 180px !important;
+  background: radial-gradient(circle, rgba(255,155,12,0.18), transparent 70%) !important;
+  pointer-events: none !important;
+}
+#view-marketplace .mkt-hero__icon {
+  width: 44px !important; height: 44px !important; border-radius: 13px !important;
+  background: rgba(255,155,12,0.18) !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  color: #ff9b0c !important; font-size: 1.15rem !important; margin-bottom: 12px !important;
+  position: relative !important;
+}
+#view-marketplace .mkt-hero__title {
+  font-size: 1.4rem !important; font-weight: 900 !important; color: #fff !important;
+  letter-spacing: -0.02em !important; margin: 0 !important; position: relative !important;
+}
+#view-marketplace .mkt-hero__sub {
+  font-size: 0.82rem !important; color: rgba(255,255,255,0.72) !important;
+  margin: 5px 0 0 !important; line-height: 1.5 !important; position: relative !important;
+}
+
+/* Filter bar */
+#view-marketplace .mkt-filter-bar {
+  background: #fff !important;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.06) !important;
+  padding: 14px !important;
+  display: block !important;
+}
+#view-marketplace .mkt-filter-bar__label {
+  font-size: 0.68rem !important; font-weight: 800 !important; text-transform: uppercase !important;
+  letter-spacing: 0.07em !important; color: #94a3b8 !important; margin-bottom: 10px !important;
+  display: flex !important; align-items: center !important; gap: 6px !important;
+}
+#view-marketplace .mkt-filter-bar__label i { color: #ff9b0c !important; }
+
+/* Risk pills — horizontal scroll, colour-coded */
+#view-marketplace .mkt-risk-pills {
+  display: flex !important; gap: 8px !important;
+  overflow-x: auto !important; -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: none !important; margin: 0 -2px 12px !important; padding: 0 2px 2px !important;
+}
+#view-marketplace .mkt-risk-pills::-webkit-scrollbar { display: none !important; }
+#view-marketplace .mkt-risk-pill {
+  flex: 0 0 auto !important;
+  border: 1.5px solid rgba(0,0,0,0.1) !important;
+  background: #f8fafc !important; color: #475569 !important;
+  border-radius: 100px !important; padding: 9px 16px !important;
+  font-size: 0.8rem !important; font-weight: 700 !important;
+  white-space: nowrap !important; cursor: pointer !important;
+  transition: all 0.14s ease !important;
+}
+#view-marketplace .mkt-risk-pill:active { transform: scale(0.95) !important; }
+#view-marketplace .mkt-risk-pill.active {
+  color: #fff !important; border-color: transparent !important;
+  background: linear-gradient(135deg,#ff9b0c,#ff5229) !important;
+  box-shadow: 0 4px 12px rgba(255,82,41,0.3) !important;
+}
+#view-marketplace .mkt-risk-pill--con.active    { background: linear-gradient(135deg,#22c55e,#16a34a) !important; box-shadow: 0 4px 12px rgba(34,197,94,0.3) !important; }
+#view-marketplace .mkt-risk-pill--mod.active    { background: linear-gradient(135deg,#f59e0b,#d97706) !important; box-shadow: 0 4px 12px rgba(245,158,11,0.3) !important; }
+#view-marketplace .mkt-risk-pill--modhigh.active { background: linear-gradient(135deg,#ff9b0c,#f97316) !important; box-shadow: 0 4px 12px rgba(255,155,12,0.3) !important; }
+#view-marketplace .mkt-risk-pill--agg.active    { background: linear-gradient(135deg,#ef4444,#dc2626) !important; box-shadow: 0 4px 12px rgba(239,68,68,0.3) !important; }
+
+/* Calculate Returns / Invest Now — orange gradient (same as primary CTA buttons) */
+#view-marketplace .mkt-calc-btn {
+  width: 100% !important;
+  display: flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important;
+  background: linear-gradient(135deg,#ff9b0c,#ff5229) !important;
+  color: #fff !important;
+  border: none !important; border-radius: 13px !important;
+  padding: 13px !important; font-size: 0.86rem !important; font-weight: 800 !important;
+  cursor: pointer !important;
+  box-shadow: 0 6px 18px rgba(255,82,41,0.28) !important;
+}
+#view-marketplace .mkt-calc-btn i { color: #fff !important; }
+#view-marketplace .mkt-calc-btn:active { transform: scale(0.98) !important; opacity: 0.92 !important; }
+
+/* ─────────────────────────────────────────────────────────────
+   PROFILE HERO — SV Capital grey (#303030) background
+   ───────────────────────────────────────────────────────────── */
+.profile-hero {
+  background: #303030 !important;
+  border-radius: 18px !important;
+  padding: 28px 20px 24px !important;
+  text-align: center !important;
+  position: relative !important;
+  overflow: hidden !important;
+  margin-bottom: 20px !important;
+}
+.profile-hero::before {
+  content: '';
+  position: absolute;
+  top: -40px; right: -40px;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(255,155,12,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.profile-hero__avatar {
+  width: 72px !important; height: 72px !important;
+  border-radius: 50% !important;
+  background: linear-gradient(135deg,#ff9b0c,#ff5229) !important;
+  color: #fff !important;
+  font-size: 1.6rem !important; font-weight: 900 !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  margin: 0 auto 14px !important;
+  box-shadow: 0 4px 16px rgba(255,155,12,0.35) !important;
+}
+.profile-hero__name {
+  color: #fff !important;
+  font-size: 1.15rem !important; font-weight: 800 !important;
+  margin-bottom: 4px !important;
+}
+.profile-hero__email {
+  color: rgba(255,255,255,0.55) !important;
+  font-size: 0.8rem !important;
+  margin-bottom: 14px !important;
+}
+.profile-hero__chips {
+  display: flex !important; flex-wrap: wrap !important;
+  gap: 8px !important; justify-content: center !important;
+}
+.profile-hero__chip {
+  display: inline-flex !important; align-items: center !important; gap: 5px !important;
+  background: rgba(255,255,255,0.1) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  border-radius: 20px !important;
+  padding: 4px 10px !important;
+  font-size: 0.72rem !important; font-weight: 600 !important;
+  color: rgba(255,255,255,0.85) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SUPPORT HERO — SV Capital grey (#303030) background
+   ───────────────────────────────────────────────────────────── */
+.support-hero {
+  background: #303030 !important;
+  border-radius: 18px !important;
+  padding: 28px 20px 24px !important;
+  text-align: center !important;
+  position: relative !important;
+  overflow: hidden !important;
+  margin-bottom: 20px !important;
+}
+.support-hero::before {
+  content: '';
+  position: absolute;
+  top: -40px; right: -40px;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(255,155,12,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.support-hero__icon {
+  width: 64px !important; height: 64px !important;
+  border-radius: 18px !important;
+  background: rgba(255,155,12,0.18) !important;
+  color: #ff9b0c !important;
+  font-size: 1.6rem !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  margin: 0 auto 16px !important;
+}
+.support-hero__title {
+  color: #fff !important;
+  font-size: 1.25rem !important; font-weight: 800 !important;
+  margin-bottom: 8px !important;
+}
+.support-hero__sub {
+  color: rgba(255,255,255,0.55) !important;
+  font-size: 0.82rem !important; line-height: 1.5 !important;
+  margin-bottom: 20px !important;
+  max-width: 280px !important; margin-left: auto !important; margin-right: auto !important;
+}
+.support-hero__actions {
+  display: flex !important; gap: 10px !important; justify-content: center !important; flex-wrap: wrap !important;
+}
+.support-quick {
+  display: inline-flex !important; align-items: center !important; gap: 7px !important;
+  padding: 11px 20px !important; border-radius: 12px !important;
+  font-size: 0.85rem !important; font-weight: 700 !important;
+  text-decoration: none !important;
+}
+.support-quick--whatsapp {
+  background: #25d366 !important; color: #fff !important;
+}
+.support-quick--email {
+  background: rgba(255,255,255,0.12) !important;
+  border: 1px solid rgba(255,255,255,0.2) !important;
+  color: #fff !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MY INVESTMENTS stats — force equal column widths
+   ───────────────────────────────────────────────────────────── */
+.my-inv-card__stats {
+  grid-template-columns: repeat(3, 1fr) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   FORM INPUTS — consistent font size (including readonly email)
+   ───────────────────────────────────────────────────────────── */
+input[readonly].form-input,
+input[disabled].form-input {
+  font-size: 16px !important;
+}

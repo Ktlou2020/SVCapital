@@ -496,7 +496,7 @@ function renderWalletReadinessPanel() {
   panel.innerHTML = `
     <div class="panel__header" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span class="panel__title"><i class="fa-solid fa-bolt" style="color:${accent}"></i> Wallet Readiness</span>
-      <span style="margin-left:auto;font-size:0.72rem;font-weight:700;color:${accent};background:${accent}14;padding:4px 10px;border-radius:999px;border:1px solid ${accent}2f">${ficaApproved ? 'Investment ready checks' : 'FICA pending — withdrawals locked'}</span>
+      <span style="margin-left:auto;font-size:0.72rem;font-weight:700;color:${accent};background:${accent}14;padding:4px 10px;border-radius:999px;border:1px solid ${accent}2f">${ficaApproved ? 'Investment ready checks' : 'KYC/FICA pending — withdrawals locked'}</span>
     </div>
     <div class="panel__body" style="display:flex;flex-direction:column;gap:14px">
       <div style="border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(255,255,255,0.98),rgba(255,155,12,0.05))">
@@ -516,7 +516,7 @@ function renderWalletReadinessPanel() {
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Verification</div>
           <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#656565'};margin-top:6px">${ficaApproved ? 'FICA/KYC approved' : 'FICA/KYC pending'}</div>
-          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${ficaApproved ? (bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.') : 'You can invest and top up. Withdrawals unlock once FICA is approved.'}</div>
+          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${ficaApproved ? (bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.') : 'You can invest and top up. Withdrawals unlock once KYC/FICA is approved.'}</div>
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Money in motion</div>
@@ -1934,13 +1934,13 @@ function renderOverviewTxns() {
   const _txnIsPositive = t => !['withdrawal', 'fee', 'investment', 'gift_sent'].includes(t.type);
   body.innerHTML = recent.map(t => {
     const pos = _txnIsPositive(t);
-    const meta = _TXN_META[t.type] || { icon: 'fa-circle-dot', color: '#9ca3af', label: (t.type || 'Transaction').replace(/_/g, ' ') };
+    const meta = _TXN_META[t.type] || { icon: 'fa-circle-dot', color: '#9ca3af', label: _toSentenceCase((t.type || 'transaction').replace(/_/g, ' ')) };
     return `
       <div class="ov-txn">
         <div class="ov-txn__icon" style="background:${meta.color}1a;color:${meta.color}"><i class="fa-solid ${meta.icon}"></i></div>
         <div class="ov-txn__main">
           <div class="ov-txn__label">${meta.label}</div>
-          <div class="ov-txn__date">${t.description ? _esc(t.description) + ' · ' : ''}${Utils.date(t.transaction_date)}</div>
+          <div class="ov-txn__date">${t.description ? _esc(_toSentenceCase(t.description)) + ' · ' : ''}${Utils.date(t.transaction_date)}</div>
         </div>
         <div class="ov-txn__amount" style="color:${pos ? '#16a34a' : '#dc2626'}">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</div>
       </div>`;
@@ -2293,6 +2293,9 @@ async function loadMyTransactions() {
   }
 }
 
+/* Capitalise first letter, lowercase the rest */
+const _toSentenceCase = s => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
+
 /* Icon + accent colour per transaction type */
 const _TXN_META = {
   deposit:        { icon: 'fa-download',            color: '#22c55e', label: 'Deposit' },
@@ -2363,11 +2366,12 @@ function renderMyTxnTable() {
   let lastMonth = '';
   body.innerHTML = sorted.map(t => {
     const pos  = _isPosTxn(t);
-    const meta = _TXN_META[t.type] || { icon: 'fa-circle-dot', color: '#9ca3af', label: (t.type || 'Transaction').replace(/_/g, ' ') };
+    const meta = _TXN_META[t.type] || { icon: 'fa-circle-dot', color: '#9ca3af', label: _toSentenceCase((t.type || 'transaction').replace(/_/g, ' ')) };
     const d    = new Date(t.transaction_date || t.created_at || 0);
     const month = d.toLocaleString('default', { month: 'long', year: 'numeric' });
     let header = '';
     if (month !== lastMonth) { header = `<div class="txn-month">${month}</div>`; lastMonth = month; }
+    const desc = _toSentenceCase(t.description || t.reference) || '—';
 
     return `${header}
       <div class="txn-card">
@@ -2376,7 +2380,7 @@ function renderMyTxnTable() {
         </div>
         <div class="txn-card__main">
           <div class="txn-card__title">${meta.label}</div>
-          <div class="txn-card__meta">${t.description || t.reference || '—'}</div>
+          <div class="txn-card__meta">${_esc(desc)}</div>
         </div>
         <div class="txn-card__right">
           <div class="txn-card__amount" style="color:${pos ? '#16a34a' : '#dc2626'}">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</div>
@@ -2504,12 +2508,12 @@ async function loadWallet() {
     const statusTag = t.status === 'pending' ? ' <span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:1px 6px;border-radius:4px;font-weight:600">Pending</span>' :
                       t.status === 'rejected' ? ' <span style="font-size:0.7rem;background:rgba(239,68,68,0.12);color:#ef4444;padding:1px 6px;border-radius:4px;font-weight:600">Rejected</span>' : '';
     return `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
-      <div>
-        <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${t.description || t.type?.replace(/_/g, ' ')}${statusTag}</div>
-        <div style="font-size:0.7rem;color:#9ca3af">${Utils.date(t.created_at || t.transaction_date)}</div>
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a;white-space:normal;overflow-wrap:break-word;word-break:break-word;padding-right:8px">${_toSentenceCase(t.description || t.type?.replace(/_/g, ' '))}${statusTag}</div>
+        <div style="font-size:0.7rem;color:#9ca3af;margin-top:2px">${Utils.date(t.created_at || t.transaction_date)}</div>
       </div>
-      <span style="font-weight:700;color:${colour}">${sign}${Utils.rand(Math.abs(t.amount))}</span>
+      <span style="font-weight:700;color:${colour};white-space:nowrap;flex-shrink:0">${sign}${Utils.rand(Math.abs(t.amount))}</span>
     </div>
   `}).join('');
 }
@@ -3415,6 +3419,25 @@ function _openPoolsForProduct(type) {
   });
 }
 
+/* Compute annualised average actual return rate from this investor's
+   paid-out / matured investments for a given product type.
+   Returns a decimal (e.g. 0.13 = 13%) or null if no data. */
+function _computeAvgActualRate(productType) {
+  const matured = (PORTAL.investments || []).filter(i =>
+    i.product_type === productType &&
+    (i.status === 'paid_out' || i.status === 'matured') &&
+    parseFloat(i.actual_return_amount) > 0 &&
+    parseFloat(i.amount) > 0
+  );
+  if (!matured.length) return null;
+  const sumRate = matured.reduce((s, i) => {
+    const rate    = parseFloat(i.actual_return_amount) / parseFloat(i.amount);
+    const termYrs = (parseFloat(i.term_months) || 12) / 12;
+    return s + rate / termYrs;
+  }, 0);
+  return sumRate / matured.length;
+}
+
 function renderProductsGrid() {
   const grid = document.getElementById('marketplaceGrid');
   if (!grid) return;
@@ -3476,9 +3499,9 @@ function renderProductsGrid() {
     const pi = Utils.productInfo(p.product_type);
     const color = Utils.productColor(p);
     const icon = p.icon || pi.icon;
-    const avg = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : null;
-    const rateLabel = avg != null ? `${(avg * 100).toFixed(2)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : '—');
-    const rateSub = avg != null ? 'avg return (matured)' : 'target return';
+    const avg = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : _computeAvgActualRate(p.product_type);
+    const rateLabel = avg != null ? `${(avg * 100).toFixed(1)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : '—');
+    const rateSub = avg != null ? 'average return' : 'target return';
     // soonest closing among the open pools
     const days = open.map(o => Utils.daysRemaining(o.end_date)).filter(d => d !== null);
     const soonest = days.length ? Math.min(...days) : null;
@@ -3527,14 +3550,18 @@ function renderProductsGrid() {
 function openProductDetail(type) {
   _selectedProductType = type;
   renderMarketplace();
-  const v = document.getElementById('view-marketplace');
-  if (v) v.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Scroll to the grid (not the full view) so the detail content is visible,
+  // not the hero/filter bar that sits above it.
+  const grid = document.getElementById('marketplaceGrid');
+  if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
   SVC.track('select_item', { item_list_id: 'products', items: [{ item_id: type }] });
 }
 
 function backToProducts() {
   _selectedProductType = null;
   renderMarketplace();
+  const grid = document.getElementById('marketplaceGrid');
+  if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function renderProductDetailView(type) {
@@ -3545,15 +3572,15 @@ async function renderProductDetailView(type) {
   const color = Utils.productColor(product);
   const icon = product.icon || pi.icon;
   const open = _openPoolsForProduct(type);
-  const avg = product.avg_actual_rate != null ? parseFloat(product.avg_actual_rate) : null;
+  const avg = product.avg_actual_rate != null ? parseFloat(product.avg_actual_rate) : _computeAvgActualRate(type);
   const projRate = avg != null ? avg : (product.benchmark_rate ? parseFloat(product.benchmark_rate) : (open[0] ? parseFloat(open[0].annual_rate) : 0.13));
   const keyDetails = (product.key_details || '').split('\n').map(s => s.trim()).filter(Boolean);
 
   // Live data panels: cattle herd status / solar telematics
   const isSolar = (type || '').startsWith('solar');
   const herdSlot = type === 'cattle'
-    ? '<div id="prodHerdStatus" style="margin-bottom:16px"></div>'
-    : (isSolar ? '<div id="prodSolarStatus" style="margin-bottom:16px"></div>' : '');
+    ? '<div id="prodHerdStatus" style="margin-top:20px;margin-bottom:16px"></div>'
+    : (isSolar ? '<div id="prodSolarStatus" style="margin-top:20px;margin-bottom:16px"></div>' : '');
 
   grid.innerHTML = `
     <div style="grid-column:1/-1">
@@ -3573,8 +3600,8 @@ async function renderProductDetailView(type) {
 
           <div class="mpc2-metrics" style="margin-bottom:16px">
             <div class="mpc2-metric">
-              <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(2) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : '—')}</div>
-              <div class="mpc2-metric__lbl">${avg != null ? 'avg return per year' : 'target return'}</div>
+              <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(1) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : '—')}</div>
+              <div class="mpc2-metric__lbl">${avg != null ? 'average return' : 'target return'}</div>
             </div>
             <div class="mpc2-metric-sep"></div>
             <div class="mpc2-metric"><div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(product.min_investment || 0)}</div><div class="mpc2-metric__lbl">minimum</div></div>
@@ -7599,7 +7626,7 @@ const SA_TYPE_META = {
   },
   stokvel:  {
     icon: 'fa-people-group',    label: 'Stokvel',
-    color: '#22c55e',           bg: 'linear-gradient(135deg,#064e1e 0%,#22c55e 100%)',
+    color: '#65ed00',           bg: 'linear-gradient(135deg,#1a4200 0%,#65ed00 100%)',
     tagline: 'Community savings club investing together',
     ficaDocs: ['Stokvel constitution / rules', 'Proof of banking account', 'Two or more members\' ID documents', 'NASASA certificate (if applicable)'],
   },
@@ -7692,10 +7719,10 @@ function _saCard(sa) {
   const balance = parseFloat(sa.wallet_balance) || 0;
   const invested= parseFloat(sa.total_invested)  || 0;
   const kycBadge = sa.kyc_status === 'approved'
-    ? `<span class="sa-kyc-badge sa-kyc-badge--ok"><i class="fa-solid fa-circle-check"></i> FICA Verified</span>`
+    ? `<span class="sa-kyc-badge sa-kyc-badge--ok"><i class="fa-solid fa-circle-check"></i> KYC/FICA Verified</span>`
     : sa.kyc_status === 'under_review'
     ? `<span class="sa-kyc-badge sa-kyc-badge--pending"><i class="fa-solid fa-clock"></i> Under Review</span>`
-    : `<span class="sa-kyc-badge sa-kyc-badge--missing"><i class="fa-solid fa-triangle-exclamation"></i> FICA Required</span>`;
+    : `<span class="sa-kyc-badge sa-kyc-badge--missing"><i class="fa-solid fa-triangle-exclamation"></i> KYC/FICA Required</span>`;
 
   const isMinor = sa.account_type === 'minor';
   const age     = isMinor ? _saAgeGroup(sa.date_of_birth) : null;
@@ -7973,9 +8000,9 @@ function _saNormalDetail(sa, meta) {
 
   const kycStatus = sa.kyc_status || 'missing';
   const kycMeta = {
-    approved:     { label: 'FICA Verified',    icon: 'fa-circle-check',        color: '#22c55e', bg: 'rgba(34,197,94,0.15)',  border: 'rgba(34,197,94,0.3)' },
+    approved:     { label: 'KYC/FICA Verified',    icon: 'fa-circle-check',        color: '#22c55e', bg: 'rgba(34,197,94,0.15)',  border: 'rgba(34,197,94,0.3)' },
     under_review: { label: 'Under Review',     icon: 'fa-clock',               color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.3)' },
-    missing:      { label: 'FICA Required',    icon: 'fa-triangle-exclamation', color: '#ef4444', bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.25)' },
+    missing:      { label: 'KYC/FICA Required',    icon: 'fa-triangle-exclamation', color: '#ef4444', bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.25)' },
   }[kycStatus] || { label: kycStatus, icon: 'fa-circle-info', color: '#9ca3af', bg: 'rgba(156,163,175,0.1)', border: 'rgba(156,163,175,0.2)' };
 
   const ficaDocs = SA_TYPE_META[sa.account_type]?.ficaDocs || [];
@@ -8438,7 +8465,7 @@ function openWithdrawalModal() {
     content.innerHTML = `
       <div style="text-align:center;padding:20px 0">
         <i class="fa-solid fa-shield-halved" style="font-size:2.5rem;color:#656565;margin-bottom:16px"></i>
-        <p style="font-size:0.9rem;font-weight:700;color:#1a1a1a;margin-bottom:8px">FICA verification required</p>
+        <p style="font-size:0.9rem;font-weight:700;color:#1a1a1a;margin-bottom:8px">KYC/FICA verification required</p>
         <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px">You need to complete FICA/KYC verification before you can withdraw funds. You can still top up your wallet and invest in the meantime.</p>
         <button class="btn btn--primary" onclick="Modal.close('withdrawalModal');navigate('profile', document.querySelector('[data-view=profile]'));openKycUploadModal()"><i class="fa-solid fa-upload"></i> Complete FICA/KYC</button>
       </div>`;
@@ -8865,7 +8892,7 @@ function renderOnboardingChecklist() {
   const steps = [
     {
       id: 'fica',
-      label: 'Complete your FICA verification',
+      label: 'Complete your KYC/FICA verification',
       desc: 'Submit your ID document and proof of address.',
       done: inv.fica_status === 'approved',
       action: "navigate('profile', document.querySelector('[data-view=profile]'))",
@@ -9322,7 +9349,7 @@ async function _renderKycStatusPanel(preloadedDocs) {
         <i class="fa-solid fa-${overallStatus === 'approved' ? 'shield-halved' : overallStatus === 'rejected' ? 'circle-xmark' : 'clock'}" style="color:${color};font-size:1.1rem"></i>
       </div>
       <div>
-        <div style="font-size:0.88rem;font-weight:700;color:#1a1a1a">FICA / KYC Verification</div>
+        <div style="font-size:0.88rem;font-weight:700;color:#1a1a1a">KYC/FICA Verification</div>
         <div style="font-size:0.78rem;color:#6b7280;margin-top:1px">${Utils.statusBadge(overallStatus)}</div>
       </div>
     </div>
@@ -9808,10 +9835,9 @@ function _renderReceiptsTable() {
       <div class="doc-card__icon" style="background:rgba(34,197,94,0.14);color:#16a34a"><i class="fa-solid fa-arrow-down-to-line"></i></div>
       <div class="doc-card__head">
         <div class="doc-card__title">${t.description || 'Wallet Deposit'}</div>
-        <div class="doc-card__sub">${Utils.date(t.transaction_date || t.created_at)} · ${t.reference || 'No ref'}</div>
       </div>
       <div class="doc-card__receipt-right">
-        <div class="doc-card__amount" style="color:#16a34a">+${Utils.rand(Math.abs(t.amount))}</div>
+        <div class="doc-card__amount" style="color:#1a1a1a;font-weight:700">+${Utils.rand(Math.abs(t.amount))}</div>
         <button class="doc-card__btn doc-card__btn--ghost doc-card__btn--sm" onclick="downloadReceipt('${t.id}')"><i class="fa-solid fa-download"></i> Receipt</button>
       </div>
     </div>`).join('');

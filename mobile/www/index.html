@@ -24,10 +24,10 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <link rel="stylesheet" href="../css/admin.css" />
-  <link rel="stylesheet" href="/css/portal.css" />
+  <link rel="stylesheet" href="/css/portal.css?v=2" />
   <link rel="stylesheet" href="/css/ci-theme.css" />
   <!-- sv-intelligence hidden -->
-  <link rel="stylesheet" href="/css/portal-premium.css" />
+  <link rel="stylesheet" href="/css/portal-premium.css?v=2" />
   <!-- Payment modal must retain dark theme — isolate from ci-theme overrides -->
   <style>
     #topUpModal.modal-overlay { background: rgba(0,0,0,0.82) !important; }
@@ -59,7 +59,7 @@
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
   </script>
   <script src="/js/native.js"></script>
-  <link rel="stylesheet" href="/css/mobile-app.css">
+  <link rel="stylesheet" href="/css/mobile-app.css?v=4">
   <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
   <script>
   (function(){
@@ -735,7 +735,7 @@
           <button class="mkt-calc-btn" onclick="openCalcModal()">
             <i class="fa-solid fa-calculator"></i> Calculate Returns
           </button>
-          <button class="mkt-calc-btn mkt-invest-now-btn" onclick="openInvestNowPicker()" style="margin-top:8px;background:linear-gradient(135deg,#ff9b0c,#ff5229);color:#fff;border:none">
+          <button class="mkt-calc-btn mkt-invest-now-btn" onclick="openInvestNowPicker()" style="margin-top:8px">
             <i class="fa-solid fa-bolt"></i> Invest Now
           </button>
           <select id="marketRiskSelect" style="display:none">
@@ -885,11 +885,11 @@
 
             <div class="panel" id="kycStatusPanel">
               <div class="panel__header">
-                <span class="panel__title"><i class="fa-solid fa-id-card" style="color:#FF9B0C;margin-right:6px"></i>FICA / KYC Status</span>
+                <span class="panel__title"><i class="fa-solid fa-id-card" style="color:#FF9B0C;margin-right:6px"></i>KYC/FICA Status</span>
                 <button class="btn btn--primary btn--sm" onclick="openKycUploadModal()"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document</button>
               </div>
               <div class="panel__body" id="kycStatusBody">
-                <div style="text-align:center;padding:20px;color:#6b7280;font-size:0.85rem">Loading KYC status…</div>
+                <div style="text-align:center;padding:20px;color:#6b7280;font-size:0.85rem">Loading KYC/FICA status…</div>
               </div>
             </div>
 
@@ -913,7 +913,7 @@
                   <div class="info-row"><span class="info-row__label">Investor ID</span><span class="info-row__value text-gold" id="profSummaryId">—</span></div>
                   <div class="info-row"><span class="info-row__label">Member Since</span><span class="info-row__value" id="profSummaryJoined">—</span></div>
                   <div class="info-row"><span class="info-row__label">Account Status</span><span class="info-row__value" id="profSummaryStatus">—</span></div>
-                  <div class="info-row"><span class="info-row__label">FICA/KYC Status</span><span class="info-row__value" id="profSummaryFica">—</span></div>
+                  <div class="info-row"><span class="info-row__label">KYC/FICA Status</span><span class="info-row__value" id="profSummaryFica">—</span></div>
                   <div class="info-row"><span class="info-row__label">Referral Code</span><span class="info-row__value text-gold" id="profSummaryReferral">—</span></div>
                 </div>
               </div>
@@ -1012,7 +1012,7 @@
                     <select class="form-select" id="tktCategory">
                       <option value="investment_query">Investment Query</option>
                       <option value="payout_issue">Payout Issue</option>
-                      <option value="fica_kyc">FICA / KYC</option>
+                      <option value="fica_kyc">KYC/FICA</option>
                       <option value="technical">Technical</option>
                       <option value="general">General</option>
                       <option value="complaint">Complaint</option>
@@ -1148,7 +1148,7 @@
               <div class="ref-stat">
                 <div class="ref-stat__icon" style="background:rgba(59,130,246,0.14);color:#3b82f6"><i class="fa-solid fa-circle-check"></i></div>
                 <div class="ref-stat__value" id="refStatApproved">—</div>
-                <div class="ref-stat__label">FICA Approved</div>
+                <div class="ref-stat__label">KYC/FICA Approved</div>
               </div>
               <div class="ref-stat">
                 <div class="ref-stat__icon" style="background:rgba(168,85,247,0.14);color:#a855f7"><i class="fa-solid fa-chart-line"></i></div>
@@ -1197,7 +1197,7 @@
         <div class="panel mb-20">
           <div class="panel__header">
             <div>
-              <div class="panel__title"><i class="fa-solid fa-id-card" style="color:#FF9B0C"></i> FICA / KYC Documents</div>
+              <div class="panel__title"><i class="fa-solid fa-id-card" style="color:#FF9B0C"></i> KYC/FICA Documents</div>
               <div style="font-size:0.75rem;color:#6b7280;margin-top:2px">South African law requires identity verification before investing</div>
             </div>
             <button class="btn btn--primary btn--sm" onclick="openKycUploadModal()"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document</button>
@@ -1583,7 +1583,7 @@
               <div class="sa-type-tile__label">Trust</div>
               <div class="sa-type-tile__desc">Grow assets in a family or business trust</div>
             </div>
-            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#22c55e;--tile-bg:linear-gradient(135deg,#064e1e,#22c55e)">
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#65ed00;--tile-bg:linear-gradient(135deg,#1a4200,#65ed00)">
               <i class="fa-solid fa-people-group sa-type-tile__icon"></i>
               <div class="sa-type-tile__label">Stokvel</div>
               <div class="sa-type-tile__desc">Community savings club investing together</div>
@@ -2925,8 +2925,8 @@
   </div>
 </nav>
 
-<script src="../js/api.js?v=2"></script>
-<script src="js/portal.js?v=2"></script>
+<script src="../js/api.js?v=3"></script>
+<script src="js/portal.js?v=7"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {
