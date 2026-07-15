@@ -59,7 +59,7 @@
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
   </script>
   <script src="/js/native.js"></script>
-  <link rel="stylesheet" href="/css/mobile-app.css?v=18">
+  <link rel="stylesheet" href="/css/mobile-app.css?v=19">
   <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
   <script>
   (function(){
@@ -1267,78 +1267,78 @@
       <div class="view" id="view-statement">
 
         <!-- Page header -->
-        <div style="margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid rgba(0,0,0,0.07)">
-          <h2 style="font-size:1.35rem;font-weight:800;color:#1a1a1a;margin:0 0 4px">Account Statement</h2>
-          <p style="color:#6b7280;font-size:0.84rem;margin:0">Generate a premium PDF statement of your investments and transactions</p>
+        <div class="stmt-pg-header">
+          <h2 class="stmt-pg-title">Account Statement</h2>
+          <p class="stmt-pg-sub">Generate a premium PDF statement of your investments and transactions</p>
         </div>
 
         <!-- Two-column layout: options + sidebar -->
-        <div id="stmtLayout" style="display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start">
+        <div id="stmtLayout" class="stmt-layout">
 
           <!-- ── Left: Options panel ── -->
-          <div style="background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden">
+          <div class="stmt-options-card">
             <!-- Header band -->
-            <div style="padding:16px 22px;border-bottom:1px solid rgba(0,0,0,0.07);background:#F7F8FA;display:flex;align-items:center;gap:14px">
-              <div id="stmtOptionIcon" style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#FF9B0C,#FF5229);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 14px rgba(255,90,41,0.30)">
-                <i class="fa-solid fa-sliders" style="color:#fff;font-size:1.25rem"></i>
+            <div class="stmt-options-header">
+              <div class="stmt-opt-icon">
+                <i class="fa-solid fa-sliders"></i>
               </div>
-              <span style="font-size:1rem;font-weight:800;color:#1a1a1a">Statement Options</span>
+              <span class="stmt-options-title">Statement Options</span>
             </div>
 
-            <div style="padding:24px;display:flex;flex-direction:column;gap:22px">
+            <div class="stmt-options-body">
 
               <!-- Date range -->
-              <div>
-                <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;margin-bottom:10px">Statement Period</div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div class="stmt-field-group">
+                <div class="stmt-field-label">Statement Period</div>
+                <div class="stmt-date-row">
                   <div>
-                    <label style="display:block;font-size:0.78rem;font-weight:600;color:#6b7280;margin-bottom:5px">From</label>
-                    <input type="date" id="stmtFrom" style="width:100%;padding:9px 12px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;color:#1a1a1a;background:#fff;outline:none;font-family:inherit" onfocus="this.style.borderColor='#ff9b0c'" onblur="this.style.borderColor='rgba(0,0,0,0.12)'" />
+                    <label class="stmt-input-label">From</label>
+                    <input type="date" id="stmtFrom" class="stmt-date-input">
                   </div>
                   <div>
-                    <label style="display:block;font-size:0.78rem;font-weight:600;color:#6b7280;margin-bottom:5px">To</label>
-                    <input type="date" id="stmtTo" style="width:100%;padding:9px 12px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;color:#1a1a1a;background:#fff;outline:none;font-family:inherit" onfocus="this.style.borderColor='#ff9b0c'" onblur="this.style.borderColor='rgba(0,0,0,0.12)'" />
+                    <label class="stmt-input-label">To</label>
+                    <input type="date" id="stmtTo" class="stmt-date-input">
                   </div>
                 </div>
               </div>
 
               <!-- Include sections -->
-              <div>
-                <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;margin-bottom:10px">Include Sections</div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-                  <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid rgba(0,0,0,0.08);border-radius:8px;background:#F7F8FA;transition:border-color 0.2s" onmouseover="this.style.borderColor='#ff9b0c'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(0,0,0,0.08)'">
-                    <input type="checkbox" id="stmtIncPortfolio" checked style="accent-color:#ff9b0c;width:15px;height:15px;flex-shrink:0">
-                    <span style="font-size:0.82rem;font-weight:600;color:#303030">Portfolio Summary</span>
+              <div class="stmt-field-group">
+                <div class="stmt-field-label">Include Sections</div>
+                <div class="stmt-check-grid">
+                  <label class="stmt-check-tile">
+                    <input type="checkbox" id="stmtIncPortfolio" checked>
+                    <span>Portfolio Summary</span>
                   </label>
-                  <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid rgba(0,0,0,0.08);border-radius:8px;background:#F7F8FA;transition:border-color 0.2s" onmouseover="this.style.borderColor='#ff9b0c'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(0,0,0,0.08)'">
-                    <input type="checkbox" id="stmtIncInvestments" checked style="accent-color:#ff9b0c;width:15px;height:15px;flex-shrink:0">
-                    <span style="font-size:0.82rem;font-weight:600;color:#303030">Investment Details</span>
+                  <label class="stmt-check-tile">
+                    <input type="checkbox" id="stmtIncInvestments" checked>
+                    <span>Investment Details</span>
                   </label>
-                  <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid rgba(0,0,0,0.08);border-radius:8px;background:#F7F8FA;transition:border-color 0.2s" onmouseover="this.style.borderColor='#ff9b0c'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(0,0,0,0.08)'">
-                    <input type="checkbox" id="stmtIncTransactions" checked style="accent-color:#ff9b0c;width:15px;height:15px;flex-shrink:0">
-                    <span style="font-size:0.82rem;font-weight:600;color:#303030">Transaction Ledger</span>
+                  <label class="stmt-check-tile">
+                    <input type="checkbox" id="stmtIncTransactions" checked>
+                    <span>Transaction Ledger</span>
                   </label>
-                  <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid rgba(0,0,0,0.08);border-radius:8px;background:#F7F8FA;transition:border-color 0.2s" onmouseover="this.style.borderColor='#ff9b0c'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='rgba(0,0,0,0.08)'">
-                    <input type="checkbox" id="stmtIncPerformance" checked style="accent-color:#ff9b0c;width:15px;height:15px;flex-shrink:0">
-                    <span style="font-size:0.82rem;font-weight:600;color:#303030">Performance Analysis</span>
+                  <label class="stmt-check-tile">
+                    <input type="checkbox" id="stmtIncPerformance" checked>
+                    <span>Performance Analysis</span>
                   </label>
                 </div>
               </div>
 
               <!-- Currency -->
-              <div>
-                <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#9ca3af;margin-bottom:8px">Currency</div>
-                <select id="stmtCurrency" style="width:100%;padding:9px 12px;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.85rem;color:#1a1a1a;background:#fff;outline:none;font-family:inherit">
+              <div class="stmt-field-group">
+                <div class="stmt-field-label">Currency</div>
+                <select id="stmtCurrency" class="stmt-select">
                   <option value="ZAR">ZAR — South African Rand</option>
                 </select>
               </div>
 
               <!-- Action buttons -->
-              <div style="display:flex;gap:10px;padding-top:4px">
-                <button onclick="generateStatement()" style="flex:1;padding:13px 20px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(255,155,12,0.28);transition:all 0.2s" onmouseover="this.style.opacity='0.9';this.style.transform='translateY(-1px)'" onmouseout="this.style.opacity='1';this.style.transform='none'">
+              <div class="stmt-btn-row">
+                <button onclick="generateStatement()" class="stmt-btn-primary">
                   <i class="fa-solid fa-file-arrow-down"></i> Generate &amp; Preview
                 </button>
-                <button onclick="printStatement()" title="Print / Save as PDF" style="padding:13px 16px;background:#fff;color:#303030;border:1.5px solid rgba(0,0,0,0.12);border-radius:10px;font-size:0.9rem;cursor:pointer;transition:all 0.2s" onmouseover="this.style.borderColor='#ff9b0c';this.style.color='#FF8215'" onmouseout="this.style.borderColor='rgba(0,0,0,0.12)';this.style.color='#303030'">
+                <button onclick="printStatement()" title="Print / Save as PDF" class="stmt-btn-ghost">
                   <i class="fa-solid fa-print"></i>
                 </button>
               </div>
@@ -1347,42 +1347,40 @@
           </div>
 
           <!-- ── Right: Stats sidebar ── -->
-          <div id="stmtSidebar" style="display:flex;flex-direction:column;gap:16px">
+          <div id="stmtSidebar" class="stmt-sidebar">
 
             <!-- Portfolio snapshot -->
-            <div style="background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden">
-              <div style="padding:14px 18px;border-bottom:1px solid rgba(0,0,0,0.07);background:#F7F8FA">
-                <span style="font-size:0.82rem;font-weight:800;color:#1a1a1a">Portfolio Snapshot</span>
-              </div>
-              <div style="padding:18px">
+            <div class="stmt-sidebar-card">
+              <div class="stmt-sidebar-card__hdr">Portfolio Snapshot</div>
+              <div class="stmt-sidebar-card__body">
                 <div id="stmtQuickStats">
-                  <div style="text-align:center;padding:24px 0;color:#9ca3af">
-                    <i class="fa-solid fa-chart-pie" style="font-size:2rem;display:block;margin-bottom:10px;opacity:0.35"></i>
-                    <span style="font-size:0.8rem">Data loads automatically…</span>
+                  <div class="stmt-empty-snap">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>Data loads automatically…</span>
                   </div>
                 </div>
               </div>
             </div>
 
             <!-- FSCA badge -->
-            <div style="background:rgba(47,140,155,0.06);border:1px solid rgba(47,140,155,0.20);border-radius:12px;padding:16px;display:flex;gap:12px;align-items:flex-start">
-              <div style="width:34px;height:34px;background:rgba(47,140,155,0.12);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                <i class="fa-solid fa-shield-halved" style="color:#656565;font-size:0.95rem"></i>
+            <div class="stmt-badge-card">
+              <div class="stmt-badge-icon">
+                <i class="fa-solid fa-shield-halved"></i>
               </div>
               <div>
-                <div style="font-size:0.82rem;font-weight:800;color:#1a1a1a;margin-bottom:3px">FSCA Regulated</div>
-                <div style="font-size:0.73rem;color:#6b7280;line-height:1.55">SmartVest Financial Services (Pty) Ltd · FSP License #52449. Statements generated from verified account data.</div>
+                <div class="stmt-badge-title">FSCA Regulated</div>
+                <div class="stmt-badge-sub">SmartVest Financial Services (Pty) Ltd · FSP License #52449. Statements generated from verified account data.</div>
               </div>
             </div>
 
             <!-- Tips -->
-            <div style="background:rgba(255,155,12,0.05);border:1px solid rgba(255,155,12,0.18);border-radius:12px;padding:16px">
-              <div style="font-size:0.78rem;font-weight:800;color:#ff5229;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+            <div class="stmt-tips-card">
+              <div class="stmt-tips-hdr">
                 <i class="fa-solid fa-lightbulb"></i> Pro Tips
               </div>
-              <ul style="font-size:0.75rem;color:#6b7280;line-height:1.6;padding-left:14px">
-                <li>Use <strong style="color:#303030">Ctrl + P</strong> or the Print button to save as PDF</li>
-                <li>Set paper size to <strong style="color:#303030">A4</strong> and enable <strong style="color:#303030">Background Graphics</strong></li>
+              <ul class="stmt-tips-list">
+                <li>Use <strong>Ctrl + P</strong> or the Print button to save as PDF</li>
+                <li>Set paper size to <strong>A4</strong> and enable <strong>Background Graphics</strong></li>
                 <li>Statement includes all investments regardless of date range</li>
               </ul>
             </div>
@@ -1419,23 +1417,23 @@
 
         <!-- ── Statement Preview ── -->
         <div id="statementPreview" style="display:none;margin-top:32px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:16px 20px;background:#fff;border:1px solid rgba(0,0,0,0.07);border-radius:12px">
-            <div style="display:flex;align-items:center;gap:10px">
-              <i class="fa-solid fa-file-invoice" style="color:#ff9b0c;font-size:1.1rem"></i>
-              <span style="font-size:0.95rem;font-weight:800;color:#1a1a1a">Statement Preview</span>
-              <span style="font-size:0.72rem;background:rgba(34,197,94,0.1);color:#16a34a;padding:3px 10px;border-radius:20px;font-weight:700;border:1px solid rgba(34,197,94,0.25)">Ready</span>
+          <div class="stmt-preview-bar">
+            <div class="stmt-preview-bar__left">
+              <i class="fa-solid fa-file-invoice stmt-preview-icon"></i>
+              <span class="stmt-preview-title">Statement Preview</span>
+              <span class="stmt-preview-badge">Ready</span>
             </div>
-            <div style="display:flex;gap:8px">
-              <button onclick="printStatement()" style="padding:8px 16px;background:#fff;color:#303030;border:1.5px solid rgba(0,0,0,0.12);border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.2s" onmouseover="this.style.borderColor='#ff9b0c';this.style.color='#FF8215'" onmouseout="this.style.borderColor='rgba(0,0,0,0.12)';this.style.color='#303030'">
+            <div class="stmt-preview-bar__right">
+              <button onclick="printStatement()" class="stmt-btn-ghost-sm">
                 <i class="fa-solid fa-print"></i> Print / Save PDF
               </button>
-              <button onclick="generateStatement()" style="padding:8px 16px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 3px 10px rgba(255,155,12,0.25)" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+              <button onclick="generateStatement()" class="stmt-btn-primary-sm">
                 <i class="fa-solid fa-rotate"></i> Refresh
               </button>
             </div>
           </div>
           <!-- The rendered statement document -->
-          <div id="statementDocument" style="background:#fff;border-radius:14px;box-shadow:0 4px 32px rgba(0,0,0,0.10);overflow:hidden;border:1px solid rgba(0,0,0,0.07)">
+          <div id="statementDocument" class="stmt-doc-wrapper">
             <!-- Populated by generateStatement() -->
           </div>
         </div>
@@ -1580,17 +1578,17 @@
         <div id="subacctsEmpty">
           <div class="sa-empty-intro">You don't have any sub-accounts yet. Choose a type to get started:</div>
           <div class="sa-type-showcase">
-            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#303030;--tile-bg:linear-gradient(135deg,#1a1a1a,#303030)">
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#303030;--tile-bg:linear-gradient(135deg,#303030,#656565)">
               <i class="fa-solid fa-building sa-type-tile__icon"></i>
               <div class="sa-type-tile__label">Business</div>
               <div class="sa-type-tile__desc">Invest through your registered company</div>
             </div>
-            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#eda5ff;--tile-bg:linear-gradient(135deg,#3d1280,#eda5ff)">
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#eda5ff;--tile-bg:linear-gradient(135deg,#0096ff,#eda5ff)">
               <i class="fa-solid fa-scale-balanced sa-type-tile__icon"></i>
               <div class="sa-type-tile__label">Trust</div>
               <div class="sa-type-tile__desc">Grow assets in a family or business trust</div>
             </div>
-            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#65ed00;--tile-bg:linear-gradient(135deg,#1a4200,#65ed00)">
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#65ed00;--tile-bg:linear-gradient(135deg,#303030,#65ed00)">
               <i class="fa-solid fa-people-group sa-type-tile__icon"></i>
               <div class="sa-type-tile__label">Stokvel</div>
               <div class="sa-type-tile__desc">Community savings club investing together</div>

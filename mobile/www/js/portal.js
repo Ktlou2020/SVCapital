@@ -5142,8 +5142,8 @@ function buildStatementHTML(opts) {
   const memberSince = investor.date_joined ? fmtDate(investor.date_joined) : '20 Aug 2022';
   const ficaStatus = investor.fica_status || 'approved';
 
-  // Logo URL — absolute so it resolves correctly inside the statement div
-  const logoUrl = new URL('../assets/logo.png', window.location.href).href;
+  // Logo URL — relative to www root (Capacitor serves www/ as root)
+  const logoUrl = 'assets/sv-capital-logo-horizontal-white-text.png';
 
   let sections = '';
 
@@ -5353,13 +5353,9 @@ function buildStatementHTML(opts) {
     <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%">
 
       <!-- Header Band -->
-      <div style="background:#303030;padding:28px 40px;display:flex;align-items:center;justify-content:space-between">
+      <div style="background:#303030;padding:24px 40px;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:14px">
-          <img src="${logoUrl}" alt="" style="height:52px;width:52px;object-fit:contain;display:block">
-          <div>
-            <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:0.06em;line-height:1">SV CAPITAL</div>
-            <div style="font-size:10px;color:rgba(255,155,12,0.75);letter-spacing:0.12em;margin-top:3px;font-weight:600">VENTURE BEYOND THE ORDINARY</div>
-          </div>
+          <img src="${logoUrl}" alt="SV Capital" style="height:44px;width:auto;max-width:220px;object-fit:contain;display:block">
         </div>
         <div style="text-align:right">
           <div style="font-size:16px;font-weight:800;color:#ff9b0c;letter-spacing:0.04em">ACCOUNT STATEMENT</div>
