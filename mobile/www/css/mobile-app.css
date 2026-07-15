@@ -600,6 +600,8 @@ input[style], textarea[style], select[style] {
 select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !important; }
 /* Hide auto-save meta text — overlaps "Personal Information" heading on mobile */
 #profileSaveMeta { display: none !important; }
+/* Biometric sign-in button — permanently removed from login page */
+#biometricBtn, .btn-biometric { display: none !important; }
 
 /* ─────────────────────────────────────────────────────────────
    17. Modals — bottom sheet pattern
