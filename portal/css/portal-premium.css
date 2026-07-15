@@ -3579,3 +3579,126 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
 @media (max-width: 768px) {
   input, select, textarea { font-size: 16px !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   My Investments — responsive card grid (never clips on any screen)
+   ═══════════════════════════════════════════════════════════════ */
+#myInvestmentsGrid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important;
+  gap: 16px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Investment Timeline Cards — shared across web + mobile
+   ═══════════════════════════════════════════════════════════════ */
+.atl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 2px 0;
+}
+.atl-card {
+  background: linear-gradient(145deg, #1c2333 0%, #141a24 100%);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-left: 3px solid #FF9B0C;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.22);
+  position: relative;
+  overflow: hidden;
+}
+.atl-card::after {
+  content: '';
+  position: absolute;
+  top: -30px;
+  right: -30px;
+  width: 90px;
+  height: 90px;
+  background: radial-gradient(circle, rgba(255,155,12,0.09) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+.atl-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+  position: relative;
+  z-index: 1;
+}
+.atl-card__name {
+  font-size: 0.93rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.35;
+  flex: 1;
+  min-width: 0;
+}
+.atl-card__status {
+  flex-shrink: 0;
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.atl-card__figures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+  position: relative;
+  z-index: 1;
+}
+.atl-card__figures > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 9px;
+  padding: 9px 10px;
+  min-width: 0;
+}
+.atl-card__k {
+  display: block;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: rgba(255,255,255,0.38);
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: normal;
+}
+.atl-card__v {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.atl-card__dates {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  padding-top: 11px;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
+}
+.atl-card__dates span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.45);
+  font-weight: 500;
+}
+.atl-card__dates .fa-play { color: #FF9B0C; font-size: 0.6rem; }
+.atl-card__dates .fa-flag-checkered { color: #a855f7; font-size: 0.65rem; }

@@ -11190,35 +11190,40 @@ function _renderAnalyticsTimeline() {
   if (!tbody) return;
   const invs = [...PORTAL.investments].sort((a, b) => new Date(b.start_date || b.created_at) - new Date(a.start_date || a.created_at));
   if (!invs.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:24px">No investments yet.</td></tr>';
+    tbody.innerHTML = '<div class="text-center text-muted" style="padding:24px">No investments yet.</div>';
     return;
   }
-  const statusBadge = s => {
+  const statusMeta = s => {
     const map = { active:'#22c55e', paid_out:'#656565', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316', open:'#22c55e', closed:'#656565' };
-    return `<span style="background:${map[s]||'#9ca3af'}22;color:${map[s]||'#9ca3af'};border:1px solid ${map[s]||'#9ca3af'}44;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700;white-space:nowrap">${String(s||'').replace('_',' ').toUpperCase()}</span>`;
+    return map[s] || '#9ca3af';
   };
   const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';
   tbody.innerHTML = invs.slice(0, 30).map(i => {
-    // Connect the row to its pool so name/dates/status reflect the actual pool.
     const pool    = (PORTAL.pools || []).find(p => p.id === i.pool_id) || {};
     const capital = parseFloat(i.amount) || 0;
-    const ret     = parseFloat(i.net_return) || parseFloat(i.expected_return) || 0;
     const startVal = pool.start_date || i.start_date || i.created_at;
     const endVal   = pool.end_date   || i.end_date   || i.maturity_date;
     const start   = new Date(startVal);
     const end     = new Date(endVal);
     const days    = (!isNaN(start) && !isNaN(end)) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '—');
-    // Once the pool has matured, every investment in it reads as matured.
     const status  = (pool.status === 'matured' || pool.status === 'paid_out') ? 'matured' : (i.status || pool.status);
-    return `<tr>
-      <td style="font-weight:600">${_esc(pool.name || i.pool_name || 'Pool')}</td>
-      <td>R ${capital.toLocaleString('en-ZA')}</td>
-      <td style="color:#22c55e;font-weight:600">${Utils.pct(pool.annual_rate || i.annual_rate || i.expected_return_rate || 0)} p.a.</td>
-      <td>${fmt(startVal)}</td>
-      <td>${fmt(endVal)}</td>
-      <td>${typeof days === 'number' ? days + ' d' : days}</td>
-      <td>${statusBadge(status)}</td>
-    </tr>`;
+    const sc      = statusMeta(status);
+    return `
+      <div class="atl-card">
+        <div class="atl-card__head">
+          <div class="atl-card__name">${_esc(pool.name || i.pool_name || 'Pool')}</div>
+          <span class="atl-card__status" style="background:${sc}1f;color:${sc};border:1px solid ${sc}44">${String(status||'').replace('_',' ').toUpperCase()}</span>
+        </div>
+        <div class="atl-card__figures">
+          <div><span class="atl-card__k">Invested</span><span class="atl-card__v">R ${capital.toLocaleString('en-ZA')}</span></div>
+          <div><span class="atl-card__k">Target Return</span><span class="atl-card__v" style="color:#16a34a">${Utils.pct(pool.annual_rate || i.annual_rate || i.expected_return_rate || 0)}</span></div>
+          <div><span class="atl-card__k">Duration</span><span class="atl-card__v">${typeof days === 'number' ? days + ' d' : days}</span></div>
+        </div>
+        <div class="atl-card__dates">
+          <span><i class="fa-solid fa-play"></i> ${fmt(startVal)}</span>
+          <span><i class="fa-solid fa-flag-checkered"></i> ${fmt(endVal)}</span>
+        </div>
+      </div>`;
   }).join('');
 }
 
