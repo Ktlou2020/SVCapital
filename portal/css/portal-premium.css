@@ -2571,6 +2571,8 @@ body {
 .info-row:last-child { border-bottom: none !important; }
 .info-row__label { color: #6b7280 !important; font-weight: 500 !important; }
 .info-row__value { font-weight: 700 !important; color: #111827 !important; }
+/* Copy button sits LEFT of the value, both right-aligned as a group */
+.info-row .copy-btn { margin-left: auto !important; }
 
 /* ─── Dark mode §43 overrides ─── */
 body.dark-mode {

@@ -659,6 +659,8 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
   background: rgba(255,255,255,0.13) !important;
   color: rgba(255,255,255,0.88) !important;
 }
+/* Account Summary: copy button sits LEFT of the value, both right-aligned */
+.info-row .copy-btn { margin-left: auto !important; }
 /* Product filter dropdown — never clip text on mobile */
 #myInvProductFilter {
   min-width: 160px !important;
