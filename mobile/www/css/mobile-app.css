@@ -2066,3 +2066,161 @@ input[disabled].form-input {
   color: #fff !important;
   box-shadow: 0 3px 10px rgba(255, 155, 12, 0.3) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   16d. Sidebar — brand / logo section
+   ═══════════════════════════════════════════════════════════════ */
+.sidebar__brand {
+  padding: 32px 18px 18px !important;
+  border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+  margin-bottom: 8px !important;
+  flex-shrink: 0 !important;
+}
+.sv-portal-logo {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+}
+.sv-portal-logo img {
+  height: 48px !important;
+  width: auto !important;
+  max-width: 220px !important;
+  display: block !important;
+  object-fit: contain !important;
+  object-position: left center !important;
+}
+.brand-text {
+  margin-top: 14px !important;
+  padding-top: 12px !important;
+  border-top: 1px solid rgba(255,255,255,0.08) !important;
+}
+.brand-role {
+  font-size: 0.65rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase !important;
+  color: rgba(255,255,255,0.35) !important;
+  display: block !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   16e. Analytics — Investment Timeline Cards
+   ═══════════════════════════════════════════════════════════════ */
+.atl-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  padding: 2px 0 !important;
+}
+.atl-card {
+  background: linear-gradient(145deg, #1c2333 0%, #141a24 100%) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+  border-left: 3px solid #FF9B0C !important;
+  border-radius: 14px !important;
+  padding: 16px !important;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.22) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+.atl-card::after {
+  content: '' !important;
+  position: absolute !important;
+  top: -30px !important;
+  right: -30px !important;
+  width: 90px !important;
+  height: 90px !important;
+  background: radial-gradient(circle, rgba(255,155,12,0.09) 0%, transparent 70%) !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+.atl-card__head {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  margin-bottom: 14px !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+.atl-card__name {
+  font-size: 0.93rem !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  line-height: 1.35 !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+.atl-card__status {
+  flex-shrink: 0 !important;
+  border-radius: 20px !important;
+  padding: 3px 10px !important;
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em !important;
+}
+.atl-card__figures {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 8px !important;
+  margin-bottom: 12px !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+.atl-card__figures > div {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+  border-radius: 9px !important;
+  padding: 9px 10px !important;
+  min-width: 0 !important;
+}
+.atl-card__k {
+  display: block !important;
+  font-size: 0.58rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.07em !important;
+  color: rgba(255,255,255,0.38) !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+  white-space: normal !important;
+}
+.atl-card__v {
+  display: block !important;
+  font-size: 0.88rem !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.atl-card__dates {
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+  border-top: 1px solid rgba(255,255,255,0.07) !important;
+  padding-top: 11px !important;
+  flex-wrap: wrap !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+.atl-card__dates span {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 0.75rem !important;
+  color: rgba(255,255,255,0.45) !important;
+  font-weight: 500 !important;
+}
+.atl-card__dates .fa-play {
+  color: #FF9B0C !important;
+  font-size: 0.6rem !important;
+}
+.atl-card__dates .fa-flag-checkered {
+  color: #eda5ff !important;
+  font-size: 0.65rem !important;
+}
