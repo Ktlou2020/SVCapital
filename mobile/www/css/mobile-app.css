@@ -2224,3 +2224,245 @@ input[disabled].form-input {
   color: #eda5ff !important;
   font-size: 0.65rem !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   16f. My Investments filter row — select text cut off fix
+   ═══════════════════════════════════════════════════════════════ */
+#myInvProductFilter {
+  min-width: 0 !important;
+  font-size: 0.72rem !important;
+  padding: 0 22px 0 8px !important;
+  flex: 1 1 80px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   16g. When Investment Ends — world-class dark maturity cards
+   ═══════════════════════════════════════════════════════════════ */
+#maturityInvestments { padding-bottom: 8px !important; }
+#maturityInvestments > h3 {
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  color: rgba(255,255,255,0.38) !important;
+  padding: 6px 2px 10px !important;
+  margin-bottom: 0 !important;
+}
+.maturity-card {
+  background: linear-gradient(145deg, #1c2333 0%, #141a24 100%) !important;
+  border-left: 3px solid #FF9B0C !important;
+  border-top: 1px solid rgba(255,255,255,0.07) !important;
+  border-right: 1px solid rgba(255,255,255,0.07) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+  border-radius: 14px !important;
+  padding: 16px !important;
+  gap: 0 !important;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.22) !important;
+  margin-bottom: 12px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+.maturity-card::after {
+  content: '' !important;
+  position: absolute !important;
+  top: -24px !important;
+  right: -24px !important;
+  width: 80px !important;
+  height: 80px !important;
+  background: radial-gradient(circle, rgba(255,155,12,0.09) 0%, transparent 70%) !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+.maturity-card > div:first-child {
+  position: relative !important;
+  z-index: 1 !important;
+}
+.maturity-card__info {
+  flex: 1 !important;
+  min-width: 0 !important;
+  overflow: visible !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+.maturity-card__name {
+  font-size: 0.93rem !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  line-height: 1.35 !important;
+  margin-bottom: 6px !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+}
+.maturity-card__detail {
+  font-size: 0.74rem !important;
+  color: rgba(255,255,255,0.42) !important;
+  line-height: 1.5 !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+}
+.maturity-card > .btn {
+  flex-shrink: 0 !important;
+  align-self: flex-start !important;
+  font-size: 0.78rem !important;
+  padding: 8px 14px !important;
+  position: relative !important;
+  z-index: 1 !important;
+  margin-top: 0 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   16h. Documents & Legal — world-class dark cards
+   ═══════════════════════════════════════════════════════════════ */
+.doc-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+.doc-card {
+  background: linear-gradient(145deg, #1c2333 0%, #141a24 100%) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+  border-left: 3px solid #FF9B0C !important;
+  border-radius: 14px !important;
+  padding: 16px !important;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.2) !important;
+  position: relative !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+.doc-card::after {
+  content: '' !important;
+  position: absolute !important;
+  top: -24px !important;
+  right: -24px !important;
+  width: 80px !important;
+  height: 80px !important;
+  background: radial-gradient(circle, rgba(255,155,12,0.09) 0%, transparent 70%) !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+.doc-card__top {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+.doc-card__icon {
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  border-radius: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 1.1rem !important;
+  flex-shrink: 0 !important;
+}
+.doc-card__head { flex: 1 !important; min-width: 0 !important; }
+.doc-card__title {
+  font-size: 0.9rem !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  line-height: 1.3 !important;
+  margin-bottom: 3px !important;
+  white-space: normal !important;
+}
+.doc-card__sub {
+  font-size: 0.70rem !important;
+  color: rgba(255,255,255,0.4) !important;
+}
+.doc-card__amount {
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+  color: #d4af37 !important;
+  flex-shrink: 0 !important;
+  align-self: center !important;
+  font-variant-numeric: tabular-nums !important;
+}
+.doc-card__meta {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+  font-size: 0.68rem !important;
+  color: rgba(255,255,255,0.35) !important;
+  border-top: 1px solid rgba(255,255,255,0.07) !important;
+  padding-top: 10px !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+.doc-card__meta span {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+.doc-card__status { margin-left: auto !important; }
+.doc-card__actions {
+  display: flex !important;
+  gap: 8px !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+.doc-card__btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  padding: 10px 14px !important;
+  border-radius: 9px !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  text-decoration: none !important;
+  flex: 1 !important;
+  transition: opacity 0.15s !important;
+  border: none !important;
+}
+.doc-card__btn:active { opacity: 0.75 !important; }
+.doc-card__btn--primary {
+  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  color: #fff !important;
+  box-shadow: 0 3px 10px rgba(255,155,12,0.28) !important;
+}
+.doc-card__btn--ghost {
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  color: rgba(255,255,255,0.72) !important;
+}
+.doc-card__btn--sm {
+  padding: 6px 10px !important;
+  font-size: 0.70rem !important;
+  flex: 0 !important;
+}
+/* Receipt: horizontal layout */
+.doc-card--receipt {
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 14px 16px !important;
+}
+.doc-card--receipt .doc-card__icon {
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  border-radius: 10px !important;
+  font-size: 1rem !important;
+}
+.doc-card--receipt .doc-card__head { flex: 1 !important; min-width: 0 !important; }
+.doc-card--receipt .doc-card__title { font-size: 0.82rem !important; }
+.doc-card__receipt-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex-shrink: 0 !important;
+}
+.doc-card--receipt .doc-card__amount {
+  font-size: 0.92rem !important;
+  color: #4ade80 !important;
+}

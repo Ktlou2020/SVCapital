@@ -1330,9 +1330,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Immediately populate greeting from cached user so name never stays "Loading..."
   try {
-    const cached    = JSON.parse(localStorage.getItem('svc_user') || '{}');
-    const firstName = cached.firstName || cached.first_name || '';
-    const lastName  = cached.lastName  || cached.last_name  || '';
+    const cached    = JSON.parse(localStorage.getItem('svc_user') || '{}') || {};
+    const firstName = cached.firstName || cached.first_name || cached.name?.split(' ')[0] || '';
+    const lastName  = cached.lastName  || cached.last_name  || cached.name?.split(' ').slice(1).join(' ') || '';
     // Fallback: use email prefix if name not yet in cache (first cold-start)
     const dispFirst = firstName || (cached.email ? cached.email.split('@')[0] : 'Investor');
     const dispFull  = firstName ? `${firstName} ${lastName}`.trim() : dispFirst;

@@ -59,7 +59,7 @@
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
   </script>
   <script src="/js/native.js"></script>
-  <link rel="stylesheet" href="/css/mobile-app.css?v=17">
+  <link rel="stylesheet" href="/css/mobile-app.css?v=18">
   <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
   <script>
   (function(){
@@ -309,7 +309,7 @@
             <div class="portfolio-hero__label">Total Portfolio Value</div>
             <div class="portfolio-hero__value" id="pov-total">—</div>
             <div class="portfolio-hero__return" id="pov-return">
-              <i class="fa-solid fa-arrow-trend-up"></i> <span>Loading...</span>
+              <i class="fa-solid fa-arrow-trend-up"></i> <span>—</span>
             </div>
           </div>
           <div class="portfolio-hero__right">
@@ -858,7 +858,10 @@
                   <div class="form-group"><label class="form-label">City</label><input type="text" class="form-input" id="profCity" /></div>
                   <div class="form-group"><label class="form-label">Province</label>
                     <select class="form-select" id="profProvince">
-                      <option>Western Cape</option><option>Gauteng</option><option>KwaZulu-Natal</option>
+                      <option value="">Select province</option>
+                      <option>Eastern Cape</option><option>Free State</option><option>Gauteng</option>
+                      <option>KwaZulu-Natal</option><option>Limpopo</option><option>Mpumalanga</option>
+                      <option>North West</option><option>Northern Cape</option><option>Western Cape</option>
                     </select>
                   </div>
                 </div>
