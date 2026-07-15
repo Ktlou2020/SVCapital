@@ -1286,43 +1286,49 @@ input[type="file"] { font-size: 16px !important; }
 .policies-header {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
   margin-bottom: 24px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid rgba(0,0,0,0.07);
+  padding-bottom: 22px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
 }
 
 .policies-header__icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg,#656565,#1a6b7a);
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #FF9B0C, #FF5229);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 1.25rem;
+  font-size: 1.6rem;
   flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(255,90,41,0.30);
 }
 
 .policies-header__title {
-  font-size: 1.25rem;
-  font-weight: 800;
+  font-size: 1.5rem;
+  font-weight: 900;
   color: #1a1a1a;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 
 .policies-header__sub {
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   color: #6b7280;
-  margin-top: 2px;
+  margin-top: 5px;
+  line-height: 1.4;
 }
 
 .policy-accordion {
   background: #fff;
   border: 1.5px solid rgba(0,0,0,0.07);
   border-radius: 18px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
   transition: box-shadow 0.25s, border-color 0.25s;
 }
 .policy-accordion--open {
@@ -1332,8 +1338,8 @@ input[type="file"] { font-size: 16px !important; }
 .policy-accordion__header {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 15px 16px;
+  gap: 16px;
+  padding: 18px 18px;
   background: none;
   border: none;
   cursor: pointer;
@@ -1342,21 +1348,21 @@ input[type="file"] { font-size: 16px !important; }
   font-family: inherit;
 }
 .policy-accordion__icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   flex-shrink: 0;
   transition: transform 0.2s;
 }
-.policy-accordion--open .policy-accordion__icon { transform: scale(1.08); }
+.policy-accordion--open .policy-accordion__icon { transform: scale(1.06); }
 .policy-accordion__title {
   flex: 1;
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 800;
   color: #1a1a1a;
 }
 .policy-accordion__chev {
