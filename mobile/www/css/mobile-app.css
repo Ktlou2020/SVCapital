@@ -1636,3 +1636,69 @@ input[readonly].form-input,
 input[disabled].form-input {
   font-size: 16px !important;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   MATURITY INSTRUCTIONS — header icon badge + deadline notice
+   ───────────────────────────────────────────────────────────── */
+.maturity-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+  padding: 20px 16px 16px !important;
+}
+.maturity-header__icon {
+  width: 56px !important;
+  height: 56px !important;
+  min-width: 56px !important;
+  border-radius: 16px !important;
+  background: linear-gradient(135deg, #ff9b0c, #ff5229) !important;
+  color: #fff !important;
+  font-size: 1.5rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 4px 16px rgba(255,90,41,0.35) !important;
+}
+.maturity-header__title {
+  font-size: 1.2rem !important;
+  font-weight: 800 !important;
+  color: #1a1a1a !important;
+  line-height: 1.2 !important;
+  margin-bottom: 4px !important;
+}
+.maturity-header__sub {
+  font-size: 0.80rem !important;
+  color: #6b7280 !important;
+  line-height: 1.45 !important;
+}
+.maturity-notice {
+  display: flex !important;
+  gap: 12px !important;
+  align-items: flex-start !important;
+  background: linear-gradient(135deg, rgba(255,155,12,0.11), rgba(255,82,41,0.06)) !important;
+  border: 1px solid rgba(255,140,20,0.32) !important;
+  border-radius: 14px !important;
+  padding: 16px !important;
+  margin: 0 16px 16px !important;
+}
+.maturity-notice > i {
+  font-size: 1.2rem !important;
+  color: #e27008 !important;
+  margin-top: 2px !important;
+  flex-shrink: 0 !important;
+}
+.maturity-notice__title {
+  font-size: 0.88rem !important;
+  font-weight: 700 !important;
+  color: #92400e !important;
+  margin-bottom: 6px !important;
+}
+.maturity-notice__text {
+  font-size: 0.77rem !important;
+  color: #78350f !important;
+  line-height: 1.55 !important;
+}
+.maturity-notice__text strong {
+  font-weight: 700 !important;
+  color: #7c2d12 !important;
+}
