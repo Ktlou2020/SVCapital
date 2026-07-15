@@ -659,6 +659,72 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
   background: rgba(255,255,255,0.13) !important;
   color: rgba(255,255,255,0.88) !important;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   16c. Sidebar — reference look (dark bg, breathing room, user card)
+   ───────────────────────────────────────────────────────────── */
+/* Richer near-black background */
+.sidebar {
+  background: linear-gradient(180deg, #0d0f14 0%, #090b0e 100%) !important;
+}
+/* Wider vertical breathing room between nav items */
+.sidebar .nav-item {
+  margin: 4px 10px !important;
+  padding: 7px 12px !important;
+  min-height: 58px !important;
+  font-size: 0.9rem !important;
+  font-weight: 500 !important;
+  gap: 14px !important;
+}
+/* Active pill: deeper brownish-amber */
+.sidebar .nav-item.active {
+  background: linear-gradient(90deg, rgba(120,38,5,0.62) 0%, rgba(68,14,0,0.30) 100%) !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+}
+/* More-toggle chevron — circular pill button */
+#navMoreChevron {
+  background: rgba(255,255,255,0.10) !important;
+  border-radius: 50% !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.62rem !important;
+  flex-shrink: 0 !important;
+}
+/* User card at the bottom */
+.sidebar .sidebar-user {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.09) !important;
+  border-radius: 16px !important;
+  padding: 14px !important;
+  gap: 14px !important;
+}
+/* Large orange gradient avatar */
+.sidebar .sidebar-user__avatar {
+  width: 56px !important;
+  height: 56px !important;
+  min-width: 56px !important;
+  border-radius: 14px !important;
+  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  color: #fff !important;
+  font-size: 1.15rem !important;
+  font-weight: 900 !important;
+  box-shadow: 0 4px 16px rgba(255,155,12,0.35) !important;
+}
+.sidebar .sidebar-user__info .user-name {
+  font-size: 0.9rem !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+}
+.sidebar .sidebar-user__info .user-role {
+  font-size: 0.72rem !important;
+  color: rgba(255,255,255,0.5) !important;
+}
+
 /* Account Summary: copy button sits LEFT of the value, both right-aligned */
 .info-row .copy-btn { margin-left: auto !important; }
 
