@@ -2090,27 +2090,27 @@ body {
 
 /* ─── PORTFOLIO HERO — Flagship element ─── */
 .portfolio-hero {
-  background: #303030 !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
+  background: linear-gradient(140deg, #1a0c04 0%, #0e0702 55%, #060301 100%) !important;
+  border: 1px solid rgba(255,140,20,0.14) !important;
   border-radius: 24px !important;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,155,12,0.08) !important;
   position: relative !important;
   overflow: hidden !important;
 }
 .portfolio-hero::before {
   content: '' !important;
   position: absolute !important;
-  top: -80px; right: -40px !important;
-  width: 320px; height: 320px !important;
-  background: radial-gradient(circle, rgba(255,155,12,0.10) 0%, transparent 68%) !important;
+  top: -60px; right: -30px !important;
+  width: 340px; height: 340px !important;
+  background: radial-gradient(circle, rgba(255,155,12,0.22) 0%, rgba(255,100,0,0.06) 45%, transparent 68%) !important;
   pointer-events: none !important;
 }
 .portfolio-hero::after {
   content: '' !important;
   position: absolute !important;
-  bottom: -60px; left: -20px !important;
-  width: 240px; height: 240px !important;
-  background: radial-gradient(circle, rgba(47,140,155,0.09) 0%, transparent 68%) !important;
+  bottom: -80px; left: -30px !important;
+  width: 260px; height: 260px !important;
+  background: radial-gradient(circle, rgba(180,80,0,0.08) 0%, transparent 68%) !important;
   pointer-events: none !important;
 }
 .portfolio-hero__value {
@@ -3074,7 +3074,7 @@ body.dark-mode .wallet-card__label { color: #9ca3af !important; }
 body.dark-mode .wallet-card__value { color: #e2e8f0 !important; }
 body.dark-mode .wallet-card__sub   { color: #6b7280 !important; }
 
-body.dark-mode .portfolio-hero { background: #303030 !important; }
+body.dark-mode .portfolio-hero { background: linear-gradient(140deg, #1a0c04 0%, #0e0702 55%, #060301 100%) !important; }
 body.dark-mode .portfolio-hero .pov-label { color: #6b7280 !important; }
 body.dark-mode .portfolio-hero .pov-value { color: #e2e8f0 !important; }
 
