@@ -5969,7 +5969,7 @@ let _fbRating = 0;
 function setFbStar(n) {
   _fbRating = n;
   document.querySelectorAll('.fb-star').forEach(s => {
-    s.style.color = parseInt(s.dataset.v) <= n ? '#ff9b0c' : '#d1d5db';
+    s.style.color = parseInt(s.dataset.v) <= n ? '#ff9b0c' : '';
   });
 }
 
