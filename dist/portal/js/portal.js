@@ -241,7 +241,7 @@ function renderOverviewTxns() {
     <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${t.type?.replace(/_/g, ' ')}</span></td>
     <td class="${t.amount > 0 ? 'td-green' : 'td-red'} fw-700">${t.amount > 0 ? '+' : ''}${Utils.rand(t.amount)}</td>
     <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
-    <td class="td-muted">${Utils.date(t.transaction_date)}</td>
+    <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
   </tr>`).join('');
 }
 
@@ -524,7 +524,7 @@ function renderMyTxnTable() {
     <td>${Utils.statusBadge(t.status)}</td>
     <td class="td-muted" style="font-size:0.72rem">${t.reference || '—'}</td>
     <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
-    <td class="td-muted">${Utils.date(t.transaction_date)}</td>
+    <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
   </tr>`).join('');
 }
 
@@ -562,7 +562,7 @@ async function loadWallet() {
     <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
       <div>
         <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${t.description || t.type?.replace(/_/g, ' ')}</div>
-        <div style="font-size:0.7rem;color:#9ca3af">${Utils.date(t.transaction_date)}</div>
+        <div style="font-size:0.7rem;color:#9ca3af">${Utils.date(t.transaction_date || t.created_at)}</div>
       </div>
       <span style="font-weight:700;color:#22c55e">+${Utils.rand(Math.abs(t.amount))}</span>
     </div>

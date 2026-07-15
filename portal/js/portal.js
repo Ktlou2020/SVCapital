@@ -1916,7 +1916,7 @@ function renderOverviewTxns() {
       <td><span class="badge badge--${typeColors[t.type] || 'gray'}">${(t.type?.replace(/_/g, ' ') || '').replace(/^\w/, c => c.toUpperCase())}</span></td>
       <td class="${pos ? 'td-green' : 'td-red'} fw-700">${pos ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
       <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
-      <td class="td-muted">${Utils.date(t.transaction_date)}</td>
+      <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
     </tr>`;
   }).join('');
 }
@@ -2291,7 +2291,7 @@ function renderMyTxnTable() {
       <td>${Utils.statusBadge(t.status)}</td>
       <td class="td-muted" style="font-size:0.72rem">${t.reference || '—'}</td>
       <td class="td-muted" style="font-size:0.75rem">${t.description || '—'}</td>
-      <td class="td-muted">${Utils.date(t.transaction_date)}</td>
+      <td class="td-muted">${Utils.date(t.transaction_date || t.created_at)}</td>
     </tr>`;
   }).join('');
 }
