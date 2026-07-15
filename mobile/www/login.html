@@ -543,7 +543,7 @@
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
   </script>
   <script src="/js/native.js"></script>
-  <link rel="stylesheet" href="/css/mobile-app.css?v=5">
+  <link rel="stylesheet" href="/css/mobile-app.css?v=6">
   <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
   <script>
   (function(){
@@ -1039,13 +1039,6 @@
     }
   }
 
-  // Show biometric button if native and token saved
-  document.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('biometricBtn');
-    if (btn && window.__SVC_NATIVE__ && localStorage.getItem('svc_bio_token')) {
-      btn.style.display = 'flex';
-    }
-  });
 
   function show2FAStep() {
     document.getElementById('loginForm').style.display = 'none';
