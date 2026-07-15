@@ -394,8 +394,11 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 .testimonial-stars   { color: var(--ci-orange) !important; }
 .testimonial-text    { color: var(--ci-text-muted) !important; }
 .testimonial-author-name { color: var(--ci-text) !important; }
+.testimonial-author strong { color: var(--ci-text) !important; }
+.testimonial-author span, .testimonial-verified { color: var(--ci-text-muted) !important; }
 .testimonial-product { color: var(--ci-orange) !important; }
 .testimonial-return  { color: var(--ci-green) !important; }
+.testimonial-card p  { color: var(--ci-text-body) !important; }
 
 /* ═══════════════════════════════════════════════════════════════
    FAQ — white background
