@@ -195,7 +195,7 @@
         </button>
         <div>
           <div class="topbar__title" id="topbarTitle">Portfolio Overview</div>
-          <div class="topbar__breadcrumb" id="topbarGreeting">Loading...</div>
+          <div class="topbar__breadcrumb" id="topbarGreeting">Welcome back</div>
         </div>
       </div>
       <div class="topbar__actions">
@@ -248,7 +248,7 @@
         <div class="welcome-banner" id="welcomeBanner">
           <div class="welcome-info">
             <div class="welcome-greeting" id="welcomeGreeting">Good morning</div>
-            <div class="welcome-name" id="welcomeName">Loading...</div>
+            <div class="welcome-name" id="welcomeName">—</div>
             <div class="welcome-chips">
               <span class="welcome-chip welcome-chip--green" id="wchipFica" style="display:none">
                 <i class="fa-solid fa-shield-halved"></i> Identity Verified
@@ -352,7 +352,11 @@
                 </button>
               </div>
               <div id="overviewInvestmentsBody" class="ov-list">
-                <div class="text-center text-muted" style="padding:24px">Loading…</div>
+                <div style="padding:20px 16px;display:flex;flex-direction:column;gap:10px">
+                  <span class="skeleton" style="width:70%;height:14px;display:block;border-radius:4px"></span>
+                  <span class="skeleton" style="width:50%;height:14px;display:block;border-radius:4px"></span>
+                  <span class="skeleton" style="width:60%;height:14px;display:block;border-radius:4px"></span>
+                </div>
               </div>
             </div>
 
@@ -363,7 +367,11 @@
                 <button class="btn btn--secondary btn--sm" onclick="navigate('transactions', document.querySelector('[data-view=transactions]'))">View All</button>
               </div>
               <div id="overviewTxnBody" class="ov-list">
-                <div class="text-center text-muted" style="padding:24px">Loading…</div>
+                <div style="padding:20px 16px;display:flex;flex-direction:column;gap:10px">
+                  <span class="skeleton" style="width:65%;height:14px;display:block;border-radius:4px"></span>
+                  <span class="skeleton" style="width:45%;height:14px;display:block;border-radius:4px"></span>
+                  <span class="skeleton" style="width:75%;height:14px;display:block;border-radius:4px"></span>
+                </div>
               </div>
             </div>
           </div>
@@ -2922,7 +2930,7 @@
 </nav>
 
 <script src="../js/api.js?v=3"></script>
-<script src="js/portal.js?v=10"></script>
+<script src="js/portal.js?v=11"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 if ('serviceWorker' in navigator && !window.__SVC_NATIVE__) {
