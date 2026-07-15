@@ -661,6 +661,56 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
 }
 /* Account Summary: copy button sits LEFT of the value, both right-aligned */
 .info-row .copy-btn { margin-left: auto !important; }
+
+/* ─── Transaction Summary Card (Money In / Money Out) ─── */
+.txn-summary {
+  display: flex !important;
+  align-items: center !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+  border-radius: 18px !important;
+  padding: 20px 16px !important;
+  margin-bottom: 16px !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.05) !important;
+}
+.txn-summary__item {
+  flex: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+}
+.txn-summary__icon {
+  width: 58px !important;
+  height: 58px !important;
+  min-width: 58px !important;
+  border-radius: 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 1.3rem !important;
+  flex-shrink: 0 !important;
+}
+.txn-summary__label {
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: #6b7280 !important;
+  margin-bottom: 4px !important;
+}
+.txn-summary__value {
+  font-size: 1.25rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1 !important;
+}
+.txn-summary__divider {
+  width: 1px !important;
+  height: 48px !important;
+  background: rgba(0,0,0,0.08) !important;
+  margin: 0 12px !important;
+  flex-shrink: 0 !important;
+}
 /* Product filter dropdown — never clip text on mobile */
 #myInvProductFilter {
   min-width: 160px !important;
