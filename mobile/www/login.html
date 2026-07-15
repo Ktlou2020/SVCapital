@@ -543,7 +543,7 @@
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
   </script>
   <script src="/js/native.js"></script>
-  <link rel="stylesheet" href="/css/mobile-app.css">
+  <link rel="stylesheet" href="/css/mobile-app.css?v=5">
   <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
   <script>
   (function(){
@@ -650,10 +650,6 @@
 
         <button type="submit" class="btn-login" id="loginBtn">
           <span id="loginBtnText"><i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In</span>
-        </button>
-        <button type="button" class="btn-biometric" id="biometricBtn" style="display:none;width:100%;padding:12px;margin-top:8px;background:transparent;border:1.5px solid rgba(255,155,12,0.3);border-radius:10px;color:#FF9B0C;font-size:0.9rem;font-weight:600;cursor:pointer;align-items:center;justify-content:center;gap:8px" onclick="loginWithBiometric()">
-          <i class="fa-solid fa-fingerprint" style="font-size:1.1rem"></i>
-          Sign in with Face ID / Fingerprint
         </button>
 
         <div class="login-links">
