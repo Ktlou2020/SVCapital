@@ -1330,17 +1330,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Immediately populate greeting from cached user so name never stays "Loading..."
   try {
-    const cached = JSON.parse(localStorage.getItem('svc_user') || '{}');
+    const cached    = JSON.parse(localStorage.getItem('svc_user') || '{}');
     const firstName = cached.firstName || cached.first_name || '';
     const lastName  = cached.lastName  || cached.last_name  || '';
+    // Fallback: use email prefix if name not yet in cache (first cold-start)
+    const dispFirst = firstName || (cached.email ? cached.email.split('@')[0] : 'Investor');
+    const dispFull  = firstName ? `${firstName} ${lastName}`.trim() : dispFirst;
     const nameEl = document.getElementById('welcomeName');
-    if (nameEl && firstName) nameEl.textContent = `${firstName} ${lastName}`.trim();
+    if (nameEl) nameEl.textContent = dispFull;
     const greetEl = document.getElementById('topbarGreeting');
-    if (greetEl && firstName) greetEl.textContent = `${_timeGreeting()}, ${firstName} 👋`;
+    if (greetEl) greetEl.textContent = `${_timeGreeting()}, ${dispFirst} 👋`;
     const greetEl2 = document.getElementById('welcomeGreeting');
     if (greetEl2) greetEl2.textContent = _timeGreeting();
     const avEl = document.getElementById('welcomeAvatar');
-    if (avEl && firstName) avEl.textContent = ((firstName[0] || '') + (lastName[0] || '')).toUpperCase() || '?';
+    if (avEl) avEl.textContent = ((dispFirst[0] || '') + (lastName[0] || '')).toUpperCase() || '?';
   } catch (_) {}
 
   // Try to render from cache immediately — hides cover instantly on repeat launches.
