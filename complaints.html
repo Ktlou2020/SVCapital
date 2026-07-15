@@ -12,9 +12,10 @@
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html{scroll-behavior:smooth}
     body{font-family:'Poppins',sans-serif;background:#f8f9fa;color:#1a1a2e;line-height:1.75;font-size:15px}
-    .header{background:#1a1a2e;padding:18px 0;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.2)}
+    .header{background:#303030;padding:18px 0;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.2)}
     .header-inner{max-width:960px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between}
-    .logo{font-size:1.25rem;font-weight:800;color:#FF8215;letter-spacing:-0.5px;text-decoration:none}
+    .logo{display:block;line-height:0;text-decoration:none}
+    .logo img{height:32px;width:auto}
     .back-link{font-size:0.82rem;color:#aaa;text-decoration:none;display:flex;align-items:center;gap:5px}
     .back-link:hover{color:#FF8215}
     .page-wrap{max-width:960px;margin:0 auto;padding:48px 24px 80px;display:grid;grid-template-columns:220px 1fr;gap:40px;align-items:start}
@@ -22,7 +23,7 @@
     .toc-title{font-weight:700;font-size:0.8rem;color:#1a1a2e;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.06em}
     .toc a{display:block;color:#6b7280;text-decoration:none;padding:4px 0;border-left:2px solid transparent;padding-left:10px;transition:all 0.15s;line-height:1.4}
     .toc a:hover{color:#FF8215;border-left-color:#FF8215}
-    .hero{background:linear-gradient(135deg,#1a1a2e,#2d2d5e);color:#fff;padding:40px 32px;border-radius:16px;margin-bottom:32px}
+    .hero{background:linear-gradient(135deg,#1a1a1a,#303030);color:#fff;padding:40px 32px;border-radius:16px;margin-bottom:32px}
     .hero h1{font-size:1.9rem;font-weight:800;margin-bottom:8px}
     .hero-meta{font-size:0.82rem;color:rgba(255,255,255,0.6);margin-top:10px}
     .badge{display:inline-block;background:rgba(255,130,21,0.2);color:#FF8215;border:1px solid rgba(255,130,21,0.4);border-radius:20px;padding:3px 12px;font-size:0.72rem;font-weight:700;margin-bottom:14px}
@@ -38,7 +39,7 @@
     .category-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:12px 0}
     .category-tag{background:#f0f4ff;border:1.5px solid #656565;border-radius:8px;padding:8px 12px;font-size:0.8rem;color:#656565;font-weight:600}
     .process-step{display:flex;gap:14px;margin:12px 0;align-items:flex-start}
-    .step-num{width:32px;height:32px;min-width:32px;background:#1a1a2e;color:#FF8215;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.85rem}
+    .step-num{width:32px;height:32px;min-width:32px;background:#303030;color:#FF8215;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.85rem}
     .step-body strong{display:block;font-size:0.88rem;margin-bottom:3px;color:#1a1a2e}
     .step-body span{font-size:0.83rem;color:#374151;line-height:1.6}
     .timeline-badge{display:inline-block;background:rgba(255,130,21,0.12);color:#FF8215;border:1px solid rgba(255,130,21,0.3);border-radius:20px;padding:2px 10px;font-size:0.75rem;font-weight:700;margin-left:6px}
@@ -62,7 +63,7 @@
 <body>
   <header class="header">
     <div class="header-inner">
-      <a href="index.html" class="logo">SV Capital</a>
+      <a href="index.html" class="logo"><img src="assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital"></a>
       <a href="index.html" class="back-link">&#8592; Back to Home</a>
     </div>
   </header>

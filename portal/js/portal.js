@@ -10272,19 +10272,17 @@ function renderRiskProfile() {
   const _setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
   _setText('profSummaryId',       inv.id);
   _setText('profSummaryJoined',   inv.date_joined ? new Date(inv.date_joined).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
-  _setText('profSummaryReferral', inv.referral_code);
 
-  // Add copy buttons for investor ID and referral code
-  ['profSummaryId', 'profSummaryReferral'].forEach(elId => {
-    const el = document.getElementById(elId);
-    if (!el || el.nextElementSibling?.classList?.contains('copy-btn')) return;
+  // Copy button for Investor ID — placed BEFORE the value: [label] ... [copy] [value]
+  const invIdEl = document.getElementById('profSummaryId');
+  if (invIdEl && !invIdEl.previousElementSibling?.classList?.contains('copy-btn')) {
     const btn = document.createElement('button');
     btn.className = 'copy-btn';
     btn.title = 'Copy';
     btn.innerHTML = '<i class="fa-solid fa-copy"></i>';
-    btn.onclick = () => _copyText(el.textContent, btn);
-    el.after(btn);
-  });
+    btn.onclick = () => _copyText(invIdEl.textContent, btn);
+    invIdEl.before(btn);
+  }
 
   const statusEl = document.getElementById('profSummaryStatus');
   if (statusEl) {

@@ -6460,13 +6460,11 @@ function renderLearnView() {
   const tabs = LEARN_TRACKS.map(t => `
     <button class="learn-track-tab ${_learnActiveTrack === t.id ? 'active' : ''}"
             onclick="_setLearnTrack('${t.id}')"
-            style="${_learnActiveTrack === t.id ? `border-color:${t.color};color:${t.color}` : ''}">
-      <i class="fa-solid ${t.icon}"></i>
-      <div>
-        <div class="learn-tab-name">${t.label}</div>
-        <div class="learn-tab-sub">${t.desc}</div>
-      </div>
-      ${t.id === recommended.id ? `<span class="learn-tab-recommended">Recommended</span>` : ''}
+            style="${_learnActiveTrack === t.id ? `border-color:${t.color}` : ''}">
+      ${t.id === recommended.id ? `<span class="learn-tab-recommended">RECOMMENDED</span>` : ''}
+      <div class="learn-tab-icon-wrap"><i class="fa-solid ${t.icon}"></i></div>
+      <div class="learn-tab-name">${t.label}</div>
+      <div class="learn-tab-sub">${t.desc}</div>
     </button>`).join('');
 
   const activeTrack = LEARN_TRACKS.find(t => t.id === _learnActiveTrack) || LEARN_TRACKS[0];
@@ -10393,19 +10391,17 @@ function renderRiskProfile() {
   const _setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
   _setText('profSummaryId',       inv.id);
   _setText('profSummaryJoined',   inv.date_joined ? new Date(inv.date_joined).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
-  _setText('profSummaryReferral', inv.referral_code);
 
-  // Add copy buttons for investor ID and referral code
-  ['profSummaryId', 'profSummaryReferral'].forEach(elId => {
-    const el = document.getElementById(elId);
-    if (!el || el.nextElementSibling?.classList?.contains('copy-btn')) return;
+  // Add copy button for Investor ID — placed BEFORE the value so layout is: [label] ... [copy] [value]
+  const invIdEl = document.getElementById('profSummaryId');
+  if (invIdEl && !invIdEl.previousElementSibling?.classList?.contains('copy-btn')) {
     const btn = document.createElement('button');
     btn.className = 'copy-btn';
     btn.title = 'Copy';
     btn.innerHTML = '<i class="fa-solid fa-copy"></i>';
-    btn.onclick = () => _copyText(el.textContent, btn);
-    el.after(btn);
-  });
+    btn.onclick = () => _copyText(invIdEl.textContent, btn);
+    invIdEl.before(btn);
+  }
 
   const statusEl = document.getElementById('profSummaryStatus');
   if (statusEl) {

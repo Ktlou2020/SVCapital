@@ -12,9 +12,10 @@
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html{scroll-behavior:smooth}
     body{font-family:'Poppins',sans-serif;background:#f8f9fa;color:#1a1a2e;line-height:1.75;font-size:15px}
-    .header{background:#1a1a2e;padding:18px 0;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.2)}
+    .header{background:#303030;padding:18px 0;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.2)}
     .header-inner{max-width:960px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between}
-    .logo{font-size:1.25rem;font-weight:800;color:#FF8215;letter-spacing:-0.5px;text-decoration:none}
+    .logo{display:block;line-height:0;text-decoration:none}
+    .logo img{height:32px;width:auto}
     .back-link{font-size:0.82rem;color:#aaa;text-decoration:none;display:flex;align-items:center;gap:5px}
     .back-link:hover{color:#FF8215}
 
@@ -28,7 +29,7 @@
 
     /* Main content */
     .content{}
-    .hero{background:linear-gradient(135deg,#1a1a2e,#2d2d5e);color:#fff;padding:40px 32px;border-radius:16px;margin-bottom:32px}
+    .hero{background:linear-gradient(135deg,#1a1a1a,#303030);color:#fff;padding:40px 32px;border-radius:16px;margin-bottom:32px}
     .hero h1{font-size:1.9rem;font-weight:800;margin-bottom:8px}
     .hero-meta{font-size:0.82rem;color:rgba(255,255,255,0.6);margin-top:10px}
     .badge{display:inline-block;background:rgba(255,130,21,0.2);color:#FF8215;border:1px solid rgba(255,130,21,0.4);border-radius:20px;padding:3px 12px;font-size:0.72rem;font-weight:700;margin-bottom:14px}
@@ -78,7 +79,7 @@
 <body>
   <header class="header">
     <div class="header-inner">
-      <a href="index.html" class="logo">SV Capital</a>
+      <a href="index.html" class="logo"><img src="assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital"></a>
       <a href="index.html" class="back-link">&#8592; Back to Home</a>
     </div>
   </header>

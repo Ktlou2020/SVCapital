@@ -387,6 +387,9 @@
 
     .form-input-toggle:hover { color: var(--orange); }
 
+    /* Biometric button — permanently removed */
+    #biometricBtn, .btn-biometric, [onclick*="loginWithBiometric"] { display: none !important; }
+
     /* Submit button */
     .btn-login {
       width: 100%;
@@ -543,7 +546,7 @@
     window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
   </script>
   <script src="/js/native.js"></script>
-  <link rel="stylesheet" href="/css/mobile-app.css?v=6">
+  <link rel="stylesheet" href="/css/mobile-app.css?v=14">
   <!-- Kill viewFadeIn animation synchronously before first paint — prevents Android WebView blank screen -->
   <script>
   (function(){
