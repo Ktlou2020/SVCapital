@@ -238,13 +238,13 @@ function sendInvestmentMatured(investor, { poolName, amount, actualReturn }) {
       <div class="box">
         <div class="row"><span class="lbl">Pool</span><span class="val">${poolName}</span></div>
         <div class="row"><span class="lbl">Principal</span><span class="val">${_fmt(amount)}</span></div>
-        <div class="row"><span class="lbl">Return Earned</span><span class="val green">${_fmt(actualReturn)}</span></div>
+        <div class="row"><span class="lbl">Return Earned</span><span class="val green">${(parseFloat(actualReturn || 0) / parseFloat(amount || 1) * 100).toFixed(2)}%</span></div>
         <div class="row"><span class="lbl">Total Processed</span><span class="val gold">${_fmt(total)}</span></div>
       </div>
       <p>Funds have been processed as per your maturity instruction. Log in to view the full details.</p>
       <a href="${BASE_URL}/portal/" class="btn">View My Portfolio →</a>
     `),
-    text: `Hi ${first_name}, your ${poolName} investment has matured. Return: ${_fmt(actualReturn)}. Total: ${_fmt(total)}. Visit ${BASE_URL}/portal/ to view details.`,
+    text: `Hi ${first_name}, your ${poolName} investment has matured. Return: ${(parseFloat(actualReturn || 0) / parseFloat(amount || 1) * 100).toFixed(2)}%. Total: ${_fmt(total)}. Visit ${BASE_URL}/portal/ to view details.`,
   });
 }
 
