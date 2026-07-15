@@ -659,6 +659,13 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
   background: rgba(255,255,255,0.13) !important;
   color: rgba(255,255,255,0.88) !important;
 }
+/* Product filter dropdown — never clip text on mobile */
+#myInvProductFilter {
+  min-width: 160px !important;
+  width: auto !important;
+  max-width: 240px !important;
+  flex: 1 !important;
+}
 /* The More chevron must NOT inherit icon-square styles */
 #navMoreChevron {
   width: auto !important;
