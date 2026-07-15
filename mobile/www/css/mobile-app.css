@@ -2387,11 +2387,9 @@ input[disabled].form-input {
   color: #a0a0a0 !important;
   border: 1px solid rgba(101,101,101,0.22) !important;
 }
-/* Receipt icon: override inline style with white icon on translucent green */
+/* Receipt cards: hide icon box, show text only */
 .doc-card--receipt .doc-card__icon {
-  background: rgba(101,237,0,0.14) !important;
-  color: #65ed00 !important;
-  border: 1px solid rgba(101,237,0,0.22) !important;
+  display: none !important;
 }
 .doc-card__head { flex: 1 !important; min-width: 0 !important; }
 .doc-card__title {
