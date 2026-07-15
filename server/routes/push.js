@@ -37,7 +37,15 @@ router.post('/subscribe', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'subscription.keys.p256dh and auth are required' });
   }
 
-  const investorId = req.user.investorId || req.user.id;
+  let investorId = req.user.investorId || null;
+  if (!investorId && req.user.id) {
+    try {
+      const { rows } = await pool.query(
+        'SELECT investor_id FROM users WHERE id = $1', [req.user.id]
+      );
+      investorId = rows[0]?.investor_id || null;
+    } catch (_) {}
+  }
   if (!investorId) {
     return res.status(400).json({ error: 'No investor ID found on session' });
   }
@@ -91,7 +99,13 @@ router.delete('/unsubscribe', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'endpoint is required' });
   }
 
-  const investorId = req.user.investorId || req.user.id;
+  let investorId = req.user.investorId || null;
+  if (!investorId && req.user.id) {
+    try {
+      const { rows } = await pool.query('SELECT investor_id FROM users WHERE id = $1', [req.user.id]);
+      investorId = rows[0]?.investor_id || null;
+    } catch (_) {}
+  }
 
   try {
     await pool.query(
@@ -116,7 +130,13 @@ router.post('/mobile-token', requireAuth, async (req, res) => {
   const validPlatforms = ['ios', 'android', 'web'];
   const plat = validPlatforms.includes(platform) ? platform : 'android';
 
-  const investorId = req.user.investorId || req.user.id;
+  let investorId = req.user.investorId || null;
+  if (!investorId && req.user.id) {
+    try {
+      const { rows } = await pool.query('SELECT investor_id FROM users WHERE id = $1', [req.user.id]);
+      investorId = rows[0]?.investor_id || null;
+    } catch (_) {}
+  }
   if (!investorId) return res.status(400).json({ error: 'No investor ID on session' });
 
   try {
