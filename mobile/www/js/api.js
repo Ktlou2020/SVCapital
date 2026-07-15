@@ -260,7 +260,7 @@ const API = {
 
     // 12-second timeout — prevents hangs when Railway server is cold-starting
     const controller = new AbortController();
-    const tId = setTimeout(() => controller.abort(), 12000);
+    const tId = setTimeout(() => controller.abort(), 18000);
     let r;
     try {
       r = await fetch(url, { ...opts, signal: controller.signal });

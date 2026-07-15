@@ -1143,6 +1143,37 @@ async function seedProducts() {
   }
 }
 
+const SEED_TESTIMONIALS = [
+  { display_name: 'Sello Moja',         initials: 'SM', body: 'Platform is easy to use. Returns out perform all banks for all investments. Thanks for listening to us and introducing minor accounts. Real growth and nice diversification portfolios.' },
+  { display_name: 'Kabelo Rakgantso',   initials: 'KR', body: 'The organisation really projected their company\'s value proposition fully towards me as their new client and my money is in safe hands.' },
+  { display_name: 'Travis Dikoko',      initials: 'TD', body: 'Great app for investing. I love it!' },
+  { display_name: 'Russel Chiume',      initials: 'RC', body: 'For someone who is new to investing, it is very helpful with guiding you to investments that suit your needs and pocket.' },
+  { display_name: 'William Keenan',     initials: 'WK', body: 'A professional service and great investment return.' },
+  { display_name: 'Nhlakanipho Mzobe',  initials: 'NM', body: 'The entire process was quite seamless. Very impressed with your App. I absolutely have no complaints.' },
+  { display_name: 'Nolukholo Gamede',   initials: 'NG', body: 'Customer service yase SV Capital is beautiful.' },
+  { display_name: 'Roland Hepson',      initials: 'RH', body: "I'm very happy with my experience and have no complaints." },
+];
+
+async function seedTestimonials() {
+  try {
+    // Allow admin-seeded testimonials that aren't tied to a specific investor account
+    await pool.query(`ALTER TABLE testimonials ALTER COLUMN investor_id DROP NOT NULL`).catch(() => {});
+    for (const t of SEED_TESTIMONIALS) {
+      await pool.query(
+        `INSERT INTO testimonials (rating, body, display_name, initials, status, approved_at)
+         SELECT 5, $1, $2, $3, 'approved', NOW()
+          WHERE NOT EXISTS (
+            SELECT 1 FROM testimonials WHERE display_name = $2 AND investor_id IS NULL
+          )`,
+        [t.body, t.display_name, t.initials]
+      );
+    }
+    console.log('✅ Seeded testimonials ready.');
+  } catch (err) {
+    console.error('[seedTestimonials] error:', err.message);
+  }
+}
+
 async function autoSetup() {
   if (!process.env.DATABASE_URL) {
     console.log('⚠️  Skipping auto-setup: DATABASE_URL not set.');
@@ -1201,6 +1232,7 @@ async function autoSetup() {
 
     // 1b2. Seed default products (idempotent — only inserts missing product types)
     await seedProducts();
+    await seedTestimonials();
 
     // 1c. Performance indexes (each wrapped individually so one failure won't abort the rest)
     const indexes = [

@@ -1079,10 +1079,14 @@ async function _applyLiveProductAverages() {
   if (!grid) return;
 
   const FALLBACKS = [
-    { rating: 5, body: 'I started with R1,000 in the cattle investment three years ago. The consistent returns have helped me build an emergency fund I never had before. SV Capital made investing real for me.', display_name: 'Nomsa M.', initials: 'NM', product_label: 'Cattle since 2022', featured: false },
-    { rating: 5, body: "As someone sceptical of 'alternative' investments, what won me over was the transparency. I can see exactly where my money goes, who manages the assets, and what the real risks are. That's rare.", display_name: 'Thabo K.', initials: 'TK', product_label: 'Solar + Cattle', featured: true },
-    { rating: 5, body: 'The 7-year solar investment is a long commitment, but at 21.4% annualised, it\'s the best return I\'ve found anywhere. My money is funding clean energy — that means something to me.', display_name: 'Lerato P.', initials: 'LP', product_label: 'Solar 7yr', featured: false },
-    { rating: 5, body: 'The delivery bike investment was my entry point — R3,100 and I started earning weekly. Two years later I have a diversified portfolio across cattle and solar too. The platform makes it so easy to track everything.', display_name: 'Sipho K.', initials: 'SK', product_label: 'Delivery + Cattle', featured: false },
+    { rating: 5, body: 'Platform is easy to use. Returns out perform all banks for all investments. Thanks for listening to us and introducing minor accounts. Real growth and nice diversification portfolios.', display_name: 'Sello Moja', initials: 'SM', featured: true },
+    { rating: 5, body: "The organisation really projected their company's value proposition fully towards me as their new client and my money is in safe hands.", display_name: 'Kabelo Rakgantso', initials: 'KR', featured: false },
+    { rating: 5, body: 'The entire process was quite seamless. Very impressed with your App. I absolutely have no complaints.', display_name: 'Nhlakanipho Mzobe', initials: 'NM', featured: false },
+    { rating: 5, body: 'For someone who is new to investing, it is very helpful with guiding you to investments that suit your needs and pocket.', display_name: 'Russel Chiume', initials: 'RC', featured: false },
+    { rating: 5, body: 'A professional service and great investment return.', display_name: 'William Keenan', initials: 'WK', featured: false },
+    { rating: 5, body: "I'm very happy with my experience and have no complaints.", display_name: 'Roland Hepson', initials: 'RH', featured: false },
+    { rating: 5, body: 'Customer service yase SV Capital is beautiful.', display_name: 'Nolukholo Gamede', initials: 'NG', featured: false },
+    { rating: 5, body: 'Great app for investing. I love it!', display_name: 'Travis Dikoko', initials: 'TD', featured: false },
   ];
 
   const renderCards = (items) => {
