@@ -774,20 +774,21 @@ function initScrollAnimations() {
 
   document.querySelectorAll('.fade-up').forEach(el => fadeObserver.observe(el));
 
-  // Data-reveal system
-  const revealObserver = new IntersectionObserver(
+  // Data-reveal system — exposed globally so dynamically injected elements
+  // (e.g. testimonials loaded after DOMContentLoaded) can be observed.
+  window._revealObserver = new IntersectionObserver(
     (entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
           entry.target.classList.add('in-view');
-          revealObserver.unobserve(entry.target);
+          window._revealObserver.unobserve(entry.target);
         }
       });
     },
     { threshold: 0.1, rootMargin: '0px 0px -30px 0px' }
   );
 
-  document.querySelectorAll('[data-reveal]').forEach(el => revealObserver.observe(el));
+  document.querySelectorAll('[data-reveal]').forEach(el => window._revealObserver.observe(el));
 }
 
 /* ═══════════════════════════════════════════════
@@ -1102,6 +1103,22 @@ async function _applyLiveProductAverages() {
           </div>
         </div>
       </div>`).join('');
+    // Cards are injected after initScrollAnimations() already ran, so the
+    // IntersectionObserver never saw them. Re-observe new cards or mark
+    // them in-view immediately if the section is already visible.
+    const section = grid.closest('section');
+    const sectionTop = section ? section.getBoundingClientRect().top : Infinity;
+    grid.querySelectorAll('[data-reveal]').forEach((el, i) => {
+      if (sectionTop < window.innerHeight) {
+        // Section already in viewport — reveal with stagger, no observer needed
+        const delay = parseInt(el.dataset.revealDelay || '0', 10);
+        setTimeout(() => el.classList.add('in-view'), delay);
+      } else if (window._revealObserver) {
+        window._revealObserver.observe(el);
+      } else {
+        el.classList.add('in-view');
+      }
+    });
   };
 
   try {
