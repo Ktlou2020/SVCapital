@@ -1416,6 +1416,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   _startPolling();
   _initPullToRefresh();
 
+  // Auto-subscribe to push notifications — runs after SW is ready (~1.5s gives
+  // the 'load' event time to fire and register the SW in index.html).
+  setTimeout(() => { _autoRegisterPush().catch(() => {}); }, 1500);
+
   // Watchdog: runs at 100ms, 600ms, and 1500ms to ensure the active view is visible.
   // Android WebView compositing (esp. with position:fixed overlays) can silently
   // leave the active view at opacity:0. Running the watchdog at three intervals
@@ -10965,20 +10969,10 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 function _initPushNotifToggle() {
-  const toggle     = document.getElementById('pushNotifToggle');
-  const slider     = document.getElementById('pushNotifSlider');
-  const statusText = document.getElementById('pushNotifStatusText');
-  if (!toggle) return;
-
+  if (!document.getElementById('pushNotifToggle')) return;
   const saved   = localStorage.getItem(PUSH_PREF_KEY);
   const enabled = saved === 'true';
-  toggle.checked = enabled;
-  if (slider) {
-    slider.style.background = enabled ? '#ff9b0c' : '#ccc';
-  }
-  if (statusText) statusText.textContent = enabled
-    ? 'Enabled — you will receive investment alerts'
-    : 'Enable to receive investment alerts';
+  _syncPushToggleUI(enabled);
 }
 
 async function togglePushNotifications(checked) {
@@ -11098,6 +11092,87 @@ async function togglePushNotifications(checked) {
     if (statusText) statusText.textContent = 'Disabled';
     Toast.info('Push notifications disabled.');
   }
+}
+
+/**
+ * Silently subscribe this browser to push notifications on portal load.
+ * Runs automatically after the portal initialises; respects explicit opt-outs.
+ * The native-app path is already handled by native.js/initPush().
+ */
+async function _autoRegisterPush() {
+  if (window.__SVC_NATIVE__) return;
+  if (!('Notification' in window) || !('PushManager' in window) || !('serviceWorker' in navigator)) return;
+  if (Notification.permission === 'denied') return;
+  // Respect explicit opt-out from the settings toggle
+  if (localStorage.getItem(PUSH_PREF_KEY) === 'false') return;
+
+  try {
+    // Wait for the service worker (registered on the 'load' event in index.html)
+    let swReg = window._swReg;
+    if (!swReg) {
+      try { swReg = await navigator.serviceWorker.ready; } catch (_) { return; }
+    }
+    if (!swReg) return;
+
+    // If already subscribed just sync the UI state and bail
+    const existing = await swReg.pushManager.getSubscription().catch(() => null);
+    if (existing) {
+      localStorage.setItem(PUSH_PREF_KEY, 'true');
+      _syncPushToggleUI(true);
+      return;
+    }
+
+    // Request permission (no-op if already 'granted')
+    let permission = Notification.permission;
+    if (permission === 'default') {
+      permission = await Notification.requestPermission();
+    }
+    if (permission !== 'granted') {
+      localStorage.setItem(PUSH_PREF_KEY, 'false');
+      _syncPushToggleUI(false);
+      return;
+    }
+
+    // Fetch VAPID public key from server
+    const keyRes = await fetch((window.__SVC_API_BASE__ || '/api/') + 'push/vapid-public-key');
+    if (!keyRes.ok) return;
+    const { publicKey } = await keyRes.json();
+
+    // Subscribe
+    const subscription = await swReg.pushManager.subscribe({
+      userVisibleOnly:      true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+
+    // Register subscription with server
+    const token = (typeof Auth !== 'undefined' ? Auth.getToken() : null) || localStorage.getItem('svc_token');
+    const subRes = await fetch((window.__SVC_API_BASE__ || '/api/') + 'push/subscribe', {
+      method:  'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ subscription: subscription.toJSON(), userAgent: navigator.userAgent }),
+    });
+
+    if (subRes.ok) {
+      localStorage.setItem(PUSH_PREF_KEY, 'true');
+      _syncPushToggleUI(true);
+    }
+  } catch (err) {
+    console.warn('[Push] auto-register error:', err.message || err);
+  }
+}
+
+function _syncPushToggleUI(enabled) {
+  const toggle     = document.getElementById('pushNotifToggle');
+  const slider     = document.getElementById('pushNotifSlider');
+  const statusText = document.getElementById('pushNotifStatusText');
+  if (toggle) toggle.checked = enabled;
+  if (slider) slider.style.background = enabled ? '#ff9b0c' : '#ccc';
+  if (statusText) statusText.textContent = enabled
+    ? 'Enabled — you will receive investment alerts'
+    : 'Enable to receive investment alerts';
 }
 
 /* PWA install prompts removed — users are directed to App Store / Google Play */
