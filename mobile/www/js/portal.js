@@ -1378,9 +1378,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         try { renderOverview(); } catch (_) {}
         if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
         _cacheRendered = true;
-        // Fresh cache → background refresh silently; stale → refresh but still no blocking
+        // Fresh cache → background refresh silently; stale → refresh but still no blocking.
+        // Exception: if investments are missing from the pre-cache (investorId not yet resolved
+        // at login time), fall through to the blocking load below so the screen never gets
+        // stuck showing skeleton placeholders for investments and transactions.
         const _skipCharts = age < _CACHE_TTL;
-        loadPortalData(0, { skipCharts: _skipCharts }).catch(() => {});
+        if (PORTAL.investments && PORTAL.investments.length > 0) {
+          loadPortalData(0, { skipCharts: _skipCharts }).catch(() => {});
+        } else {
+          _cacheRendered = false; // force blocking load — investments must populate
+        }
       }
     }
   } catch (_) {}
