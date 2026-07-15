@@ -604,6 +604,74 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
 #biometricBtn, .btn-biometric { display: none !important; }
 
 /* ─────────────────────────────────────────────────────────────
+   16b. Sidebar — icon-square nav design
+   ─────────────────────────────────────────────────────────────
+   Each nav item shows a rounded square icon badge next to the label.
+   Active item: orange gradient square + warm amber row highlight.
+   The `:first-child` selector targets the main icon only — the
+   More toggle's chevron is the SECOND i element so it is excluded.
+   ───────────────────────────────────────────────────────────── */
+.sidebar {
+  background: linear-gradient(180deg, #111111 0%, #0a0a0a 100%) !important;
+}
+/* Icon square for every primary nav icon */
+.sidebar .nav-item > i:first-child {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  border-radius: 10px !important;
+  background: rgba(255,255,255,0.08) !important;
+  color: rgba(255,255,255,0.62) !important;
+  font-size: 0.92rem !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box !important;
+}
+/* Active icon: orange gradient */
+.sidebar .nav-item.active > i:first-child {
+  background: linear-gradient(135deg, #FF9B0C 0%, #FF5229 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 14px rgba(255,155,12,0.32) !important;
+}
+/* Row layout: taller to accommodate 40px icon squares */
+.sidebar .nav-item {
+  padding: 5px 12px !important;
+  margin: 2px 10px !important;
+  gap: 12px !important;
+  min-height: 52px !important;
+  color: rgba(255,255,255,0.58) !important;
+  font-size: 0.88rem !important;
+  font-weight: 500 !important;
+  border-radius: 12px !important;
+}
+/* Active row: warm amber highlight */
+.sidebar .nav-item.active {
+  color: #fff !important;
+  font-weight: 600 !important;
+  background: linear-gradient(90deg, rgba(130,35,5,0.48) 0%, rgba(80,15,0,0.22) 100%) !important;
+  border-color: rgba(255,80,10,0.10) !important;
+  box-shadow: none !important;
+}
+/* Hover on inactive items */
+.sidebar .nav-item:not(.active):hover > i:first-child {
+  background: rgba(255,255,255,0.13) !important;
+  color: rgba(255,255,255,0.88) !important;
+}
+/* The More chevron must NOT inherit icon-square styles */
+#navMoreChevron {
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  border-radius: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  font-size: 0.7rem !important;
+  color: rgba(255,255,255,0.38) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
    17. Modals — bottom sheet pattern
    ───────────────────────────────────────────────────────────── */
 .modal-overlay {
