@@ -397,10 +397,11 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
 
     // Sort — use the original date column for tables that have one
     const defaultSort = {
-      transactions:   'COALESCE(transaction_date, created_at)',
-      investments:    'COALESCE(start_date, created_at)',
-      cattle_animals: 'tag_number',
-      cattle_cycles:  'batch_name',
+      transactions:              'COALESCE(transaction_date, created_at)',
+      investments:               'COALESCE(start_date, created_at)',
+      cattle_animals:            'tag_number',
+      cattle_cycles:             'batch_name',
+      accepted_client_documents: 'accepted_at',
     };
     const defaultDir = (table === 'cattle_animals' || table === 'cattle_cycles') ? 'ASC' : 'DESC';
     let orderClause = `ORDER BY ${defaultSort[table] || 'created_at'} ${defaultDir} NULLS LAST`;
