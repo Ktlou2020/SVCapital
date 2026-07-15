@@ -2,7 +2,7 @@
 const router = require('express').Router();
 const pool   = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const requireAdmin = requireRole('admin');
+const requireAdmin = requireRole('admin', 'director');
 
 /* GET /api/email-logs — paginated list with optional filters */
 router.get('/', requireAuth, requireAdmin, async (req, res) => {
