@@ -6677,6 +6677,29 @@ function toggleBroadcastSubject() {
   const group   = document.getElementById('broadcastSubjectGroup');
   // Hide subject only for SMS-only channel
   if (group) group.style.display = channel === 'sms' ? 'none' : '';
+
+  // Show/hide push subscriber warning
+  let warnEl = document.getElementById('pushSubWarnBanner');
+  if (channel === 'push' || channel === 'all') {
+    if (!warnEl) {
+      warnEl = document.createElement('div');
+      warnEl.id = 'pushSubWarnBanner';
+      warnEl.style.cssText = 'display:none;margin-bottom:12px;padding:10px 14px;background:rgba(255,155,12,0.1);border:1px solid rgba(255,155,12,0.3);border-radius:8px;font-size:0.82rem;color:var(--text-muted)';
+      const previewBar = document.getElementById('broadcastPreviewBar');
+      if (previewBar) previewBar.after(warnEl);
+    }
+    // Check subscriber count from analytics panel
+    const subCount = parseInt(document.getElementById('pushStatSubscribers')?.textContent || '-1');
+    if (subCount === 0) {
+      warnEl.innerHTML = '<i class="fa-solid fa-bell-slash" style="color:#ff9b0c;margin-right:6px"></i><strong>0 push subscribers registered.</strong> Investors must open the app, go to <em>Profile → Notifications</em>, and enable push notifications before they can receive them.';
+      warnEl.style.display = 'block';
+    } else if (subCount > 0) {
+      warnEl.innerHTML = `<i class="fa-solid fa-bell" style="color:#ff9b0c;margin-right:6px"></i>${subCount} push subscriber${subCount !== 1 ? 's' : ''} registered.`;
+      warnEl.style.display = 'block';
+    }
+  } else if (warnEl) {
+    warnEl.style.display = 'none';
+  }
 }
 
 async function updateBroadcastPreview() {
@@ -6740,8 +6763,17 @@ async function sendBroadcast() {
       return;
     }
 
-    const { sent = 0, failed = 0, total = 0 } = data;
-    Toast.success(`Broadcast sent! ${sent} of ${total} delivered${failed > 0 ? ` (${failed} failed)` : ''}`);
+    const { sent = 0, failed = 0, total = 0, pushSubscribers } = data;
+    const isPushChannel = channel === 'push' || channel === 'all';
+    if (isPushChannel && sent === 0 && pushSubscribers === 0) {
+      Toast.info('No push subscribers registered yet. Investors must enable notifications in their profile settings first.');
+    } else if (isPushChannel && sent === 0 && total > 0) {
+      Toast.info(`Push sent but 0 delivered — ${pushSubscribers || 0} subscriber(s) registered, none matched the selected segment. Ask investors to re-enable notifications in their profile.`);
+    } else if (isPushChannel && sent > 0) {
+      Toast.success(`Push notification delivered to ${sent} subscriber${sent !== 1 ? 's' : ''}!`);
+    } else {
+      Toast.success(`Broadcast sent! ${sent} of ${total} delivered${failed > 0 ? ` (${failed} failed)` : ''}`);
+    }
 
     // Record in history
     _broadcastHistory.unshift({
@@ -6827,6 +6859,9 @@ async function loadPushAnalytics() {
     const data = await res.json();
     if (subEl)  subEl.textContent  = data.total_subscribers ?? 0;
     if (sentEl) sentEl.textContent = data.notifications_sent ?? 0;
+    // Refresh push channel warning banner with updated count
+    const channel = document.querySelector('input[name="broadcastChannel"]:checked')?.value;
+    if (channel === 'push' || channel === 'all') toggleBroadcastSubject();
 
     const recent = data.recent_notifications || [];
     if (!logEl) return;

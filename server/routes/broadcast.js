@@ -140,6 +140,18 @@ router.post('/broadcast', async (req, res) => {
 
     // ── Push channel (handle first, may return early) ────────────────────────
     if (channel === 'push' || channel === 'all') {
+      // Count active push subscriptions so the response can explain 0-sent situations
+      let totalPushSubscribers = 0;
+      try {
+        const subCount = await pool.query(
+          `SELECT COUNT(DISTINCT investor_id) AS cnt FROM push_subscriptions`
+        );
+        const tokenCount = await pool.query(
+          `SELECT COUNT(DISTINCT investor_id) AS cnt FROM push_tokens`
+        ).catch(() => ({ rows: [{ cnt: 0 }] }));
+        totalPushSubscribers = parseInt(subCount.rows[0]?.cnt || 0) + parseInt(tokenCount.rows[0]?.cnt || 0);
+      } catch (_) {}
+
       const investorIds = investors.map(i => i.id);
       const pushResult = await pushService.sendPushToAll(investorIds, {
         title: subject || 'SV Capital',
@@ -160,8 +172,13 @@ router.post('/broadcast', async (req, res) => {
       });
 
       if (channel === 'push') {
-        console.log(`[broadcast] push segment=${segment} total=${total} sent=${pushResult.sent}`);
-        return res.json({ sent: pushResult.sent, failed: total - pushResult.sent, total });
+        console.log(`[broadcast] push segment=${segment} total=${total} sent=${pushResult.sent} subscribers=${totalPushSubscribers}`);
+        return res.json({
+          sent:           pushResult.sent,
+          failed:         total - pushResult.sent,
+          total,
+          pushSubscribers: totalPushSubscribers,
+        });
       }
       // For 'all' channel, accumulate push sends and fall through to email/sms
       sent += pushResult.sent;
