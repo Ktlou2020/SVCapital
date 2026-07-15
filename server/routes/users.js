@@ -12,6 +12,7 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const pool   = require('../db/pool');
+const audit  = require('../services/audit');
 
 const stripHtml = (str) => (str || '').replace(/<[^>]*>/g, '').replace(/[<>]/g, '').trim();
 const { requireAuth, requireRole } = require('../middleware/auth');
@@ -51,7 +52,7 @@ router.get('/', requireAuth, requireRole('admin', 'director'), async (req, res) 
     const countRes = await pool.query(`SELECT COUNT(*) FROM users WHERE ${where}`, params.slice(0, -2));
     res.json({ data: rows, total: parseInt(countRes.rows[0].count), page: +page, limit: +limit });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -65,7 +66,7 @@ router.get('/:id', requireAuth, requireRole('admin', 'director'), async (req, re
     if (!rows[0]) return res.status(404).json({ error: 'User not found.' });
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -90,9 +91,15 @@ router.post('/', requireAuth, requireRole('admin', 'director'), async (req, res)
     `, [email.toLowerCase().trim(), hash, role, firstName, lastName,
         investorId || null, ifaId || null]);
 
+    await audit.log({
+      actorId: req.user.id, actorEmail: req.user.email, actorRole: req.user.role,
+      action: 'admin.user.create', entityType: 'user', entityId: user.id,
+      description: `Created user ${user.email} with role ${user.role}`,
+      ip: req.ip,
+    });
     res.status(201).json(user);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -122,9 +129,15 @@ router.put('/:id', requireAuth, requireRole('admin', 'director'), async (req, re
         isActive !== undefined ? isActive : null,
         investorId, ifaId, req.params.id]);
     if (!user) return res.status(404).json({ error: 'User not found.' });
+    await audit.log({
+      actorId: req.user.id, actorEmail: req.user.email, actorRole: req.user.role,
+      action: 'admin.user.update', entityType: 'user', entityId: user.id,
+      description: `Updated user ${user.email}`,
+      ip: req.ip,
+    });
     res.json(user);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -137,9 +150,15 @@ router.patch('/:id/toggle-active', requireAuth, requireRole('admin', 'director')
       RETURNING id, email, role, is_active
     `, [req.params.id]);
     if (!user) return res.status(404).json({ error: 'User not found.' });
+    await audit.log({
+      actorId: req.user.id, actorEmail: req.user.email, actorRole: req.user.role,
+      action: 'admin.user.toggle_active', entityType: 'user', entityId: user.id,
+      description: `Set user ${user.email} active=${user.is_active}`,
+      ip: req.ip,
+    });
     res.json(user);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -153,7 +172,7 @@ router.patch('/:id/reset-password', requireAuth, requireRole('admin', 'director'
     await pool.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [hash, req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -162,10 +181,17 @@ router.delete('/:id', requireAuth, requireRole('director'), async (req, res) => 
   try {
     if (req.params.id === req.user.id)
       return res.status(400).json({ error: 'Cannot delete your own account.' });
+    const { rows: [deletedUser] } = await pool.query('SELECT email, role FROM users WHERE id = $1', [req.params.id]);
     await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+    await audit.log({
+      actorId: req.user.id, actorEmail: req.user.email, actorRole: req.user.role,
+      action: 'admin.user.delete', entityType: 'user', entityId: req.params.id,
+      description: `Deleted user ${deletedUser?.email || req.params.id}`,
+      ip: req.ip,
+    });
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 

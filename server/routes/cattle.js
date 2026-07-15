@@ -74,7 +74,7 @@ router.get('/animals/stats', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('[cattle/animals/stats]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -133,14 +133,14 @@ router.post('/import/cycles', requireAuth, async (req, res) => {
     } catch (err) {
       await client.query('ROLLBACK');
       console.error('[cattle/import/cycles]', err.message);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Internal server error.' });
     } finally {
       client.release();
     }
 
     res.json({ inserted, skipped: records.length - inserted });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -203,14 +203,14 @@ router.post('/import/animals', requireAuth, async (req, res) => {
     } catch (err) {
       await client.query('ROLLBACK');
       console.error('[cattle/import/animals]', err.message);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Internal server error.' });
     } finally {
       client.release();
     }
 
     res.json({ inserted, skipped: records.length - inserted });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -229,7 +229,7 @@ router.delete('/purge', requireAuth, async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('[cattle/purge]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   } finally {
     client.release();
   }

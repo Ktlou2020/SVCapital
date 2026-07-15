@@ -238,7 +238,7 @@ router.get('/personas', requireAuth, requireRole('admin', 'director', 'staff'), 
     res.json({ investors, distributions: dist, personaCounts, total: investors.length });
   } catch (err) {
     console.error('[personas] error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 

@@ -44,7 +44,7 @@ router.get('/', async (req, res) => {
     res.json({ data: rows });
   } catch (err) {
     console.error('[products] error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -126,7 +126,7 @@ router.get('/cattle-stats', async (req, res) => {
     });
   } catch (err) {
     console.error('[cattle-stats] error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -199,7 +199,7 @@ router.get('/track-record', async (req, res) => {
     res.json({ data });
   } catch (err) {
     console.error('[track-record] error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 

@@ -198,7 +198,7 @@ router.post('/bank-verify/:investorId', requireAuth, requireRole('admin', 'direc
     res.json({ verdict, confidence, checks: results, docId: doc.id, docName: doc.file_name });
   } catch (err) {
     console.error('[bank-verify] error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 

@@ -130,7 +130,7 @@ router.post('/send', requireAuth, async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[gifts/send]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   } finally {
     client.release();
   }
@@ -148,7 +148,7 @@ router.get('/my', requireAuth, async (req, res) => {
     );
     res.json({ data: rows });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -164,7 +164,7 @@ router.get('/received', requireAuth, async (req, res) => {
     );
     res.json({ data: rows });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -218,7 +218,7 @@ router.post('/claim/:token', requireAuth, async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[gifts/claim]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   } finally {
     client.release();
   }
@@ -253,7 +253,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
     res.json({ success: true, refunded: gift.amount });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   } finally {
     client.release();
   }
@@ -270,7 +270,7 @@ router.get('/check-recipient', requireAuth, async (req, res) => {
     );
     return res.json({ exists: !!investor });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 

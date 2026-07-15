@@ -49,6 +49,12 @@ CREATE TABLE IF NOT EXISTS investors (
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM investors WHERE email IS NULL LIMIT 1) THEN
+    ALTER TABLE investors ALTER COLUMN email SET NOT NULL;
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS investment_pools (
   id TEXT PRIMARY KEY, name TEXT NOT NULL,
@@ -447,6 +453,12 @@ DO $$ BEGIN
 END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS push_subs_endpoint_idx ON push_subscriptions ((subscription->>'endpoint'));
 CREATE INDEX IF NOT EXISTS push_subs_investor_idx ON push_subscriptions (investor_id);
+DO $$ BEGIN
+  ALTER TABLE push_subscriptions
+    ADD CONSTRAINT push_subs_investor_fk
+    FOREIGN KEY (investor_id) REFERENCES investors(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR undefined_table THEN NULL;
+END $$;
 
 /* Paystack reusable card tokens for auto wallet top-up */
 CREATE TABLE IF NOT EXISTS paystack_authorizations (

@@ -264,7 +264,7 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
 
     let { page = 1, limit = 100, search, sort, order = 'asc', date_from, date_to, ...filters } = req.query;
     page  = Math.max(1, parseInt(page));
-    limit = Math.min(10000, Math.max(1, parseInt(limit)));
+    limit = Math.max(1, parseInt(limit));
     const offset = (page - 1) * limit;
 
     const conditions = [];
@@ -272,6 +272,7 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
 
     // ─── Role-based access control ───
     const isAdminOrDirector = ['admin', 'director', 'fund_manager'].includes(req.user.role);
+    limit = Math.min(isAdminOrDirector ? 10000 : 500, limit);
 
     // employee tables: admins get all; staff with empId are filtered to their own rows
     if (!isAdminOrDirector) {

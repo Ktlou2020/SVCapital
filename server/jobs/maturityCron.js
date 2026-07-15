@@ -22,6 +22,7 @@ const cron         = require('node-cron');
 const pool         = require('../db/pool');
 const emailService = require('../services/email');
 const smsService   = require('../services/sms');
+const pushService  = require('../services/pushService');
 
 // Reinvestments are NOT charged a platform fee — the full matured amount rolls over.
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
@@ -166,6 +167,14 @@ async function runMaturityProcessing() {
       await smsService.sendMaturityAlert(
         inv.phone, inv.first_name, principal, poolName
       ).catch(err => console.error('[maturity] SMS failed:', err.message));
+      pushService.sendPushToInvestor(inv.investor_id, {
+        title: 'Investment Matured 🎉',
+        body: `Your ${poolName} investment has matured. R${principal.toFixed(2)} + returns have been processed.`,
+        url: '/portal/',
+        icon: '/assets/logo.png',
+        badge: '/assets/logo.png',
+        tag: 'sv-maturity',
+      }).catch(err => console.error('[maturity] push failed:', err.message));
 
       processed++;
     } catch (err) {

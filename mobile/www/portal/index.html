@@ -1,7 +1,11 @@
 <!DOCTYPE html><html><head>
   <script>
-    window.__SVC_NATIVE__ = true;
-    window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
-  </script>
+  window.__SVC_NATIVE__ = true;
+  // API base is resolved at runtime: use the same origin as the WebView host,
+  // falling back to the production URL only when accessed directly.
+  window.__SVC_API_BASE__ = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:3000/api/'
+    : 'https://svcapital-production.up.railway.app/api/';
+</script>
   <script>window.location.replace('/');</script>
 </head></html>

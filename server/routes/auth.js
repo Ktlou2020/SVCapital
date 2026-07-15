@@ -42,6 +42,14 @@ const twoFaLimiter = rateLimit({
   message: { error: 'Too many 2FA attempts.' },
 });
 
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many registration attempts. Please try again in an hour.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 function generateRecoveryCodes() {
   const codes = [];
   for (let i = 0; i < 8; i++) {
@@ -244,7 +252,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 });
 
 /* ─── POST /api/auth/register ─── */
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     const {
       email, password, phone,
@@ -264,8 +272,10 @@ router.post('/register', async (req, res) => {
     if (!email || !password || !firstName || !lastName)
       return res.status(400).json({ error: 'Email, password, first name and last name are required.' });
 
-    if (password.length < 8)
-      return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    if (password.length < 10)
+      return res.status(400).json({ error: 'Password must be at least 10 characters.' });
+    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password))
+      return res.status(400).json({ error: 'Password must contain uppercase, lowercase, and a number.' });
 
     // Only allow self-registration as investor (admins create other roles)
     const allowedSelfRoles = ['investor'];
@@ -431,8 +441,10 @@ router.put('/change-password', requireAuth, async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword)
       return res.status(400).json({ error: 'currentPassword and newPassword required.' });
-    if (newPassword.length < 8)
-      return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+    if (newPassword.length < 10)
+      return res.status(400).json({ error: 'New password must be at least 10 characters.' });
+    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword))
+      return res.status(400).json({ error: 'New password must contain uppercase, lowercase, and a number.' });
 
     const { rows } = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'User not found.' });
@@ -1041,7 +1053,7 @@ router.post('/invite-investor', requireAuth, async (req, res) => {
     res.json({ ok: true, message: `Setup email sent to ${email}` });
   } catch (err) {
     console.error('[invite-investor] error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
