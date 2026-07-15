@@ -12,7 +12,7 @@ const DEMO_INVESTOR_ID = (() => {
       return 'INV-001';
     }
     const user = Auth.getUser();
-    if (user && user.investorId) return user.investorId;
+    if (user && (user.investorId || user.investor_id)) return user.investorId || user.investor_id;
   }
   return 'INV-001'; // fallback for demo
 })();
@@ -1603,8 +1603,14 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
   } catch (e) {
     console.error(`loadPortalData error (attempt ${_attempt + 1}):`, e);
 
-    // Auth errors: do not retry — the session-expired overlay is already showing
-    if (e.message && e.message.includes('Session expired')) return;
+    // Auth errors: do not retry — the session-expired overlay is already showing.
+    // Still clear "Loading..." placeholders so the page is not frozen behind the overlay.
+    if (e.message && e.message.includes('Session expired')) {
+      if (!PORTAL.investor) PORTAL.investor = { id: DEMO_INVESTOR_ID };
+      try { renderOverview(); } catch (_) {}
+      if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
+      return;
+    }
 
     // Network / timeout errors: retry with backoff (handles Railway cold-start)
     if (_attempt < MAX_ATTEMPTS - 1) {
