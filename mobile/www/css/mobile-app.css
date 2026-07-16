@@ -2526,12 +2526,13 @@ input[disabled].form-input {
 
 /* Options card */
 .stmt-options-card {
-  background: linear-gradient(145deg, #1c2333 0%, #141a24 100%) !important;
-  border: 1px solid rgba(255,255,255,0.07) !important;
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
   border-left: 3px solid #FF9B0C !important;
   border-radius: 14px !important;
   overflow: hidden !important;
   position: relative !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.07) !important;
 }
 .stmt-options-card::after {
   content: '' !important;
@@ -2540,13 +2541,13 @@ input[disabled].form-input {
   right: -40px !important;
   width: 130px !important;
   height: 130px !important;
-  background: radial-gradient(circle, rgba(255,155,12,0.09) 0%, transparent 70%) !important;
+  background: radial-gradient(circle, rgba(255,155,12,0.05) 0%, transparent 70%) !important;
   pointer-events: none !important;
 }
 .stmt-options-header {
   padding: 16px 22px !important;
-  border-bottom: 1px solid rgba(255,255,255,0.06) !important;
-  background: rgba(255,255,255,0.03) !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  background: #f9fafb !important;
   display: flex !important;
   align-items: center !important;
   gap: 14px !important;
@@ -2567,7 +2568,7 @@ input[disabled].form-input {
 .stmt-options-title {
   font-size: 1rem !important;
   font-weight: 800 !important;
-  color: #ffffff !important;
+  color: #111827 !important;
 }
 .stmt-options-body {
   padding: 22px !important;
@@ -2582,7 +2583,7 @@ input[disabled].form-input {
   font-weight: 700 !important;
   text-transform: uppercase !important;
   letter-spacing: 0.06em !important;
-  color: rgba(255,155,12,0.65) !important;
+  color: #d97706 !important;
   margin-bottom: 10px !important;
 }
 .stmt-date-row {
@@ -2594,17 +2595,17 @@ input[disabled].form-input {
   display: block !important;
   font-size: 0.78rem !important;
   font-weight: 600 !important;
-  color: rgba(255,255,255,0.45) !important;
+  color: #6b7280 !important;
   margin-bottom: 5px !important;
 }
 .stmt-date-input {
   width: 100% !important;
   padding: 9px 12px !important;
-  border: 1.5px solid rgba(255,255,255,0.12) !important;
+  border: 1.5px solid #d1d5db !important;
   border-radius: 8px !important;
   font-size: 0.85rem !important;
-  color: #ffffff !important;
-  background: rgba(255,255,255,0.05) !important;
+  color: #111827 !important;
+  background: #ffffff !important;
   outline: none !important;
   font-family: inherit !important;
   box-sizing: border-box !important;
@@ -2625,13 +2626,13 @@ input[disabled].form-input {
   gap: 10px !important;
   cursor: pointer !important;
   padding: 10px 14px !important;
-  border: 1.5px solid rgba(255,255,255,0.09) !important;
+  border: 1.5px solid #e5e7eb !important;
   border-radius: 8px !important;
-  background: rgba(255,255,255,0.04) !important;
+  background: #f9fafb !important;
   transition: border-color 0.2s !important;
 }
 .stmt-check-tile:hover {
-  border-color: rgba(255,155,12,0.45) !important;
+  border-color: rgba(255,155,12,0.55) !important;
 }
 .stmt-check-tile input[type="checkbox"] {
   accent-color: #ff9b0c !important;
@@ -2642,18 +2643,18 @@ input[disabled].form-input {
 .stmt-check-tile span {
   font-size: 0.80rem !important;
   font-weight: 600 !important;
-  color: rgba(255,255,255,0.78) !important;
+  color: #374151 !important;
 }
 
 /* Currency select */
 .stmt-select {
   width: 100% !important;
   padding: 9px 12px !important;
-  border: 1.5px solid rgba(255,255,255,0.12) !important;
+  border: 1.5px solid #d1d5db !important;
   border-radius: 8px !important;
   font-size: 0.85rem !important;
-  color: rgba(255,255,255,0.85) !important;
-  background: rgba(255,255,255,0.05) !important;
+  color: #111827 !important;
+  background: #ffffff !important;
   outline: none !important;
   font-family: inherit !important;
 }
@@ -2682,9 +2683,9 @@ input[disabled].form-input {
 }
 .stmt-btn-ghost {
   padding: 13px 16px !important;
-  background: rgba(255,255,255,0.06) !important;
-  color: rgba(255,255,255,0.65) !important;
-  border: 1.5px solid rgba(255,255,255,0.12) !important;
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+  border: 1.5px solid #e5e7eb !important;
   border-radius: 10px !important;
   font-size: 0.9rem !important;
   cursor: pointer !important;
