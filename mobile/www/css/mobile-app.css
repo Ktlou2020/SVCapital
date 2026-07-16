@@ -2252,15 +2252,15 @@ input[disabled].form-input {
   margin-top: 0 !important;
 }
 .maturity-card {
-  background: linear-gradient(145deg, #1c2333 0%, #141a24 100%) !important;
+  background: #ffffff !important;
   border-left: 3px solid #FF9B0C !important;
-  border-top: 1px solid rgba(255,255,255,0.07) !important;
-  border-right: 1px solid rgba(255,255,255,0.07) !important;
-  border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+  border-top: 1px solid #e5e7eb !important;
+  border-right: 1px solid #e5e7eb !important;
+  border-bottom: 1px solid #e5e7eb !important;
   border-radius: 14px !important;
   padding: 16px !important;
   gap: 0 !important;
-  box-shadow: 0 4px 18px rgba(0,0,0,0.22) !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.07) !important;
   margin-bottom: 12px !important;
   display: flex !important;
   flex-direction: column !important;
@@ -2274,7 +2274,7 @@ input[disabled].form-input {
   right: -24px !important;
   width: 80px !important;
   height: 80px !important;
-  background: radial-gradient(circle, rgba(255,155,12,0.09) 0%, transparent 70%) !important;
+  background: radial-gradient(circle, rgba(255,155,12,0.06) 0%, transparent 70%) !important;
   pointer-events: none !important;
   z-index: 0 !important;
 }
@@ -2292,7 +2292,7 @@ input[disabled].form-input {
 .maturity-card__name {
   font-size: 0.93rem !important;
   font-weight: 700 !important;
-  color: #ffffff !important;
+  color: #111827 !important;
   line-height: 1.35 !important;
   margin-bottom: 6px !important;
   white-space: normal !important;
@@ -2301,7 +2301,7 @@ input[disabled].form-input {
 }
 .maturity-card__detail {
   font-size: 0.74rem !important;
-  color: rgba(255,255,255,0.42) !important;
+  color: #6b7280 !important;
   line-height: 1.5 !important;
   white-space: normal !important;
   overflow: visible !important;

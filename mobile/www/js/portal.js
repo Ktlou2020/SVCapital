@@ -4580,7 +4580,7 @@ async function loadMaturity() {
       const instrSet    = !!poolInstr || hasMixed;
       const instrLabel  = hasMixed
         ? `Mixed — ${allInstrs.length} of ${group.length} set`
-        : (poolInstr ? poolInstr.replace(/_/g,' ') : null);
+        : (poolInstr ? poolInstr.replace(/_/g,' ').replace(/^(\w)/, c => c.toUpperCase()) : null);
 
       const modalCall = multiple
         ? `openPoolMaturityModal(${JSON.stringify(inv.pool_id)})`
@@ -4642,7 +4642,7 @@ async function loadMaturity() {
       const poolInstr   = uniqueInstrs.length === 1 ? uniqueInstrs[0] : null;
       const hasMixed    = uniqueInstrs.length > 1;
       const instrSet    = !!poolInstr || hasMixed;
-      const instrLabel  = hasMixed ? `Mixed (${allInstrs.length}/${group.length})` : (poolInstr ? poolInstr.replace(/_/g,' ') : null);
+      const instrLabel  = hasMixed ? `Mixed (${allInstrs.length}/${group.length})` : (poolInstr ? poolInstr.replace(/_/g,' ').replace(/^(\w)/, c => c.toUpperCase()) : null);
 
       return `<div class="maturity-card">
         <div class="maturity-card__info">
@@ -4651,7 +4651,7 @@ async function loadMaturity() {
           ${instrSet ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px"><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> ${instrLabel}</div>` : ''}
         </div>
         ${instrSet
-          ? `<span class="badge badge--gray" style="text-transform:capitalize">${instrLabel}</span>`
+          ? `<span class="badge badge--gray">${instrLabel}</span>`
           : `<span class="badge" style="background:rgba(239,68,68,0.12);color:#b91c1c">Awaiting instruction</span>`
         }
       </div>`;
