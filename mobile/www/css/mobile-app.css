@@ -168,9 +168,19 @@ input, textarea, [contenteditable] {
 .sidebar-backdrop {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  z-index: 1250 !important;
 }
 .sidebar-backdrop:not(.sidebar-backdrop--visible) {
   display: none !important;
+}
+
+/* Sidebar: full-height on mobile, above bottom nav (z-1200) when open */
+.sidebar {
+  padding-top: env(safe-area-inset-top, 0px) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+}
+.sidebar.open {
+  z-index: 1300 !important;
 }
 
 /* ─────────────────────────────────────────────────────────────
