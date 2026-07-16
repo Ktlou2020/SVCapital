@@ -985,7 +985,7 @@ async function _applyLiveProductAverages() {
     // 3) Admin-managed product detail copy → "View Details" modal
     if (prod && typeof MODAL_DATA !== 'undefined' && MODAL_DATA[key]) {
       const m = MODAL_DATA[key];
-      if (prod.label)       m.eyebrow = prod.label;
+      if (prod.label)       m.eyebrow = prod.label.replace(/\s*\(\d+yr\)/gi, '').trim();
       if (prod.headline)    m.title   = prod.headline;
       if (prod.description) m.desc    = prod.description;
       if (prod.key_details) {

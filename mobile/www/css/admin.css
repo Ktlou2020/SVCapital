@@ -22,8 +22,8 @@
   --blue-bg: rgba(101,101,101,0.1);
   --orange: #f97316;
   --orange-bg: rgba(249,115,22,0.1);
-  --purple: #a855f7;
-  --purple-bg: rgba(168,85,247,0.1);
+  --purple: #eda5ff;
+  --purple-bg: rgba(237,165,255,0.12);
   --white: #ffffff;
   --text: #e8edf2;
   --text-muted: #7a92a8;
@@ -276,7 +276,7 @@ img { max-width: 100%; display: block; }
 .stat-card--gold::before { background: linear-gradient(90deg, var(--gold-dark), var(--gold)); }
 .stat-card--green::before { background: linear-gradient(90deg, #16a34a, var(--green)); }
 .stat-card--blue::before { background: linear-gradient(90deg, #656565, var(--blue)); }
-.stat-card--purple::before { background: linear-gradient(90deg, #7c3aed, var(--purple)); }
+.stat-card--purple::before { background: linear-gradient(90deg, #c070d8, var(--purple)); }
 .stat-card--orange::before { background: linear-gradient(90deg, #c2410c, var(--orange)); }
 
 .stat-card:hover { border-color: var(--border-gold); transform: translateY(-2px); }
@@ -496,7 +496,7 @@ img { max-width: 100%; display: block; }
 .badge--gold { background: var(--gold-glow); color: var(--gold); border: 1px solid var(--border-gold); }
 .badge--blue { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(101,101,101,0.2); }
 .badge--orange { background: var(--orange-bg); color: var(--orange); border: 1px solid rgba(249,115,22,0.2); }
-.badge--purple { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(168,85,247,0.2); }
+.badge--purple { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(237,165,255,0.25); }
 .badge--gray { background: var(--surface); color: var(--text-muted); border: 1px solid var(--border); }
 
 /* ─── BUTTONS ─── */

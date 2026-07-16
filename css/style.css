@@ -732,7 +732,7 @@ section { position: relative; padding: 100px 0; }
 
 .products-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 24px;
   margin-bottom: 48px;
 }
@@ -2286,7 +2286,7 @@ section { position: relative; padding: 100px 0; }
   .hero-trust { justify-content: center; }
   .hero-eyebrow { justify-content: center; }
 
-  .products-grid { grid-template-columns: repeat(2, 1fr); }
+  .products-grid { grid-template-columns: repeat(3, 1fr); }
 
   .compare-callout__inner { grid-template-columns: 1fr; }
   .compare-callout__text p { max-width: 100%; }

@@ -4580,7 +4580,7 @@ async function loadMaturity() {
       const instrSet    = !!poolInstr || hasMixed;
       const instrLabel  = hasMixed
         ? `Mixed — ${allInstrs.length} of ${group.length} set`
-        : (poolInstr ? poolInstr.replace(/_/g,' ') : null);
+        : (poolInstr ? poolInstr.replace(/_/g,' ').replace(/^(\w)/, c => c.toUpperCase()) : null);
 
       const modalCall = multiple
         ? `openPoolMaturityModal(${JSON.stringify(inv.pool_id)})`
@@ -4642,7 +4642,7 @@ async function loadMaturity() {
       const poolInstr   = uniqueInstrs.length === 1 ? uniqueInstrs[0] : null;
       const hasMixed    = uniqueInstrs.length > 1;
       const instrSet    = !!poolInstr || hasMixed;
-      const instrLabel  = hasMixed ? `Mixed (${allInstrs.length}/${group.length})` : (poolInstr ? poolInstr.replace(/_/g,' ') : null);
+      const instrLabel  = hasMixed ? `Mixed (${allInstrs.length}/${group.length})` : (poolInstr ? poolInstr.replace(/_/g,' ').replace(/^(\w)/, c => c.toUpperCase()) : null);
 
       return `<div class="maturity-card">
         <div class="maturity-card__info">
@@ -4651,7 +4651,7 @@ async function loadMaturity() {
           ${instrSet ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px"><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> ${instrLabel}</div>` : ''}
         </div>
         ${instrSet
-          ? `<span class="badge badge--gray" style="text-transform:capitalize">${instrLabel}</span>`
+          ? `<span class="badge badge--gray">${instrLabel}</span>`
           : `<span class="badge" style="background:rgba(239,68,68,0.12);color:#b91c1c">Awaiting instruction</span>`
         }
       </div>`;
@@ -5400,7 +5400,7 @@ function buildStatementHTML(opts) {
 
   // ─── FULL DOCUMENT ───
   return `
-    <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%">
+    <div id="stmtPrintArea" style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%;min-width:700px">
 
       <!-- Header Band -->
       <div style="background:#303030;padding:24px 40px;display:flex;align-items:center;justify-content:space-between">
@@ -5482,33 +5482,66 @@ function printStatement() {
     Toast.error('Please generate a statement first, then print.');
     return;
   }
-  // Inject a temporary print-only area — avoids popup blockers entirely
-  const styleEl = document.createElement('style');
-  styleEl.id = '_svc_print_css';
-  styleEl.textContent = [
-    '@media print{',
-    '  body { visibility: hidden !important; }',
-    '  #_svc_print_area, #_svc_print_area * { visibility: visible !important; }',
-    '  #_svc_print_area {',
-    '    position: fixed !important; inset: 0 !important; width: 100% !important;',
-    '    font-family: Poppins, sans-serif !important;',
-    '    background: #fff !important;',
-    '    -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;',
-    '  }',
-    '  @page { size: A4; margin: 0; }',
-    '}'
-  ].join('');
-  document.head.appendChild(styleEl);
 
-  const area = document.createElement('div');
-  area.id = '_svc_print_area';
-  area.innerHTML = stmtDoc.innerHTML;
-  document.body.appendChild(area);
+  const fullHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SV Capital – Account Statement</title>
+<meta name="viewport" content="width=794,initial-scale=1">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Poppins,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff}
+.svc-pbar{
+  position:fixed;top:0;left:0;right:0;z-index:9999;
+  background:#fff;border-bottom:1px solid #e5e7eb;
+  padding:10px 20px;display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 2px 8px rgba(0,0,0,.08)
+}
+.svc-pbar h3{font-size:14px;font-weight:700;color:#111827;margin:0}
+.svc-pbtn{
+  background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;
+  border:none;border-radius:8px;padding:9px 18px;font-size:13px;
+  font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px
+}
+.svc-content{padding-top:52px}
+@media print{
+  .svc-pbar{display:none!important}
+  .svc-content{padding-top:0}
+  @page{size:A4;margin:0}
+  body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div class="svc-pbar">
+  <h3>SV Capital — Account Statement</h3>
+  <button class="svc-pbtn" onclick="window.print()">🖨️ Print / Save PDF</button>
+</div>
+<div class="svc-content">
+${stmtDoc.innerHTML}
+</div>
+</body>
+</html>`;
 
-  window.print();
+  try {
+    const blob = new Blob([fullHtml], { type: 'text/html' });
+    const url  = URL.createObjectURL(blob);
+    const win  = window.open(url, '_blank');
+    if (win) {
+      win.focus();
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+      return;
+    }
+    URL.revokeObjectURL(url);
+  } catch (_) { /* blob API not available */ }
 
-  // Clean up after the print dialog closes
-  setTimeout(() => { styleEl.remove(); area.remove(); }, 1000);
+  // Fallback: data URI (Capacitor WebView / popup blocked)
+  try {
+    window.open('data:text/html;charset=utf-8,' + encodeURIComponent(fullHtml), '_blank');
+  } catch (_) {
+    Toast.error('Could not open print window. Try using the browser share button instead.');
+  }
 }
 
 /* ── Sub-account deposit ─────────────────────── */
@@ -7673,13 +7706,13 @@ const SA_TYPE_META = {
   },
   trust:    {
     icon: 'fa-scale-balanced',  label: 'Trust',
-    color: '#7c5cfc',           bg: 'linear-gradient(135deg,#2d1d6e 0%,#7c5cfc 100%)',
+    color: '#7c5cfc',           bg: 'linear-gradient(135deg,#4c1d95 0%,#2563eb 100%)',
     tagline: 'Invest through a family or business trust',
     ficaDocs: ['Trust Deed (certified copy)', 'Letters of Authority (Master of Court)', 'Trustee(s) ID documents', 'Trust tax clearance certificate'],
   },
   stokvel:  {
     icon: 'fa-people-group',    label: 'Stokvel',
-    color: '#65ed00',           bg: 'linear-gradient(135deg,#1a4200 0%,#65ed00 100%)',
+    color: '#65ed00',           bg: 'linear-gradient(135deg,#2d6b00 0%,#65ed00 100%)',
     tagline: 'Community savings club investing together',
     ficaDocs: ['Stokvel constitution / rules', 'Proof of banking account', 'Two or more members\' ID documents', 'NASASA certificate (if applicable)'],
   },
