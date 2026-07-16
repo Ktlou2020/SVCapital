@@ -463,7 +463,7 @@ input, textarea, [contenteditable] {
   padding: 14px 12px !important; gap: 8px !important;
   border-radius: 14px !important; width: 100% !important;
 }
-.stat-card__icon  { width: 34px !important; height: 34px !important; font-size: 0.85rem !important; border-radius: 10px !important; }
+.stat-card__icon  { width: 42px !important; height: 42px !important; font-size: 1rem !important; border-radius: 12px !important; }
 .stat-card__value { font-size: 1.3rem !important; letter-spacing: -0.02em !important; line-height: 1.1 !important; }
 .stat-card__label  { font-size: 0.6rem !important; }
 .stat-card__change { font-size: 0.6rem !important; }
