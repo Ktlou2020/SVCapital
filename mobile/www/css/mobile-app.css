@@ -1705,8 +1705,61 @@ input[type="file"] { font-size: 16px !important; }
 }
 
 /* ─────────────────────────────────────────────────────────────
-   MY INVESTMENTS stats — force equal column widths
+   MY INVESTMENTS — product type tile filter
+   Horizontal scrollable row; each tile: icon (centered) + label.
+   Max 3 visible at once; all fit on one row when ≤3 types.
    ───────────────────────────────────────────────────────────── */
+.prod-type-filter {
+  display: flex !important;
+  gap: 6px !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: none !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+  padding: 2px 0 !important;
+}
+.prod-type-filter::-webkit-scrollbar { display: none !important; }
+
+.prod-type-tile {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  padding: 10px 14px !important;
+  border-radius: 12px !important;
+  border: 1.5px solid rgba(0,0,0,0.08) !important;
+  background: #f3f4f6 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  flex: 1 1 0 !important;
+  min-width: 64px !important;
+  max-width: 110px !important;
+  transition: background 0.15s, border-color 0.15s !important;
+}
+.prod-type-tile i {
+  font-size: 1.15rem !important;
+  color: #6b7280 !important;
+  display: block !important;
+}
+.prod-type-tile span {
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+  color: #374151 !important;
+  text-align: center !important;
+  line-height: 1.2 !important;
+  display: block !important;
+}
+.prod-type-tile.active {
+  background: rgba(255,155,12,0.12) !important;
+  border-color: #FF9B0C !important;
+}
+.prod-type-tile.active i { color: #FF8215 !important; }
+.prod-type-tile.active span { color: #FF5229 !important; }
+
+/* MY INVESTMENTS stats — force equal column widths */
 .my-inv-card__stats {
   grid-template-columns: repeat(3, 1fr) !important;
 }
