@@ -239,8 +239,12 @@ async function runAutoTopUps() {
   let processed = 0, skipped = 0, failed = 0;
 
   for (const inv of investors) {
-    const amount   = parseFloat(inv.auto_topup_amount);
-    const amtKobo  = Math.round(amount * 100);
+    const amount   = parseFloat(inv.auto_topup_amount); // net wallet credit
+    // Gross up so SV Capital nets exactly `amount` after Paystack SA fees (1.5% + R2, cap R800)
+    const rawFee   = (amount + 2) / 0.985 - amount;
+    const fee      = Math.min(rawFee, 800);
+    const gross    = Math.round((amount + fee) * 100) / 100;
+    const amtKobo  = Math.round(gross * 100); // charge gross to Paystack
     // Deterministic reference: same investor+date always produces the same ref.
     // Paystack rejects a duplicate reference → idempotent if the cron fires twice.
     const reference = `ATU-${todayStr}-${inv.id.replace(/[^A-Z0-9]/gi, '').toUpperCase()}`;
@@ -269,6 +273,8 @@ async function runAutoTopUps() {
           metadata: {
             investor_id:   inv.id,
             wallet_credit: amount,
+            gateway_fee:   Math.round(fee * 100) / 100,
+            gross_charge:  gross,
             source:        'auto_topup',
           },
         }),
@@ -279,7 +285,7 @@ async function runAutoTopUps() {
         // Bug #2 fix: insert transaction record FIRST then credit wallet — both in a DB
         // transaction. This ensures a crash between the two operations cannot leave the
         // investor charged by Paystack but without a wallet credit (or vice versa).
-        const desc = `Auto top-up via Paystack — R${amount.toLocaleString('en-ZA')} credited`;
+        const desc = `Auto top-up via Paystack — R${amount.toLocaleString('en-ZA')} credited (charged: R${gross.toLocaleString('en-ZA')})`;
         const topupClient = await pool.connect();
         try {
           await topupClient.query('BEGIN');
@@ -308,7 +314,7 @@ async function runAutoTopUps() {
           body:  `R${amount.toLocaleString('en-ZA')} has been added to your wallet.`,
           url:   '/portal/',
         }).catch(() => {});
-        console.log(`[autoTopUp] R${amount} credited to ${inv.id}, ref: ${reference}`);
+        console.log(`[autoTopUp] Charged R${gross} (fee R${Math.round(fee*100)/100}), credited R${amount} to ${inv.id}, ref: ${reference}`);
         processed++;
       } else {
         const errMsg = (psData.message || '').toLowerCase();
