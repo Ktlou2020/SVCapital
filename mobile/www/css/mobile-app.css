@@ -2917,26 +2917,33 @@ input[disabled].form-input {
 
 /* ── Level Track ─────────────────────── */
 .level-track {
-  background: linear-gradient(145deg, #1c2333 0%, #141a24 100%) !important;
-  border: 1px solid rgba(255,255,255,0.07) !important;
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
   border-radius: 16px !important;
   padding: 16px 14px !important;
   gap: 2px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
 }
-.level-step { opacity: 0.28 !important; }
+.level-step { opacity: 0.35 !important; }
 .level-step.done, .level-step.current { opacity: 1 !important; }
 .level-step__icon {
-  background: rgba(255,255,255,0.06) !important;
-  color: rgba(255,255,255,0.35) !important;
-  border: none !important;
+  background: #f3f4f6 !important;
+  color: #6b7280 !important;
+  border: 1px solid #e5e7eb !important;
 }
 .level-step__name {
-  color: rgba(255,255,255,0.32) !important;
+  color: #9ca3af !important;
   font-size: 0.60rem !important;
 }
 .level-step.done .level-step__name,
 .level-step.current .level-step__name {
-  color: rgba(255,255,255,0.72) !important;
+  color: #374151 !important;
+}
+.level-step.done .level-step__icon,
+.level-step.current .level-step__icon {
+  background: rgba(255,155,12,0.1) !important;
+  color: #d97706 !important;
+  border-color: rgba(255,155,12,0.25) !important;
 }
 
 /* ── Quest Cards ─────────────────────── */
