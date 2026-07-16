@@ -9,6 +9,7 @@ const pool        = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const smsService  = require('../services/sms');
 const pushService = require('../services/pushService');
+const audit       = require('../services/audit');
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FROM          = process.env.FROM_EMAIL || 'SV Capital <noreply@svcapital.co.za>';
@@ -108,7 +109,7 @@ router.get('/broadcast/preview', async (req, res) => {
     res.json({ count: investors.length });
   } catch (err) {
     console.error('[broadcast] preview error:', err.message);
-    res.status(500).json({ error: 'Failed to count recipients', detail: err.message });
+    res.status(500).json({ error: 'Failed to count recipients' });
   }
 });
 
@@ -173,6 +174,12 @@ router.post('/broadcast', async (req, res) => {
 
       if (channel === 'push') {
         console.log(`[broadcast] push segment=${segment} total=${total} sent=${pushResult.sent} subscribers=${totalPushSubscribers}`);
+        await audit.log({
+          actorId: req.user?.id, actorEmail: req.user?.email, actorRole: req.user?.role,
+          action: 'admin.broadcast.send', entityType: 'broadcast',
+          description: `Broadcast [${channel}] to segment=${segment}: "${(subject || message).substring(0, 80)}" — ${pushResult.sent}/${total} delivered`,
+          ip: req.ip,
+        });
         return res.json({
           sent:           pushResult.sent,
           failed:         total - pushResult.sent,
@@ -272,10 +279,16 @@ router.post('/broadcast', async (req, res) => {
     }
 
     console.log(`[broadcast] segment=${segment} channel=${channel} total=${total} sent=${sent} failed=${failed}`);
+    await audit.log({
+      actorId: req.user?.id, actorEmail: req.user?.email, actorRole: req.user?.role,
+      action: 'admin.broadcast.send', entityType: 'broadcast',
+      description: `Broadcast [${channel}] to segment=${segment}: "${(subject || message).substring(0, 80)}" — ${sent}/${total} delivered`,
+      ip: req.ip,
+    });
     res.json({ sent, failed, total });
   } catch (err) {
     console.error('[broadcast] error:', err.message);
-    res.status(500).json({ error: 'Broadcast failed', detail: err.message });
+    res.status(500).json({ error: 'Broadcast failed' });
   }
 });
 
@@ -287,7 +300,7 @@ router.post('/run-pool-cycler', async (req, res) => {
     res.json({ ok: true, cycled: count });
   } catch (err) {
     console.error('[admin] manual pool cycler error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 

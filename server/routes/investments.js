@@ -78,7 +78,7 @@ router.post('/:id/instruction', requireAuth, async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[investments/instruction] error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   } finally {
     client.release();
   }

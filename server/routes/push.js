@@ -186,7 +186,7 @@ router.get('/analytics', requireAuth, requireRole('admin', 'director'), async (r
     });
   } catch (err) {
     console.error('[push] analytics error:', err.message);
-    res.status(500).json({ error: 'Failed to load analytics', detail: err.message });
+    res.status(500).json({ error: 'Failed to load analytics' });
   }
 });
 

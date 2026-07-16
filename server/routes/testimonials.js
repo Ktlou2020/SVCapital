@@ -106,7 +106,7 @@ router.post('/', requireAuth, async (req, res) => {
     res.json({ success: true, id: testimonialId, xpAwarded: !existing ? 50 : 0 });
   } catch (err) {
     console.error('[testimonials/post]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -120,7 +120,7 @@ router.get('/public', async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -134,7 +134,7 @@ router.get('/my', requireAuth, async (req, res) => {
     );
     res.json({ testimonial: t || null });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -148,7 +148,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
     );
     res.json({ data: rows });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -171,7 +171,7 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
     if (!t) return res.status(404).json({ error: 'Testimonial not found' });
     res.json({ success: true, data: t });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 

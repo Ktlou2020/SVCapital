@@ -186,7 +186,7 @@ router.get('/my', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('[Quests GET] error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -274,7 +274,7 @@ router.post('/complete', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('[Quests POST] error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 

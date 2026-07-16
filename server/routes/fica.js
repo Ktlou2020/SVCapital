@@ -62,7 +62,7 @@ router.get('/status/:investorId', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('FICA status error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -88,7 +88,7 @@ router.post(
       res.json({ success: true, ...result });
     } catch (err) {
       console.error('FICA trigger error:', err.message);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: 'Internal server error.' });
     }
   }
 );
@@ -136,7 +136,7 @@ router.get(
       });
     } catch (err) {
       console.error('FICA queue error:', err.message);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: 'Internal server error.' });
     }
   }
 );

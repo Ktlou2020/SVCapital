@@ -170,7 +170,7 @@ router.post('/paystack/verify', requireAuth, async (req, res) => {
 
   } catch (err) {
     console.error('[payments] Paystack verify error:', err.message);
-    return res.status(500).json({ error: `Verification failed: ${err.message}` });
+    return res.status(500).json({ error: 'Payment verification failed.' });
   }
 });
 

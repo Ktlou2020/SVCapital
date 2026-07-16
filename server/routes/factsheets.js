@@ -13,7 +13,7 @@ router.get('/', requireAuth, async (req, res) => {
     const { rows } = await pool.query(q, pool_id ? [pool_id] : []);
     res.json({ data: rows });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -39,7 +39,7 @@ router.post('/upload', requireAuth, requireRole('admin', 'director'), async (req
     );
     res.json({ success: true, data: rows[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -60,7 +60,7 @@ router.delete('/:id', requireAuth, requireRole('admin', 'director'), async (req,
     }
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 

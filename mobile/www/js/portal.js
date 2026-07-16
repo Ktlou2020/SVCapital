@@ -1312,6 +1312,29 @@ function initIdleAutoLogout() {
   markActivity();
 }
 
+function _showNetworkError() {
+  let el = document.getElementById('_networkErrorBanner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = '_networkErrorBanner';
+    el.style.cssText = [
+      'position:fixed', 'bottom:72px', 'left:12px', 'right:12px', 'z-index:8888',
+      'background:#ef4444', 'color:#fff', 'font-size:13px', 'font-weight:600',
+      'text-align:center', 'padding:10px 14px', 'border-radius:10px',
+      'box-shadow:0 4px 16px rgba(0,0,0,.25)', 'letter-spacing:0.01em',
+    ].join(';');
+    el.textContent = 'Could not connect to server — showing cached data';
+    document.body.appendChild(el);
+  }
+  el.style.display = 'block';
+  setTimeout(() => { if (el) el.style.display = 'none'; }, 8000);
+}
+
+function _hideNetworkError() {
+  const el = document.getElementById('_networkErrorBanner');
+  if (el) el.style.display = 'none';
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   _preloadLogo(); // warm logo cache for PDF generation
   Toast.init();
@@ -1611,6 +1634,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
       localStorage.setItem('svc_portal_cache', JSON.stringify(_safeCache));
     } catch (_) {}
 
+    _hideNetworkError();
     renderOverview(_opts.skipCharts);
     renderOnboardingWizard();
     updateStmtQuickStats();
@@ -1627,6 +1651,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
     _prefetchNavBadges();
   } catch (e) {
     console.error(`loadPortalData error (attempt ${_attempt + 1}):`, e);
+    _showNetworkError();
 
     // Auth errors: do not retry — the session-expired overlay is already showing.
     // Still clear "Loading..." placeholders so the page is not frozen behind the overlay.

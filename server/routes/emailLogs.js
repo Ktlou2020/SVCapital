@@ -31,7 +31,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
     );
     res.json({ data: rows, total: parseInt(count) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -52,7 +52,7 @@ router.get('/stats', requireAuth, requireAdmin, async (req, res) => {
     );
     res.json({ byType, totals });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
