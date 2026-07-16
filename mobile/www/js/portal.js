@@ -5303,7 +5303,7 @@ function buildStatementHTML(opts) {
         <td style="padding:8px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${inv.id}</td>
         <td style="padding:8px 10px;font-size:11px;font-weight:600;color:#1a1a1a">${_esc(inv.pool_name) || '—'}</td>
         <td style="padding:8px 10px">
-          <span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em">${info.label}</span>
+          <span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap">${info.label}</span>
         </td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right;font-weight:700">${fmtNum(inv.amount)}</td>
         <td style="padding:8px 10px;font-size:11px;color:${rateCell==='—'?'#9ca3af':'#ff9b0c'};text-align:right;font-weight:700">${rateCell}</td>

@@ -168,9 +168,19 @@ input, textarea, [contenteditable] {
 .sidebar-backdrop {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  z-index: 1250 !important;
 }
 .sidebar-backdrop:not(.sidebar-backdrop--visible) {
   display: none !important;
+}
+
+/* Sidebar: full-height on mobile, above bottom nav (z-1200) when open */
+.sidebar {
+  padding-top: env(safe-area-inset-top, 0px) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+}
+.sidebar.open {
+  z-index: 1300 !important;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -2948,29 +2958,28 @@ input[disabled].form-input {
 
 /* ── Quest Cards ─────────────────────── */
 .quest-card {
-  background: linear-gradient(145deg, #1c2333 0%, #141a24 100%) !important;
-  border: 1px solid rgba(255,255,255,0.07) !important;
-  border-left: 3px solid rgba(255,155,12,0.30) !important;
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+  border-left: 3px solid #e5e7eb !important;
   border-radius: 14px !important;
   padding: 14px 16px !important;
   gap: 14px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
 }
 .quest-card--ready {
   border-left-color: #FF9B0C !important;
-  background: linear-gradient(145deg, #201a08 0%, #141a24 100%) !important;
 }
 .quest-card--done {
   border-left-color: #65ed00 !important;
-  background: linear-gradient(145deg, #0d1f10 0%, #141a24 100%) !important;
 }
-.quest-card__title { color: #ffffff !important; }
-.quest-card__desc  { color: rgba(255,255,255,0.42) !important; }
+.quest-card__title { color: #111827 !important; }
+.quest-card__desc  { color: #6b7280 !important; }
 .quest-card__done-badge {
-  color: #65ed00 !important;
-  background: rgba(101,237,0,0.12) !important;
-  border: 1px solid rgba(101,237,0,0.22) !important;
+  color: #16a34a !important;
+  background: rgba(34,197,94,0.1) !important;
+  border: 1px solid rgba(34,197,94,0.2) !important;
 }
-.quest-card__locked { color: rgba(255,255,255,0.32) !important; }
+.quest-card__locked { color: #9ca3af !important; }
 
 /* ── Quest Category Headers ──────────── */
 .quest-category__icon-wrap {

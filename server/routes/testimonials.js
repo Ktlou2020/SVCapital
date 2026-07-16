@@ -155,8 +155,8 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
 /* ── PATCH /api/testimonials/:id — admin: approve or reject ─ */
 router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
   const { status, rejection_reason } = req.body;
-  if (!['approved', 'rejected'].includes(status)) {
-    return res.status(400).json({ error: 'status must be approved or rejected' });
+  if (!['approved', 'rejected', 'pending'].includes(status)) {
+    return res.status(400).json({ error: 'status must be approved, rejected, or pending' });
   }
   const adminId = req.user?.id;
   try {
