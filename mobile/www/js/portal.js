@@ -2817,7 +2817,23 @@ function openAutoTopUpModal() {
   if (el('atuEnabled'))  el('atuEnabled').checked = !!settings.auto_topup_enabled;
   if (el('atuAmount'))   el('atuAmount').value    = settings.auto_topup_amount || '';
   if (el('atuDay'))      el('atuDay').value       = settings.auto_topup_day || 1;
+  updateAutoTopUpFee();
   Modal.open('autoTopUpModal');
+}
+
+function updateAutoTopUpFee() {
+  const net = parseFloat(document.getElementById('atuAmount')?.value) || 0;
+  const bd  = document.getElementById('atuFeeBreakdown');
+  if (!bd) return;
+  if (net < 50) { bd.style.display = 'none'; return; }
+  const rawFee = (net + 2) / 0.985 - net;
+  const fee    = Math.min(rawFee, 800);
+  const gross  = Math.round((net + fee) * 100) / 100;
+  const fmt    = v => 'R ' + v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  bd.style.display = 'block';
+  document.getElementById('atuFeeNet').textContent   = fmt(net);
+  document.getElementById('atuFeeAmt').textContent   = '+ ' + fmt(Math.round(fee * 100) / 100);
+  document.getElementById('atuFeeGross').textContent = fmt(gross);
 }
 
 async function saveAutoTopUp() {
@@ -2837,7 +2853,15 @@ async function saveAutoTopUp() {
   try {
     await API._fetch('POST', 'payments/auto-topup', { enabled, amount, day });
     Modal.close('autoTopUpModal');
-    Toast.success(enabled ? `Auto top-up of ${Utils.rand(amount)} set for the ${day}${day===1?'st':day===2?'nd':day===3?'rd':'th'} of each month` : 'Auto top-up disabled');
+    if (enabled) {
+      const rawFee = (amount + 2) / 0.985 - amount;
+      const fee    = Math.min(rawFee, 800);
+      const gross  = Math.round((amount + fee) * 100) / 100;
+      const ord    = day===1?'st':day===2?'nd':day===3?'rd':'th';
+      Toast.success(`Auto top-up set — ${Utils.rand(gross)} charged on the ${day}${ord}, ${Utils.rand(amount)} credited to wallet`);
+    } else {
+      Toast.success('Auto top-up disabled');
+    }
     SVC.track('svc_auto_topup_set', { enabled: !!enabled, amount: amount, day: day });
     await _loadAutoTopUpCard();
   } catch (e) {
