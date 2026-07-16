@@ -7706,13 +7706,13 @@ const SA_TYPE_META = {
   },
   trust:    {
     icon: 'fa-scale-balanced',  label: 'Trust',
-    color: '#7c5cfc',           bg: 'linear-gradient(135deg,#2d1d6e 0%,#7c5cfc 100%)',
+    color: '#7c5cfc',           bg: 'linear-gradient(135deg,#4c1d95 0%,#2563eb 100%)',
     tagline: 'Invest through a family or business trust',
     ficaDocs: ['Trust Deed (certified copy)', 'Letters of Authority (Master of Court)', 'Trustee(s) ID documents', 'Trust tax clearance certificate'],
   },
   stokvel:  {
     icon: 'fa-people-group',    label: 'Stokvel',
-    color: '#65ed00',           bg: 'linear-gradient(135deg,#1a4200 0%,#65ed00 100%)',
+    color: '#65ed00',           bg: 'linear-gradient(135deg,#2d6b00 0%,#65ed00 100%)',
     tagline: 'Community savings club investing together',
     ficaDocs: ['Stokvel constitution / rules', 'Proof of banking account', 'Two or more members\' ID documents', 'NASASA certificate (if applicable)'],
   },
