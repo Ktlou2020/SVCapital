@@ -1033,12 +1033,13 @@ async function _applyLiveProductAverages() {
     return p ? !!p.display_on_homepage : false; // not in API (inactive) → hide
   };
 
-  // Hide/show product cards — restore visibility first, then set display:none on
-  // hidden ones. (visibility was pre-set to hidden above to prevent flash.)
+  // Hide/show product cards — use a class so the risk filter cannot accidentally
+  // restore cards that are hidden by display_on_homepage.
   document.querySelectorAll('.product-card[data-product]').forEach(card => {
     const visible = resolveVisible(card.dataset.product);
     card.style.visibility = '';
-    card.style.display    = visible ? '' : 'none';
+    card.style.display    = '';
+    card.classList.toggle('product-card--hp-hidden', !visible);
   });
 
   // Hide/show footer product links
@@ -1325,6 +1326,7 @@ function filterProductsByRisk(risk, btn) {
   if (btn) btn.classList.add('active');
   let shown = 0;
   document.querySelectorAll('.products-grid .product-card').forEach(card => {
+    if (card.classList.contains('product-card--hp-hidden')) return; // never reveal homepage-hidden products
     const match = risk === 'all' || card.getAttribute('data-risk') === risk;
     card.style.display = match ? '' : 'none';
     if (match) shown++;

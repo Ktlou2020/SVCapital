@@ -864,6 +864,7 @@ section { position: relative; padding: 100px 0; }
 .product-card--solar .product-card__icon { color: #4CAF50; }
 .product-card--short .product-card__icon { color: var(--blue); }
 .product-card--delivery .product-card__icon { color: var(--orange); }
+.product-card--hp-hidden { display: none !important; }
 
 .product-card__title {
   font-size: 1.35rem;
