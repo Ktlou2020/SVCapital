@@ -2184,12 +2184,16 @@ function renderKYCTable() {
       const branchCode  = _esc(kInv.bank_branch_code  || '—');
       const bkStatus    = kInv.bank_account_status || 'pending';
       const bkCls       = { approved: 'badge--green', rejected: 'badge--red', pending: 'badge--yellow' }[bkStatus] || 'badge--grey';
+      const submittedAt = k.submitted_at || k.submitted_date || k.created_at || '';
+      const submittedLabel = submittedAt ? `<span style="display:block;margin-top:2px;font-size:0.68rem;color:var(--text-dim)"><i class="fa-solid fa-clock" style="margin-right:3px"></i>Submitted ${Utils.date(submittedAt)}</span>` : '';
       docTypeCell = `<div style="font-size:0.78rem;font-weight:700;color:var(--text);margin-bottom:4px">Proof of Bank</div>
         <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.6">
           <span style="display:block"><strong>${bankName}</strong></span>
           <span style="display:block">${bankHolder} &bull; ${masked}</span>
           <span style="display:block">${acctType} &bull; Branch ${branchCode}</span>
-          <span class="badge ${bkCls}" style="font-size:0.62rem;margin-top:2px">Bank ${bkStatus}</span>
+          ${submittedLabel}
+          <span class="badge ${bkCls}" style="font-size:0.62rem;margin-top:4px">Bank ${bkStatus}</span>
+          <button class="btn btn--secondary" style="font-size:0.65rem;padding:2px 8px;margin-top:4px;display:inline-flex;align-items:center;gap:4px" onclick="event.stopPropagation();_showBankDetailsModal('${kInv.id}','${submittedAt}')"><i class="fa-solid fa-eye"></i> View Full</button>
         </div>`;
     }
 
@@ -2217,6 +2221,44 @@ function renderKYCTable() {
       </td>
     </tr>
   `}).join('');
+}
+
+/** Show a full (unmasked) bank details modal for a KYC bank-doc row. */
+function _showBankDetailsModal(investorId, submittedAt) {
+  const inv = STATE.investors.find(i => i.id === investorId);
+  if (!inv) { Toast.error('Investor record not found.'); return; }
+
+  const bkStatus = inv.bank_account_status || 'pending';
+  const bkCls    = { approved: 'badge--green', rejected: 'badge--red', pending: 'badge--yellow' }[bkStatus] || 'badge--grey';
+
+  const subtitle = document.getElementById('bankDetailSubtitle');
+  if (subtitle) subtitle.textContent = submittedAt ? `Submitted ${Utils.date(submittedAt)}` : '';
+
+  const body = document.getElementById('bankDetailsBody');
+  if (!body) return;
+
+  const row = (label, value, mono) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:0.78rem;color:var(--text-dim);font-weight:600">${label}</span>
+      <span style="font-size:0.88rem;font-weight:700;color:var(--text);${mono ? 'font-family:monospace;letter-spacing:0.04em' : ''}">${value || '—'}</span>
+    </div>`;
+
+  body.innerHTML = `
+    <div style="margin-bottom:16px">
+      <span class="badge ${bkCls}">Bank ${bkStatus}</span>
+    </div>
+    ${row('Account Holder', _esc(inv.bank_account_holder || '—'))}
+    ${row('Bank', _esc(inv.bank_name || '—'))}
+    ${row('Account Number', _esc(inv.bank_account_number || '—'), true)}
+    ${row('Account Type', _esc(inv.bank_account_type || '—'))}
+    ${row('Branch Code', _esc(inv.bank_branch_code || '—'), true)}
+    ${inv.bank_account_notes ? `<div style="margin-top:12px;padding:10px 12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;font-size:0.78rem;color:#fca5a5"><strong>Notes:</strong> ${_esc(inv.bank_account_notes)}</div>` : ''}
+    <div style="margin-top:16px;display:flex;gap:8px">
+      <button class="btn btn--secondary btn--sm" onclick="viewBankProof('${investorId}')"><i class="fa-solid fa-file"></i> Open Document</button>
+      <button class="btn btn--secondary btn--sm" onclick="Modal.close('bankDetailsModal')">Close</button>
+    </div>`;
+
+  Modal.open('bankDetailsModal');
 }
 
 /** Fetch and open an investor's most recent proof-of-bank document (admin profile view). */
