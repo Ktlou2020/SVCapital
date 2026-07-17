@@ -3378,6 +3378,7 @@ async function _showDepositSuccess(gateway, reference) {
   _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
   showSuccessOverlay({ title: 'Payment Received!', subtitle: `${fmtBase} added to your wallet` });
   await loadPortalData();
+  if (_pmSaId) await loadSubAccounts();
   loadWallet();
 }
 
@@ -3441,6 +3442,7 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
           try {
             await API._fetch('PATCH', `tables/sub_accounts/${_pmSaId}`, { wallet_balance: newSaBal });
             PORTAL.subAccounts[saIdx].wallet_balance = newSaBal;
+            renderSubAccountsView();
           } catch (saErr) { console.warn('Sub-account wallet update failed:', saErr); }
         }
       } else if (PORTAL.investor) {
@@ -3464,6 +3466,7 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
         _pmEl('pmSuccessAmount').textContent = `${fmtBase} deposit registered — awaiting bank confirmation`;
         _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
         await loadPortalData();
+        if (_pmSaId) await loadSubAccounts();
         loadWallet();
       } else {
         await _showDepositSuccess(gateway, reference);
