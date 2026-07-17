@@ -8321,13 +8321,12 @@ function _saNormalDetail(sa, meta) {
       <button class="sad-action-btn sad-action-btn--primary" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')">
         <i class="fa-solid fa-wallet"></i><span>Deposit</span>
       </button>
-      <button class="sad-action-btn sad-action-btn--secondary" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')" ${kycStatus !== 'approved' ? 'disabled' : ''}>
+      <button class="sad-action-btn sad-action-btn--secondary" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')">
         <i class="fa-solid fa-chart-line"></i><span>Invest</span>
       </button>
     </div>
 
-    ${kycStatus !== 'approved' ? `
-    <!-- ── FICA section ── -->
+    <!-- ── FICA section (always shown) ── -->
     <div class="sad-section">
       <div class="sad-section__header">
         <i class="fa-solid fa-id-card" style="color:${meta.color}"></i>
@@ -8343,7 +8342,36 @@ function _saNormalDetail(sa, meta) {
       <button class="sad-upload-btn" onclick="openSaFicaUpload('${sa.id}')">
         <i class="fa-solid fa-cloud-arrow-up"></i> Upload FICA Documents
       </button>
-    </div>` : ''}
+    </div>
+
+    ${(() => {
+      const saInvs = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
+      if (!saInvs.length) return '';
+      return `
+    <!-- ── Investments ── -->
+    <div class="sad-section">
+      <div class="sad-section__header">
+        <i class="fa-solid fa-chart-line" style="color:${meta.color}"></i>
+        <span>Investments (${saInvs.length})</span>
+      </div>
+      <div class="sad-txn-list">
+        ${saInvs.map(inv => {
+          const pi   = Utils.productInfo(inv.product_type);
+          const days = Utils.daysRemaining(inv.maturity_date);
+          const isActive = inv.status === 'active';
+          return `
+          <div class="sad-txn" onclick="Modal.close('saDetailModal');navigate('investments',document.querySelector('[data-view=investments]'))" style="cursor:pointer">
+            <div class="sad-txn__icon" style="background:${pi.color}1a;color:${pi.color}"><i class="fa-solid ${pi.icon}"></i></div>
+            <div class="sad-txn__info">
+              <div class="sad-txn__type">${_esc(inv.pool_name || pi.label)}</div>
+              <div class="sad-txn__date">${isActive ? (days !== null ? days + ' days left' : 'Active') : (inv.status || 'inactive')}</div>
+            </div>
+            <div class="sad-txn__amount" style="color:${isActive ? '#4ade80' : '#9ca3af'}">${Utils.rand(inv.amount)}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+    })()}
 
     ${recentTxns.length ? `
     <!-- ── Recent activity ── -->
@@ -8423,9 +8451,33 @@ function _saMinorHub(sa) {
     <div class="minor-actions minor-actions--4">
       <button class="minor-btn minor-btn--deposit" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')"><i class="fa-solid fa-piggy-bank"></i><span>Add to Jar</span></button>
       <button class="minor-btn minor-btn--transfer" onclick="openSaTransfer('${sa.id}')"><i class="fa-solid fa-arrow-right-arrow-left"></i><span>Transfer</span></button>
-      <button class="minor-btn minor-btn--invest" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')" ${sa.kyc_status !== 'approved' ? 'disabled' : ''}><i class="fa-solid fa-seedling"></i><span>Invest</span></button>
+      <button class="minor-btn minor-btn--invest" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-seedling"></i><span>Invest</span></button>
       <button class="minor-btn minor-btn--fica" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-id-card"></i><span>FICA Docs</span></button>
     </div>
+
+    ${(() => {
+      const saInvs = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
+      if (!saInvs.length) return '';
+      return `
+    <!-- Investments -->
+    <div class="minor-investments">
+      <div class="minor-investments__title">📈 Active Investments</div>
+      ${saInvs.map(inv => {
+        const pi   = Utils.productInfo(inv.product_type);
+        const days = Utils.daysRemaining(inv.maturity_date);
+        const isActive = inv.status === 'active';
+        return `
+        <div class="minor-inv-row" onclick="Modal.close('saDetailModal');navigate('investments',document.querySelector('[data-view=investments]'))">
+          <div class="minor-inv-row__icon" style="background:${pi.color}22;color:${pi.color}"><i class="fa-solid ${pi.icon}"></i></div>
+          <div class="minor-inv-row__info">
+            <div class="minor-inv-row__name">${_esc(inv.pool_name || pi.label)}</div>
+            <div class="minor-inv-row__sub">${isActive ? (days !== null ? days + ' days left' : 'Active') : (inv.status || 'inactive')}</div>
+          </div>
+          <div class="minor-inv-row__amount">${Utils.rand(inv.amount)}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+    })()}
 
     <!-- Learning Zone -->
     <div class="minor-learn-zone">
