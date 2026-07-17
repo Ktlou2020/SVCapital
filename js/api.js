@@ -620,7 +620,10 @@ const Toast = {
     this.container.className = 'toast-container';
     document.body.appendChild(this.container);
   },
-  show(message, type = 'info', duration = 4000) {
+  show(message, type = 'info', duration) {
+    // Durations per type — success/error/warning stay longer so users can read confirmations
+    const defaults = { success: 6500, error: 6000, warning: 6000, info: 4000 };
+    const ms = duration ?? defaults[type] ?? 4000;
     if (!this.container) this.init();
     // Cap at 4 visible toasts — remove oldest when exceeded
     const existing = this.container.querySelectorAll('.toast');
@@ -646,12 +649,13 @@ const Toast = {
       toast.style.transform = 'translateX(100%)';
       toast.style.transition = '0.3s ease';
       setTimeout(() => toast.remove(), 300);
-    }, duration);
+    }, ms);
   },
-  success: (msg) => Toast.show(msg, 'success'),
-  error:   (msg) => Toast.show(msg, 'error'),
-  info:    (msg) => Toast.show(msg, 'info'),
-  warning: (msg) => Toast.show(msg, 'warning'),
+  success: (msg, ms) => Toast.show(msg, 'success', ms),
+  error:   (msg, ms) => Toast.show(msg, 'error',   ms),
+  info:    (msg, ms) => Toast.show(msg, 'info',     ms),
+  warning: (msg, ms) => Toast.show(msg, 'warning',  ms),
+  warn:    (msg, ms) => Toast.show(msg, 'warning',  ms),
 };
 
 /* ═══════════════════════════════════════════════
