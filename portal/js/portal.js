@@ -8117,8 +8117,9 @@ function _saMinorHub(sa) {
   const goalPct = goal > 0 ? Math.min(100, Math.round((total / goal) * 100)) : 0;
   const jarFill = Math.min(100, Math.max(5, total > 0 ? Math.min(100, (total / Math.max(goal, total + 1)) * 100) : 0));
 
-  const ageInfo  = age || { age: '?', label: 'Saver', theme: 'minor-young' };
-  const saInvsM  = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
+  const ageInfo     = age || { age: '?', label: 'Saver', theme: 'minor-young' };
+  const saInvsM     = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
+  const saAllTxnsM  = (PORTAL.transactions || []).filter(t => t.sub_account_id === sa.id);
 
   return `
   <div class="minor-hub minor-hub--${ageInfo.theme || 'minor-young'}">
@@ -8163,6 +8164,10 @@ function _saMinorHub(sa) {
       <button class="minor-btn minor-btn--invest" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-seedling"></i><span>Invest</span></button>
       <button class="minor-btn minor-btn--fica" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-id-card"></i><span>FICA Docs</span></button>
     </div>
+    <div style="display:flex;gap:8px;padding:0 22px 16px">
+      <button class="btn btn--ghost btn--sm" style="flex:1" onclick="Modal.close('saDetailModal');downloadSaStatement('${sa.id}','${sa.name}')"><i class="fa-solid fa-file-pdf"></i> Statement</button>
+      <button class="btn btn--ghost btn--sm" style="flex:1" onclick="openSaBankDetails('${sa.id}')"><i class="fa-solid fa-building-columns"></i> Banking</button>
+    </div>
 
     ${saInvsM.length ? `
     <!-- Active Investments -->
@@ -8190,6 +8195,37 @@ function _saMinorHub(sa) {
       </div>
       <div class="minor-tips-dots" id="minorTipsDots"></div>
     </div>
+
+    <!-- Banking Details -->
+    <div class="minor-investments" style="margin-top:12px">
+      <div class="minor-investments__title"><i class="fa-solid fa-building-columns" style="color:#eda5ff;margin-right:6px"></i>Banking Details</div>
+      ${sa.sa_bank_name
+        ? `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+            <div>
+              <div style="font-size:0.82rem;font-weight:700;color:#fff">${sa.sa_bank_name}</div>
+              <div style="font-size:0.72rem;color:rgba(255,255,255,0.6)">${sa.sa_bank_holder || ''} · ****${(sa.sa_bank_number||'').slice(-4)} · ${sa.sa_bank_type||'current'}</div>
+            </div>
+            <span class="badge badge--${sa.sa_bank_status==='approved'?'green':sa.sa_bank_status==='pending'?'orange':'gray'}" style="font-size:0.65rem">${sa.sa_bank_status||'none'}</span>
+          </div>`
+        : `<div style="font-size:0.78rem;color:rgba(255,255,255,0.5);padding:4px 0">No banking details — tap Banking above to add</div>`}
+    </div>
+
+    <!-- All Transactions -->
+    ${saAllTxnsM.length ? `
+    <div class="minor-investments" style="margin-top:12px">
+      <div class="minor-investments__title"><i class="fa-solid fa-receipt" style="color:#fec24f;margin-right:6px"></i>All Transactions (${saAllTxnsM.length})</div>
+      <div style="${saAllTxnsM.length > 8 ? 'max-height:240px;overflow-y:auto' : ''}">
+        ${saAllTxnsM.map(t => `
+        <div class="minor-inv-row">
+          <div class="minor-inv-row__icon" style="background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.7)"><i class="fa-solid fa-receipt" style="font-size:0.8rem"></i></div>
+          <div class="minor-inv-row__info">
+            <div class="minor-inv-row__name">${t.description || t.type}</div>
+            <div class="minor-inv-row__sub">${Utils.date(t.created_at || t.transaction_date)}</div>
+          </div>
+          <div class="minor-inv-row__amount" style="color:${t.amount>0?'#4ade80':'#ef4444'}">${Utils.rand(t.amount)}</div>
+        </div>`).join('')}
+      </div>
+    </div>` : ''}
 
     <!-- FICA section -->
     <div class="minor-fica-section">
