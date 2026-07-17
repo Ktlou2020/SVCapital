@@ -19,8 +19,8 @@
       --surface:   #111318;
       --surface2:  #1a1c24;
       --border:    rgba(255,255,255,0.07);
-      --purple:    #7c5cfc;
-      --purple-h:  #6347e0;
+      --purple:    #eda5ff;
+      --purple-h:  #eda5ff;
       --teal:      #00d4aa;
       --text:      #e8eaf6;
       --muted:     #6b7280;
@@ -40,8 +40,8 @@
       content: '';
       position: fixed; inset: 0; z-index: 0;
       background-image:
-        linear-gradient(rgba(124,92,252,0.04) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(124,92,252,0.04) 1px, transparent 1px);
+        linear-gradient(rgba(237,165,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(237,165,255,0.04) 1px, transparent 1px);
       background-size: 48px 48px;
       pointer-events: none;
     }
@@ -50,7 +50,7 @@
     .orb {
       position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.18; z-index: 0; pointer-events: none;
     }
-    .orb--1 { width: 500px; height: 500px; background: #7c5cfc; top: -120px; left: -100px; animation: drift1 14s ease-in-out infinite alternate; }
+    .orb--1 { width: 500px; height: 500px; background: #eda5ff; top: -120px; left: -100px; animation: drift1 14s ease-in-out infinite alternate; }
     .orb--2 { width: 360px; height: 360px; background: #00d4aa; bottom: -80px; right: -60px; animation: drift2 18s ease-in-out infinite alternate; }
     .orb--3 { width: 280px; height: 280px; background: #e84393; top: 50%; right: 10%; animation: drift3 22s ease-in-out infinite alternate; }
 
@@ -160,7 +160,7 @@
     }
     .form-input:focus {
       border-color: var(--purple);
-      box-shadow: 0 0 0 3px rgba(124,92,252,0.15);
+      box-shadow: 0 0 0 3px rgba(237,165,255,0.15);
     }
     .form-input.error { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(239,68,68,0.12); }
 
@@ -182,7 +182,7 @@
     .emp-preview-card {
       display: none;
       background: var(--surface2);
-      border: 1px solid rgba(124,92,252,0.3);
+      border: 1px solid rgba(237,165,255,0.3);
       border-radius: 12px;
       padding: 16px;
       margin-bottom: 20px;
@@ -198,7 +198,7 @@
     .emp-name { font-size: 1rem; font-weight: 700; }
     .emp-role-chip {
       display: inline-flex; align-items: center; gap: 5px;
-      background: rgba(124,92,252,0.12); border: 1px solid rgba(124,92,252,0.2);
+      background: rgba(237,165,255,0.12); border: 1px solid rgba(237,165,255,0.2);
       border-radius: 20px; padding: 3px 10px;
       font-size: 0.72rem; font-weight: 600; color: var(--purple);
       margin-top: 3px;
@@ -206,15 +206,15 @@
 
     .btn-primary {
       width: 100%; padding: 14px;
-      background: linear-gradient(135deg, var(--purple), #5b3fd4);
+      background: linear-gradient(135deg, var(--purple), #c070d8);
       border: none; border-radius: 10px;
       color: #fff; font-size: 0.95rem; font-weight: 700;
       cursor: pointer; font-family: inherit;
       display: flex; align-items: center; justify-content: center; gap: 10px;
       transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
-      box-shadow: 0 4px 20px rgba(124,92,252,0.35);
+      box-shadow: 0 4px 20px rgba(237,165,255,0.35);
     }
-    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(124,92,252,0.5); }
+    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(237,165,255,0.5); }
     .btn-primary:active:not(:disabled){ transform: translateY(0); }
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -253,8 +253,8 @@
       transition: border-color 0.2s, box-shadow 0.2s;
       caret-color: var(--purple);
     }
-    .pin-box:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(124,92,252,0.15); }
-    .pin-box.filled { border-color: rgba(124,92,252,0.5); }
+    .pin-box:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(237,165,255,0.15); }
+    .pin-box.filled { border-color: rgba(237,165,255,0.5); }
     .pin-box.error  { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(239,68,68,0.12); }
 
     .spinner {
@@ -367,7 +367,7 @@
     <div class="app-preview">
       <div class="app-preview-row">
         <div class="app-chip">
-          <div class="app-chip-icon" style="background:#7c5cfc"><i class="fa-solid fa-user-circle"></i></div>
+          <div class="app-chip-icon" style="background:#eda5ff"><i class="fa-solid fa-user-circle"></i></div>
           <div><div class="app-chip-label">My Dashboard</div><div class="app-chip-desc">For every team member</div></div>
         </div>
         <div class="app-chip">
@@ -664,7 +664,7 @@ function showStep2(emp) {
 
   const avatar = document.getElementById('empAvatar');
   avatar.textContent = emp.avatar_initials || (emp.first_name[0] + emp.last_name[0]).toUpperCase();
-  avatar.style.background = emp.avatar_color || '#7c5cfc';
+  avatar.style.background = emp.avatar_color || '#eda5ff';
   document.getElementById('empName').textContent = emp.first_name + ' ' + emp.last_name;
   document.getElementById('empRoleChip').innerHTML = `<i class="fa-solid fa-id-badge"></i> ${emp.role}`;
 

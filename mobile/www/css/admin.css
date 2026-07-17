@@ -276,7 +276,7 @@ img { max-width: 100%; display: block; }
 .stat-card--gold::before { background: linear-gradient(90deg, var(--gold-dark), var(--gold)); }
 .stat-card--green::before { background: linear-gradient(90deg, #16a34a, var(--green)); }
 .stat-card--blue::before { background: linear-gradient(90deg, #656565, var(--blue)); }
-.stat-card--purple::before { background: linear-gradient(90deg, #c070d8, var(--purple)); }
+.stat-card--purple::before { background: linear-gradient(90deg, #eda5ff, var(--purple)); }
 .stat-card--orange::before { background: linear-gradient(90deg, #c2410c, var(--orange)); }
 
 .stat-card:hover { border-color: var(--border-gold); transform: translateY(-2px); }

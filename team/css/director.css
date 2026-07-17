@@ -14,7 +14,7 @@
   --gold:      #fec24f;
   --gold-h:    #d97706;
   --gold-glow: rgba(254,194,79,0.15);
-  --purple:    #7c5cfc;
+  --purple:    #eda5ff;
   --teal:      #00d4aa;
   --danger:    #ef4444;
   --success:   #10b981;
@@ -146,7 +146,7 @@ body::before {
 .btn i { font-size: 0.82rem; }
 .btn--gold   { background: linear-gradient(135deg, var(--gold), var(--gold-h)); color: #000; box-shadow: 0 4px 16px rgba(254,194,79,0.3); }
 .btn--gold:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(254,194,79,0.45); }
-.btn--primary { background: linear-gradient(135deg, var(--purple), #5b3fd4); color: #fff; box-shadow: 0 4px 16px rgba(124,92,252,0.25); }
+.btn--primary { background: linear-gradient(135deg, var(--purple), #c070d8); color: #fff; box-shadow: 0 4px 16px rgba(237,165,255,0.25); }
 .btn--primary:hover { transform: translateY(-1px); }
 .btn--danger  { background: rgba(239,68,68,0.12); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }
 .btn--danger:hover { background: rgba(239,68,68,0.2); }
@@ -186,7 +186,7 @@ body::before {
 .chip--done    { background: rgba(0,212,170,0.1);   color: var(--teal); }
 .chip--off     { background: rgba(107,114,128,0.15); color: var(--muted); }
 .chip--danger  { background: rgba(239,68,68,0.1);   color: var(--danger); }
-.chip--purple  { background: rgba(124,92,252,0.12); color: var(--purple); }
+.chip--purple  { background: rgba(237,165,255,0.12); color: var(--purple); }
 
 /* ── Role badge ── */
 .role-chip {
@@ -269,7 +269,7 @@ body::before {
   padding: 12px 16px; border-radius: 10px; font-size: 0.82rem; font-weight: 600;
   display: flex; align-items: flex-start; gap: 10px; margin-bottom: 16px;
 }
-.dir-alert--info    { background: rgba(124,92,252,0.1); border: 1px solid rgba(124,92,252,0.2); color: #c4b5fd; }
+.dir-alert--info    { background: rgba(237,165,255,0.1); border: 1px solid rgba(237,165,255,0.2); color: #eda5ff; }
 .dir-alert--success { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); color: #6ee7b7; }
 .dir-alert--warn    { background: rgba(254,194,79,0.1); border: 1px solid rgba(254,194,79,0.2); color: #fcd34d; }
 .dir-alert--danger  { background: rgba(239,68,68,0.1);  border: 1px solid rgba(239,68,68,0.2);  color: #fca5a5; }

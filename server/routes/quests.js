@@ -48,7 +48,7 @@ const QUESTS = [
   },
   {
     id: 'risk_profile_survey', title: 'Know Your Risk Profile',
-    category: 'profile', xp: 100, icon: 'fa-shield-halved', color: '#a855f7',
+    category: 'profile', xp: 100, icon: 'fa-shield-halved', color: '#eda5ff',
     description: 'Help us tailor your investment recommendations to your risk appetite.',
     type: 'survey',
     questions: [

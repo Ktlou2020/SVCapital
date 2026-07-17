@@ -240,7 +240,7 @@ CREATE TABLE IF NOT EXISTS employees (
   role TEXT NOT NULL, level TEXT DEFAULT 'junior', department TEXT,
   status TEXT DEFAULT 'active', pin_hash TEXT, hire_date DATE, notes TEXT,
   permissions JSONB DEFAULT '{}',
-  id_number TEXT, avatar_initials TEXT, avatar_color TEXT DEFAULT '#7c5cfc',
+  id_number TEXT, avatar_initials TEXT, avatar_color TEXT DEFAULT '#eda5ff',
   xp_points INT DEFAULT 0, streak_days INT DEFAULT 0,
   eva_weight NUMERIC(6,2) DEFAULT 1.0,
   base_salary NUMERIC(18,2) DEFAULT 0,
@@ -270,7 +270,7 @@ DO $$ BEGIN
   BEGIN ALTER TABLE employees ADD COLUMN level TEXT DEFAULT 'junior'; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE employees ADD COLUMN id_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE employees ADD COLUMN avatar_initials TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-  BEGIN ALTER TABLE employees ADD COLUMN avatar_color TEXT DEFAULT '#7c5cfc'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE employees ADD COLUMN avatar_color TEXT DEFAULT '#eda5ff'; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE employees ADD COLUMN xp_points INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE employees ADD COLUMN streak_days INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE employees ADD COLUMN eva_weight NUMERIC(6,2) DEFAULT 1.0; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -674,7 +674,7 @@ CREATE INDEX IF NOT EXISTS one_on_ones_emp_idx ON one_on_ones(employee_id);
 CREATE TABLE IF NOT EXISTS learning_paths (
   id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT,
   role_target TEXT,
-  thumbnail_color TEXT DEFAULT '#7c5cfc',
+  thumbnail_color TEXT DEFAULT '#eda5ff',
   thumbnail_icon TEXT DEFAULT 'fa-road',
   course_ids JSONB DEFAULT '[]',
   is_mandatory BOOLEAN DEFAULT false,
@@ -1238,6 +1238,12 @@ async function autoSetup() {
         BEGIN ALTER TABLE investments ADD COLUMN custom_payout_amount NUMERIC(18,2); EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE cattle_animals ADD COLUMN dim_tag TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE cattle_animals ADD COLUMN extra_colour_tag TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_holder TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_branch TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_type TEXT DEFAULT 'current'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_status TEXT DEFAULT 'none'; EXCEPTION WHEN duplicate_column THEN NULL; END;
       END $$
     `);
     console.log('✅ Investor FICA + gamification columns ready.');
@@ -1397,11 +1403,11 @@ async function autoSetup() {
       VALUES
         ('EMP-COO-001', 'COO', 'SV Capital', 'coo@svcapital.co.za',
          'CEO', 'executive', 'Executive',
-         'active', '0000000009001', 'CO', '#7c5cfc', 0, NOW())
+         'active', '0000000009001', 'CO', '#eda5ff', 0, NOW())
       ON CONFLICT (email) DO UPDATE SET
         role = 'CEO', level = 'executive', department = 'Executive',
         status = 'active', id_number = '0000000009001',
-        avatar_initials = 'CO', avatar_color = '#7c5cfc'
+        avatar_initials = 'CO', avatar_color = '#eda5ff'
     `);
 
     // 7. Backfill investments.end_date to match pool's canonical maturity_date.

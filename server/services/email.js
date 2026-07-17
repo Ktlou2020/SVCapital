@@ -436,7 +436,7 @@ function sendMonthlyStatement(investor, { investments, recentTransactions }) {
   const rand = (n) => 'R' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   const pct = (r) => (Number(r || 0) * 100).toFixed(2) + '%';
   const fmtDate = (s) => s ? new Date(s).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Johannesburg' }) : '—';
-  const statusColor = (s) => ({ active: '#10b981', matured: '#7c5cfc', pending: '#fec24f', cancelled: '#ef4444' }[s] || '#6b7280');
+  const statusColor = (s) => ({ active: '#10b981', matured: '#eda5ff', pending: '#fec24f', cancelled: '#ef4444' }[s] || '#6b7280');
 
   const activeInvestments = investments.filter(i => i.status === 'active');
   const effectiveReturn = Number(total_invested) > 0 ? ((Number(total_returns) / Number(total_invested)) * 100).toFixed(2) + '%' : '—';

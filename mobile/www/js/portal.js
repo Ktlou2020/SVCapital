@@ -7890,7 +7890,7 @@ const SA_TYPE_META = {
   },
   trust:    {
     icon: 'fa-scale-balanced',  label: 'Trust',
-    color: '#7c5cfc',           bg: 'linear-gradient(135deg,#4c1d95 0%,#2563eb 100%)',
+    color: '#eda5ff',           bg: 'linear-gradient(135deg,#4c1d95 0%,#2563eb 100%)',
     tagline: 'Invest through a family or business trust',
     ficaDocs: ['Trust Deed (certified copy)', 'Letters of Authority (Master of Court)', 'Trustee(s) ID documents', 'Trust tax clearance certificate'],
   },
@@ -8277,9 +8277,8 @@ function _saNormalDetail(sa, meta) {
 
   const ficaDocs = SA_TYPE_META[sa.account_type]?.ficaDocs || [];
 
-  const recentTxns = (PORTAL.transactions || [])
-    .filter(t => t.sub_account_id === sa.id)
-    .slice(0, 5);
+  const saAllTxns = (PORTAL.transactions || [])
+    .filter(t => t.sub_account_id === sa.id);
 
   const txnTypeIcon = t => ({
     deposit: 'fa-download', investment: 'fa-chart-line',
@@ -8324,6 +8323,31 @@ function _saNormalDetail(sa, meta) {
       <button class="sad-action-btn sad-action-btn--secondary" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')">
         <i class="fa-solid fa-chart-line"></i><span>Invest</span>
       </button>
+      <button class="sad-action-btn" onclick="Modal.close('saDetailModal');downloadSaStatement('${sa.id}','${sa.name}')">
+        <i class="fa-solid fa-file-pdf"></i><span>Statement</span>
+      </button>
+      <button class="sad-action-btn" onclick="openSaBankDetails('${sa.id}')">
+        <i class="fa-solid fa-building-columns"></i><span>Banking</span>
+      </button>
+    </div>
+
+    <!-- ── Banking Details ── -->
+    <div class="sad-section">
+      <div class="sad-section__header">
+        <i class="fa-solid fa-building-columns" style="color:${meta.color}"></i>
+        <span>Banking Details</span>
+      </div>
+      <div style="padding:8px 0;font-size:0.82rem;color:var(--text-muted)">
+        ${sa.sa_bank_name
+          ? `<div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <div style="font-weight:700;color:var(--text)">${sa.sa_bank_name}</div>
+                <div>${sa.sa_bank_holder} · ****${(sa.sa_bank_number||'').slice(-4)} · ${sa.sa_bank_type || 'current'}</div>
+              </div>
+              <span class="badge badge--${sa.sa_bank_status === 'pending' ? 'orange' : sa.sa_bank_status === 'approved' ? 'green' : 'gray'}">${sa.sa_bank_status || 'none'}</span>
+            </div>`
+          : `<span style="color:var(--text-dim)">No banking details on file</span>`}
+      </div>
     </div>
 
     <!-- ── FICA section (always shown) ── -->
@@ -8365,6 +8389,7 @@ function _saNormalDetail(sa, meta) {
             <div class="sad-txn__info">
               <div class="sad-txn__type">${_esc(inv.pool_name || pi.label)}</div>
               <div class="sad-txn__date">${isActive ? (days !== null ? days + ' days left' : 'Active') : (inv.status || 'inactive')}</div>
+              ${inv.status === 'matured' && !inv.maturity_instruction ? `<button class="btn btn--ghost btn--sm" style="font-size:0.7rem;padding:2px 8px;margin-top:4px;white-space:nowrap" onclick="event.stopPropagation();Modal.close('saDetailModal');openMaturityModal('${inv.id}')">Give Instruction</button>` : ''}
             </div>
             <div class="sad-txn__amount" style="color:${isActive ? '#4ade80' : '#9ca3af'}">${Utils.rand(inv.amount)}</div>
           </div>`;
@@ -8373,15 +8398,16 @@ function _saNormalDetail(sa, meta) {
     </div>`;
     })()}
 
-    ${recentTxns.length ? `
-    <!-- ── Recent activity ── -->
+    ${saAllTxns.length ? `
+    <!-- ── All activity ── -->
     <div class="sad-section">
       <div class="sad-section__header">
         <i class="fa-solid fa-clock-rotate-left" style="color:${meta.color}"></i>
-        <span>Recent Activity</span>
+        <span>All Transactions (${saAllTxns.length})</span>
       </div>
+      ${saAllTxns.length > 10 ? `<div style="max-height:320px;overflow-y:auto">` : ''}
       <div class="sad-txn-list">
-        ${recentTxns.map(t => `
+        ${saAllTxns.map(t => `
           <div class="sad-txn">
             <div class="sad-txn__icon" style="background:${t.amount > 0 ? 'rgba(74,222,128,0.12)' : 'rgba(239,68,68,0.1)'}">
               <i class="fa-solid ${txnTypeIcon(t)}" style="color:${t.amount > 0 ? '#4ade80' : '#ef4444'}"></i>
@@ -8393,6 +8419,7 @@ function _saNormalDetail(sa, meta) {
             <div class="sad-txn__amount" style="color:${t.amount > 0 ? '#4ade80' : '#ef4444'}">${t.amount > 0 ? '+' : ''}${Utils.rand(t.amount)}</div>
           </div>`).join('')}
       </div>
+      ${saAllTxns.length > 10 ? `</div>` : ''}
     </div>` : ''}
 
     <div style="height:32px"></div>`;
@@ -8643,6 +8670,49 @@ async function saveSaGoal() {
     Modal.close('saGoalModal');
     await loadSubAccounts();
   } catch (e) { Toast.error('Failed to save goal'); }
+}
+
+/* ── Sub-Account Banking Details ────────────────────────────── */
+let _saBankSaId = null;
+
+function openSaBankDetails(saId) {
+  _saBankSaId = saId;
+  const sa = PORTAL.subAccounts.find(s => s.id === saId);
+  if (!sa) return;
+  const f = id => document.getElementById(id);
+  if (f('saBankName'))   f('saBankName').value   = sa.sa_bank_name   || '';
+  if (f('saBankHolder')) f('saBankHolder').value  = sa.sa_bank_holder || '';
+  if (f('saBankNumber')) f('saBankNumber').value  = sa.sa_bank_number || '';
+  if (f('saBankBranch')) f('saBankBranch').value  = sa.sa_bank_branch || '';
+  if (f('saBankType'))   f('saBankType').value    = sa.sa_bank_type   || 'current';
+  Modal.open('saBankModal');
+}
+
+async function saveSaBankDetails() {
+  const f = id => document.getElementById(id)?.value?.trim();
+  const name   = f('saBankName');
+  const holder = f('saBankHolder');
+  const number = f('saBankNumber');
+  const branch = f('saBankBranch');
+  const type   = f('saBankType') || 'current';
+  if (!name || !holder || !number) { Toast.warn('Please fill in bank name, account holder, and account number'); return; }
+  try {
+    await API._fetch('PATCH', `tables/sub_accounts/${_saBankSaId}`, {
+      sa_bank_name:   name,
+      sa_bank_holder: holder,
+      sa_bank_number: number,
+      sa_bank_branch: branch,
+      sa_bank_type:   type,
+      sa_bank_status: 'pending',
+    });
+    const sa = PORTAL.subAccounts.find(s => s.id === _saBankSaId);
+    if (sa) { sa.sa_bank_name = name; sa.sa_bank_holder = holder; sa.sa_bank_number = number; sa.sa_bank_branch = branch; sa.sa_bank_type = type; sa.sa_bank_status = 'pending'; }
+    Modal.close('saBankModal');
+    Toast.success('Banking details saved — pending verification');
+    await loadSubAccounts();
+  } catch (err) {
+    Toast.error('Failed to save banking details');
+  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -10630,6 +10700,83 @@ function downloadStatement() {
   const ym = now.toISOString().slice(0, 7);
   doc.save(`SVC-Statement-${ym}.pdf`);
   Toast.success('90-day statement downloaded!');
+}
+
+/* downloadSaStatement() — sub-account statement */
+function downloadSaStatement(saId, saName) {
+  const txns = (PORTAL.transactions || []).filter(t => t.sub_account_id === saId);
+  if (!txns.length) { Toast.warn('No transactions found for this account'); return; }
+
+  const doc = _getPDF('portrait');
+  if (!doc) return;
+
+  const W   = doc.internal.pageSize.getWidth();
+  const now = new Date();
+  const dateLabel = now.toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  let y = _pdfHeader(doc, 'SV Capital — Sub-Account Statement', saName);
+  y += 6;
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(26, 26, 26);
+  doc.text(saName, 14, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(107, 114, 128);
+  doc.setFontSize(8);
+  doc.text(`Generated: ${dateLabel}`, 14, y + 5);
+  y += 14;
+
+  const typeMap = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus', gift_sent: 'Gift Sent', gift_received: 'Gift Received', reward: 'XP Reward' };
+  const tableHead = [['Date', 'Type', 'Description', 'Amount', 'Status']];
+  const tableBody = txns
+    .sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at))
+    .map(t => [
+      Utils.date(t.transaction_date || t.created_at),
+      typeMap[t.type] || t.type,
+      (t.description || '—').slice(0, 38),
+      (t.amount > 0 ? '+' : '') + Utils.rand(t.amount),
+      (t.status || '—').toUpperCase(),
+    ]);
+
+  if (doc.autoTable) {
+    doc.autoTable({
+      head: tableHead,
+      body: tableBody,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      headStyles: { fillColor: [26, 34, 53], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+      bodyStyles: { fontSize: 8, textColor: [26, 26, 26] },
+      alternateRowStyles: { fillColor: [247, 248, 250] },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 26 },
+        2: { cellWidth: 'auto' },
+        3: { cellWidth: 28, halign: 'right' },
+        4: { cellWidth: 22, halign: 'center' },
+      },
+      didDrawPage: () => _pdfFooter(doc),
+    });
+  } else {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(107, 114, 128);
+    doc.text('Date', 14, y + 6); doc.text('Type', 40, y + 6); doc.text('Description', 70, y + 6); doc.text('Amount', 150, y + 6); doc.text('Status', 175, y + 6);
+    y += 10;
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(26, 26, 26);
+    tableBody.slice(0, 30).forEach(row => {
+      doc.text(row[0], 14, y); doc.text(row[1], 40, y); doc.text(row[2].slice(0, 30), 70, y);
+      doc.text(row[3], 150, y, { align: 'right' }); doc.text(row[4], 175, y);
+      y += 6;
+      if (y > 260) { doc.addPage(); y = 20; }
+    });
+  }
+
+  _pdfFooter(doc);
+  const ym = now.toISOString().slice(0, 7);
+  const safeName = (saName || 'Account').replace(/[^a-zA-Z0-9_-]/g, '-');
+  doc.save(`SVC-Statement-${safeName}-${ym}.pdf`);
+  Toast.success('Sub-account statement downloaded!');
 }
 
 /* ═══════════════════════════════════════════════

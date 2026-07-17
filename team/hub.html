@@ -21,7 +21,7 @@
       --surface3: #22252f;
       --border:   rgba(255,255,255,0.07);
       --border2:  rgba(255,255,255,0.12);
-      --purple:   #7c5cfc;
+      --purple:   #eda5ff;
       --teal:     #00d4aa;
       --text:     #e8eaf6;
       --muted:    #6b7280;
@@ -40,14 +40,14 @@
       content: '';
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background-image:
-        linear-gradient(rgba(124,92,252,0.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(124,92,252,0.035) 1px, transparent 1px);
+        linear-gradient(rgba(237,165,255,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(237,165,255,0.035) 1px, transparent 1px);
       background-size: 52px 52px;
     }
 
     /* Orbs */
     .orb { position: fixed; border-radius: 50%; filter: blur(100px); opacity: 0.12; z-index: 0; pointer-events: none; }
-    .orb--1 { width: 600px; height: 600px; background: #7c5cfc; top: -200px; left: -150px; animation: float1 16s ease-in-out infinite alternate; }
+    .orb--1 { width: 600px; height: 600px; background: #eda5ff; top: -200px; left: -150px; animation: float1 16s ease-in-out infinite alternate; }
     .orb--2 { width: 400px; height: 400px; background: #00d4aa; bottom: -100px; right: -80px; animation: float2 20s ease-in-out infinite alternate; }
     @keyframes float1 { to { transform: translate(30px, 50px); } }
     @keyframes float2 { to { transform: translate(-20px, -30px); } }
@@ -58,7 +58,7 @@
       display: flex; align-items: center; justify-content: center;
       flex-direction: column; gap: 16px; z-index: 9999;
     }
-    #globalLoader .spin { width: 40px; height: 40px; border: 3px solid rgba(124,92,252,0.15); border-top-color: var(--purple); border-radius: 50%; animation: spin 0.65s linear infinite; }
+    #globalLoader .spin { width: 40px; height: 40px; border: 3px solid rgba(237,165,255,0.15); border-top-color: var(--purple); border-radius: 50%; animation: spin 0.65s linear infinite; }
     #globalLoader .load-text { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -120,7 +120,7 @@
     .hero-left {}
     .hero-greeting { font-size: 0.85rem; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
     .hero-name { font-size: 2.4rem; font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 10px; }
-    .hero-name em { font-style: normal; background: linear-gradient(135deg, #7c5cfc, #00d4aa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero-name em { font-style: normal; background: linear-gradient(135deg, #eda5ff, #00d4aa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 
     .role-badge {
       display: inline-flex; align-items: center; gap: 8px;
@@ -502,10 +502,10 @@ const ROLE_COLORS = {
   'Operations Manager': '#00d4aa',
   'Finance Manager':    '#e84393',
   'Tech Lead':          '#656565',
-  'Investment Analyst': '#7c5cfc',
+  'Investment Analyst': '#eda5ff',
   'Compliance Officer': '#10b981',
   'Client Relations':   '#fb923c',
-  'Marketing':          '#a855f7',
+  'Marketing':          '#eda5ff',
   'Junior Analyst':     '#64748b',
   'Admin':              '#64748b',
 };
@@ -524,7 +524,7 @@ const APP_META = {
     label:       'My Dashboard',
     description: 'Your personal hub — KPIs, EVA payslip, learning paths, kudos, leave requests, journal & more.',
     icon:        'fa-solid fa-user-circle',
-    color:       '#7c5cfc',
+    color:       '#eda5ff',
     path:        'employee.html',
     tags:        ['Personal', 'Required'],
     primary:     true,
@@ -637,12 +637,12 @@ function populateHero(session) {
   document.getElementById('xpValue').textContent      = (session.xpPoints || 0).toLocaleString() + ' XP';
 
   const roleDot = document.getElementById('roleDot');
-  roleDot.style.background = ROLE_COLORS[session.role] || '#7c5cfc';
+  roleDot.style.background = ROLE_COLORS[session.role] || '#eda5ff';
 
   // Topbar
   const topAvatar = document.getElementById('topAvatar');
   topAvatar.textContent     = session.avatarInitials;
-  topAvatar.style.background = session.avatarColor || '#7c5cfc';
+  topAvatar.style.background = session.avatarColor || '#eda5ff';
   document.getElementById('topName').textContent = session.firstName + ' ' + session.lastName;
   document.getElementById('topRole').textContent = session.role;
 
@@ -833,9 +833,9 @@ function _renderNotifications(feed, pending, empMap) {
   const TYPE_CFG = {
     leave_approved:  { icon: 'fa-solid fa-circle-check',  color: '#10b981' },
     leave_rejected:  { icon: 'fa-solid fa-circle-xmark',  color: '#ef4444' },
-    leave_submitted: { icon: 'fa-solid fa-paper-plane',   color: '#7c5cfc' },
+    leave_submitted: { icon: 'fa-solid fa-paper-plane',   color: '#eda5ff' },
     achievement:     { icon: 'fa-solid fa-trophy',        color: '#f59e0b' },
-    xp_gain:         { icon: 'fa-solid fa-bolt',          color: '#7c5cfc' },
+    xp_gain:         { icon: 'fa-solid fa-bolt',          color: '#eda5ff' },
     kpi_update:      { icon: 'fa-solid fa-chart-line',    color: '#00d4aa' },
   };
   const DEFAULT_CFG = { icon: 'fa-solid fa-bell', color: '#6b7280' };

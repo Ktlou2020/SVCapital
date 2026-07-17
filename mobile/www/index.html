@@ -426,7 +426,7 @@
                 </div>
                 <div class="perf-row">
                   <div class="perf-row__label">
-                    <i style="background:rgba(168,85,247,0.1);color:#a855f7"><i class="fa-solid fa-layer-group fa-sm"></i></i>
+                    <i style="background:rgba(237,165,255,0.1);color:#eda5ff"><i class="fa-solid fa-layer-group fa-sm"></i></i>
                     Active Pools
                   </div>
                   <span class="perf-row__value neutral" id="perf-pools">—</span>
@@ -504,7 +504,7 @@
             <!-- Investment timeline -->
             <div class="panel">
               <div class="panel__header">
-                <span class="panel__title"><i class="fa-solid fa-timeline" style="color:#a855f7;margin-right:6px"></i>Investment Timeline</span>
+                <span class="panel__title"><i class="fa-solid fa-timeline" style="color:#eda5ff;margin-right:6px"></i>Investment Timeline</span>
                 <button class="btn btn--secondary btn--sm" onclick="exportAnalyticsCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
               </div>
               <div class="panel__body" style="padding:12px">
@@ -528,7 +528,7 @@
             </div>
 
             <!-- Wealth projector -->
-            <div class="panel" style="background:linear-gradient(135deg,rgba(255,155,12,0.06),rgba(168,85,247,0.04));border-color:rgba(255,155,12,0.2)">
+            <div class="panel" style="background:linear-gradient(135deg,rgba(255,155,12,0.06),rgba(237,165,255,0.04));border-color:rgba(255,155,12,0.2)">
               <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-calculator" style="color:#FF9B0C;margin-right:6px"></i>Wealth Projector</span></div>
               <div class="panel__body">
                 <div class="form-group" style="margin-bottom:10px">
@@ -1147,7 +1147,7 @@
                 <div class="ref-stat__label">KYC/FICA Approved</div>
               </div>
               <div class="ref-stat">
-                <div class="ref-stat__icon" style="background:rgba(168,85,247,0.14);color:#a855f7"><i class="fa-solid fa-chart-line"></i></div>
+                <div class="ref-stat__icon" style="background:rgba(237,165,255,0.14);color:#eda5ff"><i class="fa-solid fa-chart-line"></i></div>
                 <div class="ref-stat__value" id="refStatInvested">—</div>
                 <div class="ref-stat__label">Invested</div>
               </div>
@@ -2174,7 +2174,7 @@
           <span>Invest through your registered company or CC</span>
         </button>
         <button class="sa-type-btn" data-type="trust" onclick="saSelectType('trust')">
-          <i class="fa-solid fa-scale-balanced" style="color:#7c5cfc"></i>
+          <i class="fa-solid fa-scale-balanced" style="color:#eda5ff"></i>
           <strong>Trust</strong>
           <span>Family or business trust investments</span>
         </button>
@@ -2451,6 +2451,66 @@
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('bankDetailsModal')">Cancel</button>
       <button class="btn btn--primary" onclick="saveBankDetails()"><i class="fa-solid fa-floppy-disk"></i> Save Bank Details</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sub-Account Banking Details Modal -->
+<div class="modal-overlay" id="saBankModal" onclick="if(event.target===this)Modal.close('saBankModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title">Sub-Account Banking Details</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Banking account for this sub-account — pending admin verification</div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('saBankModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="form-row form-row--2">
+        <div class="form-group">
+          <label class="form-label">Bank Name <span style="color:#ef4444">*</span></label>
+          <select class="form-select" id="saBankName">
+            <option value="">Select bank…</option>
+            <option>ABSA</option>
+            <option>Capitec Bank</option>
+            <option>First National Bank</option>
+            <option>Investec</option>
+            <option>Nedbank</option>
+            <option>Standard Bank</option>
+            <option>TymeBank</option>
+            <option>African Bank</option>
+            <option>Discovery Bank</option>
+            <option>Bidvest Bank</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Account Type</label>
+          <select class="form-select" id="saBankType">
+            <option value="current">Cheque / Current</option>
+            <option value="savings">Savings</option>
+            <option value="cheque">Cheque</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Account Holder Name <span style="color:#ef4444">*</span></label>
+        <input type="text" class="form-input" id="saBankHolder" placeholder="Full name as it appears on bank account" />
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group">
+          <label class="form-label">Account Number <span style="color:#ef4444">*</span></label>
+          <input type="text" class="form-input" id="saBankNumber" placeholder="e.g. 62012345678" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Branch Code</label>
+          <input type="text" class="form-input" id="saBankBranch" placeholder="e.g. 632005" />
+        </div>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('saBankModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveSaBankDetails()"><i class="fa-solid fa-floppy-disk"></i> Save Banking Details</button>
     </div>
   </div>
 </div>

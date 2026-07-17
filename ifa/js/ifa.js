@@ -416,7 +416,7 @@ function renderPendingActionsWidget() {
   const actions = [
     { icon: 'fa-id-card',        color: '#f97316', label: 'Clients pending FICA',              count: pendingFica,  view: 'clients' },
     { icon: 'fa-headset',        color: '#656565', label: 'Open support tickets',              count: openTickets,  view: 'support' },
-    { icon: 'fa-hourglass-end',  color: '#a855f7', label: 'Investments maturing in 30 days',  count: maturingSoon, view: 'investments' }
+    { icon: 'fa-hourglass-end',  color: '#eda5ff', label: 'Investments maturing in 30 days',  count: maturingSoon, view: 'investments' }
   ].filter(a => a.count > 0);
 
   if (!actions.length) {
@@ -451,7 +451,7 @@ function renderPortfolioChart() {
       .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
     return clientInvests || parseFloat(c.total_invested) || 0;
   });
-  const colors = ['#656565','#fec24f','#22c55e','#f97316','#a855f7','#656565','#ef4444','#656565'];
+  const colors = ['#656565','#fec24f','#22c55e','#f97316','#eda5ff','#656565','#ef4444','#656565'];
 
   if (STATE.charts.portfolio) STATE.charts.portfolio.destroy();
   if (!labels.length) return;

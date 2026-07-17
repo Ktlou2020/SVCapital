@@ -351,7 +351,7 @@ function renderTaskCompletionPanel() {
     { label: 'Complete identity verification', done: ficaReady, tone: '#fec24f', action: 'openKycUploadModal()', cta: 'Upload documents' },
     { label: 'Add a withdrawal bank account', done: bankReady, tone: '#656565', action: 'openBankDetailsModal()', cta: 'Add bank account' },
     { label: 'Add funds to your wallet', done: hasWallet, tone: '#22c55e', action: 'openTopUpModal()', cta: 'Add funds' },
-    { label: 'Confirm your risk profile', done: riskReady, tone: '#a855f7', action: 'navigate(\'profile\', document.querySelector(\'[data-view=profile]\'))', cta: 'Review profile' },
+    { label: 'Confirm your risk profile', done: riskReady, tone: '#eda5ff', action: 'navigate(\'profile\', document.querySelector(\'[data-view=profile]\'))', cta: 'Review profile' },
     { label: 'Make your first investment', done: hasInvestments, tone: '#fec24f', action: 'navigate(\'marketplace\', document.querySelector(\'[data-view=marketplace]\'))', cta: 'Browse products' },
   ];
   const doneCount = tasks.filter(t => t.done).length;
@@ -573,7 +573,7 @@ function renderMarketConversionPanel(pools) {
     sub = 'Use the waitlist options below or switch category to keep your momentum.';
     action = "filterMarket('all', document.querySelector('#view-marketplace .tab-bar .tab-btn'))";
     actionLabel = 'Show all pools';
-    accent = '#A855F7';
+    accent = '#eda5ff';
   }
 
   panel.innerHTML = `
@@ -1003,7 +1003,7 @@ function loadNotifications() {
       });
     } else if (inv.fica_status === 'approved') {
       notifs.push({
-        icon: 'fa-shield-halved', iconBg: 'rgba(168,85,247,0.1)', iconColor: '#a855f7',
+        icon: 'fa-shield-halved', iconBg: 'rgba(237,165,255,0.1)', iconColor: '#eda5ff',
         title: 'Identity verified',
         sub: 'Your FICA/KYC verification is complete. You can invest in all available pools.',
         time: inv.fica_verified_at ? Utils.timeAgo(inv.fica_verified_at) : 'Approved',
@@ -2410,7 +2410,7 @@ function _renderReturnHistory() {
 
   let running = 0;
   const typeLabel = { return: 'Return Payment', payout: 'Payout', referral_bonus: 'Referral Bonus' };
-  const typeColor = { return: '#22c55e', payout: '#fec24f', referral_bonus: '#a855f7' };
+  const typeColor = { return: '#22c55e', payout: '#fec24f', referral_bonus: '#eda5ff' };
 
   el.innerHTML = `
     <div class="panel mb-16">
@@ -3209,6 +3209,7 @@ async function _showDepositSuccess(gateway, reference) {
   _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
   showSuccessOverlay({ title: 'Payment Received!', subtitle: `${fmtBase} added to your wallet` });
   await loadPortalData();
+  if (_pmSaId) await loadSubAccounts();
   loadWallet();
 }
 
@@ -3272,6 +3273,7 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
           try {
             await API._fetch('PATCH', `tables/sub_accounts/${_pmSaId}`, { wallet_balance: newSaBal });
             PORTAL.subAccounts[saIdx].wallet_balance = newSaBal;
+            renderSubAccountsView();
           } catch (saErr) { console.warn('Sub-account wallet update failed:', saErr); }
         }
       } else if (PORTAL.investor) {
@@ -3295,6 +3297,7 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
         _pmEl('pmSuccessAmount').textContent = `${fmtBase} deposit registered — awaiting bank confirmation`;
         _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
         await loadPortalData();
+        if (_pmSaId) await loadSubAccounts();
         loadWallet();
       } else {
         await _showDepositSuccess(gateway, reference);
@@ -5347,8 +5350,8 @@ function buildStatementHTML(opts) {
 
     sections += `
       <section style="margin-bottom:36px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #A855F7">
-          <div style="width:4px;height:22px;background:linear-gradient(180deg,#A855F7,#7C3AED);border-radius:2px"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #eda5ff">
+          <div style="width:4px;height:22px;background:linear-gradient(180deg,#eda5ff,#eda5ff);border-radius:2px"></div>
           <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Transaction Ledger</h3>
           <span style="margin-left:auto;font-size:10px;color:#9ca3af">${transactions.length} transactions · ${fmtDate(from)} — ${fmtDate(to)}</span>
         </div>
@@ -5574,7 +5577,7 @@ const XP_LEVELS = [
   { id: 'cultivator', label: 'Cultivator', min: 600,  icon: 'fa-spa',              color: '#656565' },
   { id: 'harvester',  label: 'Harvester',  min: 1000, icon: 'fa-wheat-awn',        color: '#fec24f' },
   { id: 'pioneer',    label: 'Pioneer',    min: 1500, icon: 'fa-compass',          color: '#fec24f' },
-  { id: 'architect',  label: 'Architect',  min: 2500, icon: 'fa-building-columns', color: '#a855f7' },
+  { id: 'architect',  label: 'Architect',  min: 2500, icon: 'fa-building-columns', color: '#eda5ff' },
   { id: 'luminary',   label: 'Luminary',   min: 5000, icon: 'fa-crown',            color: '#fec24f' },
 ];
 
@@ -6216,7 +6219,7 @@ function _launchConfettiParticles() {
   const container = document.getElementById('levelupConfetti');
   if (!container) return;
   container.innerHTML = '';
-  const colors = ['#fec24f', '#22c55e', '#656565', '#fec24f', '#a855f7'];
+  const colors = ['#fec24f', '#22c55e', '#656565', '#fec24f', '#eda5ff'];
   for (let i = 0; i < 40; i++) {
     const p = document.createElement('span');
     p.style.cssText = `
@@ -6304,7 +6307,7 @@ Each solar project undergoes technical assessment, legal review, and business vi
   {
     id: 'learn_cattle', track: 'explorer', order: 4,
     title: 'Cattle Farming', readTime: 8, xp: 50,
-    icon: 'fa-cow', color: '#a855f7',
+    icon: 'fa-cow', color: '#eda5ff',
     keyPoints: [
       'Cattle are bought at auction, raised on a commercial feedlot, and sold at market',
       'A cattle cycle typically runs around 12 months at 12–16% p.a.',
@@ -6348,7 +6351,7 @@ Our data shows that investors with 3+ active product types consistently achieve 
   {
     id: 'learn_risk', track: 'builder', order: 1,
     title: 'Risk vs Return', readTime: 8, xp: 50,
-    icon: 'fa-scale-balanced', color: '#a855f7',
+    icon: 'fa-scale-balanced', color: '#eda5ff',
     keyPoints: [
       'Higher potential returns always come with higher risk',
       'Each product has a published risk profile — Low, Medium, Medium-High or High',
@@ -6457,7 +6460,7 @@ For larger portfolios (R500,000+), consider consulting an estate planner about s
 const LEARN_TRACKS = [
   { id: 'explorer',   label: 'Explorer',   desc: 'New to investing — start here',        icon: 'fa-compass',          color: '#656565',  minInvested: 0 },
   { id: 'builder',    label: 'Builder',    desc: 'Growing your portfolio',                icon: 'fa-hammer',           color: '#22c55e',  minInvested: 5000 },
-  { id: 'strategist', label: 'Strategist', desc: 'Advanced portfolio management',         icon: 'fa-chess-knight',     color: '#a855f7',  minInvested: 50000 },
+  { id: 'strategist', label: 'Strategist', desc: 'Advanced portfolio management',         icon: 'fa-chess-knight',     color: '#eda5ff',  minInvested: 50000 },
 ];
 
 let _learnActiveTrack = null;
@@ -6878,7 +6881,7 @@ const POLICY_SECTIONS = [
   {
     id: 'pol_popia',
     icon: 'fa-lock',
-    color: '#7c3aed',
+    color: '#eda5ff',
     title: 'POPIA Notice',
     staticContent: `<p><em>Issued in compliance with Section 18 of the Protection of Personal Information Act 4 of 2013 (POPIA) &nbsp;·&nbsp; Version 1.0</em></p>
 
@@ -7648,7 +7651,7 @@ const SA_TYPE_META = {
   },
   trust:    {
     icon: 'fa-scale-balanced',  label: 'Trust',
-    color: '#7c5cfc',           bg: 'linear-gradient(135deg,#2d1d6e 0%,#7c5cfc 100%)',
+    color: '#eda5ff',           bg: 'linear-gradient(135deg,#2d1d6e 0%,#eda5ff 100%)',
     tagline: 'Invest through a family or business trust',
     ficaDocs: ['Trust Deed (certified copy)', 'Letters of Authority (Master of Court)', 'Trustee(s) ID documents', 'Trust tax clearance certificate'],
   },
@@ -8027,9 +8030,10 @@ function _saNormalDetail(sa, meta) {
     .map(d => `<div class="sa-fica-item"><i class="fa-solid fa-file-alt" style="color:${meta.color}"></i><span>${d}</span></div>`)
     .join('');
 
-  const recentTxns = PORTAL.transactions
-    .filter(t => t.sub_account_id === sa.id)
-    .slice(0, 5);
+  const saAllTxns = PORTAL.transactions
+    .filter(t => t.sub_account_id === sa.id);
+
+  const saInvs = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
 
   return `
     <div class="sa-detail-banner" style="background:${meta.bg}">
@@ -8047,26 +8051,60 @@ function _saNormalDetail(sa, meta) {
       </div>
     </div>
 
-    <div style="display:flex;gap:8px;margin:16px 0">
+    <div style="display:flex;gap:8px;margin:16px 0;flex-wrap:wrap">
       <button class="btn btn--primary btn--sm" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')"><i class="fa-solid fa-wallet"></i> Deposit</button>
       <button class="btn btn--secondary btn--sm" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-chart-line"></i> Invest</button>
+      <button class="btn btn--ghost btn--sm" onclick="Modal.close('saDetailModal');downloadSaStatement('${sa.id}','${sa.name}')"><i class="fa-solid fa-file-pdf"></i> Statement</button>
+      <button class="btn btn--ghost btn--sm" onclick="openSaBankDetails('${sa.id}')"><i class="fa-solid fa-building-columns"></i> Banking</button>
     </div>
 
-    <div class="sa-section-title"><i class="fa-solid fa-id-card"></i> FICA Documents Required</div>
+    <div class="sa-section-title mt-16"><i class="fa-solid fa-building-columns"></i> Banking Details</div>
+    <div style="padding:10px 0;font-size:0.82rem;color:var(--text-muted)">
+      ${sa.sa_bank_name
+        ? `<div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:700;color:var(--text)">${sa.sa_bank_name}</div>
+              <div>${sa.sa_bank_holder} · ****${(sa.sa_bank_number||'').slice(-4)} · ${sa.sa_bank_type || 'current'}</div>
+            </div>
+            <span class="badge badge--${sa.sa_bank_status === 'pending' ? 'orange' : sa.sa_bank_status === 'approved' ? 'green' : 'gray'}">${sa.sa_bank_status || 'none'}</span>
+          </div>`
+        : `<span style="color:var(--text-dim)">No banking details on file</span>`}
+    </div>
+
+    ${saInvs.length ? `
+    <div class="sa-section-title"><i class="fa-solid fa-chart-line"></i> Active Investments</div>
+    <table class="data-table">
+      <thead><tr><th>Pool</th><th>Status</th><th>Matures In</th><th>Amount</th><th></th></tr></thead>
+      <tbody>${saInvs.map(inv => {
+        const pi = Utils.productInfo(inv.product_type);
+        const daysLeft = inv.maturity_date ? Math.max(0, Math.ceil((new Date(inv.maturity_date) - Date.now()) / 86400000)) : null;
+        return `<tr style="cursor:pointer" onclick="Modal.close('saDetailModal');navigate('investments',document.querySelector('[data-view=investments]'))">
+          <td><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:${pi.color};flex-shrink:0;display:inline-block"></span>${inv.pool_name || 'Investment'}</span></td>
+          <td>${Utils.statusBadge(inv.status)}</td>
+          <td class="td-muted">${daysLeft !== null ? `${daysLeft}d` : '—'}</td>
+          <td class="td-green fw-700">${Utils.rand(inv.amount)}</td>
+          <td>${inv.status === 'matured' && !inv.maturity_instruction ? `<button class="btn btn--ghost btn--sm" style="font-size:0.7rem;padding:2px 8px;white-space:nowrap" onclick="event.stopPropagation();Modal.close('saDetailModal');openMaturityModal('${inv.id}')">Give Instruction</button>` : ''}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>` : ''}
+
+    <div class="sa-section-title mt-16"><i class="fa-solid fa-id-card"></i> FICA Documents Required</div>
     <div class="sa-fica-list">${ficaItems}</div>
     <button class="btn btn--secondary btn--sm mt-8" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-upload"></i> Upload FICA Document</button>
 
-    ${recentTxns.length ? `
-    <div class="sa-section-title mt-16"><i class="fa-solid fa-receipt"></i> Recent Transactions</div>
+    ${saAllTxns.length ? `
+    <div class="sa-section-title mt-16"><i class="fa-solid fa-receipt"></i> All Transactions (${saAllTxns.length})</div>
+    ${saAllTxns.length > 10 ? `<div style="max-height:320px;overflow-y:auto">` : ''}
     <table class="data-table">
       <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
-      <tbody>${recentTxns.map(t => `<tr>
+      <tbody>${saAllTxns.map(t => `<tr>
         <td><span class="badge badge--gray">${t.type}</span></td>
         <td class="${t.amount > 0 ? 'td-green' : 'td-red'} fw-700">${Utils.rand(t.amount)}</td>
         <td>${Utils.statusBadge(t.status)}</td>
         <td class="td-muted">${Utils.date(t.created_at)}</td>
       </tr>`).join('')}</tbody>
-    </table>` : ''}`;
+    </table>
+    ${saAllTxns.length > 10 ? `</div>` : ''}` : ''}`;
 }
 
 /* ── Minor Hub ──────────────────────────────────────────────── */
@@ -8079,7 +8117,8 @@ function _saMinorHub(sa) {
   const goalPct = goal > 0 ? Math.min(100, Math.round((total / goal) * 100)) : 0;
   const jarFill = Math.min(100, Math.max(5, total > 0 ? Math.min(100, (total / Math.max(goal, total + 1)) * 100) : 0));
 
-  const ageInfo = age || { age: '?', label: 'Saver', theme: 'minor-young' };
+  const ageInfo  = age || { age: '?', label: 'Saver', theme: 'minor-young' };
+  const saInvsM  = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
 
   return `
   <div class="minor-hub minor-hub--${ageInfo.theme || 'minor-young'}">
@@ -8124,6 +8163,24 @@ function _saMinorHub(sa) {
       <button class="minor-btn minor-btn--invest" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-seedling"></i><span>Invest</span></button>
       <button class="minor-btn minor-btn--fica" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-id-card"></i><span>FICA Docs</span></button>
     </div>
+
+    ${saInvsM.length ? `
+    <!-- Active Investments -->
+    <div class="minor-investments">
+      <div class="minor-investments__title"><i class="fa-solid fa-chart-line" style="color:#4ade80;margin-right:6px"></i>Active Investments</div>
+      ${saInvsM.map(inv => {
+        const pi = Utils.productInfo(inv.product_type);
+        const daysLeft = inv.maturity_date ? Math.max(0, Math.ceil((new Date(inv.maturity_date) - Date.now()) / 86400000)) : null;
+        return `<div class="minor-inv-row" onclick="Modal.close('saDetailModal');navigate('investments',document.querySelector('[data-view=investments]'))">
+          <div class="minor-inv-row__icon" style="background:${pi.color}22;color:${pi.color}"><i class="fa-solid ${pi.icon}"></i></div>
+          <div class="minor-inv-row__info">
+            <div class="minor-inv-row__name">${inv.pool_name || 'Investment'}</div>
+            <div class="minor-inv-row__sub">${daysLeft !== null ? `${daysLeft} days remaining` : inv.status}</div>
+          </div>
+          <div class="minor-inv-row__amount">${Utils.rand(inv.amount)}</div>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
 
     <!-- Learning Zone -->
     <div class="minor-learn-zone">
@@ -8289,6 +8346,49 @@ async function saveSaGoal() {
     Modal.close('saGoalModal');
     await loadSubAccounts();
   } catch (e) { Toast.error('Failed to save goal'); }
+}
+
+/* ── Sub-Account Banking Details ────────────────────────────── */
+let _saBankSaId = null;
+
+function openSaBankDetails(saId) {
+  _saBankSaId = saId;
+  const sa = PORTAL.subAccounts.find(s => s.id === saId);
+  if (!sa) return;
+  const f = id => document.getElementById(id);
+  if (f('saBankName'))   f('saBankName').value   = sa.sa_bank_name   || '';
+  if (f('saBankHolder')) f('saBankHolder').value  = sa.sa_bank_holder || '';
+  if (f('saBankNumber')) f('saBankNumber').value  = sa.sa_bank_number || '';
+  if (f('saBankBranch')) f('saBankBranch').value  = sa.sa_bank_branch || '';
+  if (f('saBankType'))   f('saBankType').value    = sa.sa_bank_type   || 'current';
+  Modal.open('saBankModal');
+}
+
+async function saveSaBankDetails() {
+  const f = id => document.getElementById(id)?.value?.trim();
+  const name   = f('saBankName');
+  const holder = f('saBankHolder');
+  const number = f('saBankNumber');
+  const branch = f('saBankBranch');
+  const type   = f('saBankType') || 'current';
+  if (!name || !holder || !number) { Toast.warn('Please fill in bank name, account holder, and account number'); return; }
+  try {
+    await API._fetch('PATCH', `tables/sub_accounts/${_saBankSaId}`, {
+      sa_bank_name:   name,
+      sa_bank_holder: holder,
+      sa_bank_number: number,
+      sa_bank_branch: branch,
+      sa_bank_type:   type,
+      sa_bank_status: 'pending',
+    });
+    const sa = PORTAL.subAccounts.find(s => s.id === _saBankSaId);
+    if (sa) { sa.sa_bank_name = name; sa.sa_bank_holder = holder; sa.sa_bank_number = number; sa.sa_bank_branch = branch; sa.sa_bank_type = type; sa.sa_bank_status = 'pending'; }
+    Modal.close('saBankModal');
+    Toast.success('Banking details saved — pending verification');
+    await loadSubAccounts();
+  } catch (err) {
+    Toast.error('Failed to save banking details');
+  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -9718,7 +9818,7 @@ async function cancelGift(giftId) {
 }
 
 function _launchGiftConfetti() {
-  const colours = ['#fec24f','#ff5229','#fec24f','#22c55e','#a855f7'];
+  const colours = ['#fec24f','#ff5229','#fec24f','#22c55e','#eda5ff'];
   for (let i = 0; i < 60; i++) {
     const el = document.createElement('div');
     el.style.cssText = `position:fixed;top:${Math.random()*40}%;left:${Math.random()*100}%;
@@ -10288,6 +10388,84 @@ function downloadStatement() {
   const ym = now.toISOString().slice(0, 7);
   doc.save(`SVC-Statement-${ym}.pdf`);
   Toast.success('90-day statement downloaded!');
+}
+
+/* downloadSaStatement() — sub-account statement */
+function downloadSaStatement(saId, saName) {
+  const txns = (PORTAL.transactions || []).filter(t => t.sub_account_id === saId);
+  if (!txns.length) { Toast.warn('No transactions found for this account'); return; }
+
+  const doc = _getPDF('portrait');
+  if (!doc) return;
+
+  const W   = doc.internal.pageSize.getWidth();
+  const now = new Date();
+  const dateLabel = now.toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  let y = _pdfHeader(doc, 'SV Capital — Sub-Account Statement', saName);
+  _pdfWatermark(doc);
+  y += 6;
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(26, 26, 26);
+  doc.text(saName, 14, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(107, 114, 128);
+  doc.setFontSize(8);
+  doc.text(`Generated: ${dateLabel}`, 14, y + 5);
+  y += 14;
+
+  const typeMap = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus', gift_sent: 'Gift Sent', gift_received: 'Gift Received', reward: 'XP Reward' };
+  const tableHead = [['Date', 'Type', 'Description', 'Amount', 'Status']];
+  const tableBody = txns
+    .sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at))
+    .map(t => [
+      Utils.date(t.transaction_date || t.created_at),
+      typeMap[t.type] || t.type,
+      (t.description || '—').slice(0, 38),
+      (t.amount > 0 ? '+' : '') + Utils.rand(t.amount),
+      (t.status || '—').toUpperCase(),
+    ]);
+
+  if (doc.autoTable) {
+    doc.autoTable({
+      head: tableHead,
+      body: tableBody,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      headStyles: { fillColor: [48, 48, 48], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+      bodyStyles: { fontSize: 8, textColor: [26, 26, 26] },
+      alternateRowStyles: { fillColor: [247, 248, 250] },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 26 },
+        2: { cellWidth: 'auto' },
+        3: { cellWidth: 28, halign: 'right' },
+        4: { cellWidth: 22, halign: 'center' },
+      },
+      didDrawPage: () => _pdfFooter(doc),
+    });
+  } else {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(107, 114, 128);
+    doc.text('Date', 14, y + 6); doc.text('Type', 40, y + 6); doc.text('Description', 70, y + 6); doc.text('Amount', 150, y + 6); doc.text('Status', 175, y + 6);
+    y += 10;
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(26, 26, 26);
+    tableBody.slice(0, 30).forEach(row => {
+      doc.text(row[0], 14, y); doc.text(row[1], 40, y); doc.text(row[2].slice(0, 30), 70, y);
+      doc.text(row[3], 150, y, { align: 'right' }); doc.text(row[4], 175, y);
+      y += 6;
+      if (y > 260) { doc.addPage(); y = 20; }
+    });
+  }
+
+  _pdfFooter(doc);
+  const ym = now.toISOString().slice(0, 7);
+  const safeName = (saName || 'Account').replace(/[^a-zA-Z0-9_-]/g, '-');
+  doc.save(`SVC-Statement-${safeName}-${ym}.pdf`);
+  Toast.success('Sub-account statement downloaded!');
 }
 
 /* ═══════════════════════════════════════════════
@@ -11280,7 +11458,7 @@ function _renderAnalyticsTimeline() {
     return;
   }
   const statusMeta = s => {
-    const map = { active:'#22c55e', paid_out:'#656565', matured:'#a855f7', cancelled:'#ef4444', pending:'#f97316', open:'#22c55e', closed:'#656565' };
+    const map = { active:'#22c55e', paid_out:'#656565', matured:'#eda5ff', cancelled:'#ef4444', pending:'#f97316', open:'#22c55e', closed:'#656565' };
     return map[s] || '#9ca3af';
   };
   const fmt = v => v ? new Date(v).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : '—';

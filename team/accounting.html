@@ -18,7 +18,7 @@
     :root {
       --bg: #0b0c10; --surface: #111318; --surface2: #1a1c24; --surface3: #22252f;
       --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.12);
-      --purple: #7c5cfc; --teal: #00d4aa; --text: #e8eaf6; --muted: #6b7280;
+      --purple: #eda5ff; --teal: #00d4aa; --text: #e8eaf6; --muted: #6b7280;
       --muted2: #9ca3af; --red: #ef4444; --green: #22c55e; --amber: #f59e0b;
       --indigo: #656565; --sidebar-w: 220px; --orange: #f97316; --text-muted: #6b7280;
     }
@@ -27,7 +27,7 @@
       position: fixed; inset: 0; background: var(--bg);
       display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; z-index: 9999;
     }
-    #acct-loader .spin { width: 38px; height: 38px; border: 3px solid rgba(124,92,252,0.15); border-top-color: var(--purple); border-radius: 50%; animation: spin 0.65s linear infinite; }
+    #acct-loader .spin { width: 38px; height: 38px; border: 3px solid rgba(237,165,255,0.15); border-top-color: var(--purple); border-radius: 50%; animation: spin 0.65s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     /* Layout */
     .acct-layout { display: flex; height: 100vh; }
@@ -65,7 +65,7 @@
     }
     .nav-btn i { width: 16px; text-align: center; font-size: 0.8rem; }
     .nav-btn:hover { background: var(--surface2); color: var(--text); }
-    .nav-btn.active { background: rgba(124,92,252,0.12); color: var(--purple); font-weight: 600; }
+    .nav-btn.active { background: rgba(237,165,255,0.12); color: var(--purple); font-weight: 600; }
     .nav-btn.active i { color: var(--purple); }
     .sidebar-footer { padding: 12px 14px; border-top: 1px solid var(--border); }
     .back-hub-btn {
@@ -130,7 +130,7 @@
       text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s;
       position: relative; margin-bottom: 20px;
     }
-    .upload-zone:hover, .upload-zone.drag-over { border-color: var(--purple); background: rgba(124,92,252,0.04); }
+    .upload-zone:hover, .upload-zone.drag-over { border-color: var(--purple); background: rgba(237,165,255,0.04); }
     .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
     .upload-icon { font-size: 2.8rem; color: var(--muted); margin-bottom: 14px; transition: color 0.2s; }
     .upload-zone:hover .upload-icon, .upload-zone.drag-over .upload-icon { color: var(--purple); }
@@ -150,7 +150,7 @@
     .import-tbl-wrap tr:hover td { background: rgba(255,255,255,0.02); }
     .import-tbl-wrap tr.row-dup td:not(:first-child) { opacity: 0.45; }
     .match-bill { display: inline-flex; align-items: center; gap: 4px; background: rgba(0,212,170,0.1); color: var(--teal); border-radius: 5px; padding: 2px 7px; font-size: 0.69rem; font-weight: 600; white-space: nowrap; }
-    .match-rule { display: inline-flex; align-items: center; gap: 4px; background: rgba(124,92,252,0.1); color: #a78bfa; border-radius: 5px; padding: 2px 7px; font-size: 0.69rem; font-weight: 600; white-space: nowrap; }
+    .match-rule { display: inline-flex; align-items: center; gap: 4px; background: rgba(237,165,255,0.1); color: #eda5ff; border-radius: 5px; padding: 2px 7px; font-size: 0.69rem; font-weight: 600; white-space: nowrap; }
     .match-none { color: var(--muted); font-size: 0.72rem; font-style: italic; }
     .dup-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(245,158,11,0.1); color: var(--amber); border-radius: 5px; padding: 2px 7px; font-size: 0.69rem; font-weight: 600; }
     .import-actions-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; border-top: 1px solid var(--border); margin-top: 14px; flex-wrap: wrap; }
@@ -165,7 +165,7 @@
     .badge-void      { background:rgba(107,114,128,0.15); color:#6b7280; text-decoration:line-through; }
     .badge-asset { background: rgba(0,212,170,0.15); color: var(--teal); }
     .badge-liability { background: rgba(239,68,68,0.15); color: #f87171; }
-    .badge-equity { background: rgba(124,92,252,0.15); color: #a78bfa; }
+    .badge-equity { background: rgba(237,165,255,0.15); color: #eda5ff; }
     .badge-revenue { background: rgba(34,197,94,0.15); color: var(--green); }
     .badge-expense { background: rgba(245,158,11,0.15); color: var(--amber); }
     /* Modals */
@@ -841,7 +841,7 @@ function renderDashboard(bid, biz) {
         data:{
           labels:['Revenue','Expenses','Net Profit'],
           datasets:[{data:[revenue, expenses, netProfit],
-            backgroundColor:['rgba(34,197,94,0.7)','rgba(239,68,68,0.7)',netProfit>=0?'rgba(124,92,252,0.7)':'rgba(239,68,68,0.7)'],
+            backgroundColor:['rgba(34,197,94,0.7)','rgba(239,68,68,0.7)',netProfit>=0?'rgba(237,165,255,0.7)':'rgba(239,68,68,0.7)'],
             borderRadius:6}]
         },
         options:{responsive:true,plugins:{legend:{display:false}},scales:{
@@ -855,7 +855,7 @@ function renderDashboard(bid, biz) {
       dashCharts.pie = new Chart(pieCtx, {
         type:'doughnut',
         data:{labels:expData.map(e=>e.name),datasets:[{data:expData.map(e=>e.val),
-          backgroundColor:['#7c5cfc','#00d4aa','#f59e0b','#ef4444','#656565','#656565'],
+          backgroundColor:['#eda5ff','#00d4aa','#f59e0b','#ef4444','#656565','#656565'],
           borderWidth:0}]},
         options:{responsive:true,plugins:{legend:{labels:{color:'#9ca3af',font:{size:11}}}}}
       });
@@ -967,7 +967,7 @@ function renderBusinesses() {
         ${bizList.map(b=>`<tr>
           <td>
             <strong>${b.name}</strong>
-            ${b.isFSP    ? `<span style="margin-left:8px;background:rgba(124,92,252,0.15);color:var(--purple);border:1px solid rgba(124,92,252,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">FSP ${b.fspNumber||SMARTVEST_FSP_NUM}</span>` : ''}
+            ${b.isFSP    ? `<span style="margin-left:8px;background:rgba(237,165,255,0.15);color:var(--purple);border:1px solid rgba(237,165,255,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">FSP ${b.fspNumber||SMARTVEST_FSP_NUM}</span>` : ''}
             ${b.isFSP    ? `<span style="margin-left:4px;background:rgba(249,115,22,0.12);color:var(--orange);border:1px solid rgba(249,115,22,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">Platform Fee</span>` : ''}
             ${b.isHolding? `<span style="margin-left:8px;background:rgba(212,175,55,0.15);color:#D4AF37;border:1px solid rgba(212,175,55,0.3);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">Holding Co.</span>` : ''}
             ${b.isHolding? `<span style="margin-left:4px;background:rgba(34,197,94,0.1);color:var(--green);border:1px solid rgba(34,197,94,0.25);border-radius:20px;padding:1px 8px;font-size:0.67rem;font-weight:700">Raising + Perf Fees</span>` : ''}
@@ -2773,7 +2773,7 @@ function _renderImportStep2(bid, biz, coa, bills) {
     <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
       <div class="import-stat"><div class="import-stat-val">${total}</div><div class="import-stat-lbl">Transactions Found</div></div>
       <div class="import-stat"><div class="import-stat-val" style="color:var(--teal)">${billMatches}</div><div class="import-stat-lbl">Bill Matches</div></div>
-      <div class="import-stat"><div class="import-stat-val" style="color:#a78bfa">${ruleMatches}</div><div class="import-stat-lbl">Rule Matches</div></div>
+      <div class="import-stat"><div class="import-stat-val" style="color:#eda5ff">${ruleMatches}</div><div class="import-stat-lbl">Rule Matches</div></div>
       <div class="import-stat"><div class="import-stat-val" style="color:var(--amber)">${dups}</div><div class="import-stat-lbl">Duplicates Flagged</div></div>
     </div>
 
@@ -2931,8 +2931,8 @@ function renderInvestmentsView(_bid, _biz) {
     <!-- Investment Sync View -->
     <div id="view-investments" class="view">
       <!-- FSP Attribution Banner -->
-      <div style="display:flex;align-items:center;gap:14px;background:rgba(124,92,252,0.07);border:1px solid rgba(124,92,252,0.25);border-radius:12px;padding:14px 18px;margin-bottom:16px">
-        <div style="width:38px;height:38px;border-radius:10px;background:rgba(124,92,252,0.15);color:var(--purple);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-shield-halved"></i></div>
+      <div style="display:flex;align-items:center;gap:14px;background:rgba(237,165,255,0.07);border:1px solid rgba(237,165,255,0.25);border-radius:12px;padding:14px 18px;margin-bottom:16px">
+        <div style="width:38px;height:38px;border-radius:10px;background:rgba(237,165,255,0.15);color:var(--purple);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-shield-halved"></i></div>
         <div style="flex:1">
           <div style="font-size:0.88rem;font-weight:800;color:var(--text)">Smartvest Financial Services</div>
           <div style="font-size:0.75rem;color:var(--muted)">FSP Licence No. ${SMARTVEST_FSP_NUM} · All investment transactions are posted to this entity's general ledger</div>
@@ -3418,7 +3418,7 @@ function renderFundAnalytics(_bid, _biz) {
 
   const content = document.getElementById('acct-content');
   content.innerHTML = `
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;padding:14px 18px;background:rgba(124,92,252,0.07);border:1px solid rgba(124,92,252,0.25);border-radius:12px">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;padding:14px 18px;background:rgba(237,165,255,0.07);border:1px solid rgba(237,165,255,0.25);border-radius:12px">
       <i class="fa-solid fa-shield-halved" style="color:var(--purple);font-size:1.1rem"></i>
       <div>
         <div style="font-size:0.82rem;font-weight:800;color:var(--text)">Smartvest Financial Services · FSP ${SMARTVEST_FSP_NUM}</div>
@@ -3527,7 +3527,7 @@ function renderFundAnalytics(_bid, _biz) {
             const acc = coaById[t.accountId]||{};
             return `<tr>
               <td>${t.date}</td>
-              <td><span style="font-size:0.7rem;font-weight:700;color:var(--purple);background:rgba(124,92,252,0.12);padding:1px 6px;border-radius:4px">${acc.code||''}</span> <span style="font-size:0.78rem">${acc.name||''}</span></td>
+              <td><span style="font-size:0.7rem;font-weight:700;color:var(--purple);background:rgba(237,165,255,0.12);padding:1px 6px;border-radius:4px">${acc.code||''}</span> <span style="font-size:0.78rem">${acc.name||''}</span></td>
               <td style="font-size:0.78rem;color:var(--muted)">${t.description||''}</td>
               <td style="font-size:0.75rem;color:var(--muted)">${t.reference||''}</td>
               <td class="text-right" style="color:var(--red);font-size:0.8rem">${t.type==='debit'?fmtR(t.amount):''}</td>
