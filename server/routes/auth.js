@@ -50,6 +50,14 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const forgotLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  message: { error: 'Too many password reset requests. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 function generateRecoveryCodes() {
   const codes = [];
   for (let i = 0; i < 8; i++) {
@@ -461,7 +469,7 @@ router.put('/change-password', requireAuth, async (req, res) => {
 });
 
 /* ─── POST /api/auth/forgot-password ─── */
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', forgotLimiter, async (req, res) => {
   const { email: rawEmail } = req.body;
   if (!rawEmail) return res.status(400).json({ error: 'Email is required.' });
   const emailAddr = rawEmail.toLowerCase().trim();
@@ -477,23 +485,35 @@ router.post('/forgot-password', async (req, res) => {
     // Always return success to avoid email enumeration
     if (rows.length > 0) {
       const user = rows[0];
-      const jti = crypto.randomBytes(16).toString('hex');
-      const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 min
-      const token = jwt.sign(
-        { sub: user.id, purpose: 'password_reset', jti },
-        JWT_SECRET,
-        { expiresIn: '30m' }
+
+      // Per-email cooldown: if a token with >20 min remaining exists, a reset email was
+      // sent within the last 10 minutes — silently skip to prevent inbox flooding.
+      const { rows: recent } = await pool.query(
+        `SELECT jti FROM password_reset_tokens
+         WHERE user_id=$1 AND used=false AND expires_at > NOW() + INTERVAL '20 minutes'`,
+        [user.id]
       );
-      // Invalidate any previous unused tokens for this user
-      await pool.query('DELETE FROM password_reset_tokens WHERE user_id=$1 AND used=false', [user.id]);
-      // Record this token so it can only be used once
-      await pool.query(
-        'INSERT INTO password_reset_tokens (jti, user_id, expires_at) VALUES ($1, $2, $3)',
-        [jti, user.id, expiresAt]
-      );
-      const resetLink = `${process.env.BASE_URL || 'https://platform.svcapital.co.za'}/reset-password.html?token=${token}`;
-      setImmediate(() => emailService.sendPasswordReset(user.email, user.first_name, resetLink)
-        .catch(err => console.error('[email] reset failed:', err.message)));
+      if (!recent.length) {
+        const jti = crypto.randomBytes(16).toString('hex');
+        const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 min
+        const token = jwt.sign(
+          { sub: user.id, purpose: 'password_reset', jti },
+          JWT_SECRET,
+          { expiresIn: '30m' }
+        );
+        // Invalidate any previous unused tokens for this user
+        await pool.query('DELETE FROM password_reset_tokens WHERE user_id=$1 AND used=false', [user.id]);
+        // Record this token so it can only be used once
+        await pool.query(
+          'INSERT INTO password_reset_tokens (jti, user_id, expires_at) VALUES ($1, $2, $3)',
+          [jti, user.id, expiresAt]
+        );
+        const resetLink = `${process.env.BASE_URL || 'https://platform.svcapital.co.za'}/reset-password.html?token=${token}`;
+        setImmediate(() => emailService.sendPasswordReset(user.email, user.first_name, resetLink)
+          .catch(err => console.error('[email] reset failed:', err.message)));
+      } else {
+        console.warn(`[auth] forgot-password cooldown: skipped resend for ${emailAddr}`);
+      }
     }
     res.json({ success: true, message: 'If this email is registered, a reset link has been sent.' });
   } catch (err) {
