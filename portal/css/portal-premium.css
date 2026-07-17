@@ -3713,3 +3713,152 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
 }
 .atl-card__dates .fa-play { color: #fec24f; font-size: 0.6rem; }
 .atl-card__dates .fa-flag-checkered { color: #eda5ff; font-size: 0.65rem; }
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE BROWSER OPTIMISATIONS
+   All web-portal-specific responsive fixes for mobile browsers
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Sidebar backdrop (missing from admin.css for portal) ──────── */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.52);
+  z-index: 199;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.sidebar-backdrop.open { display: block; }
+
+/* ── Mobile bottom nav: inner layout ──────────────────────────── */
+.mbn-inner { display: flex; width: 100%; }
+
+/* ── Statement view layout (replaces hardcoded inline grid) ────── */
+.statement-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: start;
+}
+
+/* ═══════════════════════════════════════════════
+   @media (max-width: 768px) — phone-sized screens
+   ═══════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── Hide the floating hamburger; bottom nav is the nav on mobile ── */
+  .mobile-toggle { display: none !important; }
+
+  /* ── Sidebar backdrop shows when sidebar opens ── */
+  body.sidebar-open .sidebar-backdrop { display: block; }
+  body.sidebar-open { overflow: hidden; }
+
+  /* ── Bottom nav: push content up so last card isn't clipped ── */
+  .main-content { padding-bottom: 72px !important; }
+
+  /* ── Toast: clear the bottom nav ── */
+  .toast-container { bottom: 80px !important; }
+
+  /* ── iOS input-zoom prevention (iOS zooms when font-size < 16px) ── */
+  .form-input, .form-select, .form-textarea,
+  input[type="text"], input[type="email"], input[type="password"],
+  input[type="number"], input[type="tel"], input[type="search"],
+  select, textarea { font-size: 16px !important; }
+
+  /* ── Page padding — tighter on small screens ── */
+  .page-content { padding: 12px !important; }
+
+  /* ── Stats rows: 2-column on mobile (not 4) ── */
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+  .stat-card { padding: 14px 16px; }
+  .stat-card__value { font-size: 1.35rem; }
+
+  /* ── Wallet card value ── */
+  .wallet-card__value { font-size: 2rem !important; }
+
+  /* ── Portfolio hero ── */
+  .portfolio-hero { padding: 18px 16px; }
+
+  /* ── Welcome banner ── */
+  .welcome-banner { padding: 14px 16px; gap: 12px; }
+  .welcome-avatar { width: 44px; height: 44px; font-size: 1rem; border-radius: 12px; }
+
+  /* ── Statement view: stack on mobile ── */
+  .statement-layout { grid-template-columns: 1fr !important; }
+
+  /* ── Modals: slide up from bottom on small screens ── */
+  .modal-overlay { padding: 0 !important; align-items: flex-end !important; }
+  .modal-overlay .modal {
+    max-width: 100% !important;
+    max-height: 92dvh !important;
+    border-radius: 20px 20px 0 0 !important;
+    margin: 0 !important;
+  }
+
+  /* ── Tap targets: larger hits for thumbs ── */
+  .btn { min-height: 42px; }
+  .btn--sm { min-height: 36px; padding: 7px 12px; }
+  .topbar-btn { width: 40px !important; height: 40px !important; }
+  .modal__close { width: 36px !important; height: 36px !important; }
+  .tab-btn { min-height: 40px; padding: 9px 14px; }
+  .nav-item { padding: 11px 20px !important; min-height: 44px; }
+
+  /* ── Tables: prevent page-level horizontal scroll ── */
+  .data-table-wrap, [style*="overflow-x:auto"], [style*="overflow-x: auto"] {
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Bump table text slightly for legibility */
+  .data-table td { font-size: 0.8rem; }
+  .data-table th { font-size: 0.72rem; }
+
+  /* ── Form labels: make legible ── */
+  .form-label { font-size: 0.8rem !important; }
+
+  /* ── Topbar: hide topbar search (keyboard takes space) ── */
+  .topbar__search { display: none !important; }
+
+  /* ── Topbar actions: keep only essential buttons ── */
+  .topbar-btn:not(#sidebarToggleBtn):not(.notif-btn):not(.dark-mode-btn) {
+    display: none !important;
+  }
+
+  /* ── Overview grid sidebar: stack on mobile ── */
+  .grid-layout--sidebar { grid-template-columns: 1fr !important; }
+
+  /* ── Pool/investment cards: full width ── */
+  .market-pool-card { width: 100% !important; }
+
+  /* ── Detail drawer: full-height, no margin ── */
+  .detail-drawer {
+    width: 100% !important;
+    border-radius: 0 !important;
+  }
+
+  /* ── Sub-account card stacking ── */
+  .sa-showcase-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ── Very small screens (< 390px / iPhone SE) ─────────────────── */
+@media (max-width: 390px) {
+  .stats-row { grid-template-columns: 1fr !important; }
+  .portfolio-hero__value { font-size: 1.6rem !important; }
+  .stat-card__value { font-size: 1.1rem !important; }
+  .page-content { padding: 8px !important; }
+  .welcome-banner { gap: 10px; padding: 12px; }
+  .welcome-avatar { display: none; }
+}
+
+/* ── iOS safe-area / notch handling ────────────────────────────── */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .mobile-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (max-width: 768px) {
+    .main-content { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important; }
+    .toast-container { bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important; }
+  }
+}

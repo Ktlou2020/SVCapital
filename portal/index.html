@@ -186,7 +186,7 @@
             <span class="notif-dot" id="notifDot"></span>
           </button>
           <!-- Notification dropdown -->
-          <div id="notifPanel" style="display:none;position:absolute;top:calc(100% + 8px);right:0;width:320px;background:#fff;border:1px solid rgba(0,0,0,0.09);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.13);z-index:999;overflow:hidden">
+          <div id="notifPanel" style="display:none;position:absolute;top:calc(100% + 8px);right:0;width:320px;max-width:calc(100vw - 24px);background:#fff;border:1px solid rgba(0,0,0,0.09);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.13);z-index:999;overflow:hidden">
             <div id="notifPanelHeader" style="padding:14px 18px 10px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between">
               <span id="notifPanelTitle" style="font-size:0.88rem;font-weight:800;color:#1a1a1a">Notifications</span>
               <button onclick="markAllRead()" style="font-size:0.7rem;color:#ff9b0c;font-weight:700;background:none;border:none;cursor:pointer">Mark all read</button>
@@ -434,7 +434,7 @@
            VIEW: MY INVESTMENTS
       ══════════════════════════════════ -->
       <div class="view" id="view-investments">
-        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
+        <div class="stats-row">
           <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('analytics',document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div><div class="stat-card__value" id="mi-capital">—</div><div class="stat-card__label">Capital Deployed</div></div>
           <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('analytics',document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="mi-expected">—</div><div class="stat-card__label">Target Returns</div></div>
           <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('transactions',document.querySelector('[data-view=transactions]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-double"></i></div></div><div class="stat-card__value" id="mi-earned">—</div><div class="stat-card__label">Returns Earned</div></div>
@@ -463,7 +463,7 @@
       <div class="view" id="view-analytics">
 
         <!-- KPI tiles -->
-        <div class="stats-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+        <div class="stats-row" style="margin-bottom:20px">
           <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))">
             <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-trend-up"></i></div></div>
             <div class="stat-card__value" id="an-moic">—</div>
@@ -1214,7 +1214,7 @@
         </div>
 
         <!-- Two-column layout: options + sidebar -->
-        <div style="display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start">
+        <div class="statement-layout">
 
           <!-- ── Left: Options panel ── -->
           <div style="background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden">
@@ -2937,7 +2937,7 @@
 </div>
 
 <!-- ══ MOBILE BOTTOM NAV ══ -->
-<nav class="mbn" id="mobileBottomNav" aria-label="Main navigation">
+<nav class="mbn mobile-bottom-nav" id="mobileBottomNav" aria-label="Main navigation">
   <div class="mbn-inner">
     <button class="mbn-item active" data-view="overview" onclick="navigate('overview', this)" aria-label="Portfolio">
       <i class="fa-solid fa-chart-pie"></i>
@@ -2972,7 +2972,7 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="js/portal.js?v=9"></script>
+<script src="js/portal.js?v=10"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 // Service worker: web browsers only (not Capacitor). Handles web push notifications.
