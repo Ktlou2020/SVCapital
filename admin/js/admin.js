@@ -12,6 +12,7 @@ const _ticketDocCache = {};
 /* ─── State ─── */
 let STATE = {
   investors: [],
+  subAccounts: [],
   pools: [],
   investments: [],
   transactions: [],
@@ -1112,11 +1113,13 @@ let selectedInvestors = new Set();
 
 async function loadInvestors() {
   try {
-    const [res, uRes] = await Promise.all([
+    const [res, uRes, saRes] = await Promise.all([
       API.investors.list({ limit: 5000 }),
       API._fetch('GET', 'tables/users', null, { limit: 10000, role: 'investor' }).catch(() => ({ data: [] })),
+      API._fetch('GET', 'tables/sub_accounts', null, { limit: 5000 }).catch(() => ({ data: [] })),
     ]);
     STATE.investors = res.data || [];
+    STATE.subAccounts = saRes.data || [];
     // Build set of investor_ids that have a login account
     STATE.investorLoginSet = new Set(
       (uRes.data || []).filter(u => u.investor_id).map(u => u.investor_id)
@@ -1306,6 +1309,63 @@ function renderInvestorsTable() {
     `<span class="page-btn active" style="cursor:default;min-width:60px;text-align:center">${investorPage} / ${pages||1}</span>`,
     investorPage < pages ? `<button class="page-btn" onclick="investorPage++;renderInvestorsTable()">Next &#8250;</button>` : `<button class="page-btn" disabled style="opacity:0.35">Next &#8250;</button>`,
   ].join('');
+
+  // Append sub-account rows after paginated investor rows
+  const subAccounts = STATE.subAccounts || [];
+  if (subAccounts.length) {
+    const saInvMap = {};
+    STATE.investments.forEach(i => {
+      if (i.sub_account_id) {
+        saInvMap[i.sub_account_id] = (saInvMap[i.sub_account_id] || 0) + 1;
+      }
+    });
+    const parentMap = {};
+    STATE.investors.forEach(inv => { parentMap[inv.id] = inv; });
+    const _trunc = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block';
+    const saRows = subAccounts.map(sa => {
+      const parent = parentMap[sa.parent_investor_id] || {};
+      const parentName = `${parent.first_name || ''} ${parent.last_name || ''}`.trim() || sa.parent_investor_id || '—';
+      const typeLabel = (sa.type || 'standard').replace(/_/g, ' ');
+      const typeCap = typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1);
+      const invCount = saInvMap[sa.id] || 0;
+      const balance  = Utils.rand(parseFloat(sa.wallet_balance) || 0);
+      const saRef    = sa.sa_reference || '—';
+      return `<tr style="cursor:default;background:rgba(237,165,255,0.04);border-left:3px solid #eda5ff">
+        <td style="overflow:hidden;padding:8px 10px"></td>
+        <td style="overflow:hidden">
+          <div class="flex-center gap-8" style="min-width:0">
+            <div style="width:30px;height:30px;border-radius:50%;background:#3d1f4a;color:#eda5ff;font-size:0.63rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-circle-nodes"></i></div>
+            <div style="min-width:0;flex:1">
+              <div style="display:flex;align-items:center;gap:5px;${_trunc}">
+                <span class="td-strong" style="font-size:0.81rem">${_esc(sa.name || '—')}</span>
+                <span style="background:rgba(237,165,255,0.18);color:#eda5ff;border:1px solid rgba(237,165,255,0.35);border-radius:4px;font-size:0.62rem;font-weight:700;padding:1px 6px;white-space:nowrap">Sub Account</span>
+              </div>
+              <div style="font-size:0.67rem;font-family:monospace;color:var(--gold);${_trunc}">${saRef}</div>
+              <div style="font-size:0.67rem;color:var(--text-muted);${_trunc}">${typeCap}</div>
+            </div>
+          </div>
+        </td>
+        <td style="overflow:hidden">
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:2px">Parent Account:</div>
+          <button class="btn btn--link" style="font-size:0.78rem;padding:0;color:#eda5ff;font-weight:700;text-align:left;${_trunc}" onclick="viewInvestor('${sa.parent_investor_id}')">${_esc(parentName)}</button>
+          <div class="td-muted" style="font-size:0.67rem;${_trunc}">${_esc(parent.email || '')}</div>
+        </td>
+        <td style="overflow:hidden">
+          <span style="background:rgba(237,165,255,0.12);color:#eda5ff;border:1px solid rgba(237,165,255,0.25);border-radius:4px;font-size:0.65rem;font-weight:700;padding:2px 7px">${typeCap}</span>
+        </td>
+        <td style="overflow:hidden">
+          <div class="td-gold fw-700" style="font-size:0.81rem;${_trunc}">${balance}</div>
+        </td>
+        <td style="overflow:hidden">
+          <div style="font-weight:700;font-size:0.81rem">${invCount}</div>
+        </td>
+        <td style="overflow:hidden" onclick="event.stopPropagation()">
+          <button class="btn btn--secondary btn--sm" onclick="viewInvestor('${sa.parent_investor_id}')" title="View parent account"><i class="fa-solid fa-arrow-up-right-from-square"></i> Parent</button>
+        </td>
+      </tr>`;
+    }).join('');
+    body.insertAdjacentHTML('beforeend', saRows);
+  }
 }
 
 function setupInvestorFilters() {

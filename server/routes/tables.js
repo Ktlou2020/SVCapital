@@ -767,6 +767,12 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       body.id = `${prefix}-${Date.now()}`;
     }
 
+    // Auto-generate sa_reference for new sub_accounts
+    if (table === 'sub_accounts' && !body.sa_reference) {
+      const _rc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      body.sa_reference = 'SA-' + Array.from({length: 6}, () => _rc[Math.floor(Math.random() * _rc.length)]).join('');
+    }
+
     const keys   = Object.keys(body);
     const values = Object.values(body);
     const cols   = keys.join(', ');

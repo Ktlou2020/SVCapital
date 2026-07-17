@@ -1244,8 +1244,16 @@ async function autoSetup() {
         BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_branch TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_type TEXT DEFAULT 'current'; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_status TEXT DEFAULT 'none'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_reference TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
       END $$
     `);
+
+    // Backfill sa_reference for existing sub-accounts that don't have one
+    await pool.query(`
+      UPDATE sub_accounts
+      SET sa_reference = 'SA-' || UPPER(SUBSTRING(MD5(id) FOR 6))
+      WHERE sa_reference IS NULL OR sa_reference = ''
+    `).catch(() => {});
     console.log('✅ Investor FICA + gamification columns ready.');
 
     // 1b2. Seed default products (idempotent — only inserts missing product types)
