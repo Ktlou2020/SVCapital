@@ -3677,7 +3677,7 @@ function renderProductsGrid() {
     const icon = p.icon || pi.icon;
     const avg = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : _computeAvgActualRate(p.product_type);
     const rateLabel = avg != null ? `${(avg * 100).toFixed(1)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : '—');
-    const rateSub = avg != null ? 'average return' : 'target return';
+    const rateSub = avg != null ? 'AVG RETURN' : 'TARGET RETURN';
     // soonest closing among the open pools
     const days = open.map(o => Utils.daysRemaining(o.end_date)).filter(d => d !== null);
     const soonest = days.length ? Math.min(...days) : null;
@@ -3777,7 +3777,7 @@ async function renderProductDetailView(type) {
           <div class="mpc2-metrics" style="margin-bottom:16px">
             <div class="mpc2-metric">
               <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(1) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : '—')}</div>
-              <div class="mpc2-metric__lbl">${avg != null ? 'average return' : 'target return'}</div>
+              <div class="mpc2-metric__lbl">${avg != null ? 'AVG RETURN' : 'TARGET RETURN'}</div>
             </div>
             <div class="mpc2-metric-sep"></div>
             <div class="mpc2-metric"><div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(product.min_investment || 0)}</div><div class="mpc2-metric__lbl">minimum</div></div>
