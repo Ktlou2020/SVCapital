@@ -8294,12 +8294,23 @@ async function confirmSaDeposit() {
 }
 
 /* ── Invest from sub account ────────────────────────────────── */
+function _showSaNoFundsPrompt(sa) {
+  document.getElementById('saNoFundsTitle').textContent = `${sa.name}'s wallet is empty`;
+  document.getElementById('saNoFundsMsg').textContent   = `You need to deposit funds into ${sa.name}'s wallet before you can invest.`;
+  document.getElementById('saNoFundsBal').textContent   = Utils.rand(parseFloat(sa.wallet_balance) || 0);
+  document.getElementById('saNoFundsDepositBtn').onclick = () => {
+    Modal.close('saNoFundsModal');
+    openSaDeposit(sa.id);
+  };
+  Modal.open('saNoFundsModal');
+}
+
 function openSaInvest(saId) {
   const sa = PORTAL.subAccounts.find(a => a.id === saId);
   if (!sa) return;
-  if ((parseFloat(sa.wallet_balance) || 0) <= 0) { Toast.warn('Please deposit funds first'); return; }
+  if ((parseFloat(sa.wallet_balance) || 0) <= 0) { _showSaNoFundsPrompt(sa); return; }
 
-  _pmSaId = saId;  // tag all investments made after this to the sub-account
+  _pmSaId = saId;
   Modal.close('saDetailModal');
   Toast.info(`Investing from ${sa.name} — select a product below`);
   navigate('marketplace', document.querySelector('[data-view="marketplace"]'));

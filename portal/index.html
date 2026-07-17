@@ -2370,6 +2370,22 @@
   </div>
 </div>
 
+<!-- Sub-Account No Funds Prompt -->
+<div class="modal-overlay" id="saNoFundsModal" onclick="if(event.target===this)Modal.close('saNoFundsModal')">
+  <div class="modal modal--sm" style="max-width:380px">
+    <div class="modal__body" style="text-align:center;padding:36px 28px 28px">
+      <div style="font-size:3.5rem;margin-bottom:16px;line-height:1">🪙</div>
+      <div id="saNoFundsTitle" style="font-size:1.05rem;font-weight:800;color:var(--text);margin-bottom:8px">Wallet is empty</div>
+      <div id="saNoFundsMsg" style="font-size:0.82rem;color:var(--text-muted);line-height:1.5;margin-bottom:8px">Add funds before investing.</div>
+      <div id="saNoFundsBal" style="font-size:1.5rem;font-weight:800;color:var(--text-muted);margin-bottom:24px">R0.00</div>
+      <button class="btn btn--primary btn--full" id="saNoFundsDepositBtn" style="margin-bottom:10px">
+        <i class="fa-solid fa-wallet"></i> Add Funds Now
+      </button>
+      <button class="btn btn--ghost btn--full" onclick="Modal.close('saNoFundsModal')">Maybe Later</button>
+    </div>
+  </div>
+</div>
+
 <!-- Sub-Account Banking Details Modal -->
 <div class="modal-overlay" id="saBankModal" onclick="if(event.target===this)Modal.close('saBankModal')">
   <div class="modal">
