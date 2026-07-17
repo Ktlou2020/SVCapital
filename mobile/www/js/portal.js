@@ -2375,8 +2375,8 @@ async function loadMyTransactions() {
   }
 }
 
-/* Capitalise first letter, lowercase the rest */
-const _toSentenceCase = s => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
+/* Capitalise first letter, preserve the rest (avoid lowercasing currency symbols, proper nouns, etc.) */
+const _toSentenceCase = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 
 /* Icon + accent colour per transaction type */
 const _TXN_META = {
