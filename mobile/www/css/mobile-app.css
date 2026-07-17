@@ -594,6 +594,9 @@ input[style], textarea[style], select[style] {
   font-size: 16px !important; padding: 9px 11px !important; border-radius: 8px !important;
   width: 100% !important; max-width: 100% !important;
 }
+/* Top-up amount input — exempt from the 16px cap; must stay large to match the R symbol */
+#pmAmount { font-size: 2.8rem !important; }
+
 /* PERMANENT FIX — icon-prefixed inputs (login, signup, etc.)
    The shorthand padding above resets padding-left to 11px, hiding icons.
    Higher-specificity scoped selectors here restore the correct left padding
@@ -641,9 +644,9 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
 }
 /* Active icon: orange gradient */
 .sidebar .nav-item.active > i:first-child {
-  background: linear-gradient(135deg, #FF9B0C 0%, #FF5229 100%) !important;
+  background: linear-gradient(135deg, #fec24f 0%, #FF5229 100%) !important;
   color: #fff !important;
-  box-shadow: 0 4px 14px rgba(255,155,12,0.32) !important;
+  box-shadow: 0 4px 14px rgba(254,194,79,0.32) !important;
 }
 /* Row layout: taller to accommodate 40px icon squares */
 .sidebar .nav-item {
@@ -719,11 +722,11 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
   height: 56px !important;
   min-width: 56px !important;
   border-radius: 14px !important;
-  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  background: linear-gradient(135deg, #fec24f, #FF5229) !important;
   color: #fff !important;
   font-size: 1.15rem !important;
   font-weight: 900 !important;
-  box-shadow: 0 4px 16px rgba(255,155,12,0.35) !important;
+  box-shadow: 0 4px 16px rgba(254,194,79,0.35) !important;
 }
 .sidebar .sidebar-user__info .user-name {
   font-size: 0.9rem !important;
@@ -967,17 +970,17 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
   top: 0 !important; left: 50% !important;
   transform: translateX(-50%) scaleX(0) !important;
   width: 28px !important; height: 3px !important;
-  background: #ff9b0c !important; border-radius: 0 0 4px 4px !important;
+  background: #fec24f !important; border-radius: 0 0 4px 4px !important;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 .mbn-item.active::before { transform: translateX(-50%) scaleX(1) !important; }
 .mbn-item i { font-size: 1.1rem !important; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), color 0.12s !important; }
-.mbn-item.active { color: #ff9b0c !important; }
+.mbn-item.active { color: #fec24f !important; }
 .mbn-item.active i { transform: scale(1.12) translateY(-1px) !important; }
 .mbn-item:active { opacity: 0.6 !important; }
 body.dark-mode .mbn { background: rgba(22,27,34,0.92) !important; border-top-color: rgba(255,255,255,0.07) !important; }
 body.dark-mode .mbn-item        { color: #6b7280 !important; }
-body.dark-mode .mbn-item.active { color: #ff9b0c !important; }
+body.dark-mode .mbn-item.active { color: #fec24f !important; }
 /* Room for bottom nav + home indicator */
 .main-content {
   padding-bottom: calc(62px + env(safe-area-inset-bottom, 16px)) !important;
@@ -1160,11 +1163,11 @@ body.dark-mode .modal__header::before { background: rgba(255,255,255,0.2) !impor
 }
 .market-pool-card__rate {
   /* Remove gradient-text GPU compositor layer — use solid gold instead */
-  -webkit-text-fill-color: #FF9B0C !important;
+  -webkit-text-fill-color: #fec24f !important;
   background: none !important;
   -webkit-background-clip: unset !important;
   background-clip: unset !important;
-  color: #FF9B0C !important;
+  color: #fec24f !important;
 }
 /* No GPU layer from transform on tap — touch devices don't hover */
 .market-pool-card:hover,
@@ -1181,7 +1184,7 @@ body.dark-mode .modal__header::before { background: rgba(255,255,255,0.2) !impor
    Add a visible left accent border so the card is always apparent.
    ───────────────────────────────────────────────────────────── */
 .welcome-banner {
-  border-left: 3px solid #FF9B0C !important;
+  border-left: 3px solid #fec24f !important;
   box-shadow: 0 2px 16px rgba(0,0,0,0.08) !important;
   /* Remove overflow:hidden — it can prevent GPU layer from repainting
      child elements (avatar, text) when positioned:relative parent is
@@ -1268,12 +1271,12 @@ input[type="file"] { font-size: 16px !important; }
 }
 
 .learn-quiz-opt:hover:not(:disabled) {
-  border-color: #ff9b0c;
+  border-color: #fec24f;
   background: #fffbf0;
 }
 
 .learn-quiz-opt--selected {
-  border-color: #ff9b0c !important;
+  border-color: #fec24f !important;
   background: #fff8ed !important;
 }
 
@@ -1302,7 +1305,7 @@ input[type="file"] { font-size: 16px !important; }
 }
 
 .learn-quiz-opt--selected .learn-quiz-opt__letter {
-  background: #ff9b0c;
+  background: #fec24f;
   color: #fff;
 }
 
@@ -1373,7 +1376,7 @@ input[type="file"] { font-size: 16px !important; }
   height: 64px;
   min-width: 64px;
   border-radius: 18px;
-  background: linear-gradient(135deg, #FF9B0C, #FF5229);
+  background: linear-gradient(135deg, #fec24f, #FF5229);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1409,7 +1412,7 @@ input[type="file"] { font-size: 16px !important; }
 }
 .policy-accordion--open {
   box-shadow: 0 6px 28px rgba(0,0,0,0.10);
-  border-color: rgba(255,155,12,0.35);
+  border-color: rgba(254,194,79,0.35);
 }
 .policy-accordion__header {
   display: flex;
@@ -1482,8 +1485,8 @@ input[type="file"] { font-size: 16px !important; }
   display: flex !important;
   align-items: center !important;
   gap: 10px !important;
-  background: rgba(255,155,12,0.06) !important;
-  border: 1px solid rgba(255,155,12,0.18) !important;
+  background: rgba(254,194,79,0.06) !important;
+  border: 1px solid rgba(254,194,79,0.18) !important;
   border-radius: 14px !important;
   padding: 10px 14px !important;
 }
@@ -1516,14 +1519,14 @@ input[type="file"] { font-size: 16px !important; }
   content: '' !important; position: absolute !important;
   top: -50px !important; right: -40px !important;
   width: 180px !important; height: 180px !important;
-  background: radial-gradient(circle, rgba(255,155,12,0.18), transparent 70%) !important;
+  background: radial-gradient(circle, rgba(254,194,79,0.18), transparent 70%) !important;
   pointer-events: none !important;
 }
 #view-marketplace .mkt-hero__icon {
   width: 44px !important; height: 44px !important; border-radius: 13px !important;
-  background: rgba(255,155,12,0.18) !important;
+  background: rgba(254,194,79,0.18) !important;
   display: flex !important; align-items: center !important; justify-content: center !important;
-  color: #ff9b0c !important; font-size: 1.15rem !important; margin-bottom: 12px !important;
+  color: #fec24f !important; font-size: 1.15rem !important; margin-bottom: 12px !important;
   position: relative !important;
 }
 #view-marketplace .mkt-hero__title {
@@ -1549,7 +1552,7 @@ input[type="file"] { font-size: 16px !important; }
   letter-spacing: 0.07em !important; color: #94a3b8 !important; margin-bottom: 10px !important;
   display: flex !important; align-items: center !important; gap: 6px !important;
 }
-#view-marketplace .mkt-filter-bar__label i { color: #ff9b0c !important; }
+#view-marketplace .mkt-filter-bar__label i { color: #fec24f !important; }
 
 /* Risk pills — horizontal scroll, colour-coded */
 #view-marketplace .mkt-risk-pills {
@@ -1570,19 +1573,19 @@ input[type="file"] { font-size: 16px !important; }
 #view-marketplace .mkt-risk-pill:active { transform: scale(0.95) !important; }
 #view-marketplace .mkt-risk-pill.active {
   color: #fff !important; border-color: transparent !important;
-  background: linear-gradient(135deg,#ff9b0c,#ff5229) !important;
+  background: linear-gradient(135deg,#fec24f,#ff5229) !important;
   box-shadow: 0 4px 12px rgba(255,82,41,0.3) !important;
 }
 #view-marketplace .mkt-risk-pill--con.active    { background: linear-gradient(135deg,#22c55e,#16a34a) !important; box-shadow: 0 4px 12px rgba(34,197,94,0.3) !important; }
-#view-marketplace .mkt-risk-pill--mod.active    { background: linear-gradient(135deg,#f59e0b,#d97706) !important; box-shadow: 0 4px 12px rgba(245,158,11,0.3) !important; }
-#view-marketplace .mkt-risk-pill--modhigh.active { background: linear-gradient(135deg,#ff9b0c,#f97316) !important; box-shadow: 0 4px 12px rgba(255,155,12,0.3) !important; }
+#view-marketplace .mkt-risk-pill--mod.active    { background: linear-gradient(135deg,#fec24f,#d97706) !important; box-shadow: 0 4px 12px rgba(254,194,79,0.3) !important; }
+#view-marketplace .mkt-risk-pill--modhigh.active { background: linear-gradient(135deg,#fec24f,#f97316) !important; box-shadow: 0 4px 12px rgba(254,194,79,0.3) !important; }
 #view-marketplace .mkt-risk-pill--agg.active    { background: linear-gradient(135deg,#ef4444,#dc2626) !important; box-shadow: 0 4px 12px rgba(239,68,68,0.3) !important; }
 
 /* Calculate Returns / Invest Now — orange gradient (same as primary CTA buttons) */
 #view-marketplace .mkt-calc-btn {
   width: 100% !important;
   display: flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important;
-  background: linear-gradient(135deg,#ff9b0c,#ff5229) !important;
+  background: linear-gradient(135deg,#fec24f,#ff5229) !important;
   color: #fff !important;
   border: none !important; border-radius: 13px !important;
   padding: 13px !important; font-size: 0.86rem !important; font-weight: 800 !important;
@@ -1609,18 +1612,18 @@ input[type="file"] { font-size: 16px !important; }
   position: absolute;
   top: -40px; right: -40px;
   width: 200px; height: 200px;
-  background: radial-gradient(circle, rgba(255,155,12,0.12) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(254,194,79,0.12) 0%, transparent 70%);
   pointer-events: none;
 }
 .profile-hero__avatar {
   width: 72px !important; height: 72px !important;
   border-radius: 50% !important;
-  background: linear-gradient(135deg,#ff9b0c,#ff5229) !important;
+  background: linear-gradient(135deg,#fec24f,#ff5229) !important;
   color: #fff !important;
   font-size: 1.6rem !important; font-weight: 900 !important;
   display: flex !important; align-items: center !important; justify-content: center !important;
   margin: 0 auto 14px !important;
-  box-shadow: 0 4px 16px rgba(255,155,12,0.35) !important;
+  box-shadow: 0 4px 16px rgba(254,194,79,0.35) !important;
 }
 .profile-hero__name {
   color: #fff !important;
@@ -1663,14 +1666,14 @@ input[type="file"] { font-size: 16px !important; }
   position: absolute;
   top: -40px; right: -40px;
   width: 200px; height: 200px;
-  background: radial-gradient(circle, rgba(255,155,12,0.12) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(254,194,79,0.12) 0%, transparent 70%);
   pointer-events: none;
 }
 .support-hero__icon {
   width: 64px !important; height: 64px !important;
   border-radius: 18px !important;
-  background: rgba(255,155,12,0.18) !important;
-  color: #ff9b0c !important;
+  background: rgba(254,194,79,0.18) !important;
+  color: #fec24f !important;
   font-size: 1.6rem !important;
   display: flex !important; align-items: center !important; justify-content: center !important;
   margin: 0 auto 16px !important;
@@ -1726,37 +1729,35 @@ input[type="file"] { font-size: 16px !important; }
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 5px !important;
-  padding: 10px 14px !important;
+  gap: 4px !important;
+  padding: 8px 12px !important;
   border-radius: 12px !important;
   border: 1.5px solid rgba(0,0,0,0.08) !important;
   background: #f3f4f6 !important;
   cursor: pointer !important;
-  white-space: nowrap !important;
   flex-shrink: 0 !important;
-  flex: 1 1 0 !important;
-  min-width: 64px !important;
-  max-width: 110px !important;
+  min-width: 56px !important;
   transition: background 0.15s, border-color 0.15s !important;
 }
 .prod-type-tile i {
-  font-size: 1.15rem !important;
+  font-size: 1.05rem !important;
   color: #6b7280 !important;
   display: block !important;
 }
 .prod-type-tile span {
-  font-size: 0.68rem !important;
+  font-size: 0.65rem !important;
   font-weight: 700 !important;
   color: #374151 !important;
   text-align: center !important;
   line-height: 1.2 !important;
   display: block !important;
+  white-space: nowrap !important;
 }
 .prod-type-tile.active {
-  background: rgba(255,155,12,0.12) !important;
-  border-color: #FF9B0C !important;
+  background: rgba(254,194,79,0.12) !important;
+  border-color: #fec24f !important;
 }
-.prod-type-tile.active i { color: #FF8215 !important; }
+.prod-type-tile.active i { color: #fec24f !important; }
 .prod-type-tile.active span { color: #FF5229 !important; }
 
 /* MY INVESTMENTS stats — force equal column widths */
@@ -1812,7 +1813,7 @@ input[disabled].form-input {
   align-items: center !important;
   gap: 4px !important;
   background: rgba(255,255,255,0.07) !important;
-  border: 1px solid rgba(255,155,12,0.40) !important;
+  border: 1px solid rgba(254,194,79,0.40) !important;
   border-radius: 100px !important;
   padding: 9px 18px !important;
   font-size: 0.81rem !important;
@@ -1821,7 +1822,7 @@ input[disabled].form-input {
   z-index: 1 !important;
 }
 .learn-hero__xp-amt {
-  color: #ff9b0c !important;
+  color: #fec24f !important;
   font-weight: 800 !important;
 }
 
@@ -1853,8 +1854,8 @@ input[disabled].form-input {
   margin-bottom: 2px !important;
 }
 .learn-track-tab.active .learn-tab-icon-wrap {
-  background: rgba(255,155,12,0.12) !important;
-  color: #ff9b0c !important;
+  background: rgba(254,194,79,0.12) !important;
+  color: #fec24f !important;
 }
 .learn-tab-name {
   font-size: 0.9rem !important;
@@ -2010,7 +2011,7 @@ input[disabled].form-input {
   height: 56px !important;
   min-width: 56px !important;
   border-radius: 16px !important;
-  background: linear-gradient(135deg, #ff9b0c, #ff5229) !important;
+  background: linear-gradient(135deg, #fec24f, #ff5229) !important;
   color: #fff !important;
   font-size: 1.5rem !important;
   display: flex !important;
@@ -2034,7 +2035,7 @@ input[disabled].form-input {
   display: flex !important;
   gap: 12px !important;
   align-items: flex-start !important;
-  background: linear-gradient(135deg, rgba(255,155,12,0.11), rgba(255,82,41,0.06)) !important;
+  background: linear-gradient(135deg, rgba(254,194,79,0.11), rgba(255,82,41,0.06)) !important;
   border: 1px solid rgba(255,140,20,0.32) !important;
   border-radius: 14px !important;
   padding: 16px !important;
@@ -2067,7 +2068,7 @@ input[disabled].form-input {
    ───────────────────────────────────────────────────────────── */
 .action-centre-done {
   background: linear-gradient(150deg, #fff8f0 0%, #ffffff 100%) !important;
-  border: 1.5px solid rgba(255, 155, 12, 0.2) !important;
+  border: 1.5px solid rgba(254, 194, 79, 0.2) !important;
   border-radius: 16px !important;
   padding: 20px !important;
 }
@@ -2082,13 +2083,13 @@ input[disabled].form-input {
   height: 48px !important;
   min-width: 48px !important;
   border-radius: 50% !important;
-  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  background: linear-gradient(135deg, #fec24f, #FF5229) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   color: #fff !important;
   font-size: 1.3rem !important;
-  box-shadow: 0 4px 14px rgba(255, 155, 12, 0.35) !important;
+  box-shadow: 0 4px 14px rgba(254, 194, 79, 0.35) !important;
 }
 .acd-title {
   font-size: 1rem !important;
@@ -2122,14 +2123,14 @@ input[disabled].form-input {
 }
 .acd-btn--ghost {
   background: transparent !important;
-  border: 1.5px solid #FF9B0C !important;
-  color: #FF9B0C !important;
+  border: 1.5px solid #fec24f !important;
+  color: #fec24f !important;
 }
 .acd-btn--primary {
-  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  background: linear-gradient(135deg, #fec24f, #FF5229) !important;
   border: none !important;
   color: #fff !important;
-  box-shadow: 0 3px 10px rgba(255, 155, 12, 0.3) !important;
+  box-shadow: 0 3px 10px rgba(254, 194, 79, 0.3) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -2182,7 +2183,7 @@ input[disabled].form-input {
 .atl-card {
   background: linear-gradient(145deg, #1c2333 0%, #141a24 100%) !important;
   border: 1px solid rgba(255,255,255,0.07) !important;
-  border-left: 3px solid #FF9B0C !important;
+  border-left: 3px solid #fec24f !important;
   border-radius: 14px !important;
   padding: 16px !important;
   box-shadow: 0 4px 18px rgba(0,0,0,0.22) !important;
@@ -2196,7 +2197,7 @@ input[disabled].form-input {
   right: -30px !important;
   width: 90px !important;
   height: 90px !important;
-  background: radial-gradient(circle, rgba(255,155,12,0.09) 0%, transparent 70%) !important;
+  background: radial-gradient(circle, rgba(254,194,79,0.09) 0%, transparent 70%) !important;
   pointer-events: none !important;
   z-index: 0 !important;
 }
@@ -2282,7 +2283,7 @@ input[disabled].form-input {
   font-weight: 500 !important;
 }
 .atl-card__dates .fa-play {
-  color: #FF9B0C !important;
+  color: #fec24f !important;
   font-size: 0.6rem !important;
 }
 .atl-card__dates .fa-flag-checkered {
@@ -2316,7 +2317,7 @@ input[disabled].form-input {
 }
 .maturity-card {
   background: #ffffff !important;
-  border-left: 3px solid #FF9B0C !important;
+  border-left: 3px solid #fec24f !important;
   border-top: 1px solid #e5e7eb !important;
   border-right: 1px solid #e5e7eb !important;
   border-bottom: 1px solid #e5e7eb !important;
@@ -2337,7 +2338,7 @@ input[disabled].form-input {
   right: -24px !important;
   width: 80px !important;
   height: 80px !important;
-  background: radial-gradient(circle, rgba(255,155,12,0.06) 0%, transparent 70%) !important;
+  background: radial-gradient(circle, rgba(254,194,79,0.06) 0%, transparent 70%) !important;
   pointer-events: none !important;
   z-index: 0 !important;
 }
@@ -2391,7 +2392,7 @@ input[disabled].form-input {
 .doc-card {
   background: #ffffff !important;
   border: 1px solid #e5e7eb !important;
-  border-left: 3px solid #FF9B0C !important;
+  border-left: 3px solid #fec24f !important;
   border-radius: 14px !important;
   padding: 16px !important;
   box-shadow: 0 2px 10px rgba(0,0,0,0.07) !important;
@@ -2408,7 +2409,7 @@ input[disabled].form-input {
   right: -24px !important;
   width: 80px !important;
   height: 80px !important;
-  background: radial-gradient(circle, rgba(255,155,12,0.05) 0%, transparent 70%) !important;
+  background: radial-gradient(circle, rgba(254,194,79,0.05) 0%, transparent 70%) !important;
   pointer-events: none !important;
   z-index: 0 !important;
 }
@@ -2436,9 +2437,9 @@ input[disabled].form-input {
 /* Badge variants inside light doc-cards */
 .doc-card .doc-card__icon.badge--gold,
 .doc-card .doc-card__icon.badge--orange {
-  background: rgba(255,155,12,0.12) !important;
+  background: rgba(254,194,79,0.12) !important;
   color: #d97706 !important;
-  border: 1px solid rgba(255,155,12,0.2) !important;
+  border: 1px solid rgba(254,194,79,0.2) !important;
 }
 .doc-card .doc-card__icon.badge--green {
   background: rgba(34,197,94,0.12) !important;
@@ -2470,7 +2471,7 @@ input[disabled].form-input {
 .doc-card__amount {
   font-size: 1rem !important;
   font-weight: 800 !important;
-  color: #d4af37 !important;
+  color: #fec24f !important;
   flex-shrink: 0 !important;
   align-self: center !important;
   font-variant-numeric: tabular-nums !important;
@@ -2516,9 +2517,9 @@ input[disabled].form-input {
 }
 .doc-card__btn:active { opacity: 0.75 !important; }
 .doc-card__btn--primary {
-  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  background: linear-gradient(135deg, #fec24f, #FF5229) !important;
   color: #fff !important;
-  box-shadow: 0 3px 10px rgba(255,155,12,0.28) !important;
+  box-shadow: 0 3px 10px rgba(254,194,79,0.28) !important;
 }
 .doc-card__btn--ghost {
   background: #f3f4f6 !important;
@@ -2591,7 +2592,7 @@ input[disabled].form-input {
 .stmt-options-card {
   background: #ffffff !important;
   border: 1px solid #e5e7eb !important;
-  border-left: 3px solid #FF9B0C !important;
+  border-left: 3px solid #fec24f !important;
   border-radius: 14px !important;
   overflow: hidden !important;
   position: relative !important;
@@ -2604,7 +2605,7 @@ input[disabled].form-input {
   right: -40px !important;
   width: 130px !important;
   height: 130px !important;
-  background: radial-gradient(circle, rgba(255,155,12,0.05) 0%, transparent 70%) !important;
+  background: radial-gradient(circle, rgba(254,194,79,0.05) 0%, transparent 70%) !important;
   pointer-events: none !important;
 }
 .stmt-options-header {
@@ -2619,7 +2620,7 @@ input[disabled].form-input {
   width: 48px !important;
   height: 48px !important;
   border-radius: 13px !important;
-  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  background: linear-gradient(135deg, #fec24f, #FF5229) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -2674,7 +2675,7 @@ input[disabled].form-input {
   box-sizing: border-box !important;
 }
 .stmt-date-input:focus {
-  border-color: #ff9b0c !important;
+  border-color: #fec24f !important;
 }
 
 /* Checkbox tiles */
@@ -2695,10 +2696,10 @@ input[disabled].form-input {
   transition: border-color 0.2s !important;
 }
 .stmt-check-tile:hover {
-  border-color: rgba(255,155,12,0.55) !important;
+  border-color: rgba(254,194,79,0.55) !important;
 }
 .stmt-check-tile input[type="checkbox"] {
-  accent-color: #ff9b0c !important;
+  accent-color: #fec24f !important;
   width: 15px !important;
   height: 15px !important;
   flex-shrink: 0 !important;
@@ -2731,7 +2732,7 @@ input[disabled].form-input {
 .stmt-btn-primary {
   flex: 1 !important;
   padding: 13px 20px !important;
-  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  background: linear-gradient(135deg, #fec24f, #FF5229) !important;
   color: #fff !important;
   border: none !important;
   border-radius: 10px !important;
@@ -2742,7 +2743,7 @@ input[disabled].form-input {
   align-items: center !important;
   justify-content: center !important;
   gap: 8px !important;
-  box-shadow: 0 4px 16px rgba(255,155,12,0.28) !important;
+  box-shadow: 0 4px 16px rgba(254,194,79,0.28) !important;
 }
 .stmt-btn-ghost {
   padding: 13px 16px !important;
@@ -2827,15 +2828,15 @@ input[disabled].form-input {
 
 /* Pro Tips */
 .stmt-tips-card {
-  background: rgba(255,155,12,0.06) !important;
-  border: 1px solid rgba(255,155,12,0.18) !important;
+  background: rgba(254,194,79,0.06) !important;
+  border: 1px solid rgba(254,194,79,0.18) !important;
   border-radius: 12px !important;
   padding: 16px !important;
 }
 .stmt-tips-hdr {
   font-size: 0.78rem !important;
   font-weight: 800 !important;
-  color: #ff9b0c !important;
+  color: #fec24f !important;
   margin-bottom: 10px !important;
   display: flex !important;
   align-items: center !important;
@@ -2871,7 +2872,7 @@ input[disabled].form-input {
   gap: 10px !important;
 }
 .stmt-preview-icon {
-  color: #ff9b0c !important;
+  color: #fec24f !important;
   font-size: 1.1rem !important;
 }
 .stmt-preview-title {
@@ -2907,7 +2908,7 @@ input[disabled].form-input {
 }
 .stmt-btn-primary-sm {
   padding: 8px 14px !important;
-  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  background: linear-gradient(135deg, #fec24f, #FF5229) !important;
   color: #fff !important;
   border: none !important;
   border-radius: 8px !important;
@@ -2917,7 +2918,7 @@ input[disabled].form-input {
   display: flex !important;
   align-items: center !important;
   gap: 6px !important;
-  box-shadow: 0 3px 10px rgba(255,155,12,0.25) !important;
+  box-shadow: 0 3px 10px rgba(254,194,79,0.25) !important;
 }
 
 /* Statement document wrapper — white background preserved for print */
@@ -2937,19 +2938,19 @@ input[disabled].form-input {
 /* ── XP Hero ─────────────────────────── */
 #questXpHero {
   background: linear-gradient(135deg, #1e1500 0%, #191000 50%, #141a24 100%) !important;
-  border: 1px solid rgba(255,155,12,0.20) !important;
+  border: 1px solid rgba(254,194,79,0.20) !important;
   box-shadow: 0 4px 24px rgba(0,0,0,0.30) !important;
 }
 #questXpHero::before {
-  background: radial-gradient(circle, rgba(255,155,12,0.20) 0%, transparent 65%) !important;
+  background: radial-gradient(circle, rgba(254,194,79,0.20) 0%, transparent 65%) !important;
 }
 #questLevelIcon {
-  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  background: linear-gradient(135deg, #fec24f, #FF5229) !important;
   box-shadow: 0 4px 16px rgba(255,90,41,0.38) !important;
 }
 .xp-hero__level-name { color: #ffffff !important; }
 .xp-hero__xp         { color: rgba(255,255,255,0.48) !important; }
-.xp-hero__track-bar  { background: linear-gradient(90deg, #FF9B0C, #fec24f) !important; }
+.xp-hero__track-bar  { background: linear-gradient(90deg, #fec24f, #fec24f) !important; }
 .xp-hero__track-label { color: rgba(255,255,255,0.50) !important; }
 .xp-hero__earned-label { color: rgba(255,255,255,0.38) !important; }
 .xp-hero__earned-val   { color: #65ed00 !important; font-size: 1.4rem !important; }
@@ -3004,9 +3005,9 @@ input[disabled].form-input {
 }
 .level-step.done .level-step__icon,
 .level-step.current .level-step__icon {
-  background: rgba(255,155,12,0.1) !important;
+  background: rgba(254,194,79,0.1) !important;
   color: #d97706 !important;
-  border-color: rgba(255,155,12,0.25) !important;
+  border-color: rgba(254,194,79,0.25) !important;
 }
 
 /* ── Quest Cards ─────────────────────── */
@@ -3020,7 +3021,7 @@ input[disabled].form-input {
   box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
 }
 .quest-card--ready {
-  border-left-color: #FF9B0C !important;
+  border-left-color: #fec24f !important;
 }
 .quest-card--done {
   border-left-color: #65ed00 !important;
@@ -3036,14 +3037,14 @@ input[disabled].form-input {
 
 /* ── Quest Category Headers ──────────── */
 .quest-category__icon-wrap {
-  background: rgba(255,155,12,0.12) !important;
+  background: rgba(254,194,79,0.12) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
 }
 .quest-category__title  { color: #1a1a1a !important; }
 .quest-category__sub    { color: #6b7280 !important; }
-.quest-category__count  { color: #FF9B0C !important; }
+.quest-category__count  { color: #fec24f !important; }
 .quest-cat-bar {
   background: rgba(0,0,0,0.08) !important;
   border-radius: 100px !important;
@@ -3054,13 +3055,13 @@ input[disabled].form-input {
 .quest-cat-bar__fill {
   height: 4px !important;
   border-radius: 100px !important;
-  background: linear-gradient(90deg, #FF9B0C, #fec24f) !important;
+  background: linear-gradient(90deg, #fec24f, #fec24f) !important;
 }
 
 /* ── Pending Section ─────────────────── */
 .pending-section {
-  background: linear-gradient(135deg, rgba(255,155,12,0.08) 0%, rgba(255,82,41,0.05) 100%) !important;
-  border: 1px solid rgba(255,155,12,0.22) !important;
+  background: linear-gradient(135deg, rgba(254,194,79,0.08) 0%, rgba(255,82,41,0.05) 100%) !important;
+  border: 1px solid rgba(254,194,79,0.22) !important;
   border-radius: 16px !important;
 }
 .pending-section__title {
@@ -3081,7 +3082,7 @@ input[disabled].form-input {
 .rw-feedback-card {
   background: linear-gradient(145deg, #1c2333 0%, #141a24 100%) !important;
   border: 1px solid rgba(255,255,255,0.07) !important;
-  border-left: 3px solid #FF9B0C !important;
+  border-left: 3px solid #fec24f !important;
   border-radius: 14px !important;
   overflow: hidden !important;
   margin-top: 20px !important;
@@ -3092,7 +3093,7 @@ input[disabled].form-input {
   position: absolute !important;
   top: -30px !important; right: -30px !important;
   width: 120px !important; height: 120px !important;
-  background: radial-gradient(circle, rgba(255,155,12,0.09) 0%, transparent 70%) !important;
+  background: radial-gradient(circle, rgba(254,194,79,0.09) 0%, transparent 70%) !important;
   pointer-events: none !important;
 }
 .rw-feedback-card__header {
@@ -3107,7 +3108,7 @@ input[disabled].form-input {
   width: 36px !important;
   height: 36px !important;
   border-radius: 50% !important;
-  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  background: linear-gradient(135deg, #fec24f, #FF5229) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -3125,7 +3126,7 @@ input[disabled].form-input {
   color: rgba(255,255,255,0.40) !important;
   margin-top: 2px !important;
 }
-.rw-xp-accent { color: #FF9B0C !important; }
+.rw-xp-accent { color: #fec24f !important; }
 .rw-feedback-card__body {
   padding: 18px !important;
 }
@@ -3154,7 +3155,7 @@ input[disabled].form-input {
   outline: none !important;
 }
 .rw-input:focus {
-  border-color: #ff9b0c !important;
+  border-color: #fec24f !important;
 }
 .rw-input::placeholder { color: rgba(255,255,255,0.28) !important; }
 .rw-input--mt { margin-top: 10px !important; }
@@ -3176,4 +3177,37 @@ input[disabled].form-input {
 .rw-feedback-submitted__sub {
   font-size: 0.8rem !important;
   color: rgba(255,255,255,0.45) !important;
+}
+
+/* ── Minor Hub (Sub-Account Detail) bottom-sheet fix ─────────────
+   The overlay inherits modal-overlay's align-items:center which
+   clips tall content above the viewport. Override to a true
+   full-height bottom sheet so the child header is always visible. */
+.sa-detail-overlay {
+  align-items: flex-end !important;
+  padding: 0 !important;
+  background: rgba(0,0,0,0.6) !important;
+}
+.sa-detail-sheet {
+  width: 100% !important;
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px)) !important;
+  border-radius: 20px 20px 0 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: transparent !important;
+}
+.sa-detail-drag-bar {
+  flex-shrink: 0 !important;
+  width: 40px !important;
+  height: 4px !important;
+  border-radius: 2px !important;
+  background: rgba(255,255,255,0.25) !important;
+  margin: 10px auto 0 !important;
+}
+.sa-detail-scroll {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  padding-bottom: env(safe-area-inset-bottom, 16px) !important;
 }

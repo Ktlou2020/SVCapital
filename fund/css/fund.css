@@ -5,13 +5,13 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --orange:       #FF8215;
+  --orange:       #fec24f;
   --orange-dark:  #E56200;
-  --orange-light: #FF9B0C;
+  --orange-light: #fec24f;
   --teal:         #656565;
   --teal-dark:    #656565;
   --green:        #22C55E;
-  --gold:         #D4AF37;
+  --gold:         #fec24f;
   --purple:       #a855f7;
   --red:          #ef4444;
   --blue:         #656565;
@@ -75,7 +75,7 @@ body {
 /* Module badge */
 .module-badge {
   display: flex; align-items: center; gap: 8px;
-  background: linear-gradient(135deg, rgba(255,130,21,0.18) 0%, rgba(255,155,12,0.1) 100%);
+  background: linear-gradient(135deg, rgba(255,130,21,0.18) 0%, rgba(254,194,79,0.1) 100%);
   border: 1px solid rgba(255,130,21,0.3);
   border-radius: 8px; padding: 9px 12px;
 }
@@ -163,7 +163,7 @@ body {
 .kpi__label { font-size: 0.72rem; color: var(--text-muted); font-weight: 500; }
 
 .kpi--orange .kpi__icon { background: rgba(255,130,21,0.12); color: var(--orange); }
-.kpi--gold   .kpi__icon { background: rgba(212,175,55,0.12);  color: var(--gold); }
+.kpi--gold   .kpi__icon { background: rgba(254,194,79,0.12);  color: var(--gold); }
 .kpi--green  .kpi__icon { background: rgba(34,197,94,0.12);   color: var(--green); }
 .kpi--teal   .kpi__icon { background: rgba(47,140,155,0.12);  color: var(--teal); }
 .kpi--blue   .kpi__icon { background: rgba(101,101,101,0.12);  color: var(--blue); }
@@ -254,7 +254,7 @@ body {
   font-size: 0.67rem; font-weight: 700; text-transform: capitalize; white-space: nowrap;
 }
 .badge--green  { background: rgba(34,197,94,0.12);  color: #15803d; }
-.badge--gold   { background: rgba(212,175,55,0.12);  color: #92640a; }
+.badge--gold   { background: rgba(254,194,79,0.12);  color: #92640a; }
 .badge--orange { background: rgba(255,130,21,0.12);  color: #c2520b; }
 .badge--blue   { background: rgba(101,101,101,0.12);  color: #656565; }
 .badge--teal   { background: rgba(47,140,155,0.12);  color: var(--teal-dark); }
@@ -344,8 +344,8 @@ body {
 /* Comparison bar */
 .rate-comparison {
   display: flex; align-items: center; gap: 12px; margin-top: 14px;
-  padding: 12px 16px; background: rgba(212,175,55,0.08); border-radius: var(--radius);
-  border: 1px solid rgba(212,175,55,0.2);
+  padding: 12px 16px; background: rgba(254,194,79,0.08); border-radius: var(--radius);
+  border: 1px solid rgba(254,194,79,0.2);
 }
 .rate-comparison i { color: var(--gold); font-size: 0.85rem; }
 .rate-comparison span { font-size: 0.8rem; color: var(--text-body); }

@@ -1,14 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════════
    SV CAPITAL — Home Page CI Override  (home-ci.css)
-   Official Corporate Identity: White/light body · Orange #FF8215 primary
+   Official Corporate Identity: White/light body · Orange #fec24f primary
    Teal #656565 secondary · DM Serif Display headings
    ═══════════════════════════════════════════════════════════════════ */
 
 /* ── CI Tokens ─────────────────────────────────────────────────── */
 :root {
-  --ci-orange:        #FF8215;
+  --ci-orange:        #fec24f;
   --ci-orange-dark:   #E56200;
-  --ci-orange-light:  #FF9B0C;
+  --ci-orange-light:  #fec24f;
   --ci-orange-pale:   rgba(255,130,21,0.08);
   --ci-orange-border: rgba(255,130,21,0.28);
   --ci-orange-glow:   rgba(255,130,21,0.18);
@@ -86,7 +86,7 @@
 
 /* Primary nav CTA */
 .nav-btn--primary {
-  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  background: linear-gradient(135deg, #fec24f, #FF5229) !important;
   color: #fff !important;
   box-shadow: 0 4px 16px rgba(255,130,21,0.28) !important;
 }
@@ -108,7 +108,7 @@
 
 /* Hero CTAs */
 .btn--gold {
-  background: linear-gradient(135deg, #FF9B0C 0%, #FF5229 100%) !important;
+  background: linear-gradient(135deg, #fec24f 0%, #FF5229 100%) !important;
   color: #fff !important;
   border-color: transparent !important;
   box-shadow: 0 6px 24px rgba(255,130,21,0.32) !important;
@@ -192,7 +192,7 @@
 .product-card__title { color: var(--ci-text) !important; }
 .product-card__desc  { color: var(--ci-text-muted) !important; }
 .product-card__featured-ribbon {
-  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  background: linear-gradient(135deg, #fec24f, #FF5229) !important;
   color: #fff !important;
 }
 
@@ -210,9 +210,9 @@
 
 /* Risk / popular badges */
 .risk-badge--moderate {
-  background: rgba(245,158,11,0.10) !important;
+  background: rgba(254,194,79,0.10) !important;
   color: #b45309 !important;
-  border: 1px solid rgba(245,158,11,0.25) !important;
+  border: 1px solid rgba(254,194,79,0.25) !important;
 }
 .risk-badge--low {
   background: rgba(34,197,94,0.09) !important;
@@ -275,7 +275,7 @@
   box-shadow: 0 6px 24px rgba(255,130,21,0.10) !important;
 }
 .step-number {
-  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  background: linear-gradient(135deg, #fec24f, #FF5229) !important;
   color: #fff !important;
   -webkit-text-fill-color: #fff !important;
 }
@@ -366,7 +366,7 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 }
 .team-card:hover { border-color: var(--ci-orange-border) !important; }
 .team-avatar-placeholder {
-  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  background: linear-gradient(135deg, #fec24f, #FF5229) !important;
   color: #fff !important;
 }
 .team-card__content h3 { color: var(--ci-text) !important; }
@@ -493,7 +493,7 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
    AUTHOR / BLOG
    ═══════════════════════════════════════════════════════════════ */
 .author-avatar {
-  background: linear-gradient(135deg, #FF9B0C, #FF5229) !important;
+  background: linear-gradient(135deg, #fec24f, #FF5229) !important;
   color: #fff !important;
 }
 

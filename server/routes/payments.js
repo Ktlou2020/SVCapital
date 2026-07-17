@@ -361,4 +361,81 @@ router.post('/auto-topup', requireAuth, async (req, res) => {
   }
 });
 
+/* ──────────────────────────────────────────────────────────
+   POST /api/payments/wallet-transfer
+   Transfer funds from the investor's main wallet to a sub-account wallet.
+   Both sides recorded in transactions; entire operation is atomic.
+────────────────────────────────────────────────────────── */
+router.post('/wallet-transfer', requireAuth, async (req, res) => {
+  try {
+    const investorId = req.user.investorId;
+    if (!investorId) return res.status(400).json({ error: 'investorId required' });
+
+    const { sub_account_id, amount } = req.body;
+    const amountNum = parseFloat(amount);
+    if (!sub_account_id) return res.status(400).json({ error: 'sub_account_id required' });
+    if (!amountNum || amountNum < 10) return res.status(400).json({ error: 'Minimum transfer is R10' });
+
+    // Verify sub-account belongs to this investor and is active
+    const { rows: saRows } = await pool.query(
+      `SELECT id, name FROM sub_accounts WHERE id=$1 AND parent_investor_id=$2 AND status='active'`,
+      [sub_account_id, investorId]
+    );
+    if (!saRows.length) return res.status(404).json({ error: 'Sub-account not found' });
+
+    const saName    = saRows[0].name;
+    const reference = `WT-${Date.now()}-${investorId.replace(/[^A-Z0-9]/gi, '').slice(0, 8).toUpperCase()}`;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Debit parent wallet atomically — fails if balance insufficient
+      const { rowCount } = await client.query(
+        `UPDATE investors SET wallet_balance = wallet_balance - $1, updated_at=NOW()
+         WHERE id=$2 AND wallet_balance >= $1`,
+        [amountNum, investorId]
+      );
+      if (!rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Insufficient wallet balance' });
+      }
+
+      // Credit sub-account wallet
+      await client.query(
+        `UPDATE sub_accounts SET wallet_balance = wallet_balance + $1, updated_at=NOW() WHERE id=$2`,
+        [amountNum, sub_account_id]
+      );
+
+      // Debit transaction for parent wallet
+      await client.query(
+        `INSERT INTO transactions
+           (id, investor_id, type, amount, status, reference, description, transaction_date, created_at)
+         VALUES (gen_random_uuid(),$1,'transfer_out',$2,'completed',$3,$4,NOW(),NOW())`,
+        [investorId, amountNum, reference, `Wallet transfer to ${saName}`]
+      );
+
+      // Credit transaction linked to sub-account
+      await client.query(
+        `INSERT INTO transactions
+           (id, investor_id, type, amount, status, reference, description, transaction_date, sub_account_id, created_at)
+         VALUES (gen_random_uuid(),$1,'transfer_in',$2,'completed',$3,$4,NOW(),$5,NOW())`,
+        [investorId, amountNum, reference + '-IN', `Wallet transfer from main account to ${saName}`, sub_account_id]
+      );
+
+      await client.query('COMMIT');
+      console.log(`[wallet-transfer] R${amountNum} from investor ${investorId} → sub-account ${sub_account_id} (${saName}), ref: ${reference}`);
+      res.json({ success: true, reference });
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('[wallet-transfer]', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 module.exports = router;

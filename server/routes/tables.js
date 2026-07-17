@@ -911,7 +911,7 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
           // Activity feed entry (shows under the employee's recent activity)
           await pool.query(
             `INSERT INTO activity_feed (id, employee_id, type, title, body, icon, color, is_public, created_at)
-             VALUES ($1,$2,'leave_submitted',$3,$4,'fa-calendar-day','#f59e0b',false,NOW())
+             VALUES ($1,$2,'leave_submitted',$3,$4,'fa-calendar-day','#fec24f',false,NOW())
              ON CONFLICT (id) DO NOTHING`,
             [
               `ACT-LVREQ-${created.id}`,

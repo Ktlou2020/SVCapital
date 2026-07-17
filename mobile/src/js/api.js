@@ -31,7 +31,7 @@ function _showSessionExpiredOverlay() {
       <div style="font-size:2.5rem;margin-bottom:16px">🔒</div>
       <div style="color:#fff;font-weight:800;font-size:1.1rem;margin-bottom:8px">Session Expired</div>
       <div style="color:#9ca3af;font-size:0.85rem;line-height:1.6;margin-bottom:24px">Your session has expired. Please log in again to continue.</div>
-      <button id="_svcSessionExpiredBtn" style="background:#ff9b0c;color:#000;border:none;border-radius:12px;padding:14px 32px;font-weight:800;font-size:0.95rem;cursor:pointer;width:100%">Log In Again</button>
+      <button id="_svcSessionExpiredBtn" style="background:#fec24f;color:#000;border:none;border-radius:12px;padding:14px 32px;font-weight:800;font-size:0.95rem;cursor:pointer;width:100%">Log In Again</button>
     </div>`;
   document.body.appendChild(el);
   document.getElementById('_svcSessionExpiredBtn').addEventListener('click', function () {
@@ -500,14 +500,14 @@ const Utils = {
       solar_5yr:      { label: 'Solar Investment (5yr)',  icon: 'fa-solar-panel', color: '#65ed00', badgeClass: 'badge--green' },
       short_term:     { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#ff5229', badgeClass: 'badge--orange' },
       smme:           { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#ff5229', badgeClass: 'badge--orange' },
-      delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#ff9b0c', badgeClass: 'badge--orange' },
-      delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#ff9b0c', badgeClass: 'badge--orange' },
+      delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
+      delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
       other:          { label: 'Other',                   icon: 'fa-circle',      color: '#656565', badgeClass: 'badge--gray' },
     };
     return map[type] || { label: type, icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
   },
 
-  ciProductPalette: ['#ff9b0c', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'],
+  ciProductPalette: ['#fec24f', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'],
 
   productColor(product) {
     const type = (product && product.product_type) || product;

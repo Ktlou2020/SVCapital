@@ -28,17 +28,17 @@ body{background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',
 .bdy{padding:38px 40px}
 h2{font-size:1.2rem;font-weight:700;color:#303030;margin-bottom:14px}
 p{font-size:0.93rem;color:#444;line-height:1.65;margin-bottom:14px}
-.big{font-size:2.1rem;font-weight:800;color:#ff9b0c;display:block;margin:10px 0 18px}
+.big{font-size:2.1rem;font-weight:800;color:#fec24f;display:block;margin:10px 0 18px}
 .box{background:#f7f9fc;border-radius:12px;padding:12px 22px;margin:18px 0}
 .row{overflow:hidden;padding:9px 0;border-bottom:1px solid #eee;font-size:0.87rem}
 .row:last-child{border-bottom:none}
 .lbl{color:#888;float:left;padding-right:24px;white-space:nowrap}
 .val{font-weight:600;color:#303030;float:right;text-align:right}
-.btn{display:inline-block;background:#ff9b0c;color:#fff!important;text-decoration:none!important;padding:13px 30px;border-radius:10px;font-weight:700;font-size:0.94rem;margin:10px 0}
+.btn{display:inline-block;background:#fec24f;color:#fff!important;text-decoration:none!important;padding:13px 30px;border-radius:10px;font-weight:700;font-size:0.94rem;margin:10px 0}
 .green{color:#22c55e}
-.gold{color:#ff9b0c}
+.gold{color:#fec24f}
 .ftr{background:#f7f9fc;border-top:1px solid #eee;padding:18px 40px;text-align:center;font-size:0.76rem;color:#aaa}
-.ftr a{color:#ff9b0c;text-decoration:none}
+.ftr a{color:#fec24f;text-decoration:none}
 @media(max-width:600px){.bdy,.hdr,.ftr{padding:24px 20px}}
 </style></head><body>
 <div class="shell">
@@ -257,7 +257,7 @@ function sendTicketResponse(investor, { subject: ticketSubject, adminResponse })
     html: _wrap(`
       <h2>Support Response 💬</h2>
       <p>Hi ${first_name}, the SV Capital support team has responded to your query.</p>
-      <div class="box" style="border-left:4px solid #ff9b0c;padding-left:18px">
+      <div class="box" style="border-left:4px solid #fec24f;padding-left:18px">
         <p style="margin:0;font-size:0.9rem;color:#333;line-height:1.7">${escHtml(adminResponse).replace(/\n/g, '<br>')}</p>
       </div>
       <p>If you have further questions, please log in and raise a follow-up ticket.</p>
@@ -339,7 +339,7 @@ function sendWithdrawalRequested(investor, { amount, reference }) {
       <div class="box">
         <div class="row"><span class="lbl">Amount Requested</span><span class="val gold">${_fmt(amount)}</span></div>
         <div class="row"><span class="lbl">Reference</span><span class="val">${reference}</span></div>
-        <div class="row"><span class="lbl">Status</span><span class="val" style="color:#f59e0b">Pending Review</span></div>
+        <div class="row"><span class="lbl">Status</span><span class="val" style="color:#fec24f">Pending Review</span></div>
       </div>
       <p>Funds will be transferred to your verified bank account on record once our team has processed the request. This typically takes 1–2 business days.</p>
       <a href="${BASE_URL}/portal/" class="btn">View Wallet →</a>
@@ -436,7 +436,7 @@ function sendMonthlyStatement(investor, { investments, recentTransactions }) {
   const rand = (n) => 'R' + Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   const pct = (r) => (Number(r || 0) * 100).toFixed(2) + '%';
   const fmtDate = (s) => s ? new Date(s).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Johannesburg' }) : '—';
-  const statusColor = (s) => ({ active: '#10b981', matured: '#7c5cfc', pending: '#f59e0b', cancelled: '#ef4444' }[s] || '#6b7280');
+  const statusColor = (s) => ({ active: '#10b981', matured: '#7c5cfc', pending: '#fec24f', cancelled: '#ef4444' }[s] || '#6b7280');
 
   const activeInvestments = investments.filter(i => i.status === 'active');
   const effectiveReturn = Number(total_invested) > 0 ? ((Number(total_returns) / Number(total_invested)) * 100).toFixed(2) + '%' : '—';
@@ -445,7 +445,7 @@ function sendMonthlyStatement(investor, { investments, recentTransactions }) {
     ? activeInvestments.map(i => `
       <tr>
         <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#e5e7eb">${i.pool_name}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#FF9B0C;font-weight:600">${rand(i.amount)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#fec24f;font-weight:600">${rand(i.amount)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#10b981">${pct(i.annual_rate)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#9ca3af">${fmtDate(i.end_date)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a"><span style="background:${statusColor(i.status)}22;color:${statusColor(i.status)};padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600">${i.status}</span></td>
@@ -480,7 +480,7 @@ function sendMonthlyStatement(investor, { investments, recentTransactions }) {
     <table width="100%" cellpadding="0" cellspacing="0"><tr>
       <td width="32%" style="background:#161616;border:1px solid #262626;border-radius:12px;padding:20px;text-align:center">
         <div style="font-size:11px;color:#6b7280;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Total Invested</div>
-        <div style="font-size:22px;font-weight:800;color:#FF9B0C">${rand(total_invested)}</div>
+        <div style="font-size:22px;font-weight:800;color:#fec24f">${rand(total_invested)}</div>
       </td>
       <td width="4%"></td>
       <td width="32%" style="background:#161616;border:1px solid #262626;border-radius:12px;padding:20px;text-align:center">
@@ -526,7 +526,7 @@ function sendMonthlyStatement(investor, { investments, recentTransactions }) {
   </div>
 
   <div style="text-align:center;margin-bottom:24px">
-    <a href="${process.env.PORTAL_URL || 'https://svcapital.co.za/portal'}" style="display:inline-block;background:linear-gradient(135deg,#FF9B0C,#e07a00);color:#000;font-weight:700;font-size:14px;padding:14px 32px;border-radius:10px;text-decoration:none">View Full Portfolio →</a>
+    <a href="${process.env.PORTAL_URL || 'https://svcapital.co.za/portal'}" style="display:inline-block;background:linear-gradient(135deg,#fec24f,#fec24f);color:#000;font-weight:700;font-size:14px;padding:14px 32px;border-radius:10px;text-decoration:none">View Full Portfolio →</a>
   </div>
 
   <div style="text-align:center;font-size:11px;color:#4b5563;line-height:1.6">
@@ -551,7 +551,7 @@ function sendDirectorReport(director, data) {
       <tr>
         <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.86rem">${p.pool_name || '—'}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.86rem;text-transform:capitalize">${p.product_type || '—'}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.86rem;color:#ff9b0c;font-weight:600">${fmtR(p.invested)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.86rem;color:#fec24f;font-weight:600">${fmtR(p.invested)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.86rem;text-align:right">${fmtN(p.investors)}</td>
       </tr>`).join('')
     : '<tr><td colspan="4" style="padding:12px;text-align:center;color:#aaa;font-size:0.85rem">No active pool data</td></tr>';
@@ -734,7 +734,7 @@ function sendGiftReceived(to, { senderName, amount, message, recipientName, inve
       <h2>You've received an investment gift! 🎁</h2>
       <p>Hi ${recipientName},</p>
       <p><strong>${escHtml(senderName)}</strong> just sent you an investment gift on SV Capital.</p>
-      ${message ? `<div class="box" style="border-left:4px solid #ff9b0c;background:#fffbf0"><p style="font-style:italic;color:#555;margin:0">&ldquo;${escHtml(message)}&rdquo;</p></div>` : ''}
+      ${message ? `<div class="box" style="border-left:4px solid #fec24f;background:#fffbf0"><p style="font-style:italic;color:#555;margin:0">&ldquo;${escHtml(message)}&rdquo;</p></div>` : ''}
       <span class="big">R${amt}</span>
       <p>This amount has been added directly to your wallet and is ready to invest right now.</p>
       <a href="${BASE_URL}/portal/" class="btn">Go to My Wallet →</a>
@@ -754,7 +754,7 @@ function sendGiftInvite(to, { senderName, amount, message, recipientName, signup
       <h2>You have an investment gift waiting! 🎁</h2>
       <p>Hi${recipientName ? ` ${recipientName}` : ''},</p>
       <p><strong>${senderName}</strong> sent you an investment gift through SV Capital — South Africa's smart investment platform.</p>
-      ${message ? `<div class="box" style="border-left:4px solid #ff9b0c;background:#fffbf0"><p style="font-style:italic;color:#555;margin:0">&ldquo;${message}&rdquo;</p></div>` : ''}
+      ${message ? `<div class="box" style="border-left:4px solid #fec24f;background:#fffbf0"><p style="font-style:italic;color:#555;margin:0">&ldquo;${message}&rdquo;</p></div>` : ''}
       <span class="big">R${amt}</span>
       <p>Create your free SV Capital account to claim this gift. It'll be waiting in your wallet — ready to start earning returns immediately.</p>
       <a href="${signupUrl}" class="btn" style="font-size:1rem">Claim Your Gift →</a>

@@ -31,7 +31,7 @@ function _showSessionExpiredOverlay() {
       <div style="font-size:2.5rem;margin-bottom:16px">🔒</div>
       <div style="color:#fff;font-weight:800;font-size:1.1rem;margin-bottom:8px">Session Expired</div>
       <div style="color:#9ca3af;font-size:0.85rem;line-height:1.6;margin-bottom:24px">Your session has expired. Please log in again to continue.</div>
-      <button id="_svcSessionExpiredBtn" style="background:linear-gradient(135deg,#ff9b0c,#ff5229);color:#fff;border:none;border-radius:12px;padding:14px 32px;font-weight:800;font-size:0.95rem;cursor:pointer;width:100%;box-shadow:0 6px 18px rgba(255,82,41,0.28)">Log In Again</button>
+      <button id="_svcSessionExpiredBtn" style="background:linear-gradient(135deg,#fec24f,#ff5229);color:#fff;border:none;border-radius:12px;padding:14px 32px;font-weight:800;font-size:0.95rem;cursor:pointer;width:100%;box-shadow:0 6px 18px rgba(255,82,41,0.28)">Log In Again</button>
     </div>`;
   document.body.appendChild(el);
   document.getElementById('_svcSessionExpiredBtn').addEventListener('click', function () {
@@ -508,8 +508,8 @@ const Utils = {
       solar_5yr:      { label: 'Solar Investment (5yr)',  icon: 'fa-solar-panel', color: '#65ed00', badgeClass: 'badge--green' },
       short_term:     { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#ff5229', badgeClass: 'badge--orange' },
       smme:           { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#ff5229', badgeClass: 'badge--orange' },
-      delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#ff9b0c', badgeClass: 'badge--orange' },
-      delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#ff9b0c', badgeClass: 'badge--orange' },
+      delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
+      delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
       other:          { label: 'Other',                   icon: 'fa-circle',      color: '#656565', badgeClass: 'badge--gray' },
     };
     const base = map[type] || { label: type || 'Other', icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
@@ -525,7 +525,7 @@ const Utils = {
   },
 
   // SV Capital CI palette assignable to products (white is reserved/excluded).
-  ciProductPalette: ['#ff9b0c', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'],
+  ciProductPalette: ['#fec24f', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'],
 
   // Resolve a product's colour: known types use their CI colour from productInfo;
   // custom/new products use their admin-assigned `color`, else a palette fallback.
@@ -670,10 +670,10 @@ const Toast = {
       setTimeout(() => toast.remove(), 300);
     }, duration);
   },
-  success: (msg) => Toast.show(msg, 'success'),
-  error:   (msg) => Toast.show(msg, 'error'),
-  info:    (msg) => Toast.show(msg, 'info'),
-  warning: (msg) => Toast.show(msg, 'warning'),
+  success: (msg) => Toast.show(msg, 'success', 5000),
+  error:   (msg) => Toast.show(msg, 'error',   6000),
+  info:    (msg) => Toast.show(msg, 'info',    5000),
+  warning: (msg) => Toast.show(msg, 'warning', 6000),
 };
 
 /* ═══════════════════════════════════════════════

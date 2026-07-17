@@ -162,7 +162,7 @@ body {
 }
 .product-card:hover::after { opacity: 1; }
 
-.product-card--cattle::after  { background: linear-gradient(90deg, #D4AF37, #FF9B0C); }
+.product-card--cattle::after  { background: linear-gradient(90deg, #fec24f, #fec24f); }
 .product-card--solar::after   { background: linear-gradient(90deg, #22c55e, #656565); }
 .product-card--short::after   { background: linear-gradient(90deg, #656565, #656565); }
 .product-card--delivery::after { background: linear-gradient(90deg, #f97316, #FF5229); }
@@ -193,7 +193,7 @@ body {
 .step__number {
   font-size: 1.5rem;
   font-weight: 900;
-  background: linear-gradient(135deg, #FF9B0C, #FF5229);
+  background: linear-gradient(135deg, #fec24f, #FF5229);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -230,7 +230,7 @@ body {
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 4px;
-  background: linear-gradient(90deg, #FF9B0C, #FF5229 60%, #D4AF37);
+  background: linear-gradient(90deg, #fec24f, #FF5229 60%, #fec24f);
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -263,7 +263,7 @@ body {
   width: 126px;
   height: 126px;
   border-radius: 50%;
-  background: conic-gradient(#FF9B0C 0deg, #FF5229 120deg, #D4AF37 240deg, #FF9B0C 360deg);
+  background: conic-gradient(#fec24f 0deg, #FF5229 120deg, #fec24f 240deg, #fec24f 360deg);
   animation: ringRotate 8s linear infinite;
   opacity: 0.5;
 }
@@ -434,7 +434,7 @@ body {
 .stat-card__icon {
   font-size: 1.8rem !important;
   margin-bottom: 16px;
-  background: linear-gradient(135deg, #FF9B0C, #FF5229);
+  background: linear-gradient(135deg, #fec24f, #FF5229);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -444,7 +444,7 @@ body {
   font-weight: 900 !important;
   line-height: 1 !important;
   margin-bottom: 8px;
-  background: linear-gradient(135deg, #FF9B0C 30%, #FFD070);
+  background: linear-gradient(135deg, #fec24f 30%, #fec24f);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -596,7 +596,7 @@ body {
 .award-card__year {
   font-size: 0.72rem;
   font-weight: 800;
-  background: linear-gradient(135deg, #FF9B0C, #FF5229);
+  background: linear-gradient(135deg, #fec24f, #FF5229);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -744,7 +744,7 @@ body {
   font-weight: 500;
 }
 .stats-ticker__item i {
-  color: var(--ci-orange, #FF8215);
+  color: var(--ci-orange, #fec24f);
   font-size: 0.85rem;
 }
 .stats-ticker__item strong {
@@ -775,7 +775,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: var(--gold, #D4AF37);
+  color: var(--gold, #fec24f);
 }
 .product-risk-filter .prf-pills {
   display: inline-flex;
@@ -801,7 +801,7 @@ body {
   transform: translateY(-1px);
 }
 .product-risk-filter .prf-pill.active {
-  background: linear-gradient(135deg, #FF8215, #ff5229);
+  background: linear-gradient(135deg, #fec24f, #ff5229);
   border-color: transparent;
   color: #fff;
   box-shadow: 0 6px 18px rgba(255,82,41,0.35);
@@ -832,7 +832,7 @@ body.light .product-risk-filter .prf-pill,
   box-shadow: 0 4px 12px rgba(0,0,0,0.06);
 }
 .product-risk-filter .prf-pill.active {
-  background: linear-gradient(135deg, #FF8215, #ff5229);
+  background: linear-gradient(135deg, #fec24f, #ff5229);
   border-color: transparent;
   color: #fff;
 }
@@ -868,11 +868,11 @@ body.light .product-risk-filter .prf-pill,
   transition: all 0.18s ease;
 }
 .calc-term-btn:hover {
-  border-color: rgba(255,155,12,0.5);
+  border-color: rgba(254,194,79,0.5);
   color: #fff;
 }
 .calc-term-btn.active {
-  background: linear-gradient(135deg, #ff9b0c, #ff5229);
+  background: linear-gradient(135deg, #fec24f, #ff5229);
   border-color: transparent;
   color: #fff;
   box-shadow: 0 4px 14px rgba(255,82,41,0.32);

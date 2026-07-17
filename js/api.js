@@ -469,8 +469,8 @@ const Utils = {
       solar_5yr:      { label: 'Solar Investment (5yr)',  icon: 'fa-solar-panel', color: '#65ed00', badgeClass: 'badge--green' },
       short_term:     { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#ff5229', badgeClass: 'badge--orange' },
       smme:           { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#ff5229', badgeClass: 'badge--orange' },
-      delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#ff9b0c', badgeClass: 'badge--orange' },
-      delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#ff9b0c', badgeClass: 'badge--orange' },
+      delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
+      delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
       gridfarmer:     { label: 'GridFarmer',              icon: 'fa-seedling',    color: '#65ed00', badgeClass: 'badge--green'  },
       other:          { label: 'Other',                   icon: 'fa-circle',      color: '#656565', badgeClass: 'badge--gray' },
     };
@@ -486,7 +486,7 @@ const Utils = {
     };
   },
 
-  ciProductPalette: ['#ff9b0c', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'],
+  ciProductPalette: ['#fec24f', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'],
 
   productColor(product) {
     const type = (product && product.product_type) || product;

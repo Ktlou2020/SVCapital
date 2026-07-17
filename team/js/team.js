@@ -110,7 +110,7 @@ const LEVELS = [
   { level: 3, title: 'Senior',      minXP: 1200, color: '#00d4aa' },
   { level: 4, title: 'Lead',        minXP: 2500, color: '#4fc3f7' },
   { level: 5, title: 'Director',    minXP: 4500, color: '#7c5cfc' },
-  { level: 6, title: 'MVP',         minXP: 7000, color: '#f9c846' },
+  { level: 6, title: 'MVP',         minXP: 7000, color: '#fec24f' },
 ];
 
 function getLevel(xp) {
@@ -133,7 +133,7 @@ function getXpProgress(xp) {
 function kpiColor(v) {
   if (v >= 90) return '#00d4aa';
   if (v >= 75) return '#4fc3f7';
-  if (v >= 60) return '#f9c846';
+  if (v >= 60) return '#fec24f';
   if (v >= 40) return '#ffb347';
   return '#ff5b5b';
 }
@@ -418,7 +418,7 @@ function renderDashboardChart() {
   const datasets = [];
   const dims = ['revenue_contribution','client_satisfaction','compliance_score','task_completion_rate','team_collaboration'];
   const dimLabels = ['Revenue','Client','Compliance','Tasks','Team'];
-  const colors = ['#7c5cfc','#00d4aa','#4fc3f7','#f9c846','#fd79a8'];
+  const colors = ['#7c5cfc','#00d4aa','#4fc3f7','#fec24f','#fd79a8'];
   dims.forEach((d, i) => {
     datasets.push({
       label: dimLabels[i],
@@ -589,7 +589,7 @@ function renderKpiRadar(empId) {
   const labels = ['Revenue','Client Sat.','Tasks','Response','Compliance','Innovation','Team','Attendance'];
 
   let datasets = [];
-  const colors = ['#7c5cfc','#00d4aa','#f9c846','#fd79a8','#4fc3f7','#ff5b5b'];
+  const colors = ['#7c5cfc','#00d4aa','#fec24f','#fd79a8','#4fc3f7','#ff5b5b'];
 
   if (empId) {
     const emp = _employees.find(e => e.id === empId);
@@ -660,7 +660,7 @@ function renderLeave() {
     const name = emp ? `${emp.first_name} ${emp.last_name}` : lr.employee_id;
     const col  = emp?.avatar_color || '#7c5cfc';
     const init = emp?.avatar_initials || '?';
-    const typeColors = { annual: '#4fc3f7', sick: '#ff5b5b', study: '#f9c846', family: '#fd79a8', unpaid: '#8b91a8' };
+    const typeColors = { annual: '#4fc3f7', sick: '#ff5b5b', study: '#fec24f', family: '#fd79a8', unpaid: '#8b91a8' };
     const dotCol = typeColors[lr.leave_type] || '#8b91a8';
     return `
       <div class="leave-card">
@@ -766,7 +766,7 @@ function renderEvaChart(evaCalc) {
   const ctx = document.getElementById('evaDonut');
   if (!ctx) return;
   if (_charts.evaDonut) { _charts.evaDonut.destroy(); }
-  const colors = ['#7c5cfc','#00d4aa','#f9c846','#fd79a8','#4fc3f7','#ff5b5b'];
+  const colors = ['#7c5cfc','#00d4aa','#fec24f','#fd79a8','#4fc3f7','#ff5b5b'];
   _charts.evaDonut = new Chart(ctx, {
     type: 'doughnut',
     data: {
@@ -1080,7 +1080,7 @@ function openKpiDetail(empId) {
 
   const dims = [
     { key: 'revenue_contribution', label: 'Revenue Contribution', icon: 'fa-chart-line', color: '#7c5cfc' },
-    { key: 'client_satisfaction',  label: 'Client Satisfaction',  icon: 'fa-star',       color: '#f9c846' },
+    { key: 'client_satisfaction',  label: 'Client Satisfaction',  icon: 'fa-star',       color: '#fec24f' },
     { key: 'task_completion_rate', label: 'Task Completion',       icon: 'fa-check-circle',color: '#00d4aa' },
     { key: 'response_time_score',  label: 'Response Time',         icon: 'fa-bolt',       color: '#4fc3f7' },
     { key: 'compliance_score',     label: 'Compliance',            icon: 'fa-shield',     color: '#0984e3' },

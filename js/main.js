@@ -1153,7 +1153,7 @@ function _showNextPoolClosing(products) {
 
   const el = document.createElement('div');
   el.id = 'nextPoolClosing';
-  el.style.cssText = 'display:inline-flex;align-items:center;gap:10px;margin-top:16px;padding:9px 18px;border-radius:999px;background:rgba(255,155,12,0.12);border:1px solid rgba(255,155,12,0.3);color:#b8702a;font-weight:700;font-size:0.86rem;white-space:nowrap;max-width:calc(100vw - 48px);overflow-x:auto';
+  el.style.cssText = 'display:inline-flex;align-items:center;gap:10px;margin-top:16px;padding:9px 18px;border-radius:999px;background:rgba(254,194,79,0.12);border:1px solid rgba(254,194,79,0.3);color:#b8702a;font-weight:700;font-size:0.86rem;white-space:nowrap;max-width:calc(100vw - 48px);overflow-x:auto';
   el.innerHTML = `<i class="fa-solid fa-clock"></i> Next pool closes ${dateStr}${days <= 60 ? ` — <span style="color:#e0571a">${days} day${days === 1 ? '' : 's'} left</span>` : ''}${soonestProduct && soonestProduct.label ? ` · ${soonestProduct.label}` : ''}`;
   header.appendChild(el);
 }
@@ -1191,7 +1191,7 @@ async function _applyCattleHerdStatus() {
       const wp = Math.min(100, Math.max(0, Math.round((current - entry) / (target - entry) * 100)));
       weightBar = `<div style="margin-bottom:14px">
         <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--text-dim);margin-bottom:5px"><span>Entry ${entry}kg</span><span style="color:#fec24f;font-weight:700">Now ~${current}kg</span><span>Target ${target}kg</span></div>
-        <div style="height:9px;border-radius:5px;background:rgba(255,255,255,0.08);overflow:hidden"><div style="height:100%;width:${wp}%;background:linear-gradient(90deg,#fec24f,#f59e0b)"></div></div>
+        <div style="height:9px;border-radius:5px;background:rgba(255,255,255,0.08);overflow:hidden"><div style="height:100%;width:${wp}%;background:linear-gradient(90deg,#fec24f,#fec24f)"></div></div>
         <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">${wp}% of the way to market weight</div></div>`;
     }
     const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
@@ -1256,9 +1256,9 @@ async function _applyTrackRecord() {
     // Show the average delivered return only (no per-pool bar graph).
     MODAL_DATA[key].trackHtml = `
       <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
-        <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#ff9b0c;margin-bottom:12px"><i class="fa-solid fa-award"></i> Track Record</div>
+        <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#fec24f;margin-bottom:12px"><i class="fa-solid fa-award"></i> Track Record</div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-          <div><div style="font-size:1.5rem;font-weight:800;color:#ff9b0c">${(sumA / n * 100).toFixed(2)}%</div><div style="font-size:0.72rem;color:var(--text-dim)">avg return achieved p.a.</div></div>
+          <div><div style="font-size:1.5rem;font-weight:800;color:#fec24f">${(sumA / n * 100).toFixed(2)}%</div><div style="font-size:0.72rem;color:var(--text-dim)">avg return achieved p.a.</div></div>
           <div><div style="font-size:1.5rem;font-weight:800;color:#fff">${n}</div><div style="font-size:0.72rem;color:var(--text-dim)">pool${n === 1 ? '' : 's'} matured</div></div>
           <div><div style="font-size:1.5rem;font-weight:800;color:#fff">${rand(paid)}</div><div style="font-size:0.72rem;color:var(--text-dim)">paid back</div></div>
         </div>

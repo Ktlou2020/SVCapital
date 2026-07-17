@@ -398,7 +398,7 @@ function renderSTLDashboard() {
         type: 'doughnut',
         data: {
           labels: ['Active','Repaid','Overdue','Partial','Written Off'],
-          datasets: [{ data: statusVals, backgroundColor:['rgba(59,130,246,.8)','rgba(34,197,94,.8)','rgba(239,68,68,.8)','rgba(245,158,11,.8)','rgba(156,163,175,.5)'], borderColor:'#111827', borderWidth: 2 }]
+          datasets: [{ data: statusVals, backgroundColor:['rgba(59,130,246,.8)','rgba(34,197,94,.8)','rgba(239,68,68,.8)','rgba(254,194,79,.8)','rgba(156,163,175,.5)'], borderColor:'#111827', borderWidth: 2 }]
         },
         options: { responsive: true, maintainAspectRatio: false, plugins: { ...chartDefaults.plugins } }
       });
@@ -477,7 +477,7 @@ function renderLoansTable(loans) {
                 <td class="num">${stlfmt.zar(n.principal)}</td>
                 <td class="num" style="color:#656565">${stlfmt.zar(n.fixedInterest || (n.principal * n.annualRate))}</td>
                 <td class="num">${stlfmt.zar(n.totalRepayable)}</td>
-                <td class="num" style="color:${n.partialPaid > 0 ? '#fbbf24' : 'rgba(255,255,255,.4)'}">${n.partialPaid > 0 ? stlfmt.zar(n.partialPaid) : '—'}</td>
+                <td class="num" style="color:${n.partialPaid > 0 ? '#fec24f' : 'rgba(255,255,255,.4)'}">${n.partialPaid > 0 ? stlfmt.zar(n.partialPaid) : '—'}</td>
                 <td class="num" style="color:${n.isFullyRepaid ? '#4ade80' : n.isOverdue ? '#f87171' : '#656565'};font-weight:700">
                   ${n.isFullyRepaid ? '<span style="color:#4ade80"><i class="fa-solid fa-check"></i> Repaid</span>' : stlfmt.zar(n.nav)}
                 </td>
@@ -555,7 +555,7 @@ function renderOverdueView() {
             </div>
             <div>
               <div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;margin-bottom:4px">Partial Paid</div>
-              <div style="font-size:16px;font-weight:700;color:#fbbf24">${stlfmt.zar(n.partialPaid)}</div>
+              <div style="font-size:16px;font-weight:700;color:#fec24f">${stlfmt.zar(n.partialPaid)}</div>
             </div>
             <div>
               <div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;margin-bottom:4px">Outstanding</div>

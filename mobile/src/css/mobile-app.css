@@ -750,17 +750,17 @@ select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !impo
   top: 0 !important; left: 50% !important;
   transform: translateX(-50%) scaleX(0) !important;
   width: 28px !important; height: 3px !important;
-  background: #ff9b0c !important; border-radius: 0 0 4px 4px !important;
+  background: #fec24f !important; border-radius: 0 0 4px 4px !important;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 .mbn-item.active::before { transform: translateX(-50%) scaleX(1) !important; }
 .mbn-item i { font-size: 1.1rem !important; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), color 0.12s !important; }
-.mbn-item.active { color: #ff9b0c !important; }
+.mbn-item.active { color: #fec24f !important; }
 .mbn-item.active i { transform: scale(1.12) translateY(-1px) !important; }
 .mbn-item:active { opacity: 0.6 !important; }
 body.dark-mode .mbn { background: rgba(22,27,34,0.92) !important; border-top-color: rgba(255,255,255,0.07) !important; }
 body.dark-mode .mbn-item        { color: #6b7280 !important; }
-body.dark-mode .mbn-item.active { color: #ff9b0c !important; }
+body.dark-mode .mbn-item.active { color: #fec24f !important; }
 /* Room for bottom nav + home indicator */
 .main-content {
   padding-bottom: calc(62px + env(safe-area-inset-bottom, 16px)) !important;
@@ -940,11 +940,11 @@ body.dark-mode .modal__header::before { background: rgba(255,255,255,0.2) !impor
 }
 .market-pool-card__rate {
   /* Remove gradient-text GPU compositor layer — use solid gold instead */
-  -webkit-text-fill-color: #FF9B0C !important;
+  -webkit-text-fill-color: #fec24f !important;
   background: none !important;
   -webkit-background-clip: unset !important;
   background-clip: unset !important;
-  color: #FF9B0C !important;
+  color: #fec24f !important;
 }
 /* No GPU layer from transform on tap — touch devices don't hover */
 .market-pool-card:hover,
@@ -961,7 +961,7 @@ body.dark-mode .modal__header::before { background: rgba(255,255,255,0.2) !impor
    Add a visible left accent border so the card is always apparent.
    ───────────────────────────────────────────────────────────── */
 .welcome-banner {
-  border-left: 3px solid #FF9B0C !important;
+  border-left: 3px solid #fec24f !important;
   box-shadow: 0 2px 16px rgba(0,0,0,0.08) !important;
   /* Remove overflow:hidden — it can prevent GPU layer from repainting
      child elements (avatar, text) when positioned:relative parent is
@@ -1048,12 +1048,12 @@ input[type="file"] { font-size: 16px !important; }
 }
 
 .learn-quiz-opt:hover:not(:disabled) {
-  border-color: #ff9b0c;
+  border-color: #fec24f;
   background: #fffbf0;
 }
 
 .learn-quiz-opt--selected {
-  border-color: #ff9b0c !important;
+  border-color: #fec24f !important;
   background: #fff8ed !important;
 }
 
@@ -1082,7 +1082,7 @@ input[type="file"] { font-size: 16px !important; }
 }
 
 .learn-quiz-opt--selected .learn-quiz-opt__letter {
-  background: #ff9b0c;
+  background: #fec24f;
   color: #fff;
 }
 
@@ -1183,7 +1183,7 @@ input[type="file"] { font-size: 16px !important; }
 }
 .policy-accordion--open {
   box-shadow: 0 6px 28px rgba(0,0,0,0.10);
-  border-color: rgba(255,155,12,0.35);
+  border-color: rgba(254,194,79,0.35);
 }
 .policy-accordion__header {
   display: flex;
