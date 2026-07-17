@@ -1286,37 +1286,103 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && _p
 window._stopPolling = function () { if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; } };
 
 // ─── Idle auto-logout (web only) ───
-// Signs the investor out after 5 minutes of no activity. Skipped in the
-// native Capacitor app, which has its own session handling.
+// Shows a countdown overlay after 10 min of inactivity; skipped in native app.
 function initIdleAutoLogout() {
   const isNative = (typeof _svcPlatform === 'function' && _svcPlatform() !== 'web') ||
                    (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
   if (isNative) return;
 
-  const IDLE_MS = 10 * 60 * 1000;     // 10 minutes
-  const WARN_MS = 30 * 1000;          // warn 30s before signing out
-  let idleTimer = null, warnTimer = null;
+  const IDLE_MS  = 10 * 60 * 1000;  // 10 minutes total
+  const WARN_MS  = 60 * 1000;        // show countdown for 60 seconds
+  let idleTimer = null, warnTimer = null, countdownInterval = null;
+  let overlayEl = null, _signingOut = false;
+
+  const _injectIdleStyles = () => {
+    if (document.getElementById('_idleStyles')) return;
+    const s = document.createElement('style');
+    s.id = '_idleStyles';
+    s.textContent = [
+      '#_idleOverlay{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:24px;animation:_idleFadeIn .22s ease}',
+      '@keyframes _idleFadeIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}',
+      '._idle-card{background:var(--dark-2,#131b26);border:1px solid var(--border,rgba(255,255,255,.08));border-radius:20px;padding:36px 28px 26px;width:100%;max-width:340px;text-align:center;box-shadow:0 28px 70px rgba(0,0,0,.55)}',
+      '._idle-icon{font-size:2.2rem;color:#fec24f;margin-bottom:14px}',
+      '._idle-title{font-size:1.15rem;font-weight:700;color:var(--text,#e8edf2);margin-bottom:4px}',
+      '._idle-count{font-size:3.8rem;font-weight:800;color:#fec24f;line-height:1.1;letter-spacing:-0.02em;margin:8px 0}',
+      '._idle-sub{font-size:0.83rem;color:var(--text-dim,#7a92a8);margin-bottom:18px;line-height:1.5}',
+      '._idle-bar-wrap{height:5px;background:var(--dark-3,#1a2535);border-radius:3px;overflow:hidden;margin-bottom:22px}',
+      '._idle-bar{height:100%;background:#fec24f;width:100%;transition:width 1s linear;border-radius:3px}',
+      '._idle-btn-stay{width:100%;padding:13px;background:#fec24f;color:#1a1a1a;border:none;border-radius:12px;font-size:.95rem;font-weight:700;cursor:pointer;margin-bottom:8px;transition:filter .15s}',
+      '._idle-btn-stay:hover{filter:brightness(1.08)}',
+      '._idle-btn-out{width:100%;padding:8px;background:none;color:var(--text-dim,#7a92a8);border:none;font-size:.82rem;cursor:pointer;transition:color .15s}',
+      '._idle-btn-out:hover{color:var(--text,#e8edf2)}',
+    ].join('');
+    document.head.appendChild(s);
+  };
+
+  const removeOverlay = () => {
+    if (overlayEl) { overlayEl.remove(); overlayEl = null; }
+    if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+  };
+
+  const showCountdown = () => {
+    if (overlayEl) return;
+    _injectIdleStyles();
+    let secs = Math.round(WARN_MS / 1000);
+    overlayEl = document.createElement('div');
+    overlayEl.id = '_idleOverlay';
+    overlayEl.innerHTML = [
+      '<div class="_idle-card">',
+      '<div class="_idle-icon"><i class="fa-regular fa-clock"></i></div>',
+      '<div class="_idle-title">Still there?</div>',
+      '<div class="_idle-count" id="_idleSecs">' + secs + '</div>',
+      '<div class="_idle-sub">You\'ll be signed out due to inactivity.</div>',
+      '<div class="_idle-bar-wrap"><div class="_idle-bar" id="_idleBar"></div></div>',
+      '<button class="_idle-btn-stay" onclick="_idleStay()">Stay Signed In</button>',
+      '<button class="_idle-btn-out" onclick="_idleLogout()">Sign Out Now</button>',
+      '</div>',
+    ].join('');
+    document.body.appendChild(overlayEl);
+    countdownInterval = setInterval(() => {
+      secs = Math.max(0, secs - 1);
+      const sc  = document.getElementById('_idleSecs');
+      const bar = document.getElementById('_idleBar');
+      if (sc)  sc.textContent = secs;
+      if (bar) bar.style.width = (secs / (WARN_MS / 1000) * 100) + '%';
+    }, 1000);
+  };
 
   const doAutoLogout = () => {
-    try { if (typeof Toast !== 'undefined') Toast.info?.('Signed out due to inactivity'); } catch (_) {}
+    removeOverlay();
     localStorage.removeItem('svc_portal_cache');
     localStorage.removeItem('svc_user');
     sessionStorage.clear();
     Auth.logout('../login.html?reason=timeout');
   };
 
+  window._idleStay = () => {
+    _signingOut = false;
+    removeOverlay();
+    markActivity();
+  };
+
+  window._idleLogout = () => {
+    _signingOut = true;
+    removeOverlay();
+    doAutoLogout();
+  };
+
   const reset = () => {
     clearTimeout(idleTimer);
     clearTimeout(warnTimer);
-    warnTimer = setTimeout(() => {
-      try { if (typeof Toast !== 'undefined') Toast.info?.('You will be signed out in 30 seconds due to inactivity.'); } catch (_) {}
-    }, IDLE_MS - WARN_MS);
-    idleTimer = setTimeout(doAutoLogout, IDLE_MS);
+    warnTimer  = setTimeout(showCountdown, IDLE_MS - WARN_MS);
+    idleTimer  = setTimeout(doAutoLogout,  IDLE_MS);
   };
 
   // Activity across tabs: broadcast last-activity via localStorage so multiple
   // portal tabs share one idle clock.
   const markActivity = () => {
+    if (_signingOut) return;
+    if (overlayEl) removeOverlay();  // any interaction during countdown = stay signed in
     try { localStorage.setItem('svc_last_activity', String(Date.now())); } catch (_) {}
     reset();
   };
