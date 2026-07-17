@@ -4,9 +4,10 @@
 All development goes on `claude/exciting-volta-CxUp1`. Push to that branch after every change.
 
 ## Pull Requests
-- Always create a **draft PR** after pushing, if one doesn't already exist for the branch.
+- Always create a PR (not draft) after pushing, if one doesn't already exist for the branch.
 - Immediately after creating the PR, call `mcp__github__enable_pr_auto_merge` with `mergeMethod: "SQUASH"` so it merges automatically once checks pass.
-- If the PR was already open, still call `enable_pr_auto_merge` on it.
+- If `enable_pr_auto_merge` returns "already in clean status", call `mcp__github__merge_pull_request` with `merge_method: "squash"` to merge it directly.
+- If the PR was already open, still call `enable_pr_auto_merge` on it (then merge directly if already clean).
 
 ## Service Worker Cache
 Bump `mobile/www/sw.js` CACHE version (svc-portal-vN) with every JS/CSS change to mobile.
