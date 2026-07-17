@@ -3209,6 +3209,7 @@ async function _showDepositSuccess(gateway, reference) {
   _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
   showSuccessOverlay({ title: 'Payment Received!', subtitle: `${fmtBase} added to your wallet` });
   await loadPortalData();
+  if (_pmSaId) await loadSubAccounts();
   loadWallet();
 }
 
@@ -3272,6 +3273,7 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
           try {
             await API._fetch('PATCH', `tables/sub_accounts/${_pmSaId}`, { wallet_balance: newSaBal });
             PORTAL.subAccounts[saIdx].wallet_balance = newSaBal;
+            renderSubAccountsView();
           } catch (saErr) { console.warn('Sub-account wallet update failed:', saErr); }
         }
       } else if (PORTAL.investor) {
@@ -3295,6 +3297,7 @@ async function _recordDeposit(gateway, reference, status, showSuccess = true) {
         _pmEl('pmSuccessAmount').textContent = `${fmtBase} deposit registered — awaiting bank confirmation`;
         _pmEl('pmSuccessRef').textContent = `Reference: ${reference}`;
         await loadPortalData();
+        if (_pmSaId) await loadSubAccounts();
         loadWallet();
       } else {
         await _showDepositSuccess(gateway, reference);
@@ -8031,6 +8034,8 @@ function _saNormalDetail(sa, meta) {
     .filter(t => t.sub_account_id === sa.id)
     .slice(0, 5);
 
+  const saInvs = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
+
   return `
     <div class="sa-detail-banner" style="background:${meta.bg}">
       <div style="display:flex;align-items:center;gap:12px">
@@ -8052,7 +8057,23 @@ function _saNormalDetail(sa, meta) {
       <button class="btn btn--secondary btn--sm" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-chart-line"></i> Invest</button>
     </div>
 
-    <div class="sa-section-title"><i class="fa-solid fa-id-card"></i> FICA Documents Required</div>
+    ${saInvs.length ? `
+    <div class="sa-section-title"><i class="fa-solid fa-chart-line"></i> Active Investments</div>
+    <table class="data-table">
+      <thead><tr><th>Pool</th><th>Status</th><th>Matures In</th><th>Amount</th></tr></thead>
+      <tbody>${saInvs.map(inv => {
+        const pi = Utils.productInfo(inv.product_type);
+        const daysLeft = inv.maturity_date ? Math.max(0, Math.ceil((new Date(inv.maturity_date) - Date.now()) / 86400000)) : null;
+        return `<tr style="cursor:pointer" onclick="Modal.close('saDetailModal');navigate('investments',document.querySelector('[data-view=investments]'))">
+          <td><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:${pi.color};flex-shrink:0;display:inline-block"></span>${inv.pool_name || 'Investment'}</span></td>
+          <td>${Utils.statusBadge(inv.status)}</td>
+          <td class="td-muted">${daysLeft !== null ? `${daysLeft}d` : '—'}</td>
+          <td class="td-green fw-700">${Utils.rand(inv.amount)}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>` : ''}
+
+    <div class="sa-section-title mt-16"><i class="fa-solid fa-id-card"></i> FICA Documents Required</div>
     <div class="sa-fica-list">${ficaItems}</div>
     <button class="btn btn--secondary btn--sm mt-8" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-upload"></i> Upload FICA Document</button>
 
@@ -8079,7 +8100,8 @@ function _saMinorHub(sa) {
   const goalPct = goal > 0 ? Math.min(100, Math.round((total / goal) * 100)) : 0;
   const jarFill = Math.min(100, Math.max(5, total > 0 ? Math.min(100, (total / Math.max(goal, total + 1)) * 100) : 0));
 
-  const ageInfo = age || { age: '?', label: 'Saver', theme: 'minor-young' };
+  const ageInfo  = age || { age: '?', label: 'Saver', theme: 'minor-young' };
+  const saInvsM  = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
 
   return `
   <div class="minor-hub minor-hub--${ageInfo.theme || 'minor-young'}">
@@ -8124,6 +8146,24 @@ function _saMinorHub(sa) {
       <button class="minor-btn minor-btn--invest" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-seedling"></i><span>Invest</span></button>
       <button class="minor-btn minor-btn--fica" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-id-card"></i><span>FICA Docs</span></button>
     </div>
+
+    ${saInvsM.length ? `
+    <!-- Active Investments -->
+    <div class="minor-investments">
+      <div class="minor-investments__title"><i class="fa-solid fa-chart-line" style="color:#4ade80;margin-right:6px"></i>Active Investments</div>
+      ${saInvsM.map(inv => {
+        const pi = Utils.productInfo(inv.product_type);
+        const daysLeft = inv.maturity_date ? Math.max(0, Math.ceil((new Date(inv.maturity_date) - Date.now()) / 86400000)) : null;
+        return `<div class="minor-inv-row" onclick="Modal.close('saDetailModal');navigate('investments',document.querySelector('[data-view=investments]'))">
+          <div class="minor-inv-row__icon" style="background:${pi.color}22;color:${pi.color}"><i class="fa-solid ${pi.icon}"></i></div>
+          <div class="minor-inv-row__info">
+            <div class="minor-inv-row__name">${inv.pool_name || 'Investment'}</div>
+            <div class="minor-inv-row__sub">${daysLeft !== null ? `${daysLeft} days remaining` : inv.status}</div>
+          </div>
+          <div class="minor-inv-row__amount">${Utils.rand(inv.amount)}</div>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
 
     <!-- Learning Zone -->
     <div class="minor-learn-zone">
