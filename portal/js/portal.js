@@ -2738,7 +2738,23 @@ function openAutoTopUpModal() {
   if (toggleSpan) toggleSpan.style.background = isEnabled ? '#fec24f' : '#ccc';
   if (el('atuAmount'))   el('atuAmount').value    = settings.auto_topup_amount || '';
   if (el('atuDay'))      el('atuDay').value       = settings.auto_topup_day || 1;
+  updateAutoTopUpFee();
   Modal.open('autoTopUpModal');
+}
+
+function updateAutoTopUpFee() {
+  const net = parseFloat(document.getElementById('atuAmount')?.value) || 0;
+  const bd  = document.getElementById('atuFeeBreakdown');
+  if (!bd) return;
+  if (net < 50) { bd.style.display = 'none'; return; }
+  const rawFee = (net + 2) / 0.985 - net;
+  const fee    = Math.min(rawFee, 800);
+  const gross  = Math.round((net + fee) * 100) / 100;
+  const fmt    = v => 'R ' + v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  bd.style.display = 'block';
+  document.getElementById('atuFeeNet').textContent   = fmt(net);
+  document.getElementById('atuFeeAmt').textContent   = '+ ' + fmt(Math.round(fee * 100) / 100);
+  document.getElementById('atuFeeGross').textContent = fmt(gross);
 }
 
 async function saveAutoTopUp() {
