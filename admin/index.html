@@ -2507,6 +2507,20 @@
 </div>
 
 <!-- Toast Container -->
+<!-- Bank Details Full View Modal -->
+<div class="modal-overlay" id="bankDetailsModal" onclick="if(event.target===this)Modal.close('bankDetailsModal')">
+  <div class="modal" style="max-width:460px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-building-columns" style="color:#fec24f;margin-right:8px"></i>Bank Account Details</span>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin-top:2px" id="bankDetailSubtitle"></div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('bankDetailsModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="bankDetailsBody" style="padding-top:4px"></div>
+  </div>
+</div>
+
 <div class="toast-container" id="toastContainer"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
