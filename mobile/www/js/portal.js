@@ -8618,10 +8618,16 @@ async function confirmSaDeposit() {
 }
 
 /* ── Invest from sub account ────────────────────────────────── */
-function _showSaNoFundsPrompt(sa) {
-  document.getElementById('saNoFundsTitle').textContent = `${sa.name}'s wallet is empty`;
-  document.getElementById('saNoFundsMsg').textContent   = `You need to deposit funds into ${sa.name}'s wallet before you can invest.`;
-  document.getElementById('saNoFundsBal').textContent   = Utils.rand(parseFloat(sa.wallet_balance) || 0);
+function _showSaNoFundsPrompt(sa, minNeeded) {
+  const bal     = parseFloat(sa.wallet_balance) || 0;
+  const isEmpty = bal <= 0;
+  document.getElementById('saNoFundsTitle').textContent = isEmpty
+    ? `${sa.name}'s wallet is empty`
+    : `Insufficient funds in ${sa.name}'s wallet`;
+  document.getElementById('saNoFundsMsg').textContent = isEmpty
+    ? `You need to deposit funds into ${sa.name}'s wallet before you can invest.`
+    : `The minimum investment plus the 1% platform fee requires ${Utils.rand(minNeeded)}. Current balance: ${Utils.rand(bal)}.`;
+  document.getElementById('saNoFundsBal').textContent   = Utils.rand(bal);
   document.getElementById('saNoFundsDepositBtn').onclick = () => {
     Modal.close('saNoFundsModal');
     openSaDeposit(sa.id);
@@ -8632,7 +8638,12 @@ function _showSaNoFundsPrompt(sa) {
 function openSaInvest(saId) {
   const sa = PORTAL.subAccounts.find(a => a.id === saId);
   if (!sa) return;
-  if ((parseFloat(sa.wallet_balance) || 0) <= 0) { _showSaNoFundsPrompt(sa); return; }
+  const bal      = parseFloat(sa.wallet_balance) || 0;
+  const openPools = (PORTAL.pools || []).filter(p => p.status === 'open');
+  const minNeeded = openPools.length
+    ? Math.min(...openPools.map(p => { const m = parseFloat(p.min_investment) || 0; return Math.round((m + m * 0.01) * 100) / 100; }))
+    : 0;
+  if (bal <= 0 || (minNeeded > 0 && bal < minNeeded)) { _showSaNoFundsPrompt(sa, minNeeded); return; }
 
   _pmSaId = saId;
   Modal.close('saDetailModal');
