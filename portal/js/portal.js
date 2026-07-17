@@ -8113,12 +8113,12 @@ function _saNormalDetail(sa, meta) {
     ${saAllTxns.length > 10 ? `<div style="max-height:320px;overflow-y:auto">` : ''}
     <table class="data-table">
       <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
-      <tbody>${saAllTxns.map(t => `<tr>
+      <tbody>${saAllTxns.map(t => { const _p = !['withdrawal','fee','investment','gift_sent'].includes(t.type); return `<tr>
         <td><span class="badge badge--gray">${t.type}</span></td>
-        <td class="${t.amount > 0 ? 'td-green' : 'td-red'} fw-700">${Utils.rand(t.amount)}</td>
+        <td class="${_p ? 'td-green' : 'td-red'} fw-700">${_p ? '' : '-'}${Utils.rand(Math.abs(t.amount))}</td>
         <td>${Utils.statusBadge(t.status)}</td>
         <td class="td-muted">${Utils.date(t.created_at)}</td>
-      </tr>`).join('')}</tbody>
+      </tr>`; }).join('')}</tbody>
     </table>
     ${saAllTxns.length > 10 ? `</div>` : ''}` : ''}`;
 }
@@ -8238,7 +8238,7 @@ function _saMinorHub(sa) {
             <div class="minor-inv-row__name">${t.description || t.type}</div>
             <div class="minor-inv-row__sub">${Utils.date(t.created_at || t.transaction_date)}</div>
           </div>
-          <div class="minor-inv-row__amount" style="color:${t.amount>0?'#4ade80':'#ef4444'}">${Utils.rand(t.amount)}</div>
+          <div class="minor-inv-row__amount" style="color:${!['withdrawal','fee','investment','gift_sent'].includes(t.type)?'#4ade80':'#ef4444'}">${['withdrawal','fee','investment','gift_sent'].includes(t.type)?'-':''}${Utils.rand(Math.abs(t.amount))}</div>
         </div>`).join('')}
       </div>
     </div>` : ''}

@@ -8407,17 +8407,17 @@ function _saNormalDetail(sa, meta) {
       </div>
       ${saAllTxns.length > 10 ? `<div style="max-height:320px;overflow-y:auto">` : ''}
       <div class="sad-txn-list">
-        ${saAllTxns.map(t => `
+        ${saAllTxns.map(t => { const _p = !['withdrawal','fee','investment','gift_sent'].includes(t.type); return `
           <div class="sad-txn">
-            <div class="sad-txn__icon" style="background:${t.amount > 0 ? 'rgba(74,222,128,0.12)' : 'rgba(239,68,68,0.1)'}">
-              <i class="fa-solid ${txnTypeIcon(t)}" style="color:${t.amount > 0 ? '#4ade80' : '#ef4444'}"></i>
+            <div class="sad-txn__icon" style="background:${_p ? 'rgba(74,222,128,0.12)' : 'rgba(239,68,68,0.1)'}">
+              <i class="fa-solid ${txnTypeIcon(t)}" style="color:${_p ? '#4ade80' : '#ef4444'}"></i>
             </div>
             <div class="sad-txn__info">
               <div class="sad-txn__type">${(t.type || 'transaction').replace(/_/g,' ')}</div>
               <div class="sad-txn__date">${Utils.date(t.created_at)}</div>
             </div>
-            <div class="sad-txn__amount" style="color:${t.amount > 0 ? '#4ade80' : '#ef4444'}">${t.amount > 0 ? '+' : ''}${Utils.rand(t.amount)}</div>
-          </div>`).join('')}
+            <div class="sad-txn__amount" style="color:${_p ? '#4ade80' : '#ef4444'}">${_p ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</div>
+          </div>`; }).join('')}
       </div>
       ${saAllTxns.length > 10 ? `</div>` : ''}
     </div>` : ''}
@@ -8546,7 +8546,7 @@ function _saMinorHub(sa) {
             <div class="minor-inv-row__name">${t.description || t.type}</div>
             <div class="minor-inv-row__sub">${Utils.date(t.created_at || t.transaction_date)}</div>
           </div>
-          <div class="minor-inv-row__amount" style="color:${t.amount>0?'#4ade80':'#ef4444'}">${Utils.rand(t.amount)}</div>
+          <div class="minor-inv-row__amount" style="color:${!['withdrawal','fee','investment','gift_sent'].includes(t.type)?'#4ade80':'#ef4444'}">${['withdrawal','fee','investment','gift_sent'].includes(t.type)?'-':''}${Utils.rand(Math.abs(t.amount))}</div>
         </div>`).join('')}
       </div>
     </div>` : ''}
