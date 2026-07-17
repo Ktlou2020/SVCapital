@@ -670,10 +670,10 @@ const Toast = {
       setTimeout(() => toast.remove(), 300);
     }, duration);
   },
-  success: (msg) => Toast.show(msg, 'success'),
-  error:   (msg) => Toast.show(msg, 'error'),
-  info:    (msg) => Toast.show(msg, 'info'),
-  warning: (msg) => Toast.show(msg, 'warning'),
+  success: (msg) => Toast.show(msg, 'success', 5000),
+  error:   (msg) => Toast.show(msg, 'error',   6000),
+  info:    (msg) => Toast.show(msg, 'info',    5000),
+  warning: (msg) => Toast.show(msg, 'warning', 6000),
 };
 
 /* ═══════════════════════════════════════════════

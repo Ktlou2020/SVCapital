@@ -3175,3 +3175,36 @@ input[disabled].form-input {
   font-size: 0.8rem !important;
   color: rgba(255,255,255,0.45) !important;
 }
+
+/* ── Minor Hub (Sub-Account Detail) bottom-sheet fix ─────────────
+   The overlay inherits modal-overlay's align-items:center which
+   clips tall content above the viewport. Override to a true
+   full-height bottom sheet so the child header is always visible. */
+.sa-detail-overlay {
+  align-items: flex-end !important;
+  padding: 0 !important;
+  background: rgba(0,0,0,0.6) !important;
+}
+.sa-detail-sheet {
+  width: 100% !important;
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px)) !important;
+  border-radius: 20px 20px 0 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: transparent !important;
+}
+.sa-detail-drag-bar {
+  flex-shrink: 0 !important;
+  width: 40px !important;
+  height: 4px !important;
+  border-radius: 2px !important;
+  background: rgba(255,255,255,0.25) !important;
+  margin: 10px auto 0 !important;
+}
+.sa-detail-scroll {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  padding-bottom: env(safe-area-inset-bottom, 16px) !important;
+}
