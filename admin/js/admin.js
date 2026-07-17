@@ -264,7 +264,7 @@ function loadAdminNotifications(investors, transactions, tickets) {
   if (pendingBank.length) {
     notifs.push(_an({
       nid: `bank-${pendingBank.map(i=>i.id).sort().join('-')}`,
-      icon: 'fa-building-columns', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#656565',
+      icon: 'fa-building-columns', iconBg: 'rgba(237,165,255,0.1)', iconColor: '#656565',
       title: `${pendingBank.length} bank account${pendingBank.length === 1 ? '' : 's'} to verify`,
       sub: `${pendingBank.slice(0,2).map(i => `${_esc(i.first_name)} ${_esc(i.last_name)}`).join(', ')}${pendingBank.length > 2 ? ` +${pendingBank.length - 2} more` : ''}.`,
       action: "navigate('investors',document.querySelector('[data-view=investors]'));toggleAdminNotif()",
@@ -451,7 +451,7 @@ function _populateAdminIdentity(jwtUser) {
   // svc_user / jwtUser fills gaps when only a JWT login was used.
   let identity = {
     initials:   null,
-    color:      '#7c5cfc',
+    color:      '#eda5ff',
     name:       null,
     role:       null,
     department: null,
@@ -465,7 +465,7 @@ function _populateAdminIdentity(jwtUser) {
       const s = JSON.parse(raw);
       if (s && s.empId && s.expiresAt > Date.now()) {
         identity.initials   = s.avatarInitials || null;
-        identity.color      = s.avatarColor    || '#7c5cfc';
+        identity.color      = s.avatarColor    || '#eda5ff';
         identity.name       = `${s.firstName || ''} ${s.lastName || ''}`.trim() || null;
         identity.role       = s.role           || null;
         identity.department = s.department     || null;
@@ -1202,7 +1202,7 @@ function renderInvestorStats() {
 }
 
 function _invAvatarColor(name) {
-  const p = ['#fec24f','#656565','#22c55e','#fec24f','#8b5cf6','#656565','#ec4899','#ef4444'];
+  const p = ['#fec24f','#656565','#22c55e','#fec24f','#eda5ff','#656565','#ec4899','#ef4444'];
   let h = 0; for (const c of (name||'?')) h = (h<<5) - h + c.charCodeAt(0);
   return p[Math.abs(h) % p.length];
 }
@@ -2123,7 +2123,7 @@ function renderKYCStats() {
     const pendClr = pend > 0 ? '#fec24f' : 'var(--text-muted)';
     return `<div class="stat-card" style="cursor:pointer;padding:12px 14px" onclick="document.getElementById('kycDocTypeFilter').value=${JSON.stringify(t)};renderKYCTable()">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <i class="fa-solid ${icon}" style="color:#6366f1;font-size:0.9rem"></i>
+        <i class="fa-solid ${icon}" style="color:#eda5ff;font-size:0.9rem"></i>
         <span style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${label}</span>
       </div>
       <div style="display:flex;align-items:flex-end;gap:8px">
@@ -2961,7 +2961,7 @@ async function viewPoolInvestors(poolId) {
           ['Total Raised',  Utils.rand(summary.total_invested), 'coins',         '#fec24f'],
           ['Investors',     summary.investor_count,             'users',          '#656565'],
           ['Active',        summary.active_count,               'chart-line',     '#22c55e'],
-          ['Matured',       summary.matured_count,              'flag-checkered', '#8b5cf6'],
+          ['Matured',       summary.matured_count,              'flag-checkered', '#eda5ff'],
         ].map(([label, val, icon, color]) => `
           <div style="background:var(--bg-secondary);border-radius:10px;padding:14px;text-align:center">
             <i class="fa-solid fa-${icon}" style="color:${color};font-size:1.1rem;display:block;margin-bottom:6px"></i>
@@ -2987,7 +2987,7 @@ async function viewPoolInvestors(poolId) {
         </div>
         <div>
           <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">EVA (from Upfront)</div>
-          <div style="font-size:0.95rem;font-weight:800;color:#8b5cf6">${hasFees ? Utils.rand(summary.total_eva) : '—'}</div>
+          <div style="font-size:0.95rem;font-weight:800;color:#eda5ff">${hasFees ? Utils.rand(summary.total_eva) : '—'}</div>
         </div>
         <div>
           <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">Net Invested</div>
@@ -3020,7 +3020,7 @@ async function viewPoolInvestors(poolId) {
                 <td class="td-gold fw-700 clip">${Utils.rand(r.amount)}</td>
                 <td class="clip" style="font-size:0.78rem;color:#f97316">${r.upfront_fee > 0 ? Utils.rand(r.upfront_fee) : '—'}</td>
                 <td class="clip" style="font-size:0.78rem;color:#f97316">${Utils.rand(r.platform_fee)}</td>
-                <td class="clip" style="font-size:0.78rem;color:#8b5cf6">${r.eva_contribution > 0 ? Utils.rand(r.eva_contribution) : '—'}</td>
+                <td class="clip" style="font-size:0.78rem;color:#eda5ff">${r.eva_contribution > 0 ? Utils.rand(r.eva_contribution) : '—'}</td>
                 <td class="clip" style="font-size:0.82rem;font-weight:700;color:#22c55e">${Utils.rand(r.net_amount)}</td>
                 <td class="td-green clip">${r.annual_rate ? Utils.pct(r.annual_rate) : '—'}</td>
                 <td><span class="badge ${statusColor[r.investment_status]||'badge--gray'}">${r.investment_status||'—'}</span></td>
@@ -4179,9 +4179,9 @@ async function viewTicket(id) {
         </label>
       </div>
     </div>` : ''}
-    ${isBankVerification && tkt.investor_id ? `<div class="panel mb-12" style="border:1.5px solid rgba(99,102,241,0.25)">
-      <div class="panel__header" style="background:rgba(99,102,241,0.07);display:flex;align-items:center;gap:10px">
-        <span class="panel__title"><i class="fa-solid fa-building-columns" style="color:#6366f1;margin-right:6px"></i>Proof of Bank Account</span>
+    ${isBankVerification && tkt.investor_id ? `<div class="panel mb-12" style="border:1.5px solid rgba(237,165,255,0.25)">
+      <div class="panel__header" style="background:rgba(237,165,255,0.07);display:flex;align-items:center;gap:10px">
+        <span class="panel__title"><i class="fa-solid fa-building-columns" style="color:#eda5ff;margin-right:6px"></i>Proof of Bank Account</span>
         <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
           <button class="btn btn--secondary btn--sm" id="bankAutoVerifyBtn" onclick='_runBankAutoVerify(${JSON.stringify(tkt.investor_id)})'><i class="fa-solid fa-robot"></i> Auto-Verify</button>
         </div>
@@ -4189,7 +4189,7 @@ async function viewTicket(id) {
       <div id="bankProofPreview" style="padding:12px 16px;font-size:0.82rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading document…</div>
       <div id="bankVerifyResult" style="padding:0 16px 12px;font-size:0.82rem;color:var(--text-muted)"></div>
     </div>` : ''}
-    ${showActionBtns ? `<div style="display:flex;gap:10px;margin-bottom:16px;padding:12px;background:${isPaymentProof ? 'rgba(34,197,94,0.06)' : 'rgba(99,102,241,0.06)'};border-radius:8px;border:1px solid ${isPaymentProof ? 'rgba(34,197,94,0.2)' : 'rgba(99,102,241,0.15)'}">
+    ${showActionBtns ? `<div style="display:flex;gap:10px;margin-bottom:16px;padding:12px;background:${isPaymentProof ? 'rgba(34,197,94,0.06)' : 'rgba(237,165,255,0.06)'};border-radius:8px;border:1px solid ${isPaymentProof ? 'rgba(34,197,94,0.2)' : 'rgba(237,165,255,0.15)'}">
       <div style="flex:1">
         <div style="font-size:0.78rem;font-weight:700;color:var(--text);margin-bottom:4px">${isPaymentProof ? 'EFT Deposit Approval' : isBankVerification ? 'Bank Account Verification' : 'Document Review'}</div>
         <div style="font-size:0.72rem;color:var(--text-muted)">${isPaymentProof ? 'Approving will credit the investor\'s wallet with the EFT amount and resolve this ticket.' : `Approve or decline the submitted ${isBankVerification ? 'bank account details' : 'documents'}. This will update the investor record.`}</div>
@@ -4353,7 +4353,7 @@ async function viewTicket(id) {
             const blob = _dataUrlToBlob(src);
             const blobUrl = blob ? URL.createObjectURL(blob) : src;
             previewEl.innerHTML = `<iframe src="${blobUrl}" style="width:100%;height:520px;border:none;border-radius:6px" title="${_esc(name)}"></iframe>
-              <div style="margin-top:6px;text-align:right"><a href="${blobUrl}" target="_blank" rel="noopener" style="font-size:0.78rem;color:#6366f1"><i class="fa-solid fa-arrow-up-right-from-square" style="margin-right:4px"></i>Open full screen</a></div>`;
+              <div style="margin-top:6px;text-align:right"><a href="${blobUrl}" target="_blank" rel="noopener" style="font-size:0.78rem;color:#eda5ff"><i class="fa-solid fa-arrow-up-right-from-square" style="margin-right:4px"></i>Open full screen</a></div>`;
           }
         }
       } catch (e) {
@@ -4442,7 +4442,7 @@ function _renderPersonas(data) {
     'Growth Seeker':      { icon: 'fa-chart-line',    color: '#22c55e', desc: 'Focused on long-term capital growth. Comfortable with volatility.' },
     'Income Investor':    { icon: 'fa-coins',          color: '#fec24f', desc: 'Wants regular income from investments. Dividend / returns oriented.' },
     'Risk Taker':         { icon: 'fa-fire-flame-curved', color: '#ef4444', desc: 'Experienced investor who buys on dips. High conviction, high risk.' },
-    'Long-Term Planner':  { icon: 'fa-calendar-days', color: '#a855f7', desc: 'Investing for retirement or dependents. Steady, multi-year horizon.' },
+    'Long-Term Planner':  { icon: 'fa-calendar-days', color: '#eda5ff', desc: 'Investing for retirement or dependents. Steady, multi-year horizon.' },
     'Explorer':           { icon: 'fa-compass',        color: '#fec24f', desc: 'Just getting started. Goals and risk profile still taking shape.' },
   };
 
@@ -4690,15 +4690,15 @@ async function renderMobileActivity() {
         </div>
         <div style="font-size:0.68rem;color:var(--text-dim);margin-top:4px">${webLogins} logins · ${pct(webLogins)}% of total</div>
       </div>
-      <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:10px;padding:14px 16px">
+      <div style="background:rgba(237,165,255,0.08);border:1px solid rgba(237,165,255,0.2);border-radius:10px;padding:14px 16px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <i class="fa-solid fa-mobile-screen" style="font-size:1.1rem;color:#a855f7"></i>
-          <span style="font-size:0.72rem;font-weight:700;color:#a855f7;text-transform:uppercase;letter-spacing:0.05em">App Total</span>
+          <i class="fa-solid fa-mobile-screen" style="font-size:1.1rem;color:#eda5ff"></i>
+          <span style="font-size:0.72rem;font-weight:700;color:#eda5ff;text-transform:uppercase;letter-spacing:0.05em">App Total</span>
         </div>
         <div style="font-size:1.6rem;font-weight:800;color:var(--text)">${(iosEvents.length + androidEvents.length).toLocaleString()}</div>
         <div style="font-size:0.72rem;color:var(--text-muted)">iOS + Android (30d)</div>
         <div style="margin-top:8px;height:4px;background:rgba(0,0,0,0.1);border-radius:2px">
-          <div style="height:100%;width:${totalLogins ? Math.round((iosLogins + droidLogins) / totalLogins * 100) : 0}%;background:#a855f7;border-radius:2px"></div>
+          <div style="height:100%;width:${totalLogins ? Math.round((iosLogins + droidLogins) / totalLogins * 100) : 0}%;background:#eda5ff;border-radius:2px"></div>
         </div>
         <div style="font-size:0.68rem;color:var(--text-dim);margin-top:4px">${iosLogins + droidLogins} app logins · ${totalLogins ? Math.round((iosLogins + droidLogins) / totalLogins * 100) : 0}% share</div>
       </div>
@@ -4761,7 +4761,7 @@ function renderProvinceChart() {
   if (!ctx) return;
   const prov = {};
   STATE.investors.forEach(i => { prov[i.province] = (prov[i.province] || 0) + 1; });
-  const colors = ['#fec24f', '#22c55e', '#656565', '#f97316', '#a855f7', '#ef4444', '#656565', '#84cc16', '#fec24f'];
+  const colors = ['#fec24f', '#22c55e', '#656565', '#f97316', '#eda5ff', '#ef4444', '#656565', '#84cc16', '#fec24f'];
 
   if (STATE.charts.province) STATE.charts.province.destroy();
   STATE.charts.province = new Chart(ctx, {
@@ -4897,7 +4897,7 @@ function renderConversionFunnel() {
     { label: 'First Deposit',       count: deposited,      color: '#22c55e', icon: '💳' },
     { label: 'First Investment',    count: invested,       color: '#fec24f', icon: '📈' },
     { label: 'Repeat Investor',     count: multiInvested,  color: '#f97316', icon: '🔄' },
-    { label: 'Recurring Set',       count: recurring,      color: '#a855f7', icon: '⚡' },
+    { label: 'Recurring Set',       count: recurring,      color: '#eda5ff', icon: '⚡' },
     { label: 'Referred Someone',    count: referred,       color: '#ec4899', icon: '🎁' },
   ];
 
@@ -4989,7 +4989,7 @@ function renderConversionFunnel() {
         <div style="font-size:1.05rem;font-weight:700;color:#22c55e">${fmt(totalAUM)}</div>
         <div style="font-size:0.68rem;color:var(--text-muted)">all investors</div>
       </div>
-      <div style="background:rgba(99,102,241,0.08);border-radius:8px;padding:10px 12px">
+      <div style="background:rgba(237,165,255,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Avg 1st Invest</div>
         <div style="font-size:1.05rem;font-weight:700;color:#656565">${avgFirstInv > 0 ? fmt(avgFirstInv) : '—'}</div>
         <div style="font-size:0.68rem;color:var(--text-muted)">per investor</div>
@@ -5004,9 +5004,9 @@ function renderConversionFunnel() {
         <div style="font-size:0.88rem;font-weight:700;color:#f97316;text-transform:capitalize">${topProduct.replace(/_/g,' ')}</div>
         <div style="font-size:0.68rem;color:var(--text-muted)">1st investment choice</div>
       </div>
-      <div style="background:rgba(168,85,247,0.08);border-radius:8px;padding:10px 12px">
+      <div style="background:rgba(237,165,255,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Retention</div>
-        <div style="font-size:1.05rem;font-weight:700;color:#a855f7">${invested > 0 ? Math.round(multiInvested/invested*100) : 0}%</div>
+        <div style="font-size:1.05rem;font-weight:700;color:#eda5ff">${invested > 0 ? Math.round(multiInvested/invested*100) : 0}%</div>
         <div style="font-size:0.68rem;color:var(--text-muted)">made 2+ investments</div>
       </div>
     </div>
@@ -5102,7 +5102,7 @@ function renderSignupFriction(data, panel) {
   const totalDev = device_breakdown.reduce((s, d) => s + d.count, 0) || 1;
   const devHtml = device_breakdown.map(d => {
     const pct = Math.round(d.count / totalDev * 100);
-    const colors = { mobile: '#a855f7', desktop: '#656565', tablet: '#22c55e' };
+    const colors = { mobile: '#eda5ff', desktop: '#656565', tablet: '#22c55e' };
     const c = colors[d.device_type] || '#6b7280';
     return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
       <div style="width:62px;font-size:0.75rem;color:var(--text-muted);text-transform:capitalize">${d.device_type}</div>
@@ -5125,7 +5125,7 @@ function renderSignupFriction(data, panel) {
   panel.innerHTML = `
     <!-- Metric cards -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px">
-      <div style="background:rgba(99,102,241,0.08);border-radius:8px;padding:10px 12px">
+      <div style="background:rgba(237,165,255,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">Total Sessions</div>
         <div style="font-size:1.3rem;font-weight:800;color:#656565">${total_sessions.toLocaleString()}</div>
         <div style="font-size:0.65rem;color:var(--text-muted)">signup page visits</div>
@@ -6386,7 +6386,7 @@ function _opsRenderMoney(s) {
     ${row('fa-wallet', 'Total wallet pool', _opsR(s.totalWalletBalance), '#656565')}
     ${row('fa-arrow-down-to-arc', `Pending deposits (${s.pendingDeposits?.count ?? 0})`, _opsR(s.pendingDeposits?.value), '#22c55e', 'Awaiting admin approval')}
     ${row('fa-arrow-up-from-arc', `Pending withdrawals (${s.pendingWithdrawals?.count ?? 0})`, _opsR(s.pendingWithdrawals?.value), '#fec24f', 'In payout queue')}
-    ${row('fa-clock', `Pending investments (${s.pendingInvestments?.count ?? 0})`, _opsR(s.pendingInvestments?.value), '#a855f7', 'Awaiting allocation')}
+    ${row('fa-clock', `Pending investments (${s.pendingInvestments?.count ?? 0})`, _opsR(s.pendingInvestments?.value), '#eda5ff', 'Awaiting allocation')}
     ${row('fa-coins', 'Deposits this month', _opsR(s.monthDeposits?.value), '#656565', `${s.monthDeposits?.count ?? 0} transactions`)}
     ${row('fa-hand-holding-dollar', 'Returns distributed this month', _opsR(s.returnsDistributed), '#22c55e')}
     ${row('fa-bolt', 'Deposit velocity (7 days)', _opsR(s.investVol7d), '#fec24f')}
@@ -6412,7 +6412,7 @@ function _opsRenderInvestorPulse(s) {
       ${tile('Active Investors', inv.active, '#22c55e')}
       ${tile('FICA Approved', inv.ficaApproved, '#656565')}
       ${tile('FICA Pending', inv.ficaPending, '#fec24f')}
-      ${tile('New Today', inv.newToday, '#a855f7')}
+      ${tile('New Today', inv.newToday, '#eda5ff')}
       ${tile('New This Month', inv.newMonth, '#fec24f')}
     </div>
     <div style="display:flex;align-items:center;padding:10px 12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:10px;font-size:0.82rem;color:#e8edf2">
@@ -6430,7 +6430,7 @@ function _opsRenderFunnel(funnel) {
   el.innerHTML = stages.map((stage, i) => {
     const pct = Math.round((stage.count / max) * 100);
     const convPct = i > 0 ? Math.round((stage.count / stages[i-1].count) * 100) : 100;
-    const color = ['#656565','#22c55e','#fec24f','#a855f7','#fec24f'][i] || '#656565';
+    const color = ['#656565','#22c55e','#fec24f','#eda5ff','#fec24f'][i] || '#656565';
     return `<div style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <span style="font-size:0.78rem;font-weight:700;color:#e8edf2">${stage.label}</span>
@@ -6451,7 +6451,7 @@ function _opsRenderAumByType(s) {
   if (!ctx || !s.aumByType?.length) return;
   if (_opsAumByTypeChart) { _opsAumByTypeChart.destroy(); _opsAumByTypeChart = null; }
   const typeLabel = { cattle: 'Cattle', solar: 'Solar', short_term: 'Short-Term', delivery: 'Delivery' };
-  const colors = ['#fec24f','#22c55e','#656565','#a855f7','#fec24f','#656565'];
+  const colors = ['#fec24f','#22c55e','#656565','#eda5ff','#fec24f','#656565'];
   const labels  = s.aumByType.map(r => typeLabel[r.type] || r.type);
   const data    = s.aumByType.map(r => r.volume);
   _opsAumByTypeChart = new Chart(ctx, {
@@ -6474,7 +6474,7 @@ function _opsRenderTopPools(s) {
   const el = document.getElementById('opsTopPools');
   if (!el || !s.topPools?.length) { if (el) el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.82rem">No pool data</div>'; return; }
   const maxVol = Math.max(...s.topPools.map(p => p.volume), 1);
-  const typeColor = { cattle: '#fec24f', solar: '#22c55e', short_term: '#656565', delivery: '#a855f7' };
+  const typeColor = { cattle: '#fec24f', solar: '#22c55e', short_term: '#656565', delivery: '#eda5ff' };
   el.innerHTML = s.topPools.map((p, i) => {
     const pct = Math.round((p.volume / maxVol) * 100);
     const color = typeColor[p.type] || '#9ca3af';
@@ -6554,7 +6554,7 @@ function _opsRenderComms(comms) {
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
       ${tile('fa-bell', 'Push Subscribers', (push.subscribers||0).toLocaleString(), '#656565')}
       ${tile('fa-paper-plane', 'Pushes Sent (month)', push.sentThisMonth ?? 0, '#22c55e')}
-      ${tile('fa-users', 'Push Recipients (month)', (push.recipientsThisMonth||0).toLocaleString(), '#a855f7')}
+      ${tile('fa-users', 'Push Recipients (month)', (push.recipientsThisMonth||0).toLocaleString(), '#eda5ff')}
     </div>
     ${recent.length ? `
       <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#7a92a8;font-weight:800;margin-bottom:8px">Recent Push Notifications</div>
@@ -6579,7 +6579,7 @@ const _ACTION_COLOR = {
   'withdrawal.approved':'#22c55e', 'withdrawal.rejected':'#ef4444',
   'investment.created':'#656565', 'investment.approved':'#22c55e',
   'kyc.approved':'#22c55e', 'kyc.rejected':'#ef4444',
-  'investor.suspended':'#ef4444', 'broadcast.sent':'#a855f7',
+  'investor.suspended':'#ef4444', 'broadcast.sent':'#eda5ff',
   'deposit.approved':'#22c55e', 'deposit.rejected':'#ef4444',
 };
 
@@ -7284,7 +7284,7 @@ function loadInvestorTimeline(inv, invsts, txns) {
       sub: `${i.pool_name || i.product_type} · ${Utils.statusBadge(i.status)}`
     });
     if (i.status === 'matured' && i.end_date) events.push({
-      date: new Date(i.end_date), icon: 'fa-hourglass-end', color: '#8b5cf6',
+      date: new Date(i.end_date), icon: 'fa-hourglass-end', color: '#eda5ff',
       title: `Investment matured`, sub: `${i.pool_name || '—'} · ${Utils.rand(i.amount)}`
     });
   });
@@ -7472,7 +7472,7 @@ function renderAnStatusChart() {
   const statuses = ['active', 'matured', 'paid_out', 'pending'];
   const counts = statuses.map(s => STATE.investments.filter(i => i.status === s).length);
   const labels = ['Active', 'Matured', 'Paid Out', 'Pending'];
-  const colors = ['#22c55e', '#a855f7', '#fec24f', '#f97316'];
+  const colors = ['#22c55e', '#eda5ff', '#fec24f', '#f97316'];
 
   if (STATE.charts.anStatus) STATE.charts.anStatus.destroy();
 
@@ -7613,7 +7613,7 @@ async function runMigration() {
           ['Investors',    counts.investors    ?? 0, 'users',          '#22c55e'],
           ['Pools',        counts.pools        ?? 0, 'layer-group',    '#656565'],
           ['Investments',  counts.investments  ?? 0, 'chart-line',     '#fec24f'],
-          ['Transactions', counts.transactions ?? 0, 'arrows-rotate',  '#8b5cf6'],
+          ['Transactions', counts.transactions ?? 0, 'arrows-rotate',  '#eda5ff'],
           ['KYC Docs',     counts.kyc          ?? 0, 'id-card',        '#656565'],
         ].map(([label, count, icon, color]) => `
           <div style="background:var(--bg-secondary);border-radius:8px;padding:14px;text-align:center">
@@ -7948,7 +7948,7 @@ async function loadAcceptedDocuments() {
         { label:'Total Acceptances', value: total,    color:'#fec24f' },
         { label:'Unique Investors',  value: uniqInv,  color:'#22c55e' },
         { label:'Accepted Today',    value: today,    color:'#656565' },
-        { label:'Document Types',    value: types.filter(t => _acdRows.some(d => d.document_type === t)).length, color:'#a855f7' },
+        { label:'Document Types',    value: types.filter(t => _acdRows.some(d => d.document_type === t)).length, color:'#eda5ff' },
       ].map(s => `
         <div class="stat-card">
           <div class="stat-card__label">${s.label}</div>
@@ -7999,7 +7999,7 @@ function renderAcceptedDocsTable() {
     return;
   }
 
-  const docColor = { terms_of_service:'#656565', privacy_policy:'#22c55e', popia_notice:'#7c3aed', fica_consent:'#fec24f', risk_disclaimer:'#ef4444' };
+  const docColor = { terms_of_service:'#656565', privacy_policy:'#22c55e', popia_notice:'#eda5ff', fica_consent:'#fec24f', risk_disclaimer:'#ef4444' };
 
   tbody.innerHTML = rows.slice(0, 500).map(d => {
     const inv  = d.investor;

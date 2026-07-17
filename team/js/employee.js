@@ -57,7 +57,7 @@ const LEVELS = [
   {level:2,title:'Associate', minXP:500, color:'#5cb85c'},
   {level:3,title:'Senior',    minXP:1200,color:'#00d4aa'},
   {level:4,title:'Lead',      minXP:2500,color:'#4fc3f7'},
-  {level:5,title:'Director',  minXP:4500,color:'#7c5cfc'},
+  {level:5,title:'Director',  minXP:4500,color:'#eda5ff'},
   {level:6,title:'MVP',       minXP:7000,color:'#fec24f'},
 ];
 function getLevel(xp) { let l=LEVELS[0]; for(const L of LEVELS){if(xp>=L.minXP)l=L;} return l; }
@@ -68,7 +68,7 @@ function getXpProgress(xp) {
   return {pct:Math.round(cur/need*100),current:cur,needed:need,nextTitle:next.title};
 }
 const catColors = {
-  aum_growth:'#7c5cfc',technical:'#4fc3f7',compliance:'#0984e3',
+  aum_growth:'#eda5ff',technical:'#4fc3f7',compliance:'#0984e3',
   leadership:'#fec24f',client_relations:'#fd79a8',innovation:'#00d4aa',soft_skills:'#ffb347'
 };
 const KPI_DIMS = ['revenue_contribution','client_satisfaction','task_completion_rate',
@@ -124,7 +124,7 @@ async function init() {
   const session = StaffAuth.getSession();
   if (!session || !session.empId) {
     document.getElementById('globalLoader').innerHTML =
-      '<p style="color:#ff5b5b;text-align:center;margin-top:40px">Session expired. <a href="login.html" style="color:#7c5cfc">Sign in again</a>.</p>';
+      '<p style="color:#ff5b5b;text-align:center;margin-top:40px">Session expired. <a href="login.html" style="color:#eda5ff">Sign in again</a>.</p>';
     return;
   }
   const myEmpId = session.empId;
@@ -173,7 +173,7 @@ async function init() {
   _emp = emps.find(e => e.id === targetEmpId) || emps.find(e => e.id === myEmpId);
   if (!_emp) {
     document.getElementById('globalLoader').innerHTML =
-      '<p style="color:#ff5b5b;text-align:center;margin-top:40px">Employee profile not found. Please <a href="login.html" style="color:#7c5cfc">sign in</a> again.</p>';
+      '<p style="color:#ff5b5b;text-align:center;margin-top:40px">Employee profile not found. Please <a href="login.html" style="color:#eda5ff">sign in</a> again.</p>';
     return;
   }
 
@@ -207,7 +207,7 @@ function renderTopbar() {
   const el = document.getElementById('sidebar-avatar');
   if (el) {
     el.textContent = _emp.avatar_initials || (_emp.first_name||'?')[0];
-    el.style.background = _emp.avatar_color || '#7c5cfc';
+    el.style.background = _emp.avatar_color || '#eda5ff';
   }
   const nameEl = document.getElementById('sidebar-profile-name');
   if (nameEl) nameEl.textContent = `${_emp.first_name||''} ${_emp.last_name||''}`.trim();
@@ -313,7 +313,7 @@ async function autoAwardCourseBadge(course) {
     employee_id:_emp.id,
     badge_id:`BADGE-CRS-${course.id}`,
     badge_name:`${course.title} Graduate`,
-    badge_icon:'🎓', badge_color:'#7c5cfc',
+    badge_icon:'🎓', badge_color:'#eda5ff',
     category:'milestone',
     description:`Completed the course: ${course.title}`,
     xp_awarded:50, awarded_at:new Date().toISOString(), awarded_by:'system'
@@ -605,7 +605,7 @@ async function completeModule(mod, score, xpReward) {
     employee_id:_emp.id, type:'course_complete',
     title:`Module completed: ${mod.title}`,
     body:`+${xpReward} XP earned in ${_readerCourse.title}`,
-    icon:'fa-graduation-cap', color:'#7c5cfc',
+    icon:'fa-graduation-cap', color:'#eda5ff',
     xp_shown:xpReward, is_public:false,
     created_at:new Date().toISOString()
   });
@@ -720,7 +720,7 @@ async function startAiGeneration() {
     modules_count:3, quiz_questions:3, pass_score:60,
     status:'active', ai_generated:true,
     thumbnail_icon:'fa-robot',
-    thumbnail_color: catColors[cat]||'#7c5cfc'
+    thumbnail_color: catColors[cat]||'#eda5ff'
   });
   _courses.push(course);
   await runAiGeneration(course, focus);
@@ -913,7 +913,7 @@ function renderDashboard() {
   el.innerHTML = `
     <!-- Profile Hero -->
     <div class="profile-hero">
-      <div class="hero-avatar" style="background:${_emp.avatar_color||'#7c5cfc'}">${_emp.avatar_initials||(_emp.first_name||'?')[0]}</div>
+      <div class="hero-avatar" style="background:${_emp.avatar_color||'#eda5ff'}">${_emp.avatar_initials||(_emp.first_name||'?')[0]}</div>
       <div class="hero-info">
         <h2>${_emp.first_name} ${_emp.last_name}</h2>
         <div class="hero-role">${_emp.role||''} · ${_emp.department||''}</div>
@@ -953,7 +953,7 @@ function renderDashboard() {
         <i class="fa-solid fa-poll" style="color:var(--accent2)"></i>
         <p><strong style="color:var(--accent2)">Pulse survey available</strong> — 3 quick questions, helps leadership make better decisions.</p>
       </div>` : ''}
-      ${openOoo ? `<div class="burnout-alert" style="flex:1;min-width:200px;padding:12px 16px;background:rgba(124,92,252,0.06);border-color:rgba(124,92,252,0.25);cursor:pointer" onclick="navigate('oneonone',document.querySelector('[data-view=oneonone]'))">
+      ${openOoo ? `<div class="burnout-alert" style="flex:1;min-width:200px;padding:12px 16px;background:rgba(237,165,255,0.06);border-color:rgba(237,165,255,0.25);cursor:pointer" onclick="navigate('oneonone',document.querySelector('[data-view=oneonone]'))">
         <i class="fa-solid fa-comments" style="color:var(--accent)"></i>
         <p><strong style="color:var(--accent)">1-on-1 scheduled</strong> — ${new Date(openOoo.scheduled_date).toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'short'})}</p>
       </div>` : ''}
@@ -972,7 +972,7 @@ function renderDashboard() {
         <div class="stat-card-trend up"><i class="fa-solid fa-arrow-trend-up"></i> View breakdown →</div>
       </div>
       <div class="stat-card" style="cursor:pointer" onclick="navigate('okrs',document.querySelector('[data-view=okrs]'))">
-        <div class="stat-card-icon" style="background:rgba(124,92,252,0.15);color:var(--accent)"><i class="fa-solid fa-bullseye"></i></div>
+        <div class="stat-card-icon" style="background:rgba(237,165,255,0.15);color:var(--accent)"><i class="fa-solid fa-bullseye"></i></div>
         <div class="stat-card-val">${myOkr?Math.round(Number(myOkr.overall_progress)||0)+'%':'—'}</div>
         <div class="stat-card-lbl">OKR Progress</div>
         <div class="stat-card-trend up"><i class="fa-solid fa-arrow-right"></i> View OKRs →</div>
@@ -996,7 +996,7 @@ function renderDashboard() {
     <div class="chart-container" style="padding:16px 20px">
       ${recentFeed.length ? recentFeed.map(f=>`
         <div class="feed-item">
-          <div class="feed-icon-wrap" style="background:${f.color||'#7c5cfc'}20;color:${f.color||'#7c5cfc'}">
+          <div class="feed-icon-wrap" style="background:${f.color||'#eda5ff'}20;color:${f.color||'#eda5ff'}">
             <i class="fa-solid ${f.icon||'fa-bolt'}"></i>
           </div>
           <div class="feed-body">
@@ -1017,7 +1017,7 @@ function renderDashboard() {
 
       <div class="chart-container" style="padding:20px">
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
-          <div style="width:52px;height:52px;border-radius:14px;background:${_emp.avatar_color||'#7c5cfc'};display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:800;color:#fff;flex-shrink:0">${_emp.avatar_initials||(_emp.first_name||'?')[0]}</div>
+          <div style="width:52px;height:52px;border-radius:14px;background:${_emp.avatar_color||'#eda5ff'};display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:800;color:#fff;flex-shrink:0">${_emp.avatar_initials||(_emp.first_name||'?')[0]}</div>
           <div>
             <div style="font-size:1rem;font-weight:700">${_emp.first_name} ${_emp.last_name}</div>
             <div style="font-size:0.78rem;color:var(--muted)">${_emp.role||'—'} · ${_emp.department||'—'}</div>
@@ -1095,7 +1095,7 @@ function renderDashboard() {
           const label = daysUntil === 0 ? '🎉 Today!' : daysUntil === 1 ? 'Tomorrow' : `in ${daysUntil} day${daysUntil!==1?'s':''}`;
           const dateLabel = new Date(bdStr+'T12:00:00Z').toLocaleDateString('en-ZA',{day:'numeric',month:'short'});
           return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
-            <div style="width:32px;height:32px;border-radius:50%;background:${emp.avatar_color||'#7c5cfc'};display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:800;color:#fff;flex-shrink:0">${emp.avatar_initials||(emp.first_name||'?')[0]}</div>
+            <div style="width:32px;height:32px;border-radius:50%;background:${emp.avatar_color||'#eda5ff'};display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:800;color:#fff;flex-shrink:0">${emp.avatar_initials||(emp.first_name||'?')[0]}</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${emp.first_name} ${emp.last_name}</div>
               <div style="font-size:0.72rem;color:var(--muted)">${dateLabel}</div>
@@ -1131,7 +1131,7 @@ function renderDashboard() {
       const emp = _employees.find(e => e.id === l.employee_id) || l;
       const initials = emp.avatar_initials || ((emp.first_name||'?')[0] + (emp.last_name||'')[0]).toUpperCase();
       return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
-        <div style="width:32px;height:32px;border-radius:50%;background:${emp.avatar_color||'#7c5cfc'};display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:800;color:#fff;flex-shrink:0">${initials}</div>
+        <div style="width:32px;height:32px;border-radius:50%;background:${emp.avatar_color||'#eda5ff'};display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:800;color:#fff;flex-shrink:0">${initials}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${emp.first_name||''} ${emp.last_name||''}</div>
           <div style="font-size:0.72rem;color:var(--muted)">${l.leave_type||'Leave'} · back ${l.end_date}</div>
@@ -1198,8 +1198,8 @@ function courseCardHTML(c, mode) {
   const isDone = prog?.status==='completed';
   const diffC = {beginner:'#00d4aa',intermediate:'#fec24f',advanced:'#ff6b6b'}[c.difficulty]||'#6b7280';
   return `<div class="course-card ${isDone?'completed':''}" onclick="${isDone?`openCertificateByProgress('${prog?.id}')`:`openCourse('${c.id}')`}">
-    <div class="course-banner" style="background:${c.thumbnail_color||'#7c5cfc'}20">
-      <i class="fa-solid ${c.thumbnail_icon||'fa-book'}" style="color:${c.thumbnail_color||'#7c5cfc'}"></i>
+    <div class="course-banner" style="background:${c.thumbnail_color||'#eda5ff'}20">
+      <i class="fa-solid ${c.thumbnail_icon||'fa-book'}" style="color:${c.thumbnail_color||'#eda5ff'}"></i>
       <span class="diff-badge" style="background:${diffC}20;color:${diffC}">${c.difficulty||'intermediate'}</span>
       ${isDone?`<span style="position:absolute;top:8px;left:8px;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(0,212,170,0.2);color:var(--accent2)">✓ Done</span>`:''}
     </div>
@@ -1285,8 +1285,8 @@ function drawKpiCharts(history, current) {
       datasets:[{
         label:'Overall KPI',
         data: history.map(k=>Math.round(Number(k.overall_score)||0)).reverse(),
-        borderColor:'#7c5cfc',backgroundColor:'rgba(124,92,252,0.1)',
-        fill:true, tension:0.4, pointBackgroundColor:'#7c5cfc', pointRadius:4
+        borderColor:'#eda5ff',backgroundColor:'rgba(237,165,255,0.1)',
+        fill:true, tension:0.4, pointBackgroundColor:'#eda5ff', pointRadius:4
       },{
         label:'Revenue',
         data: history.map(k=>Math.round(Number(k.revenue_contribution)||0)).reverse(),
@@ -1307,8 +1307,8 @@ function drawKpiCharts(history, current) {
       datasets:[{
         label:'This Month',
         data: KPI_DIMS.map(d=>Math.round(Number(current[d])||0)),
-        borderColor:'#7c5cfc',backgroundColor:'rgba(124,92,252,0.15)',
-        pointBackgroundColor:'#7c5cfc'
+        borderColor:'#eda5ff',backgroundColor:'rgba(237,165,255,0.15)',
+        pointBackgroundColor:'#eda5ff'
       }]
     },
     options:{responsive:true,maintainAspectRatio:false,
@@ -1478,7 +1478,7 @@ function renderFeedback() {
   const public360 = _peerFeedback.filter(f=>isTrue(f.is_public)).slice(0,20);
 
   function empName(id) { const e=_employees.find(e=>e.id===id); return e?`${e.first_name} ${e.last_name}`:'Team Member'; }
-  function empAv(id)   { const e=_employees.find(e=>e.id===id); return {init:e?.avatar_initials||'?',col:e?.avatar_color||'#7c5cfc'}; }
+  function empAv(id)   { const e=_employees.find(e=>e.id===id); return {init:e?.avatar_initials||'?',col:e?.avatar_color||'#eda5ff'}; }
 
   const el = document.getElementById('view-feedback');
   el.innerHTML = `
@@ -1541,7 +1541,7 @@ function switchFeedbackTab(tab, btn) {
   const given    = _peerFeedback.filter(f=>f.from_employee_id===_emp.id);
   const teamPub  = _peerFeedback.filter(f=>isTrue(f.is_public)&&f.type==='kudos').slice(0,20);
   function empName(id) { const e=_employees.find(e=>e.id===id); return e?`${e.first_name} ${e.last_name}`:'Team Member'; }
-  function empAv(id)   { const e=_employees.find(e=>e.id===id); return {init:e?.avatar_initials||'?',col:e?.avatar_color||'#7c5cfc'}; }
+  function empAv(id)   { const e=_employees.find(e=>e.id===id); return {init:e?.avatar_initials||'?',col:e?.avatar_color||'#eda5ff'}; }
   const list = tab==='received'?received:tab==='given'?given:teamPub;
   panel.innerHTML = list.map(f=>{
     const av = empAv(tab==='received'?f.from_employee_id:tab==='given'?f.to_employee_id:f.from_employee_id);
@@ -1840,7 +1840,7 @@ function renderPaths() {
       const pct=total?Math.round(done/total*100):0;
       return `<div class="path-card">
         <div class="path-header">
-          <div class="path-icon" style="background:${path.thumbnail_color||'#7c5cfc'}20;color:${path.thumbnail_color||'#7c5cfc'}">
+          <div class="path-icon" style="background:${path.thumbnail_color||'#eda5ff'}20;color:${path.thumbnail_color||'#eda5ff'}">
             <i class="fa-solid ${path.thumbnail_icon||'fa-road'}"></i>
           </div>
           <div class="path-info">
@@ -1858,7 +1858,7 @@ function renderPaths() {
             <div style="font-size:0.68rem;color:var(--muted)">${done}/${total} done</div>
           </div>
         </div>
-        <div class="kpi-track"><div class="kpi-fill" style="width:${pct}%;background:${path.thumbnail_color||'#7c5cfc'}"></div></div>
+        <div class="kpi-track"><div class="kpi-fill" style="width:${pct}%;background:${path.thumbnail_color||'#eda5ff'}"></div></div>
         <div class="path-steps mt-1">
           ${courseIds.map((cid,i)=>{
             const c=_courses.find(x=>x.id===cid)||{title:cid};
@@ -1903,7 +1903,7 @@ function renderActivityFeed() {
     <div class="chart-container" style="padding:16px 20px">
       ${feed.length ? feed.map(f=>`
         <div class="feed-item">
-          <div class="feed-icon-wrap" style="background:${f.color||'#7c5cfc'}20;color:${f.color||'#7c5cfc'}">
+          <div class="feed-icon-wrap" style="background:${f.color||'#eda5ff'}20;color:${f.color||'#eda5ff'}">
             <i class="fa-solid ${f.icon||'fa-bolt'}"></i>
           </div>
           <div class="feed-body">
@@ -2113,7 +2113,7 @@ function renderMyAchievements() {
         <div class="stat-card-lbl">Badges Earned</div>
       </div>
       <div class="stat-card">
-        <div class="stat-card-icon" style="background:rgba(124,92,252,0.15);color:var(--accent)"><i class="fa-solid fa-star"></i></div>
+        <div class="stat-card-icon" style="background:rgba(237,165,255,0.15);color:var(--accent)"><i class="fa-solid fa-star"></i></div>
         <div class="stat-card-val">${Number(_emp.xp_points)||0}</div>
         <div class="stat-card-lbl">Total XP</div>
       </div>
@@ -2138,9 +2138,9 @@ function renderMyAchievements() {
     </div>
     <div class="section-head mt-2"><i class="fa-solid fa-graduation-cap"></i> Course Certificates (${_progress.filter(p=>p.status==='completed').length})</div>
     ${_progress.filter(p=>p.status==='completed').map(p=>{
-      const c=_courses.find(x=>x.id===p.course_id)||{title:p.course_id,thumbnail_icon:'fa-book',thumbnail_color:'#7c5cfc'};
+      const c=_courses.find(x=>x.id===p.course_id)||{title:p.course_id,thumbnail_icon:'fa-book',thumbnail_color:'#eda5ff'};
       return `<div class="wellbeing-card" style="display:flex;align-items:center;gap:14px;cursor:pointer" onclick="openCertificateByProgress('${p.id}')">
-        <i class="fa-solid ${c.thumbnail_icon||'fa-book'}" style="font-size:1.3rem;color:${c.thumbnail_color||'#7c5cfc'}"></i>
+        <i class="fa-solid ${c.thumbnail_icon||'fa-book'}" style="font-size:1.3rem;color:${c.thumbnail_color||'#eda5ff'}"></i>
         <div style="flex:1">
           <div style="font-weight:700;font-size:0.88rem">${c.title}</div>
           <div style="font-size:0.72rem;color:var(--muted)">Completed ${p.completed_at?timeAgo(p.completed_at):'recently'}</div>
@@ -2543,7 +2543,7 @@ function renderProfile() {
                const [yr, mo] = p.pay_period.split('-');
                const moLabel = ['January','February','March','April','May','June','July','August','September','October','November','December'][(parseInt(mo,10)||1)-1] || mo;
                return `<div style="display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--border)">
-                 <div style="width:36px;height:36px;border-radius:9px;background:rgba(124,92,252,0.08);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                 <div style="width:36px;height:36px;border-radius:9px;background:rgba(237,165,255,0.08);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0">
                    <i class="fa-solid fa-file-invoice-dollar"></i>
                  </div>
                  <div style="flex:1">
@@ -2956,7 +2956,7 @@ function renderCalendarView(container, leaveList, year, month) {
       id: l.employee_id,
       first_name: l.first_name || 'Employee',
       last_name:  l.last_name || '',
-      avatar_color: l.avatar_color || '#7c5cfc',
+      avatar_color: l.avatar_color || '#eda5ff',
       avatar_initials: l.avatar_initials || ((l.first_name||'E')[0] + (l.last_name||'')[0]).toUpperCase(),
     };
     // Iterate every calendar day in the leave range using UTC noon to stay
@@ -3013,7 +3013,7 @@ function renderCalendarView(container, leaveList, year, month) {
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
       <span style="font-size:0.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Team:</span>
       ${_employees.map(e=>`<div style="display:flex;align-items:center;gap:5px;font-size:0.75rem">
-        <div style="width:10px;height:10px;border-radius:50%;background:${e.avatar_color||'#7c5cfc'}"></div>
+        <div style="width:10px;height:10px;border-radius:50%;background:${e.avatar_color||'#eda5ff'}"></div>
         ${e.first_name}
       </div>`).join('')}
       <span style="margin-left:8px;font-size:0.72rem;color:var(--muted)">|</span>
@@ -3039,7 +3039,7 @@ function renderCalendarView(container, leaveList, year, month) {
           const bdays   = bdMap[dateStr] || [];
           const isWeekend = new Date(dateStr).getDay()===0||new Date(dateStr).getDay()===6;
           return `<div style="min-height:80px;border:1px solid var(--border);padding:6px 8px;
-              background:${isToday?'rgba(124,92,252,0.12)':isWeekend?'rgba(255,255,255,0.01)':'transparent'};
+              background:${isToday?'rgba(237,165,255,0.12)':isWeekend?'rgba(255,255,255,0.01)':'transparent'};
               position:relative">
             <div style="font-size:0.8rem;font-weight:${isToday?'800':'600'};color:${isToday?'var(--accent)':'var(--text)'}">
               ${d}
@@ -3049,7 +3049,7 @@ function renderCalendarView(container, leaveList, year, month) {
             </div>`).join('')}
             ${onLeave.slice(0,3).map(({emp,leave})=>`
               <div title="${emp.first_name} ${emp.last_name} — ${leave.leave_type}" style="font-size:0.65rem;border-radius:4px;padding:1px 5px;margin-top:2px;
-                   background:${emp.avatar_color||'#7c5cfc'}25;color:${emp.avatar_color||'#7c5cfc'};
+                   background:${emp.avatar_color||'#eda5ff'}25;color:${emp.avatar_color||'#eda5ff'};
                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
                 ${emp.avatar_initials||emp.first_name[0]}  ${emp.first_name}
               </div>`).join('')}
@@ -3074,7 +3074,7 @@ function renderCalendarView(container, leaveList, year, month) {
           const emp=_employees.find(e=>e.id===l.employee_id)||{ first_name:l.first_name, last_name:l.last_name, avatar_color:l.avatar_color, avatar_initials:l.avatar_initials };
           const sc={approved:'chip-green',pending:'chip-gold',rejected:'chip-red'};
           return `<div class="kudos-card">
-            <div class="kudos-avatar" style="background:${emp.avatar_color||'#7c5cfc'}">${emp.avatar_initials||'?'}</div>
+            <div class="kudos-avatar" style="background:${emp.avatar_color||'#eda5ff'}">${emp.avatar_initials||'?'}</div>
             <div class="kudos-body">
               <div class="kudos-top">
                 <span class="kudos-from">${emp.first_name||''} ${emp.last_name||''}</span>
@@ -3172,7 +3172,7 @@ function showXpPopup(amount) {
 }
 
 function launchConfetti() {
-  const cols=['#7c5cfc','#00d4aa','#fec24f','#ff6b6b','#4fc3f7'];
+  const cols=['#eda5ff','#00d4aa','#fec24f','#ff6b6b','#4fc3f7'];
   for(let i=0;i<60;i++) {
     const el=document.createElement('div');
     el.className='confetti-piece';
@@ -3244,7 +3244,7 @@ const HELP_CONTENT = {
     icon: 'fa-house',
     intro: 'Your personal command centre. Everything important at a glance.',
     sections: [
-      { heading: 'Profile Hero', icon: 'fa-user-circle', color: '#7c5cfc',
+      { heading: 'Profile Hero', icon: 'fa-user-circle', color: '#eda5ff',
         text: 'Shows your name, role, current XP level, and daily streak. The XP bar at the top tracks your progress to the next level. Click the avatar (bottom of sidebar) to jump to Achievements.' },
       { heading: 'Smart Notifications', icon: 'fa-bell', color: '#fec24f',
         text: 'Context-aware reminders appear here automatically — daily check-in reminder, active pulse surveys, upcoming 1-on-1s, and wellbeing alerts (3+ stressed check-ins triggers a burnout warning).' },
@@ -3259,7 +3259,7 @@ const HELP_CONTENT = {
     icon: 'fa-book-open',
     intro: 'Your learning library. Complete courses to earn XP, boost KPI dimensions, and unlock certificates.',
     sections: [
-      { heading: 'Course Cards', icon: 'fa-layer-group', color: '#7c5cfc',
+      { heading: 'Course Cards', icon: 'fa-layer-group', color: '#eda5ff',
         text: 'Each card shows: title, category, difficulty, estimated time, XP reward, and which KPI dimension it boosts. Colour-coded by category (purple = AUM Growth, teal = Innovation, pink = Client Relations, etc.).' },
       { heading: 'Starting a Course', icon: 'fa-play', color: '#00d4aa',
         text: 'Click "Start Course" or "Continue" to open the Course Reader. Use the left panel to jump between modules. Complete the quiz at the end of each module to progress.' },
@@ -3267,7 +3267,7 @@ const HELP_CONTENT = {
         text: 'Each module ends with a multiple-choice quiz. You need to score above the pass mark (usually 70%) to complete the module and earn XP. You can retry if you don\'t pass.' },
       { heading: 'Certificates', icon: 'fa-certificate', color: '#e84393',
         text: 'Completing a full course generates a certificate with your name, date, and a unique certificate ID. View all certificates in the Achievements view.' },
-      { heading: 'AI Course Generator', icon: 'fa-robot', color: '#7c5cfc',
+      { heading: 'AI Course Generator', icon: 'fa-robot', color: '#eda5ff',
         text: 'Click "Generate with AI" to create a personalised 3-module course on any topic. Enter a title, focus area, category and the KPI you want to boost. The system generates full lesson content and quizzes tailored to your role in seconds.' },
     ]
   },
@@ -3289,7 +3289,7 @@ const HELP_CONTENT = {
     icon: 'fa-chart-bar',
     intro: 'Your 8 performance dimensions tracked monthly. KPIs directly determine your individual EVA bonus share.',
     sections: [
-      { heading: '8 KPI Dimensions', icon: 'fa-sliders', color: '#7c5cfc',
+      { heading: '8 KPI Dimensions', icon: 'fa-sliders', color: '#eda5ff',
         text: 'Revenue Contribution, Client Satisfaction, Task Completion, Response Time, Compliance Score, Innovation Score, Team Collaboration, and Attendance. Each scored 0–100.' },
       { heading: 'How Scores are Set', icon: 'fa-pen', color: '#fec24f',
         text: 'Your manager scores you monthly in the Team Dashboard. You can boost your own scores by: completing courses (auto-boost), completing OKRs (+10 pts), giving kudos, and maintaining daily check-in streaks (attendance).' },
@@ -3304,7 +3304,7 @@ const HELP_CONTENT = {
     icon: 'fa-bullseye',
     intro: 'Objectives and Key Results. Set your goals, track progress, and earn XP + KPI boosts on completion.',
     sections: [
-      { heading: 'What is an OKR?', icon: 'fa-info-circle', color: '#7c5cfc',
+      { heading: 'What is an OKR?', icon: 'fa-info-circle', color: '#eda5ff',
         text: 'An Objective is a qualitative goal ("I want to improve client satisfaction"). Key Results are measurable milestones that prove you\'ve hit it (3 per objective). When all 3 KRs reach 100%, the OKR is complete.' },
       { heading: 'Creating an OKR', icon: 'fa-plus', color: '#00d4aa',
         text: 'Click "+ New OKR". Set your objective, add 3 key results with targets, and link it to a KPI dimension. Each OKR completion auto-boosts that KPI by +10 points and awards +100 XP.' },
@@ -3319,7 +3319,7 @@ const HELP_CONTENT = {
     sections: [
       { heading: 'Giving Kudos', icon: 'fa-heart', color: '#e84393',
         text: 'Select a colleague, choose a KPI dimension their work exemplifies, write a message, and send. You earn +25 XP for every kudos you give. Kudos are visible on the team wall (if marked public).' },
-      { heading: '360° Feedback', icon: 'fa-circle-nodes', color: '#7c5cfc',
+      { heading: '360° Feedback', icon: 'fa-circle-nodes', color: '#eda5ff',
         text: 'Request structured feedback from peers across multiple KPI dimensions, with a 1–5 rating and comments. This helps build a more accurate picture of your performance.' },
       { heading: 'Received / Given / Team Wall Tabs', icon: 'fa-tab', color: '#00d4aa',
         text: 'Switch between feedback you\'ve received, feedback you\'ve given, and the public team kudos wall where everyone\'s recognition is visible.' },
@@ -3330,7 +3330,7 @@ const HELP_CONTENT = {
     icon: 'fa-poll',
     intro: 'A quick weekly survey to measure team health, engagement, and satisfaction.',
     sections: [
-      { heading: 'The Survey', icon: 'fa-clipboard-list', color: '#7c5cfc',
+      { heading: 'The Survey', icon: 'fa-clipboard-list', color: '#eda5ff',
         text: 'Each week contains 3 short questions plus an eNPS (Employee Net Promoter Score) question. Surveys take 2–3 minutes. Complete it to earn +20 XP.' },
       { heading: 'eNPS', icon: 'fa-chart-bar', color: '#00d4aa',
         text: 'On a scale of 0–10, how likely are you to recommend SV Capital as a great place to work? This is the Employee Net Promoter Score — a global standard metric for employee engagement.' },
@@ -3343,7 +3343,7 @@ const HELP_CONTENT = {
     icon: 'fa-comments',
     intro: 'Structured one-on-one meetings with your manager. Track agendas, action items, and notes.',
     sections: [
-      { heading: 'Upcoming & Past Meetings', icon: 'fa-calendar', color: '#7c5cfc',
+      { heading: 'Upcoming & Past Meetings', icon: 'fa-calendar', color: '#eda5ff',
         text: 'Upcoming meetings show the date, agenda, and any topics you\'ve submitted. Past meetings show outcomes, manager notes, and action items.' },
       { heading: 'Action Items', icon: 'fa-check-square', color: '#00d4aa',
         text: 'Action items from 1-on-1s appear here. Tick them off when done — each completed action earns +10 XP. Your manager tracks completion rates.' },
@@ -3373,7 +3373,7 @@ const HELP_CONTENT = {
     icon: 'fa-calendar-days',
     intro: 'Submit, track and manage your leave requests.',
     sections: [
-      { heading: 'Leave Types', icon: 'fa-tags', color: '#7c5cfc',
+      { heading: 'Leave Types', icon: 'fa-tags', color: '#eda5ff',
         text: 'Annual Leave, Sick Leave, Study Leave, Family Responsibility Leave, and Unpaid Leave. Each type has different balances and EVA implications.' },
       { heading: 'EVA Impact', icon: 'fa-chart-line', color: '#e84393',
         text: 'Extended leave can reduce your EVA bonus share for that period. The "EVA Impact %" shown on each request indicates the reduction. This resets next period.' },
@@ -3390,7 +3390,7 @@ const HELP_CONTENT = {
     sections: [
       { heading: 'Earning Badges', icon: 'fa-medal', color: '#fec24f',
         text: 'Badges are awarded automatically for milestones: completing 5 courses, 7-day streak, giving 10 kudos, 100% OKR completion, and more. Each badge awards bonus XP.' },
-      { heading: 'Certificates', icon: 'fa-certificate', color: '#7c5cfc',
+      { heading: 'Certificates', icon: 'fa-certificate', color: '#eda5ff',
         text: 'Every completed course generates a certificate. Click any certificate to open the printable PDF-ready certificate overlay with your name, date, and unique ID.' },
       { heading: 'XP & Levels', icon: 'fa-star', color: '#00d4aa',
         text: 'Analyst (0) → Associate (500) → Senior (1,200) → Lead (2,500) → Director (4,500) → MVP (7,000). Your level is displayed on your profile and the leaderboard.' },
@@ -3401,7 +3401,7 @@ const HELP_CONTENT = {
     icon: 'fa-bolt',
     intro: 'A chronological record of all your XP events, milestones, and notable actions.',
     sections: [
-      { heading: 'What Appears Here', icon: 'fa-list', color: '#7c5cfc',
+      { heading: 'What Appears Here', icon: 'fa-list', color: '#eda5ff',
         text: 'Course completions, badges earned, kudos given and received, OKR milestones, level-ups, streak milestones, and onboarding steps. All timestamped.' },
       { heading: 'Public vs Private', icon: 'fa-eye', color: '#00d4aa',
         text: 'Some events are public (visible to the whole team on the team dashboard) — like level-ups and badges. Others are private — like personal notes and journal entries.' },
@@ -3412,7 +3412,7 @@ const HELP_CONTENT = {
     icon: 'fa-pen-to-square',
     intro: 'Your completely private digital journal. Reflect, plan, and write freely.',
     sections: [
-      { heading: 'Privacy', icon: 'fa-lock', color: '#7c5cfc',
+      { heading: 'Privacy', icon: 'fa-lock', color: '#eda5ff',
         text: '100% private. No manager, director, or admin can see your journal entries. This is your personal space.' },
       { heading: 'Creating Notes', icon: 'fa-plus', color: '#00d4aa',
         text: 'Click "New Note" to open the editor. Add a title, write your content, and choose whether to pin it. Pinned notes appear at the top of your journal.' },
@@ -3425,7 +3425,7 @@ const HELP_CONTENT = {
     icon: 'fa-money-bill-trend-up',
     intro: 'Your transparent payslip-style breakdown of how your EVA bonus is calculated.',
     sections: [
-      { heading: 'The Formula', icon: 'fa-calculator', color: '#7c5cfc',
+      { heading: 'The Formula', icon: 'fa-calculator', color: '#eda5ff',
         text: 'Gross Revenue = Total AUM × 2.5%. EVA Pool = Revenue − Costs. Team Pool = EVA Pool × 50%. Your share = (KPI Score × EVA Weight) / All Weights × Individual Pool + Collective Pool / Headcount.' },
       { heading: 'Individual vs Collective', icon: 'fa-users', color: '#00d4aa',
         text: '60% of the Team Pool is split based on KPI performance (weighted). The other 40% is split equally among all active employees — the "collective" share. You earn both.' },
@@ -3440,7 +3440,7 @@ const HELP_CONTENT = {
     icon: 'fa-id-card',
     intro: 'Your personal and banking details. Keep everything up to date for accurate EVA payments.',
     sections: [
-      { heading: 'Personal Details', icon: 'fa-user', color: '#7c5cfc',
+      { heading: 'Personal Details', icon: 'fa-user', color: '#eda5ff',
         text: 'Your name, email, phone, date of birth, and SA ID number. The ID number determines your login PIN (last 4 digits). Keep this accurate.' },
       { heading: 'Banking Details', icon: 'fa-building-columns', color: '#00d4aa',
         text: 'Your bank account details for EVA bonus payments. Account number is masked for security (•••••1234). Click Edit to update. Upload proof of banking using the upload button.' },
@@ -3455,7 +3455,7 @@ const HELP_CONTENT = {
     icon: 'fa-calendar-days',
     intro: 'Full team leave visibility. See who is off when and plan accordingly.',
     sections: [
-      { heading: 'The Monthly Grid', icon: 'fa-calendar', color: '#7c5cfc',
+      { heading: 'The Monthly Grid', icon: 'fa-calendar', color: '#eda5ff',
         text: 'A full month grid showing all approved leave. Each employee has a unique colour. Leave blocks span the correct days. Use the arrows to navigate months.' },
       { heading: 'Birthday Overlays', icon: 'fa-birthday-cake', color: '#fec24f',
         text: 'A 🎂 chip appears on each team member\'s birthday. The "Birthdays This Month" section below the grid lists everyone celebrating this month.' },
@@ -3497,8 +3497,8 @@ function renderHelpContent(view) {
 
   body.innerHTML = `
     <!-- View intro -->
-    <div style="background:rgba(124,92,252,0.08);border:1px solid rgba(124,92,252,0.15);border-radius:12px;padding:14px 16px;margin-bottom:20px;display:flex;gap:12px;align-items:flex-start">
-      <i class="fa-solid ${content.icon}" style="color:#7c5cfc;font-size:1rem;margin-top:2px;flex-shrink:0"></i>
+    <div style="background:rgba(237,165,255,0.08);border:1px solid rgba(237,165,255,0.15);border-radius:12px;padding:14px 16px;margin-bottom:20px;display:flex;gap:12px;align-items:flex-start">
+      <i class="fa-solid ${content.icon}" style="color:#eda5ff;font-size:1rem;margin-top:2px;flex-shrink:0"></i>
       <div>
         <div style="font-size:0.88rem;font-weight:800;color:#e8eaf6;margin-bottom:4px">${content.title}</div>
         <div style="font-size:0.78rem;color:#9ca3af;line-height:1.6">${content.intro}</div>
@@ -3521,7 +3521,7 @@ function renderHelpContent(view) {
       <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#6b7280;margin-bottom:10px">Jump to view</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">
         ${Object.entries(HELP_CONTENT).map(([key, hc]) => `
-          <button onclick="navigate('${key}',document.querySelector('[data-view=${key}]'));toggleHelpPanel();" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:4px 10px;font-size:0.72rem;font-weight:600;color:#9ca3af;cursor:pointer;font-family:inherit;transition:all 0.15s" onmouseover="this.style.background='rgba(124,92,252,0.12)';this.style.color='#c4b5fd'" onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.color='#9ca3af'">
+          <button onclick="navigate('${key}',document.querySelector('[data-view=${key}]'));toggleHelpPanel();" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:4px 10px;font-size:0.72rem;font-weight:600;color:#9ca3af;cursor:pointer;font-family:inherit;transition:all 0.15s" onmouseover="this.style.background='rgba(237,165,255,0.12)';this.style.color='#eda5ff'" onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.color='#9ca3af'">
             <i class="fa-solid ${hc.icon}" style="margin-right:4px;font-size:0.68rem"></i>${hc.title}
           </button>
         `).join('')}
@@ -3881,7 +3881,7 @@ function renderPayslips() {
     <!-- YTD KPI tiles -->
     <div class="cards-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
       <div class="stat-card">
-        <div class="stat-card-icon" style="background:rgba(124,92,252,0.15);color:var(--accent)"><i class="fa-solid fa-coins"></i></div>
+        <div class="stat-card-icon" style="background:rgba(237,165,255,0.15);color:var(--accent)"><i class="fa-solid fa-coins"></i></div>
         <div class="stat-card-val">R ${ytdGross.toLocaleString('en-ZA',{maximumFractionDigits:0})}</div>
         <div class="stat-card-lbl">Gross Pay YTD ${ytdYear}</div>
       </div>
@@ -3932,7 +3932,7 @@ function renderPayslips() {
                  const eva    = Number(p.eva_bonus) || 0;
                  const ded    = gross - nett;
                  const st     = p.status || 'pending';
-                 const stCol  = st === 'paid' ? '#00d4aa' : st === 'finalised' ? '#7c5cfc' : '#fec24f';
+                 const stCol  = st === 'paid' ? '#00d4aa' : st === 'finalised' ? '#eda5ff' : '#fec24f';
                  return `<tr>
                    <td style="font-weight:700">${moLabel} ${yr}</td>
                    <td>R ${base.toLocaleString('en-ZA',{maximumFractionDigits:2})}</td>
@@ -4074,7 +4074,7 @@ function renderEmpCmdResults(q) {
       html += `<div class="emp-cmd-item" data-idx="${idx}"
         style="display:flex;align-items:center;gap:12px;padding:9px 14px;cursor:pointer;border-radius:8px;margin:0 6px;transition:background 0.12s"
         onmouseover="empCmdHover(${idx})" onclick="empCmdSelect(${idx})">
-        <i class="fa-solid ${item.icon}" style="width:16px;text-align:center;color:rgba(124,92,252,0.85);font-size:0.85rem"></i>
+        <i class="fa-solid ${item.icon}" style="width:16px;text-align:center;color:rgba(237,165,255,0.85);font-size:0.85rem"></i>
         <span style="font-size:0.88rem;color:#e2e4f0">${item.label}</span>
       </div>`;
     });
@@ -4087,7 +4087,7 @@ function renderEmpCmdResults(q) {
 function empCmdHover(idx) {
   _empCmdActive = idx;
   document.querySelectorAll('#empCmdList .emp-cmd-item').forEach(el => {
-    el.style.background = +el.dataset.idx === idx ? 'rgba(124,92,252,0.15)' : '';
+    el.style.background = +el.dataset.idx === idx ? 'rgba(237,165,255,0.15)' : '';
   });
 }
 

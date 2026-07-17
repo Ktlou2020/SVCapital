@@ -7890,7 +7890,7 @@ const SA_TYPE_META = {
   },
   trust:    {
     icon: 'fa-scale-balanced',  label: 'Trust',
-    color: '#7c5cfc',           bg: 'linear-gradient(135deg,#4c1d95 0%,#2563eb 100%)',
+    color: '#eda5ff',           bg: 'linear-gradient(135deg,#4c1d95 0%,#2563eb 100%)',
     tagline: 'Invest through a family or business trust',
     ficaDocs: ['Trust Deed (certified copy)', 'Letters of Authority (Master of Court)', 'Trustee(s) ID documents', 'Trust tax clearance certificate'],
   },

@@ -384,7 +384,7 @@ function renderRunTypeChart() {
   const types = {};
   S.runs.forEach(r => { const t=r.product_type||'other'; types[t]=(types[t]||0)+1; });
   if (!Object.keys(types).length) return;
-  const colors = { cattle:'#fec24f', solar_7yr:'#22c55e', solar_6yr:'#16a34a', solar_5yr:'#15803d', short_term:'#656565', delivery_bike:'#a855f7', other:'#94a3b8' };
+  const colors = { cattle:'#fec24f', solar_7yr:'#22c55e', solar_6yr:'#16a34a', solar_5yr:'#15803d', short_term:'#656565', delivery_bike:'#eda5ff', other:'#94a3b8' };
   if (S.charts.runType) S.charts.runType.destroy();
   S.charts.runType = new Chart(ctx, {
     type: 'doughnut',
@@ -490,7 +490,7 @@ function renderPortfolioComposition() {
     {label:'Cattle Finance', val:cattleDep, color:'#74c69d', icon:'fa-cow', active:(S.cattle||[]).filter(c=>['active','in_progress'].includes(c.status)).length},
     {label:'Solar Finance',  val:solarDep,  color:'#fec24f', icon:'fa-solar-panel', active:(S.solar||[]).filter(p=>p.status==='active').length},
     {label:'Short-Term Loans',val:loansDep, color:'#656565', icon:'fa-hand-holding-dollar', active:(S.loans||[]).filter(l=>l.status==='active').length},
-    {label:'Fund Runs',      val:runsDep,   color:'#c084fc', icon:'fa-play-circle', active:(S.runs||[]).filter(r=>r.status==='in_progress').length},
+    {label:'Fund Runs',      val:runsDep,   color:'#eda5ff', icon:'fa-play-circle', active:(S.runs||[]).filter(r=>r.status==='in_progress').length},
   ].filter(s=>s.val>0);
 
   const deployedPct = totalRaised > 0 ? (totalDep/totalRaised*100).toFixed(1) : 0;
@@ -498,7 +498,7 @@ function renderPortfolioComposition() {
 
   el.innerHTML = `
     <div class="panel__hd">
-      <div><div class="panel__title"><i class="fa-solid fa-layer-group" style="color:#c084fc;margin-right:8px"></i>Portfolio Composition — Live Deployment</div>
+      <div><div class="panel__title"><i class="fa-solid fa-layer-group" style="color:#eda5ff;margin-right:8px"></i>Portfolio Composition — Live Deployment</div>
       <div class="panel__sub">Portfolio AUM: ${fmt.rand(totalAUM)} · ${deployedPct}% of raised capital deployed across ${segments.length} product${segments.length!==1?'s':''}</div></div>
     </div>
     <div class="panel__bd">
@@ -516,9 +516,9 @@ function renderPortfolioComposition() {
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.4);margin-bottom:5px">Undeployed</div>
           <div style="font-size:18px;font-weight:900;color:#74c69d">${fmt.rand(undeployed)}</div>
         </div>
-        <div style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.2);border-radius:10px;padding:14px;text-align:center">
+        <div style="background:rgba(237,165,255,.08);border:1px solid rgba(237,165,255,.2);border-radius:10px;padding:14px;text-align:center">
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.4);margin-bottom:5px">Investor AUM</div>
-          <div style="font-size:18px;font-weight:900;color:#c084fc">${fmt.rand(totalAUM)}</div>
+          <div style="font-size:18px;font-weight:900;color:#eda5ff">${fmt.rand(totalAUM)}</div>
         </div>
       </div>
       ${segments.length ? `<div style="display:flex;flex-direction:column;gap:14px">
@@ -1652,7 +1652,7 @@ function renderAuditTable() {
   const sevColors = { info:'#656565', warning:'#fb923c', critical:'#f87171' };
   const sevIcons  = { info:'fa-circle-info', warning:'fa-triangle-exclamation', critical:'fa-circle-xmark' };
   const typeIcons = { fund_run:'fa-play-circle', solar_project:'fa-solar-panel', loan:'fa-hand-holding-dollar', cattle:'fa-cow', pool:'fa-layer-group', schedule:'fa-calendar-days', auth:'fa-key', system:'fa-robot' };
-  const actionColors = { create:'#74c69d', update:'#fec24f', delete:'#f87171', status_change:'#656565', approve:'#74c69d', reject:'#f87171', export:'#a78bfa', login:'#656565', logout:'rgba(255,255,255,.4)', mark_paid:'#74c69d', calculate_returns:'#fec24f' };
+  const actionColors = { create:'#74c69d', update:'#fec24f', delete:'#f87171', status_change:'#656565', approve:'#74c69d', reject:'#f87171', export:'#eda5ff', login:'#656565', logout:'rgba(255,255,255,.4)', mark_paid:'#74c69d', calculate_returns:'#fec24f' };
 
   el.innerHTML = data.map(e => {
     const ts   = e.event_at || e.created_at;
@@ -1786,7 +1786,7 @@ function renderAllocationsView() {
   }
 
   const statusColors  = { active:'badge--green', committed:'badge--blue', matured:'badge--purple', defaulted:'badge--red', cancelled:'badge--gray' };
-  const productColors = { cattle:'#74c69d', solar_7yr:'#fec24f', solar_6yr:'#fec24f', solar_5yr:'#fcd34d', short_term:'#656565', fund_run:'#a78bfa' };
+  const productColors = { cattle:'#74c69d', solar_7yr:'#fec24f', solar_6yr:'#fec24f', solar_5yr:'#fcd34d', short_term:'#656565', fund_run:'#eda5ff' };
   const productIcons  = { cattle:'fa-cow', solar_7yr:'fa-solar-panel', solar_6yr:'fa-solar-panel', solar_5yr:'fa-solar-panel', short_term:'fa-hand-holding-dollar', fund_run:'fa-play-circle' };
 
   el.innerHTML = data.map(a => {
@@ -1844,7 +1844,7 @@ function renderAllocByInvestor() {
     const totalExp  = inv.items.reduce((s,x) => s+(parseFloat(x.expected_payout)||0), 0);
     const activeCount = inv.items.filter(x => x.status==='active').length;
     const products = [...new Set(inv.items.map(x => x.product_type))];
-    const productColors = { cattle:'#74c69d', solar_7yr:'#fec24f', solar_6yr:'#fec24f', solar_5yr:'#fcd34d', short_term:'#656565', fund_run:'#a78bfa' };
+    const productColors = { cattle:'#74c69d', solar_7yr:'#fec24f', solar_6yr:'#fec24f', solar_5yr:'#fcd34d', short_term:'#656565', fund_run:'#eda5ff' };
     return `
     <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
       <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--teal));display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;flex-shrink:0">${fmt.initials(inv.name)}</div>
@@ -2041,7 +2041,7 @@ function buildForecast({ schedules, solar, loans, cattle, runs, pools, allocs })
     if (!b) return;
     const amount = parseFloat(r.capital_deployed)||0;
     b.inflows += amount;
-    b.items.push({ type:'inflow', label:`Fund Run Return: ${r.run_name}`, amount, product:'fund_run', date: r.end_date, icon:'fa-play-circle', color:'#a78bfa' });
+    b.items.push({ type:'inflow', label:`Fund Run Return: ${r.run_name}`, amount, product:'fund_run', date: r.end_date, icon:'fa-play-circle', color:'#eda5ff' });
     events.push({ bucket: b.key, direction:'inflow', label:`Run Return: ${r.run_name}`, amount, product:'fund_run', date: r.end_date });
   });
 
@@ -2171,7 +2171,7 @@ async function loadIntelligence() {
   const el = document.getElementById('intelligenceContent');
   if (!el) return;
   el.innerHTML = `<div class="panel"><div class="panel__bd" style="padding:60px;text-align:center;color:rgba(255,255,255,.4)">
-    <i class="fa-solid fa-spinner fa-spin" style="font-size:32px;margin-bottom:14px;color:#c084fc"></i>
+    <i class="fa-solid fa-spinner fa-spin" style="font-size:32px;margin-bottom:14px;color:#eda5ff"></i>
     <p style="margin:0;font-size:13px">Analysing fund data…</p></div></div>`;
 
   try {
@@ -2440,9 +2440,9 @@ function renderIntelligenceView(ctx) {
   /* ── KPI row ── */
   const kpiRow = `
   <div class="stats-grid stats-grid--4 mb-20">
-    <div class="kpi" style="background:linear-gradient(135deg,#0d1832,#1a2040);border-color:rgba(168,85,247,.2)">
-      <div class="kpi__head"><div class="kpi__icon" style="background:rgba(168,85,247,.15)"><i class="fa-solid fa-wallet" style="color:#c084fc"></i></div><span class="kpi__trend" style="color:#c084fc">${ctx.availablePct.toFixed(1)}% of AUM</span></div>
-      <div class="kpi__value" style="color:#c084fc">${fmt.rand(ctx.availableBalance)}</div>
+    <div class="kpi" style="background:linear-gradient(135deg,#0d1832,#1a2040);border-color:rgba(237,165,255,.2)">
+      <div class="kpi__head"><div class="kpi__icon" style="background:rgba(237,165,255,.15)"><i class="fa-solid fa-wallet" style="color:#eda5ff"></i></div><span class="kpi__trend" style="color:#eda5ff">${ctx.availablePct.toFixed(1)}% of AUM</span></div>
+      <div class="kpi__value" style="color:#eda5ff">${fmt.rand(ctx.availableBalance)}</div>
       <div class="kpi__label">Available to Deploy</div>
     </div>
     <div class="kpi" style="border-color:rgba(${ctx.liquidityStatus==='healthy'?'116,198,157':ctx.liquidityStatus==='watch'?'251,146,60':'248,113,113'},.2)">
@@ -2466,7 +2466,7 @@ function renderIntelligenceView(ctx) {
   const balancePanel = `
   <div class="panel mb-20">
     <div class="panel__hd">
-      <div><div class="panel__title"><i class="fa-solid fa-scale-balanced" style="color:#c084fc;margin-right:8px"></i>Capital Balance Breakdown</div>
+      <div><div class="panel__title"><i class="fa-solid fa-scale-balanced" style="color:#eda5ff;margin-right:8px"></i>Capital Balance Breakdown</div>
       <div class="panel__sub">As of ${ctx.asOf}</div></div>
     </div>
     <div class="panel__bd">
@@ -2486,9 +2486,9 @@ function renderIntelligenceView(ctx) {
           <div style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.4);margin-bottom:6px">Obligations Reserve (90d + 10%)</div>
           <div style="font-size:20px;font-weight:800;color:#fb923c">${fmt.rand(ctx.liquidityBuffer)}</div>
         </div>
-        <div style="background:linear-gradient(135deg,#1a0d2e,#160b25);border-radius:10px;padding:14px 16px;border:1px solid rgba(168,85,247,.3)">
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:#c084fc;margin-bottom:6px">Available to Deploy</div>
-          <div style="font-size:24px;font-weight:900;color:#c084fc">${fmt.rand(ctx.availableBalance)}</div>
+        <div style="background:linear-gradient(135deg,#1a0d2e,#160b25);border-radius:10px;padding:14px 16px;border:1px solid rgba(237,165,255,.3)">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:#eda5ff;margin-bottom:6px">Available to Deploy</div>
+          <div style="font-size:24px;font-weight:900;color:#eda5ff">${fmt.rand(ctx.availableBalance)}</div>
         </div>
       </div>
 
@@ -2571,7 +2571,7 @@ function renderIntelligenceView(ctx) {
   <div class="panel">
     <div class="panel__hd">
       <div>
-        <div class="panel__title"><i class="fa-solid fa-brain" style="color:#c084fc;margin-right:8px"></i>AI Deployment Recommendations</div>
+        <div class="panel__title"><i class="fa-solid fa-brain" style="color:#eda5ff;margin-right:8px"></i>AI Deployment Recommendations</div>
         <div class="panel__sub">Rule-based heuristic engine · scored by return, risk, and concentration</div>
       </div>
     </div>
@@ -2580,7 +2580,7 @@ function renderIntelligenceView(ctx) {
         ${suggestions.map((s, i) => {
           const scoreColor = s.score >= 70 ? '#74c69d' : s.score >= 45 ? '#fec24f' : s.score > 0 ? '#fb923c' : '#f87171';
           const scoreBg    = s.score >= 70 ? 'rgba(116,198,157,.1)' : s.score >= 45 ? 'rgba(251,191,36,.1)' : s.score > 0 ? 'rgba(251,146,60,.1)' : 'rgba(248,113,113,.1)';
-          const rankBadge  = i === 0 && s.score > 0 ? `<span style="font-size:9px;background:rgba(168,85,247,.2);color:#c084fc;padding:2px 7px;border-radius:10px;font-weight:700;margin-left:8px">TOP PICK</span>` : '';
+          const rankBadge  = i === 0 && s.score > 0 ? `<span style="font-size:9px;background:rgba(237,165,255,.2);color:#eda5ff;padding:2px 7px;border-radius:10px;font-weight:700;margin-left:8px">TOP PICK</span>` : '';
           return `
           <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:18px 20px;border-left:3px solid ${s.color}">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:12px;flex-wrap:wrap">
@@ -2615,10 +2615,10 @@ function renderIntelligenceView(ctx) {
       </div>
 
       <!-- AI disclaimer -->
-      <div style="margin-top:20px;padding:12px 16px;background:rgba(168,85,247,.06);border:1px solid rgba(168,85,247,.15);border-radius:8px;display:flex;gap:10px;align-items:flex-start">
-        <i class="fa-solid fa-circle-info" style="color:#c084fc;margin-top:1px;flex-shrink:0"></i>
+      <div style="margin-top:20px;padding:12px 16px;background:rgba(237,165,255,.06);border:1px solid rgba(237,165,255,.15);border-radius:8px;display:flex;gap:10px;align-items:flex-start">
+        <i class="fa-solid fa-circle-info" style="color:#eda5ff;margin-top:1px;flex-shrink:0"></i>
         <p style="font-size:11px;color:rgba(255,255,255,.4);margin:0;line-height:1.5">
-          <strong style="color:#c084fc">AI Disclaimer:</strong> Recommendations are generated by a rule-based heuristic engine using live platform data. Scores are indicative only and do not constitute financial advice. All deployment decisions require director approval and compliance review.
+          <strong style="color:#eda5ff">AI Disclaimer:</strong> Recommendations are generated by a rule-based heuristic engine using live platform data. Scores are indicative only and do not constitute financial advice. All deployment decisions require director approval and compliance review.
         </p>
       </div>
     </div>
@@ -2708,7 +2708,7 @@ function _renderFeeTypeChart(fees) {
   fees.forEach(f => { const t = f.fee_type || 'Other'; types[t] = (types[t]||0) + (parseFloat(f.fee_amount)||0); });
   const labels = Object.keys(types);
   const data   = labels.map(k => types[k]);
-  const COLORS  = ['#fec24f','#74c69d','#656565','#fb923c','#c084fc','#f472b6'];
+  const COLORS  = ['#fec24f','#74c69d','#656565','#fb923c','#eda5ff','#f472b6'];
 
   S.charts.feeType = new Chart(canvas, {
     type: 'doughnut',
@@ -2735,7 +2735,7 @@ function _renderFeeProductChart(fees) {
   fees.forEach(f => { const p = f.product_type || 'Unknown'; prods[p] = (prods[p]||0) + (parseFloat(f.fee_amount)||0); });
   const labels = Object.keys(prods);
   const data   = labels.map(k => prods[k]);
-  const COLORS  = ['#656565','#34d399','#fec24f','#f87171','#a78bfa'];
+  const COLORS  = ['#656565','#34d399','#fec24f','#f87171','#eda5ff'];
 
   S.charts.feeProd = new Chart(canvas, {
     type: 'doughnut',
@@ -4112,7 +4112,7 @@ function updateScenarios() {
         <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Gross Return</span><span style="color:#4ade80;font-weight:600">${fmt.rand(grossRet)}</span></div>
         <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Mgmt Fee (15%)</span><span style="color:#fec24f">${fmt.rand(mgmtFee)}</span></div>
         <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,.08);padding-top:7px"><span style="color:rgba(255,255,255,.7);font-weight:600">Net Return</span><span style="color:#4ade80;font-weight:700">${fmt.rand(netRet)}</span></div>
-        <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">MOIC</span><span style="color:#c084fc;font-weight:600">${moic.toFixed(3)}x</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">MOIC</span><span style="color:#eda5ff;font-weight:600">${moic.toFixed(3)}x</span></div>
         <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Ann. Return</span><span style="color:#656565;font-weight:600">${fmt.pct(ann)}</span></div>
       </div>
     </div>`;

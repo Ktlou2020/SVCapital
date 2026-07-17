@@ -12,7 +12,7 @@
   --teal-dark:    #656565;
   --green:        #22C55E;
   --gold:         #fec24f;
-  --purple:       #a855f7;
+  --purple:       #eda5ff;
   --red:          #ef4444;
   --blue:         #656565;
 
@@ -167,7 +167,7 @@ body {
 .kpi--green  .kpi__icon { background: rgba(34,197,94,0.12);   color: var(--green); }
 .kpi--teal   .kpi__icon { background: rgba(47,140,155,0.12);  color: var(--teal); }
 .kpi--blue   .kpi__icon { background: rgba(101,101,101,0.12);  color: var(--blue); }
-.kpi--purple .kpi__icon { background: rgba(168,85,247,0.12);  color: var(--purple); }
+.kpi--purple .kpi__icon { background: rgba(237,165,255,0.12);  color: var(--purple); }
 .kpi--red    .kpi__icon { background: rgba(239,68,68,0.12);   color: var(--red); }
 
 .trend--up   { background: rgba(34,197,94,0.12);  color: #16a34a; }
@@ -258,7 +258,7 @@ body {
 .badge--orange { background: rgba(255,130,21,0.12);  color: #c2520b; }
 .badge--blue   { background: rgba(101,101,101,0.12);  color: #656565; }
 .badge--teal   { background: rgba(47,140,155,0.12);  color: var(--teal-dark); }
-.badge--purple { background: rgba(168,85,247,0.12);  color: #7c3aed; }
+.badge--purple { background: rgba(237,165,255,0.12);  color: var(--purple); }
 .badge--red    { background: rgba(239,68,68,0.12);   color: #dc2626; }
 .badge--gray   { background: rgba(100,116,139,0.1);  color: var(--text-muted); }
 

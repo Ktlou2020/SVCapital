@@ -36,7 +36,7 @@
 
 <!-- Global Loader -->
 <div id="globalLoader" style="position:fixed;inset:0;background:#0e0f13;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9999">
-  <div style="width:44px;height:44px;border:3px solid rgba(124,92,252,0.2);border-top-color:#7c5cfc;border-radius:50%;animation:spin 0.7s linear infinite"></div>
+  <div style="width:44px;height:44px;border:3px solid rgba(237,165,255,0.2);border-top-color:#eda5ff;border-radius:50%;animation:spin 0.7s linear infinite"></div>
   <div style="font-size:0.8rem;color:#4e5470;font-weight:600">Loading your dashboard…</div>
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 </div>
@@ -76,14 +76,14 @@
 </div>
 
 <!-- ── Help Button (floating) ── -->
-<button id="helpBtn" onclick="toggleHelpPanel()" title="Help & Guide" style="position:fixed;bottom:24px;right:24px;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#7c5cfc,#5b3fd4);border:none;color:#fff;font-size:1.1rem;cursor:pointer;z-index:7900;box-shadow:0 4px 20px rgba(124,92,252,0.45);display:flex;align-items:center;justify-content:center;transition:transform 0.15s">
+<button id="helpBtn" onclick="toggleHelpPanel()" title="Help & Guide" style="position:fixed;bottom:24px;right:24px;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#eda5ff,#c070d8);border:none;color:#fff;font-size:1.1rem;cursor:pointer;z-index:7900;box-shadow:0 4px 20px rgba(237,165,255,0.45);display:flex;align-items:center;justify-content:center;transition:transform 0.15s">
   <i class="fa-solid fa-circle-question"></i>
 </button>
 
 <!-- ── Help Panel ── -->
 <div id="helpPanel" style="position:fixed;right:-420px;top:0;bottom:0;width:400px;background:#111318;border-left:1px solid rgba(255,255,255,0.08);z-index:8500;overflow-y:auto;transition:right 0.3s cubic-bezier(0.4,0,0.2,1);box-shadow:-8px 0 40px rgba(0,0,0,0.5)">
   <div style="position:sticky;top:0;background:#111318;border-bottom:1px solid rgba(255,255,255,0.08);padding:16px 20px;display:flex;align-items:center;gap:12px;z-index:1">
-    <div style="width:32px;height:32px;border-radius:9px;background:rgba(124,92,252,0.15);color:#7c5cfc;display:flex;align-items:center;justify-content:center;font-size:0.85rem"><i class="fa-solid fa-circle-question"></i></div>
+    <div style="width:32px;height:32px;border-radius:9px;background:rgba(237,165,255,0.15);color:#eda5ff;display:flex;align-items:center;justify-content:center;font-size:0.85rem"><i class="fa-solid fa-circle-question"></i></div>
     <div style="flex:1"><div style="font-size:0.92rem;font-weight:800">Help &amp; Guide</div><div id="help-context-label" style="font-size:0.7rem;color:#6b7280">Platform overview</div></div>
     <button onclick="toggleHelpPanel()" style="background:none;border:none;color:#6b7280;cursor:pointer;font-size:0.9rem"><i class="fa-solid fa-xmark"></i></button>
   </div>
@@ -267,7 +267,7 @@
 
 <!-- Command Palette -->
 <div id="empCmdOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;align-items:flex-start;justify-content:center;padding-top:80px;backdrop-filter:blur(4px)" onclick="if(event.target===this)closeEmpCmd()">
-  <div style="background:#161820;border:1px solid rgba(124,92,252,0.3);border-radius:16px;width:100%;max-width:560px;box-shadow:0 24px 64px rgba(0,0,0,0.7);overflow:hidden">
+  <div style="background:#161820;border:1px solid rgba(237,165,255,0.3);border-radius:16px;width:100%;max-width:560px;box-shadow:0 24px 64px rgba(0,0,0,0.7);overflow:hidden">
     <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
       <i class="fa-solid fa-magnifying-glass" style="color:rgba(255,255,255,0.35);font-size:0.9rem"></i>
       <input id="empCmdInput" type="text" placeholder="Search views and actions…" autocomplete="off"

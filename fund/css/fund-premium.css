@@ -32,7 +32,7 @@
 .kpi--teal::after    { background: linear-gradient(90deg, var(--teal), #5ecfdc); }
 .kpi--green::after   { background: linear-gradient(90deg, var(--green), #4ade80); }
 .kpi--orange::after  { background: linear-gradient(90deg, var(--orange), #fec24f); }
-.kpi--purple::after  { background: linear-gradient(90deg, var(--purple), #c084fc); }
+.kpi--purple::after  { background: linear-gradient(90deg, var(--purple), #eda5ff); }
 .kpi--blue::after    { background: linear-gradient(90deg, var(--blue), #656565); }
 .kpi--red::after     { background: linear-gradient(90deg, var(--red), #f87171); }
 
@@ -151,7 +151,7 @@
 /* ─── Intelligence view polish ─── */
 #view-intelligence .panel,
 #view-forecast .panel {
-  border-top: 3px solid rgba(168,85,247,0.3);
+  border-top: 3px solid rgba(237,165,255,0.3);
 }
 
 /* ─── Risk dashboard accent ─── */

@@ -36,8 +36,8 @@
   --brand-green-pale:   rgba(34,197,94,0.08);
 
   /* ─── Brand Purple/Accent ─── */
-  --brand-purple:       #A855F7;
-  --brand-purple-pale:  rgba(168,85,247,0.08);
+  --brand-purple:       #eda5ff;
+  --brand-purple-pale:  rgba(237,165,255,0.08);
 
   /* ─── Brand Gradient (logo petals) ─── */
   --gradient-brand:     linear-gradient(135deg, #fec24f 0%, #FF6421 50%, #FF5229 100%);

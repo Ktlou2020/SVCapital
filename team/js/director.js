@@ -87,7 +87,7 @@ const APP_ICONS = {
   admin:'fa-shield-halved', ifa:'fa-handshake', portal:'fa-building-columns', director:'fa-crown'
 };
 const APP_COLORS = {
-  employee:'#7c5cfc', team:'#00d4aa', fund:'#fec24f',
+  employee:'#eda5ff', team:'#00d4aa', fund:'#fec24f',
   admin:'#e84393', ifa:'#656565', portal:'#10b981', director:'#fec24f'
 };
 
@@ -102,7 +102,7 @@ let _payslips   = [];
 let _kpiScores  = [];
 let _leaveReqs  = [];
 let _editingEmp = null;
-let _selectedColor = '#7c5cfc';
+let _selectedColor = '#eda5ff';
 let _currentView   = 'overview';
 let _dirCharts  = {};
 
@@ -130,7 +130,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             role:           u.role || payload.role || 'director',
             level:          'executive',
             avatarInitials: ((u.firstName||'D')[0] + (u.lastName||'')[0]).toUpperCase() || 'D',
-            avatarColor:    '#7c5cfc',
+            avatarColor:    '#eda5ff',
           };
         }
       }
@@ -145,7 +145,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Populate sidebar user info
   const av = document.getElementById('sidebarAvatar');
-  if (av) { av.textContent = _session.avatarInitials; av.style.background = _session.avatarColor || '#7c5cfc'; }
+  if (av) { av.textContent = _session.avatarInitials; av.style.background = _session.avatarColor || '#eda5ff'; }
   document.getElementById('sidebarName').textContent = (_session.firstName || '') + ' ' + (_session.lastName || '');
   document.getElementById('sidebarRole').textContent = _session.role;
 
@@ -393,7 +393,7 @@ function renderOverview() {
 
   document.getElementById('overviewStats').innerHTML = `
     <div class="dir-stat">
-      <div class="dir-stat-icon" style="background:rgba(124,92,252,0.1);color:#7c5cfc"><i class="fa-solid fa-users"></i></div>
+      <div class="dir-stat-icon" style="background:rgba(237,165,255,0.1);color:#eda5ff"><i class="fa-solid fa-users"></i></div>
       <div><div class="dir-stat-val">${_employees.length}</div><div class="dir-stat-label">Total Employees</div></div>
     </div>
     <div class="dir-stat">
@@ -420,7 +420,7 @@ function renderOverview() {
   const stats2El = document.getElementById('overviewStats2');
   if (stats2El) stats2El.innerHTML = `
     <div class="dir-stat">
-      <div class="dir-stat-icon" style="background:rgba(124,92,252,0.1);color:#a78bfa"><i class="fa-solid fa-chart-bar"></i></div>
+      <div class="dir-stat-icon" style="background:rgba(237,165,255,0.1);color:#eda5ff"><i class="fa-solid fa-chart-bar"></i></div>
       <div><div class="dir-stat-val">${avgKpi !== null ? avgKpi.toFixed(1)+'%' : '—'}</div><div class="dir-stat-label">Avg KPI Score</div></div>
     </div>
     <div class="dir-stat">
@@ -450,7 +450,7 @@ function renderOverview() {
           <tr style="cursor:pointer" onclick="openEmpDetail('${e.id}')">
             <td>
               <div style="display:flex;align-items:center;gap:10px">
-                <div class="emp-row-avatar" style="background:${e.avatar_color||'#7c5cfc'}">${e.avatar_initials||'?'}</div>
+                <div class="emp-row-avatar" style="background:${e.avatar_color||'#eda5ff'}">${e.avatar_initials||'?'}</div>
                 <div><div class="emp-row-name">${e.first_name} ${e.last_name}</div><div class="emp-row-email">${e.email||''}</div></div>
               </div>
             </td>
@@ -471,7 +471,7 @@ function renderOverview() {
     return `
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:8px;cursor:pointer" onclick="openObDetail('${ob.id}')">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-          <div class="emp-row-avatar" style="background:${emp.avatar_color||'#7c5cfc'}">${emp.avatar_initials||'?'}</div>
+          <div class="emp-row-avatar" style="background:${emp.avatar_color||'#eda5ff'}">${emp.avatar_initials||'?'}</div>
           <div style="flex:1"><div style="font-size:0.85rem;font-weight:700">${emp.first_name} ${emp.last_name}</div><div style="font-size:0.72rem;color:var(--muted)">${emp.role||''}</div></div>
           <div style="font-size:0.8rem;font-weight:700;color:var(--gold)">${pct}%</div>
         </div>
@@ -515,7 +515,7 @@ function renderEmpTable(list) {
       <tr>
         <td>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="emp-row-avatar" style="background:${e.avatar_color||'#7c5cfc'}">${e.avatar_initials||'?'}</div>
+            <div class="emp-row-avatar" style="background:${e.avatar_color||'#eda5ff'}">${e.avatar_initials||'?'}</div>
             <div><div class="emp-row-name">${e.first_name} ${e.last_name}</div><div class="emp-row-email">${e.email||''}</div></div>
           </div>
         </td>
@@ -563,7 +563,7 @@ function openEmpDetail(empId) {
   document.getElementById('empDetailBody').innerHTML = `
     <div class="emp-detail-panel">
       <div class="emp-detail-header">
-        <div class="emp-detail-avatar" style="background:${e.avatar_color||'#7c5cfc'}">${e.avatar_initials||'?'}</div>
+        <div class="emp-detail-avatar" style="background:${e.avatar_color||'#eda5ff'}">${e.avatar_initials||'?'}</div>
         <div>
           <div class="emp-detail-name">${e.first_name} ${e.last_name}</div>
           <div class="emp-detail-role">${e.role||''} · ${e.department||''}</div>
@@ -578,7 +578,7 @@ function openEmpDetail(empId) {
       </div>
       <div class="emp-detail-body">
         <div class="emp-detail-grid">
-          <div class="emp-detail-field"><div class="emp-detail-label">XP Points</div><div class="emp-detail-value" style="color:#7c5cfc">${(Number(e.xp_points)||0).toLocaleString()} XP</div></div>
+          <div class="emp-detail-field"><div class="emp-detail-label">XP Points</div><div class="emp-detail-value" style="color:#eda5ff">${(Number(e.xp_points)||0).toLocaleString()} XP</div></div>
           <div class="emp-detail-field"><div class="emp-detail-label">Streak</div><div class="emp-detail-value">${e.streak_days||0} days 🔥</div></div>
           <div class="emp-detail-field"><div class="emp-detail-label">EVA Weight</div><div class="emp-detail-value">${e.eva_weight||1.0}</div></div>
           <div class="emp-detail-field"><div class="emp-detail-label">Base Salary</div><div class="emp-detail-value">${e.base_salary ? zarM(e.base_salary)+'/mo' : '—'}</div></div>
@@ -616,7 +616,7 @@ function openEmpDetail(empId) {
           <div style="display:flex;flex-wrap:wrap;gap:8px">
             ${allowedApps.map(k => `
               <div style="display:inline-flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:5px 11px;font-size:0.76rem;font-weight:600">
-                <i class="fa-solid ${APP_ICONS[k]||'fa-circle'}" style="color:${APP_COLORS[k]||'#7c5cfc'}"></i>${APP_NAMES[k]||k}
+                <i class="fa-solid ${APP_ICONS[k]||'fa-circle'}" style="color:${APP_COLORS[k]||'#eda5ff'}"></i>${APP_NAMES[k]||k}
               </div>
             `).join('')}
           </div>
@@ -864,7 +864,7 @@ function resetCreateForm() {
   document.getElementById('c-salary').value = '';
   document.getElementById('c-start').value  = '';
   document.getElementById('c-buddy').selectedIndex = 0;
-  _selectedColor = '#7c5cfc';
+  _selectedColor = '#eda5ff';
   document.querySelectorAll('.color-swatch').forEach((s,i) => s.classList.toggle('selected', i===0));
   updatePreview();
 }
@@ -1032,7 +1032,7 @@ function renderOnboardingView() {
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;cursor:pointer" onclick="openObDetail('${ob.id}')">
             <div style="padding:18px 20px;border-bottom:1px solid var(--border)">
               <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-                <div class="emp-row-avatar" style="background:${emp.avatar_color||'#7c5cfc'};width:42px;height:42px;font-size:0.85rem">${emp.avatar_initials||'?'}</div>
+                <div class="emp-row-avatar" style="background:${emp.avatar_color||'#eda5ff'};width:42px;height:42px;font-size:0.85rem">${emp.avatar_initials||'?'}</div>
                 <div style="flex:1">
                   <div style="font-size:0.92rem;font-weight:800">${emp.first_name} ${emp.last_name}</div>
                   <div style="font-size:0.75rem;color:var(--muted)">${emp.role||''} · ${emp.department||''}</div>
@@ -1067,7 +1067,7 @@ function openObDetail(obId) {
 
   document.getElementById('obDetailBody').innerHTML = `
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--border)">
-      <div class="emp-row-avatar" style="background:${emp.avatar_color||'#7c5cfc'};width:52px;height:52px;font-size:1rem">${emp.avatar_initials||'?'}</div>
+      <div class="emp-row-avatar" style="background:${emp.avatar_color||'#eda5ff'};width:52px;height:52px;font-size:1rem">${emp.avatar_initials||'?'}</div>
       <div style="flex:1">
         <div style="font-size:1.1rem;font-weight:800">${emp.first_name} ${emp.last_name}</div>
         <div style="font-size:0.8rem;color:var(--muted)">${emp.role||''} · ${emp.department||''}</div>
@@ -1089,11 +1089,11 @@ function openObDetail(obId) {
     <div class="ob-checklist">
       ${defaultTasks.map((t, i) => {
         const isDone = (ob.tasks_completed||0) > i;
-        const catColors = { setup:'#7c5cfc', learning:'#00d4aa', compliance:'#e84393', system:'#fec24f', social:'#fb923c' };
+        const catColors = { setup:'#eda5ff', learning:'#00d4aa', compliance:'#e84393', system:'#fec24f', social:'#fb923c' };
         return `
           <div class="ob-task ${isDone?'done':''}">
             <div class="ob-task-check">${isDone?'<i class="fa-solid fa-check"></i>':''}</div>
-            <div class="ob-task-icon" style="background:${catColors[t.category]||'#7c5cfc'}20;color:${catColors[t.category]||'#7c5cfc'}"><i class="fa-solid ${t.icon}"></i></div>
+            <div class="ob-task-icon" style="background:${catColors[t.category]||'#eda5ff'}20;color:${catColors[t.category]||'#eda5ff'}"><i class="fa-solid ${t.icon}"></i></div>
             <div style="flex:1">
               <div class="ob-task-title">${t.title}</div>
               <div class="ob-task-desc">${t.description}</div>
@@ -1684,7 +1684,7 @@ function renderAccessMatrix() {
             return `<tr>
               <td>
                 <div style="display:flex;align-items:center;gap:8px">
-                  <div class="emp-row-avatar" style="background:${e.avatar_color||'#7c5cfc'};width:28px;height:28px;font-size:0.65rem">${e.avatar_initials||'?'}</div>
+                  <div class="emp-row-avatar" style="background:${e.avatar_color||'#eda5ff'};width:28px;height:28px;font-size:0.65rem">${e.avatar_initials||'?'}</div>
                   <div>
                     <div class="emp-row-name" style="font-size:0.8rem">${e.first_name} ${e.last_name}</div>
                     <div class="emp-row-email" style="font-size:0.7rem">${e.email||''}</div>
@@ -1768,13 +1768,13 @@ async function saveIndividualAccess() {
 /* ═══ COURSE LIBRARY ════════════════════════════════════════════════ */
 function renderCourseLibrary() {
   document.getElementById('courseCount').textContent = _courses.length;
-  const catColors = {aum_growth:'#7c5cfc',technical:'#4fc3f7',compliance:'#0984e3',leadership:'#fec24f',client_relations:'#fd79a8',innovation:'#00d4aa',soft_skills:'#ffb347'};
+  const catColors = {aum_growth:'#eda5ff',technical:'#4fc3f7',compliance:'#0984e3',leadership:'#fec24f',client_relations:'#fd79a8',innovation:'#00d4aa',soft_skills:'#ffb347'};
   document.getElementById('courseGrid').innerHTML = _courses.map(c => `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden">
-      <div style="height:6px;background:${catColors[c.category]||'#7c5cfc'}"></div>
+      <div style="height:6px;background:${catColors[c.category]||'#eda5ff'}"></div>
       <div style="padding:18px">
         <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px">
-          <div style="width:40px;height:40px;border-radius:10px;background:${c.thumbnail_color||'#7c5cfc'}20;color:${c.thumbnail_color||'#7c5cfc'};display:flex;align-items:center;justify-content:center;font-size:0.9rem;flex-shrink:0"><i class="fa-solid ${c.thumbnail_icon||'fa-book'}"></i></div>
+          <div style="width:40px;height:40px;border-radius:10px;background:${c.thumbnail_color||'#eda5ff'}20;color:${c.thumbnail_color||'#eda5ff'};display:flex;align-items:center;justify-content:center;font-size:0.9rem;flex-shrink:0"><i class="fa-solid ${c.thumbnail_icon||'fa-book'}"></i></div>
           <div>
             <div style="font-size:0.88rem;font-weight:700;line-height:1.3">${c.title}</div>
             <div style="font-size:0.72rem;color:var(--muted);margin-top:3px">${c.category?.replace('_',' ')?.toUpperCase()} · ${c.difficulty||'beginner'}</div>
@@ -1785,7 +1785,7 @@ function renderCourseLibrary() {
           <span style="font-size:0.7rem;background:rgba(254,194,79,0.1);color:var(--gold);border-radius:6px;padding:2px 8px;font-weight:700">${c.xp_reward||0} XP</span>
           <span style="font-size:0.7rem;color:var(--muted)"><i class="fa-solid fa-clock" style="margin-right:3px"></i>${c.estimated_minutes||30} min</span>
           <span style="font-size:0.7rem;color:var(--muted)"><i class="fa-solid fa-layer-group" style="margin-right:3px"></i>${c.modules_count||3} modules</span>
-          ${c.ai_generated ? '<span style="font-size:0.68rem;background:rgba(124,92,252,0.1);color:#7c5cfc;border-radius:6px;padding:2px 8px;font-weight:700"><i class="fa-solid fa-robot" style="margin-right:3px"></i>AI</span>' : ''}
+          ${c.ai_generated ? '<span style="font-size:0.68rem;background:rgba(237,165,255,0.1);color:#eda5ff;border-radius:6px;padding:2px 8px;font-weight:700"><i class="fa-solid fa-robot" style="margin-right:3px"></i>AI</span>' : ''}
         </div>
       </div>
     </div>
@@ -1835,7 +1835,7 @@ const DIR_HELP = {
     icon:  'fa-gauge-high',
     intro: 'Your Director command centre — live platform stats, recent employee activity, and active onboarding journeys at a glance.',
     sections: [
-      { heading: 'Stats Cards', icon: 'fa-chart-bar', color: '#7c5cfc',
+      { heading: 'Stats Cards', icon: 'fa-chart-bar', color: '#eda5ff',
         text: 'Four key metrics updated in real time: total employees, active headcount, onboarding journeys in progress, and number of courses in the library. These pull directly from the live database.' },
       { heading: 'Recent Employees', icon: 'fa-users', color: '#00d4aa',
         text: 'The last employees added to the platform. Click any row to open their full detail card — view role, level, app access permissions, and onboarding progress.' },
@@ -1848,7 +1848,7 @@ const DIR_HELP = {
     icon:  'fa-users',
     intro: 'The full company roster — searchable, with quick access to every employee\'s profile, permissions, and onboarding status.',
     sections: [
-      { heading: 'Employee Table', icon: 'fa-table', color: '#7c5cfc',
+      { heading: 'Employee Table', icon: 'fa-table', color: '#eda5ff',
         text: 'Columns: Employee (avatar + name + email), Role, Department, Level, Status (active/inactive), Onboarding progress bar, and Actions (View, Edit, Activate/Deactivate). Click the row or the View button to open the full detail modal.' },
       { heading: 'Search', icon: 'fa-magnifying-glass', color: '#00d4aa',
         text: 'The search box filters by name, email, role, or department in real time — no page reload. Type at least 1 character to filter. Search resets when cleared.' },
@@ -1865,7 +1865,7 @@ const DIR_HELP = {
     icon:  'fa-user-plus',
     intro: 'Create a new employee account. On submission, the system automatically starts their onboarding journey — 3 mandatory courses are enrolled and a welcome message is delivered.',
     sections: [
-      { heading: 'Personal Information', icon: 'fa-id-card', color: '#7c5cfc',
+      { heading: 'Personal Information', icon: 'fa-id-card', color: '#eda5ff',
         text: 'First name, last name, and work email are required. Phone, date of birth, and SA ID number are optional but important — the SA ID last 4 digits become the employee\'s default login PIN.' },
       { heading: 'Role & Position', icon: 'fa-briefcase', color: '#00d4aa',
         text: 'Role is a job title/label and Level determines seniority tier. App access is granted per individual in the Access tab (not by role). EVA Weight (0.5×–2.0×) scales their variable bonus allocation.' },
@@ -1882,7 +1882,7 @@ const DIR_HELP = {
     icon:  'fa-rocket',
     intro: 'Track every new employee\'s onboarding progress — task completion, course enrolment, and overall percentage towards being "fully set up".',
     sections: [
-      { heading: 'Journey Cards', icon: 'fa-layer-group', color: '#7c5cfc',
+      { heading: 'Journey Cards', icon: 'fa-layer-group', color: '#eda5ff',
         text: 'Each card shows the employee\'s name, role, current status chip (In Progress / Completed / Not Started), progress bar, task count, start date, and assigned buddy. Click any card to open the full checklist.' },
       { heading: 'Filter', icon: 'fa-filter', color: '#00d4aa',
         text: 'Use the dropdown filter to show All, In Progress, Completed, or Not Started journeys. This helps prioritise who needs a follow-up.' },
@@ -1899,7 +1899,7 @@ const DIR_HELP = {
     icon:  'fa-key',
     intro: 'Per-individual app access. Each employee has their own list of apps they may open — tick the apps per person and Save. Role is just a label and no longer controls access.',
     sections: [
-      { heading: 'Reading the Grid', icon: 'fa-table', color: '#7c5cfc',
+      { heading: 'Reading the Grid', icon: 'fa-table', color: '#eda5ff',
         text: 'Rows = individual employees. Columns = apps. Tick a box to grant that person that app, then click Save Changes. My Dashboard is always available and cannot be removed.' },
       { heading: '7 App Keys', icon: 'fa-grid-2', color: '#00d4aa',
         text: 'My Dashboard (employee), Team Dashboard (team), Fund Operations (fund), Admin Console (admin), IFA Portal (ifa), Investor Portal (portal), Director Panel (director). Access is enforced on page load by StaffAuth.guard().' },
@@ -1914,7 +1914,7 @@ const DIR_HELP = {
     icon:  'fa-graduation-cap',
     intro: 'All training courses available on the platform — both AI-generated employee courses and the 3 pre-seeded onboarding courses.',
     sections: [
-      { heading: 'Course Cards', icon: 'fa-layer-group', color: '#7c5cfc',
+      { heading: 'Course Cards', icon: 'fa-layer-group', color: '#eda5ff',
         text: 'Each card shows: title, category (colour-coded), difficulty, XP reward, estimated minutes, module count, and an AI badge if the course was generated by the AI generator.' },
       { heading: 'Onboarding Courses', icon: 'fa-rocket', color: '#fec24f',
         text: 'CRS-OB-001 (Welcome to SV Capital), CRS-OB-002 (Platform Walkthrough), and CRS-OB-003 (Compliance & FICA) are the 3 mandatory courses auto-enrolled for every new employee.' },
@@ -2006,7 +2006,7 @@ function renderDeptChart() {
   });
   const labels = Object.keys(deptCounts);
   const values = Object.values(deptCounts);
-  const palette = ['#7c5cfc','#fec24f','#10b981','#00d4aa','#656565','#f87171','#a78bfa','#34d399'];
+  const palette = ['#eda5ff','#fec24f','#10b981','#00d4aa','#656565','#f87171','#eda5ff','#34d399'];
   _dirCharts.dept = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -2082,7 +2082,7 @@ function renderPerformanceView() {
   const perfStats = document.getElementById('perfStats');
   if (perfStats) perfStats.innerHTML = `
     <div class="dir-stat">
-      <div class="dir-stat-icon" style="background:rgba(124,92,252,.1);color:#a78bfa"><i class="fa-solid fa-chart-bar"></i></div>
+      <div class="dir-stat-icon" style="background:rgba(237,165,255,.1);color:#eda5ff"><i class="fa-solid fa-chart-bar"></i></div>
       <div><div class="dir-stat-val">${avgKpi.toFixed(1)}%</div><div class="dir-stat-label">Avg KPI Score</div></div>
     </div>
     <div class="dir-stat">
@@ -2115,8 +2115,8 @@ function renderPerformanceView() {
         labels: dimLabels,
         datasets: [{
           label: 'Team Avg', data: dimAvgs,
-          backgroundColor: 'rgba(124,92,252,0.15)', borderColor: '#7c5cfc', borderWidth: 2,
-          pointBackgroundColor: '#7c5cfc', pointRadius: 3
+          backgroundColor: 'rgba(237,165,255,0.15)', borderColor: '#eda5ff', borderWidth: 2,
+          pointBackgroundColor: '#eda5ff', pointRadius: 3
         }]
       },
       options: {
@@ -2146,7 +2146,7 @@ function renderPerformanceView() {
     });
     const dLabels = Object.keys(deptMap);
     const dAvgs = dLabels.map(d => deptMap[d].reduce((s,v)=>s+v,0)/deptMap[d].length);
-    const palette = ['#7c5cfc','#fec24f','#10b981','#00d4aa','#656565','#f87171','#a78bfa','#34d399'];
+    const palette = ['#eda5ff','#fec24f','#10b981','#00d4aa','#656565','#f87171','#eda5ff','#34d399'];
     _dirCharts.perfDept = new Chart(deptCtx, {
       type: 'bar',
       data: { labels: dLabels, datasets: [{ label:'Avg KPI %', data: dAvgs.map(v=>+v.toFixed(1)), backgroundColor: palette.slice(0,dLabels.length), borderRadius:5 }] },
@@ -2174,7 +2174,7 @@ function renderPerformanceView() {
       <td>
         <div style="display:flex;align-items:center;gap:10px">
           <div style="width:22px;text-align:center;font-size:0.75rem;font-weight:700;color:${i<3?'#fec24f':'#6b7280'}">${i+1}</div>
-          <div class="emp-row-avatar" style="background:${e.avatar_color||'#7c5cfc'}">${e.avatar_initials||'?'}</div>
+          <div class="emp-row-avatar" style="background:${e.avatar_color||'#eda5ff'}">${e.avatar_initials||'?'}</div>
           <div><div class="emp-row-name">${e.first_name} ${e.last_name}</div><div class="emp-row-email">${e.role||''}</div></div>
         </div>
       </td>
@@ -2402,7 +2402,7 @@ function _updateEvaExample(rate) {
     On a <strong>R${exAmt.toLocaleString()}</strong> investment with a <strong>5% upfront fee</strong>:<br>
     Upfront fee = <strong>R${upfront.toLocaleString()}</strong> &nbsp;→&nbsp;
     Net-VAT = <strong>R${(upfront/1.15).toFixed(2)}</strong> &nbsp;→&nbsp;
-    EVA = <strong style="color:#a78bfa">R${evaAmount.toFixed(2)}</strong> (${(rate*100).toFixed(1)}%)
+    EVA = <strong style="color:#eda5ff">R${evaAmount.toFixed(2)}</strong> (${(rate*100).toFixed(1)}%)
   `;
 }
 

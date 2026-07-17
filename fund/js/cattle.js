@@ -1520,7 +1520,7 @@ function _renderCostTypeChart(costs) {
   const canvas = document.getElementById('costTypeChart');
   if (!canvas) return;
   if (S.charts.costType) S.charts.costType.destroy();
-  const TYPE_COLORS = { feed: '#fec24f', vet: '#656565', transport: '#a78bfa', labour: '#34d399', mortality: '#f87171', other: 'rgba(255,255,255,.35)' };
+  const TYPE_COLORS = { feed: '#fec24f', vet: '#656565', transport: '#eda5ff', labour: '#34d399', mortality: '#f87171', other: 'rgba(255,255,255,.35)' };
   const types = {};
   costs.forEach(c => { const t = c.cost_type||'other'; types[t] = (types[t]||0) + (parseFloat(c.amount)||0); });
   const labels = Object.keys(types);
@@ -1557,7 +1557,7 @@ function renderCostTable(costs, cycleFilter, typeFilter) {
   if (typeFilter)  rows = rows.filter(c => c.cost_type === typeFilter);
   rows.sort((a,b) => (b.cost_date||'').localeCompare(a.cost_date||''));
   if (sub) sub.textContent = `${rows.length} entries · Total: ${fmt.zar(rows.reduce((s,c)=>s+(parseFloat(c.amount)||0),0))}`;
-  const TYPE_COLORS = { feed:'#fec24f', vet:'#656565', transport:'#a78bfa', labour:'#34d399', mortality:'#f87171', other:'rgba(255,255,255,.35)' };
+  const TYPE_COLORS = { feed:'#fec24f', vet:'#656565', transport:'#eda5ff', labour:'#34d399', mortality:'#f87171', other:'rgba(255,255,255,.35)' };
   const statusBadge = s => {
     const cfg = { paid:['#74c69d','#052e16'], pending:['#fec24f','#1c1400'], approved:['#656565','#0c1a2e'] };
     const [bg,fg] = cfg[s] || ['rgba(255,255,255,.12)','rgba(255,255,255,.5)'];

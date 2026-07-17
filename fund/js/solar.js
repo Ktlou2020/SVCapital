@@ -252,7 +252,7 @@ function renderDashboard() {
       </div>
       <div class="sol-kpi" style="">
         <div class="sol-kpi-label">Matured / Realised</div>
-        <div class="sol-kpi-value" style="color:#a78bfa">${sfmt.zarM(pNav.totalActual)}</div>
+        <div class="sol-kpi-value" style="color:#eda5ff">${sfmt.zarM(pNav.totalActual)}</div>
         <div class="sol-kpi-sub">${pNav.maturedCount} project${pNav.maturedCount!==1?'s':''} matured</div>
       </div>
     </div>

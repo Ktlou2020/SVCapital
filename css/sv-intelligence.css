@@ -266,7 +266,7 @@
 .svi-insight-card__icon--blue   { background: rgba(59,130,246,0.10); color: #656565; }
 .svi-insight-card__icon--red    { background: rgba(239,68,68,0.10);  color: #ef4444; }
 .svi-insight-card__icon--teal   { background: rgba(47,140,155,0.10); color: #656565; }
-.svi-insight-card__icon--purple { background: rgba(168,85,247,0.10); color: #a855f7; }
+.svi-insight-card__icon--purple { background: rgba(237,165,255,0.10); color: #eda5ff; }
 
 .svi-insight-card__body { flex: 1; min-width: 0; }
 .svi-insight-card__label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af; margin-bottom: 2px; }
