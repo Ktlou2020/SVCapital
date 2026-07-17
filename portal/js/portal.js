@@ -8030,9 +8030,8 @@ function _saNormalDetail(sa, meta) {
     .map(d => `<div class="sa-fica-item"><i class="fa-solid fa-file-alt" style="color:${meta.color}"></i><span>${d}</span></div>`)
     .join('');
 
-  const recentTxns = PORTAL.transactions
-    .filter(t => t.sub_account_id === sa.id)
-    .slice(0, 5);
+  const saAllTxns = PORTAL.transactions
+    .filter(t => t.sub_account_id === sa.id);
 
   const saInvs = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
 
@@ -8052,15 +8051,30 @@ function _saNormalDetail(sa, meta) {
       </div>
     </div>
 
-    <div style="display:flex;gap:8px;margin:16px 0">
+    <div style="display:flex;gap:8px;margin:16px 0;flex-wrap:wrap">
       <button class="btn btn--primary btn--sm" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')"><i class="fa-solid fa-wallet"></i> Deposit</button>
       <button class="btn btn--secondary btn--sm" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-chart-line"></i> Invest</button>
+      <button class="btn btn--ghost btn--sm" onclick="Modal.close('saDetailModal');downloadSaStatement('${sa.id}','${sa.name}')"><i class="fa-solid fa-file-pdf"></i> Statement</button>
+      <button class="btn btn--ghost btn--sm" onclick="openSaBankDetails('${sa.id}')"><i class="fa-solid fa-building-columns"></i> Banking</button>
+    </div>
+
+    <div class="sa-section-title mt-16"><i class="fa-solid fa-building-columns"></i> Banking Details</div>
+    <div style="padding:10px 0;font-size:0.82rem;color:var(--text-muted)">
+      ${sa.sa_bank_name
+        ? `<div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:700;color:var(--text)">${sa.sa_bank_name}</div>
+              <div>${sa.sa_bank_holder} · ****${(sa.sa_bank_number||'').slice(-4)} · ${sa.sa_bank_type || 'current'}</div>
+            </div>
+            <span class="badge badge--${sa.sa_bank_status === 'pending' ? 'orange' : sa.sa_bank_status === 'approved' ? 'green' : 'gray'}">${sa.sa_bank_status || 'none'}</span>
+          </div>`
+        : `<span style="color:var(--text-dim)">No banking details on file</span>`}
     </div>
 
     ${saInvs.length ? `
     <div class="sa-section-title"><i class="fa-solid fa-chart-line"></i> Active Investments</div>
     <table class="data-table">
-      <thead><tr><th>Pool</th><th>Status</th><th>Matures In</th><th>Amount</th></tr></thead>
+      <thead><tr><th>Pool</th><th>Status</th><th>Matures In</th><th>Amount</th><th></th></tr></thead>
       <tbody>${saInvs.map(inv => {
         const pi = Utils.productInfo(inv.product_type);
         const daysLeft = inv.maturity_date ? Math.max(0, Math.ceil((new Date(inv.maturity_date) - Date.now()) / 86400000)) : null;
@@ -8069,6 +8083,7 @@ function _saNormalDetail(sa, meta) {
           <td>${Utils.statusBadge(inv.status)}</td>
           <td class="td-muted">${daysLeft !== null ? `${daysLeft}d` : '—'}</td>
           <td class="td-green fw-700">${Utils.rand(inv.amount)}</td>
+          <td>${inv.status === 'matured' && !inv.maturity_instruction ? `<button class="btn btn--ghost btn--sm" style="font-size:0.7rem;padding:2px 8px;white-space:nowrap" onclick="event.stopPropagation();Modal.close('saDetailModal');openMaturityModal('${inv.id}')">Give Instruction</button>` : ''}</td>
         </tr>`;
       }).join('')}</tbody>
     </table>` : ''}
@@ -8077,17 +8092,19 @@ function _saNormalDetail(sa, meta) {
     <div class="sa-fica-list">${ficaItems}</div>
     <button class="btn btn--secondary btn--sm mt-8" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-upload"></i> Upload FICA Document</button>
 
-    ${recentTxns.length ? `
-    <div class="sa-section-title mt-16"><i class="fa-solid fa-receipt"></i> Recent Transactions</div>
+    ${saAllTxns.length ? `
+    <div class="sa-section-title mt-16"><i class="fa-solid fa-receipt"></i> All Transactions (${saAllTxns.length})</div>
+    ${saAllTxns.length > 10 ? `<div style="max-height:320px;overflow-y:auto">` : ''}
     <table class="data-table">
       <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
-      <tbody>${recentTxns.map(t => `<tr>
+      <tbody>${saAllTxns.map(t => `<tr>
         <td><span class="badge badge--gray">${t.type}</span></td>
         <td class="${t.amount > 0 ? 'td-green' : 'td-red'} fw-700">${Utils.rand(t.amount)}</td>
         <td>${Utils.statusBadge(t.status)}</td>
         <td class="td-muted">${Utils.date(t.created_at)}</td>
       </tr>`).join('')}</tbody>
-    </table>` : ''}`;
+    </table>
+    ${saAllTxns.length > 10 ? `</div>` : ''}` : ''}`;
 }
 
 /* ── Minor Hub ──────────────────────────────────────────────── */
@@ -8329,6 +8346,49 @@ async function saveSaGoal() {
     Modal.close('saGoalModal');
     await loadSubAccounts();
   } catch (e) { Toast.error('Failed to save goal'); }
+}
+
+/* ── Sub-Account Banking Details ────────────────────────────── */
+let _saBankSaId = null;
+
+function openSaBankDetails(saId) {
+  _saBankSaId = saId;
+  const sa = PORTAL.subAccounts.find(s => s.id === saId);
+  if (!sa) return;
+  const f = id => document.getElementById(id);
+  if (f('saBankName'))   f('saBankName').value   = sa.sa_bank_name   || '';
+  if (f('saBankHolder')) f('saBankHolder').value  = sa.sa_bank_holder || '';
+  if (f('saBankNumber')) f('saBankNumber').value  = sa.sa_bank_number || '';
+  if (f('saBankBranch')) f('saBankBranch').value  = sa.sa_bank_branch || '';
+  if (f('saBankType'))   f('saBankType').value    = sa.sa_bank_type   || 'current';
+  Modal.open('saBankModal');
+}
+
+async function saveSaBankDetails() {
+  const f = id => document.getElementById(id)?.value?.trim();
+  const name   = f('saBankName');
+  const holder = f('saBankHolder');
+  const number = f('saBankNumber');
+  const branch = f('saBankBranch');
+  const type   = f('saBankType') || 'current';
+  if (!name || !holder || !number) { Toast.warn('Please fill in bank name, account holder, and account number'); return; }
+  try {
+    await API._fetch('PATCH', `tables/sub_accounts/${_saBankSaId}`, {
+      sa_bank_name:   name,
+      sa_bank_holder: holder,
+      sa_bank_number: number,
+      sa_bank_branch: branch,
+      sa_bank_type:   type,
+      sa_bank_status: 'pending',
+    });
+    const sa = PORTAL.subAccounts.find(s => s.id === _saBankSaId);
+    if (sa) { sa.sa_bank_name = name; sa.sa_bank_holder = holder; sa.sa_bank_number = number; sa.sa_bank_branch = branch; sa.sa_bank_type = type; sa.sa_bank_status = 'pending'; }
+    Modal.close('saBankModal');
+    Toast.success('Banking details saved — pending verification');
+    await loadSubAccounts();
+  } catch (err) {
+    Toast.error('Failed to save banking details');
+  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -10328,6 +10388,84 @@ function downloadStatement() {
   const ym = now.toISOString().slice(0, 7);
   doc.save(`SVC-Statement-${ym}.pdf`);
   Toast.success('90-day statement downloaded!');
+}
+
+/* downloadSaStatement() — sub-account statement */
+function downloadSaStatement(saId, saName) {
+  const txns = (PORTAL.transactions || []).filter(t => t.sub_account_id === saId);
+  if (!txns.length) { Toast.warn('No transactions found for this account'); return; }
+
+  const doc = _getPDF('portrait');
+  if (!doc) return;
+
+  const W   = doc.internal.pageSize.getWidth();
+  const now = new Date();
+  const dateLabel = now.toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  let y = _pdfHeader(doc, 'SV Capital — Sub-Account Statement', saName);
+  _pdfWatermark(doc);
+  y += 6;
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(26, 26, 26);
+  doc.text(saName, 14, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(107, 114, 128);
+  doc.setFontSize(8);
+  doc.text(`Generated: ${dateLabel}`, 14, y + 5);
+  y += 14;
+
+  const typeMap = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus', gift_sent: 'Gift Sent', gift_received: 'Gift Received', reward: 'XP Reward' };
+  const tableHead = [['Date', 'Type', 'Description', 'Amount', 'Status']];
+  const tableBody = txns
+    .sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at))
+    .map(t => [
+      Utils.date(t.transaction_date || t.created_at),
+      typeMap[t.type] || t.type,
+      (t.description || '—').slice(0, 38),
+      (t.amount > 0 ? '+' : '') + Utils.rand(t.amount),
+      (t.status || '—').toUpperCase(),
+    ]);
+
+  if (doc.autoTable) {
+    doc.autoTable({
+      head: tableHead,
+      body: tableBody,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      headStyles: { fillColor: [48, 48, 48], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+      bodyStyles: { fontSize: 8, textColor: [26, 26, 26] },
+      alternateRowStyles: { fillColor: [247, 248, 250] },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 26 },
+        2: { cellWidth: 'auto' },
+        3: { cellWidth: 28, halign: 'right' },
+        4: { cellWidth: 22, halign: 'center' },
+      },
+      didDrawPage: () => _pdfFooter(doc),
+    });
+  } else {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(107, 114, 128);
+    doc.text('Date', 14, y + 6); doc.text('Type', 40, y + 6); doc.text('Description', 70, y + 6); doc.text('Amount', 150, y + 6); doc.text('Status', 175, y + 6);
+    y += 10;
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(26, 26, 26);
+    tableBody.slice(0, 30).forEach(row => {
+      doc.text(row[0], 14, y); doc.text(row[1], 40, y); doc.text(row[2].slice(0, 30), 70, y);
+      doc.text(row[3], 150, y, { align: 'right' }); doc.text(row[4], 175, y);
+      y += 6;
+      if (y > 260) { doc.addPage(); y = 20; }
+    });
+  }
+
+  _pdfFooter(doc);
+  const ym = now.toISOString().slice(0, 7);
+  const safeName = (saName || 'Account').replace(/[^a-zA-Z0-9_-]/g, '-');
+  doc.save(`SVC-Statement-${safeName}-${ym}.pdf`);
+  Toast.success('Sub-account statement downloaded!');
 }
 
 /* ═══════════════════════════════════════════════
