@@ -8725,14 +8725,30 @@ function openSaBankDetails(saId) {
 }
 
 async function saveSaBankDetails() {
-  const f = id => document.getElementById(id)?.value?.trim();
-  const name   = f('saBankName');
-  const holder = f('saBankHolder');
-  const number = f('saBankNumber');
-  const branch = f('saBankBranch');
-  const type   = f('saBankType') || 'current';
+  const fv = id => document.getElementById(id)?.value?.trim();
+  const name      = fv('saBankName');
+  const holder    = fv('saBankHolder');
+  const number    = fv('saBankNumber');
+  const branch    = fv('saBankBranch');
+  const type      = fv('saBankType') || 'current';
+  const proofFile = document.getElementById('saBankProof')?.files?.[0] || null;
+
   if (!name || !holder || !number) { Toast.warn('Please fill in bank name, account holder, and account number'); return; }
+  const sa = PORTAL.subAccounts.find(s => s.id === _saBankSaId);
+  const hasExisting = !!(sa?.sa_bank_number);
+  if (!proofFile && !hasExisting) { Toast.warn('Please attach proof of bank account (statement or confirmation letter)'); return; }
+
   try {
+    let proofData = null;
+    if (proofFile) {
+      proofData = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = e => resolve(e.target.result);
+        reader.onerror = () => reject(new Error('Could not read file'));
+        reader.readAsDataURL(proofFile);
+      });
+    }
+
     await API._fetch('PATCH', `tables/sub_accounts/${_saBankSaId}`, {
       sa_bank_name:   name,
       sa_bank_holder: holder,
@@ -8741,13 +8757,39 @@ async function saveSaBankDetails() {
       sa_bank_type:   type,
       sa_bank_status: 'pending',
     });
-    const sa = PORTAL.subAccounts.find(s => s.id === _saBankSaId);
-    if (sa) { sa.sa_bank_name = name; sa.sa_bank_holder = holder; sa.sa_bank_number = number; sa.sa_bank_branch = branch; sa.sa_bank_type = type; sa.sa_bank_status = 'pending'; }
+    if (sa) { Object.assign(sa, { sa_bank_name: name, sa_bank_holder: holder, sa_bank_number: number, sa_bank_branch: branch, sa_bank_type: type, sa_bank_status: 'pending' }); }
+
+    const maskedNum    = number.slice(-4).padStart(number.length, '•');
+    const investorId   = PORTAL.investor?.id;
+    const investorName = `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim();
+
+    await API.kyc.create({
+      investor_id:    investorId,
+      investor_name:  investorName || undefined,
+      doc_type:       'proof_of_bank',
+      status:         'pending',
+      file_name:      proofFile ? proofFile.name : undefined,
+      file_data:      proofData || undefined,
+      notes:          `Sub-account banking: ${sa?.name || _saBankSaId} — ${name} ${maskedNum}`,
+    }).catch(e => console.warn('[saBankDetails] KYC doc failed:', e.message));
+
+    await API.tickets.create({
+      investor_id:    investorId,
+      investor_name:  investorName,
+      investor_email: PORTAL.investor?.email || '',
+      subject:        `Sub-Account Bank Verification — ${sa?.name || _saBankSaId}`,
+      message:        `Sub-account banking details submitted for verification.\n\nSub-Account: ${sa?.name || _saBankSaId}\nType: ${sa?.account_type || ''}\n\nBank: ${name}\nAccount Holder: ${holder}\nAccount Number: ${maskedNum}\nAccount Type: ${type}\nBranch Code: ${branch}\n\nPlease verify and approve or reject in the admin panel.`,
+      status:         'open',
+      priority:       'medium',
+      category:       'bank_verification',
+    }).catch(e => console.warn('[saBankDetails] ticket failed:', e.message));
+
     Modal.close('saBankModal');
-    Toast.success('Banking details saved — pending verification');
+    Toast.success('Banking details submitted — the admin team will verify within 1–2 business days.');
     await loadSubAccounts();
   } catch (err) {
     Toast.error('Failed to save banking details');
+    console.error(err);
   }
 }
 

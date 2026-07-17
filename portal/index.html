@@ -2422,10 +2422,19 @@
           <input type="text" class="form-input" id="saBankBranch" placeholder="e.g. 632005" />
         </div>
       </div>
+      <div class="form-group">
+        <label class="form-label">Proof of Bank Account <span style="color:#ef4444">*</span></label>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px">Bank statement, cancelled cheque, or confirmation letter (PDF, JPG, PNG)</div>
+        <input type="file" class="form-input" id="saBankProof" accept=".pdf,.jpg,.jpeg,.png" />
+      </div>
+      <div style="background:rgba(254,194,79,0.08);border:1px solid rgba(254,194,79,0.2);border-radius:10px;padding:10px 14px;font-size:0.78rem;color:var(--text-muted);margin-top:4px">
+        <i class="fa-solid fa-circle-info" style="color:#fec24f;margin-right:6px"></i>
+        Banking details will be reviewed and approved by the admin team before they can be used for withdrawals.
+      </div>
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('saBankModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveSaBankDetails()"><i class="fa-solid fa-floppy-disk"></i> Save Banking Details</button>
+      <button class="btn btn--primary" onclick="saveSaBankDetails()"><i class="fa-solid fa-floppy-disk"></i> Submit for Approval</button>
     </div>
   </div>
 </div>
