@@ -10802,81 +10802,287 @@ function downloadStatement() {
   Toast.success('90-day statement downloaded!');
 }
 
-/* downloadSaStatement() — sub-account statement */
+/* downloadSaStatement() — sub-account statement (matches main investor statement structure) */
 function downloadSaStatement(saId, saName) {
-  const txns = (PORTAL.transactions || []).filter(t => t.sub_account_id === saId);
-  if (!txns.length) { Toast.warn('No transactions found for this account'); return; }
+  const sa           = (PORTAL.subAccounts || []).find(a => a.id === saId) || { id: saId, name: saName, wallet_balance: 0 };
+  const investments  = (PORTAL.investments  || []).filter(i => i.sub_account_id === saId);
+  const transactions = (PORTAL.transactions || []).filter(t => t.sub_account_id === saId);
+  const investor     = PORTAL.investor || {};
 
-  const doc = _getPDF('portrait');
-  if (!doc) return;
+  const totalInvested = investments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const totalReturns  = investments.reduce((s, i) => s + (Number(i.actual_return_amount) || 0), 0);
+  const walletBal     = Number(sa.wallet_balance) || 0;
+  const totalValue    = totalInvested + walletBal + totalReturns;
+  const activeInv     = investments.filter(i => i.status === 'active').length;
 
-  const W   = doc.internal.pageSize.getWidth();
-  const now = new Date();
-  const dateLabel = now.toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' });
+  const now             = new Date();
+  const generatedAt     = now.toLocaleString('en-ZA', { dateStyle: 'long', timeStyle: 'short' });
+  const statementNumber = `SVC-${now.getFullYear()}-SA-${String(Math.floor(Math.random() * 90000) + 10000)}`;
+  const logoUrl         = `${window.location.origin}/assets/sv-capital-logo-horizontal-white-text.png`;
+  const logoOutlineUrl  = new URL('../assets/logo-outline.png', window.location.href).href;
+  const saType          = sa.type ? sa.type.charAt(0).toUpperCase() + sa.type.slice(1) : 'Sub-Account';
+  const parentName      = `${investor.first_name || ''} ${investor.last_name || ''}`.trim() || 'Parent Investor';
 
-  let y = _pdfHeader(doc, 'SV Capital — Sub-Account Statement', saName);
-  y += 6;
+  const summarySection = `
+    <section style="margin-bottom:36px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #fec24f">
+        <div style="width:4px;height:22px;background:linear-gradient(180deg,#fec24f,#FF5229);border-radius:2px"></div>
+        <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Portfolio Summary</h3>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px">
+        ${stmtKPIBox('Total Value', fmtNum(totalValue), '#fec24f')}
+        ${stmtKPIBox('Capital Deployed', fmtNum(totalInvested), '#656565')}
+        ${stmtKPIBox('Returns Earned', fmtNum(totalReturns), '#22C55E')}
+        ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#0096ff')}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="background:#F7F8FA;border-radius:8px;padding:14px;border:1px solid rgba(0,0,0,0.06)">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:700;margin-bottom:10px">Account Details</div>
+          ${stmtInfoRow('Account Name', _esc(sa.name))}
+          ${stmtInfoRow('Account ID', sa.id)}
+          ${stmtInfoRow('Account Type', saType)}
+          ${stmtInfoRow('Parent Investor', parentName)}
+          ${stmtInfoRow('Investor ID', investor.id || '—')}
+          ${stmtInfoRow('Email', investor.email || '—')}
+        </div>
+        <div style="background:#F7F8FA;border-radius:8px;padding:14px;border:1px solid rgba(0,0,0,0.06)">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:700;margin-bottom:10px">Investment Snapshot</div>
+          ${stmtInfoRow('Total Investments', investments.length)}
+          ${stmtInfoRow('Active Investments', activeInv)}
+          ${stmtInfoRow('Matured', investments.filter(i => ['matured', 'paid_out'].includes(i.status)).length)}
+          ${stmtInfoRow('Total Transactions', transactions.length)}
+          ${stmtInfoRow('Total Deposits', fmtNum(transactions.filter(t => t.type === 'deposit').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0)))}
+          ${stmtInfoRow('Fees Charged', fmtNum(transactions.filter(t => t.type === 'fee').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0)))}
+        </div>
+      </div>
+    </section>`;
 
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(26, 26, 26);
-  doc.text(saName, 14, y);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(107, 114, 128);
-  doc.setFontSize(8);
-  doc.text(`Generated: ${dateLabel}`, 14, y + 5);
-  y += 14;
-
-  const typeMap = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus', gift_sent: 'Gift Sent', gift_received: 'Gift Received', reward: 'XP Reward' };
-  const tableHead = [['Date', 'Type', 'Description', 'Amount', 'Status']];
-  const tableBody = txns
-    .sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at))
-    .map(t => [
-      Utils.date(t.transaction_date || t.created_at),
-      typeMap[t.type] || t.type,
-      (t.description || '—').slice(0, 38),
-      (t.amount > 0 ? '+' : '') + Utils.rand(t.amount),
-      (t.status || '—').toUpperCase(),
-    ]);
-
-  if (doc.autoTable) {
-    doc.autoTable({
-      head: tableHead,
-      body: tableBody,
-      startY: y,
-      margin: { left: 14, right: 14 },
-      headStyles: { fillColor: [26, 34, 53], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
-      bodyStyles: { fontSize: 8, textColor: [26, 26, 26] },
-      alternateRowStyles: { fillColor: [247, 248, 250] },
-      columnStyles: {
-        0: { cellWidth: 22 },
-        1: { cellWidth: 26 },
-        2: { cellWidth: 'auto' },
-        3: { cellWidth: 28, halign: 'right' },
-        4: { cellWidth: 22, halign: 'center' },
-      },
-      didDrawPage: () => _pdfFooter(doc),
+  let performanceSection = '';
+  if (investments.length > 0) {
+    const byProduct = {};
+    investments.forEach(inv => {
+      const p = inv.product_type || 'unknown';
+      if (!byProduct[p]) byProduct[p] = { count: 0, capital: 0, returns: 0 };
+      byProduct[p].count++;
+      byProduct[p].capital += Number(inv.amount) || 0;
+      byProduct[p].returns += Number(inv.actual_return_amount) || 0;
     });
-  } else {
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(107, 114, 128);
-    doc.text('Date', 14, y + 6); doc.text('Type', 40, y + 6); doc.text('Description', 70, y + 6); doc.text('Amount', 150, y + 6); doc.text('Status', 175, y + 6);
-    y += 10;
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(26, 26, 26);
-    tableBody.slice(0, 30).forEach(row => {
-      doc.text(row[0], 14, y); doc.text(row[1], 40, y); doc.text(row[2].slice(0, 30), 70, y);
-      doc.text(row[3], 150, y, { align: 'right' }); doc.text(row[4], 175, y);
-      y += 6;
-      if (y > 260) { doc.addPage(); y = 20; }
-    });
+    const perfRows = Object.entries(byProduct).map(([prod, d]) => {
+      const pct  = d.capital > 0 ? ((d.returns / d.capital) * 100).toFixed(2) : '0.00';
+      const info = getProductInfo(prod);
+      return `<tr style="border-bottom:1px solid #f0f0f0">
+        <td style="padding:8px 10px;font-size:11px;font-weight:700;color:#1a1a1a">${info.label}</td>
+        <td style="padding:8px 10px;font-size:11px;color:#6b7280;text-align:center">${d.count}</td>
+        <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right;font-weight:600">${fmtNum(d.capital)}</td>
+        <td style="padding:8px 10px;font-size:11px;color:#22C55E;text-align:right;font-weight:700">${fmtNum(d.returns)}</td>
+        <td style="padding:8px 10px;font-size:11px;color:#fec24f;text-align:right;font-weight:700">${pct}%</td>
+      </tr>`;
+    }).join('');
+    performanceSection = `
+      <section style="margin-bottom:36px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #656565">
+          <div style="width:4px;height:22px;background:#656565;border-radius:2px"></div>
+          <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Performance Analysis</h3>
+        </div>
+        <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea">
+          <thead><tr style="background:#F7F8FA">
+            <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Product</th>
+            <th style="padding:9px 10px;font-size:10px;text-align:center;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Count</th>
+            <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Capital</th>
+            <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Returns</th>
+            <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Return %</th>
+          </tr></thead>
+          <tbody>${perfRows}</tbody>
+          <tfoot><tr style="background:#F7F8FA">
+            <td colspan="2" style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a">TOTAL</td>
+            <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a;text-align:right">${fmtNum(totalInvested)}</td>
+            <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#22C55E;text-align:right">${fmtNum(totalReturns)}</td>
+            <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#fec24f;text-align:right">${totalInvested > 0 ? ((totalReturns / totalInvested) * 100).toFixed(2) : 0}%</td>
+          </tr></tfoot>
+        </table>
+      </section>`;
   }
 
-  _pdfFooter(doc);
-  const ym = now.toISOString().slice(0, 7);
-  const safeName = (saName || 'Account').replace(/[^a-zA-Z0-9_-]/g, '-');
-  doc.save(`SVC-Statement-${safeName}-${ym}.pdf`);
-  Toast.success('Sub-account statement downloaded!');
+  let investmentSection = '';
+  if (investments.length > 0) {
+    const invRows = investments.map(inv => {
+      const info       = getProductInfo(inv.product_type);
+      const isMatured  = inv.status === 'matured' || inv.status === 'paid_out';
+      const baseRate   = (Number(inv.expected_return_rate) || 0) * 100;
+      const expRet     = Number(inv.expected_return) || 0;
+      const actRet     = Number(inv.actual_return) || 0;
+      const achieved   = expRet > 0 ? baseRate * (actRet / expRet) : baseRate;
+      const rateCell   = isMatured ? `${achieved.toFixed(2)}%` : '—';
+      const statusColor = inv.status === 'active' ? '#656565' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
+      return `<tr style="border-bottom:1px solid #f0f0f0">
+        <td style="padding:8px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${inv.id}</td>
+        <td style="padding:8px 10px;font-size:11px;font-weight:600;color:#1a1a1a">${_esc(inv.pool_name) || '—'}</td>
+        <td style="padding:8px 10px"><span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em">${info.label}</span></td>
+        <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right;font-weight:700">${fmtNum(inv.amount)}</td>
+        <td style="padding:8px 10px;font-size:11px;color:${rateCell === '—' ? '#9ca3af' : '#fec24f'};text-align:right;font-weight:700">${rateCell}</td>
+        <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${fmtDate(inv.investment_date)}</td>
+        <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${inv.maturity_date ? fmtDate(inv.maturity_date) : '—'}</td>
+        <td style="padding:8px 10px"><span style="color:${statusColor};font-size:10px;font-weight:700;text-transform:uppercase">${inv.status}</span></td>
+      </tr>`;
+    }).join('');
+    investmentSection = `
+      <section style="margin-bottom:36px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #22C55E">
+          <div style="width:4px;height:22px;background:linear-gradient(180deg,#22C55E,#16A34A);border-radius:2px"></div>
+          <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Investment Details</h3>
+          <span style="margin-left:auto;font-size:10px;color:#9ca3af">${investments.length} records</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:700px">
+            <thead><tr style="background:#F7F8FA">
+              <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">ID</th>
+              <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Pool</th>
+              <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Product</th>
+              <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Amount</th>
+              <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Actual Rate</th>
+              <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Invested</th>
+              <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Maturity</th>
+              <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Status</th>
+            </tr></thead>
+            <tbody>${invRows}</tbody>
+          </table>
+        </div>
+      </section>`;
+  }
+
+  const typeMap    = { deposit: 'Deposit', withdrawal: 'Withdrawal', investment: 'Investment', return: 'Return', payout: 'Payout', fee: 'Fee', referral_bonus: 'Referral Bonus', gift_sent: 'Gift Sent', gift_received: 'Gift Received', reward: 'XP Reward', transfer_in: 'Transfer In', transfer_out: 'Transfer Out' };
+  const sortedTxns = [...transactions].sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at));
+  const txnRows = sortedTxns.length > 0 ? sortedTxns.map(t => {
+    const isPos    = !['withdrawal', 'fee', 'investment', 'gift_sent', 'transfer_out'].includes(t.type);
+    const amt      = isPos ? `+${fmtNum(Math.abs(t.amount))}` : `-${fmtNum(Math.abs(t.amount))}`;
+    const amtColor = isPos ? '#22C55E' : '#EF4444';
+    return `<tr style="border-bottom:1px solid #f0f0f0">
+      <td style="padding:7px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${t.reference || '—'}</td>
+      <td style="padding:7px 10px;font-size:11px;color:#1a1a1a">${typeMap[t.type] || t.type}</td>
+      <td style="padding:7px 10px;font-size:11px;color:#1a1a1a">${t.description || '—'}</td>
+      <td style="padding:7px 10px;font-size:11px;font-weight:700;color:${amtColor};text-align:right">${amt}</td>
+      <td style="padding:7px 10px;font-size:11px;color:#9ca3af;text-align:right">${fmtDate(t.transaction_date || t.created_at)}</td>
+      <td style="padding:7px 10px">
+        <span style="background:${t.status === 'completed' ? '#dcfce7' : '#fef9c3'};color:${t.status === 'completed' ? '#16a34a' : '#92400e'};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase">${t.status || '—'}</span>
+      </td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="6" style="padding:20px;text-align:center;color:#9ca3af;font-size:11px">No transactions found for this account</td></tr>`;
+
+  const totalDeposits   = transactions.filter(t => t.type === 'deposit').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalTransferIn = transactions.filter(t => t.type === 'transfer_in').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalFees       = transactions.filter(t => t.type === 'fee').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+
+  const ledgerSection = `
+    <section style="margin-bottom:36px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #eda5ff">
+        <div style="width:4px;height:22px;background:#eda5ff;border-radius:2px"></div>
+        <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Transaction Ledger</h3>
+        <span style="margin-left:auto;font-size:10px;color:#9ca3af">${transactions.length} transactions · all time</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+        ${stmtMiniBox('Total Deposits', fmtNum(totalDeposits + totalTransferIn), '#22C55E')}
+        ${stmtMiniBox('Total Invested', fmtNum(totalInvested), '#656565')}
+        ${stmtMiniBox('Fees Charged', fmtNum(totalFees), '#EF4444')}
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:600px">
+          <thead><tr style="background:#F7F8FA">
+            <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Reference</th>
+            <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Type</th>
+            <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Description</th>
+            <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Amount</th>
+            <th style="padding:9px 10px;font-size:10px;text-align:right;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Date</th>
+            <th style="padding:9px 10px;font-size:10px;text-align:left;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em">Status</th>
+          </tr></thead>
+          <tbody>${txnRows}</tbody>
+        </table>
+      </div>
+    </section>`;
+
+  const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SV Capital — Sub-Account Statement · ${_esc(sa.name)}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#1a1a1a}
+    @page{size:A4;margin:0}
+    @media print{.no-print{display:none!important}.print-body{padding-top:0!important}}
+    .no-print{position:fixed;top:0;left:0;right:0;background:#1a1a1a;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;z-index:999;box-shadow:0 2px 12px rgba(0,0,0,0.3)}
+    .no-print span{color:#fff;font-size:13px;font-weight:600}
+    .no-print button{background:linear-gradient(135deg,#fec24f,#FF5229);color:#fff;border:none;padding:8px 22px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
+    .print-body{padding-top:52px}
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <span>SV Capital — Sub-Account Statement · ${_esc(sa.name)}</span>
+    <button onclick="window.print()">⬇&nbsp; Save as PDF / Print</button>
+  </div>
+  <div class="print-body">
+    <div style="font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;min-height:100%;position:relative">
+      <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:0;opacity:0.04;width:480px;height:480px;background:url('${logoOutlineUrl}') center/contain no-repeat;print-color-adjust:exact;-webkit-print-color-adjust:exact"></div>
+      <div style="background:#303030;padding:24px 40px;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1">
+        <img src="${logoUrl}" alt="SV Capital" style="height:44px;width:auto;max-width:220px;object-fit:contain;display:block">
+        <div style="text-align:right">
+          <div style="font-size:16px;font-weight:800;color:#fec24f;letter-spacing:0.04em">SUB-ACCOUNT STATEMENT</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:4px"># ${statementNumber}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:2px">Generated: ${generatedAt}</div>
+        </div>
+      </div>
+      <div style="background:linear-gradient(90deg,rgba(254,194,79,0.08),rgba(47,140,155,0.06));border-top:3px solid #fec24f;border-bottom:1px solid rgba(0,0,0,0.06);padding:12px 40px;display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em">Account:</span>
+          <span style="font-size:12px;font-weight:800;color:#1a1a1a">${_esc(sa.name)}</span>
+          <span style="background:rgba(237,165,255,0.12);color:#c070d8;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(237,165,255,0.25);margin-left:4px">${saType}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em">Investor:</span>
+          <span style="font-size:12px;font-weight:800;color:#1a1a1a">${parentName}</span>
+          <span style="background:rgba(254,194,79,0.1);color:#ff5229;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(254,194,79,0.2);margin-left:4px">${investor.id || ''}</span>
+        </div>
+      </div>
+      <div style="padding:32px 40px">
+        ${summarySection}
+        ${performanceSection}
+        ${investmentSection}
+        ${ledgerSection}
+      </div>
+      <div style="background:#F7F8FA;border-top:3px solid #fec24f;padding:20px 40px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:#1a1a1a;margin-bottom:3px">SV Capital (Pty) Ltd</div>
+            <div style="font-size:9px;color:#9ca3af">enquiry@svcapital.co.za · www.svcapital.co.za</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:9px;color:#c1c7d0">This statement is computer generated and does not require a signature.</div>
+          </div>
+        </div>
+        <div style="font-size:7.5px;color:#b0b8c4;border-top:1px solid rgba(0,0,0,0.06);padding-top:8px;line-height:1.5">
+          IMPORTANT NOTICE: This investment is not a regulated financial product under the Financial Sector Conduct Authority (FSCA) and is not covered by the Financial Advisory and Intermediary Services Act (FAIS) or the Collective Investment Schemes Control Act (CISCA). This investment is managed solely by SV Capital (Pty) Ltd. Capital is at risk and returns are not guaranteed.
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+  if (!win) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SVC-Statement-${(saName || 'Account').replace(/[^a-zA-Z0-9_-]/g, '-')}-${now.toISOString().slice(0, 10)}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    Toast.success('Statement downloaded — open in a browser to save as PDF.');
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
 }
 
 /* ═══════════════════════════════════════════════
