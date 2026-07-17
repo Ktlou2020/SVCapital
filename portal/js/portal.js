@@ -3117,7 +3117,19 @@ function launchPaystack() {
 function showEftDetails() {
   const investorId = _pmInvestorId();
   _pmEl('eftAmountDisplay').textContent = `R${_pmAmount.toLocaleString('en-ZA')}`;
-  _pmEl('eftReference').textContent     = investorId;
+
+  let eftRef = investorId;
+  let hintHtml = 'Always use your <strong style="color:#f0f4ff">Investor ID as the payment reference</strong> so we can match your deposit. Funds reflect within 1–2 business days.';
+  if (_pmSaId) {
+    const sa = (PORTAL.subAccounts || []).find(s => s.id === _pmSaId);
+    if (sa?.sa_reference) {
+      eftRef = sa.sa_reference;
+      hintHtml = `Always use the <strong style="color:#f0f4ff">Sub-Account Reference (${sa.sa_reference})</strong> as your payment reference so we can credit the correct sub-account. Funds reflect within 1–2 business days.`;
+    }
+  }
+  _pmEl('eftReference').textContent = eftRef;
+  const hint = document.getElementById('eftRefHint');
+  if (hint) hint.innerHTML = hintHtml;
 
   _pmShowOnly('pmStep3Eft');
   _pmSetProgress(100);
