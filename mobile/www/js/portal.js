@@ -2224,7 +2224,7 @@ function populateMyInvProductFilter() {
     { value: '', icon: 'fa-layer-group', label: 'All' },
     ...types.map(t => {
       const pi = Utils.productInfo(t);
-      return { value: t, icon: pi.icon, label: (pi.label || t).replace(/\s*\(\d+yr\)/gi, '').trim(), color: pi.color };
+      return { value: t, icon: pi.icon, label: (pi.label || t).replace(/\s*\(\d+yr\)/gi, '').replace(/\s+Investments?\b/gi, '').trim(), color: pi.color };
     })
   ];
   container.innerHTML = items.map(item => `

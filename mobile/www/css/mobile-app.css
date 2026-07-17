@@ -1726,31 +1726,29 @@ input[type="file"] { font-size: 16px !important; }
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 5px !important;
-  padding: 10px 14px !important;
+  gap: 4px !important;
+  padding: 8px 12px !important;
   border-radius: 12px !important;
   border: 1.5px solid rgba(0,0,0,0.08) !important;
   background: #f3f4f6 !important;
   cursor: pointer !important;
-  white-space: nowrap !important;
   flex-shrink: 0 !important;
-  flex: 1 1 0 !important;
-  min-width: 64px !important;
-  max-width: 110px !important;
+  min-width: 56px !important;
   transition: background 0.15s, border-color 0.15s !important;
 }
 .prod-type-tile i {
-  font-size: 1.15rem !important;
+  font-size: 1.05rem !important;
   color: #6b7280 !important;
   display: block !important;
 }
 .prod-type-tile span {
-  font-size: 0.68rem !important;
+  font-size: 0.65rem !important;
   font-weight: 700 !important;
   color: #374151 !important;
   text-align: center !important;
   line-height: 1.2 !important;
   display: block !important;
+  white-space: nowrap !important;
 }
 .prod-type-tile.active {
   background: rgba(255,155,12,0.12) !important;
