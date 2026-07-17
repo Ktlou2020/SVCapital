@@ -2173,8 +2173,18 @@ function renderKYCTable() {
     const canSelect = ['pending', 'under_review'].includes(k.status);
     const isBankDoc = k.doc_type === 'proof_of_bank';
 
+    // Detect if this KYC doc was submitted for a sub-account
+    const _saNotesMatch = (k.notes || '').match(/^Sub-account banking:\s*(.+?)\s*—/i);
+    const _isSubAcctDoc = !!_saNotesMatch;
+    const _saDocName    = _saNotesMatch ? _saNotesMatch[1].trim() : '';
+
+    // Sub-account badge shown in both bank and non-bank doc rows
+    const _subAcctBadge = _isSubAcctDoc
+      ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.65rem;font-weight:700;color:#eda5ff;background:rgba(237,165,255,0.12);border:1px solid rgba(237,165,255,0.3);border-radius:6px;padding:2px 7px;margin-bottom:4px"><i class="fa-solid fa-layer-group" style="font-size:0.6rem"></i>Sub Account${_saDocName ? ': ' + _esc(_saDocName) : ''}</span><br>`
+      : '';
+
     // For proof_of_bank rows, surface the bank details the investor submitted
-    let docTypeCell = k.doc_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—';
+    let docTypeCell = `${_subAcctBadge}${k.doc_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—'}`;
     if (isBankDoc && kInv) {
       const bankName    = _esc(kInv.bank_name || '—');
       const bankHolder  = _esc(kInv.bank_account_holder || '—');
@@ -2186,21 +2196,21 @@ function renderKYCTable() {
       const bkCls       = { approved: 'badge--green', rejected: 'badge--red', pending: 'badge--yellow' }[bkStatus] || 'badge--grey';
       const submittedAt = k.submitted_at || k.submitted_date || k.created_at || '';
       const submittedLabel = submittedAt ? `<span style="display:block;margin-top:2px;font-size:0.68rem;color:var(--text-dim)"><i class="fa-solid fa-clock" style="margin-right:3px"></i>Submitted ${Utils.date(submittedAt)}</span>` : '';
-      docTypeCell = `<div style="font-size:0.78rem;font-weight:700;color:var(--text);margin-bottom:4px">Proof of Bank</div>
+      docTypeCell = `${_subAcctBadge}<div style="font-size:0.78rem;font-weight:700;color:var(--text);margin-bottom:4px">Proof of Bank</div>
         <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.6">
           <span style="display:block"><strong>${bankName}</strong></span>
           <span style="display:block">${bankHolder} &bull; ${masked}</span>
           <span style="display:block">${acctType} &bull; Branch ${branchCode}</span>
           ${submittedLabel}
           <span class="badge ${bkCls}" style="font-size:0.62rem;margin-top:4px">Bank ${bkStatus}</span>
-          <button class="btn btn--secondary" style="font-size:0.65rem;padding:2px 8px;margin-top:4px;display:inline-flex;align-items:center;gap:4px" onclick="event.stopPropagation();_showBankDetailsModal('${kInv.id}','${submittedAt}')"><i class="fa-solid fa-eye"></i> View Full</button>
+          <button class="btn btn--secondary" style="font-size:0.65rem;padding:2px 8px;margin-top:4px;display:inline-flex;align-items:center;gap:4px" onclick="event.stopPropagation();_showBankDetailsModal('${kInv.id}','${submittedAt}','${_esc(_saDocName)}')"><i class="fa-solid fa-eye"></i> View Full</button>
         </div>`;
     }
 
     return `
     <tr>
       <td><input type="checkbox" class="kyc-cb" value="${k.id}" ${!canSelect ? 'disabled' : ''} ${_kycSelected.has(k.id) ? 'checked' : ''} onchange="toggleKycRow('${k.id}', this.checked)" style="${canSelect ? 'cursor:pointer;width:16px;height:16px;accent-color:#fec24f' : 'opacity:0.3;width:16px;height:16px'}"></td>
-      <td><div class="td-strong clip">${kName}</div><div class="td-muted clip">${k.investor_id}</div></td>
+      <td><div class="td-strong clip">${kName}</div><div class="td-muted clip">${k.investor_id}</div>${_isSubAcctDoc ? `<div style="margin-top:3px"><span style="font-size:0.62rem;font-weight:700;color:#eda5ff;background:rgba(237,165,255,0.1);border:1px solid rgba(237,165,255,0.25);border-radius:4px;padding:1px 5px"><i class="fa-solid fa-layer-group" style="margin-right:3px;font-size:0.58rem"></i>Sub Account</span></div>` : ''}</td>
       <td>${docTypeCell}</td>
       <td class="td-muted clip">${k.file_name || 'Not uploaded'}</td>
       <td>${Utils.statusBadge(k.status)}</td>
@@ -2224,7 +2234,7 @@ function renderKYCTable() {
 }
 
 /** Show a full (unmasked) bank details modal for a KYC bank-doc row. */
-function _showBankDetailsModal(investorId, submittedAt) {
+function _showBankDetailsModal(investorId, submittedAt, saName) {
   const inv = STATE.investors.find(i => i.id === investorId);
   if (!inv) { Toast.error('Investor record not found.'); return; }
 
@@ -2232,7 +2242,12 @@ function _showBankDetailsModal(investorId, submittedAt) {
   const bkCls    = { approved: 'badge--green', rejected: 'badge--red', pending: 'badge--yellow' }[bkStatus] || 'badge--grey';
 
   const subtitle = document.getElementById('bankDetailSubtitle');
-  if (subtitle) subtitle.textContent = submittedAt ? `Submitted ${Utils.date(submittedAt)}` : '';
+  if (subtitle) {
+    const parts = [];
+    if (saName) parts.push(`Sub Account: ${saName}`);
+    if (submittedAt) parts.push(`Submitted ${Utils.date(submittedAt)}`);
+    subtitle.textContent = parts.join(' · ');
+  }
 
   const body = document.getElementById('bankDetailsBody');
   if (!body) return;
@@ -2244,8 +2259,9 @@ function _showBankDetailsModal(investorId, submittedAt) {
     </div>`;
 
   body.innerHTML = `
-    <div style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <span class="badge ${bkCls}">Bank ${bkStatus}</span>
+      ${saName ? `<span style="font-size:0.72rem;font-weight:700;color:#eda5ff;background:rgba(237,165,255,0.12);border:1px solid rgba(237,165,255,0.3);border-radius:6px;padding:2px 8px"><i class="fa-solid fa-layer-group" style="margin-right:4px;font-size:0.65rem"></i>Sub Account: ${_esc(saName)}</span>` : ''}
     </div>
     ${row('Account Holder', _esc(inv.bank_account_holder || '—'))}
     ${row('Bank', _esc(inv.bank_name || '—'))}
