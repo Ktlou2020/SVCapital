@@ -368,6 +368,7 @@ function navigate(view, btnEl) {
     migrate: 'Data Migration', compliance: 'Compliance Calendar', reconciliation: 'Financial Reconciliation',
     terms: 'Terms of Use', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest',
     opsconsole: 'Operations Console', feedback: 'Client Feedback', emaillogs: 'Email Logs',
+    'fica-pipeline': 'FICA Pipeline',
   };
   document.getElementById('topbarTitle').textContent = titles[view] || view;
   STATE.currentView = view;
@@ -396,6 +397,7 @@ function navigate(view, btnEl) {
     privacy: loadPrivacyEditor,
     'accepted-docs': loadAcceptedDocuments,
     intlinterest: loadIntlInterest,
+    'fica-pipeline': loadFicaPipeline,
     opsconsole: loadOpsConsole,
     feedback: () => loadFeedback('pending'),
     emaillogs: loadEmailLogs,
@@ -1893,6 +1895,9 @@ function renderWithdrawalsTable() {
   const _row = (w, showActions) => {
     const inv  = STATE.investors.find(i => i.id === w.investor_id);
     const name = inv ? `${inv.first_name} ${inv.last_name}` : w.investor_id || '—';
+    const saBadge = w.sub_account_id
+      ? (() => { const sa = (STATE.subAccounts || []).find(s => s.id === w.sub_account_id); return `<div style="margin-top:2px"><span style="background:rgba(237,165,255,.15);color:#eda5ff;border-radius:4px;padding:1px 6px;font-size:0.65rem;font-weight:700">SA: ${sa ? _esc(sa.name) : 'Sub-Account'}</span></div>`; })()
+      : '';
 
     let bankNotes = {};
     try { if (inv?.notes?.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
@@ -1913,7 +1918,7 @@ function renderWithdrawalsTable() {
     return `<tr>
       ${checkCol}
       <td class="td-muted clip">${Utils.date(w.created_at || w.transaction_date)}</td>
-      <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${w.investor_id||''}</div></td>
+      <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${w.investor_id||''}</div>${saBadge}</td>
       <td class="td-gold fw-700 clip">${Utils.rand(Math.abs(w.amount))}</td>
       <td>${bankDisplay}</td>
       <td class="td-muted clip" style="font-size:0.75rem">${w.reference || '—'}</td>
@@ -4066,6 +4071,23 @@ async function processMaturity(id) {
     Toast.error('Failed to process instruction: ' + (e.message || 'unknown error'));
     console.error('[processMaturity]', e);
   }
+}
+
+async function processAllMaturity() {
+  const pending = (STATE.maturity || []).filter(m => m.status === 'submitted' && !m._from_investment);
+  if (!pending.length) { Toast.info('No submitted instructions to process'); return; }
+  if (!await Confirm.ask(`Process all ${pending.length} submitted maturity instructions?`, {
+    body: 'Each instruction will be marked as processing. This cannot be undone.',
+    confirmLabel: 'Process All',
+  })) return;
+  let ok = 0, fail = 0;
+  for (const m of pending) {
+    try { await API.maturityInstructions.update(m.id, { status: 'processing' }); ok++; }
+    catch (e) { console.error('[processAllMaturity]', m.id, e); fail++; }
+  }
+  if (fail) Toast.warning(`${ok} processed, ${fail} failed`);
+  else Toast.success(`${ok} maturity instructions marked as processing`);
+  await loadMaturity();
 }
 
 /* ═══════════════════════════════════════════════
@@ -8120,7 +8142,7 @@ function renderReconcTable() {
   const tbody = document.getElementById('reconcBody');
   if (!tbody) return;
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#7a92a8">No records found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:#7a92a8">No records found</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(r => {
@@ -8136,11 +8158,46 @@ function renderReconcTable() {
       <td style="color:#9ca3af;font-size:0.82rem">${fmt(r.expectedWallet)}</td>
       <td style="font-size:0.82rem;font-weight:700;${varColor}">${r.variance >= 0 ? '+' : '-'}${fmt(r.variance)}</td>
       <td>${statusBadge}</td>
+      <td><button class="btn btn--secondary btn--sm" onclick='openManualCreditModal(${JSON.stringify(r.inv.id)}, ${JSON.stringify(r.inv.first_name + ' ' + r.inv.last_name)})'><i class="fa-solid fa-plus"></i> Credit</button></td>
     </tr>`;
   }).join('');
 
   const footer = document.getElementById('reconcFooter');
   if (footer) footer.textContent = `${rows.length} investors shown · ${discCount} discrepancy${discCount!==1?'ies':''} · Variance tolerance R1.00`;
+}
+
+function openManualCreditModal(investorId, investorName) {
+  document.getElementById('manualCreditInvestorId').value = investorId;
+  document.getElementById('manualCreditInvestorName').textContent = investorName;
+  document.getElementById('manualCreditAmount').value = '';
+  document.getElementById('manualCreditNotes').value = '';
+  Modal.open('manualCreditModal');
+}
+
+async function submitManualCredit() {
+  const investorId = document.getElementById('manualCreditInvestorId').value;
+  const amount = parseFloat(document.getElementById('manualCreditAmount').value);
+  const notes = document.getElementById('manualCreditNotes').value.trim();
+  if (!investorId || isNaN(amount) || amount <= 0) { Toast.error('Enter a valid positive amount'); return; }
+  const name = document.getElementById('manualCreditInvestorName').textContent;
+  if (!await Confirm.ask(`Credit R${amount.toFixed(2)} to ${name}?`, { body: notes || 'No notes provided.', confirmLabel: 'Credit Wallet' })) return;
+  try {
+    const res = await fetch('/api/admin/manual-credit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ investorId, amount, notes: notes || null }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Request failed');
+    Toast.success(`Wallet credited R${amount.toFixed(2)} successfully`);
+    Modal.close('manualCreditModal');
+    // Refresh investor data so reconciliation reflects the new balance
+    const inv = STATE.investors.find(i => i.id === investorId);
+    if (inv) inv.wallet_balance = (parseFloat(inv.wallet_balance) || 0) + amount;
+    renderReconcTable();
+  } catch (e) {
+    Toast.error('Credit failed: ' + (e.message || 'unknown error'));
+  }
 }
 
 function exportReconciliationCSV() {
@@ -8456,6 +8513,113 @@ function adminCmdKeyNav(e) {
   if (e.key==='ArrowUp')   { e.preventDefault(); adminCmdHover((_adminCmdActive-1+count)%count); }
   if (e.key==='Enter')     { e.preventDefault(); if (_adminCmdActive>=0) adminCmdSelect(_adminCmdActive); else if(count>0) adminCmdSelect(0); }
   if (e.key==='Escape')    { closeAdminCmd(); }
+}
+
+/* ═══════════════════════════════════════════════
+   FICA PIPELINE
+   ═══════════════════════════════════════════════ */
+let _ficaStageFilter = 'all';
+
+function _ficaStageOf(inv) {
+  if (inv.fica_status === 'approved' || inv.kyc_status === 'verified') return 'approved';
+  const docs = (STATE.kyc || []).filter(d => d.investor_id === inv.id && !d.sub_account_id);
+  if (!docs.length) return 'not_started';
+  if (docs.some(d => d.status === 'rejected')) return 'rejected';
+  if (docs.some(d => d.status === 'approved')) return 'in_review';
+  return 'submitted';
+}
+
+const _ficaStageLabels = {
+  not_started: 'Not Started',
+  submitted:   'Docs Submitted',
+  in_review:   'In Review',
+  approved:    'Approved',
+  rejected:    'Rejected / Issues',
+};
+
+const _ficaStageColors = {
+  not_started: { bg: 'rgba(122,146,168,.12)', border: 'rgba(122,146,168,.2)', text: '#7a92a8', badge: 'rgba(122,146,168,.15)', badgeText: '#7a92a8' },
+  submitted:   { bg: 'rgba(254,194,79,.08)',  border: 'rgba(254,194,79,.15)', text: '#fec24f', badge: 'rgba(254,194,79,.15)',  badgeText: '#fec24f' },
+  in_review:   { bg: 'rgba(59,130,246,.08)',  border: 'rgba(59,130,246,.15)', text: '#60a5fa', badge: 'rgba(59,130,246,.15)',  badgeText: '#60a5fa' },
+  approved:    { bg: 'rgba(34,197,94,.08)',   border: 'rgba(34,197,94,.15)',  text: '#22c55e', badge: 'rgba(34,197,94,.12)',   badgeText: '#22c55e' },
+  rejected:    { bg: 'rgba(239,68,68,.08)',   border: 'rgba(239,68,68,.15)',  text: '#ef4444', badge: 'rgba(239,68,68,.12)',   badgeText: '#ef4444' },
+};
+
+async function loadFicaPipeline() {
+  try {
+    const [invRes, kycRes] = await Promise.all([
+      STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 }),
+      STATE.kyc.length ? Promise.resolve({ data: STATE.kyc }) : API._fetch('GET', 'tables/kyc_documents?limit=5000'),
+    ]);
+    if (!STATE.investors.length) STATE.investors = invRes.data || [];
+    if (!STATE.kyc.length) STATE.kyc = kycRes.data || [];
+    _renderFicaPipeline();
+  } catch (e) { Toast.error('Failed to load FICA pipeline'); }
+}
+
+function _renderFicaPipeline() {
+  const stageOrder = ['not_started','submitted','in_review','approved','rejected'];
+  const search = (document.getElementById('ficaPipelineSearch')?.value || '').toLowerCase();
+
+  const investors = STATE.investors.filter(inv => {
+    if (inv.role && inv.role !== 'investor') return false;
+    if (search) {
+      const full = `${inv.first_name} ${inv.last_name} ${inv.email || ''}`.toLowerCase();
+      if (!full.includes(search)) return false;
+    }
+    if (_ficaStageFilter !== 'all') return _ficaStageOf(inv) === _ficaStageFilter;
+    return true;
+  });
+
+  const counts = {};
+  stageOrder.forEach(s => counts[s] = 0);
+  STATE.investors.forEach(inv => {
+    if (inv.role && inv.role !== 'investor') return;
+    const s = _ficaStageOf(inv);
+    counts[s] = (counts[s] || 0) + 1;
+  });
+
+  const tilesEl = document.getElementById('ficaPipelineTiles');
+  if (tilesEl) {
+    tilesEl.innerHTML = [
+      { key: 'all', label: 'All Investors', count: Object.values(counts).reduce((a,b) => a+b, 0), c: { bg:'rgba(255,255,255,.04)', border:'rgba(255,255,255,.08)', text:'#e8edf2', badge:'rgba(255,255,255,.08)', badgeText:'#e8edf2' } },
+      ...stageOrder.map(s => ({ key: s, label: _ficaStageLabels[s], count: counts[s], c: _ficaStageColors[s] })),
+    ].map(({ key, label, count, c }) => `
+      <div onclick="_ficaSetStage('${key}')" style="cursor:pointer;background:${c.bg};border:1px solid ${key===_ficaStageFilter?c.text:c.border};border-radius:12px;padding:14px 16px;transition:border-color .15s${key===_ficaStageFilter?';box-shadow:0 0 0 2px '+c.text+'22':''}" title="Filter: ${label}">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:${c.text};margin-bottom:6px">${label}</div>
+        <div style="font-size:1.5rem;font-weight:800;color:${c.text}">${count}</div>
+      </div>`).join('');
+  }
+
+  const tbody = document.getElementById('ficaPipelineBody');
+  if (!tbody) return;
+  if (!investors.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#7a92a8">No investors match the current filter</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = investors.map(inv => {
+    const stage = _ficaStageOf(inv);
+    const c = _ficaStageColors[stage];
+    const docs = (STATE.kyc || []).filter(d => d.investor_id === inv.id && !d.sub_account_id);
+    const docCount = docs.length;
+    const approvedCount = docs.filter(d => d.status === 'approved').length;
+    const stageBadge = `<span style="background:${c.badge};color:${c.badgeText};border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">${_ficaStageLabels[stage]}</span>`;
+    return `<tr>
+      <td><div style="font-weight:600;font-size:0.83rem">${_esc(inv.first_name)} ${_esc(inv.last_name)}</div><div style="font-size:0.72rem;color:#7a92a8">${_esc(inv.email||'')}</div></td>
+      <td style="font-size:0.82rem;color:#7a92a8">${Utils.date(inv.created_at)}</td>
+      <td>${stageBadge}</td>
+      <td style="font-size:0.82rem;color:#7a92a8">${docCount ? `${approvedCount}/${docCount} approved` : '—'}</td>
+      <td><button class="btn btn--secondary btn--sm" onclick='navigate("kyc", document.querySelector("[data-view=kyc]"))'><i class="fa-solid fa-id-card"></i> KYC Queue</button></td>
+    </tr>`;
+  }).join('');
+
+  const subtitle = document.getElementById('ficaPipelineSubtitle');
+  if (subtitle) subtitle.textContent = `${investors.length} investor${investors.length!==1?'s':''} shown · filter: ${_ficaStageFilter === 'all' ? 'all stages' : _ficaStageLabels[_ficaStageFilter]}`;
+}
+
+function _ficaSetStage(stage) {
+  _ficaStageFilter = stage;
+  _renderFicaPipeline();
 }
 
 /* ═══════════════════════════════════════════════
