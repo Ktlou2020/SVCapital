@@ -1108,6 +1108,7 @@ function renderProductMixChart() {
 let investorPage = 1;
 const INV_PAGE_SIZE = 8;
 let filteredInvestors = [];
+let filteredSubAccounts = [];
 
 let selectedInvestors = new Set();
 
@@ -1125,6 +1126,7 @@ async function loadInvestors() {
       (uRes.data || []).filter(u => u.investor_id).map(u => u.investor_id)
     );
     filteredInvestors = [...STATE.investors];
+    filteredSubAccounts = [...STATE.subAccounts];
     _markRefreshed('investors');
     renderInvestorStats();
     renderInvestorsTable();
@@ -1193,9 +1195,11 @@ async function bulkSendLoginInvites() {
 
 function renderInvestorStats() {
   const d = STATE.investors;
-  // AUM computed from live investments table (not stale investor.total_invested field)
+  // AUM from active investments (sub-account investments carry investor_id so are included)
   const liveAUM = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-  const totalWallet = d.reduce((s, i) => s + (parseFloat(i.wallet_balance) || 0), 0);
+  // Wallet tile includes both main investor wallets and sub-account wallets
+  const saWallet = (STATE.subAccounts || []).reduce((s, sa) => s + (parseFloat(sa.wallet_balance) || 0), 0);
+  const totalWallet = d.reduce((s, i) => s + (parseFloat(i.wallet_balance) || 0), 0) + saWallet;
   document.getElementById('is-total').textContent = d.length.toLocaleString();
   document.getElementById('is-active').textContent = d.filter(i => i.status === 'active').length.toLocaleString();
   document.getElementById('is-pending').textContent = d.filter(i => i.kyc_status === 'pending').length.toLocaleString();
@@ -1310,9 +1314,9 @@ function renderInvestorsTable() {
     investorPage < pages ? `<button class="page-btn" onclick="investorPage++;renderInvestorsTable()">Next &#8250;</button>` : `<button class="page-btn" disabled style="opacity:0.35">Next &#8250;</button>`,
   ].join('');
 
-  // Append sub-account rows after paginated investor rows
-  const subAccounts = STATE.subAccounts || [];
-  if (subAccounts.length) {
+  // Append sub-account rows after paginated investor rows (uses filteredSubAccounts for search)
+  const _visibleSa = filteredSubAccounts || [];
+  if (_visibleSa.length) {
     const saInvMap = {};
     STATE.investments.forEach(i => {
       if (i.sub_account_id) {
@@ -1322,21 +1326,32 @@ function renderInvestorsTable() {
     const parentMap = {};
     STATE.investors.forEach(inv => { parentMap[inv.id] = inv; });
     const _trunc = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block';
-    const saRows = subAccounts.map(sa => {
+    const _ficaBadge = (status) => {
+      if (status === 'approved') return '<span class="badge badge--green" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-shield-check"></i> FICA</span>';
+      if (status === 'rejected') return '<span class="badge badge--red" style="font-size:0.65rem;padding:2px 6px">FICA Fail</span>';
+      if (status === 'flagged')  return '<span class="badge badge--red" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-flag"></i> Flagged</span>';
+      return '<span class="badge badge--yellow" style="font-size:0.65rem;padding:2px 6px">FICA Pending</span>';
+    };
+    const saRows = _visibleSa.map(sa => {
       const parent = parentMap[sa.parent_investor_id] || {};
-      const parentName = `${parent.first_name || ''} ${parent.last_name || ''}`.trim() || sa.parent_investor_id || '—';
       const typeLabel = (sa.type || 'standard').replace(/_/g, ' ');
       const typeCap = typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1);
       const invCount = saInvMap[sa.id] || 0;
       const balance  = Utils.rand(parseFloat(sa.wallet_balance) || 0);
       const saRef    = sa.sa_reference || '—';
-      return `<tr style="cursor:default;background:rgba(237,165,255,0.04);border-left:3px solid #eda5ff">
+      const ficaBadge = _ficaBadge(parent.fica_status);
+      const bankBadge = sa.sa_bank_status === 'approved'
+        ? '<span class="badge badge--green" style="font-size:0.65rem;padding:2px 6px">Bank ✓</span>'
+        : sa.sa_bank_status === 'rejected'
+        ? '<span class="badge badge--red" style="font-size:0.65rem;padding:2px 6px">Bank ✗</span>'
+        : '';
+      return `<tr style="cursor:pointer;background:rgba(237,165,255,0.04);border-left:3px solid #eda5ff" onclick="viewSubAccount('${sa.id}')">
         <td style="overflow:hidden;padding:8px 10px"></td>
         <td style="overflow:hidden">
           <div class="flex-center gap-8" style="min-width:0">
             <div style="width:30px;height:30px;border-radius:50%;background:#3d1f4a;color:#eda5ff;font-size:0.63rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid fa-circle-nodes"></i></div>
             <div style="min-width:0;flex:1">
-              <div style="display:flex;align-items:center;gap:5px;${_trunc}">
+              <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
                 <span class="td-strong" style="font-size:0.81rem">${_esc(sa.name || '—')}</span>
                 <span style="background:rgba(237,165,255,0.18);color:#eda5ff;border:1px solid rgba(237,165,255,0.35);border-radius:4px;font-size:0.62rem;font-weight:700;padding:1px 6px;white-space:nowrap">Sub Account</span>
               </div>
@@ -1346,12 +1361,11 @@ function renderInvestorsTable() {
           </div>
         </td>
         <td style="overflow:hidden">
-          <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:2px">Parent Account:</div>
-          <button class="btn btn--link" style="font-size:0.78rem;padding:0;color:#eda5ff;font-weight:700;text-align:left;${_trunc}" onclick="viewInvestor('${sa.parent_investor_id}')">${_esc(parentName)}</button>
-          <div class="td-muted" style="font-size:0.67rem;${_trunc}">${_esc(parent.email || '')}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);${_trunc}">Sub-account</div>
+          <div style="font-size:0.72rem;color:var(--text-dim);${_trunc}">${_esc(parent.email || '—')}</div>
         </td>
         <td style="overflow:hidden">
-          <span style="background:rgba(237,165,255,0.12);color:#eda5ff;border:1px solid rgba(237,165,255,0.25);border-radius:4px;font-size:0.65rem;font-weight:700;padding:2px 7px">${typeCap}</span>
+          <div style="display:flex;flex-direction:column;gap:3px">${ficaBadge}${bankBadge}</div>
         </td>
         <td style="overflow:hidden">
           <div class="td-gold fw-700" style="font-size:0.81rem;${_trunc}">${balance}</div>
@@ -1360,7 +1374,7 @@ function renderInvestorsTable() {
           <div style="font-weight:700;font-size:0.81rem">${invCount}</div>
         </td>
         <td style="overflow:hidden" onclick="event.stopPropagation()">
-          <button class="btn btn--secondary btn--sm" onclick="viewInvestor('${sa.parent_investor_id}')" title="View parent account"><i class="fa-solid fa-arrow-up-right-from-square"></i> Parent</button>
+          <button class="btn btn--secondary btn--sm" onclick="viewSubAccount('${sa.id}')"><i class="fa-solid fa-eye"></i> View</button>
         </td>
       </tr>`;
     }).join('');
@@ -1408,6 +1422,17 @@ function setupInvestorFilters() {
         || (lo === 'has_login' &&  loginSet.has(inv.id));
       return matchQ && matchSt && matchKy && matchPv && matchLo;
     });
+    // Filter sub-accounts by name or SA reference (ignore status/kyc/province filters)
+    const _pmap = {};
+    STATE.investors.forEach(inv => { _pmap[inv.id] = inv; });
+    filteredSubAccounts = STATE.subAccounts.filter(sa => {
+      if (!q) return true;
+      const p = _pmap[sa.parent_investor_id] || {};
+      return (sa.name||'').toLowerCase().includes(q)
+        || (sa.sa_reference||'').toLowerCase().includes(q)
+        || `${p.first_name||''} ${p.last_name||''}`.toLowerCase().includes(q)
+        || (p.email||'').toLowerCase().includes(q);
+    });
     investorPage = 1;
     selectedInvestors.clear();
     updateBulkBar();
@@ -1422,6 +1447,56 @@ function setupInvestorFilters() {
 
   // Apply saved filters immediately if any
   if (saved && (saved.q || saved.st || saved.ky || saved.pv || saved.lo)) filter();
+}
+
+function viewSubAccount(saId) {
+  const sa = (STATE.subAccounts || []).find(s => s.id === saId);
+  if (!sa) return;
+  const parent = STATE.investors.find(i => i.id === sa.parent_investor_id) || {};
+  const parentName = `${parent.first_name || ''} ${parent.last_name || ''}`.trim() || sa.parent_investor_id || '—';
+  const typeLabel  = (sa.type || 'standard').replace(/_/g, ' ');
+  const typeCap    = typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1);
+  const saRef      = sa.sa_reference || '—';
+  const invCount   = (STATE.investments || []).filter(i => i.sub_account_id === sa.id).length;
+  const activeInv  = (STATE.investments || []).filter(i => i.sub_account_id === sa.id && i.status === 'active').length;
+  const totalInvested = (STATE.investments || []).filter(i => i.sub_account_id === sa.id)
+    .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const ficaStatus = parent.fica_status || 'pending';
+  const ficaColor  = ficaStatus === 'approved' ? '#22c55e' : ficaStatus === 'rejected' || ficaStatus === 'flagged' ? '#ef4444' : '#f59e0b';
+  const ficaIcon   = ficaStatus === 'approved' ? 'fa-shield-check' : ficaStatus === 'flagged' ? 'fa-flag' : 'fa-clock';
+  const bankStatus = sa.sa_bank_status || 'none';
+  const bankColor  = bankStatus === 'approved' ? '#22c55e' : bankStatus === 'rejected' ? '#ef4444' : '#9ca3af';
+  const bankLabel  = bankStatus === 'approved' ? 'Approved' : bankStatus === 'rejected' ? 'Rejected' : bankStatus === 'pending' ? 'Pending Review' : 'Not submitted';
+
+  document.getElementById('saModalSubtitle').textContent = saRef;
+  document.getElementById('saModalBody').innerHTML = `
+    <div class="info-list" style="margin-bottom:16px">
+      <div class="info-row"><span class="info-row__label">Account Name</span><span class="info-row__value fw-700">${_esc(sa.name || '—')}</span></div>
+      <div class="info-row"><span class="info-row__label">Account Number</span><span class="info-row__value" style="font-family:monospace;color:#ffe86a;font-weight:700">${saRef}</span></div>
+      <div class="info-row"><span class="info-row__label">Account Type</span><span class="info-row__value">${typeCap}</span></div>
+      <div class="info-row"><span class="info-row__label">FICA Status</span><span class="info-row__value" style="color:${ficaColor};font-weight:700"><i class="fa-solid ${ficaIcon}" style="margin-right:5px"></i>${ficaStatus.charAt(0).toUpperCase()+ficaStatus.slice(1)} (parent)</span></div>
+      <div class="info-row"><span class="info-row__label">Bank Documents</span><span class="info-row__value" style="color:${bankColor};font-weight:700">${bankLabel}</span></div>
+      <div class="info-row"><span class="info-row__label">Wallet Balance</span><span class="info-row__value td-gold fw-700">${Utils.rand(parseFloat(sa.wallet_balance)||0)}</span></div>
+      <div class="info-row"><span class="info-row__label">Total Invested</span><span class="info-row__value fw-700">${Utils.rand(totalInvested)}</span></div>
+      <div class="info-row"><span class="info-row__label">Investments</span><span class="info-row__value">${activeInv} active / ${invCount} total</span></div>
+    </div>
+    ${sa.sa_bank_holder ? `<div style="background:var(--dark-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px">Bank Details</div>
+      <div class="info-list">
+        <div class="info-row"><span class="info-row__label">Account Holder</span><span class="info-row__value">${_esc(sa.sa_bank_holder||'—')}</span></div>
+        <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">${_esc(sa.sa_bank_name||'—')}</span></div>
+        <div class="info-row"><span class="info-row__label">Account Number</span><span class="info-row__value" style="font-family:monospace">${_esc(sa.sa_bank_number||'—')}</span></div>
+        <div class="info-row"><span class="info-row__label">Account Type</span><span class="info-row__value">${_esc(sa.sa_bank_type||'—')}</span></div>
+        ${sa.sa_bank_branch ? `<div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value" style="font-family:monospace">${_esc(sa.sa_bank_branch)}</span></div>` : ''}
+      </div>
+    </div>` : ''}
+    <div style="background:rgba(237,165,255,0.08);border:1px solid rgba(237,165,255,0.2);border-radius:10px;padding:12px 14px">
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px">Parent Account Holder</div>
+      <div style="font-weight:700;font-size:0.88rem;margin-bottom:2px">${_esc(parentName)}</div>
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px">${_esc(parent.email||'')} · ${_esc(parent.id||'')}</div>
+      <button class="btn btn--primary btn--sm" onclick="Modal.close('subAccountModal');viewInvestor('${sa.parent_investor_id}')"><i class="fa-solid fa-arrow-up-right-from-square" style="margin-right:6px"></i>View Parent Account</button>
+    </div>`;
+  Modal.open('subAccountModal');
 }
 
 async function viewInvestor(id) {
