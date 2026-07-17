@@ -28,13 +28,66 @@ router.post('/request', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'This endpoint is only available to investor accounts.' });
     }
 
-    const { amount, bank_account_number, bank_name, notes } = req.body;
+    const { amount, bank_account_number, bank_name, notes, sub_account_id } = req.body;
     const numAmount = parseFloat(amount);
     if (!amount || isNaN(numAmount) || numAmount <= 0) {
       return res.status(400).json({ error: 'amount must be a positive number.' });
     }
 
     const reference = 'WD-' + require('crypto').randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase();
+
+    // ── Sub-account withdrawal ──────────────────────────────────────────────
+    if (sub_account_id) {
+      const client = await pool.connect();
+      let investor;
+      try {
+        await client.query('BEGIN');
+
+        const { rows: [saRow] } = await client.query(
+          'SELECT * FROM sub_accounts WHERE id=$1 AND parent_investor_id=$2 FOR UPDATE',
+          [sub_account_id, investorId]
+        );
+        if (!saRow) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ error: 'Sub-account not found or does not belong to you.' });
+        }
+        if (saRow.kyc_status !== 'approved') {
+          await client.query('ROLLBACK');
+          return res.status(403).json({ error: 'Sub-account FICA/KYC verification is required before withdrawing funds.' });
+        }
+        if (parseFloat(saRow.wallet_balance) < numAmount) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: `Insufficient sub-account wallet balance. Available: R${parseFloat(saRow.wallet_balance).toFixed(2)}.` });
+        }
+
+        const description = `Sub-account withdrawal (${saRow.name})${bank_name ? ` to ${bank_name}` : ''}${bank_account_number ? ` (${bank_account_number})` : ''}`;
+        await client.query(
+          `INSERT INTO transactions (id, investor_id, sub_account_id, type, amount, status, reference, description, notes, created_at, updated_at)
+           VALUES (gen_random_uuid(), $1, $2, 'withdrawal', $3, 'pending', $4, $5, $6, NOW(), NOW())`,
+          [investorId, sub_account_id, numAmount, reference, description, notes || null]
+        );
+        await client.query(
+          'UPDATE sub_accounts SET wallet_balance = wallet_balance - $1, updated_at = NOW() WHERE id = $2',
+          [numAmount, sub_account_id]
+        );
+        await client.query('COMMIT');
+
+        const { rows: [invRow] } = await pool.query('SELECT * FROM investors WHERE id=$1', [investorId]).catch(() => ({ rows: [] }));
+        investor = invRow;
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+      if (investor) {
+        setImmediate(() => emailService.sendWithdrawalRequested(investor, { amount: numAmount, reference })
+          .catch(err => console.error('[email] sendWithdrawalRequested (SA) failed:', err.message)));
+      }
+      return res.json({ success: true, reference });
+    }
+
+    // ── Investor wallet withdrawal ──────────────────────────────────────────
     const description = `Withdrawal request${bank_name ? ` to ${bank_name}` : ''}${bank_account_number ? ` (${bank_account_number})` : ''}`;
 
     // Use a serializable transaction + FOR UPDATE to prevent double-spend race conditions
