@@ -5597,6 +5597,73 @@ function openSaDeposit(saId) {
   openTopUpModal(null, saId);
 }
 
+/* ── Sub-account wallet transfer ─────────────── */
+function openSaTransfer(saId) {
+  const sa = (PORTAL.subAccounts || []).find(s => s.id === saId);
+  if (!sa) return Toast.error('Sub-account not found');
+  const el = id => document.getElementById(id);
+  if (!el('saTransferModal')) return;
+  el('saTransferSaId').value        = saId;
+  el('saTransferSaName').textContent = sa.name;
+  el('saTransferWalletBal').textContent = Utils.rand(parseFloat(PORTAL.investor?.wallet_balance) || 0);
+  el('saTransferAmount').value = '';
+  el('saTransferHint').style.color = '#9ca3af';
+  el('saTransferHint').textContent = 'Minimum R10. Funds move instantly.';
+  Modal.open('saTransferModal');
+}
+
+function setSaTransferAmount(amt) {
+  const el = document.getElementById('saTransferAmount');
+  if (el) { el.value = amt; updateSaTransferHint(); }
+}
+
+function updateSaTransferHint() {
+  const amount  = parseFloat(document.getElementById('saTransferAmount')?.value) || 0;
+  const hint    = document.getElementById('saTransferHint');
+  const walBal  = parseFloat(PORTAL.investor?.wallet_balance) || 0;
+  if (!hint) return;
+  if (amount > 0 && amount > walBal) {
+    hint.style.color = '#ef4444';
+    hint.textContent = `Exceeds your wallet balance of ${Utils.rand(walBal)}`;
+  } else {
+    hint.style.color = '#9ca3af';
+    hint.textContent = 'Minimum R10. Funds move instantly.';
+  }
+}
+
+async function saveWalletTransfer() {
+  const el     = id => document.getElementById(id);
+  const saId   = el('saTransferSaId')?.value;
+  const amount = parseFloat(el('saTransferAmount')?.value);
+  const walBal = parseFloat(PORTAL.investor?.wallet_balance) || 0;
+
+  if (!amount || amount < 10)  return Toast.error('Minimum transfer is R10');
+  if (amount > walBal)         return Toast.error(`Insufficient balance — your wallet has ${Utils.rand(walBal)}`);
+
+  const btn = el('saTransferBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Transferring…'; }
+
+  try {
+    await API._fetch('POST', 'payments/wallet-transfer', { sub_account_id: saId, amount });
+    Modal.close('saTransferModal');
+    Toast.success(`${Utils.rand(amount)} transferred to ${el('saTransferSaName')?.textContent || 'sub-account'}`);
+    // Update local state immediately then reload
+    if (PORTAL.investor) PORTAL.investor.wallet_balance = Math.max(0, walBal - amount);
+    const sa = (PORTAL.subAccounts || []).find(s => s.id === saId);
+    if (sa) sa.wallet_balance = (parseFloat(sa.wallet_balance) || 0) + amount;
+    renderOverviewTxns();
+    renderWallet();
+    SVC.track('svc_wallet_transfer', { amount, sub_account_id: saId });
+    // Re-open sub-account detail with updated data
+    await loadPortalData();
+    openSaDetail(saId);
+  } catch (e) {
+    Toast.error(e.message || 'Transfer failed');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-arrow-right-arrow-left"></i> Transfer'; }
+  }
+}
+
 /* ─── Profile ─── */
 async function saveProfile() {
   const inv = PORTAL.investor;
@@ -8283,8 +8350,9 @@ function _saMinorHub(sa) {
     </div>
 
     <!-- Actions -->
-    <div class="minor-actions">
+    <div class="minor-actions minor-actions--4">
       <button class="minor-btn minor-btn--deposit" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')"><i class="fa-solid fa-piggy-bank"></i><span>Add to Jar</span></button>
+      <button class="minor-btn minor-btn--transfer" onclick="openSaTransfer('${sa.id}')"><i class="fa-solid fa-arrow-right-arrow-left"></i><span>Transfer</span></button>
       <button class="minor-btn minor-btn--invest" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')" ${sa.kyc_status !== 'approved' ? 'disabled' : ''}><i class="fa-solid fa-seedling"></i><span>Invest</span></button>
       <button class="minor-btn minor-btn--fica" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-id-card"></i><span>FICA Docs</span></button>
     </div>

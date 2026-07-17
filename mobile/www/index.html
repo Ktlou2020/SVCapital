@@ -2229,6 +2229,57 @@
   </div>
 </div>
 
+<!-- Sub Account Wallet Transfer Modal -->
+<div class="modal-overlay" id="saTransferModal" onclick="if(event.target===this)Modal.close('saTransferModal')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-arrow-right-arrow-left" style="color:var(--gold);margin-right:8px"></i>Transfer to Jar</span>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Move funds from your wallet to <strong id="saTransferSaName"></strong></div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('saTransferModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="saTransferSaId">
+
+      <!-- Wallet balance info -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--ci-bg-light,#F7F8FA);border-radius:10px;margin-bottom:16px">
+        <div style="font-size:0.82rem;color:var(--text-muted)">Your wallet balance</div>
+        <div style="font-size:0.95rem;font-weight:800;color:#1a1a1a" id="saTransferWalletBal">—</div>
+      </div>
+
+      <!-- Amount input -->
+      <div class="form-group">
+        <label class="form-label">Amount to Transfer (ZAR) <span style="color:#ef4444">*</span></label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:1.1rem;font-weight:700;color:#6b7280">R</span>
+          <input type="number" class="form-input" id="saTransferAmount" min="10" step="10" placeholder="e.g. 500" style="flex:1" oninput="updateSaTransferHint()">
+        </div>
+        <div id="saTransferHint" style="font-size:0.72rem;color:#9ca3af;margin-top:4px">Minimum R10. Funds move instantly.</div>
+      </div>
+
+      <!-- Quick amounts -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:16px">
+        <button class="pm-chip" onclick="setSaTransferAmount(100)">R100</button>
+        <button class="pm-chip" onclick="setSaTransferAmount(250)">R250</button>
+        <button class="pm-chip" onclick="setSaTransferAmount(500)">R500</button>
+        <button class="pm-chip" onclick="setSaTransferAmount(1000)">R1 000</button>
+      </div>
+
+      <div style="padding:10px 14px;background:rgba(255,155,12,0.06);border:1px solid rgba(255,155,12,0.2);border-radius:8px;font-size:0.78rem;color:var(--text-muted)">
+        <i class="fa-solid fa-circle-info" style="color:var(--gold)"></i>
+        Funds are transferred instantly from your SV Capital wallet. No fees apply.
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('saTransferModal')">Cancel</button>
+      <button class="btn btn--primary" id="saTransferBtn" onclick="saveWalletTransfer()">
+        <i class="fa-solid fa-arrow-right-arrow-left"></i> Transfer
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Sub Account Deposit Modal -->
 <div class="modal-overlay" id="saDepositModal" onclick="if(event.target===this)Modal.close('saDepositModal')">
   <div class="modal">

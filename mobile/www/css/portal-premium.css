@@ -2952,9 +2952,11 @@ body.dark-mode .tab-btn.active { color: #ff9b0c !important; }
 .minor-btn:hover  { transform:scale(1.04); }
 .minor-btn:disabled { opacity:.45;cursor:not-allowed;transform:none; }
 .minor-btn i      { font-size:1.2rem; }
-.minor-btn--deposit { background:linear-gradient(135deg,#ff5229,#ff9b0c);color:#fff; }
-.minor-btn--invest  { background:linear-gradient(135deg,#0a7c4d,#22c55e);color:#fff; }
-.minor-btn--fica    { background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.85);border:1px solid rgba(255,255,255,0.15); }
+.minor-btn--deposit  { background:linear-gradient(135deg,#ff5229,#ff9b0c);color:#fff; }
+.minor-btn--transfer { background:linear-gradient(135deg,#1d4ed8,#3b82f6);color:#fff; }
+.minor-btn--invest   { background:linear-gradient(135deg,#0a7c4d,#22c55e);color:#fff; }
+.minor-btn--fica     { background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.85);border:1px solid rgba(255,255,255,0.15); }
+.minor-actions--4    { grid-template-columns:repeat(2,1fr); }
 
 /* ── Learning Zone ── */
 .minor-learn-zone { padding:16px 22px;border-top:1px solid rgba(255,255,255,0.07); }
