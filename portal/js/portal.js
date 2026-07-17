@@ -8117,8 +8117,9 @@ function _saMinorHub(sa) {
   const goalPct = goal > 0 ? Math.min(100, Math.round((total / goal) * 100)) : 0;
   const jarFill = Math.min(100, Math.max(5, total > 0 ? Math.min(100, (total / Math.max(goal, total + 1)) * 100) : 0));
 
-  const ageInfo  = age || { age: '?', label: 'Saver', theme: 'minor-young' };
-  const saInvsM  = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
+  const ageInfo     = age || { age: '?', label: 'Saver', theme: 'minor-young' };
+  const saInvsM     = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
+  const saAllTxnsM  = (PORTAL.transactions || []).filter(t => t.sub_account_id === sa.id);
 
   return `
   <div class="minor-hub minor-hub--${ageInfo.theme || 'minor-young'}">
@@ -8163,6 +8164,10 @@ function _saMinorHub(sa) {
       <button class="minor-btn minor-btn--invest" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')"><i class="fa-solid fa-seedling"></i><span>Invest</span></button>
       <button class="minor-btn minor-btn--fica" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-id-card"></i><span>FICA Docs</span></button>
     </div>
+    <div style="display:flex;gap:8px;padding:0 22px 16px">
+      <button class="btn btn--ghost btn--sm" style="flex:1" onclick="Modal.close('saDetailModal');downloadSaStatement('${sa.id}','${sa.name}')"><i class="fa-solid fa-file-pdf"></i> Statement</button>
+      <button class="btn btn--ghost btn--sm" style="flex:1" onclick="openSaBankDetails('${sa.id}')"><i class="fa-solid fa-building-columns"></i> Banking</button>
+    </div>
 
     ${saInvsM.length ? `
     <!-- Active Investments -->
@@ -8190,6 +8195,37 @@ function _saMinorHub(sa) {
       </div>
       <div class="minor-tips-dots" id="minorTipsDots"></div>
     </div>
+
+    <!-- Banking Details -->
+    <div class="minor-investments" style="margin-top:12px">
+      <div class="minor-investments__title"><i class="fa-solid fa-building-columns" style="color:#eda5ff;margin-right:6px"></i>Banking Details</div>
+      ${sa.sa_bank_name
+        ? `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+            <div>
+              <div style="font-size:0.82rem;font-weight:700;color:#fff">${sa.sa_bank_name}</div>
+              <div style="font-size:0.72rem;color:rgba(255,255,255,0.6)">${sa.sa_bank_holder || ''} · ****${(sa.sa_bank_number||'').slice(-4)} · ${sa.sa_bank_type||'current'}</div>
+            </div>
+            <span class="badge badge--${sa.sa_bank_status==='approved'?'green':sa.sa_bank_status==='pending'?'orange':'gray'}" style="font-size:0.65rem">${sa.sa_bank_status||'none'}</span>
+          </div>`
+        : `<div style="font-size:0.78rem;color:rgba(255,255,255,0.5);padding:4px 0">No banking details — tap Banking above to add</div>`}
+    </div>
+
+    <!-- All Transactions -->
+    ${saAllTxnsM.length ? `
+    <div class="minor-investments" style="margin-top:12px">
+      <div class="minor-investments__title"><i class="fa-solid fa-receipt" style="color:#fec24f;margin-right:6px"></i>All Transactions (${saAllTxnsM.length})</div>
+      <div style="${saAllTxnsM.length > 8 ? 'max-height:240px;overflow-y:auto' : ''}">
+        ${saAllTxnsM.map(t => `
+        <div class="minor-inv-row">
+          <div class="minor-inv-row__icon" style="background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.7)"><i class="fa-solid fa-receipt" style="font-size:0.8rem"></i></div>
+          <div class="minor-inv-row__info">
+            <div class="minor-inv-row__name">${t.description || t.type}</div>
+            <div class="minor-inv-row__sub">${Utils.date(t.created_at || t.transaction_date)}</div>
+          </div>
+          <div class="minor-inv-row__amount" style="color:${t.amount>0?'#4ade80':'#ef4444'}">${Utils.rand(t.amount)}</div>
+        </div>`).join('')}
+      </div>
+    </div>` : ''}
 
     <!-- FICA section -->
     <div class="minor-fica-section">
@@ -8258,12 +8294,23 @@ async function confirmSaDeposit() {
 }
 
 /* ── Invest from sub account ────────────────────────────────── */
+function _showSaNoFundsPrompt(sa) {
+  document.getElementById('saNoFundsTitle').textContent = `${sa.name}'s wallet is empty`;
+  document.getElementById('saNoFundsMsg').textContent   = `You need to deposit funds into ${sa.name}'s wallet before you can invest.`;
+  document.getElementById('saNoFundsBal').textContent   = Utils.rand(parseFloat(sa.wallet_balance) || 0);
+  document.getElementById('saNoFundsDepositBtn').onclick = () => {
+    Modal.close('saNoFundsModal');
+    openSaDeposit(sa.id);
+  };
+  Modal.open('saNoFundsModal');
+}
+
 function openSaInvest(saId) {
   const sa = PORTAL.subAccounts.find(a => a.id === saId);
   if (!sa) return;
-  if ((parseFloat(sa.wallet_balance) || 0) <= 0) { Toast.warn('Please deposit funds first'); return; }
+  if ((parseFloat(sa.wallet_balance) || 0) <= 0) { _showSaNoFundsPrompt(sa); return; }
 
-  _pmSaId = saId;  // tag all investments made after this to the sub-account
+  _pmSaId = saId;
   Modal.close('saDetailModal');
   Toast.info(`Investing from ${sa.name} — select a product below`);
   navigate('marketplace', document.querySelector('[data-view="marketplace"]'));
@@ -8365,14 +8412,30 @@ function openSaBankDetails(saId) {
 }
 
 async function saveSaBankDetails() {
-  const f = id => document.getElementById(id)?.value?.trim();
-  const name   = f('saBankName');
-  const holder = f('saBankHolder');
-  const number = f('saBankNumber');
-  const branch = f('saBankBranch');
-  const type   = f('saBankType') || 'current';
+  const fv = id => document.getElementById(id)?.value?.trim();
+  const name      = fv('saBankName');
+  const holder    = fv('saBankHolder');
+  const number    = fv('saBankNumber');
+  const branch    = fv('saBankBranch');
+  const type      = fv('saBankType') || 'current';
+  const proofFile = document.getElementById('saBankProof')?.files?.[0] || null;
+
   if (!name || !holder || !number) { Toast.warn('Please fill in bank name, account holder, and account number'); return; }
+  const sa = PORTAL.subAccounts.find(s => s.id === _saBankSaId);
+  const hasExisting = !!(sa?.sa_bank_number);
+  if (!proofFile && !hasExisting) { Toast.warn('Please attach proof of bank account (statement or confirmation letter)'); return; }
+
   try {
+    let proofData = null;
+    if (proofFile) {
+      proofData = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = e => resolve(e.target.result);
+        reader.onerror = () => reject(new Error('Could not read file'));
+        reader.readAsDataURL(proofFile);
+      });
+    }
+
     await API._fetch('PATCH', `tables/sub_accounts/${_saBankSaId}`, {
       sa_bank_name:   name,
       sa_bank_holder: holder,
@@ -8381,13 +8444,39 @@ async function saveSaBankDetails() {
       sa_bank_type:   type,
       sa_bank_status: 'pending',
     });
-    const sa = PORTAL.subAccounts.find(s => s.id === _saBankSaId);
-    if (sa) { sa.sa_bank_name = name; sa.sa_bank_holder = holder; sa.sa_bank_number = number; sa.sa_bank_branch = branch; sa.sa_bank_type = type; sa.sa_bank_status = 'pending'; }
+    if (sa) { Object.assign(sa, { sa_bank_name: name, sa_bank_holder: holder, sa_bank_number: number, sa_bank_branch: branch, sa_bank_type: type, sa_bank_status: 'pending' }); }
+
+    const maskedNum = number.slice(-4).padStart(number.length, '•');
+    const investorId   = PORTAL.investor?.id;
+    const investorName = `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim();
+
+    await API.kyc.create({
+      investor_id:    investorId,
+      investor_name:  investorName || undefined,
+      doc_type:       'proof_of_bank',
+      status:         'pending',
+      file_name:      proofFile ? proofFile.name : undefined,
+      file_data:      proofData || undefined,
+      notes:          `Sub-account banking: ${sa?.name || _saBankSaId} — ${name} ${maskedNum}`,
+    }).catch(e => console.warn('[saBankDetails] KYC doc failed:', e.message));
+
+    await API.tickets.create({
+      investor_id:    investorId,
+      investor_name:  investorName,
+      investor_email: PORTAL.investor?.email || '',
+      subject:        `Sub-Account Bank Verification — ${sa?.name || _saBankSaId}`,
+      message:        `Sub-account banking details submitted for verification.\n\nSub-Account: ${sa?.name || _saBankSaId}\nType: ${sa?.account_type || ''}\n\nBank: ${name}\nAccount Holder: ${holder}\nAccount Number: ${maskedNum}\nAccount Type: ${type}\nBranch Code: ${branch}\n\nPlease verify and approve or reject in the admin panel.`,
+      status:         'open',
+      priority:       'medium',
+      category:       'bank_verification',
+    }).catch(e => console.warn('[saBankDetails] ticket failed:', e.message));
+
     Modal.close('saBankModal');
-    Toast.success('Banking details saved — pending verification');
+    Toast.success('Banking details submitted — the admin team will verify within 1–2 business days.');
     await loadSubAccounts();
   } catch (err) {
     Toast.error('Failed to save banking details');
+    console.error(err);
   }
 }
 

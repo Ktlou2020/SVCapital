@@ -2455,6 +2455,23 @@
   </div>
 </div>
 
+<!-- Sub-Account No Funds Prompt -->
+<div class="modal-overlay" id="saNoFundsModal" onclick="if(event.target===this)Modal.close('saNoFundsModal')">
+  <div class="modal" style="margin-top:auto;margin-bottom:0;border-radius:24px 24px 0 0;padding-bottom:env(safe-area-inset-bottom,16px)">
+    <div style="width:40px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:12px auto 0"></div>
+    <div style="text-align:center;padding:24px 24px 28px">
+      <div style="font-size:3.5rem;margin-bottom:14px;line-height:1">🪙</div>
+      <div id="saNoFundsTitle" style="font-size:1.05rem;font-weight:800;color:#fff;margin-bottom:8px">Wallet is empty</div>
+      <div id="saNoFundsMsg" style="font-size:0.82rem;color:rgba(255,255,255,0.6);line-height:1.5;margin-bottom:8px">Add funds before investing.</div>
+      <div id="saNoFundsBal" style="font-size:1.8rem;font-weight:800;color:rgba(255,255,255,0.35);margin-bottom:28px">R0.00</div>
+      <button class="btn btn--primary btn--full" id="saNoFundsDepositBtn" style="background:linear-gradient(135deg,#ff5229,#fec24f);border:none;font-size:1rem;padding:14px;margin-bottom:10px">
+        <i class="fa-solid fa-wallet"></i> Add Funds Now
+      </button>
+      <button style="width:100%;background:none;border:none;color:rgba(255,255,255,0.45);font-size:0.85rem;padding:8px;cursor:pointer" onclick="Modal.close('saNoFundsModal')">Maybe Later</button>
+    </div>
+  </div>
+</div>
+
 <!-- Sub-Account Banking Details Modal -->
 <div class="modal-overlay" id="saBankModal" onclick="if(event.target===this)Modal.close('saBankModal')">
   <div class="modal">
@@ -2507,10 +2524,19 @@
           <input type="text" class="form-input" id="saBankBranch" placeholder="e.g. 632005" />
         </div>
       </div>
+      <div class="form-group">
+        <label class="form-label">Proof of Bank Account <span style="color:#ef4444">*</span></label>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px">Bank statement, cancelled cheque, or confirmation letter (PDF, JPG, PNG)</div>
+        <input type="file" class="form-input" id="saBankProof" accept=".pdf,.jpg,.jpeg,.png" />
+      </div>
+      <div style="background:rgba(254,194,79,0.08);border:1px solid rgba(254,194,79,0.2);border-radius:10px;padding:10px 14px;font-size:0.78rem;color:var(--text-muted);margin-top:4px">
+        <i class="fa-solid fa-circle-info" style="color:#fec24f;margin-right:6px"></i>
+        Banking details will be reviewed and approved by the admin team before they can be used for withdrawals.
+      </div>
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('saBankModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveSaBankDetails()"><i class="fa-solid fa-floppy-disk"></i> Save Banking Details</button>
+      <button class="btn btn--primary" onclick="saveSaBankDetails()"><i class="fa-solid fa-floppy-disk"></i> Submit for Approval</button>
     </div>
   </div>
 </div>
