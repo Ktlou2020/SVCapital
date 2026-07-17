@@ -639,6 +639,29 @@ function sendKycApproved(investor) {
   });
 }
 
+/* ── 15b. Sub-account FICA approved ─────────────────────── */
+function sendSubAccountFicaApproved(investor, { saName }) {
+  const { email, first_name } = investor;
+  if (!email) return Promise.resolve();
+  const today = new Date().toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Africa/Johannesburg' });
+  return _send({
+    to: email,
+    subject: `Sub-Account Verified — ${saName || 'Your sub-account'} is ready to invest ✅`,
+    html: _wrap(`
+      <h2>Sub-Account FICA/KYC Approved ✅</h2>
+      <p>Hi ${first_name}, great news! The identity and bank documents for your sub-account <strong>${saName || 'sub-account'}</strong> have been reviewed and approved by our compliance team.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Sub-Account</span><span class="val">${saName || '—'}</span></div>
+        <div class="row"><span class="lbl">Status</span><span class="val green">Approved</span></div>
+        <div class="row"><span class="lbl">Verified on</span><span class="val">${today}</span></div>
+      </div>
+      <p>This sub-account is now fully verified and can invest in all available pools on the SV Capital platform. You can also withdraw funds from the sub-account wallet.</p>
+      <a href="${BASE_URL}/portal/" class="btn">View Sub-Account →</a>
+    `),
+    text: `Hi ${first_name}, the documents for your sub-account ${saName || ''} have been approved. It is now fully verified and ready to invest.`,
+  });
+}
+
 /* ── 14. Login anomaly alert ─────────────────────────────── */
 function sendLoginAlert(recipient, { ip, time }) {
   // recipient can be an investor row (email, first_name) or a user row (email, first_name)
@@ -860,6 +883,7 @@ module.exports = {
   sendDirectorReport,
   sendWaitlistNotification,
   sendKycApproved,
+  sendSubAccountFicaApproved,
   sendKycRejected,
   sendLoginAlert,
   sendFicaResubmitReminder,

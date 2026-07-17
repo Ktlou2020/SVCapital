@@ -8029,6 +8029,7 @@ function _saCard(sa) {
     <div class="sa-card__actions">
       <button class="btn btn--sm btn--primary" onclick="openSaDeposit('${sa.id}')"><i class="fa-solid fa-wallet"></i> Deposit</button>
       <button class="btn btn--sm btn--secondary" onclick="openSaInvest('${sa.id}')"><i class="fa-solid fa-chart-line"></i> Invest</button>
+      ${sa.kyc_status === 'approved' ? `<button class="btn btn--sm btn--ghost" onclick="openSaWithdrawal('${sa.id}')"><i class="fa-solid fa-arrow-up-from-bracket"></i> Withdraw</button>` : ''}
       <button class="btn btn--sm btn--secondary" onclick="openSaDetail('${sa.id}')"><i class="fa-solid fa-${isMinor ? 'star' : 'eye'}"></i> ${isMinor ? 'Hub' : 'Details'}</button>
     </div>
   </div>`;
@@ -8335,6 +8336,9 @@ function _saNormalDetail(sa, meta) {
       <button class="sad-action-btn sad-action-btn--secondary" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')">
         <i class="fa-solid fa-chart-line"></i><span>Invest</span>
       </button>
+      ${sa.kyc_status === 'approved' ? `<button class="sad-action-btn" onclick="openSaWithdrawal('${sa.id}')">
+        <i class="fa-solid fa-arrow-up-from-bracket"></i><span>Withdraw</span>
+      </button>` : ''}
       <button class="sad-action-btn" onclick="Modal.close('saDetailModal');downloadSaStatement('${sa.id}','${sa.name}')">
         <i class="fa-solid fa-file-pdf"></i><span>Statement</span>
       </button>
@@ -8957,7 +8961,123 @@ async function saveBankDetails() {
   }
 }
 
+let _saWithdrawalId = null;
+
+function openSaWithdrawal(saId) {
+  _saWithdrawalId = saId;
+  const content = document.getElementById('withdrawalModalContent');
+  const footer  = document.getElementById('withdrawalModalFooter');
+  const sa      = (PORTAL.subAccounts || []).find(s => s.id === saId);
+  if (!sa) { Toast.error('Sub-account not found'); return; }
+  const balance = parseFloat(sa.wallet_balance || 0);
+
+  if (sa.kyc_status !== 'approved') {
+    content.innerHTML = `
+      <div style="text-align:center;padding:20px 0">
+        <i class="fa-solid fa-shield-halved" style="font-size:2.5rem;color:#656565;margin-bottom:16px"></i>
+        <p style="font-size:0.9rem;font-weight:700;margin-bottom:8px">FICA verification required</p>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px">${sa.name} needs completed FICA/KYC before withdrawals.</p>
+      </div>`;
+    footer.style.display = 'none';
+    Modal.open('withdrawalModal');
+    return;
+  }
+
+  if (!sa.sa_bank_number) {
+    content.innerHTML = `
+      <div style="text-align:center;padding:20px 0">
+        <i class="fa-solid fa-building-columns" style="font-size:2.5rem;color:#9ca3af;margin-bottom:16px"></i>
+        <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:16px">Add a verified bank account to ${sa.name} before withdrawing.</p>
+        <button class="btn btn--primary" onclick="Modal.close('withdrawalModal');openSaBankDetails('${sa.id}')"><i class="fa-solid fa-plus"></i> Add Bank Account</button>
+      </div>`;
+    footer.style.display = 'none';
+    Modal.open('withdrawalModal');
+    return;
+  }
+
+  if (sa.sa_bank_status !== 'approved') {
+    content.innerHTML = `
+      <div style="text-align:center;padding:20px 0">
+        <i class="fa-solid fa-clock" style="font-size:2.5rem;color:#fec24f;margin-bottom:16px"></i>
+        <p style="font-size:0.9rem;color:var(--text-muted)">${sa.sa_bank_status === 'pending' ? 'Bank account for ' + sa.name + ' is pending verification.' : 'Bank account not verified.'}</p>
+      </div>`;
+    footer.style.display = 'none';
+    Modal.open('withdrawalModal');
+    return;
+  }
+
+  const pendingWd = (PORTAL.transactions || []).find(t => t.sub_account_id === saId && t.type === 'withdrawal' && t.status === 'pending');
+  if (pendingWd) {
+    content.innerHTML = `
+      <div style="padding:14px 16px;border-radius:14px;background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.18)">
+        <div style="font-size:0.92rem;font-weight:800">A withdrawal for ${sa.name} is already in progress.</div>
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px">${Utils.rand(Math.abs(parseFloat(pendingWd.amount)||0))} — payout within 1–2 business days.</div>
+      </div>`;
+    footer.style.display = 'none';
+    Modal.open('withdrawalModal');
+    return;
+  }
+
+  if (balance < 50) {
+    content.innerHTML = `
+      <div style="text-align:center;padding:20px 0">
+        <i class="fa-solid fa-wallet" style="font-size:2.5rem;color:#9ca3af;margin-bottom:16px"></i>
+        <p style="font-size:0.9rem;color:var(--text-muted)">Balance for ${sa.name}: <strong>${Utils.rand(balance)}</strong>. Minimum withdrawal is R50.</p>
+      </div>`;
+    footer.style.display = 'none';
+    Modal.open('withdrawalModal');
+    return;
+  }
+
+  const masked = '••••••' + String(sa.sa_bank_number).slice(-4);
+  const quickAmounts = [0.25, 0.5, 1].map(r => Math.floor((balance * r) / 10) * 10).filter(v => v >= 50);
+  content.innerHTML = `
+    <div style="margin-bottom:10px;padding:8px 12px;border-radius:8px;background:rgba(237,165,255,0.08);border:1px solid rgba(237,165,255,0.2);font-size:0.8rem;color:var(--text-muted)">
+      <i class="fa-solid fa-folder-open" style="color:#eda5ff;margin-right:6px"></i>Withdrawing from <strong>${sa.name}</strong>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px">
+      <div style="padding:12px 14px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid var(--border)">
+        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:800">Available</div>
+        <div style="font-size:1.08rem;font-weight:900;margin-top:4px">${Utils.rand(balance)}</div>
+      </div>
+      <div style="padding:12px 14px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid var(--border)">
+        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:800">Destination</div>
+        <div style="font-size:0.82rem;font-weight:800;margin-top:6px">${sa.sa_bank_name || ''} ${masked}</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount (R) <span style="color:#ef4444">*</span></label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        ${quickAmounts.map(v => `<button type="button" class="btn btn--secondary btn--sm" onclick="document.getElementById('wdAmount').value='${v}';_withdrawCalcSa(${balance})">${v >= balance ? 'All' : Utils.rand(v)}</button>`).join('')}
+      </div>
+      <input type="number" class="form-input" id="wdAmount" placeholder="e.g. ${balance.toFixed(0)}" min="50" max="${balance.toFixed(2)}" oninput="_withdrawCalcSa(${balance})" />
+    </div>
+    <div id="wdCalcBox" style="display:none;margin-top:4px"></div>`;
+  footer.style.display = '';
+  Modal.open('withdrawalModal');
+}
+
+function _withdrawCalcSa(balance) {
+  const amount = parseFloat(document.getElementById('wdAmount')?.value || 0);
+  const box    = document.getElementById('wdCalcBox');
+  if (!box) return;
+  if (!amount || amount <= 0) { box.style.display = 'none'; return; }
+  if (amount > balance) {
+    box.style.display = '';
+    box.innerHTML = `<div style="color:#ef4444;font-size:0.8rem"><i class="fa-solid fa-triangle-exclamation"></i> Exceeds available balance ${Utils.rand(balance)}</div>`;
+    return;
+  }
+  if (amount < 50) {
+    box.style.display = '';
+    box.innerHTML = `<div style="color:#ef4444;font-size:0.8rem"><i class="fa-solid fa-triangle-exclamation"></i> Minimum withdrawal is R50</div>`;
+    return;
+  }
+  box.style.display = '';
+  box.innerHTML = `<div style="padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.04);font-size:0.8rem">Remaining: <strong>${Utils.rand(balance - amount)}</strong></div>`;
+}
+
 function openWithdrawalModal() {
+  _saWithdrawalId = null;
   const content  = document.getElementById('withdrawalModalContent');
   const footer   = document.getElementById('withdrawalModalFooter');
   const inv      = PORTAL.investor;
@@ -9095,13 +9215,39 @@ function _withdrawCalc() {
 }
 
 async function confirmWithdrawal() {
-  const balance = parseFloat(PORTAL.investor?.wallet_balance || 0);
-  const amount  = parseFloat(document.getElementById('wdAmount')?.value || 0);
+  const amount = parseFloat(document.getElementById('wdAmount')?.value || 0);
+  const btn    = document.getElementById('withdrawalConfirmBtn');
 
+  if (_saWithdrawalId) {
+    const sa      = (PORTAL.subAccounts || []).find(s => s.id === _saWithdrawalId);
+    const balance = parseFloat(sa?.wallet_balance || 0);
+    if (!amount || amount < 50) { Toast.error('Minimum withdrawal is R50'); return; }
+    if (amount > balance)       { Toast.error('Amount exceeds available balance'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
+    try {
+      await API._fetch('POST', 'withdrawals/request', {
+        amount,
+        sub_account_id:      _saWithdrawalId,
+        bank_account_number: sa.sa_bank_number || undefined,
+        bank_name:           sa.sa_bank_name   || undefined,
+      });
+      Toast.success('Withdrawal request submitted! Funds will be sent within 1–2 business days.');
+      Modal.close('withdrawalModal');
+      _saWithdrawalId = null;
+      await loadPortalData();
+    } catch (e) {
+      Toast.error(e.message || 'Withdrawal failed. Please try again.');
+      console.error(e);
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Request Withdrawal'; }
+    }
+    return;
+  }
+
+  const balance = parseFloat(PORTAL.investor?.wallet_balance || 0);
   if (!amount || amount < 50) { Toast.error('Minimum withdrawal is R50'); return; }
   if (amount > balance)       { Toast.error('Amount exceeds available balance'); return; }
 
-  const btn = document.getElementById('withdrawalConfirmBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
 
   try {

@@ -1383,6 +1383,40 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           }
         }
 
+        // Sub-account KYC document approved → check if sub-account is now fully FICA-verified
+        if (table === 'kyc_documents' && body.status === 'approved' && updated.sub_account_id) {
+          const saId = updated.sub_account_id;
+          const { rows: saDocs } = await pool.query(
+            `SELECT doc_type FROM kyc_documents WHERE sub_account_id=$1 AND status='approved' AND doc_type='id_document' LIMIT 1`,
+            [saId]
+          );
+          const { rows: saRows } = await pool.query('SELECT * FROM sub_accounts WHERE id=$1', [saId]);
+          const sa = saRows[0];
+          if (sa && saDocs.length > 0 && sa.sa_bank_status === 'approved' && sa.kyc_status !== 'approved') {
+            await pool.query(`UPDATE sub_accounts SET kyc_status='approved', updated_at=NOW() WHERE id=$1`, [saId]);
+            const { rows: invRows } = await pool.query('SELECT * FROM investors WHERE id=$1', [sa.parent_investor_id]);
+            if (invRows[0]) await emailService.sendSubAccountFicaApproved(invRows[0], { saName: sa.name }).catch(() => {});
+          }
+        }
+
+        // Sub-account bank status approved → check if sub-account is now fully FICA-verified
+        if (table === 'sub_accounts' && body.sa_bank_status === 'approved') {
+          const saId = req.params.id;
+          const { rows: saDocs } = await pool.query(
+            `SELECT doc_type FROM kyc_documents WHERE sub_account_id=$1 AND status='approved' AND doc_type='id_document' LIMIT 1`,
+            [saId]
+          );
+          if (saDocs.length > 0) {
+            const { rows: saRows } = await pool.query('SELECT * FROM sub_accounts WHERE id=$1', [saId]);
+            const sa = saRows[0];
+            if (sa && sa.kyc_status !== 'approved') {
+              await pool.query(`UPDATE sub_accounts SET kyc_status='approved', updated_at=NOW() WHERE id=$1`, [saId]);
+              const { rows: invRows } = await pool.query('SELECT * FROM investors WHERE id=$1', [sa.parent_investor_id]);
+              if (invRows[0]) await emailService.sendSubAccountFicaApproved(invRows[0], { saName: sa.name }).catch(() => {});
+            }
+          }
+        }
+
         // KYC document rejected → email investor with reason from notes
         if (table === 'kyc_documents' && body.status === 'rejected' && updated.investor_id) {
           const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);

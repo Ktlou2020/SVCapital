@@ -1468,18 +1468,53 @@ function viewSubAccount(saId) {
   const bankColor  = bankStatus === 'approved' ? '#22c55e' : bankStatus === 'rejected' ? '#ef4444' : '#9ca3af';
   const bankLabel  = bankStatus === 'approved' ? 'Approved' : bankStatus === 'rejected' ? 'Rejected' : bankStatus === 'pending' ? 'Pending Review' : 'Not submitted';
 
+  // KYC documents for this sub-account
+  const saDocs = (STATE.kyc || []).filter(d => d.sub_account_id === sa.id)
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  const docTypeLabel = { id_document: 'ID Document', proof_of_address: 'Proof of Address', proof_of_bank: 'Bank Proof', proof_of_identity: 'Proof of Identity' };
+  const saKycStatus  = sa.kyc_status || 'pending';
+  const saKycColor   = saKycStatus === 'approved' ? '#22c55e' : '#f59e0b';
+  const saKycIcon    = saKycStatus === 'approved' ? 'fa-circle-check' : 'fa-clock';
+
   document.getElementById('saModalSubtitle').textContent = saRef;
   document.getElementById('saModalBody').innerHTML = `
     <div class="info-list" style="margin-bottom:16px">
       <div class="info-row"><span class="info-row__label">Account Name</span><span class="info-row__value fw-700">${_esc(sa.name || '—')}</span></div>
       <div class="info-row"><span class="info-row__label">Account Number</span><span class="info-row__value" style="font-family:monospace;color:#ffe86a;font-weight:700">${saRef}</span></div>
       <div class="info-row"><span class="info-row__label">Account Type</span><span class="info-row__value">${typeCap}</span></div>
-      <div class="info-row"><span class="info-row__label">FICA Status</span><span class="info-row__value" style="color:${ficaColor};font-weight:700"><i class="fa-solid ${ficaIcon}" style="margin-right:5px"></i>${ficaStatus.charAt(0).toUpperCase()+ficaStatus.slice(1)} (parent)</span></div>
+      <div class="info-row"><span class="info-row__label">Sub-Account FICA</span><span class="info-row__value" style="color:${saKycColor};font-weight:700"><i class="fa-solid ${saKycIcon}" style="margin-right:5px"></i>${saKycStatus.charAt(0).toUpperCase()+saKycStatus.slice(1)}</span></div>
+      <div class="info-row"><span class="info-row__label">Parent FICA</span><span class="info-row__value" style="color:${ficaColor};font-weight:700"><i class="fa-solid ${ficaIcon}" style="margin-right:5px"></i>${ficaStatus.charAt(0).toUpperCase()+ficaStatus.slice(1)}</span></div>
       <div class="info-row"><span class="info-row__label">Bank Documents</span><span class="info-row__value" style="color:${bankColor};font-weight:700">${bankLabel}</span></div>
       <div class="info-row"><span class="info-row__label">Wallet Balance</span><span class="info-row__value td-gold fw-700">${Utils.rand(parseFloat(sa.wallet_balance)||0)}</span></div>
       <div class="info-row"><span class="info-row__label">Total Invested</span><span class="info-row__value fw-700">${Utils.rand(totalInvested)}</span></div>
       <div class="info-row"><span class="info-row__label">Investments</span><span class="info-row__value">${activeInv} active / ${invCount} total</span></div>
     </div>
+
+    ${saDocs.length ? `
+    <div style="background:var(--dark-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:10px">
+        <i class="fa-solid fa-id-card" style="color:#eda5ff;margin-right:6px"></i>Documents Submitted (${saDocs.length})
+      </div>
+      ${saDocs.map(d => {
+        const dStatus = d.status || 'pending';
+        const dColor = dStatus === 'approved' ? '#22c55e' : dStatus === 'rejected' ? '#ef4444' : '#f59e0b';
+        const dIcon  = dStatus === 'approved' ? 'fa-circle-check' : dStatus === 'rejected' ? 'fa-circle-xmark' : 'fa-clock';
+        const dDate  = d.created_at ? new Date(d.created_at).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+        const dLabel = docTypeLabel[d.doc_type] || d.doc_type || 'Document';
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:0.8rem">
+          <div>
+            <span style="font-weight:700;color:var(--text)">${_esc(dLabel)}</span>
+            <span style="color:var(--text-muted);margin-left:8px;font-size:0.72rem">${dDate}</span>
+            ${d.notes ? `<div style="color:var(--text-muted);font-size:0.7rem;margin-top:2px">${_esc(d.notes)}</div>` : ''}
+          </div>
+          <span style="color:${dColor};font-weight:700;white-space:nowrap;margin-left:8px"><i class="fa-solid ${dIcon}" style="margin-right:4px"></i>${dStatus.charAt(0).toUpperCase()+dStatus.slice(1)}</span>
+        </div>`;
+      }).join('')}
+    </div>` : `
+    <div style="background:var(--dark-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:0.82rem;color:var(--text-muted)">
+      <i class="fa-solid fa-id-card" style="margin-right:6px;color:#eda5ff"></i>No documents submitted yet for this sub-account.
+    </div>`}
+
     ${sa.sa_bank_holder ? `<div style="background:var(--dark-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px">
       <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px">Bank Details</div>
       <div class="info-list">
@@ -2637,6 +2672,20 @@ async function _recomputeInvestorFicaStatus(investorId) {
   return { verified, missing: missing.map(t => FICA_DOC_LABELS[t] || t) };
 }
 
+async function _recomputeSubAccountFicaStatus(saId) {
+  if (!saId) return { verified: false };
+  const docs = (STATE.kyc || []).filter(d => d.sub_account_id === saId);
+  const idDocApproved = docs.some(d => d.doc_type === 'id_document' && d.status === 'approved');
+  const sa = (STATE.subAccounts || []).find(s => s.id === saId);
+  const bankApproved = sa?.sa_bank_status === 'approved';
+  const verified = idDocApproved && bankApproved;
+  if (verified) {
+    await API._fetch('PATCH', `tables/sub_accounts/${saId}`, { kyc_status: 'approved' });
+    if (sa) sa.kyc_status = 'approved';
+  }
+  return { verified };
+}
+
 async function approveKyc(id, btn) {
   if (!await Confirm.ask('Approve KYC document?', { body: 'This will mark the document as verified.', confirmLabel: 'Approve' })) return;
   const reviewedBy = _getAdminName();
@@ -2644,13 +2693,28 @@ async function approveKyc(id, btn) {
     try {
       await API.kyc.update(id, { status: 'approved', reviewed_by: reviewedBy, reviewed_at: new Date().toISOString() });
       const doc = STATE.kyc.find(k => k.id === id);
-      if (doc?.investor_id && doc?.doc_type === 'proof_of_bank') {
-        await API._fetch('PATCH', `tables/investors/${doc.investor_id}`, { bank_account_status: 'approved', bank_account_notes: null });
+
+      if (doc?.sub_account_id) {
+        // Sub-account document
+        if (doc.doc_type === 'proof_of_bank') {
+          await API._fetch('PATCH', `tables/sub_accounts/${doc.sub_account_id}`, { sa_bank_status: 'approved' });
+          const sa = (STATE.subAccounts || []).find(s => s.id === doc.sub_account_id);
+          if (sa) sa.sa_bank_status = 'approved';
+        }
+        const saResult = await _recomputeSubAccountFicaStatus(doc.sub_account_id);
+        Toast.success(saResult.verified
+          ? 'Document approved — sub-account is now FICA-verified'
+          : 'Document approved for sub-account');
+      } else {
+        // Regular investor document
+        if (doc?.investor_id && doc?.doc_type === 'proof_of_bank') {
+          await API._fetch('PATCH', `tables/investors/${doc.investor_id}`, { bank_account_status: 'approved', bank_account_notes: null });
+        }
+        const result = await _recomputeInvestorFicaStatus(doc?.investor_id);
+        Toast.success(result.verified
+          ? 'Document approved — investor is now FICA-verified'
+          : `Document approved — still needed: ${result.missing.join(', ')}`);
       }
-      const result = await _recomputeInvestorFicaStatus(doc?.investor_id);
-      Toast.success(result.verified
-        ? 'Document approved — investor is now FICA-verified'
-        : `Document approved — still needed: ${result.missing.join(', ')}`);
       await loadKYC();
     } catch (e) {
       Toast.error('Failed to approve document: ' + (e.message || 'unknown error'));
