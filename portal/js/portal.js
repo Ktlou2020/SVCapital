@@ -2130,13 +2130,35 @@ function filterMyInvestments(filter, btn) {
 }
 
 function populateMyInvProductFilter() {
-  const sel = document.getElementById('myInvProductFilter');
-  if (!sel) return;
+  const container = document.getElementById('myInvProductFilter');
+  if (!container) return;
   const types = [...new Set((PORTAL.investments || []).map(i => i.product_type).filter(Boolean))];
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">All Products</option>' +
-    types.map(t => `<option value="${_esc(t)}">${_esc(Utils.productInfo(t).label)}</option>`).join('');
-  if (types.includes(cur)) sel.value = cur;
+  const cur = container.dataset.activeType || '';
+  const items = [
+    { value: '', icon: 'fa-layer-group', label: 'All' },
+    ...types.map(t => {
+      const pi = Utils.productInfo(t);
+      return { value: t, icon: pi.icon, label: (pi.label || t).replace(/\s*\(\d+yr\)/gi, '').replace(/\s+Investments?\b/gi, '').trim(), color: pi.color };
+    })
+  ];
+  container.innerHTML = items.map(item => `
+    <button class="prod-type-tile${item.value === cur ? ' active' : ''}"
+            data-type="${_esc(item.value)}"
+            onclick="filterMyInvProduct('${_esc(item.value)}')"
+            ${item.color ? `style="--tile-color:${item.color}"` : ''}>
+      <i class="fa-solid ${item.icon}"></i>
+      <span>${_esc(item.label)}</span>
+    </button>`).join('');
+}
+
+function filterMyInvProduct(type) {
+  const container = document.getElementById('myInvProductFilter');
+  if (!container) return;
+  container.dataset.activeType = type;
+  container.querySelectorAll('.prod-type-tile').forEach(b =>
+    b.classList.toggle('active', b.dataset.type === type)
+  );
+  renderMyInvestmentCards();
 }
 
 function _groupInvsByPool(investments) {
@@ -2164,7 +2186,8 @@ function toggleInvBreakdown(uid) {
 function renderMyInvestmentCards() {
   populateMyInvProductFilter();
   const grid = document.getElementById('myInvestmentsGrid');
-  const productFilter = document.getElementById('myInvProductFilter')?.value || '';
+  const _pf = document.getElementById('myInvProductFilter');
+  const productFilter = _pf?.dataset?.activeType || _pf?.value || '';
   let items = PORTAL.myInvFilter === 'all' ? PORTAL.investments : PORTAL.investments.filter(i => i.status === PORTAL.myInvFilter);
   if (productFilter) items = items.filter(i => i.product_type === productFilter);
 

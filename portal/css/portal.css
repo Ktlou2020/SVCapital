@@ -2092,3 +2092,56 @@ html body .my-inv-card .btn--secondary:hover {
   border-color: rgba(212,175,55,0.40) !important;
   color: #d4af37 !important;
 }
+
+/* ── Product type filter tiles (My Investments) ──────────────────────── */
+.prod-type-filter {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0;
+}
+.prod-type-filter::-webkit-scrollbar { display: none; }
+
+.prod-type-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  cursor: pointer;
+  flex-shrink: 0;
+  min-width: 52px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.prod-type-tile i {
+  font-size: 1rem;
+  color: rgba(255,255,255,0.5);
+  display: block;
+}
+.prod-type-tile span {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.6);
+  text-align: center;
+  line-height: 1.2;
+  display: block;
+  white-space: nowrap;
+}
+.prod-type-tile.active {
+  background: rgba(212,175,55,0.15);
+  border-color: #D4AF37;
+}
+.prod-type-tile.active i    { color: #D4AF37; }
+.prod-type-tile.active span { color: #D4AF37; }
+.prod-type-tile:hover:not(.active) {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.2);
+}
