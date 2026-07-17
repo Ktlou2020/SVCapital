@@ -21,7 +21,7 @@
   position: absolute;
   top: -60px; right: -60px;
   width: 200px; height: 200px;
-  background: radial-gradient(circle, rgba(212,175,55,0.12), transparent 70%);
+  background: radial-gradient(circle, rgba(254,194,79,0.12), transparent 70%);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -181,9 +181,9 @@
 }
 
 .inv-card__status.matured {
-  background: rgba(212,175,55,0.12);
+  background: rgba(254,194,79,0.12);
   color: var(--gold);
-  border: 1px solid rgba(212,175,55,0.3);
+  border: 1px solid rgba(254,194,79,0.3);
 }
 
 .inv-card__stats {
@@ -219,7 +219,7 @@
 .inv-card__progress-bar {
   height: 100%;
   border-radius: 100px;
-  background: linear-gradient(90deg, var(--gold), #f5d060);
+  background: linear-gradient(90deg, var(--gold), #fec24f);
   transition: width 0.6s ease;
 }
 
@@ -231,8 +231,8 @@
 
 /* ─── Referral Card ─── */
 .referral-card {
-  background: linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.03) 100%);
-  border: 1px solid rgba(212,175,55,0.25);
+  background: linear-gradient(135deg, rgba(254,194,79,0.08) 0%, rgba(254,194,79,0.03) 100%);
+  border: 1px solid rgba(254,194,79,0.25);
   border-radius: var(--radius-lg);
   padding: 24px;
 }
@@ -293,7 +293,7 @@
 
 .tx-icon.deposit { background: var(--green-bg); color: var(--green); }
 .tx-icon.withdrawal { background: rgba(239,68,68,0.12); color: #ef4444; }
-.tx-icon.investment { background: rgba(212,175,55,0.12); color: var(--gold); }
+.tx-icon.investment { background: rgba(254,194,79,0.12); color: var(--gold); }
 .tx-icon.return { background: rgba(34,197,94,0.12); color: var(--green); }
 
 .tx-details { flex: 1; min-width: 0; }
@@ -506,7 +506,7 @@
 .xp-bar {
   height: 100%;
   border-radius: 100px;
-  background: linear-gradient(90deg, var(--gold), #f5d060);
+  background: linear-gradient(90deg, var(--gold), #fec24f);
   transition: width 0.8s ease;
 }
 
@@ -517,8 +517,8 @@
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--gold);
-  background: rgba(212,175,55,0.1);
-  border: 1px solid rgba(212,175,55,0.3);
+  background: rgba(254,194,79,0.1);
+  border: 1px solid rgba(254,194,79,0.3);
   padding: 4px 12px;
   border-radius: 100px;
 }
@@ -823,7 +823,7 @@
 .amount-chip:hover,
 .amount-chip.selected {
   border-color: var(--gold);
-  background: rgba(212,175,55,0.1);
+  background: rgba(254,194,79,0.1);
   color: var(--gold);
 }
 
@@ -838,7 +838,7 @@
 }
 
 .opp-card:hover {
-  border-color: rgba(212,175,55,0.5);
+  border-color: rgba(254,194,79,0.5);
   transform: translateY(-2px);
 }
 
@@ -909,7 +909,7 @@
 .opp-card__progress-bar {
   height: 100%;
   border-radius: 100px;
-  background: linear-gradient(90deg, var(--gold), #f5d060);
+  background: linear-gradient(90deg, var(--gold), #fec24f);
 }
 
 .opp-card__progress-label {
@@ -1024,7 +1024,7 @@
 .upload-zone:hover,
 .upload-zone.drag-over {
   border-color: var(--gold);
-  background: rgba(212,175,55,0.04);
+  background: rgba(254,194,79,0.04);
 }
 
 .upload-zone__icon {
@@ -1083,9 +1083,9 @@
 }
 
 .badge-gold {
-  background: rgba(212,175,55,0.15);
+  background: rgba(254,194,79,0.15);
   color: var(--gold);
-  border: 1px solid rgba(212,175,55,0.3);
+  border: 1px solid rgba(254,194,79,0.3);
 }
 
 .badge-green {
@@ -1130,7 +1130,7 @@
 }
 
 .page-btn:hover { border-color: var(--gold); color: var(--gold); }
-.page-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(212,175,55,0.08); }
+.page-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(254,194,79,0.08); }
 .page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* ─── Accordion / FAQ ─── */
@@ -1186,8 +1186,8 @@
 }
 
 .chat-bubble.user {
-  background: rgba(212,175,55,0.12);
-  border: 1px solid rgba(212,175,55,0.25);
+  background: rgba(254,194,79,0.12);
+  border: 1px solid rgba(254,194,79,0.25);
   color: var(--white);
   margin-left: auto;
   border-bottom-right-radius: 4px;
@@ -1212,8 +1212,8 @@
 .premium-gate {
   text-align: center;
   padding: 40px 24px;
-  background: linear-gradient(135deg, rgba(212,175,55,0.06) 0%, transparent 100%);
-  border: 1px solid rgba(212,175,55,0.2);
+  background: linear-gradient(135deg, rgba(254,194,79,0.06) 0%, transparent 100%);
+  border: 1px solid rgba(254,194,79,0.2);
   border-radius: var(--radius-xl);
 }
 
@@ -1351,7 +1351,7 @@
   margin-bottom: 10px;
 }
 .bank-option:hover { border-color: var(--gold); }
-.bank-option.selected { border-color: var(--gold); background: rgba(212,175,55,0.05); }
+.bank-option.selected { border-color: var(--gold); background: rgba(254,194,79,0.05); }
 .bank-option__icon { font-size: 1.5rem; flex-shrink: 0; }
 .bank-option__name { font-weight: 700; color: var(--white); font-size: 0.9rem; }
 .bank-option__account { font-size: 0.78rem; color: var(--text-dim); }
@@ -1390,8 +1390,8 @@
   transition: border-color 0.2s;
   margin-bottom: 8px;
 }
-.invest-opp-item:hover { border-color: rgba(212,175,55,0.5); }
-.invest-opp-item.selected { border-color: var(--gold); background: rgba(212,175,55,0.05); }
+.invest-opp-item:hover { border-color: rgba(254,194,79,0.5); }
+.invest-opp-item.selected { border-color: var(--gold); background: rgba(254,194,79,0.05); }
 .invest-opp-item__name { font-weight: 700; color: var(--white); font-size: 0.9rem; }
 .invest-opp-item__rate { font-size: 0.8rem; color: var(--gold); font-weight: 600; margin-top: 2px; }
 .invest-opp-item__check { margin-left: auto; color: var(--gold); font-size: 1.1rem; opacity: 0; }
@@ -1411,7 +1411,7 @@
 }
 .loading-cover__spinner {
   width: 40px; height: 40px;
-  border: 3px solid rgba(212,175,55,0.2);
+  border: 3px solid rgba(254,194,79,0.2);
   border-top-color: var(--gold);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
@@ -1545,8 +1545,8 @@ select option { background: #1a1a2e; color: #fff; }
 
 .pill-btn.active,
 .pill-btn:hover {
-  background: rgba(212,175,55,0.12);
-  border-color: rgba(212,175,55,0.4);
+  background: rgba(254,194,79,0.12);
+  border-color: rgba(254,194,79,0.4);
   color: var(--gold);
 }
 
@@ -1631,7 +1631,7 @@ select option { background: #1a1a2e; color: #fff; }
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #000;
-  background: linear-gradient(90deg, var(--gold), #f5d060);
+  background: linear-gradient(90deg, var(--gold), #fec24f);
   padding: 2px 8px;
   border-radius: 100px;
 }
@@ -1677,8 +1677,8 @@ select option { background: #1a1a2e; color: #fff; }
 
 .filter-chip.active,
 .filter-chip:hover {
-  background: rgba(212,175,55,0.1);
-  border-color: rgba(212,175,55,0.4);
+  background: rgba(254,194,79,0.1);
+  border-color: rgba(254,194,79,0.4);
   color: var(--gold);
 }
 
@@ -1990,8 +1990,8 @@ html body .my-inv-card {
   transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease !important;
 }
 html body .my-inv-card:hover {
-  border-color: rgba(212,175,55,0.50) !important;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.55), 0 0 0 1px rgba(212,175,55,0.12) !important;
+  border-color: rgba(254,194,79,0.50) !important;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.55), 0 0 0 1px rgba(254,194,79,0.12) !important;
   transform: translateY(-2px) !important;
 }
 html body .my-inv-card--paidout { opacity: 0.55 !important; }
@@ -2036,7 +2036,7 @@ html body .my-inv-card .progress-bar {
 html body .my-inv-card .progress-fill {
   height: 100% !important;
   border-radius: 100px !important;
-  background: linear-gradient(90deg, #d4af37 0%, #f5d060 100%) !important;
+  background: linear-gradient(90deg, #fec24f 0%, #fec24f 100%) !important;
 }
 html body .my-inv-card__stats {
   display: grid !important;
@@ -2074,8 +2074,8 @@ html body .my-inv-card .mic-stat__value {
   line-height: 1.2 !important;
 }
 html body .my-inv-card .mic-stat__value--gold {
-  color: #d4af37 !important;
-  -webkit-text-fill-color: #d4af37 !important;
+  color: #fec24f !important;
+  -webkit-text-fill-color: #fec24f !important;
 }
 html body .my-inv-card .mic-stat__value--green {
   color: #4ade80 !important;
@@ -2088,9 +2088,9 @@ html body .my-inv-card .btn--secondary {
   margin-top: 6px !important;
 }
 html body .my-inv-card .btn--secondary:hover {
-  background: rgba(212,175,55,0.10) !important;
-  border-color: rgba(212,175,55,0.40) !important;
-  color: #d4af37 !important;
+  background: rgba(254,194,79,0.10) !important;
+  border-color: rgba(254,194,79,0.40) !important;
+  color: #fec24f !important;
 }
 
 /* ── Product type filter tiles (My Investments) ──────────────────────── */
@@ -2136,11 +2136,11 @@ html body .my-inv-card .btn--secondary:hover {
   white-space: nowrap;
 }
 .prod-type-tile.active {
-  background: rgba(212,175,55,0.15);
-  border-color: #D4AF37;
+  background: rgba(254,194,79,0.15);
+  border-color: #fec24f;
 }
-.prod-type-tile.active i    { color: #D4AF37; }
-.prod-type-tile.active span { color: #D4AF37; }
+.prod-type-tile.active i    { color: #fec24f; }
+.prod-type-tile.active span { color: #fec24f; }
 .prod-type-tile:hover:not(.active) {
   background: rgba(255,255,255,0.08);
   border-color: rgba(255,255,255,0.2);

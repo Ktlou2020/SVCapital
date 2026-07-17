@@ -5,7 +5,7 @@
    
    BRAND COLORS (from CI Manual & SVG logo analysis):
    - Logo mark: Multi-color gradient petals (orange, purple, green, blue, yellow)
-   - Primary Orange: #FF9B0C → #FF5229 (warm energy, primary CTA)
+   - Primary Orange: #fec24f → #FF5229 (warm energy, primary CTA)
    - Teal/Blue:      #656565 / #656565  (trust, stability)
    - Green:          #65ED00 / #7BCB5A  (growth, returns)
    - Purple:         #EDA5FF             (premium, sophistication)
@@ -18,9 +18,9 @@
 
 :root {
   /* ─── Brand Primary ─── */
-  --brand-orange:       #FF8215;
+  --brand-orange:       #fec24f;
   --brand-orange-dark:  #E56200;
-  --brand-orange-light: #FF9B0C;
+  --brand-orange-light: #fec24f;
   --brand-orange-glow:  rgba(255,130,21,0.12);
   --brand-orange-pale:  rgba(255,130,21,0.08);
 
@@ -40,7 +40,7 @@
   --brand-purple-pale:  rgba(237,165,255,0.10);
 
   /* ─── Brand Gradient (logo petals) ─── */
-  --gradient-brand:     linear-gradient(135deg, #FF9B0C 0%, #FF6421 50%, #FF5229 100%);
+  --gradient-brand:     linear-gradient(135deg, #fec24f 0%, #FF6421 50%, #FF5229 100%);
   --gradient-teal:      linear-gradient(135deg, #656565 0%, #656565 100%);
   --gradient-hero:      linear-gradient(135deg, #1a3a4a 0%, #0d2535 100%);
   --gradient-warm:      linear-gradient(135deg, #FFE86A 0%, #FFB782 100%);

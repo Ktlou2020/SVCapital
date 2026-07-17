@@ -1520,7 +1520,7 @@ function _renderCostTypeChart(costs) {
   const canvas = document.getElementById('costTypeChart');
   if (!canvas) return;
   if (S.charts.costType) S.charts.costType.destroy();
-  const TYPE_COLORS = { feed: '#fbbf24', vet: '#656565', transport: '#a78bfa', labour: '#34d399', mortality: '#f87171', other: 'rgba(255,255,255,.35)' };
+  const TYPE_COLORS = { feed: '#fec24f', vet: '#656565', transport: '#a78bfa', labour: '#34d399', mortality: '#f87171', other: 'rgba(255,255,255,.35)' };
   const types = {};
   costs.forEach(c => { const t = c.cost_type||'other'; types[t] = (types[t]||0) + (parseFloat(c.amount)||0); });
   const labels = Object.keys(types);
@@ -1543,7 +1543,7 @@ function _renderCostCycleChart(costs) {
   const data   = labels.map(k => byCycle[k]);
   S.charts.costCycle = new Chart(canvas, {
     type: 'bar',
-    data: { labels, datasets: [{ label:'Total Cost', data, backgroundColor:'rgba(212,175,55,.7)', borderRadius:6, borderSkipped:false }] },
+    data: { labels, datasets: [{ label:'Total Cost', data, backgroundColor:'rgba(254,194,79,.7)', borderRadius:6, borderSkipped:false }] },
     options: { responsive: true, maintainAspectRatio: false, indexAxis:'y', plugins: { legend: { display:false }, tooltip: { callbacks: { label: ctx => ` ${fmt.zar(ctx.raw)}` } } }, scales: { x: { ticks:{ color:'rgba(255,255,255,.5)', font:{size:11}, callback: v=>'R'+Math.round(v/1000)+'k' }, grid:{ color:'rgba(255,255,255,.04)' } }, y: { ticks:{ color:'rgba(255,255,255,.6)', font:{size:11} }, grid:{ color:'rgba(255,255,255,.04)' } } } }
   });
 }
@@ -1557,9 +1557,9 @@ function renderCostTable(costs, cycleFilter, typeFilter) {
   if (typeFilter)  rows = rows.filter(c => c.cost_type === typeFilter);
   rows.sort((a,b) => (b.cost_date||'').localeCompare(a.cost_date||''));
   if (sub) sub.textContent = `${rows.length} entries · Total: ${fmt.zar(rows.reduce((s,c)=>s+(parseFloat(c.amount)||0),0))}`;
-  const TYPE_COLORS = { feed:'#fbbf24', vet:'#656565', transport:'#a78bfa', labour:'#34d399', mortality:'#f87171', other:'rgba(255,255,255,.35)' };
+  const TYPE_COLORS = { feed:'#fec24f', vet:'#656565', transport:'#a78bfa', labour:'#34d399', mortality:'#f87171', other:'rgba(255,255,255,.35)' };
   const statusBadge = s => {
-    const cfg = { paid:['#74c69d','#052e16'], pending:['#fbbf24','#1c1400'], approved:['#656565','#0c1a2e'] };
+    const cfg = { paid:['#74c69d','#052e16'], pending:['#fec24f','#1c1400'], approved:['#656565','#0c1a2e'] };
     const [bg,fg] = cfg[s] || ['rgba(255,255,255,.12)','rgba(255,255,255,.5)'];
     return `<span style="background:${bg};color:${fg};padding:2px 7px;border-radius:8px;font-size:11px;font-weight:700">${(s||'?').toUpperCase()}</span>`;
   };
@@ -1573,7 +1573,7 @@ function renderCostTable(costs, cycleFilter, typeFilter) {
       <td style="font-size:12px;color:rgba(255,255,255,.7)">${escapeHtml(c.description||'—')}</td>
       <td style="text-align:right;font-size:12px;color:rgba(255,255,255,.5)">${c.per_animal ? fmt.zar(c.per_animal) : '—'}</td>
       <td style="text-align:right;font-size:12px;color:rgba(255,255,255,.5)">${c.animals_count || '—'}</td>
-      <td style="text-align:right;font-weight:700;color:#D4AF37">${fmt.zar(parseFloat(c.amount)||0)}</td>
+      <td style="text-align:right;font-weight:700;color:#fec24f">${fmt.zar(parseFloat(c.amount)||0)}</td>
       <td style="font-size:11px;color:rgba(255,255,255,.4)">${escapeHtml(c.supplier||'—')}</td>
       <td style="font-size:11px;color:rgba(255,255,255,.35)">${escapeHtml(c.invoice_ref||'—')}</td>
       <td>${statusBadge(c.status)}</td>
@@ -1602,7 +1602,7 @@ function renderCostNetReturnPanel(costs) {
     return { name: info.name, costs: info.total, gross: grossReturn, net: netReturn, saleV: saleValue };
   });
   if (!rows.length) { el.innerHTML = `<p style="color:rgba(255,255,255,.3);padding:16px;text-align:center">No cost data available</p>`; return; }
-  el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="border-bottom:1px solid rgba(255,255,255,.07)"><th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Cycle</th><th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Sale Value</th><th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Total Costs</th><th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Gross Return</th><th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Net Return</th><th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Margin</th></tr></thead><tbody>${rows.map(r => { const netColor = r.net >= 0 ? '#74c69d' : '#f87171'; const margin = r.saleV > 0 ? ((r.net/r.saleV)*100).toFixed(1) : '—'; return `<tr style="border-bottom:1px solid rgba(255,255,255,.04)"><td style="padding:10px 12px;font-weight:600;color:#fff">${escapeHtml(r.name)}</td><td style="padding:10px 12px;text-align:right;color:rgba(255,255,255,.6)">${fmt.zar(r.saleV)}</td><td style="padding:10px 12px;text-align:right;color:#f87171">${fmt.zar(r.costs)}</td><td style="padding:10px 12px;text-align:right;color:${r.gross>=0?'#D4AF37':'#f87171'}">${fmt.zar(r.gross)}</td><td style="padding:10px 12px;text-align:right;font-weight:700;color:${netColor}">${fmt.zar(r.net)}</td><td style="padding:10px 12px;text-align:right;color:${parseFloat(margin)>=0?'#74c69d':'#f87171'}">${margin !== '—' ? margin+'%' : '—'}</td></tr>`; }).join('')}</tbody></table></div>`;
+  el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="border-bottom:1px solid rgba(255,255,255,.07)"><th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Cycle</th><th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Sale Value</th><th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Total Costs</th><th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Gross Return</th><th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Net Return</th><th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Margin</th></tr></thead><tbody>${rows.map(r => { const netColor = r.net >= 0 ? '#74c69d' : '#f87171'; const margin = r.saleV > 0 ? ((r.net/r.saleV)*100).toFixed(1) : '—'; return `<tr style="border-bottom:1px solid rgba(255,255,255,.04)"><td style="padding:10px 12px;font-weight:600;color:#fff">${escapeHtml(r.name)}</td><td style="padding:10px 12px;text-align:right;color:rgba(255,255,255,.6)">${fmt.zar(r.saleV)}</td><td style="padding:10px 12px;text-align:right;color:#f87171">${fmt.zar(r.costs)}</td><td style="padding:10px 12px;text-align:right;color:${r.gross>=0?'#fec24f':'#f87171'}">${fmt.zar(r.gross)}</td><td style="padding:10px 12px;text-align:right;font-weight:700;color:${netColor}">${fmt.zar(r.net)}</td><td style="padding:10px 12px;text-align:right;color:${parseFloat(margin)>=0?'#74c69d':'#f87171'}">${margin !== '—' ? margin+'%' : '—'}</td></tr>`; }).join('')}</tbody></table></div>`;
 }
 
 let _editingCostId = null;

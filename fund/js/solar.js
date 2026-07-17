@@ -51,7 +51,7 @@ const SToast = {
     const icons = { success:'fa-check-circle', error:'fa-exclamation-circle', info:'fa-info-circle' };
     const el = document.createElement('div');
     el.className = `sol-toast ${type}`;
-    el.innerHTML = `<i class="fa-solid ${icons[type]||icons.info}" style="color:${type==='error'?'#f87171':type==='success'?'#74c69d':'#f59e0b'}"></i><span>${msg}</span>`;
+    el.innerHTML = `<i class="fa-solid ${icons[type]||icons.info}" style="color:${type==='error'?'#f87171':type==='success'?'#74c69d':'#fec24f'}"></i><span>${msg}</span>`;
     c.appendChild(el);
     setTimeout(() => el.remove(), 3800);
   }
@@ -339,7 +339,7 @@ function renderDashboard() {
         data: {
           labels: chartLabels,
           datasets: [
-            { label:'Capital Deployed', data: chartCapital, backgroundColor:'rgba(245,158,11,.7)', borderColor:'rgba(245,158,11,1)', borderRadius:6 },
+            { label:'Capital Deployed', data: chartCapital, backgroundColor:'rgba(254,194,79,.7)', borderColor:'rgba(254,194,79,1)', borderRadius:6 },
             { label:'Accrued Returns',  data: chartAccrued, backgroundColor:'rgba(116,198,157,.6)', borderColor:'rgba(116,198,157,1)', borderRadius:6 }
           ]
         },
@@ -361,7 +361,7 @@ function renderDashboard() {
         type: 'doughnut',
         data: {
           labels: ['5-Year', '6-Year', '7-Year'],
-          datasets: [{ data: typeVals, backgroundColor:['rgba(96,165,250,.8)','rgba(245,158,11,.8)','rgba(116,198,157,.8)'], borderColor:'#131720', borderWidth:2 }]
+          datasets: [{ data: typeVals, backgroundColor:['rgba(96,165,250,.8)','rgba(254,194,79,.8)','rgba(116,198,157,.8)'], borderColor:'#131720', borderWidth:2 }]
         },
         options: {
           responsive: true, maintainAspectRatio: false,
@@ -561,7 +561,7 @@ function renderNAVCalculator() {
         <span class="sol-calc-row-label">Total Contracted Returns (full term)</span>
         <span class="sol-calc-row-val">${sfmt.zar(pNav.totalContracted)}</span>
       </div>
-      <div class="sol-calc-row" style="border-top:1px solid rgba(245,158,11,.3);padding-top:12px;margin-top:8px">
+      <div class="sol-calc-row" style="border-top:1px solid rgba(254,194,79,.3);padding-top:12px;margin-top:8px">
         <span style="color:#fff;font-weight:700">Portfolio NAV (Capital + Accrued)</span>
         <span style="color:var(--sol-gold);font-weight:900;font-size:17px">${sfmt.zar(pNav.portfolioNAV)}</span>
       </div>

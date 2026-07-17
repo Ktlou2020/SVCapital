@@ -113,7 +113,7 @@
       label:       'Fund Operations',
       description: 'AUM tracking, returns & fund management',
       icon:        'fa-solid fa-chart-line',
-      color:       '#f59e0b',
+      color:       '#fec24f',
       path:        '/fund/index.html',
       guard:       true,
     },

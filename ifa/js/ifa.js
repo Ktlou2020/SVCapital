@@ -451,7 +451,7 @@ function renderPortfolioChart() {
       .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
     return clientInvests || parseFloat(c.total_invested) || 0;
   });
-  const colors = ['#656565','#D4AF37','#22c55e','#f97316','#a855f7','#656565','#ef4444','#656565'];
+  const colors = ['#656565','#fec24f','#22c55e','#f97316','#a855f7','#656565','#ef4444','#656565'];
 
   if (STATE.charts.portfolio) STATE.charts.portfolio.destroy();
   if (!labels.length) return;
@@ -732,7 +732,7 @@ function renderReferralOverview() {
         <div style="font-size:1.6rem;font-weight:800;color:#656565">${ficaSubmitted}</div>
         <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">FICA Submitted</div>
       </div>
-      <div style="text-align:center;background:#fefce8;border:1px solid rgba(212,175,55,0.2);border-radius:var(--radius);padding:16px">
+      <div style="text-align:center;background:#fefce8;border:1px solid rgba(254,194,79,0.2);border-radius:var(--radius);padding:16px">
         <div style="font-size:1.6rem;font-weight:800;color:var(--gold)">${invested}</div>
         <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">Invested</div>
       </div>

@@ -28,10 +28,10 @@
 }
 .kpi:hover { transform: translateY(-3px); box-shadow: 0 10px 32px rgba(0,0,0,0.13); }
 .kpi:hover::after { opacity: 1; }
-.kpi--gold::after    { background: linear-gradient(90deg, var(--gold), #f5c842); }
+.kpi--gold::after    { background: linear-gradient(90deg, var(--gold), #fec24f); }
 .kpi--teal::after    { background: linear-gradient(90deg, var(--teal), #5ecfdc); }
 .kpi--green::after   { background: linear-gradient(90deg, var(--green), #4ade80); }
-.kpi--orange::after  { background: linear-gradient(90deg, var(--orange), #ff9b0c); }
+.kpi--orange::after  { background: linear-gradient(90deg, var(--orange), #fec24f); }
 .kpi--purple::after  { background: linear-gradient(90deg, var(--purple), #c084fc); }
 .kpi--blue::after    { background: linear-gradient(90deg, var(--blue), #656565); }
 .kpi--red::after     { background: linear-gradient(90deg, var(--red), #f87171); }
@@ -50,7 +50,7 @@
   content: '';
   position: absolute; top: -100px; right: -60px;
   width: 300px; height: 300px;
-  background: radial-gradient(circle, rgba(212,175,55,0.1) 0%, transparent 65%);
+  background: radial-gradient(circle, rgba(254,194,79,0.1) 0%, transparent 65%);
   border-radius: 50%; pointer-events: none;
 }
 .fund-hero-banner::after {
@@ -72,7 +72,7 @@
   letter-spacing: -0.02em; margin-bottom: 12px;
 }
 .fund-hero__title span {
-  background: linear-gradient(90deg, var(--gold), #f5c842);
+  background: linear-gradient(90deg, var(--gold), #fec24f);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
 .fund-hero__chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -81,10 +81,10 @@
   padding: 4px 10px; border-radius: 50px;
   font-size: 0.68rem; font-weight: 700; white-space: nowrap;
 }
-.fund-hero__chip--gold   { background: rgba(212,175,55,0.15); border: 1px solid rgba(212,175,55,0.35); color: #D4AF37; }
+.fund-hero__chip--gold   { background: rgba(254,194,79,0.15); border: 1px solid rgba(254,194,79,0.35); color: #fec24f; }
 .fund-hero__chip--teal   { background: rgba(47,140,155,0.15); border: 1px solid rgba(47,140,155,0.35); color: #5ecfdc; }
 .fund-hero__chip--green  { background: rgba(34,197,94,0.15);  border: 1px solid rgba(34,197,94,0.35);  color: #22c55e; }
-.fund-hero__chip--orange { background: rgba(255,130,21,0.15); border: 1px solid rgba(255,130,21,0.35); color: #FF8215; }
+.fund-hero__chip--orange { background: rgba(255,130,21,0.15); border: 1px solid rgba(255,130,21,0.35); color: #fec24f; }
 
 .fund-hero__right {
   display: flex; flex-direction: column; gap: 8px;
@@ -104,12 +104,12 @@
   transition: background 0.14s;
 }
 .data-table tbody tr:hover td {
-  background: rgba(212,175,55,0.03);
+  background: rgba(254,194,79,0.03);
 }
 
 /* ─── Nav items ─── */
 .nav-btn.active {
-  box-shadow: inset 0 0 0 1px rgba(212,175,55,0.2);
+  box-shadow: inset 0 0 0 1px rgba(254,194,79,0.2);
 }
 
 /* ─── Product cards ─── */
@@ -119,7 +119,7 @@
 .product-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 10px 32px rgba(0,0,0,0.13);
-  border-color: rgba(212,175,55,0.3);
+  border-color: rgba(254,194,79,0.3);
 }
 
 /* ─── Topbar gradient ─── */
@@ -130,17 +130,17 @@
 
 /* ─── Sidebar brand glow ─── */
 .sidebar__brand {
-  background: linear-gradient(180deg, rgba(212,175,55,0.06) 0%, transparent 100%);
+  background: linear-gradient(180deg, rgba(254,194,79,0.06) 0%, transparent 100%);
 }
 
 /* ─── Module badge pulse ─── */
 .module-badge {
-  border: 1px solid rgba(212,175,55,0.2);
+  border: 1px solid rgba(254,194,79,0.2);
   transition: background 0.22s, border-color 0.22s;
 }
 .module-badge:hover {
-  background: rgba(212,175,55,0.12);
-  border-color: rgba(212,175,55,0.35);
+  background: rgba(254,194,79,0.12);
+  border-color: rgba(254,194,79,0.35);
 }
 
 /* ─── Trend badge ─── */

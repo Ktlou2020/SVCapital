@@ -31,7 +31,7 @@ body{background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',
 .logo img{height:48px;width:auto;object-fit:contain;display:block;margin:0 auto}
 .bdy{padding:38px 40px;font-size:0.95rem;color:#444;line-height:1.7;white-space:pre-wrap}
 .ftr{background:#f7f9fc;border-top:1px solid #eee;padding:18px 40px;text-align:center;font-size:0.76rem;color:#aaa}
-.ftr a{color:#ff9b0c;text-decoration:none}
+.ftr a{color:#fec24f;text-decoration:none}
 @media(max-width:600px){.bdy,.hdr,.ftr{padding:24px 20px}}
 </style></head><body>
 <div class="shell">

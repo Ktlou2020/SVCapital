@@ -12,7 +12,7 @@
   --muted:     #6b7280;
   --accent:    #7c5cfc;
   --accent2:   #00d4aa;
-  --gold:      #f9c846;
+  --gold:      #fec24f;
   --danger:    #ff5b5b;
   --warn:      #ffb347;
   --sidebar-w: 224px;
@@ -1209,7 +1209,7 @@ html, body {
 }
 .cert-seal {
   width: 72px; height: 72px;
-  background: linear-gradient(135deg, #f9c846, #ffb347);
+  background: linear-gradient(135deg, #fec24f, #ffb347);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1221,7 +1221,7 @@ html, body {
   box-shadow: 0 0 40px rgba(249,200,70,0.3);
 }
 .cert-issued { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 8px; }
-.cert-name { font-size: 2rem; font-weight: 800; background: linear-gradient(90deg, #f9c846, #ffb347); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; }
+.cert-name { font-size: 2rem; font-weight: 800; background: linear-gradient(90deg, #fec24f, #ffb347); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; }
 .cert-phrase { font-size: 0.85rem; color: var(--muted); margin-bottom: 20px; }
 .cert-course { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
 .cert-date { font-size: 0.78rem; color: var(--muted); margin-bottom: 28px; }
@@ -1648,7 +1648,7 @@ html, body {
 .cal-bday-chip {
   font-size: 0.65rem;
   background: rgba(249,200,70,0.15);
-  color: #f9c846;
+  color: #fec24f;
   border-radius: 4px;
   padding: 1px 4px;
   margin-top: 2px;

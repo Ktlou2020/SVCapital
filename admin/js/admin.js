@@ -291,7 +291,7 @@ function loadAdminNotifications(investors, transactions, tickets) {
   if (bankTkts.length) {
     notifs.push(_an({
       nid: `btkt-${bankTkts.map(t=>t.id).sort().join('-')}`,
-      icon: 'fa-file-invoice', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
+      icon: 'fa-file-invoice', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
       title: `${bankTkts.length} bank verification ticket${bankTkts.length === 1 ? '' : 's'}`,
       sub: `${bankTkts.slice(0,2).map(t => _esc(t.investor_name || 'Investor')).join(', ')} submitted bank details.`,
       action: "navigate('support',document.querySelector('[data-view=support]'));toggleAdminNotif()",
@@ -846,7 +846,7 @@ function renderPendingActions() {
   }
 
   el.innerHTML = actions.map(a => `
-    <button type="button" style="width:100%;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--dark-3);margin-bottom:10px;cursor:pointer;transition:transform .15s ease, box-shadow .15s ease" onclick="navigate('${a.view}', document.querySelector('[data-view=${a.view}]'))" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.3)';this.style.borderColor='rgba(212,175,55,0.3)'" onmouseout="this.style.transform='';this.style.boxShadow='';this.style.borderColor=''">
+    <button type="button" style="width:100%;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--dark-3);margin-bottom:10px;cursor:pointer;transition:transform .15s ease, box-shadow .15s ease" onclick="navigate('${a.view}', document.querySelector('[data-view=${a.view}]'))" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.3)';this.style.borderColor='rgba(254,194,79,0.3)'" onmouseout="this.style.transform='';this.style.boxShadow='';this.style.borderColor=''">
       <div style="display:flex;align-items:flex-start;gap:12px">
         <div style="width:34px;height:34px;border-radius:10px;background:${a.color}18;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <i class="fa-solid ${a.icon}" style="color:${a.color};font-size:0.8rem"></i>
@@ -889,7 +889,7 @@ function renderActivityFeed(page) {
     if (!ts) return;
     events.push({
       ts: new Date(ts),
-      icon: 'fa-coins', color: '#D4AF37',
+      icon: 'fa-coins', color: '#fec24f',
       text: `<strong>${_esc(inv.investor_name || inv.investor_id)}</strong> invested ${Utils.rand(inv.amount)}`,
       sub: _esc(inv.pool_name || inv.pool_id || ''),
       view: 'investments',
@@ -915,7 +915,7 @@ function renderActivityFeed(page) {
     if (!ts) return;
     events.push({
       ts: new Date(ts),
-      icon: 'fa-id-card', color: '#f59e0b',
+      icon: 'fa-id-card', color: '#fec24f',
       text: `<strong>${_esc(inv.first_name)} ${_esc(inv.last_name)}</strong> submitted KYC docs`,
       sub: inv.id,
       view: 'kyc',
@@ -1028,15 +1028,15 @@ function renderAumChart(range) {
         {
           label: 'AUM (R)',
           data: aumData,
-          borderColor: '#D4AF37',
+          borderColor: '#fec24f',
           backgroundColor: c => {
             const g = c.chart.ctx.createLinearGradient(0, 0, 0, 280);
-            g.addColorStop(0, 'rgba(212,175,55,0.18)');
-            g.addColorStop(1, 'rgba(212,175,55,0)');
+            g.addColorStop(0, 'rgba(254,194,79,0.18)');
+            g.addColorStop(1, 'rgba(254,194,79,0)');
             return g;
           },
           fill: true, tension: 0.4, borderWidth: 2.5,
-          pointRadius: 4, pointBackgroundColor: '#D4AF37',
+          pointRadius: 4, pointBackgroundColor: '#fec24f',
         },
         {
           label: 'Returns Paid (R)',
@@ -1054,7 +1054,7 @@ function renderAumChart(range) {
         legend: { labels: { color: '#7a92a8', font: { size: 11 }, boxWidth: 12, boxHeight: 12 } },
         tooltip: {
           backgroundColor: 'rgba(13,17,23,0.95)', titleColor: '#e8edf2', bodyColor: '#7a92a8',
-          borderColor: 'rgba(212,175,55,0.3)', borderWidth: 1,
+          borderColor: 'rgba(254,194,79,0.3)', borderWidth: 1,
           callbacks: { label: c => ` ${c.dataset.label}: ${Utils.rand(c.parsed.y)}` }
         }
       },
@@ -1082,7 +1082,7 @@ function renderProductMixChart() {
 
   const labels = ['Cattle Investment', 'Solar Investment (7yr)', 'Solar Investment (6yr)', 'Solar Investment (5yr)', 'Short Term Investment', 'Delivery Bikes'];
   const data = Object.values(products);
-  const colors = ['#D4AF37', '#22c55e', '#4ade80', '#86efac', '#656565', '#f97316'];
+  const colors = ['#fec24f', '#22c55e', '#4ade80', '#86efac', '#656565', '#f97316'];
 
   if (STATE.charts.productMix) STATE.charts.productMix.destroy();
   STATE.charts.productMix = new Chart(ctx, {
@@ -1202,7 +1202,7 @@ function renderInvestorStats() {
 }
 
 function _invAvatarColor(name) {
-  const p = ['#D4AF37','#656565','#22c55e','#f59e0b','#8b5cf6','#656565','#ec4899','#ef4444'];
+  const p = ['#fec24f','#656565','#22c55e','#fec24f','#8b5cf6','#656565','#ec4899','#ef4444'];
   let h = 0; for (const c of (name||'?')) h = (h<<5) - h + c.charCodeAt(0);
   return p[Math.abs(h) % p.length];
 }
@@ -1261,7 +1261,7 @@ function renderInvestorsTable() {
       : '<span class="badge badge--grey" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-user-slash"></i> No Login</span>';
     const province = (inv.province||'').replace(/\s+$/,'');
     const _trunc = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block';
-    return `<tr style="cursor:pointer;${isSelected ? 'background:rgba(255,155,12,0.06)' : ''}" tabindex="0" onclick="viewInvestor('${inv.id}')" onkeydown="if(event.key==='Enter')viewInvestor('${inv.id}')">
+    return `<tr style="cursor:pointer;${isSelected ? 'background:rgba(254,194,79,0.06)' : ''}" tabindex="0" onclick="viewInvestor('${inv.id}')" onkeydown="if(event.key==='Enter')viewInvestor('${inv.id}')">
       <td style="overflow:hidden;padding:8px 10px" onclick="event.stopPropagation()">
         <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleInvestorSelect('${inv.id}', this.checked)">
       </td>
@@ -1426,7 +1426,7 @@ async function viewInvestor(id) {
           <div class="panel__body">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
               <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
-                <div style="font-size:1.05rem;font-weight:800;color:#D4AF37">${Utils.rand(inv.wallet_balance)}</div>
+                <div style="font-size:1.05rem;font-weight:800;color:#fec24f">${Utils.rand(inv.wallet_balance)}</div>
                 <div style="font-size:0.72rem;color:var(--text-muted)">Wallet</div>
               </div>
               <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
@@ -2120,7 +2120,7 @@ function renderKYCStats() {
     const avg     = _avgHours(docs);
     const icon    = DOC_ICONS[t] || 'fa-file';
     const label   = DOC_LABELS[t] || t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    const pendClr = pend > 0 ? '#FF9B0C' : 'var(--text-muted)';
+    const pendClr = pend > 0 ? '#fec24f' : 'var(--text-muted)';
     return `<div class="stat-card" style="cursor:pointer;padding:12px 14px" onclick="document.getElementById('kycDocTypeFilter').value=${JSON.stringify(t)};renderKYCTable()">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <i class="fa-solid ${icon}" style="color:#6366f1;font-size:0.9rem"></i>
@@ -2195,7 +2195,7 @@ function renderKYCTable() {
 
     return `
     <tr>
-      <td><input type="checkbox" class="kyc-cb" value="${k.id}" ${!canSelect ? 'disabled' : ''} ${_kycSelected.has(k.id) ? 'checked' : ''} onchange="toggleKycRow('${k.id}', this.checked)" style="${canSelect ? 'cursor:pointer;width:16px;height:16px;accent-color:#FF9B0C' : 'opacity:0.3;width:16px;height:16px'}"></td>
+      <td><input type="checkbox" class="kyc-cb" value="${k.id}" ${!canSelect ? 'disabled' : ''} ${_kycSelected.has(k.id) ? 'checked' : ''} onchange="toggleKycRow('${k.id}', this.checked)" style="${canSelect ? 'cursor:pointer;width:16px;height:16px;accent-color:#fec24f' : 'opacity:0.3;width:16px;height:16px'}"></td>
       <td><div class="td-strong clip">${kName}</div><div class="td-muted clip">${k.investor_id}</div></td>
       <td>${docTypeCell}</td>
       <td class="td-muted clip">${k.file_name || 'Not uploaded'}</td>
@@ -2247,7 +2247,7 @@ async function _runBankAutoVerify(investorId) {
 
     const verdictCfg = {
       match:       { icon: 'fa-circle-check',   color: '#22c55e', label: 'Details Match',          bg: 'rgba(34,197,94,0.08)',   border: 'rgba(34,197,94,0.25)'   },
-      partial:     { icon: 'fa-circle-exclamation', color: '#f59e0b', label: 'Partial Match',      bg: 'rgba(245,158,11,0.08)',  border: 'rgba(245,158,11,0.25)'  },
+      partial:     { icon: 'fa-circle-exclamation', color: '#fec24f', label: 'Partial Match',      bg: 'rgba(254,194,79,0.08)',  border: 'rgba(254,194,79,0.25)'  },
       mismatch:    { icon: 'fa-circle-xmark',   color: '#ef4444', label: 'Details Do Not Match',   bg: 'rgba(239,68,68,0.08)',   border: 'rgba(239,68,68,0.25)'   },
       unreadable:  { icon: 'fa-file-circle-question', color: '#9ca3af', label: 'Document Unreadable', bg: 'rgba(156,163,175,0.08)', border: 'rgba(156,163,175,0.25)' },
     };
@@ -2492,7 +2492,7 @@ function _capacityBar(pool) {
   const cur = Number(pool.current_invested) || 0;
   if (!max) return '<span style="font-size:0.75rem;color:var(--text-muted)">Unlimited</span>';
   const pct = Math.min(100, Math.round(cur / max * 100));
-  const color = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#22c55e';
+  const color = pct >= 90 ? '#ef4444' : pct >= 70 ? '#fec24f' : '#22c55e';
   const fullBadge = cur >= max ? ' <span style="display:inline-block;background:#ef4444;color:#fff;font-size:0.65rem;font-weight:700;padding:1px 6px;border-radius:20px;vertical-align:middle;margin-left:4px">Full</span>' : '';
   return `<div style="min-width:100px">${fullBadge}
     <div style="height:4px;background:rgba(255,255,255,0.08);border-radius:2px;margin-bottom:3px">
@@ -2645,7 +2645,7 @@ function editProduct(id) {
 
 // ─── Product colour palette editor ───
 const PROD_PALETTE = (window.Utils && Utils.ciProductPalette) ||
-  ['#ff9b0c', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'];
+  ['#fec24f', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'];
 
 function _renderProdColorSwatches() {
   const wrap = document.getElementById('prodColorSwatches');
@@ -2726,7 +2726,7 @@ async function saveProduct(btn) {
         // admin didn't pick one, assign the first colour not already in use.
         if (!payload.color) {
           const palette = (window.Utils && Utils.ciProductPalette) ||
-            ['#ff9b0c', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'];
+            ['#fec24f', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'];
           let used = new Set();
           try {
             const existing = (await API.products.list({ limit: 500 })).data || [];
@@ -2838,7 +2838,7 @@ function renderPoolsGrid() {
     const isWaitlist = p.status === 'waitlist';
     const isFull = (Number(p.max_capacity) > 0) && (Number(p.current_invested) >= Number(p.max_capacity));
     const waitlistCountHtml = (isWaitlist || isFull)
-      ? `<div id="wl-count-${p.id}" style="font-size:0.72rem;color:#f59e0b;margin-top:4px"><i class="fa-solid fa-spinner fa-spin"></i> Loading waitlist…</div>`
+      ? `<div id="wl-count-${p.id}" style="font-size:0.72rem;color:#fec24f;margin-top:4px"><i class="fa-solid fa-spinner fa-spin"></i> Loading waitlist…</div>`
       : '';
 
     // Manage dropdown for waitlist/reopen
@@ -2850,7 +2850,7 @@ function renderPoolsGrid() {
           <i class="fa-solid fa-ellipsis-vertical"></i> Manage
         </button>
         <div id="pool-menu-${pid}" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--dark-3);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:9999;min-width:180px;overflow:hidden">
-          ${canSetWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="setPoolWaitlist('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-clock" style="color:#f59e0b;width:16px"></i> Set to Waitlist</button>` : ''}
+          ${canSetWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="setPoolWaitlist('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-clock" style="color:#fec24f;width:16px"></i> Set to Waitlist</button>` : ''}
           ${isWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="reopenPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-door-open" style="color:#22c55e;width:16px"></i> Reopen Pool</button>` : ''}
           <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="editPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-pen" style="width:16px"></i> Edit Pool</button>
           ${p.status === 'open' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="closePool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-lock" style="color:#ef4444;width:16px"></i> Close Pool</button>` : ''}
@@ -2880,7 +2880,7 @@ function renderPoolsGrid() {
             <span class="pool-stat__value" style="color:var(--gold);text-decoration:underline dotted">${p.live_investor_count ?? p.investor_count ?? 0}</span>
           </div>
           <div class="pool-stat"><span class="pool-stat__label">Term</span><span class="pool-stat__value">${p.term_months ?? '—'}mo</span></div>
-          ${p.management_fee_pct > 0 ? `<div class="pool-stat"><span class="pool-stat__label">Mgt Fee</span><span class="pool-stat__value" style="color:#f59e0b">${(Number(p.management_fee_pct) * 100).toFixed(2)}% (${p.management_fee_frequency || 'once'})</span></div>` : ''}
+          ${p.management_fee_pct > 0 ? `<div class="pool-stat"><span class="pool-stat__label">Mgt Fee</span><span class="pool-stat__value" style="color:#fec24f">${(Number(p.management_fee_pct) * 100).toFixed(2)}% (${p.management_fee_frequency || 'once'})</span></div>` : ''}
         </div>
 
         ${(() => {
@@ -2958,7 +2958,7 @@ async function viewPoolInvestors(poolId) {
       <!-- Pool stats -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
         ${[
-          ['Total Raised',  Utils.rand(summary.total_invested), 'coins',         '#D4AF37'],
+          ['Total Raised',  Utils.rand(summary.total_invested), 'coins',         '#fec24f'],
           ['Investors',     summary.investor_count,             'users',          '#656565'],
           ['Active',        summary.active_count,               'chart-line',     '#22c55e'],
           ['Matured',       summary.matured_count,              'flag-checkered', '#8b5cf6'],
@@ -3067,7 +3067,7 @@ async function _loadWaitlistCount(poolId) {
       const data = await res.json();
       const count = (data.data || []).length || data.count || 0;
       el.innerHTML = count
-        ? `<i class="fa-solid fa-hourglass-half" style="color:#f59e0b"></i> ${count} investor${count !== 1 ? 's' : ''} waiting`
+        ? `<i class="fa-solid fa-hourglass-half" style="color:#fec24f"></i> ${count} investor${count !== 1 ? 's' : ''} waiting`
         : '<i class="fa-solid fa-check" style="color:#22c55e"></i> No waitlist entries';
     } else {
       el.textContent = '';
@@ -3875,7 +3875,7 @@ function renderTxnTable() {
       : Utils.statusBadge(t.status);
 
     const proofLink = (t.proof_attached && t.proof_filename)
-      ? `<a href="#" onclick="viewEftProof('${t.id}')" style="display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;color:#FF8215;font-weight:600;margin-top:2px"><i class="fa-solid fa-paperclip"></i> ${t.proof_filename}</a>`
+      ? `<a href="#" onclick="viewEftProof('${t.id}')" style="display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;color:#fec24f;font-weight:600;margin-top:2px"><i class="fa-solid fa-paperclip"></i> ${t.proof_filename}</a>`
       : '';
 
     const invName = _txnInvName(t);
@@ -4064,7 +4064,7 @@ function renderTicketsTable() {
     const invName  = t.investor_name || (inv ? `${inv.first_name} ${inv.last_name}` : t.investor_id || '—');
     const invEmail = t.investor_email || inv?.email || '';
     const needsReply = !t.admin_response && t.status === 'open';
-    return `<tr ${needsReply ? 'style="background:rgba(255,155,12,0.05)"' : ''}>
+    return `<tr ${needsReply ? 'style="background:rgba(254,194,79,0.05)"' : ''}>
       <td><div class="td-strong clip">${invName}</div><div class="td-muted clip">${invEmail}</div></td>
       <td class="td-strong clip">${t.subject}</td>
       <td><span class="badge badge--gray">${t.category?.replace(/_/g, ' ') || '—'}</span></td>
@@ -4163,12 +4163,12 @@ async function viewTicket(id) {
       <div class="info-row"><span class="info-row__label">Submitted</span><span class="info-row__value td-muted">${Utils.date(tkt.created_at)}</span></div>
       ${tkt.responded_at ? `<div class="info-row"><span class="info-row__label">Last Response</span><span class="info-row__value td-muted">${Utils.date(tkt.responded_at)}</span></div>` : ''}
     </div>
-    ${hasProof ? `<div class="panel mb-12" style="border:1.5px solid rgba(255,155,12,0.3)">
-      <div class="panel__header" style="background:rgba(255,155,12,0.08)">
-        <span class="panel__title"><i class="fa-solid fa-paperclip" style="color:#ff9b0c;margin-right:6px"></i>Document Attached</span>
+    ${hasProof ? `<div class="panel mb-12" style="border:1.5px solid rgba(254,194,79,0.3)">
+      <div class="panel__header" style="background:rgba(254,194,79,0.08)">
+        <span class="panel__title"><i class="fa-solid fa-paperclip" style="color:#fec24f;margin-right:6px"></i>Document Attached</span>
       </div>
       <div class="panel__body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        ${tkt.proof_filename ? `<span style="font-size:0.85rem;font-weight:600"><i class="fa-solid fa-file" style="color:#ff9b0c;margin-right:6px"></i>${_esc(tkt.proof_filename)}</span>` : ''}
+        ${tkt.proof_filename ? `<span style="font-size:0.85rem;font-weight:600"><i class="fa-solid fa-file" style="color:#fec24f;margin-right:6px"></i>${_esc(tkt.proof_filename)}</span>` : ''}
         ${attachDataUrl
           ? `<button class="btn btn--secondary btn--sm" onclick='_openTicketDoc(${JSON.stringify(tkt.id)},${JSON.stringify(tkt.proof_filename||"attachment")})'><i class="fa-solid fa-eye"></i> View</button>
              <button class="btn btn--ghost btn--sm" onclick='_downloadTicketDoc(${JSON.stringify(tkt.id)},${JSON.stringify(tkt.proof_filename||"attachment")})'><i class="fa-solid fa-download"></i> Download</button>`
@@ -4440,10 +4440,10 @@ function _renderPersonas(data) {
   const PERSONA_META = {
     'Conservative Saver': { icon: 'fa-shield-halved', color: '#64748b', desc: 'Prioritises capital preservation. Low risk tolerance, cautious approach.' },
     'Growth Seeker':      { icon: 'fa-chart-line',    color: '#22c55e', desc: 'Focused on long-term capital growth. Comfortable with volatility.' },
-    'Income Investor':    { icon: 'fa-coins',          color: '#f59e0b', desc: 'Wants regular income from investments. Dividend / returns oriented.' },
+    'Income Investor':    { icon: 'fa-coins',          color: '#fec24f', desc: 'Wants regular income from investments. Dividend / returns oriented.' },
     'Risk Taker':         { icon: 'fa-fire-flame-curved', color: '#ef4444', desc: 'Experienced investor who buys on dips. High conviction, high risk.' },
     'Long-Term Planner':  { icon: 'fa-calendar-days', color: '#a855f7', desc: 'Investing for retirement or dependents. Steady, multi-year horizon.' },
-    'Explorer':           { icon: 'fa-compass',        color: '#FF8215', desc: 'Just getting started. Goals and risk profile still taking shape.' },
+    'Explorer':           { icon: 'fa-compass',        color: '#fec24f', desc: 'Just getting started. Goals and risk profile still taking shape.' },
   };
 
   const total = data.total || 1;
@@ -4576,7 +4576,7 @@ function renderMaturityForecastChart() {
   if (STATE.charts.maturityForecast) STATE.charts.maturityForecast.destroy();
   STATE.charts.maturityForecast = new Chart(ctx, {
     type: 'bar',
-    data: { labels: months, datasets: [{ label: 'Capital Maturing (R)', data: amounts, backgroundColor: 'rgba(212,175,55,0.7)', borderColor: '#D4AF37', borderWidth: 1, borderRadius: 6 }] },
+    data: { labels: months, datasets: [{ label: 'Capital Maturing (R)', data: amounts, backgroundColor: 'rgba(254,194,79,0.7)', borderColor: '#fec24f', borderWidth: 1, borderRadius: 6 }] },
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { labels: { color: '#7a92a8', font: { size: 11 } } }, tooltip: { callbacks: { label: c => ` ${Utils.rand(c.parsed.y)}` } } },
       scales: { x: { ticks: { color: '#3d5268' }, grid: { display: false } }, y: { ticks: { color: '#3d5268', callback: v => 'R'+(v/1000).toFixed(0)+'k' }, grid: { color: 'rgba(0,0,0,0.05)' } } }
@@ -4678,7 +4678,7 @@ async function renderMobileActivity() {
         </div>
         <div style="font-size:0.68rem;color:var(--text-dim);margin-top:4px">${droidLogins} logins · ${pct(droidLogins)}% of total</div>
       </div>
-      <div style="background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.15);border-radius:10px;padding:14px 16px">
+      <div style="background:rgba(254,194,79,0.07);border:1px solid rgba(254,194,79,0.15);border-radius:10px;padding:14px 16px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <i class="fa-solid fa-globe" style="font-size:1.1rem;color:var(--gold)"></i>
           <span style="font-size:0.72rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.05em">Web</span>
@@ -4739,7 +4739,7 @@ function renderProductVolChart() {
   STATE.investments.forEach(i => { vol[i.product_type] = (vol[i.product_type] || 0) + i.amount; });
   const labels = Object.keys(vol).map(k => Utils.productInfo(k).label);
   const data = Object.values(vol);
-  const colors = ['#D4AF37', '#22c55e', '#4ade80', '#86efac', '#656565', '#f97316'];
+  const colors = ['#fec24f', '#22c55e', '#4ade80', '#86efac', '#656565', '#f97316'];
 
   if (STATE.charts.productVol) STATE.charts.productVol.destroy();
   STATE.charts.productVol = new Chart(ctx, {
@@ -4761,7 +4761,7 @@ function renderProvinceChart() {
   if (!ctx) return;
   const prov = {};
   STATE.investors.forEach(i => { prov[i.province] = (prov[i.province] || 0) + 1; });
-  const colors = ['#D4AF37', '#22c55e', '#656565', '#f97316', '#a855f7', '#ef4444', '#656565', '#84cc16', '#f59e0b'];
+  const colors = ['#fec24f', '#22c55e', '#656565', '#f97316', '#a855f7', '#ef4444', '#656565', '#84cc16', '#fec24f'];
 
   if (STATE.charts.province) STATE.charts.province.destroy();
   STATE.charts.province = new Chart(ctx, {
@@ -4785,7 +4785,7 @@ function renderRiskChart() {
     type: 'doughnut',
     data: {
       labels: ['Conservative', 'Moderate', 'Aggressive'],
-      datasets: [{ data: Object.values(risk), backgroundColor: ['#22c55e', '#D4AF37', '#ef4444'], borderColor: 'var(--dark-2)', borderWidth: 3 }]
+      datasets: [{ data: Object.values(risk), backgroundColor: ['#22c55e', '#fec24f', '#ef4444'], borderColor: 'var(--dark-2)', borderWidth: 3 }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -4827,7 +4827,7 @@ function renderTxnFlowChart() {
       labels: months,
       datasets: [
         { label: 'Deposits', data: deposits, backgroundColor: 'rgba(34,197,94,0.6)', borderRadius: 4 },
-        { label: 'Payouts', data: payouts, backgroundColor: 'rgba(212,175,55,0.6)', borderRadius: 4 }
+        { label: 'Payouts', data: payouts, backgroundColor: 'rgba(254,194,79,0.6)', borderRadius: 4 }
       ]
     },
     options: {
@@ -4893,9 +4893,9 @@ function renderConversionFunnel() {
   const stages = [
     { label: 'Signed Up',          count: total,         color: '#656565', icon: '✍️' },
     { label: 'FICA Submitted',      count: ficaSubmitted,  color: '#656565', icon: '📋' },
-    { label: 'FICA Approved',       count: ficaApproved,   color: '#FF9B0C', icon: '✅' },
+    { label: 'FICA Approved',       count: ficaApproved,   color: '#fec24f', icon: '✅' },
     { label: 'First Deposit',       count: deposited,      color: '#22c55e', icon: '💳' },
-    { label: 'First Investment',    count: invested,       color: '#D4AF37', icon: '📈' },
+    { label: 'First Investment',    count: invested,       color: '#fec24f', icon: '📈' },
     { label: 'Repeat Investor',     count: multiInvested,  color: '#f97316', icon: '🔄' },
     { label: 'Recurring Set',       count: recurring,      color: '#a855f7', icon: '⚡' },
     { label: 'Referred Someone',    count: referred,       color: '#ec4899', icon: '🎁' },
@@ -4956,7 +4956,7 @@ function renderConversionFunnel() {
       ${stages.map((s, i) => {
         const pct     = total > 0 ? Math.round(s.count / total * 100) : 0;
         const dropOff = i > 0 ? Math.round((1 - s.count / (stages[i-1].count || 1)) * 100) : 0;
-        const dropColor = dropOff > 50 ? '#ef4444' : dropOff > 25 ? '#f97316' : '#f59e0b';
+        const dropColor = dropOff > 50 ? '#ef4444' : dropOff > 25 ? '#f97316' : '#fec24f';
         return `
           <div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -4979,9 +4979,9 @@ function renderConversionFunnel() {
 
     <!-- Summary metrics -->
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px">
-      <div style="background:rgba(212,175,55,0.08);border-radius:8px;padding:10px 12px">
+      <div style="background:rgba(254,194,79,0.08);border-radius:8px;padding:10px 12px">
         <div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px">End-to-end</div>
-        <div style="font-size:1.1rem;font-weight:700;color:#D4AF37">${invested > 0 ? Math.round(invested/total*100) : 0}%</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#fec24f">${invested > 0 ? Math.round(invested/total*100) : 0}%</div>
         <div style="font-size:0.68rem;color:var(--text-muted)">conversion rate</div>
       </div>
       <div style="background:rgba(34,197,94,0.08);border-radius:8px;padding:10px 12px">
@@ -5046,7 +5046,7 @@ function renderSignupFriction(data, panel) {
   const maxSessions = Math.max(...step_funnel.map(s => s.sessions), 1);
 
   const stepNames = { 1: 'Personal Info', 2: 'Security', 3: 'Profile', 4: 'FICA Docs' };
-  const stepColors = { 1: '#656565', 2: '#656565', 3: '#FF9B0C', 4: '#22c55e' };
+  const stepColors = { 1: '#656565', 2: '#656565', 3: '#fec24f', 4: '#22c55e' };
 
   function fmtMs(ms) {
     if (!ms) return '—';
@@ -5060,7 +5060,7 @@ function renderSignupFriction(data, panel) {
     const prev     = stepByNum[step - 1] || sessions;
     const pct      = maxSessions > 0 ? Math.round(sessions / maxSessions * 100) : 0;
     const dropOff  = step > 1 && prev > 0 ? Math.round((1 - sessions / prev) * 100) : 0;
-    const dropColor = dropOff >= 40 ? '#ef4444' : dropOff >= 20 ? '#f97316' : '#f59e0b';
+    const dropColor = dropOff >= 40 ? '#ef4444' : dropOff >= 20 ? '#f97316' : '#fec24f';
     const timeRow  = avg_time_per_step.find(t => t.step === step);
     return `
       <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
@@ -5846,7 +5846,7 @@ function setupGlobalSearch() {
   const highlight = idx => {
     const items = [...dropdown.querySelectorAll('.gs-item')];
     items.forEach((el, itemIdx) => {
-      el.style.background = itemIdx === idx ? 'rgba(212,175,55,0.08)' : '';
+      el.style.background = itemIdx === idx ? 'rgba(254,194,79,0.08)' : '';
       el.setAttribute('aria-selected', itemIdx === idx ? 'true' : 'false');
     });
     activeIndex = idx;
@@ -5872,7 +5872,7 @@ function setupGlobalSearch() {
       return name.includes(q) || (i.email||'').toLowerCase().includes(q)
           || (i.id||'').toLowerCase().includes(q) || (i.phone||'').includes(q);
     }).slice(0, 5).map(i => ({
-      icon: 'fa-user', color: '#D4AF37',
+      icon: 'fa-user', color: '#fec24f',
       title: `${i.first_name} ${i.last_name}`,
       sub: `${i.id} · ${i.email}`,
       action: () => { input.value = ''; close(); navigate('investors', document.querySelector('[data-view=investors]')); setTimeout(() => { const el = document.getElementById('investorSearch'); if (el) { el.value = `${i.first_name} ${i.last_name}`; el.dispatchEvent(new Event('input')); } }, 200); }
@@ -6385,11 +6385,11 @@ function _opsRenderMoney(s) {
     ${row('fa-chart-line', 'Total AUM (active investments)', _opsR(s.aum), '#22c55e')}
     ${row('fa-wallet', 'Total wallet pool', _opsR(s.totalWalletBalance), '#656565')}
     ${row('fa-arrow-down-to-arc', `Pending deposits (${s.pendingDeposits?.count ?? 0})`, _opsR(s.pendingDeposits?.value), '#22c55e', 'Awaiting admin approval')}
-    ${row('fa-arrow-up-from-arc', `Pending withdrawals (${s.pendingWithdrawals?.count ?? 0})`, _opsR(s.pendingWithdrawals?.value), '#f59e0b', 'In payout queue')}
+    ${row('fa-arrow-up-from-arc', `Pending withdrawals (${s.pendingWithdrawals?.count ?? 0})`, _opsR(s.pendingWithdrawals?.value), '#fec24f', 'In payout queue')}
     ${row('fa-clock', `Pending investments (${s.pendingInvestments?.count ?? 0})`, _opsR(s.pendingInvestments?.value), '#a855f7', 'Awaiting allocation')}
     ${row('fa-coins', 'Deposits this month', _opsR(s.monthDeposits?.value), '#656565', `${s.monthDeposits?.count ?? 0} transactions`)}
     ${row('fa-hand-holding-dollar', 'Returns distributed this month', _opsR(s.returnsDistributed), '#22c55e')}
-    ${row('fa-bolt', 'Deposit velocity (7 days)', _opsR(s.investVol7d), '#FF9B0C')}
+    ${row('fa-bolt', 'Deposit velocity (7 days)', _opsR(s.investVol7d), '#fec24f')}
   `.replace(/<div[^>]*><\/div>$/, '');
 }
 
@@ -6411,9 +6411,9 @@ function _opsRenderInvestorPulse(s) {
       ${tile('Total', inv.total, '#e8edf2')}
       ${tile('Active Investors', inv.active, '#22c55e')}
       ${tile('FICA Approved', inv.ficaApproved, '#656565')}
-      ${tile('FICA Pending', inv.ficaPending, '#f59e0b')}
+      ${tile('FICA Pending', inv.ficaPending, '#fec24f')}
       ${tile('New Today', inv.newToday, '#a855f7')}
-      ${tile('New This Month', inv.newMonth, '#FF9B0C')}
+      ${tile('New This Month', inv.newMonth, '#fec24f')}
     </div>
     <div style="display:flex;align-items:center;padding:10px 12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:10px;font-size:0.82rem;color:#e8edf2">
       <i class="fa-solid fa-user-plus" style="color:#656565;margin-right:8px"></i>
@@ -6430,12 +6430,12 @@ function _opsRenderFunnel(funnel) {
   el.innerHTML = stages.map((stage, i) => {
     const pct = Math.round((stage.count / max) * 100);
     const convPct = i > 0 ? Math.round((stage.count / stages[i-1].count) * 100) : 100;
-    const color = ['#656565','#22c55e','#f59e0b','#a855f7','#FF9B0C'][i] || '#656565';
+    const color = ['#656565','#22c55e','#fec24f','#a855f7','#fec24f'][i] || '#656565';
     return `<div style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <span style="font-size:0.78rem;font-weight:700;color:#e8edf2">${stage.label}</span>
         <div style="display:flex;align-items:center;gap:8px">
-          ${i > 0 ? `<span style="font-size:0.68rem;color:${convPct >= 50 ? '#22c55e' : '#f59e0b'};font-weight:700">${convPct}% from prev</span>` : ''}
+          ${i > 0 ? `<span style="font-size:0.68rem;color:${convPct >= 50 ? '#22c55e' : '#fec24f'};font-weight:700">${convPct}% from prev</span>` : ''}
           <span style="font-size:0.82rem;font-weight:900;color:#e8edf2">${(stage.count||0).toLocaleString()}</span>
         </div>
       </div>
@@ -6451,7 +6451,7 @@ function _opsRenderAumByType(s) {
   if (!ctx || !s.aumByType?.length) return;
   if (_opsAumByTypeChart) { _opsAumByTypeChart.destroy(); _opsAumByTypeChart = null; }
   const typeLabel = { cattle: 'Cattle', solar: 'Solar', short_term: 'Short-Term', delivery: 'Delivery' };
-  const colors = ['#FF9B0C','#22c55e','#656565','#a855f7','#f59e0b','#656565'];
+  const colors = ['#fec24f','#22c55e','#656565','#a855f7','#fec24f','#656565'];
   const labels  = s.aumByType.map(r => typeLabel[r.type] || r.type);
   const data    = s.aumByType.map(r => r.volume);
   _opsAumByTypeChart = new Chart(ctx, {
@@ -6474,7 +6474,7 @@ function _opsRenderTopPools(s) {
   const el = document.getElementById('opsTopPools');
   if (!el || !s.topPools?.length) { if (el) el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.82rem">No pool data</div>'; return; }
   const maxVol = Math.max(...s.topPools.map(p => p.volume), 1);
-  const typeColor = { cattle: '#FF9B0C', solar: '#22c55e', short_term: '#656565', delivery: '#a855f7' };
+  const typeColor = { cattle: '#fec24f', solar: '#22c55e', short_term: '#656565', delivery: '#a855f7' };
   el.innerHTML = s.topPools.map((p, i) => {
     const pct = Math.round((p.volume / maxVol) * 100);
     const color = typeColor[p.type] || '#9ca3af';
@@ -6521,7 +6521,7 @@ function _opsRenderVelocity(velocity) {
       datasets: [
         { label: 'Deposits', data: days.map(d => getVol(d, 'deposit')), backgroundColor: 'rgba(34,197,94,0.7)', borderColor: '#22c55e', borderWidth: 1, borderRadius: 4 },
         { label: 'Withdrawals', data: days.map(d => getVol(d, 'withdrawal')), backgroundColor: 'rgba(239,68,68,0.6)', borderColor: '#ef4444', borderWidth: 1, borderRadius: 4 },
-        { label: 'Returns', data: days.map(d => getVol(d, 'return')), backgroundColor: 'rgba(255,155,12,0.6)', borderColor: '#FF9B0C', borderWidth: 1, borderRadius: 4 },
+        { label: 'Returns', data: days.map(d => getVol(d, 'return')), backgroundColor: 'rgba(254,194,79,0.6)', borderColor: '#fec24f', borderWidth: 1, borderRadius: 4 },
       ],
     },
     options: {
@@ -6684,17 +6684,17 @@ function toggleBroadcastSubject() {
     if (!warnEl) {
       warnEl = document.createElement('div');
       warnEl.id = 'pushSubWarnBanner';
-      warnEl.style.cssText = 'display:none;margin-bottom:12px;padding:10px 14px;background:rgba(255,155,12,0.1);border:1px solid rgba(255,155,12,0.3);border-radius:8px;font-size:0.82rem;color:var(--text-muted)';
+      warnEl.style.cssText = 'display:none;margin-bottom:12px;padding:10px 14px;background:rgba(254,194,79,0.1);border:1px solid rgba(254,194,79,0.3);border-radius:8px;font-size:0.82rem;color:var(--text-muted)';
       const previewBar = document.getElementById('broadcastPreviewBar');
       if (previewBar) previewBar.after(warnEl);
     }
     // Check subscriber count from analytics panel
     const subCount = parseInt(document.getElementById('pushStatSubscribers')?.textContent || '-1');
     if (subCount === 0) {
-      warnEl.innerHTML = '<i class="fa-solid fa-bell-slash" style="color:#ff9b0c;margin-right:6px"></i><strong>0 push subscribers registered.</strong> Investors must open the app, go to <em>Profile → Notifications</em>, and enable push notifications before they can receive them.';
+      warnEl.innerHTML = '<i class="fa-solid fa-bell-slash" style="color:#fec24f;margin-right:6px"></i><strong>0 push subscribers registered.</strong> Investors must open the app, go to <em>Profile → Notifications</em>, and enable push notifications before they can receive them.';
       warnEl.style.display = 'block';
     } else if (subCount > 0) {
-      warnEl.innerHTML = `<i class="fa-solid fa-bell" style="color:#ff9b0c;margin-right:6px"></i>${subCount} push subscriber${subCount !== 1 ? 's' : ''} registered.`;
+      warnEl.innerHTML = `<i class="fa-solid fa-bell" style="color:#fec24f;margin-right:6px"></i>${subCount} push subscriber${subCount !== 1 ? 's' : ''} registered.`;
       warnEl.style.display = 'block';
     }
   } else if (warnEl) {
@@ -7218,7 +7218,7 @@ function _buildTimelineEvents(inv, invsts, txns) {
     if (!d) return;
     const typeMap = {
       deposit:    { icon: 'fa-arrow-down',           color: '#22c55e', text: `Deposited ${amt}` },
-      investment: { icon: 'fa-chart-line',            color: '#D4AF37', text: `Invested ${amt}${t.description ? ' in ' + t.description : ''}` },
+      investment: { icon: 'fa-chart-line',            color: '#fec24f', text: `Invested ${amt}${t.description ? ' in ' + t.description : ''}` },
       return:     { icon: 'fa-coins',                 color: '#22c55e', text: `Interest earned ${amt}` },
       payout:     { icon: 'fa-arrow-up',              color: '#656565', text: `Payout received ${amt}` },
       withdrawal: { icon: 'fa-arrow-up-from-bracket', color: '#f97316', text: `Withdrawal ${amt}${t.status ? ' (' + t.status + ')' : ''}` },
@@ -7234,7 +7234,7 @@ function _buildTimelineEvents(inv, invsts, txns) {
     const amt = Utils.rand(i.amount || 0);
     const rate = i.annual_rate ? ` at ${Utils.pct(i.annual_rate)}` : '';
     if (i.start_date || i.investment_date) {
-      events.push({ date: i.start_date || i.investment_date, icon: 'fa-seedling', color: '#D4AF37', text: `Investment started — ${poolLabel} ${amt}${rate}` });
+      events.push({ date: i.start_date || i.investment_date, icon: 'fa-seedling', color: '#fec24f', text: `Investment started — ${poolLabel} ${amt}${rate}` });
     }
     if (i.status === 'matured' && i.end_date) {
       events.push({ date: i.end_date, icon: 'fa-clock', color: '#f97316', text: `Investment matured — ${poolLabel}` });
@@ -7279,7 +7279,7 @@ function loadInvestorTimeline(inv, invsts, txns) {
   // Investments
   invsts.forEach(i => {
     events.push({
-      date: new Date(i.start_date || i.created_at), icon: 'fa-chart-line', color: '#D4AF37',
+      date: new Date(i.start_date || i.created_at), icon: 'fa-chart-line', color: '#fec24f',
       title: `Investment: ${Utils.rand(i.amount)}`,
       sub: `${i.pool_name || i.product_type} · ${Utils.statusBadge(i.status)}`
     });
@@ -7292,7 +7292,7 @@ function loadInvestorTimeline(inv, invsts, txns) {
   // Transactions
   txns.forEach(t => {
     const icons = { deposit: 'fa-wallet', withdrawal: 'fa-arrow-up-from-bracket', investment: 'fa-chart-line', return: 'fa-star', payout: 'fa-money-bill-transfer', fee: 'fa-receipt' };
-    const colors = { deposit: '#22c55e', withdrawal: '#ef4444', investment: '#D4AF37', return: '#656565', payout: '#22c55e', fee: '#f59e0b' };
+    const colors = { deposit: '#22c55e', withdrawal: '#ef4444', investment: '#fec24f', return: '#656565', payout: '#22c55e', fee: '#fec24f' };
     events.push({
       date: new Date(t.transaction_date || t.created_at), icon: icons[t.type] || 'fa-arrows-rotate',
       color: colors[t.type] || '#888',
@@ -7344,7 +7344,7 @@ function _chartDefaults() {
     maintainAspectRatio: false,
     plugins: {
       legend: { labels: { color: '#7a92a8', font: { size: 10 }, boxWidth: 10, padding: 8 } },
-      tooltip: { backgroundColor: 'rgba(13,17,23,0.95)', titleColor: '#e8edf2', bodyColor: '#7a92a8', borderColor: 'rgba(212,175,55,0.3)', borderWidth: 1 }
+      tooltip: { backgroundColor: 'rgba(13,17,23,0.95)', titleColor: '#e8edf2', bodyColor: '#7a92a8', borderColor: 'rgba(254,194,79,0.3)', borderWidth: 1 }
     },
     scales: {
       x: { grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#3d5268', font: { size: 10 } } },
@@ -7385,14 +7385,14 @@ function renderAnAumChart() {
       datasets: [{
         label: 'Cumulative AUM (deposits)',
         data: aumData,
-        borderColor: '#D4AF37',
+        borderColor: '#fec24f',
         backgroundColor: (c) => {
           const g = c.chart.ctx.createLinearGradient(0, 0, 0, 220);
-          g.addColorStop(0, 'rgba(212,175,55,0.2)');
-          g.addColorStop(1, 'rgba(212,175,55,0)');
+          g.addColorStop(0, 'rgba(254,194,79,0.2)');
+          g.addColorStop(1, 'rgba(254,194,79,0)');
           return g;
         },
-        fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: '#D4AF37'
+        fill: true, tension: 0.4, borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: '#fec24f'
       }]
     },
     options: opts
@@ -7472,7 +7472,7 @@ function renderAnStatusChart() {
   const statuses = ['active', 'matured', 'paid_out', 'pending'];
   const counts = statuses.map(s => STATE.investments.filter(i => i.status === s).length);
   const labels = ['Active', 'Matured', 'Paid Out', 'Pending'];
-  const colors = ['#22c55e', '#a855f7', '#D4AF37', '#f97316'];
+  const colors = ['#22c55e', '#a855f7', '#fec24f', '#f97316'];
 
   if (STATE.charts.anStatus) STATE.charts.anStatus.destroy();
 
@@ -7612,7 +7612,7 @@ async function runMigration() {
         ${[
           ['Investors',    counts.investors    ?? 0, 'users',          '#22c55e'],
           ['Pools',        counts.pools        ?? 0, 'layer-group',    '#656565'],
-          ['Investments',  counts.investments  ?? 0, 'chart-line',     '#f59e0b'],
+          ['Investments',  counts.investments  ?? 0, 'chart-line',     '#fec24f'],
           ['Transactions', counts.transactions ?? 0, 'arrows-rotate',  '#8b5cf6'],
           ['KYC Docs',     counts.kyc          ?? 0, 'id-card',        '#656565'],
         ].map(([label, count, icon, color]) => `
@@ -7682,7 +7682,7 @@ async function loadCompliance() {
       const isPast = daysLeft < 0;
       const isUrgent = daysLeft >= 0 && daysLeft <= 30;
       const isDone   = d.status === 'completed';
-      const color = isDone ? '#22c55e' : isPast ? '#ef4444' : isUrgent ? '#f59e0b' : '#656565';
+      const color = isDone ? '#22c55e' : isPast ? '#ef4444' : isUrgent ? '#fec24f' : '#656565';
       const label = isDone ? 'Done' : isPast ? 'Overdue' : isUrgent ? `${daysLeft}d left` : `${daysLeft}d`;
       const deleteBtn = !d._static ? `<button class="btn btn--danger btn--sm" style="margin-left:6px;padding:2px 8px;font-size:0.68rem" onclick='deleteComplianceItem(${JSON.stringify(d.id)})'><i class="fa-solid fa-trash"></i></button>` : '';
       const doneBtn   = !d._static && d.status !== 'completed' ? `<button class="btn btn--success btn--sm" style="margin-left:4px;padding:2px 8px;font-size:0.68rem" onclick='markComplianceDone(${JSON.stringify(d.id)})'><i class="fa-solid fa-check"></i></button>` : '';
@@ -7836,9 +7836,9 @@ function renderReconcTable() {
   // Update KPI tiles
   const statsEl = document.getElementById('reconcStats');
   if (statsEl) statsEl.innerHTML = `
-    <div style="background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.15);border-radius:12px;padding:16px">
+    <div style="background:rgba(254,194,79,.08);border:1px solid rgba(254,194,79,.15);border-radius:12px;padding:16px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#7a92a8;margin-bottom:6px">Total Deposits</div>
-      <div style="font-size:1.35rem;font-weight:800;color:#D4AF37">${fmt(totalDep)}</div>
+      <div style="font-size:1.35rem;font-weight:800;color:#fec24f">${fmt(totalDep)}</div>
     </div>
     <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.15);border-radius:12px;padding:16px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#7a92a8;margin-bottom:6px">Total Invested</div>
@@ -7873,7 +7873,7 @@ function renderReconcTable() {
       : `<span style="background:rgba(34,197,94,.12);color:#22c55e;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">✓ Balanced</span>`;
     return `<tr>
       <td><div style="font-weight:600;font-size:0.83rem">${_esc(r.inv.first_name)} ${_esc(r.inv.last_name)}</div><div style="font-size:0.72rem;color:#7a92a8">${_esc(r.inv.email)||''}</div></td>
-      <td style="color:#D4AF37;font-size:0.82rem;font-weight:600">${fmt(r.totalDeposited)}</td>
+      <td style="color:#fec24f;font-size:0.82rem;font-weight:600">${fmt(r.totalDeposited)}</td>
       <td style="color:#656565;font-size:0.82rem;font-weight:600">${fmt(r.totalInvested)}</td>
       <td style="color:#22c55e;font-size:0.82rem;font-weight:600">${fmt(r.walletBalance)}</td>
       <td style="color:#9ca3af;font-size:0.82rem">${fmt(r.expectedWallet)}</td>
@@ -7945,7 +7945,7 @@ async function loadAcceptedDocuments() {
       const uniqInv = new Set(_acdRows.map(d => d.investor_id)).size;
       const today   = _acdRows.filter(d => new Date(d.accepted_at) > new Date(Date.now() - 86400000)).length;
       stats.innerHTML = [
-        { label:'Total Acceptances', value: total,    color:'#ff9b0c' },
+        { label:'Total Acceptances', value: total,    color:'#fec24f' },
         { label:'Unique Investors',  value: uniqInv,  color:'#22c55e' },
         { label:'Accepted Today',    value: today,    color:'#656565' },
         { label:'Document Types',    value: types.filter(t => _acdRows.some(d => d.document_type === t)).length, color:'#a855f7' },
@@ -7999,7 +7999,7 @@ function renderAcceptedDocsTable() {
     return;
   }
 
-  const docColor = { terms_of_service:'#656565', privacy_policy:'#22c55e', popia_notice:'#7c3aed', fica_consent:'#ff9b0c', risk_disclaimer:'#ef4444' };
+  const docColor = { terms_of_service:'#656565', privacy_policy:'#22c55e', popia_notice:'#7c3aed', fica_consent:'#fec24f', risk_disclaimer:'#ef4444' };
 
   tbody.innerHTML = rows.slice(0, 500).map(d => {
     const inv  = d.investor;
@@ -8176,7 +8176,7 @@ function renderAdminCmdResults(q) {
 function adminCmdHover(idx) {
   _adminCmdActive = idx;
   document.querySelectorAll('.adm-cmd-item').forEach((el,i) => {
-    el.style.background = i === idx ? 'rgba(212,175,55,.1)' : '';
+    el.style.background = i === idx ? 'rgba(254,194,79,.1)' : '';
   });
 }
 
@@ -8255,7 +8255,7 @@ function _renderIntlInterest(data) {
   body.innerHTML = data.map(r => `
     <tr>
       <td style="font-weight:600;color:#e8edf2">${_esc(r.full_name || '—')}</td>
-      <td><a href="mailto:${_esc(r.email)}" style="color:#FF9B0C;text-decoration:none">${_esc(r.email)}</a></td>
+      <td><a href="mailto:${_esc(r.email)}" style="color:#fec24f;text-decoration:none">${_esc(r.email)}</a></td>
       <td>${_esc(r.country || '—')}</td>
       <td style="color:#7a92a8">${r.created_at ? new Date(r.created_at).toLocaleDateString('en-ZA',{day:'2-digit',month:'short',year:'numeric'}) : '—'}</td>
     </tr>`).join('');
@@ -8335,17 +8335,17 @@ async function loadFeedback(filter = 'all') {
     }
 
     const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
-    const statusColor = { pending: '#f59e0b', approved: '#10b981', rejected: '#ef4444' };
+    const statusColor = { pending: '#fec24f', approved: '#10b981', rejected: '#ef4444' };
 
     list.innerHTML = rows.map(r => `
       <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:20px;position:relative">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:12px">
-            <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#FF9B0C,#FF5229);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;color:#1a1a1a;flex-shrink:0">${r.initials}</div>
+            <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#fec24f,#FF5229);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;color:#1a1a1a;flex-shrink:0">${r.initials}</div>
             <div>
               <div style="font-weight:700;font-size:0.9rem">${r.first_name} ${r.last_name}</div>
               <div style="font-size:0.75rem;color:var(--text-muted)">${r.email}</div>
-              <div style="font-size:0.78rem;color:#f59e0b;letter-spacing:1px;margin-top:2px">${stars(r.rating)}</div>
+              <div style="font-size:0.78rem;color:#fec24f;letter-spacing:1px;margin-top:2px">${stars(r.rating)}</div>
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -8471,7 +8471,7 @@ async function loadEmailLogs(resetPage = true) {
       const statusPill = l.status === 'sent'
         ? `<span style="background:#dcfce7;color:#166534;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600">Sent</span>`
         : `<span style="background:#fee2e2;color:#991b1b;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600" title="${l.error || ''}">Failed</span>`;
-      const typePill = `<span style="background:rgba(255,155,12,0.1);color:#b45309;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600">${EMAIL_TYPE_LABELS[l.type] || l.type}</span>`;
+      const typePill = `<span style="background:rgba(254,194,79,0.1);color:#b45309;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600">${EMAIL_TYPE_LABELS[l.type] || l.type}</span>`;
       return `<tr style="border-bottom:1px solid var(--border)">
         <td style="padding:10px 12px">${l.to_email}</td>
         <td style="padding:10px 12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.subject}">${l.subject}</td>

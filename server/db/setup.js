@@ -1026,7 +1026,7 @@ CREATE TABLE IF NOT EXISTS products (
   benchmark_rate      NUMERIC(8,4) DEFAULT 0, -- e.g. 0.13 = 13% benchmark
   performance_fee_pct NUMERIC(8,4) DEFAULT 0, -- e.g. 0.20 = 20% above benchmark
   risk_profile        TEXT DEFAULT 'Medium',
-  risk_color          TEXT DEFAULT '#f59e0b',
+  risk_color          TEXT DEFAULT '#fec24f',
   icon                TEXT DEFAULT 'fa-circle',
   color               TEXT DEFAULT '#656565',
   badge_class         TEXT DEFAULT 'badge--gray',
@@ -1057,7 +1057,7 @@ const DEFAULT_PRODUCTS = [
       'Performance fee: 20% on returns above 13% benchmark',
     ].join('\n'),
     min_investment: 500, term_months: 12, benchmark_rate: 0.13, performance_fee_pct: 0.20,
-    risk_profile: 'Medium-High', risk_color: '#ff9b0c', icon: 'fa-cow', color: '#D4AF37',
+    risk_profile: 'Medium-High', risk_color: '#fec24f', icon: 'fa-cow', color: '#fec24f',
     badge_class: 'badge--gold', partner_name: 'Beefcor', sort_order: 1,
   },
   {
@@ -1065,7 +1065,7 @@ const DEFAULT_PRODUCTS = [
     description: 'Fund solar energy installations for homes and businesses across South Africa and earn from clean, contracted energy generation over a 7-year term.',
     key_details: ['Funds rooftop & commercial solar installations', 'Contracted energy offtake agreements', 'Supports SA energy independence'].join('\n'),
     min_investment: 10000, term_months: 84, benchmark_rate: 0.13, performance_fee_pct: 0.20,
-    risk_profile: 'Medium', risk_color: '#f59e0b', icon: 'fa-solar-panel', color: '#22c55e',
+    risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-solar-panel', color: '#22c55e',
     badge_class: 'badge--green', sort_order: 2,
   },
   {
@@ -1073,7 +1073,7 @@ const DEFAULT_PRODUCTS = [
     description: 'Fund solar energy installations across South Africa over a 6-year term.',
     key_details: ['Funds rooftop & commercial solar installations', 'Contracted energy offtake agreements'].join('\n'),
     min_investment: 10000, term_months: 72, benchmark_rate: 0.13, performance_fee_pct: 0.20,
-    risk_profile: 'Medium', risk_color: '#f59e0b', icon: 'fa-solar-panel', color: '#22c55e',
+    risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-solar-panel', color: '#22c55e',
     badge_class: 'badge--green', sort_order: 3,
   },
   {
@@ -1081,7 +1081,7 @@ const DEFAULT_PRODUCTS = [
     description: 'Fund solar energy installations across South Africa over a 5-year term.',
     key_details: ['Funds rooftop & commercial solar installations', 'Contracted energy offtake agreements'].join('\n'),
     min_investment: 10000, term_months: 60, benchmark_rate: 0.13, performance_fee_pct: 0.20,
-    risk_profile: 'Medium', risk_color: '#f59e0b', icon: 'fa-solar-panel', color: '#22c55e',
+    risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-solar-panel', color: '#22c55e',
     badge_class: 'badge--green', sort_order: 4,
   },
   {
@@ -1089,7 +1089,7 @@ const DEFAULT_PRODUCTS = [
     description: 'Fund South African SMMEs through asset finance. Capital is deployed into vetted businesses generating strong short-cycle returns.',
     key_details: ['Capital deployed to vetted SMMEs', 'Short investment cycles', 'Asset-backed where possible'].join('\n'),
     min_investment: 1000, term_months: 5, benchmark_rate: 0.13, performance_fee_pct: 0.20,
-    risk_profile: 'Medium', risk_color: '#f59e0b', icon: 'fa-bolt', color: '#656565',
+    risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-bolt', color: '#656565',
     badge_class: 'badge--blue', sort_order: 5,
   },
   {
@@ -1097,7 +1097,7 @@ const DEFAULT_PRODUCTS = [
     description: 'Fund vetted small, medium and micro enterprises through short-cycle asset finance.',
     key_details: ['Capital deployed to vetted SMMEs', 'Short investment cycles'].join('\n'),
     min_investment: 1000, term_months: 1, benchmark_rate: 0.13, performance_fee_pct: 0.20,
-    risk_profile: 'Medium', risk_color: '#f59e0b', icon: 'fa-bolt', color: '#656565',
+    risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-bolt', color: '#656565',
     badge_class: 'badge--blue', sort_order: 6,
   },
   {

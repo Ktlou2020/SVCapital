@@ -68,7 +68,7 @@ function _ensureTaskCompletionPanel() {
   wrap.id = 'taskCompletionPanel';
   wrap.style.cssText = 'display:none;margin-bottom:20px';
   wrap.innerHTML = `
-    <div class="panel" style="border:1px solid rgba(47,140,155,0.18);background:linear-gradient(135deg,rgba(47,140,155,0.05),rgba(255,155,12,0.04))">
+    <div class="panel" style="border:1px solid rgba(47,140,155,0.18);background:linear-gradient(135deg,rgba(47,140,155,0.05),rgba(254,194,79,0.04))">
       <div class="panel__header" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
         <div>
           <span class="panel__title"><i class="fa-solid fa-list-check" style="color:#656565;margin-right:8px"></i>Action Centre</span>
@@ -185,7 +185,7 @@ function _persistProfileDraft() {
   }
   _localSet(_portalScopedKey(PROFILE_DRAFT_KEY), JSON.stringify({ ...data, saved_at: Date.now() }));
   _profileDirty = true;
-  _setInlineMessage('profileSaveMeta', 'Draft saved locally — click Save to update your account.', '#FF8215');
+  _setInlineMessage('profileSaveMeta', 'Draft saved locally — click Save to update your account.', '#fec24f');
 }
 function restoreProfileDraft() {
   const raw = _localGet(_portalScopedKey(PROFILE_DRAFT_KEY));
@@ -201,7 +201,7 @@ function restoreProfileDraft() {
     if (!same) {
       _applyProfileDraft(draft);
       _profileDirty = true;
-      _setInlineMessage('profileSaveMeta', 'Draft restored — review your changes and click Save.', '#FF8215');
+      _setInlineMessage('profileSaveMeta', 'Draft restored — review your changes and click Save.', '#fec24f');
     }
   } catch (_) {}
 }
@@ -297,7 +297,7 @@ function restoreSupportDraft() {
     message.value = draft.message || message.value;
     _supportHydrating = false;
     _updateSupportCounter();
-    _setInlineMessage('supportDraftMeta', 'Draft restored — review and submit when ready.', '#FF8215');
+    _setInlineMessage('supportDraftMeta', 'Draft restored — review and submit when ready.', '#fec24f');
   } catch (_) {}
 }
 function clearSupportDraft() {
@@ -348,11 +348,11 @@ function renderTaskCompletionPanel() {
   const riskReady = !!inv.risk_profile;
   const ficaReady = _isInvestorFicaApproved(inv);
   const tasks = [
-    { label: 'Complete identity verification', done: ficaReady, tone: '#FF8215', action: 'openKycUploadModal()', cta: 'Upload documents' },
+    { label: 'Complete identity verification', done: ficaReady, tone: '#fec24f', action: 'openKycUploadModal()', cta: 'Upload documents' },
     { label: 'Add a withdrawal bank account', done: bankReady, tone: '#656565', action: 'openBankDetailsModal()', cta: 'Add bank account' },
     { label: 'Add funds to your wallet', done: hasWallet, tone: '#22c55e', action: 'openTopUpModal()', cta: 'Add funds' },
     { label: 'Confirm your risk profile', done: riskReady, tone: '#eda5ff', action: 'navigate(\'profile\', document.querySelector(\'[data-view=profile]\'))', cta: 'Review profile' },
-    { label: 'Make your first investment', done: hasInvestments, tone: '#D4AF37', action: 'navigate(\'marketplace\', document.querySelector(\'[data-view=marketplace]\'))', cta: 'Browse products' },
+    { label: 'Make your first investment', done: hasInvestments, tone: '#fec24f', action: 'navigate(\'marketplace\', document.querySelector(\'[data-view=marketplace]\'))', cta: 'Browse products' },
   ];
   const doneCount = tasks.filter(t => t.done).length;
   const pending = tasks.filter(t => !t.done);
@@ -475,7 +475,7 @@ function renderWalletReadinessPanel() {
   let subcopy = 'Choose the next action that will get you to a completed investment quickest.';
   let ctaLabel = 'Top up wallet';
   let ctaAction = "openTopUpModal()";
-  let accent = '#FF9B0C';
+  let accent = '#fec24f';
 
   if (affordable.length) {
     const best = affordable[0];
@@ -490,7 +490,7 @@ function renderWalletReadinessPanel() {
     subcopy = `${cheapest.name} is currently the most reachable pool for your next step.`;
     ctaLabel = 'Top up now';
     ctaAction = "openTopUpModal()";
-    accent = '#FF9B0C';
+    accent = '#fec24f';
   }
 
   panel.innerHTML = `
@@ -499,7 +499,7 @@ function renderWalletReadinessPanel() {
       <span style="margin-left:auto;font-size:0.72rem;font-weight:700;color:${accent};background:${accent}14;padding:4px 10px;border-radius:999px;border:1px solid ${accent}2f">${ficaApproved ? 'Investment ready checks' : 'KYC/FICA pending — withdrawals locked'}</span>
     </div>
     <div class="panel__body" style="display:flex;flex-direction:column;gap:14px">
-      <div style="border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(255,255,255,0.98),rgba(255,155,12,0.05))">
+      <div style="border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(255,255,255,0.98),rgba(254,194,79,0.05))">
         <div style="font-size:0.92rem;font-weight:800;color:#1a1a1a;line-height:1.35">${headline}</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin-top:5px;line-height:1.55">${subcopy}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
@@ -569,7 +569,7 @@ function renderMarketConversionPanel(pools) {
     sub = `${cheapest.name} has the lowest reachable minimum among current opportunities.`;
     action = "openTopUpModal()";
     actionLabel = 'Top up wallet';
-    accent = '#FF9B0C';
+    accent = '#fec24f';
   } else if (!openPools.length) {
     title = 'There are no open pools in this filter right now.';
     sub = 'Use the waitlist options below or switch category to keep your momentum.';
@@ -682,7 +682,7 @@ function renderStatementAssistCard(meta = {}) {
   const taxYear = document.getElementById('taxYearSelect')?.value || new Date().getFullYear();
   card.innerHTML = `
     <div style="padding:14px 18px;border-bottom:1px solid rgba(0,0,0,0.07);background:#F7F8FA">
-      <span style="font-size:0.82rem;font-weight:800;color:#1a1a1a"><i class="fa-solid fa-wand-magic-sparkles" style="color:#FF9B0C;margin-right:6px"></i>Faster statement workflow</span>
+      <span style="font-size:0.82rem;font-weight:800;color:#1a1a1a"><i class="fa-solid fa-wand-magic-sparkles" style="color:#fec24f;margin-right:6px"></i>Faster statement workflow</span>
     </div>
     <div style="padding:18px;display:flex;flex-direction:column;gap:12px">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -696,7 +696,7 @@ function renderStatementAssistCard(meta = {}) {
         <div style="margin-top:4px"><strong style="color:#1a1a1a">Included sections:</strong> ${sections.length ? sections.join(', ') : 'Portfolio summary will be added automatically'}</div>
         <div style="margin-top:4px"><strong style="color:#1a1a1a">Tax certificate:</strong> IT3(b) for year ending Feb ${taxYear}</div>
       </div>
-      ${_statementAssistMeta?.generatedAt ? `<div style="padding:10px 12px;border-radius:10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.18);font-size:0.75rem;color:#166534;line-height:1.55"><strong>Last preview generated:</strong> ${_statementAssistMeta.generatedAt}<br>${_statementAssistMeta.summary || ''}</div>` : `<div style="padding:10px 12px;border-radius:10px;background:rgba(255,155,12,0.08);border:1px solid rgba(255,155,12,0.18);font-size:0.75rem;color:#9a5d00;line-height:1.55">Generate a preview once, then use Print / Save PDF to complete the task without re-entering your settings.</div>`}
+      ${_statementAssistMeta?.generatedAt ? `<div style="padding:10px 12px;border-radius:10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.18);font-size:0.75rem;color:#166534;line-height:1.55"><strong>Last preview generated:</strong> ${_statementAssistMeta.generatedAt}<br>${_statementAssistMeta.summary || ''}</div>` : `<div style="padding:10px 12px;border-radius:10px;background:rgba(254,194,79,0.08);border:1px solid rgba(254,194,79,0.18);font-size:0.75rem;color:#9a5d00;line-height:1.55">Generate a preview once, then use Print / Save PDF to complete the task without re-entering your settings.</div>`}
     </div>`;
 }
 
@@ -781,7 +781,7 @@ function _initPullToRefresh() {
 
   const el = document.createElement('div');
   el.id = '_ptrIndicator';
-  el.style.cssText = 'position:fixed;top:0;left:50%;transform:translate(-50%,-56px);z-index:9999;width:40px;height:40px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(212,175,55,0.4);transition:transform 0.2s,opacity 0.2s;opacity:0;pointer-events:none';
+  el.style.cssText = 'position:fixed;top:0;left:50%;transform:translate(-50%,-56px);z-index:9999;width:40px;height:40px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(254,194,79,0.4);transition:transform 0.2s,opacity 0.2s;opacity:0;pointer-events:none';
   el.innerHTML = '<i class="fa-solid fa-arrow-rotate-right" style="color:#000;font-size:1rem"></i>';
   document.body.appendChild(el);
 
@@ -935,7 +935,7 @@ function loadNotifications() {
   // 1. Low wallet balance
   if (inv && parseFloat(inv.wallet_balance) < 500) {
     notifs.push({
-      icon: 'fa-wallet', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
+      icon: 'fa-wallet', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
       title: 'Low wallet balance',
       sub: `Your balance is ${Utils.rand(parseFloat(inv.wallet_balance) || 0)}. Top up to keep investing.`,
       time: 'Now',
@@ -979,7 +979,7 @@ function loadNotifications() {
       });
     } else if (inv.fica_status === 'pending' || inv.kyc_status === 'pending' || inv.status === 'fica_submitted') {
       notifs.push({
-        icon: 'fa-clock', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
+        icon: 'fa-clock', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
         title: 'FICA/KYC verification in progress',
         sub: 'Your documents are under review — typically 1–2 business days.',
         time: 'Pending',
@@ -1002,7 +1002,7 @@ function loadNotifications() {
   if (inv && inv.bank_account_number) {
     if (inv.bank_account_status === 'pending') {
       notifs.push({
-        icon: 'fa-building-columns', iconBg: 'rgba(255,155,12,0.12)', iconColor: '#ff9b0c',
+        icon: 'fa-building-columns', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
         title: 'Bank account pending verification',
         sub: `${inv.bank_name || 'Your bank account'} is being reviewed by our team. Withdrawals will be enabled once approved.`,
         time: 'Under review',
@@ -1931,8 +1931,8 @@ function renderOnboardingWizard() {
   if (stepsEl) {
     stepsEl.innerHTML = stepDefs.map(s => `
       <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:rgba(0,0,0,0.04)">
-        <div style="width:22px;height:22px;border-radius:50%;background:${s.done ? '#22c55e' : 'rgba(255,155,12,0.2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <i class="fa-solid ${s.done ? 'fa-check' : 'fa-' + s.icon}" style="font-size:0.65rem;color:${s.done ? '#fff' : '#FF9B0C'}"></i>
+        <div style="width:22px;height:22px;border-radius:50%;background:${s.done ? '#22c55e' : 'rgba(254,194,79,0.2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="fa-solid ${s.done ? 'fa-check' : 'fa-' + s.icon}" style="font-size:0.65rem;color:${s.done ? '#fff' : '#fec24f'}"></i>
         </div>
         <div style="flex:1">
           <div style="font-size:0.82rem;font-weight:${s.done ? '600' : '700'};color:${s.done ? '#9ca3af' : '#1a1a1a'};${s.done ? 'text-decoration:line-through' : ''}">${s.label}</div>
@@ -2067,18 +2067,18 @@ function renderPortfolioTrendChart() {
       datasets: [{
         label: 'Portfolio Value',
         data,
-        borderColor:          '#FF9B0C',
+        borderColor:          '#fec24f',
         borderWidth:          2.5,
         fill:                 true,
         backgroundColor: c => {
           const g = c.chart.ctx.createLinearGradient(0, 0, 0, c.chart.height);
-          g.addColorStop(0, 'rgba(255,155,12,0.28)');
-          g.addColorStop(1, 'rgba(255,155,12,0.01)');
+          g.addColorStop(0, 'rgba(254,194,79,0.28)');
+          g.addColorStop(1, 'rgba(254,194,79,0.01)');
           return g;
         },
         tension:              0.42,
         pointRadius:          3,
-        pointBackgroundColor: '#FF9B0C',
+        pointBackgroundColor: '#fec24f',
         pointBorderColor:     'rgba(255,255,255,0.9)',
         pointBorderWidth:     2,
         pointHoverRadius:     6,
@@ -2095,9 +2095,9 @@ function renderPortfolioTrendChart() {
         legend: { display: false },
         tooltip: {
           backgroundColor:  'rgba(13,17,23,0.96)',
-          titleColor:       '#FF9B0C',
+          titleColor:       '#fec24f',
           bodyColor:        '#e5e7eb',
-          borderColor:      'rgba(255,155,12,0.3)',
+          borderColor:      'rgba(254,194,79,0.3)',
           borderWidth:      1,
           padding:          12,
           cornerRadius:     10,
@@ -2282,7 +2282,7 @@ function renderMyInvestmentCards() {
   <i class="fa-solid fa-seedling" style="font-size:3rem;color:var(--gold);opacity:0.7;margin-bottom:16px;display:block"></i>
   <div class="empty-state__title">No investments yet</div>
   <div class="empty-state__sub">Start growing your wealth today.</div>
-  <button onclick="navigate('marketplace',null)" class="btn--primary" style="margin-top:16px;padding:10px 24px;border-radius:8px;font-size:0.85rem;font-weight:700;border:none;cursor:pointer;background:linear-gradient(135deg,#D4AF37,#b8932a);color:#000">Browse Investment Pools →</button>
+  <button onclick="navigate('marketplace',null)" class="btn--primary" style="margin-top:16px;padding:10px 24px;border-radius:8px;font-size:0.85rem;font-weight:700;border:none;cursor:pointer;background:linear-gradient(135deg,#fec24f,#fec24f);color:#000">Browse Investment Pools →</button>
 </div>`;
     return;
   }
@@ -2385,10 +2385,10 @@ const _TXN_META = {
   return:         { icon: 'fa-arrow-trend-up',      color: '#eab308', label: 'Return Payment' },
   payout:         { icon: 'fa-money-bill-wave',     color: '#22c55e', label: 'Payout' },
   reinvestment:   { icon: 'fa-arrows-rotate',       color: '#3b82f6', label: 'Re-investment' },
-  fee:            { icon: 'fa-receipt',             color: '#f59e0b', label: 'Platform Fee' },
+  fee:            { icon: 'fa-receipt',             color: '#fec24f', label: 'Platform Fee' },
   referral_bonus: { icon: 'fa-user-group',          color: '#eda5ff', label: 'Referral Bonus' },
   withdrawal:     { icon: 'fa-upload',              color: '#ef4444', label: 'Withdrawal' },
-  gift_sent:      { icon: 'fa-gift',                color: '#f59e0b', label: 'Gift Sent' },
+  gift_sent:      { icon: 'fa-gift',                color: '#fec24f', label: 'Gift Sent' },
   gift_received:  { icon: 'fa-gift',                color: '#22c55e', label: 'Gift Received' },
   reward:         { icon: 'fa-award',               color: '#eda5ff', label: 'Reward' },
 };
@@ -2497,7 +2497,7 @@ function _renderReturnHistory() {
 
   let running = 0;
   const typeLabel = { return: 'Return Payment', payout: 'Payout', referral_bonus: 'Referral Bonus' };
-  const typeColor = { return: '#22c55e', payout: '#ff9b0c', referral_bonus: '#eda5ff' };
+  const typeColor = { return: '#22c55e', payout: '#fec24f', referral_bonus: '#eda5ff' };
 
   el.innerHTML = `
     <div class="panel mb-16">
@@ -2587,7 +2587,7 @@ async function loadWallet() {
     const isOut = ['withdrawal', 'gift_sent'].includes(t.type);
     const colour = isOut ? '#ef4444' : '#22c55e';
     const sign   = isOut ? '−' : '+';
-    const statusTag = t.status === 'pending' ? ' <span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:1px 6px;border-radius:4px;font-weight:600">Pending</span>' :
+    const statusTag = t.status === 'pending' ? ' <span style="font-size:0.7rem;background:rgba(254,194,79,0.15);color:#fec24f;padding:1px 6px;border-radius:4px;font-weight:600">Pending</span>' :
                       t.status === 'rejected' ? ' <span style="font-size:0.7rem;background:rgba(239,68,68,0.12);color:#ef4444;padding:1px 6px;border-radius:4px;font-weight:600">Rejected</span>' : '';
     return `
     <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
@@ -2637,7 +2637,7 @@ function _renderRecurringTab() {
       <div class="wallet-card__label">Recurring Investment
         <span style="background:rgba(34,197,94,0.15);color:#22c55e;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:8px;vertical-align:middle">Active</span>
       </div>
-      <div class="wallet-card__value" style="color:#ff9b0c">${Utils.rand(inv.recurring_amount)}<span style="font-size:0.85rem;font-weight:500;color:#6b7280;margin-left:4px">/ month</span></div>
+      <div class="wallet-card__value" style="color:#fec24f">${Utils.rand(inv.recurring_amount)}<span style="font-size:0.85rem;font-weight:500;color:#6b7280;margin-left:4px">/ month</span></div>
       <div class="wallet-card__sub"><i class="fa-solid fa-layer-group" style="margin-right:4px"></i>${PRODUCT_LABELS[productType] || productType} &nbsp;·&nbsp; Every ${day}${suffix} of the month &nbsp;·&nbsp; Next in <strong>${daysUntil} day${daysUntil !== 1 ? 's' : ''}</strong></div>
       <div class="wallet-card__actions">
         <button class="btn btn--secondary" onclick="openRecurringModal()"><i class="fa-solid fa-pen"></i> Edit</button>
@@ -2750,8 +2750,8 @@ function _renderAutoTopUpCard(container) {
   if (!card) {
     container.innerHTML = `
       <div style="display:flex;align-items:center;gap:14px;padding:16px">
-        <div style="width:42px;height:42px;border-radius:10px;background:rgba(255,155,12,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <i class="fa-solid fa-rotate" style="color:#ff9b0c;font-size:1.1rem"></i>
+        <div style="width:42px;height:42px;border-radius:10px;background:rgba(254,194,79,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="fa-solid fa-rotate" style="color:#fec24f;font-size:1.1rem"></i>
         </div>
         <div style="flex:1">
           <div style="font-weight:700;font-size:0.88rem;color:#1a1a1a">Auto Wallet Top-Up</div>
@@ -2767,8 +2767,8 @@ function _renderAutoTopUpCard(container) {
   container.innerHTML = `
     <div style="padding:16px">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-        <div style="width:42px;height:42px;border-radius:10px;background:rgba(255,155,12,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <i class="fa-solid fa-rotate" style="color:#ff9b0c;font-size:1.1rem"></i>
+        <div style="width:42px;height:42px;border-radius:10px;background:rgba(254,194,79,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="fa-solid fa-rotate" style="color:#fec24f;font-size:1.1rem"></i>
         </div>
         <div style="flex:1">
           <div style="font-weight:700;font-size:0.88rem;color:#1a1a1a">Auto Wallet Top-Up</div>
@@ -3037,11 +3037,11 @@ function _pmUpdateFeeSummary() {
     </div>
     <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.07)">
       <span style="color:#9ca3af;font-size:0.78rem">Gateway fee (2.9% + R1)</span>
-      <span style="color:#f59e0b;font-weight:600;font-size:0.78rem">+ R${fee.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+      <span style="color:#fec24f;font-weight:600;font-size:0.78rem">+ R${fee.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:8px 0">
       <span style="color:#f0f4ff;font-size:0.82rem;font-weight:700">Total charged to you</span>
-      <span style="color:#FF9B0C;font-size:0.88rem;font-weight:900">R${total.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+      <span style="color:#fec24f;font-size:0.88rem;font-weight:900">R${total.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
     </div>
     <div style="font-size:0.69rem;color:#6b7280;margin-top:2px">
       <i class="fa-solid fa-circle-info" style="color:#6b7280"></i>
@@ -3484,23 +3484,23 @@ function filterMarket(type) {
 }
 
 const _POOL_META = {
-  solar:         { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
-  solar_7yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
-  solar_6yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
-  solar_5yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#f59e0b' },
+  solar:         { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#fec24f' },
+  solar_7yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#fec24f' },
+  solar_6yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#fec24f' },
+  solar_5yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#fec24f' },
   cattle:        { blurb: 'Partner with Beefcor — SA\'s premier feedlot — and earn returns as your herd grows from 200kg to 500kg.', risk: 'Aggressive',   riskColor: '#ef4444' },
-  short_term:    { blurb: 'Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.', risk: 'Moderate',  riskColor: '#f59e0b' },
+  short_term:    { blurb: 'Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.', risk: 'Moderate',  riskColor: '#fec24f' },
   delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Conservative', riskColor: '#22c55e' },
 };
 
 // Risk profile is defined per-product in the admin console (products.risk_profile).
 // This resolves the current risk label + colour for a product type from the
 // live product records rather than any hardcoded value.
-const _RISK_COLORS = { 'Low': '#22c55e', 'Medium': '#f59e0b', 'Medium-High': '#ff9b0c', 'High': '#ef4444' };
+const _RISK_COLORS = { 'Low': '#22c55e', 'Medium': '#fec24f', 'Medium-High': '#fec24f', 'High': '#ef4444' };
 function _productRisk(productType) {
   const p = (_mktProducts || []).find(pr => pr.product_type === productType);
   const risk = (p && p.risk_profile) ? p.risk_profile : 'Medium';
-  const color = (p && p.risk_color) ? p.risk_color : (_RISK_COLORS[risk] || '#f59e0b');
+  const color = (p && p.risk_color) ? p.risk_color : (_RISK_COLORS[risk] || '#fec24f');
   return { risk, color };
 }
 
@@ -3964,7 +3964,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
     const pi   = Utils.productInfo(pool.product_type);
     const pct  = Utils.poolFillPct(pool);
     const days = Utils.daysRemaining(pool.end_date);
-    const meta = _POOL_META[pool.product_type] || { blurb: '', risk: 'Medium', riskColor: '#f59e0b' };
+    const meta = _POOL_META[pool.product_type] || { blurb: '', risk: 'Medium', riskColor: '#fec24f' };
     const pr   = _productRisk(pool.product_type);   // risk profile from the product (admin console)
     const canInvest = walletBal >= _minPlusFee(pool);
     const urgency   = days !== null && days <= 7;
@@ -3979,7 +3979,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
     let capacityBarHtml = '';
     if (maxCap > 0) {
       const capPct = Math.min(100, Math.round((curInv / maxCap) * 100));
-      const capColor = capPct >= 90 ? '#ef4444' : capPct >= 70 ? '#f59e0b' : '#22c55e';
+      const capColor = capPct >= 90 ? '#ef4444' : capPct >= 70 ? '#fec24f' : '#22c55e';
       capacityBarHtml = `
         <div style="margin-top:6px">
           <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--text-muted);margin-bottom:3px">
@@ -4102,7 +4102,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
           })() : `
             <div class="mpc2-progress__labels">
               <span>${Utils.rand(pool.raised_amount)} raised</span>
-              <span style="font-weight:700;color:${pct >= 90 ? '#ef4444' : pct >= 60 ? '#f59e0b' : pi.color}">${pct}% funded</span>
+              <span style="font-weight:700;color:${pct >= 90 ? '#ef4444' : pct >= 60 ? '#fec24f' : pi.color}">${pct}% funded</span>
             </div>
             <div class="mpc2-progress__track">
               <div class="mpc2-progress__fill" style="width:${pct}%;background:linear-gradient(90deg,${pi.color},${pi.color}aa)"></div>
@@ -4149,8 +4149,8 @@ function _cattleHerdStatusCompactHtml(s) {
   const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
   const survival = (100 - mortRate).toFixed(1);
   const weight = s.avg_current_weight || s.avg_entry_weight;
-  return `<div style="background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:0.82rem;flex-wrap:wrap">
-    <i class="fa-solid fa-cow" style="color:#b8902a;flex-shrink:0"></i>
+  return `<div style="background:rgba(254,194,79,0.07);border:1px solid rgba(254,194,79,0.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:0.82rem;flex-wrap:wrap">
+    <i class="fa-solid fa-cow" style="color:#fec24f;flex-shrink:0"></i>
     <span style="color:#303030"><strong>${(s.live_count || 0).toLocaleString('en-ZA')}</strong> cattle live</span>
     ${weight ? `<span style="color:#656565">·</span><span style="color:#303030">avg <strong>${weight}kg</strong></span>` : ''}
     <span style="color:#656565">·</span>
@@ -4164,7 +4164,7 @@ function _cattleHerdStatusHtml(s) {
   const genders  = (s.by_gender || []).filter(g => g.count > 0);
   const breeds   = (s.by_breed  || []).filter(b => b.count > 0);
   const totalG   = genders.reduce((a, g) => a + g.count, 0) || 1;
-  const chip = txt => `<span style="font-size:0.76rem;background:rgba(212,175,55,0.14);color:#8a6d1f;border-radius:20px;padding:3px 11px">${txt}</span>`;
+  const chip = txt => `<span style="font-size:0.76rem;background:rgba(254,194,79,0.14);color:#8a6d1f;border-radius:20px;padding:3px 11px">${txt}</span>`;
 
   // Weight journey: entry → current → target market weight
   const entry = s.avg_entry_weight, current = s.avg_current_weight, target = s.target_weight || 475;
@@ -4176,7 +4176,7 @@ function _cattleHerdStatusHtml(s) {
         <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">
           <span>Entry ${entry}kg</span><span style="color:#8a6d1f;font-weight:700">Now ~${current}kg</span><span>Target ${target}kg</span>
         </div>
-        <div style="height:8px;border-radius:5px;background:rgba(0,0,0,0.08);overflow:hidden"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#D4AF37,#b8902a)"></div></div>
+        <div style="height:8px;border-radius:5px;background:rgba(0,0,0,0.08);overflow:hidden"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#fec24f,#fec24f)"></div></div>
         <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">${pct}% of the way to market weight</div>
       </div>`;
   }
@@ -4186,8 +4186,8 @@ function _cattleHerdStatusHtml(s) {
   const mortBlock = `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:var(--text)">${(100 - mortRate).toFixed(1)}%</strong>${s.mortality_count ? ` · ${s.mortality_count} mortalit${s.mortality_count === 1 ? 'y' : 'ies'} of ${s.total_purchased.toLocaleString('en-ZA')}` : ''}</div>`;
 
   return `
-    <div style="background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">
-      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#b8902a;margin-bottom:10px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
+    <div style="background:rgba(254,194,79,0.07);border:1px solid rgba(254,194,79,0.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#fec24f;margin-bottom:10px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
         <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.total_purchased.toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">purchased to date</div></div>
         <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.live_count || 0).toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">currently live</div></div>
@@ -4369,7 +4369,7 @@ function openInvestModal(poolId) {
   const _activeSa  = _pmSaId ? PORTAL.subAccounts.find(s => s.id === _pmSaId) : null;
   const walletBal  = _activeSa ? (parseFloat(_activeSa.wallet_balance) || 0) : (parseFloat(PORTAL.investor?.wallet_balance) || 0);
   const pi         = Utils.productInfo(pool.product_type);
-  const meta       = _POOL_META[pool.product_type] || { risk: 'Medium', riskColor: '#f59e0b' };
+  const meta       = _POOL_META[pool.product_type] || { risk: 'Medium', riskColor: '#fec24f' };
   const pr         = _productRisk(pool.product_type);
   const maturityDt = new Date();
   maturityDt.setMonth(maturityDt.getMonth() + pool.term_months);
@@ -4378,7 +4378,7 @@ function openInvestModal(poolId) {
   document.getElementById('investModalTitle').textContent = `Invest in ${pool.name}`;
 
   document.getElementById('investModalBody').innerHTML = `
-    ${_activeSa ? `<div style="background:rgba(255,155,12,0.1);border:1px solid rgba(255,155,12,0.3);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:0.82rem;color:#ff9b0c;display:flex;align-items:center;gap:8px"><i class="fa-solid fa-wallet"></i><span>Investing from <strong>${_esc(_activeSa.name)}</strong> sub-account &mdash; available: <strong>${Utils.rand(walletBal)}</strong></span></div>` : ''}
+    ${_activeSa ? `<div style="background:rgba(254,194,79,0.1);border:1px solid rgba(254,194,79,0.3);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:0.82rem;color:#fec24f;display:flex;align-items:center;gap:8px"><i class="fa-solid fa-wallet"></i><span>Investing from <strong>${_esc(_activeSa.name)}</strong> sub-account &mdash; available: <strong>${Utils.rand(walletBal)}</strong></span></div>` : ''}
     <!-- Pool summary card -->
     <div class="invest-modal-pool-card">
       <div class="invest-modal-pool-icon" style="background:${pi.color}20;color:${pi.color}">
@@ -4875,7 +4875,7 @@ async function openPoolMaturityModal(poolId) {
       <div class="info-row"><span class="info-row__label">Investments</span><span class="info-row__value">${poolInvs.length}</span></div>
       <div class="info-row"><span class="info-row__label">Total Capital</span><span class="info-row__value text-gold fw-700">${Utils.rand(totalAmount)}</span></div>
     </div>
-    <div style="font-size:0.8rem;color:var(--text-muted);background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.2);border-radius:8px;padding:10px 12px;margin-bottom:16px">
+    <div style="font-size:0.8rem;color:var(--text-muted);background:rgba(254,194,79,0.08);border:1px solid rgba(254,194,79,0.2);border-radius:8px;padding:10px 12px;margin-bottom:16px">
       <i class="fa-solid fa-layer-group" style="color:var(--gold);margin-right:6px"></i>
       This instruction applies to all ${poolInvs.length} investments. To set per-investment instructions, expand <strong>Individual instructions</strong>.
     </div>
@@ -5248,12 +5248,12 @@ function buildStatementHTML(opts) {
   if (incPortfolio) {
     sections += `
       <section style="margin-bottom:36px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #ff9b0c">
-          <div style="width:4px;height:22px;background:linear-gradient(180deg,#FF9B0C,#FF5229);border-radius:2px"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #fec24f">
+          <div style="width:4px;height:22px;background:linear-gradient(180deg,#fec24f,#FF5229);border-radius:2px"></div>
           <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Portfolio Summary</h3>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px">
-          ${stmtKPIBox('Total Portfolio Value', fmtNum(totalValue), '#ff9b0c')}
+          ${stmtKPIBox('Total Portfolio Value', fmtNum(totalValue), '#fec24f')}
           ${stmtKPIBox('Capital Deployed', fmtNum(totalInvested), '#656565')}
           ${stmtKPIBox('Returns Earned', fmtNum(totalReturns), '#22C55E')}
           ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#0096ff')}
@@ -5300,7 +5300,7 @@ function buildStatementHTML(opts) {
         <td style="padding:8px 10px;font-size:11px;color:#6b7280;text-align:center">${d.count}</td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right;font-weight:600">${fmtNum(d.capital)}</td>
         <td style="padding:8px 10px;font-size:11px;color:#22C55E;text-align:right;font-weight:700">${fmtNum(d.returns)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:#ff9b0c;text-align:right;font-weight:700">${pct}%</td>
+        <td style="padding:8px 10px;font-size:11px;color:#fec24f;text-align:right;font-weight:700">${pct}%</td>
       </tr>`;
     }).join('');
 
@@ -5326,7 +5326,7 @@ function buildStatementHTML(opts) {
               <td colspan="2" style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a">TOTAL</td>
               <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#1a1a1a;text-align:right">${fmtNum(totalInvested)}</td>
               <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#22C55E;text-align:right">${fmtNum(totalReturns)}</td>
-              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#ff9b0c;text-align:right">${totalInvested>0?((totalReturns/totalInvested)*100).toFixed(2):0}%</td>
+              <td style="padding:9px 10px;font-size:11px;font-weight:800;color:#fec24f;text-align:right">${totalInvested>0?((totalReturns/totalInvested)*100).toFixed(2):0}%</td>
             </tr>
           </tfoot>
         </table>
@@ -5353,7 +5353,7 @@ function buildStatementHTML(opts) {
           <span style="background:${info.bg};color:${info.color};font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap">${info.label}</span>
         </td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right;font-weight:700">${fmtNum(inv.amount)}</td>
-        <td style="padding:8px 10px;font-size:11px;color:${rateCell==='—'?'#9ca3af':'#ff9b0c'};text-align:right;font-weight:700">${rateCell}</td>
+        <td style="padding:8px 10px;font-size:11px;color:${rateCell==='—'?'#9ca3af':'#fec24f'};text-align:right;font-weight:700">${rateCell}</td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${fmtDate(inv.investment_date)}</td>
         <td style="padding:8px 10px;font-size:11px;color:#1a1a1a;text-align:right">${maturity}</td>
         <td style="padding:8px 10px">
@@ -5425,7 +5425,7 @@ function buildStatementHTML(opts) {
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
           ${stmtMiniBox('Total Deposits', fmtNum(totalDeposits), '#22C55E')}
           ${stmtMiniBox('Total Invested', fmtNum(totalWithdrawals), '#656565')}
-          ${stmtMiniBox('Returns Received', fmtNum(totalReturnsTxn), '#ff9b0c')}
+          ${stmtMiniBox('Returns Received', fmtNum(totalReturnsTxn), '#fec24f')}
         </div>
         <div style="overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eaeaea;min-width:600px">
@@ -5455,14 +5455,14 @@ function buildStatementHTML(opts) {
           <img src="${logoUrl}" alt="SV Capital" style="height:44px;width:auto;max-width:220px;object-fit:contain;display:block">
         </div>
         <div style="text-align:right">
-          <div style="font-size:16px;font-weight:800;color:#ff9b0c;letter-spacing:0.04em">ACCOUNT STATEMENT</div>
+          <div style="font-size:16px;font-weight:800;color:#fec24f;letter-spacing:0.04em">ACCOUNT STATEMENT</div>
           <div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:4px"># ${statementNumber}</div>
           <div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:2px">Generated: ${generatedAt}</div>
         </div>
       </div>
 
       <!-- Period Banner -->
-      <div style="background:linear-gradient(90deg,rgba(255,155,12,0.08),rgba(47,140,155,0.06));border-top:3px solid #ff9b0c;border-bottom:1px solid rgba(0,0,0,0.06);padding:12px 40px;display:flex;align-items:center;justify-content:space-between">
+      <div style="background:linear-gradient(90deg,rgba(254,194,79,0.08),rgba(47,140,155,0.06));border-top:3px solid #fec24f;border-bottom:1px solid rgba(0,0,0,0.06);padding:12px 40px;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em">Statement Period:</span>
           <span style="font-size:12px;font-weight:800;color:#1a1a1a">${fmtDate(from)} — ${fmtDate(to)}</span>
@@ -5470,7 +5470,7 @@ function buildStatementHTML(opts) {
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em">Investor:</span>
           <span style="font-size:12px;font-weight:800;color:#1a1a1a">${fullName}</span>
-          <span style="background:rgba(255,155,12,0.1);color:#ff5229;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(255,155,12,0.2);margin-left:4px">${investorId}</span>
+          <span style="background:rgba(254,194,79,0.1);color:#ff5229;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(254,194,79,0.2);margin-left:4px">${investorId}</span>
         </div>
       </div>
 
@@ -5547,7 +5547,7 @@ body{margin:0;font-family:Poppins,-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 }
 .svc-pbar h3{font-size:14px;font-weight:700;color:#111827;margin:0}
 .svc-pbtn{
-  background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;
+  background:linear-gradient(135deg,#fec24f,#FF5229);color:#fff;
   border:none;border-radius:8px;padding:9px 18px;font-size:13px;
   font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px
 }
@@ -5719,10 +5719,10 @@ const XP_LEVELS = [
   { id: 'sprout',     label: 'Sprout',     min: 100,  icon: 'fa-leaf',             color: '#22c55e' },
   { id: 'grower',     label: 'Grower',     min: 300,  icon: 'fa-tree',             color: '#16a34a' },
   { id: 'cultivator', label: 'Cultivator', min: 600,  icon: 'fa-spa',              color: '#656565' },
-  { id: 'harvester',  label: 'Harvester',  min: 1000, icon: 'fa-wheat-awn',        color: '#ff9b0c' },
-  { id: 'pioneer',    label: 'Pioneer',    min: 1500, icon: 'fa-compass',          color: '#f59e0b' },
+  { id: 'harvester',  label: 'Harvester',  min: 1000, icon: 'fa-wheat-awn',        color: '#fec24f' },
+  { id: 'pioneer',    label: 'Pioneer',    min: 1500, icon: 'fa-compass',          color: '#fec24f' },
   { id: 'architect',  label: 'Architect',  min: 2500, icon: 'fa-building-columns', color: '#eda5ff' },
-  { id: 'luminary',   label: 'Luminary',   min: 5000, icon: 'fa-crown',            color: '#D4AF37' },
+  { id: 'luminary',   label: 'Luminary',   min: 5000, icon: 'fa-crown',            color: '#fec24f' },
 ];
 
 function _getLevelForXP(xp) {
@@ -6097,7 +6097,7 @@ function renderQuestView() {
     if (quickWins.length) {
       pendingGroups += `
         <div class="pending-group">
-          <div class="pending-group__label"><i class="fa-solid fa-bolt" style="color:#ff9b0c"></i> Quick wins — complete a short survey</div>
+          <div class="pending-group__label"><i class="fa-solid fa-bolt" style="color:#fec24f"></i> Quick wins — complete a short survey</div>
           <div class="quest-cards-grid">${quickWins.map(qst => _qCard(qst, 'profile')).join('')}</div>
         </div>`;
     }
@@ -6132,8 +6132,8 @@ function renderQuestView() {
     return `
       <div class="quest-category mb-24">
         <div class="quest-category__header">
-          <div class="quest-category__icon-wrap" style="background:rgba(255,155,12,0.1)">
-            <i class="fa-solid ${cat.icon}" style="color:#ff9b0c"></i>
+          <div class="quest-category__icon-wrap" style="background:rgba(254,194,79,0.1)">
+            <i class="fa-solid ${cat.icon}" style="color:#fec24f"></i>
           </div>
           <div>
             <div class="quest-category__title">${cat.label}</div>
@@ -6166,7 +6166,7 @@ let _fbRating = 0;
 function setFbStar(n) {
   _fbRating = n;
   document.querySelectorAll('.fb-star').forEach(s => {
-    s.style.color = parseInt(s.dataset.v) <= n ? '#ff9b0c' : '';
+    s.style.color = parseInt(s.dataset.v) <= n ? '#fec24f' : '';
   });
 }
 
@@ -6391,7 +6391,7 @@ function _launchConfettiParticles() {
   const container = document.getElementById('levelupConfetti');
   if (!container) return;
   container.innerHTML = '';
-  const colors = ['#ff9b0c', '#22c55e', '#656565', '#D4AF37', '#eda5ff'];
+  const colors = ['#fec24f', '#22c55e', '#656565', '#fec24f', '#eda5ff'];
   for (let i = 0; i < 40; i++) {
     const p = document.createElement('span');
     p.style.cssText = `
@@ -6458,7 +6458,7 @@ The effective return you see on your dashboard is the annualised figure, so you 
   {
     id: 'learn_solar', track: 'explorer', order: 3,
     title: 'Solar Energy Investing', readTime: 8, xp: 50,
-    icon: 'fa-solar-panel', color: '#f59e0b',
+    icon: 'fa-solar-panel', color: '#fec24f',
     keyPoints: [
       'SV Capital funds solar panel installations for South African businesses',
       'Businesses pay structured lease or energy purchase agreements',
@@ -6500,7 +6500,7 @@ Because cattle depends on biological growth and market prices, it carries a high
   {
     id: 'learn_diversification', track: 'explorer', order: 5,
     title: 'Diversification 101', readTime: 6, xp: 50,
-    icon: 'fa-chart-pie', color: '#ff9b0c',
+    icon: 'fa-chart-pie', color: '#fec24f',
     keyPoints: [
       'Spreading capital across products reduces exposure to any single risk',
       'Different products have different maturity timelines, creating natural liquidity',
@@ -6588,7 +6588,7 @@ Note that SV Capital does not deduct tax at source — you are responsible for d
   {
     id: 'learn_yield_opt', track: 'strategist', order: 1,
     title: 'Yield Optimisation', readTime: 10, xp: 50,
-    icon: 'fa-chart-line-up', color: '#ff9b0c',
+    icon: 'fa-chart-line-up', color: '#fec24f',
     keyPoints: [
       'Blending high-rate short-term products with stable long-term ones maximises risk-adjusted yield',
       'Entry timing and reinvestment speed have a significant impact on effective annualised returns',
@@ -7832,7 +7832,7 @@ const SA_TYPE_META = {
   },
   minor:    {
     icon: 'fa-child-reaching',  label: 'Minor',
-    color: '#ff9b0c',           bg: 'linear-gradient(135deg,#ff5229 0%,#ff9b0c 100%)',
+    color: '#fec24f',           bg: 'linear-gradient(135deg,#ff5229 0%,#fec24f 100%)',
     tagline: 'Start your child\'s investment journey today',
     ficaDocs: ['Child\'s birth certificate (unabridged)', 'Guardian\'s ID document', 'Proof of guardianship / parental rights', 'Child\'s tax reference number (if applicable)'],
   },
@@ -8117,7 +8117,7 @@ function _saRenderReview() {
     </div>
     <div class="info-list mt-16">${rows.map(([k,v]) => `<div class="info-row"><span class="info-row__label">${k}</span><span class="info-row__value">${v}</span></div>`).join('')}</div>
     <div class="sa-fica-notice">
-      <i class="fa-solid fa-id-card" style="color:#ff9b0c"></i>
+      <i class="fa-solid fa-id-card" style="color:#fec24f"></i>
       <div><strong>FICA documents required</strong><br><span style="font-size:0.8rem;color:var(--text-muted)">After creating, you'll upload the required documents in the account details view. Investing is enabled once FICA is approved.</span></div>
     </div>`;
 }
@@ -8201,7 +8201,7 @@ function _saNormalDetail(sa, meta) {
   const kycStatus = sa.kyc_status || 'missing';
   const kycMeta = {
     approved:     { label: 'KYC/FICA Verified',    icon: 'fa-circle-check',        color: '#22c55e', bg: 'rgba(34,197,94,0.15)',  border: 'rgba(34,197,94,0.3)' },
-    under_review: { label: 'Under Review',     icon: 'fa-clock',               color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.3)' },
+    under_review: { label: 'Under Review',     icon: 'fa-clock',               color: '#fec24f', bg: 'rgba(254,194,79,0.15)', border: 'rgba(254,194,79,0.3)' },
     missing:      { label: 'KYC/FICA Required',    icon: 'fa-triangle-exclamation', color: '#ef4444', bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.25)' },
   }[kycStatus] || { label: kycStatus, icon: 'fa-circle-info', color: '#9ca3af', bg: 'rgba(156,163,175,0.1)', border: 'rgba(156,163,175,0.2)' };
 
@@ -8346,7 +8346,7 @@ function _saMinorHub(sa) {
       <div class="minor-goal-track">
         <div class="minor-goal-track__bar"><div class="minor-goal-track__fill" style="width:${goalPct}%"></div></div>
         <div class="minor-goal-track__label">${goalPct}% of ${Utils.rand(goal)} goal ${goalPct >= 100 ? '🎉' : goalPct >= 50 ? '🔥' : '💪'}</div>
-      </div>` : `<div style="margin-top:8px;font-size:0.78rem;color:rgba(255,255,255,0.7);text-align:center">No savings goal set — <a href="#" style="color:#ff9b0c" onclick="openSaGoalModal('${sa.id}')">set one now!</a></div>`}
+      </div>` : `<div style="margin-top:8px;font-size:0.78rem;color:rgba(255,255,255,0.7);text-align:center">No savings goal set — <a href="#" style="color:#fec24f" onclick="openSaGoalModal('${sa.id}')">set one now!</a></div>`}
     </div>
 
     <!-- Actions -->
@@ -8369,7 +8369,7 @@ function _saMinorHub(sa) {
     <!-- FICA section -->
     <div class="minor-fica-section">
       <div class="minor-fica-section__title"><i class="fa-solid fa-id-card"></i> Required Documents</div>
-      ${SA_TYPE_META.minor.ficaDocs.map(d => `<div class="sa-fica-item sa-fica-item--minor"><i class="fa-solid fa-circle-dot" style="color:#ff9b0c"></i><span>${d}</span></div>`).join('')}
+      ${SA_TYPE_META.minor.ficaDocs.map(d => `<div class="sa-fica-item sa-fica-item--minor"><i class="fa-solid fa-circle-dot" style="color:#fec24f"></i><span>${d}</span></div>`).join('')}
       <button class="btn btn--primary btn--sm mt-12 w-full" onclick="openSaFicaUpload('${sa.id}')"><i class="fa-solid fa-upload"></i> Upload Documents</button>
     </div>
 
@@ -8691,7 +8691,7 @@ function openWithdrawalModal() {
     const pending = status === 'pending';
     content.innerHTML = `
       <div style="text-align:center;padding:20px 0">
-        <i class="fa-solid fa-clock" style="font-size:2.5rem;color:#f59e0b;margin-bottom:16px"></i>
+        <i class="fa-solid fa-clock" style="font-size:2.5rem;color:#fec24f;margin-bottom:16px"></i>
         <p style="font-size:0.9rem;color:var(--text-muted)">${pending ? 'Your bank account is pending verification by our team. Withdrawals will be available once approved.' : 'Your bank account has not been verified. Please update your bank details.'}</p>
         ${!pending ? `<button class="btn btn--secondary mt-12" onclick="Modal.close('withdrawalModal');openBankDetailsModal()"><i class="fa-solid fa-pen"></i> Update Bank Details</button>` : ''}
       </div>`;
@@ -8755,8 +8755,8 @@ function openWithdrawalModal() {
       <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">Maximum: ${Utils.rand(balance)} · Minimum: R50</div>
     </div>
     <div id="wdCalcBox" style="display:none;margin-top:4px"></div>
-    <div class="info-box" style="background:rgba(255,155,12,0.06);border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:12px 14px;font-size:0.8rem;color:var(--text-muted);margin-top:12px;line-height:1.6">
-      <i class="fa-solid fa-shield-halved" style="color:#ff9b0c"></i>
+    <div class="info-box" style="background:rgba(254,194,79,0.06);border:1px solid rgba(254,194,79,0.2);border-radius:10px;padding:12px 14px;font-size:0.8rem;color:var(--text-muted);margin-top:12px;line-height:1.6">
+      <i class="fa-solid fa-shield-halved" style="color:#fec24f"></i>
       We only send withdrawals to your verified bank account. Requests submitted now are queued for the next finance run and you can track follow-up in Support if needed.
     </div>`;
   footer.style.display = '';
@@ -8859,7 +8859,7 @@ body{font-family:'Poppins',sans-serif;background:#fff;color:#111;-webkit-print-c
 @media print{.no-print{display:none!important}}
 .no-print{position:fixed;top:0;left:0;right:0;background:#303030;padding:10px 24px;display:flex;justify-content:space-between;align-items:center;z-index:99}
 .no-print span{color:#fff;font-size:13px;font-weight:600}
-.no-print button{background:#FF9B0C;color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
+.no-print button{background:#fec24f;color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
 .wrap{max-width:700px;margin:60px auto 32px;padding:40px}
 .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #303030}
 .logo img{height:48px;max-width:220px;object-fit:contain;display:block}
@@ -8992,7 +8992,7 @@ async function toggle2FA() {
 async function open2FASetupModal() {
   const body   = document.getElementById('twoFAModalBody');
   const footer = document.getElementById('twoFAModalFooter');
-  body.innerHTML = '<div style="text-align:center;padding:20px"><i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem;color:#ff9b0c"></i><p style="margin-top:10px;color:var(--text-muted);font-size:0.85rem">Generating your secret…</p></div>';
+  body.innerHTML = '<div style="text-align:center;padding:20px"><i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem;color:#fec24f"></i><p style="margin-top:10px;color:var(--text-muted);font-size:0.85rem">Generating your secret…</p></div>';
   footer.innerHTML = '';
   Modal.open('twoFAModal');
   try {
@@ -9007,7 +9007,7 @@ async function open2FASetupModal() {
         </p>
         <div id="qrCodeCanvas" style="display:inline-block;background:#fff;padding:14px;border-radius:12px;margin-bottom:12px"></div>
         <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px">Or enter this key manually:</div>
-        <div style="font-family:monospace;font-size:0.85rem;font-weight:700;background:rgba(255,155,12,0.08);padding:8px 14px;border-radius:8px;letter-spacing:0.08em;word-break:break-all">${data.secret}</div>
+        <div style="font-family:monospace;font-size:0.85rem;font-weight:700;background:rgba(254,194,79,0.08);padding:8px 14px;border-radius:8px;letter-spacing:0.08em;word-break:break-all">${data.secret}</div>
       </div>
       <div class="form-group">
         <label class="form-label">Verification Code <span style="color:#ef4444">*</span></label>
@@ -9213,7 +9213,7 @@ function openInvestNowPicker() {
     const meta = _POOL_META[prod.product_type] || {};
     const open = openCounts[prod.product_type] || 0;
     return `
-      <div onclick="selectInvestNowProduct('${_esc(prod.product_type)}')" style="display:flex;align-items:center;gap:14px;padding:14px;border:1.5px solid rgba(0,0,0,0.07);border-radius:14px;cursor:pointer;background:#fff;transition:border-color 0.15s" onmousedown="this.style.borderColor='#ff9b0c'" onmouseup="this.style.borderColor='rgba(0,0,0,0.07)'" ontouchstart="this.style.borderColor='#ff9b0c'" ontouchend="this.style.borderColor='rgba(0,0,0,0.07)'">
+      <div onclick="selectInvestNowProduct('${_esc(prod.product_type)}')" style="display:flex;align-items:center;gap:14px;padding:14px;border:1.5px solid rgba(0,0,0,0.07);border-radius:14px;cursor:pointer;background:#fff;transition:border-color 0.15s" onmousedown="this.style.borderColor='#fec24f'" onmouseup="this.style.borderColor='rgba(0,0,0,0.07)'" ontouchstart="this.style.borderColor='#fec24f'" ontouchend="this.style.borderColor='rgba(0,0,0,0.07)'">
         <div style="width:46px;height:46px;border-radius:12px;background:${pi.color}1a;color:${pi.color};display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">
           <i class="fa-solid ${pi.icon}"></i>
         </div>
@@ -9429,7 +9429,7 @@ function _kycFileSelected(file) {
 function _kycHandleDrop(event) {
   event.preventDefault();
   const zone = document.getElementById('kycDropZone');
-  if (zone) zone.style.borderColor = 'rgba(255,155,12,0.35)';
+  if (zone) zone.style.borderColor = 'rgba(254,194,79,0.35)';
   const file = event.dataTransfer?.files?.[0];
   if (file) {
     const inp = document.getElementById('kycFileInput');
@@ -9445,7 +9445,7 @@ function _kycClearFile() {
   const statusEl = document.getElementById('kycFileStatus');
   if (statusEl) statusEl.style.display = 'none';
   const zone = document.getElementById('kycDropZone');
-  if (zone) { zone.style.borderColor = 'rgba(255,155,12,0.35)'; zone.style.background = 'rgba(255,155,12,0.03)'; }
+  if (zone) { zone.style.borderColor = 'rgba(254,194,79,0.35)'; zone.style.background = 'rgba(254,194,79,0.03)'; }
 }
 
 function openKycUploadModal() {
@@ -9535,7 +9535,7 @@ async function _renderKycStatusPanel(preloadedDocs) {
 
   const inv = PORTAL.investor;
   const overallStatus = inv.fica_status || inv.kyc_status || 'pending';
-  const statusColor = { approved: '#22c55e', rejected: '#ef4444', pending: '#f59e0b', in_progress: '#656565', submitted: '#656565', not_started: '#9ca3af' };
+  const statusColor = { approved: '#22c55e', rejected: '#ef4444', pending: '#fec24f', in_progress: '#656565', submitted: '#656565', not_started: '#9ca3af' };
   const color = statusColor[overallStatus] || '#9ca3af';
 
   const typeLabel = {
@@ -9558,7 +9558,7 @@ async function _renderKycStatusPanel(preloadedDocs) {
       <div style="display:flex;flex-direction:column;gap:8px">
         ${docs.map(d => `
           <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,0,0,0.03);border-radius:8px">
-            <i class="fa-solid fa-file-lines" style="color:#FF9B0C;font-size:0.9rem;flex-shrink:0"></i>
+            <i class="fa-solid fa-file-lines" style="color:#fec24f;font-size:0.9rem;flex-shrink:0"></i>
             <div style="flex:1;min-width:0">
               <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${typeLabel[d.doc_type] || _esc(d.doc_type)}</div>
               <div style="font-size:0.72rem;color:#9ca3af">${_esc(d.file_name) || '—'} · ${Utils.date(d.created_at)}</div>
@@ -9599,8 +9599,8 @@ async function _renderKycDocsList(preloadedDocs) {
   const missingRequired = requiredTypes.filter(t => !submittedTypes.has(t));
 
   list.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:${overallStatus === 'approved' ? 'rgba(34,197,94,0.08)' : 'rgba(255,155,12,0.07)'};margin-bottom:14px">
-      <i class="fa-solid fa-${overallStatus === 'approved' ? 'circle-check' : 'circle-info'}" style="color:${overallStatus === 'approved' ? '#22c55e' : '#FF9B0C'};font-size:1rem"></i>
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:${overallStatus === 'approved' ? 'rgba(34,197,94,0.08)' : 'rgba(254,194,79,0.07)'};margin-bottom:14px">
+      <i class="fa-solid fa-${overallStatus === 'approved' ? 'circle-check' : 'circle-info'}" style="color:${overallStatus === 'approved' ? '#22c55e' : '#fec24f'};font-size:1rem"></i>
       <div style="flex:1">
         <span style="font-size:0.82rem;font-weight:700;color:#1a1a1a">Overall FICA Status: </span>
         ${Utils.statusBadge(overallStatus)}
@@ -9687,7 +9687,7 @@ function _viewKycDoc(docId) {
   toolbar.innerHTML = `
     <span id="_kycDocTitle" style="color:#e5e7eb;font-size:0.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%"></span>
     <span style="display:flex;gap:10px">
-      <button id="_kycDownBtn" style="background:#ff9b0c;color:#000;border:none;border-radius:6px;padding:6px 14px;font-size:0.8rem;font-weight:600;cursor:pointer">Download</button>
+      <button id="_kycDownBtn" style="background:#fec24f;color:#000;border:none;border-radius:6px;padding:6px 14px;font-size:0.8rem;font-weight:600;cursor:pointer">Download</button>
       <button id="_kycCloseBtn" style="background:#374151;color:#f3f4f6;border:none;border-radius:6px;padding:6px 14px;font-size:0.8rem;font-weight:600;cursor:pointer">Close ✕</button>
     </span>
   `;
@@ -9717,7 +9717,7 @@ function _viewKycDoc(docId) {
     content.innerHTML = `<div style="color:#e5e7eb;text-align:center;padding:32px">
       <i class="fa-solid fa-file" style="font-size:3rem;display:block;margin-bottom:12px;opacity:0.5"></i>
       <p style="margin:0 0 16px">Preview not available for this file type.</p>
-      <button id="_kycDlOnly" style="background:#ff9b0c;color:#000;border:none;border-radius:6px;padding:8px 20px;font-size:0.85rem;font-weight:600;cursor:pointer">Download File</button>
+      <button id="_kycDlOnly" style="background:#fec24f;color:#000;border:none;border-radius:6px;padding:8px 20px;font-size:0.85rem;font-weight:600;cursor:pointer">Download File</button>
     </div>`;
   }
 
@@ -9810,7 +9810,7 @@ function onGiftEmailInput() {
         }
       } else {
         statusEl.textContent = '✉ Will receive an invite email';
-        statusEl.style.color = '#ff9b0c';
+        statusEl.style.color = '#fec24f';
       }
     } catch (_) { statusEl.textContent = ''; }
   }, 500);
@@ -9900,12 +9900,12 @@ function _renderGiftHistory(type) {
   }
   if (emptyEl) emptyEl.style.display = 'none';
 
-  const statusColors = { pending:'#ff9b0c', claimed:'#22c55e', expired:'#6b7280', cancelled:'#ef4444' };
+  const statusColors = { pending:'#fec24f', claimed:'#22c55e', expired:'#6b7280', cancelled:'#ef4444' };
   const statusLabels = { pending:'Pending — awaiting claim', claimed:'Claimed', expired:'Expired', cancelled:'Cancelled' };
 
   listEl.innerHTML = data.map(g => {
-    const iconBg = isSent ? 'rgba(255,155,12,0.12)' : 'rgba(34,197,94,0.12)';
-    const iconColor = isSent ? '#ff9b0c' : '#22c55e';
+    const iconBg = isSent ? 'rgba(254,194,79,0.12)' : 'rgba(34,197,94,0.12)';
+    const iconColor = isSent ? '#fec24f' : '#22c55e';
     const personName = isSent
       ? (g.r_first ? `${g.r_first} ${g.r_last}`.trim() : (g.recipient_name || g.recipient_email))
       : (g.s_first ? `${g.s_first} ${g.s_last}`.trim() : 'SV Capital Gift');
@@ -9950,7 +9950,7 @@ async function cancelGift(giftId) {
 }
 
 function _launchGiftConfetti() {
-  const colours = ['#ff9b0c','#ff5229','#D4AF37','#22c55e','#eda5ff'];
+  const colours = ['#fec24f','#ff5229','#fec24f','#22c55e','#eda5ff'];
   for (let i = 0; i < 60; i++) {
     const el = document.createElement('div');
     el.style.cssText = `position:fixed;top:${Math.random()*40}%;left:${Math.random()*100}%;
@@ -10056,15 +10056,15 @@ function generateInvestmentCertificate(invId) {
   const html = `<div style="font-family:Arial,sans-serif;padding:40px;max-width:700px;margin:0 auto">
     <div style="text-align:center;margin-bottom:30px">
       <h1 style="font-size:22px;color:#1a1a1a;margin:0">INVESTMENT CERTIFICATE</h1>
-      <div style="color:#ff9b0c;font-size:13px;font-weight:700;margin-top:4px">SV CAPITAL</div>
+      <div style="color:#fec24f;font-size:13px;font-weight:700;margin-top:4px">SV CAPITAL</div>
     </div>
-    <div style="border:2px solid #ff9b0c;border-radius:8px;padding:24px;margin-bottom:20px">
+    <div style="border:2px solid #fec24f;border-radius:8px;padding:24px;margin-bottom:20px">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <tr><td style="padding:6px 0;color:#6b7280;width:45%">Certificate Number</td><td style="font-weight:700;color:#1a1a1a">${certNo}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Investor Name</td><td style="font-weight:700">${_esc(investor.first_name)} ${_esc(investor.last_name)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Investor ID</td><td style="font-weight:700">${investor.id}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Investment Pool</td><td style="font-weight:700">${inv.pool_name||pool.name||'—'}</td></tr>
-        <tr><td style="padding:6px 0;color:#6b7280">Amount Invested</td><td style="font-weight:700;color:#ff9b0c;font-size:16px">${Utils.rand(inv.amount)}</td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280">Amount Invested</td><td style="font-weight:700;color:#fec24f;font-size:16px">${Utils.rand(inv.amount)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Annual Rate</td><td style="font-weight:700">${Utils.pct(inv.annual_rate||inv.expected_return_rate)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Target Return</td><td style="font-weight:700;color:#22c55e">${Utils.rand(inv.expected_return_amount||inv.expected_return)}</td></tr>
         <tr><td style="padding:6px 0;color:#6b7280">Investment Date</td><td style="font-weight:700">${Utils.date(inv.investment_date||inv.start_date)}</td></tr>
@@ -10679,7 +10679,7 @@ async function _loadStatementArchive() {
     const currentYear = new Date().getFullYear();
     const taxYear = new Date().getMonth() >= 2 ? currentYear : currentYear - 1; // Feb cutoff
     const taxSection = `
-      <div style="margin-bottom:14px;padding:12px;background:rgba(255,155,12,0.06);border-radius:8px;border:1px solid rgba(255,155,12,0.2)">
+      <div style="margin-bottom:14px;padding:12px;background:rgba(254,194,79,0.06);border-radius:8px;border:1px solid rgba(254,194,79,0.2)">
         <div style="font-size:0.84rem;font-weight:700;margin-bottom:6px"><i class="fa-solid fa-file-shield" style="color:var(--gold);margin-right:6px"></i>Investment Income Certificate</div>
         <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">Download your annual IT3(b)-style investment income summary for SARS submission.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -10982,7 +10982,7 @@ function updateRecurringToggleStyle() {
   const slider = document.getElementById('recurringToggleSlider');
   if (!slider) return;
   const on = !!(toggle && toggle.checked);
-  slider.style.background = on ? '#ff9b0c' : '#ccc';
+  slider.style.background = on ? '#fec24f' : '#ccc';
 }
 
 function openRecurringModal() {
@@ -11156,7 +11156,7 @@ async function togglePushNotifications(checked) {
     // Native Capacitor app — push is managed by native.js on startup
     if (window.__SVC_NATIVE__) {
       localStorage.setItem(PUSH_PREF_KEY, 'true');
-      if (slider) slider.style.background = '#ff9b0c';
+      if (slider) slider.style.background = '#fec24f';
       if (statusText) statusText.textContent = 'Enabled — you will receive investment alerts';
       Toast.success('Push notifications enabled!');
       return;
@@ -11223,7 +11223,7 @@ async function togglePushNotifications(checked) {
       if (!subRes.ok) throw new Error('Failed to save subscription on server');
 
       localStorage.setItem(PUSH_PREF_KEY, 'true');
-      if (slider) slider.style.background = '#ff9b0c';
+      if (slider) slider.style.background = '#fec24f';
       if (statusText) statusText.textContent = 'Enabled — you will receive investment alerts';
       Toast.success('Push notifications enabled!');
     } catch (err) {
@@ -11342,7 +11342,7 @@ function _syncPushToggleUI(enabled) {
   const slider     = document.getElementById('pushNotifSlider');
   const statusText = document.getElementById('pushNotifStatusText');
   if (toggle) toggle.checked = enabled;
-  if (slider) slider.style.background = enabled ? '#ff9b0c' : '#ccc';
+  if (slider) slider.style.background = enabled ? '#fec24f' : '#ccc';
   if (statusText) statusText.textContent = enabled
     ? 'Enabled — you will receive investment alerts'
     : 'Enable to receive investment alerts';
@@ -11432,7 +11432,7 @@ function _renderMonthlyReturnsChart() {
       datasets: [{
         label: 'Returns (R)',
         data: data.length ? data : [0],
-        backgroundColor: 'rgba(255,155,12,0.75)',
+        backgroundColor: 'rgba(254,194,79,0.75)',
         borderRadius: 6,
         borderSkipped: false,
       }],
@@ -11462,7 +11462,7 @@ function _renderAnalyticsAllocChart() {
   });
   const entries = Object.entries(byPool).sort((a, b) => b[1] - a[1]);
   const total   = entries.reduce((s, [, v]) => s + v, 0);
-  const COLORS  = ['#FF9B0C','#eda5ff','#656565','#22c55e','#ef4444','#656565','#f97316','#eda5ff'];
+  const COLORS  = ['#fec24f','#eda5ff','#656565','#22c55e','#ef4444','#656565','#f97316','#eda5ff'];
 
   if (PORTAL.charts.analyticsAlloc) { PORTAL.charts.analyticsAlloc.destroy(); }
   PORTAL.charts.analyticsAlloc = new Chart(ctx, {
@@ -11631,7 +11631,7 @@ function renderPortalCmdResults(q) {
       html += `<div class="portal-cmd-item" data-idx="${idx}"
         style="display:flex;align-items:center;gap:12px;padding:9px 14px;cursor:pointer;border-radius:8px;margin:0 6px;transition:background 0.15s"
         onmouseover="portalCmdHover(${idx})" onclick="portalCmdSelect(${idx})">
-        <i class="fa-solid ${_esc(item.icon)}" style="width:16px;text-align:center;color:rgba(255,155,12,0.8);font-size:0.85rem"></i>
+        <i class="fa-solid ${_esc(item.icon)}" style="width:16px;text-align:center;color:rgba(254,194,79,0.8);font-size:0.85rem"></i>
         <span style="font-size:0.88rem;color:#f0f4ff">${_esc(item.label)}</span>
       </div>`;
     });
@@ -11644,7 +11644,7 @@ function renderPortalCmdResults(q) {
 function portalCmdHover(idx) {
   _portalCmdActive = idx;
   document.querySelectorAll('#portalCmdList .portal-cmd-item').forEach(el => {
-    el.style.background = +el.dataset.idx === idx ? 'rgba(255,155,12,0.12)' : '';
+    el.style.background = +el.dataset.idx === idx ? 'rgba(254,194,79,0.12)' : '';
   });
 }
 

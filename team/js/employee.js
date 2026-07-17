@@ -51,14 +51,14 @@ const timeAgo = iso => {
   const d = Math.floor(h/24); if (d<7) return `${d}d ago`;
   return new Date(iso).toLocaleDateString('en-ZA',{day:'numeric',month:'short'});
 };
-const kpiColor = v => v>=90?'#00d4aa':v>=75?'#4fc3f7':v>=60?'#f9c846':v>=40?'#ffb347':'#ff5b5b';
+const kpiColor = v => v>=90?'#00d4aa':v>=75?'#4fc3f7':v>=60?'#fec24f':v>=40?'#ffb347':'#ff5b5b';
 const LEVELS = [
   {level:1,title:'Analyst',   minXP:0,   color:'#adb5bd'},
   {level:2,title:'Associate', minXP:500, color:'#5cb85c'},
   {level:3,title:'Senior',    minXP:1200,color:'#00d4aa'},
   {level:4,title:'Lead',      minXP:2500,color:'#4fc3f7'},
   {level:5,title:'Director',  minXP:4500,color:'#7c5cfc'},
-  {level:6,title:'MVP',       minXP:7000,color:'#f9c846'},
+  {level:6,title:'MVP',       minXP:7000,color:'#fec24f'},
 ];
 function getLevel(xp) { let l=LEVELS[0]; for(const L of LEVELS){if(xp>=L.minXP)l=L;} return l; }
 function getXpProgress(xp) {
@@ -69,7 +69,7 @@ function getXpProgress(xp) {
 }
 const catColors = {
   aum_growth:'#7c5cfc',technical:'#4fc3f7',compliance:'#0984e3',
-  leadership:'#f9c846',client_relations:'#fd79a8',innovation:'#00d4aa',soft_skills:'#ffb347'
+  leadership:'#fec24f',client_relations:'#fd79a8',innovation:'#00d4aa',soft_skills:'#ffb347'
 };
 const KPI_DIMS = ['revenue_contribution','client_satisfaction','task_completion_rate',
   'response_time_score','compliance_score','innovation_score','team_collaboration','attendance_score'];
@@ -279,7 +279,7 @@ async function awardXP(amount, reason='') {
       employee_id: _emp.id, type:'level_up',
       title:`Level Up! You're now ${newLevel}`,
       body:`You've reached the ${newLevel} level with ${newXp} XP!`,
-      icon:'fa-star', color:'#f9c846', xp_shown:0, is_public:true,
+      icon:'fa-star', color:'#fec24f', xp_shown:0, is_public:true,
       created_at: new Date().toISOString()
     });
     _activityFeed.unshift(actEl);
@@ -336,7 +336,7 @@ async function autoCheckBadgeUnlocks(earned) {
     if ((m.count && completed>=m.count) || (m.streak && streak>=m.streak)) {
       const badge = await post('tables/achievements', {
         employee_id:_emp.id, badge_id:m.id, badge_name:m.name,
-        badge_icon:m.icon, badge_color:'#f9c846', category:'milestone',
+        badge_icon:m.icon, badge_color:'#fec24f', category:'milestone',
         description:m.desc, xp_awarded:100, awarded_at:new Date().toISOString(), awarded_by:'system'
       });
       _achievements.push(badge);
@@ -946,8 +946,8 @@ function renderDashboard() {
     <!-- Notifications row -->
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px">
       ${!checkedIn ? `<div class="burnout-alert" style="flex:1;min-width:200px;padding:12px 16px;cursor:pointer" onclick="navigate('checkin',document.querySelector('[data-view=checkin]'))">
-        <i class="fa-solid fa-sun" style="color:#f9c846"></i>
-        <p><strong style="color:#f9c846">Daily check-in pending</strong> — Start your day right, earn XP & keep your streak!</p>
+        <i class="fa-solid fa-sun" style="color:#fec24f"></i>
+        <p><strong style="color:#fec24f">Daily check-in pending</strong> — Start your day right, earn XP & keep your streak!</p>
       </div>` : ''}
       ${activePulse && !alreadyResponded ? `<div class="burnout-alert" style="flex:1;min-width:200px;padding:12px 16px;background:rgba(0,212,170,0.06);border-color:rgba(0,212,170,0.25);cursor:pointer" onclick="navigate('pulse',document.querySelector('[data-view=pulse]'))">
         <i class="fa-solid fa-poll" style="color:var(--accent2)"></i>
@@ -1089,7 +1089,7 @@ function renderDashboard() {
       <!-- Upcoming Birthdays -->
       <div class="chart-container" style="padding:20px">
         <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px">
-          <i class="fa-solid fa-cake-candles" style="color:#f9c846;margin-right:5px"></i>Upcoming Birthdays
+          <i class="fa-solid fa-cake-candles" style="color:#fec24f;margin-right:5px"></i>Upcoming Birthdays
         </div>
         ${upcomingBirthdays.length ? upcomingBirthdays.map(({ emp, bdStr, daysUntil }) => {
           const label = daysUntil === 0 ? '🎉 Today!' : daysUntil === 1 ? 'Tomorrow' : `in ${daysUntil} day${daysUntil!==1?'s':''}`;
@@ -1100,7 +1100,7 @@ function renderDashboard() {
               <div style="font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${emp.first_name} ${emp.last_name}</div>
               <div style="font-size:0.72rem;color:var(--muted)">${dateLabel}</div>
             </div>
-            <span style="font-size:0.7rem;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap;background:rgba(249,200,70,0.12);color:#f9c846">${label}</span>
+            <span style="font-size:0.7rem;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap;background:rgba(249,200,70,0.12);color:#fec24f">${label}</span>
           </div>`;
         }).join('')
         : `<div style="font-size:0.82rem;color:var(--muted);padding:8px 0"><i class="fa-solid fa-calendar-check" style="margin-right:6px"></i>No birthdays in the next 30 days.</div>`}
@@ -1196,7 +1196,7 @@ function courseCardHTML(c, mode) {
   const prog = _progress.find(p=>p.course_id===c.id);
   const pct  = prog ? Math.round((Number(prog.modules_completed)||0)/(Number(c.modules_count)||1)*100) : 0;
   const isDone = prog?.status==='completed';
-  const diffC = {beginner:'#00d4aa',intermediate:'#f9c846',advanced:'#ff6b6b'}[c.difficulty]||'#6b7280';
+  const diffC = {beginner:'#00d4aa',intermediate:'#fec24f',advanced:'#ff6b6b'}[c.difficulty]||'#6b7280';
   return `<div class="course-card ${isDone?'completed':''}" onclick="${isDone?`openCertificateByProgress('${prog?.id}')`:`openCourse('${c.id}')`}">
     <div class="course-banner" style="background:${c.thumbnail_color||'#7c5cfc'}20">
       <i class="fa-solid ${c.thumbnail_icon||'fa-book'}" style="color:${c.thumbnail_color||'#7c5cfc'}"></i>
@@ -1883,7 +1883,7 @@ async function completePath(pathId) {
   if(path.badge_reward) {
     const b=await post('tables/achievements',{
       employee_id:_emp.id, badge_id:`BADGE-PATH-${pathId}`,
-      badge_name:path.badge_reward, badge_icon:'🏆', badge_color:'#f9c846',
+      badge_name:path.badge_reward, badge_icon:'🏆', badge_color:'#fec24f',
       category:'milestone', description:`Completed learning path: ${path.title}`,
       xp_awarded:50, awarded_at:new Date().toISOString(), awarded_by:'system'
     });
@@ -2365,7 +2365,7 @@ function checkBirthdays() {
     banner.innerHTML = `<span style="font-size:1.4rem">🎂</span>
       <span>${isMe ? '🎉 Happy Birthday to YOU!' : `🎂 Today is ${emp.first_name} ${emp.last_name}'s birthday!`}
       ${isMe ? ' The whole team wishes you an amazing day!' : ' Wish them a happy birthday!'}</span>
-      ${!isMe ? `<button onclick="openKudosForBirthday('${emp.id}')" style="margin-left:auto;background:#0e0f13;color:#f9c846;border:none;padding:5px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.78rem">
+      ${!isMe ? `<button onclick="openKudosForBirthday('${emp.id}')" style="margin-left:auto;background:#0e0f13;color:#fec24f;border:none;padding:5px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.78rem">
         Send 🎂 Wishes
       </button>` : ''}
       <button onclick="this.parentElement.remove()" style="background:transparent;border:none;cursor:pointer;font-size:1rem;margin-left:${isMe?'auto':'8px'}">✕</button>`;
@@ -2385,7 +2385,7 @@ function checkBirthdays() {
           employee_id: emp.id, type: 'badge_earned',
           title: '🎂 Birthday! +100 XP',
           body: `Happy Birthday ${emp.first_name}! The SV Capital team celebrates you today.`,
-          icon: 'fa-cake-candles', color: '#f9c846',
+          icon: 'fa-cake-candles', color: '#fec24f',
           xp_shown: 100, is_public: true,
           created_at: new Date().toISOString()
         });
@@ -2669,7 +2669,7 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:9.5pt;color:#1a1a1a;min-he
 .hdr-co-addr{font-size:8pt;color:rgba(255,255,255,0.6);line-height:1.65}
 .hdr-right{text-align:right;min-width:180px}
 .hdr-pd-lbl{font-size:7pt;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}
-.hdr-pd-val{font-size:13pt;font-weight:800;color:#FF9B0C;margin-bottom:12px;letter-spacing:0.02em}
+.hdr-pd-val{font-size:13pt;font-weight:800;color:#fec24f;margin-bottom:12px;letter-spacing:0.02em}
 .hdr-logo{width:170px;height:auto;display:block;margin-left:auto}
 .emp-strip{padding:16px 30px;background:#f7f9fc;border-bottom:2px solid #e2e8f0;display:grid;grid-template-columns:1fr 1fr;gap:4px 36px}
 .er{display:flex;padding:2.5px 0;font-size:8.5pt}
@@ -2682,8 +2682,8 @@ th{font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:.05em;c
 th.r,td.r{text-align:right}
 td{padding:5.5px 5px;border-bottom:1px solid #f1f5f9;vertical-align:top;color:#374151}
 .tr-tot td{font-weight:700;border-top:1.5px solid #94a3b8;border-bottom:1.5px solid #94a3b8;background:#f8fafc;color:#0f172a;padding:8px 5px}
-.tr-nett td{font-weight:800;font-size:11.5pt;color:#0d2535;padding:10px 5px;border-bottom:2.5px solid #FF8215}
-.tr-nett td.r{color:#FF8215}
+.tr-nett td{font-weight:800;font-size:11.5pt;color:#0d2535;padding:10px 5px;border-bottom:2.5px solid #fec24f}
+.tr-nett td.r{color:#fec24f}
 .bank{padding:14px 30px 16px;background:#fffbf5;border-top:1.5px solid #fed7aa;border-bottom:1.5px solid #fed7aa;margin-top:4px}
 .bank-lbl{font-size:7.5pt;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#b45309;margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .bank-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 16px}
@@ -2693,7 +2693,7 @@ td{padding:5.5px 5px;border-bottom:1px solid #f1f5f9;vertical-align:top;color:#3
 .ftr-l{font-size:6.5pt;color:#9ca3af;font-style:italic}
 .ftr-r{font-size:6.5pt;color:#9ca3af}
 .print-row{padding:18px;text-align:center;background:#f0f4f8}
-.pbtn{padding:11px 36px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:8px;font-size:10pt;font-weight:700;cursor:pointer;font-family:Arial;letter-spacing:.02em;box-shadow:0 3px 12px rgba(255,130,21,0.35)}
+.pbtn{padding:11px 36px;background:linear-gradient(135deg,#fec24f,#FF5229);color:#fff;border:none;border-radius:8px;font-size:10pt;font-weight:700;cursor:pointer;font-family:Arial;letter-spacing:.02em;box-shadow:0 3px 12px rgba(255,130,21,0.35)}
 @media print{html{background:#fff}body{padding:0}.page{box-shadow:none;border-radius:0}.print-row{display:none}}
 </style></head>
 <body><div class="page">
@@ -3044,7 +3044,7 @@ function renderCalendarView(container, leaveList, year, month) {
             <div style="font-size:0.8rem;font-weight:${isToday?'800':'600'};color:${isToday?'var(--accent)':'var(--text)'}">
               ${d}
             </div>
-            ${bdays.map(emp=>`<div style="font-size:0.65rem;background:rgba(249,200,70,0.15);border-radius:4px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#f9c846">
+            ${bdays.map(emp=>`<div style="font-size:0.65rem;background:rgba(249,200,70,0.15);border-radius:4px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fec24f">
               🎂 ${emp.first_name}
             </div>`).join('')}
             ${onLeave.slice(0,3).map(({emp,leave})=>`
@@ -3172,7 +3172,7 @@ function showXpPopup(amount) {
 }
 
 function launchConfetti() {
-  const cols=['#7c5cfc','#00d4aa','#f9c846','#ff6b6b','#4fc3f7'];
+  const cols=['#7c5cfc','#00d4aa','#fec24f','#ff6b6b','#4fc3f7'];
   for(let i=0;i<60;i++) {
     const el=document.createElement('div');
     el.className='confetti-piece';
@@ -3246,11 +3246,11 @@ const HELP_CONTENT = {
     sections: [
       { heading: 'Profile Hero', icon: 'fa-user-circle', color: '#7c5cfc',
         text: 'Shows your name, role, current XP level, and daily streak. The XP bar at the top tracks your progress to the next level. Click the avatar (bottom of sidebar) to jump to Achievements.' },
-      { heading: 'Smart Notifications', icon: 'fa-bell', color: '#f59e0b',
+      { heading: 'Smart Notifications', icon: 'fa-bell', color: '#fec24f',
         text: 'Context-aware reminders appear here automatically — daily check-in reminder, active pulse surveys, upcoming 1-on-1s, and wellbeing alerts (3+ stressed check-ins triggers a burnout warning).' },
       { heading: 'Stats Cards', icon: 'fa-chart-bar', color: '#00d4aa',
         text: 'Quick KPI overview, your estimated EVA bonus share, courses completed this month, and streak count. These update in real time as you take actions.' },
-      { heading: 'Recent Activity', icon: 'fa-bolt', color: '#f59e0b',
+      { heading: 'Recent Activity', icon: 'fa-bolt', color: '#fec24f',
         text: 'The last few things you\'ve done — course completions, kudos, check-ins, OKR milestones. Full history is in the Activity Feed view (⚡ in sidebar).' },
     ]
   },
@@ -3263,7 +3263,7 @@ const HELP_CONTENT = {
         text: 'Each card shows: title, category, difficulty, estimated time, XP reward, and which KPI dimension it boosts. Colour-coded by category (purple = AUM Growth, teal = Innovation, pink = Client Relations, etc.).' },
       { heading: 'Starting a Course', icon: 'fa-play', color: '#00d4aa',
         text: 'Click "Start Course" or "Continue" to open the Course Reader. Use the left panel to jump between modules. Complete the quiz at the end of each module to progress.' },
-      { heading: 'Quizzes', icon: 'fa-question-circle', color: '#f59e0b',
+      { heading: 'Quizzes', icon: 'fa-question-circle', color: '#fec24f',
         text: 'Each module ends with a multiple-choice quiz. You need to score above the pass mark (usually 70%) to complete the module and earn XP. You can retry if you don\'t pass.' },
       { heading: 'Certificates', icon: 'fa-certificate', color: '#e84393',
         text: 'Completing a full course generates a certificate with your name, date, and a unique certificate ID. View all certificates in the Achievements view.' },
@@ -3280,7 +3280,7 @@ const HELP_CONTENT = {
         text: 'Paths marked "Mandatory" must be completed. They often have a deadline and are tied to compliance or onboarding requirements. Optional paths earn bonus XP and badges.' },
       { heading: 'Path Progress', icon: 'fa-stairs', color: '#00d4aa',
         text: 'Courses in a path unlock sequentially. Complete course 1 to unlock course 2. A progress bar shows your overall path completion percentage.' },
-      { heading: 'Path Rewards', icon: 'fa-trophy', color: '#f59e0b',
+      { heading: 'Path Rewards', icon: 'fa-trophy', color: '#fec24f',
         text: 'Completing a full learning path awards bonus XP on top of the individual course XP, plus a special path completion badge.' },
     ]
   },
@@ -3291,7 +3291,7 @@ const HELP_CONTENT = {
     sections: [
       { heading: '8 KPI Dimensions', icon: 'fa-sliders', color: '#7c5cfc',
         text: 'Revenue Contribution, Client Satisfaction, Task Completion, Response Time, Compliance Score, Innovation Score, Team Collaboration, and Attendance. Each scored 0–100.' },
-      { heading: 'How Scores are Set', icon: 'fa-pen', color: '#f59e0b',
+      { heading: 'How Scores are Set', icon: 'fa-pen', color: '#fec24f',
         text: 'Your manager scores you monthly in the Team Dashboard. You can boost your own scores by: completing courses (auto-boost), completing OKRs (+10 pts), giving kudos, and maintaining daily check-in streaks (attendance).' },
       { heading: 'Trend Chart', icon: 'fa-chart-line', color: '#00d4aa',
         text: 'The line chart shows your score trends across the last 6 months. The radar chart compares your profile shape against the ideal 100% benchmark.' },
@@ -3308,7 +3308,7 @@ const HELP_CONTENT = {
         text: 'An Objective is a qualitative goal ("I want to improve client satisfaction"). Key Results are measurable milestones that prove you\'ve hit it (3 per objective). When all 3 KRs reach 100%, the OKR is complete.' },
       { heading: 'Creating an OKR', icon: 'fa-plus', color: '#00d4aa',
         text: 'Click "+ New OKR". Set your objective, add 3 key results with targets, and link it to a KPI dimension. Each OKR completion auto-boosts that KPI by +10 points and awards +100 XP.' },
-      { heading: 'Updating Progress', icon: 'fa-arrows-alt', color: '#f59e0b',
+      { heading: 'Updating Progress', icon: 'fa-arrows-alt', color: '#fec24f',
         text: 'Click any OKR card to update key result progress with sliders. The overall % auto-calculates. Your manager can also add notes.' },
     ]
   },
@@ -3334,7 +3334,7 @@ const HELP_CONTENT = {
         text: 'Each week contains 3 short questions plus an eNPS (Employee Net Promoter Score) question. Surveys take 2–3 minutes. Complete it to earn +20 XP.' },
       { heading: 'eNPS', icon: 'fa-chart-bar', color: '#00d4aa',
         text: 'On a scale of 0–10, how likely are you to recommend SV Capital as a great place to work? This is the Employee Net Promoter Score — a global standard metric for employee engagement.' },
-      { heading: 'Previous Responses', icon: 'fa-history', color: '#f59e0b',
+      { heading: 'Previous Responses', icon: 'fa-history', color: '#fec24f',
         text: 'View your past survey responses below the current survey. Your answers help leadership understand team morale trends over time.' },
     ]
   },
@@ -3347,7 +3347,7 @@ const HELP_CONTENT = {
         text: 'Upcoming meetings show the date, agenda, and any topics you\'ve submitted. Past meetings show outcomes, manager notes, and action items.' },
       { heading: 'Action Items', icon: 'fa-check-square', color: '#00d4aa',
         text: 'Action items from 1-on-1s appear here. Tick them off when done — each completed action earns +10 XP. Your manager tracks completion rates.' },
-      { heading: 'Adding Pre-Meeting Notes', icon: 'fa-pen', color: '#f59e0b',
+      { heading: 'Adding Pre-Meeting Notes', icon: 'fa-pen', color: '#fec24f',
         text: 'Before a meeting, click "Add Notes" to submit talking points, questions, or updates you want to cover. Your manager can see these in advance.' },
       { heading: 'Requesting a Meeting', icon: 'fa-plus', color: '#e84393',
         text: 'Click "Request 1-on-1" to propose a new meeting. Add an agenda and any topics. Your manager will confirm the time.' },
@@ -3358,7 +3358,7 @@ const HELP_CONTENT = {
     icon: 'fa-sun',
     intro: 'A 30-second daily ritual that builds your streak, earns XP, and helps the business track team wellbeing.',
     sections: [
-      { heading: 'Mood Selector', icon: 'fa-face-smile', color: '#f59e0b',
+      { heading: 'Mood Selector', icon: 'fa-face-smile', color: '#fec24f',
         text: 'Choose from 5 moods: Energised 🔥, Happy 😊, Neutral 😐, Stressed 😰, or Exhausted 😴. Be honest — your responses are anonymised in aggregate reporting. Streak and XP are awarded regardless of mood.' },
       { heading: 'Tasks', icon: 'fa-list-check', color: '#00d4aa',
         text: 'Enter how many tasks you planned for the day and how many you completed yesterday. This feeds your task completion KPI over time.' },
@@ -3379,7 +3379,7 @@ const HELP_CONTENT = {
         text: 'Extended leave can reduce your EVA bonus share for that period. The "EVA Impact %" shown on each request indicates the reduction. This resets next period.' },
       { heading: 'Approval Process', icon: 'fa-check-double', color: '#00d4aa',
         text: 'Once submitted, your manager reviews your request in the Team Dashboard. Status changes from "pending" → "approved" or "rejected". You\'ll see the updated status here.' },
-      { heading: 'Leave Calendar', icon: 'fa-calendar-week', color: '#f59e0b',
+      { heading: 'Leave Calendar', icon: 'fa-calendar-week', color: '#fec24f',
         text: 'See the full team leave calendar in the 📅 calendar view (sidebar). Plan leave to avoid clashing with critical team coverage periods.' },
     ]
   },
@@ -3388,7 +3388,7 @@ const HELP_CONTENT = {
     icon: 'fa-trophy',
     intro: 'Your badge collection, certificates, and XP milestones.',
     sections: [
-      { heading: 'Earning Badges', icon: 'fa-medal', color: '#f59e0b',
+      { heading: 'Earning Badges', icon: 'fa-medal', color: '#fec24f',
         text: 'Badges are awarded automatically for milestones: completing 5 courses, 7-day streak, giving 10 kudos, 100% OKR completion, and more. Each badge awards bonus XP.' },
       { heading: 'Certificates', icon: 'fa-certificate', color: '#7c5cfc',
         text: 'Every completed course generates a certificate. Click any certificate to open the printable PDF-ready certificate overlay with your name, date, and unique ID.' },
@@ -3416,7 +3416,7 @@ const HELP_CONTENT = {
         text: '100% private. No manager, director, or admin can see your journal entries. This is your personal space.' },
       { heading: 'Creating Notes', icon: 'fa-plus', color: '#00d4aa',
         text: 'Click "New Note" to open the editor. Add a title, write your content, and choose whether to pin it. Pinned notes appear at the top of your journal.' },
-      { heading: 'Editing & Deleting', icon: 'fa-pen', color: '#f59e0b',
+      { heading: 'Editing & Deleting', icon: 'fa-pen', color: '#fec24f',
         text: 'Click any note to edit it. Use the delete button to remove it permanently. Edits are saved with a timestamp.' },
     ]
   },
@@ -3429,7 +3429,7 @@ const HELP_CONTENT = {
         text: 'Gross Revenue = Total AUM × 2.5%. EVA Pool = Revenue − Costs. Team Pool = EVA Pool × 50%. Your share = (KPI Score × EVA Weight) / All Weights × Individual Pool + Collective Pool / Headcount.' },
       { heading: 'Individual vs Collective', icon: 'fa-users', color: '#00d4aa',
         text: '60% of the Team Pool is split based on KPI performance (weighted). The other 40% is split equally among all active employees — the "collective" share. You earn both.' },
-      { heading: 'EVA Weight', icon: 'fa-weight-scale', color: '#f59e0b',
+      { heading: 'EVA Weight', icon: 'fa-weight-scale', color: '#fec24f',
         text: 'Your EVA weight (0.5–2.0) is set by your role. A weight of 1.8 (Investment Analyst) means you get 1.8× more individual pool allocation than someone with weight 1.0.' },
       { heading: 'Improving Your Share', icon: 'fa-trending-up', color: '#e84393',
         text: 'Boost your KPI scores by completing courses, hitting OKRs, maintaining streaks, and giving kudos. The improvement table at the bottom shows the exact ZAR impact of a 10-point KPI increase.' },
@@ -3446,7 +3446,7 @@ const HELP_CONTENT = {
         text: 'Your bank account details for EVA bonus payments. Account number is masked for security (•••••1234). Click Edit to update. Upload proof of banking using the upload button.' },
       { heading: 'Emergency Contact', icon: 'fa-phone-volume', color: '#e84393',
         text: 'Add an emergency contact name and phone number. This is only accessed by HR in genuine emergencies.' },
-      { heading: 'Sensitive Field Masking', icon: 'fa-eye-slash', color: '#f59e0b',
+      { heading: 'Sensitive Field Masking', icon: 'fa-eye-slash', color: '#fec24f',
         text: 'SA ID number and bank account number are masked in the display for your protection. Only you can see and edit them.' },
     ]
   },
@@ -3457,7 +3457,7 @@ const HELP_CONTENT = {
     sections: [
       { heading: 'The Monthly Grid', icon: 'fa-calendar', color: '#7c5cfc',
         text: 'A full month grid showing all approved leave. Each employee has a unique colour. Leave blocks span the correct days. Use the arrows to navigate months.' },
-      { heading: 'Birthday Overlays', icon: 'fa-birthday-cake', color: '#f59e0b',
+      { heading: 'Birthday Overlays', icon: 'fa-birthday-cake', color: '#fec24f',
         text: 'A 🎂 chip appears on each team member\'s birthday. The "Birthdays This Month" section below the grid lists everyone celebrating this month.' },
       { heading: 'Who\'s On Leave', icon: 'fa-user-clock', color: '#e84393',
         text: 'The "On Leave Today" section at the bottom shows everyone currently on leave with their leave type and return date.' },
@@ -3570,7 +3570,7 @@ async function checkOnboardingBanner() {
   if (chipsEl) {
     const incomplete = defaultTasks.slice(ob.tasks_completed||0, (ob.tasks_completed||0) + 3);
     chipsEl.innerHTML = incomplete.map(t => `
-      <button onclick="navigate('${t.view}',document.querySelector('[data-view=${t.view}]'))" style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:20px;padding:4px 12px;font-size:0.72rem;font-weight:600;color:#f59e0b;cursor:pointer;font-family:inherit;transition:background 0.15s">
+      <button onclick="navigate('${t.view}',document.querySelector('[data-view=${t.view}]'))" style="display:inline-flex;align-items:center;gap:6px;background:rgba(254,194,79,0.1);border:1px solid rgba(254,194,79,0.25);border-radius:20px;padding:4px 12px;font-size:0.72rem;font-weight:600;color:#fec24f;cursor:pointer;font-family:inherit;transition:background 0.15s">
         <i class="fa-solid ${t.icon}" style="font-size:0.68rem"></i> ${t.title}
       </button>
     `).join('') + `<span style="font-size:0.72rem;color:#6b7280;align-self:center">${tasksLeft} tasks remaining</span>`;
@@ -3717,7 +3717,7 @@ function refreshOnboardingBanner(count, total, completed, tasks) {
 
   if (chipsEl) {
     chipsEl.innerHTML = incomplete.map(t => `
-      <button onclick="navigate('${t.view}',document.querySelector('[data-view=${t.view}]'))" style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:20px;padding:4px 12px;font-size:0.72rem;font-weight:600;color:#f59e0b;cursor:pointer;font-family:inherit;transition:background 0.15s">
+      <button onclick="navigate('${t.view}',document.querySelector('[data-view=${t.view}]'))" style="display:inline-flex;align-items:center;gap:6px;background:rgba(254,194,79,0.1);border:1px solid rgba(254,194,79,0.25);border-radius:20px;padding:4px 12px;font-size:0.72rem;font-weight:600;color:#fec24f;cursor:pointer;font-family:inherit;transition:background 0.15s">
         <i class="fa-solid ${t.icon}" style="font-size:0.68rem"></i> ${t.title}
       </button>
     `).join('') + `<span style="font-size:0.72rem;color:#6b7280;align-self:center">${tasksLeft} task${tasksLeft!==1?'s':''} remaining</span>`;
@@ -3739,7 +3739,7 @@ async function handleOnboardingCompletion() {
     title:       '🎉 Onboarding journey complete!',
     body:        'You have completed all required onboarding tasks. Welcome to the team!',
     icon:        'fa-rocket',
-    color:       '#f59e0b',
+    color:       '#fec24f',
     xp_shown:    150,
     is_public:   true,
     created_at:  new Date().toISOString(),
@@ -3754,7 +3754,7 @@ async function handleOnboardingCompletion() {
         <div style="width:44px;height:44px;border-radius:12px;background:rgba(0,212,170,0.15);border:1px solid rgba(0,212,170,0.4);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">🎉</div>
         <div style="flex:1">
           <div style="font-size:0.9rem;font-weight:800;color:#00d4aa;margin-bottom:2px">Onboarding complete! Welcome to SV Capital! 🚀</div>
-          <div style="font-size:0.78rem;color:#9ca3af;line-height:1.4">You've completed all required onboarding steps and earned <strong style="color:#f59e0b">+150 bonus XP</strong>. You're officially ready to go — the team is excited to have you!</div>
+          <div style="font-size:0.78rem;color:#9ca3af;line-height:1.4">You've completed all required onboarding steps and earned <strong style="color:#fec24f">+150 bonus XP</strong>. You're officially ready to go — the team is excited to have you!</div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
           <span style="font-size:1.6rem;font-weight:900;color:#00d4aa">100%</span>
@@ -3932,7 +3932,7 @@ function renderPayslips() {
                  const eva    = Number(p.eva_bonus) || 0;
                  const ded    = gross - nett;
                  const st     = p.status || 'pending';
-                 const stCol  = st === 'paid' ? '#00d4aa' : st === 'finalised' ? '#7c5cfc' : '#f9c846';
+                 const stCol  = st === 'paid' ? '#00d4aa' : st === 'finalised' ? '#7c5cfc' : '#fec24f';
                  return `<tr>
                    <td style="font-weight:700">${moLabel} ${yr}</td>
                    <td>R ${base.toLocaleString('en-ZA',{maximumFractionDigits:2})}</td>

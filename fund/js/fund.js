@@ -375,7 +375,7 @@ function renderUpcomingPayoutsWidget() {
       </div>
     </div>`;
   }).join('');
-  el.innerHTML = `<div style="padding:8px 0 4px;font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Total due: <span style="color:#D4AF37;font-weight:700">${fmt.rand(totalVal)}</span></div>` + rows;
+  el.innerHTML = `<div style="padding:8px 0 4px;font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Total due: <span style="color:#fec24f;font-weight:700">${fmt.rand(totalVal)}</span></div>` + rows;
 }
 
 function renderRunTypeChart() {
@@ -384,7 +384,7 @@ function renderRunTypeChart() {
   const types = {};
   S.runs.forEach(r => { const t=r.product_type||'other'; types[t]=(types[t]||0)+1; });
   if (!Object.keys(types).length) return;
-  const colors = { cattle:'#D4AF37', solar_7yr:'#22c55e', solar_6yr:'#16a34a', solar_5yr:'#15803d', short_term:'#656565', delivery_bike:'#a855f7', other:'#94a3b8' };
+  const colors = { cattle:'#fec24f', solar_7yr:'#22c55e', solar_6yr:'#16a34a', solar_5yr:'#15803d', short_term:'#656565', delivery_bike:'#a855f7', other:'#94a3b8' };
   if (S.charts.runType) S.charts.runType.destroy();
   S.charts.runType = new Chart(ctx, {
     type: 'doughnut',
@@ -410,7 +410,7 @@ function renderReturnsChart() {
     data: {
       labels,
       datasets: [
-        { label:'Gross Return', data:gross, backgroundColor:'rgba(212,175,55,0.5)', borderColor:'#D4AF37', borderWidth:1.5, borderRadius:4 },
+        { label:'Gross Return', data:gross, backgroundColor:'rgba(254,194,79,0.5)', borderColor:'#fec24f', borderWidth:1.5, borderRadius:4 },
         { label:'Net Return',   data:net,   backgroundColor:'rgba(34,197,94,0.5)',  borderColor:'#22c55e', borderWidth:1.5, borderRadius:4 }
       ]
     },
@@ -488,7 +488,7 @@ function renderPortfolioComposition() {
 
   const segments = [
     {label:'Cattle Finance', val:cattleDep, color:'#74c69d', icon:'fa-cow', active:(S.cattle||[]).filter(c=>['active','in_progress'].includes(c.status)).length},
-    {label:'Solar Finance',  val:solarDep,  color:'#f59e0b', icon:'fa-solar-panel', active:(S.solar||[]).filter(p=>p.status==='active').length},
+    {label:'Solar Finance',  val:solarDep,  color:'#fec24f', icon:'fa-solar-panel', active:(S.solar||[]).filter(p=>p.status==='active').length},
     {label:'Short-Term Loans',val:loansDep, color:'#656565', icon:'fa-hand-holding-dollar', active:(S.loans||[]).filter(l=>l.status==='active').length},
     {label:'Fund Runs',      val:runsDep,   color:'#c084fc', icon:'fa-play-circle', active:(S.runs||[]).filter(r=>r.status==='in_progress').length},
   ].filter(s=>s.val>0);
@@ -503,9 +503,9 @@ function renderPortfolioComposition() {
     </div>
     <div class="panel__bd">
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
-        <div style="background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.2);border-radius:10px;padding:14px;text-align:center">
+        <div style="background:rgba(254,194,79,.08);border:1px solid rgba(254,194,79,.2);border-radius:10px;padding:14px;text-align:center">
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.4);margin-bottom:5px">Total Raised</div>
-          <div style="font-size:18px;font-weight:900;color:#D4AF37">${fmt.rand(totalRaised)}</div>
+          <div style="font-size:18px;font-weight:900;color:#fec24f">${fmt.rand(totalRaised)}</div>
         </div>
         <div style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:10px;padding:14px;text-align:center">
           <div style="font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.4);margin-bottom:5px">Total Deployed</div>
@@ -561,8 +561,8 @@ function renderCapitalWaterfall() {
       labels: ['Gross Returns Generated','− Management Fees','− Performance Fees','Net Returns to Investors'],
       datasets:[{
         data:[gross, mgmt, perf, net],
-        backgroundColor:['rgba(212,175,55,0.75)','rgba(248,113,113,0.7)','rgba(251,146,60,0.7)','rgba(116,198,157,0.75)'],
-        borderColor:['#D4AF37','#f87171','#fb923c','#74c69d'],
+        backgroundColor:['rgba(254,194,79,0.75)','rgba(248,113,113,0.7)','rgba(251,146,60,0.7)','rgba(116,198,157,0.75)'],
+        borderColor:['#fec24f','#f87171','#fb923c','#74c69d'],
         borderWidth:1.5, borderRadius:6,
       }]
     },
@@ -615,15 +615,15 @@ function renderLiveProductCards() {
   el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;padding:16px">
     ${card('cattle.html','linear-gradient(135deg,#0d1e13,#1a3a26)','#74c69d','fa-cow','🐄','Cattle Finance','Physical asset backed · Beefcor feedlot',
       activeCattle.length>0?'ACTIVE':'IDLE',activeCattle.length>0?'#74c69d':'rgba(255,255,255,.3)',
-      stat('Active Cycles',activeCattle.length,'#74c69d')+stat('Animals',totalAnimals>0?totalAnimals.toLocaleString():'—')+stat('Deployed',cattleDep>0?fmt.rand(cattleDep):'—','#D4AF37')+stat('Target Return','14.83%','#74c69d'),
+      stat('Active Cycles',activeCattle.length,'#74c69d')+stat('Animals',totalAnimals>0?totalAnimals.toLocaleString():'—')+stat('Deployed',cattleDep>0?fmt.rand(cattleDep):'—','#fec24f')+stat('Target Return','14.83%','#74c69d'),
       'View NAV Dashboard','#74c69d')}
-    ${card('solar.html','linear-gradient(135deg,#1a1200,#2a1f00)','#f59e0b','fa-solar-panel','☀️','Solar Finance','5yr · 6yr · 7yr products',
-      activeSolar.length>0?'ACTIVE':'IDLE',activeSolar.length>0?'#f59e0b':'rgba(255,255,255,.3)',
-      stat('Active Projects',activeSolar.length,'#f59e0b')+stat('Return Range','13.5–21.4%')+stat('Deployed',solarDep>0?fmt.rand(solarDep):'—','#D4AF37')+stat('Max Term','7 Years'),
-      'View Solar Dashboard','#f59e0b')}
+    ${card('solar.html','linear-gradient(135deg,#1a1200,#2a1f00)','#fec24f','fa-solar-panel','☀️','Solar Finance','5yr · 6yr · 7yr products',
+      activeSolar.length>0?'ACTIVE':'IDLE',activeSolar.length>0?'#fec24f':'rgba(255,255,255,.3)',
+      stat('Active Projects',activeSolar.length,'#fec24f')+stat('Return Range','13.5–21.4%')+stat('Deployed',solarDep>0?fmt.rand(solarDep):'—','#fec24f')+stat('Max Term','7 Years'),
+      'View Solar Dashboard','#fec24f')}
     ${card('shortterm.html','linear-gradient(135deg,#0d1832,#0a1428)','#656565','fa-hand-holding-dollar','🏢','SMME Short-Term Loans','Business asset finance · 5-month cycles',
       overdueLoans.length>0?overdueLoans.length+' OVERDUE':activeLoans.length>0?'ACTIVE':'IDLE',overdueLoans.length>0?'#f87171':activeLoans.length>0?'#656565':'rgba(255,255,255,.3)',
-      stat('Active Loans',activeLoans.length,'#656565')+stat('Overdue',overdueLoans.length,overdueLoans.length>0?'#f87171':'rgba(255,255,255,.3)')+stat('Deployed',loansDep>0?fmt.rand(loansDep):'—','#D4AF37')+stat('Target Return','13.92%','#656565'),
+      stat('Active Loans',activeLoans.length,'#656565')+stat('Overdue',overdueLoans.length,overdueLoans.length>0?'#f87171':'rgba(255,255,255,.3)')+stat('Deployed',loansDep>0?fmt.rand(loansDep):'—','#fec24f')+stat('Target Return','13.92%','#656565'),
       'View Loan Dashboard','#656565')}
   </div>`;
 }
@@ -1274,7 +1274,7 @@ function renderPoolsOverview() {
     if (!items.length) return `<span style="color:rgba(255,255,255,.25);font-size:0.72rem">None linked</span>`;
     return items.map(it => {
       const label = it.batch_name || it.project_name || it.business_name || it.loan_ref || it.id;
-      const color = type === 'cattle' ? '#74c69d' : type.startsWith('solar') ? '#f59e0b' : '#656565';
+      const color = type === 'cattle' ? '#74c69d' : type.startsWith('solar') ? '#fec24f' : '#656565';
       return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;font-weight:700;background:${color}18;color:${color};padding:2px 8px;border-radius:20px;margin:1px">${label}</span>`;
     }).join('');
   };
@@ -1336,7 +1336,7 @@ function openLinkProductModal(poolId) {
 
   const linked   = products.filter(p => p.pool_id === poolId);
   const available = products.filter(p => !p.pool_id);
-  const color = type === 'cattle' ? '#74c69d' : type.startsWith('solar') ? '#f59e0b' : '#656565';
+  const color = type === 'cattle' ? '#74c69d' : type.startsWith('solar') ? '#fec24f' : '#656565';
 
   const pLabel = it => it[nameField] || it.loan_ref || it.id;
   const pSub   = it => [it.status, it.purchase_value ? fmt.rand(it.purchase_value) : it.capital_deployed ? fmt.rand(it.capital_deployed) : it.amount_disbursed ? fmt.rand(it.amount_disbursed) : null].filter(Boolean).join(' · ');
@@ -1652,7 +1652,7 @@ function renderAuditTable() {
   const sevColors = { info:'#656565', warning:'#fb923c', critical:'#f87171' };
   const sevIcons  = { info:'fa-circle-info', warning:'fa-triangle-exclamation', critical:'fa-circle-xmark' };
   const typeIcons = { fund_run:'fa-play-circle', solar_project:'fa-solar-panel', loan:'fa-hand-holding-dollar', cattle:'fa-cow', pool:'fa-layer-group', schedule:'fa-calendar-days', auth:'fa-key', system:'fa-robot' };
-  const actionColors = { create:'#74c69d', update:'#fbbf24', delete:'#f87171', status_change:'#656565', approve:'#74c69d', reject:'#f87171', export:'#a78bfa', login:'#656565', logout:'rgba(255,255,255,.4)', mark_paid:'#74c69d', calculate_returns:'#fbbf24' };
+  const actionColors = { create:'#74c69d', update:'#fec24f', delete:'#f87171', status_change:'#656565', approve:'#74c69d', reject:'#f87171', export:'#a78bfa', login:'#656565', logout:'rgba(255,255,255,.4)', mark_paid:'#74c69d', calculate_returns:'#fec24f' };
 
   el.innerHTML = data.map(e => {
     const ts   = e.event_at || e.created_at;
@@ -1786,7 +1786,7 @@ function renderAllocationsView() {
   }
 
   const statusColors  = { active:'badge--green', committed:'badge--blue', matured:'badge--purple', defaulted:'badge--red', cancelled:'badge--gray' };
-  const productColors = { cattle:'#74c69d', solar_7yr:'#f59e0b', solar_6yr:'#fbbf24', solar_5yr:'#fcd34d', short_term:'#656565', fund_run:'#a78bfa' };
+  const productColors = { cattle:'#74c69d', solar_7yr:'#fec24f', solar_6yr:'#fec24f', solar_5yr:'#fcd34d', short_term:'#656565', fund_run:'#a78bfa' };
   const productIcons  = { cattle:'fa-cow', solar_7yr:'fa-solar-panel', solar_6yr:'fa-solar-panel', solar_5yr:'fa-solar-panel', short_term:'fa-hand-holding-dollar', fund_run:'fa-play-circle' };
 
   el.innerHTML = data.map(a => {
@@ -1844,7 +1844,7 @@ function renderAllocByInvestor() {
     const totalExp  = inv.items.reduce((s,x) => s+(parseFloat(x.expected_payout)||0), 0);
     const activeCount = inv.items.filter(x => x.status==='active').length;
     const products = [...new Set(inv.items.map(x => x.product_type))];
-    const productColors = { cattle:'#74c69d', solar_7yr:'#f59e0b', solar_6yr:'#fbbf24', solar_5yr:'#fcd34d', short_term:'#656565', fund_run:'#a78bfa' };
+    const productColors = { cattle:'#74c69d', solar_7yr:'#fec24f', solar_6yr:'#fec24f', solar_5yr:'#fcd34d', short_term:'#656565', fund_run:'#a78bfa' };
     return `
     <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
       <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--teal));display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;flex-shrink:0">${fmt.initials(inv.name)}</div>
@@ -1857,7 +1857,7 @@ function renderAllocByInvestor() {
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:3px">${activeCount} active · ${inv.items.length} total</div>
-        <div style="font-size:18px;font-weight:800;color:#D4AF37">${fmt.rand(totalCap)}</div>
+        <div style="font-size:18px;font-weight:800;color:#fec24f">${fmt.rand(totalCap)}</div>
         <div style="font-size:11px;color:#74c69d">→ ${fmt.rand(totalExp)} expected</div>
       </div>
     </div>`;
@@ -1883,14 +1883,14 @@ function viewAllocDetail(allocId) {
         ${[['Investor',a.investor_name],['Email',a.investor_email||'—'],['Product',(a.product_type||'').replace(/_/g,' ')],['Deployment',a.entity_name],['Status',a.status],['Annual Rate',((parseFloat(a.annual_rate)||0)*100).toFixed(2)+'% p.a.'],['Start Date',fmt.date(a.start_date)],['Maturity',fmt.date(a.maturity_date)],['Term',`${a.term_days||'—'} days`],['Allocation',`${(parseFloat(a.allocation_pct)||0).toFixed(2)}%`]].map(([k,v])=>`<div><div style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px">${k}</div><div style="font-size:13px;font-weight:600;color:#fff">${v}</div></div>`).join('')}
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
-        <div style="background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">CAPITAL</div><div style="font-size:18px;font-weight:800;color:#D4AF37">${fmt.rand(a.capital_paid||0)}</div></div>
+        <div style="background:rgba(254,194,79,.08);border:1px solid rgba(254,194,79,.2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">CAPITAL</div><div style="font-size:18px;font-weight:800;color:#fec24f">${fmt.rand(a.capital_paid||0)}</div></div>
         <div style="background:rgba(116,198,157,.08);border:1px solid rgba(116,198,157,.2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">LIVE NAV</div><div style="font-size:18px;font-weight:800;color:#74c69d">${fmt.rand(navNow)}</div><div style="font-size:10px;color:#74c69d">+${fmt.rand(gain)}</div></div>
         <div style="background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">EXPECTED</div><div style="font-size:18px;font-weight:800;color:#656565">${fmt.rand(a.expected_payout||0)}</div></div>
       </div>
       ${a.notes ? `<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px;font-size:12px;color:rgba(255,255,255,.6);line-height:1.5;margin-bottom:14px"><strong style="color:rgba(255,255,255,.7)">Notes:</strong> ${a.notes}</div>` : ''}
       <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid rgba(255,255,255,.07)">
         <button onclick="printInvestorStatement('${a.id}')"
-                style="background:rgba(212,175,55,.15);border:1px solid rgba(212,175,55,.3);color:#D4AF37;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
+                style="background:rgba(254,194,79,.15);border:1px solid rgba(254,194,79,.3);color:#fec24f;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
           <i class="fa-solid fa-file-invoice"></i> Investor Statement
         </button>
         <button onclick="printTaxCertificate('${a.id}')"
@@ -2021,7 +2021,7 @@ function buildForecast({ schedules, solar, loans, cattle, runs, pools, allocs })
     if (!b) return;
     const nav = (parseFloat(p.capital_deployed)||0) + (parseFloat(p.capital_deployed)||0) * (parseFloat(p.annual_rate)||0) * (Math.max(0,Math.round((new Date(p.maturity_date)-new Date(p.start_date||0))/86400000))/365);
     b.inflows += nav;
-    b.items.push({ type:'inflow', label:`Solar Maturity: ${p.project_name}`, amount: nav, product:'solar', date: p.maturity_date, icon:'fa-solar-panel', color:'#f59e0b' });
+    b.items.push({ type:'inflow', label:`Solar Maturity: ${p.project_name}`, amount: nav, product:'solar', date: p.maturity_date, icon:'fa-solar-panel', color:'#fec24f' });
     events.push({ bucket: b.key, direction:'inflow', label:`Solar Maturity: ${p.project_name}`, amount: nav, product:'solar', date: p.maturity_date });
   });
 
@@ -2081,7 +2081,7 @@ function renderForecastView({ months, events, totalInflows, totalOutflows, total
         datasets: [
           { label: 'Inflows', data: months.map(m => m.inflows), backgroundColor: 'rgba(45,212,191,.7)', borderColor:'#656565', borderWidth:1, borderRadius:4 },
           { label: 'Outflows', data: months.map(m => m.outflows), backgroundColor: 'rgba(248,113,113,.7)', borderColor:'#f87171', borderWidth:1, borderRadius:4 },
-          { label: 'Net', data: months.map(m => m.net), type:'line', borderColor:'#fbbf24', backgroundColor:'rgba(251,191,36,.1)', borderWidth:2, pointRadius:4, pointBackgroundColor:'#fbbf24', fill:false, tension:0.3, yAxisID:'y' }
+          { label: 'Net', data: months.map(m => m.net), type:'line', borderColor:'#fec24f', backgroundColor:'rgba(251,191,36,.1)', borderWidth:2, pointRadius:4, pointBackgroundColor:'#fec24f', fill:false, tension:0.3, yAxisID:'y' }
         ]
       },
       options: {
@@ -2358,7 +2358,7 @@ const AIAdvisor = {
     suggestions.push({
       product: 'solar',
       icon: 'fa-solar-panel',
-      color: '#f59e0b',
+      color: '#fec24f',
       title: 'Allocate to Solar Finance',
       amount: solarAlloc,
       score: solarScore,
@@ -2473,7 +2473,7 @@ function renderIntelligenceView(ctx) {
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:20px">
         <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:14px 16px;border:1px solid rgba(255,255,255,.07)">
           <div style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.4);margin-bottom:6px">Total Raised (Pools)</div>
-          <div style="font-size:20px;font-weight:800;color:#D4AF37">${fmt.rand(ctx.totalRaised)}</div>
+          <div style="font-size:20px;font-weight:800;color:#fec24f">${fmt.rand(ctx.totalRaised)}</div>
         </div>
         <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:14px 16px;border:1px solid rgba(255,255,255,.07)">
           <div style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.4);margin-bottom:6px">Total Deployed</div>
@@ -2498,12 +2498,12 @@ function renderIntelligenceView(ctx) {
           <span>Deployment utilisation</span><span>${ctx.deployedPct.toFixed(1)}% deployed</span>
         </div>
         <div style="background:rgba(255,255,255,.07);border-radius:8px;height:12px;overflow:hidden;display:flex">
-          <div style="width:${Math.min(ctx.solarDeployed/ctx.totalRaised*100,100).toFixed(1)}%;background:#f59e0b;transition:width .5s" title="Solar"></div>
+          <div style="width:${Math.min(ctx.solarDeployed/ctx.totalRaised*100,100).toFixed(1)}%;background:#fec24f;transition:width .5s" title="Solar"></div>
           <div style="width:${Math.min(ctx.loansDeployed/ctx.totalRaised*100,100).toFixed(1)}%;background:#656565;transition:width .5s" title="Loans"></div>
           <div style="width:${Math.min(ctx.cattleDeployed/ctx.totalRaised*100,100).toFixed(1)}%;background:#74c69d;transition:width .5s" title="Cattle"></div>
         </div>
         <div style="display:flex;gap:16px;font-size:11px;color:rgba(255,255,255,.4);margin-top:6px">
-          <span><span style="display:inline-block;width:10px;height:10px;background:#f59e0b;border-radius:2px;margin-right:4px"></span>Solar</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#fec24f;border-radius:2px;margin-right:4px"></span>Solar</span>
           <span><span style="display:inline-block;width:10px;height:10px;background:#656565;border-radius:2px;margin-right:4px"></span>Loans</span>
           <span><span style="display:inline-block;width:10px;height:10px;background:#74c69d;border-radius:2px;margin-right:4px"></span>Cattle</span>
           <span><span style="display:inline-block;width:10px;height:10px;background:rgba(255,255,255,.1);border-radius:2px;margin-right:4px"></span>Available</span>
@@ -2531,7 +2531,7 @@ function renderIntelligenceView(ctx) {
         </div>
         <div style="background:rgba(255,255,255,.04);border-radius:12px;padding:16px 20px;flex:1;min-width:180px">
           <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:5px">Pool Value (Raised)</div>
-          <div style="font-size:18px;font-weight:800;color:#D4AF37">${fmt.rand(parseFloat(ctx.nextPool.raised_amount)||0)}</div>
+          <div style="font-size:18px;font-weight:800;color:#fec24f">${fmt.rand(parseFloat(ctx.nextPool.raised_amount)||0)}</div>
         </div>
         ${ctx.maturingPools.length > 1 ? `
         <div style="background:rgba(255,255,255,.04);border-radius:12px;padding:16px 20px;flex:1;min-width:180px">
@@ -2546,12 +2546,12 @@ function renderIntelligenceView(ctx) {
         <div style="display:flex;flex-direction:column;gap:6px">
           ${ctx.maturingPools.map(p => {
             const d = Math.max(0, Math.round((new Date(p.maturity_date) - new Date()) / 86400000));
-            const urgency = d <= 14 ? '#f87171' : d <= 30 ? '#fb923c' : '#fbbf24';
+            const urgency = d <= 14 ? '#f87171' : d <= 30 ? '#fb923c' : '#fec24f';
             return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(255,255,255,.04);border-radius:8px;font-size:12px">
               <span style="color:#fff;font-weight:600">${p.pool_name || p.id}</span>
               <span style="color:rgba(255,255,255,.4)">${fmt.date(p.maturity_date)}</span>
               <span style="color:${urgency};font-weight:700">${d}d</span>
-              <span style="color:#D4AF37;font-weight:600">${fmt.rand(parseFloat(p.raised_amount)||0)}</span>
+              <span style="color:#fec24f;font-weight:600">${fmt.rand(parseFloat(p.raised_amount)||0)}</span>
             </div>`;
           }).join('')}
         </div>
@@ -2578,7 +2578,7 @@ function renderIntelligenceView(ctx) {
     <div class="panel__bd">
       <div style="display:flex;flex-direction:column;gap:14px">
         ${suggestions.map((s, i) => {
-          const scoreColor = s.score >= 70 ? '#74c69d' : s.score >= 45 ? '#fbbf24' : s.score > 0 ? '#fb923c' : '#f87171';
+          const scoreColor = s.score >= 70 ? '#74c69d' : s.score >= 45 ? '#fec24f' : s.score > 0 ? '#fb923c' : '#f87171';
           const scoreBg    = s.score >= 70 ? 'rgba(116,198,157,.1)' : s.score >= 45 ? 'rgba(251,191,36,.1)' : s.score > 0 ? 'rgba(251,146,60,.1)' : 'rgba(248,113,113,.1)';
           const rankBadge  = i === 0 && s.score > 0 ? `<span style="font-size:9px;background:rgba(168,85,247,.2);color:#c084fc;padding:2px 7px;border-radius:10px;font-weight:700;margin-left:8px">TOP PICK</span>` : '';
           return `
@@ -2637,7 +2637,7 @@ function renderIntelligenceView(ctx) {
         <tbody>
           ${ctx.upcomingPayouts.slice(0,8).map(p => {
             const daysLeft = Math.max(0,Math.round((new Date(p.scheduled_payout_date)-new Date())/86400000));
-            const urgColor = daysLeft <= 14 ? '#f87171' : daysLeft <= 30 ? '#fb923c' : '#fbbf24';
+            const urgColor = daysLeft <= 14 ? '#f87171' : daysLeft <= 30 ? '#fb923c' : '#fec24f';
             return `<tr>
               <td><div class="td-h">${p.investor_name||'—'}</div></td>
               <td class="td-m">${p.pool_name||'—'}</td>
@@ -2708,7 +2708,7 @@ function _renderFeeTypeChart(fees) {
   fees.forEach(f => { const t = f.fee_type || 'Other'; types[t] = (types[t]||0) + (parseFloat(f.fee_amount)||0); });
   const labels = Object.keys(types);
   const data   = labels.map(k => types[k]);
-  const COLORS  = ['#D4AF37','#74c69d','#656565','#fb923c','#c084fc','#f472b6'];
+  const COLORS  = ['#fec24f','#74c69d','#656565','#fb923c','#c084fc','#f472b6'];
 
   S.charts.feeType = new Chart(canvas, {
     type: 'doughnut',
@@ -2735,7 +2735,7 @@ function _renderFeeProductChart(fees) {
   fees.forEach(f => { const p = f.product_type || 'Unknown'; prods[p] = (prods[p]||0) + (parseFloat(f.fee_amount)||0); });
   const labels = Object.keys(prods);
   const data   = labels.map(k => prods[k]);
-  const COLORS  = ['#656565','#34d399','#fbbf24','#f87171','#a78bfa'];
+  const COLORS  = ['#656565','#34d399','#fec24f','#f87171','#a78bfa'];
 
   S.charts.feeProd = new Chart(canvas, {
     type: 'doughnut',
@@ -2783,7 +2783,7 @@ function _renderFeeTimelineChart(fees) {
       labels: months.map(m => m.label),
       datasets: [
         { label: 'Received', data: months.map(m => m.received), backgroundColor: 'rgba(116,198,157,.8)', borderRadius: 4 },
-        { label: 'Accrued',  data: months.map(m => m.accrued),  backgroundColor: 'rgba(212,175,55,.5)',  borderRadius: 4 }
+        { label: 'Accrued',  data: months.map(m => m.accrued),  backgroundColor: 'rgba(254,194,79,.5)',  borderRadius: 4 }
       ]
     },
     options: {
@@ -2814,7 +2814,7 @@ function renderFeeLedgerTable(fees, typeFilter, statusFilter) {
   if (sub) sub.textContent = `${rows.length} entries · Total: ${fmt.rand(rows.reduce((s,f)=>s+(parseFloat(f.fee_amount)||0),0))}`;
 
   const statusBadge = s => {
-    const cfg = { received: ['#74c69d','#052e16'], accrued: ['#fbbf24','#1c1400'], invoiced: ['#656565','#0c1a2e'], waived: ['rgba(255,255,255,.3)','rgba(0,0,0,.4)'] };
+    const cfg = { received: ['#74c69d','#052e16'], accrued: ['#fec24f','#1c1400'], invoiced: ['#656565','#0c1a2e'], waived: ['rgba(255,255,255,.3)','rgba(0,0,0,.4)'] };
     const [bg, fg] = cfg[s] || ['rgba(255,255,255,.15)','rgba(255,255,255,.6)'];
     return `<span style="background:${bg};color:${fg};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">${(s||'').toUpperCase()}</span>`;
   };
@@ -2828,7 +2828,7 @@ function renderFeeLedgerTable(fees, typeFilter, statusFilter) {
     <tr>
       <td class="td-m" style="color:rgba(255,255,255,.5);font-size:11px">${fmt.date(f.fee_date)}</td>
       <td class="td-m" style="font-weight:600;color:#fff">${f.run_name || f.run_id || '—'}</td>
-      <td class="td-m"><span style="background:rgba(212,175,55,.15);color:#D4AF37;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">${f.product_type||'—'}</span></td>
+      <td class="td-m"><span style="background:rgba(254,194,79,.15);color:#fec24f;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">${f.product_type||'—'}</span></td>
       <td class="td-m"><span style="background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);padding:2px 8px;border-radius:10px;font-size:11px">${f.fee_type||'—'}</span></td>
       <td class="td-m" style="text-align:right;color:rgba(255,255,255,.5)">${fmt.rand(parseFloat(f.capital_base)||0)}</td>
       <td class="td-m" style="text-align:right;color:rgba(255,255,255,.5);font-size:12px">${f.fee_rate ? (parseFloat(f.fee_rate)*100).toFixed(2)+'%' : '—'}</td>
@@ -2916,12 +2916,12 @@ function renderRiskDashboard({ solar, loans, cattle, runs, pools, allocations })
   /* ── HHI colouring ── */
   const hhiEl = document.getElementById('risk-hhi');
   if (hhiEl) {
-    hhiEl.style.color = hhi < 1500 ? '#74c69d' : hhi < 2500 ? '#fbbf24' : '#f87171';
+    hhiEl.style.color = hhi < 1500 ? '#74c69d' : hhi < 2500 ? '#fec24f' : '#f87171';
   }
   const hhiBadge = document.getElementById('risk-hhi-badge');
   if (hhiBadge) {
     hhiBadge.textContent = hhi < 1500 ? 'DIVERSIFIED' : hhi < 2500 ? 'MODERATE' : 'CONCENTRATED';
-    hhiBadge.style.color = hhi < 1500 ? '#74c69d' : hhi < 2500 ? '#fbbf24' : '#f87171';
+    hhiBadge.style.color = hhi < 1500 ? '#74c69d' : hhi < 2500 ? '#fec24f' : '#f87171';
   }
 
   /* ── Risk alert badge ── */
@@ -2955,7 +2955,7 @@ function _renderConcentrationChart({ solarAUM, loansAUM, cattleAUM }) {
       labels: ['Solar', 'Short-Term Loans', 'Cattle'],
       datasets: [{
         data: [solarAUM, loansAUM, cattleAUM],
-        backgroundColor: ['#D4AF37','#656565','#34d399'],
+        backgroundColor: ['#fec24f','#656565','#34d399'],
         borderWidth: 2, borderColor: '#1a1a2e'
       }]
     },
@@ -2991,7 +2991,7 @@ function _renderVintageChart(allocations) {
       datasets: [{
         label: 'Capital Deployed',
         data,
-        backgroundColor: years.map((_,i) => i === years.length-1 ? '#D4AF37' : 'rgba(212,175,55,.35)'),
+        backgroundColor: years.map((_,i) => i === years.length-1 ? '#fec24f' : 'rgba(254,194,79,.35)'),
         borderRadius: 6, borderSkipped: false
       }]
     },
@@ -3013,7 +3013,7 @@ function renderConcentrationTable({ solarAUM, loansAUM, cattleAUM, totalAUM }) {
   const tbody = document.getElementById('riskConcentrationBody');
   if (!tbody) return;
   const rows = [
-    { product:'Solar Projects',     aum: solarAUM,  color:'#D4AF37' },
+    { product:'Solar Projects',     aum: solarAUM,  color:'#fec24f' },
     { product:'Short-Term Loans',   aum: loansAUM,  color:'#656565' },
     { product:'Cattle / Livestock', aum: cattleAUM, color:'#34d399' }
   ];
@@ -3021,10 +3021,10 @@ function renderConcentrationTable({ solarAUM, loansAUM, cattleAUM, totalAUM }) {
     const pct      = totalAUM > 0 ? ((r.aum/totalAUM)*100).toFixed(1) : '0.0';
     const pctN     = parseFloat(pct);
     const hhiComp  = Math.round(pctN * pctN);  /* HHI contribution = share%² */
-    const riskColor= pctN < 25 ? '#74c69d' : pctN < 40 ? '#fbbf24' : '#f87171';
+    const riskColor= pctN < 25 ? '#74c69d' : pctN < 40 ? '#fec24f' : '#f87171';
     const riskLabel= pctN < 25 ? 'LOW' : pctN < 40 ? 'MODERATE' : 'HIGH';
     const alertIcon= pctN >= 40 ? `<i class="fa-solid fa-triangle-exclamation" style="color:#f87171"></i>` :
-                     pctN >= 25 ? `<i class="fa-solid fa-circle-exclamation" style="color:#fbbf24"></i>` :
+                     pctN >= 25 ? `<i class="fa-solid fa-circle-exclamation" style="color:#fec24f"></i>` :
                                   `<i class="fa-solid fa-circle-check" style="color:#74c69d"></i>`;
     const barWidth = Math.min(100, pctN);
     return `
@@ -3062,7 +3062,7 @@ function renderLoanStressPanel(loans) {
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
     ${[
       ['Active',   active.length,   '#74c69d'],
-      ['Overdue',  overdue.length,  '#fbbf24'],
+      ['Overdue',  overdue.length,  '#fec24f'],
       ['Defaulted',defaultd.length, '#f87171'],
       ['Paid',     paid.length,     'rgba(255,255,255,.3)']
     ].map(([l,v,c]) => `<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px;text-align:center">
@@ -3071,7 +3071,7 @@ function renderLoanStressPanel(loans) {
     </div>`).join('')}
   </div>
   <div style="margin-bottom:14px;font-size:12px;color:rgba(255,255,255,.5)">
-    Total exposure: <strong style="color:#fff">${fmt.rand(totalAmt)}</strong> · Overdue exposure: <strong style="color:#fbbf24">${fmt.rand(overAmt)}</strong>
+    Total exposure: <strong style="color:#fff">${fmt.rand(totalAmt)}</strong> · Overdue exposure: <strong style="color:#fec24f">${fmt.rand(overAmt)}</strong>
   </div>
   ${loans.length > 0 ? `
   <div style="overflow-x:auto">
@@ -3082,14 +3082,14 @@ function renderLoanStressPanel(loans) {
       <tbody>
         ${loans.slice(0,8).map(l => {
           const s = l.status||'unknown';
-          const sc = s==='overdue'?'#fbbf24':s==='defaulted'?'#f87171':s==='paid'||s==='settled'?'#74c69d':'rgba(255,255,255,.5)';
+          const sc = s==='overdue'?'#fec24f':s==='defaulted'?'#f87171':s==='paid'||s==='settled'?'#74c69d':'rgba(255,255,255,.5)';
           const daysLeft = l.end_date ? Math.round((new Date(l.end_date)-new Date())/86400000) : null;
           return `<tr>
             <td class="td-m" style="font-weight:600">${l.borrower_name||l.borrower||'—'}</td>
             <td class="td-m" style="text-align:right">${fmt.rand(parseFloat(l.loan_amount)||0)}</td>
             <td class="td-m" style="text-align:right">${l.interest_rate ? (parseFloat(l.interest_rate)*100).toFixed(1)+'%' : '—'}</td>
             <td class="td-m"><span style="color:${sc};font-weight:700;font-size:11px">${s.toUpperCase()}</span></td>
-            <td class="td-m" style="color:${daysLeft!=null&&daysLeft<14?'#f87171':daysLeft!=null&&daysLeft<30?'#fbbf24':'rgba(255,255,255,.4)'}">${daysLeft!=null ? daysLeft+'d' : (l.end_date ? fmt.date(l.end_date) : '—')}</td>
+            <td class="td-m" style="color:${daysLeft!=null&&daysLeft<14?'#f87171':daysLeft!=null&&daysLeft<30?'#fec24f':'rgba(255,255,255,.4)'}">${daysLeft!=null ? daysLeft+'d' : (l.end_date ? fmt.date(l.end_date) : '—')}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -3114,16 +3114,16 @@ function renderSolarRiskPanel(solar) {
   el.innerHTML = `
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
     ${[
-      ['Total Projects', solar.length, '#D4AF37'],
+      ['Total Projects', solar.length, '#fec24f'],
       ['Active', active.length, '#74c69d'],
-      ['Maturing <90d', maturing.length, '#fbbf24']
+      ['Maturing <90d', maturing.length, '#fec24f']
     ].map(([l,v,c]) => `<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px;text-align:center">
       <div style="font-size:22px;font-weight:800;color:${c}">${v}</div>
       <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:2px">${l}</div>
     </div>`).join('')}
   </div>
   <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;color:rgba(255,255,255,.5)">
-    <span>Total capital: <strong style="color:#D4AF37">${fmt.rand(totalCap)}</strong></span>
+    <span>Total capital: <strong style="color:#fec24f">${fmt.rand(totalCap)}</strong></span>
     <span>Rate range: <strong style="color:#fff">${minRate}% — ${maxRate}%</strong></span>
     <span>Avg rate: <strong style="color:#74c69d">${avgRate}%</strong></span>
   </div>
@@ -3133,7 +3133,7 @@ function renderSolarRiskPanel(solar) {
       <tbody>
         ${solar.slice(0,6).map(p => {
           const daysLeft = p.maturity_date ? Math.round((new Date(p.maturity_date)-now)/86400000) : null;
-          const urgColor = daysLeft!=null && daysLeft < 30 ? '#fbbf24' : daysLeft!=null && daysLeft < 0 ? '#f87171' : 'rgba(255,255,255,.4)';
+          const urgColor = daysLeft!=null && daysLeft < 30 ? '#fec24f' : daysLeft!=null && daysLeft < 0 ? '#f87171' : 'rgba(255,255,255,.4)';
           return `<tr>
             <td class="td-m" style="font-weight:600">${p.project_name||p.name||'—'}</td>
             <td class="td-m" style="text-align:right">${fmt.rand(parseFloat(p.capital_invested||p.capital)||0)}</td>
@@ -3190,7 +3190,7 @@ function renderNotifications(notifs, catFilter, sevFilter) {
 
   const sevConfig = {
     critical: { color:'#f87171', bg:'rgba(248,113,113,.1)', border:'rgba(248,113,113,.3)', icon:'fa-circle-xmark' },
-    warning:  { color:'#fbbf24', bg:'rgba(251,191,36,.1)',  border:'rgba(251,191,36,.3)',  icon:'fa-triangle-exclamation' },
+    warning:  { color:'#fec24f', bg:'rgba(251,191,36,.1)',  border:'rgba(251,191,36,.3)',  icon:'fa-triangle-exclamation' },
     info:     { color:'#656565', bg:'rgba(96,165,250,.1)',  border:'rgba(96,165,250,.25)', icon:'fa-circle-info' },
     success:  { color:'#74c69d', bg:'rgba(116,198,157,.1)', border:'rgba(116,198,157,.25)',icon:'fa-circle-check' }
   };
@@ -3433,7 +3433,7 @@ async function printInvestorStatement(allocId) {
 
   /* Action bar — screen only */
   .action-bar { background: #1a3a4a; color: #fff; padding: 12px 20px; display: flex; gap: 12px; align-items: center; justify-content: flex-end; }
-  .action-bar button { background: #FF8215; color: #fff; border: none; border-radius: 6px; padding: 8px 18px; font-size: 11pt; font-weight: 700; cursor: pointer; }
+  .action-bar button { background: #fec24f; color: #fff; border: none; border-radius: 6px; padding: 8px 18px; font-size: 11pt; font-weight: 700; cursor: pointer; }
   .action-bar .close-btn { background: rgba(255,255,255,.12); }
 </style>
 </head>
@@ -3638,7 +3638,7 @@ async function printTaxCertificate(allocId) {
   }
 
   .action-bar { background: #1a3a4a; color: #fff; padding: 12px 20px; display: flex; gap: 12px; align-items: center; justify-content: flex-end; }
-  .action-bar button { background: #FF8215; color: #fff; border: none; border-radius: 6px; padding: 8px 18px; font-size: 11pt; font-weight: 700; cursor: pointer; }
+  .action-bar button { background: #fec24f; color: #fff; border: none; border-radius: 6px; padding: 8px 18px; font-size: 11pt; font-weight: 700; cursor: pointer; }
   .action-bar .close-btn { background: rgba(255,255,255,.12); }
 </style>
 </head>
@@ -3785,7 +3785,7 @@ function renderEventTicker() {
   if (!el) return;
   const events = [];
   S.runs.filter(r => r.status === 'in_progress').forEach(r => {
-    events.push({ icon:'fa-play-circle', color:'#f59e0b', text:`<b>${r.run_name}</b> is in progress — ${fmt.rand(r.capital_deployed)} deployed` });
+    events.push({ icon:'fa-play-circle', color:'#fec24f', text:`<b>${r.run_name}</b> is in progress — ${fmt.rand(r.capital_deployed)} deployed` });
   });
   S.schedules.filter(s => s.status === 'processing').forEach(s => {
     events.push({ icon:'fa-circle-dot', color:'#656565', text:`Payout processing: <b>${s.investor_name||'Investor'}</b> — ${fmt.rand(s.payout_amount||0)}` });
@@ -4027,7 +4027,7 @@ function renderCmdResults(q) {
 function cmdHover(idx) {
   _cmdActive = idx;
   document.querySelectorAll('.cmd-item').forEach((el,i) => {
-    el.style.background = i === idx ? 'rgba(212,175,55,.12)' : '';
+    el.style.background = i === idx ? 'rgba(254,194,79,.12)' : '';
   });
 }
 
@@ -4076,7 +4076,7 @@ function renderScenarioInputs() {
   if (!grid) return;
   grid.innerHTML = SCENARIOS.map((s,i) => `
     <div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:16px">
-      <div style="font-size:12px;font-weight:700;color:#D4AF37;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">${s.label}</div>
+      <div style="font-size:12px;font-weight:700;color:#fec24f;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">${s.label}</div>
       <div class="f-group" style="margin-bottom:10px">
         <label class="f-label" style="font-size:11px">Capital (R)</label>
         <input type="number" class="f-input" style="font-size:13px;padding:6px 10px" value="${s.capital}"
@@ -4107,10 +4107,10 @@ function updateScenarios() {
     const moic     = (s.capital + netRet) / s.capital;
     const ann      = s.days > 0 ? (Math.pow(moic, 365/s.days) - 1) : 0;
     return `<div style="background:rgba(255,255,255,.04);border-radius:8px;padding:14px">
-      <div style="font-size:11px;font-weight:700;color:#D4AF37;margin-bottom:10px;text-transform:uppercase">${s.label}</div>
+      <div style="font-size:11px;font-weight:700;color:#fec24f;margin-bottom:10px;text-transform:uppercase">${s.label}</div>
       <div style="display:flex;flex-direction:column;gap:7px;font-size:12px">
         <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Gross Return</span><span style="color:#4ade80;font-weight:600">${fmt.rand(grossRet)}</span></div>
-        <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Mgmt Fee (15%)</span><span style="color:#f59e0b">${fmt.rand(mgmtFee)}</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Mgmt Fee (15%)</span><span style="color:#fec24f">${fmt.rand(mgmtFee)}</span></div>
         <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,.08);padding-top:7px"><span style="color:rgba(255,255,255,.7);font-weight:600">Net Return</span><span style="color:#4ade80;font-weight:700">${fmt.rand(netRet)}</span></div>
         <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">MOIC</span><span style="color:#c084fc;font-weight:600">${moic.toFixed(3)}x</span></div>
         <div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,.5)">Ann. Return</span><span style="color:#656565;font-weight:600">${fmt.pct(ann)}</span></div>
