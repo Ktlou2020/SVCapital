@@ -474,6 +474,7 @@ const Utils = {
       gridfarmer:     { label: 'GridFarmer',              icon: 'fa-seedling',    color: '#65ed00', badgeClass: 'badge--green'  },
       other:          { label: 'Other',                   icon: 'fa-circle',      color: '#656565', badgeClass: 'badge--gray' },
     };
+    const KNOWN_CI = new Set(['cattle','solar','solar_5yr','solar_6yr','solar_7yr','short_term','smme','delivery_bike','delivery_bikes','gridfarmer']);
     const base = map[type] || { label: type || 'Other', icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
     const cached = this._productCache[type];
     if (!cached) return base;
@@ -481,7 +482,7 @@ const Utils = {
       ...base,
       label:      cached.label      || base.label,
       icon:       cached.icon       || base.icon,
-      color:      cached.color      || base.color,
+      color:      KNOWN_CI.has(type) ? base.color : (cached.color || base.color),
       badgeClass: cached.badge_class || base.badgeClass,
     };
   },
