@@ -1340,7 +1340,7 @@ function renderInvestorsTable() {
                 <span class="td-strong" style="font-size:0.81rem">${_esc(sa.name || '—')}</span>
                 <span style="background:rgba(237,165,255,0.18);color:#eda5ff;border:1px solid rgba(237,165,255,0.35);border-radius:4px;font-size:0.62rem;font-weight:700;padding:1px 6px;white-space:nowrap">Sub Account</span>
               </div>
-              <div style="font-size:0.67rem;font-family:monospace;color:var(--gold);${_trunc}">${saRef}</div>
+              <div style="font-size:0.67rem;font-family:monospace;color:#ffe86a;${_trunc}">${saRef}</div>
               <div style="font-size:0.67rem;color:var(--text-muted);${_trunc}">${typeCap}</div>
             </div>
           </div>
