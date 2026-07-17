@@ -2114,8 +2114,8 @@ html body .my-inv-card .btn--secondary:hover {
   gap: 4px;
   padding: 8px 12px;
   border-radius: 10px;
-  border: 1.5px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.05);
+  border: 1.5px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.09);
   cursor: pointer;
   flex-shrink: 0;
   min-width: 52px;
@@ -2123,18 +2123,25 @@ html body .my-inv-card .btn--secondary:hover {
 }
 .prod-type-tile i {
   font-size: 1rem;
-  color: rgba(255,255,255,0.5);
+  color: rgba(255,255,255,0.65);
   display: block;
 }
 .prod-type-tile span {
   font-size: 0.65rem;
   font-weight: 700;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.75);
   text-align: center;
   line-height: 1.2;
   display: block;
   white-space: nowrap;
 }
+/* light mode */
+body:not(.dark-mode) .prod-type-tile {
+  background: #e9eaec;
+  border-color: rgba(0,0,0,0.18);
+}
+body:not(.dark-mode) .prod-type-tile i    { color: #4b5563; }
+body:not(.dark-mode) .prod-type-tile span { color: #1f2937; }
 .prod-type-tile.active {
   background: rgba(254,194,79,0.15);
   border-color: #fec24f;
@@ -2142,6 +2149,10 @@ html body .my-inv-card .btn--secondary:hover {
 .prod-type-tile.active i    { color: #fec24f; }
 .prod-type-tile.active span { color: #fec24f; }
 .prod-type-tile:hover:not(.active) {
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.13);
+  border-color: rgba(255,255,255,0.28);
+}
+body:not(.dark-mode) .prod-type-tile:hover:not(.active) {
+  background: #d1d5db;
+  border-color: rgba(0,0,0,0.25);
 }
