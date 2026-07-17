@@ -11525,18 +11525,19 @@ function _renderAnalyticsAllocChart() {
   const byPool = {};
   active.forEach(i => {
     const name = i.pool_name || 'Other';
-    byPool[name] = (byPool[name] || 0) + (parseFloat(i.amount) || 0);
+    if (!byPool[name]) byPool[name] = { amount: 0, product_type: i.product_type || 'other' };
+    byPool[name].amount += parseFloat(i.amount) || 0;
   });
-  const entries = Object.entries(byPool).sort((a, b) => b[1] - a[1]);
-  const total   = entries.reduce((s, [, v]) => s + v, 0);
-  const COLORS  = ['#fec24f','#eda5ff','#656565','#22c55e','#ef4444','#656565','#f97316','#eda5ff'];
+  const entries = Object.entries(byPool).sort((a, b) => b[1].amount - a[1].amount);
+  const total   = entries.reduce((s, [, v]) => s + v.amount, 0);
+  const colors  = entries.map(([, v]) => Utils.productColor(v.product_type));
 
   if (PORTAL.charts.analyticsAlloc) { PORTAL.charts.analyticsAlloc.destroy(); }
   PORTAL.charts.analyticsAlloc = new Chart(ctx, {
     type: 'doughnut',
     data: {
       labels: entries.map(([n]) => n),
-      datasets: [{ data: entries.map(([,v]) => v), backgroundColor: COLORS, borderWidth: 2, borderColor: '#fff' }],
+      datasets: [{ data: entries.map(([, v]) => v.amount), backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }],
     },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '62%',
@@ -11548,9 +11549,9 @@ function _renderAnalyticsAllocChart() {
   if (list) {
     list.innerHTML = entries.map(([name, val], i) => `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${COLORS[i % COLORS.length]};flex-shrink:0"></span>
+        <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${colors[i]};flex-shrink:0"></span>
         <span style="font-size:0.78rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-body)">${_esc(name)}</span>
-        <span style="font-size:0.78rem;font-weight:700;color:var(--text-body)">${total > 0 ? ((val/total)*100).toFixed(1) : 0}%</span>
+        <span style="font-size:0.78rem;font-weight:700;color:var(--text-body)">${total > 0 ? ((val.amount/total)*100).toFixed(1) : 0}%</span>
       </div>`).join('') || '<p style="font-size:0.78rem;color:var(--text-muted)">No investment data yet.</p>';
   }
 }
