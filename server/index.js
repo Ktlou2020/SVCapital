@@ -163,6 +163,7 @@ app.use('/api/fica',        require('./routes/fica'));
 app.use('/api/payments',    require('./routes/payments'));
 app.use('/api/admin',       require('./routes/broadcast'));
 app.use('/api/admin',       require('./routes/bankVerify'));
+app.use('/api/admin',       require('./routes/manualCredit'));
 app.use('/api/push',        require('./routes/push'));
 // Mobile app push-token shortcut (Capacitor bridge calls /api/investors/push-token)
 app.post('/api/investors/push-token', require('./middleware/auth').requireAuth, (req, res, next) => {

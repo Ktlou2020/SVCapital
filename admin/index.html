@@ -71,6 +71,9 @@
         <i class="fa-solid fa-earth-africa"></i> International Interest
         <span class="nav-badge" id="intlInterestBadge" style="display:none">0</span>
       </button>
+      <button class="nav-item" data-view="fica-pipeline" onclick="navigate('fica-pipeline', this)">
+        <i class="fa-solid fa-filter"></i> FICA Pipeline
+      </button>
 
       <div class="nav-section-label">Investments</div>
       <button class="nav-item" data-view="products" onclick="navigate('products', this)">
@@ -705,6 +708,9 @@
               <div class="table-card__sub">Investor payout and reinvestment instructions</div>
             </div>
             <div class="table-card__controls">
+              <button class="btn btn--success btn--sm" onclick="processAllMaturity()">
+                <i class="fa-solid fa-play"></i> Process All Submitted
+              </button>
               <button class="btn btn--secondary btn--sm" onclick="exportMaturityCSV()">
                 <i class="fa-solid fa-file-csv"></i> Export
               </button>
@@ -1705,21 +1711,63 @@
             <table class="data-table" style="table-layout:fixed;width:100%">
               <thead>
                 <tr>
-                  <th style="width:22%">Investor</th>
-                  <th style="width:13%">Total Deposited</th>
-                  <th style="width:13%">Total Invested</th>
-                  <th style="width:13%">Wallet Balance</th>
-                  <th style="width:13%">Expected Wallet</th>
-                  <th style="width:13%">Variance</th>
-                  <th style="width:13%">Status</th>
+                  <th style="width:20%">Investor</th>
+                  <th style="width:12%">Total Deposited</th>
+                  <th style="width:12%">Total Invested</th>
+                  <th style="width:12%">Wallet Balance</th>
+                  <th style="width:12%">Expected Wallet</th>
+                  <th style="width:10%">Variance</th>
+                  <th style="width:12%">Status</th>
+                  <th style="width:10%">Actions</th>
                 </tr>
               </thead>
               <tbody id="reconcBody">
-                <tr><td colspan="7" style="text-align:center;padding:40px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
+                <tr><td colspan="8" style="text-align:center;padding:40px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
               </tbody>
             </table>
           </div>
           <div class="table-card__footer" id="reconcFooter" style="padding:10px 18px;font-size:12px;color:#7a92a8"></div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: FICA PIPELINE
+      ══════════════════════════════════ -->
+      <div class="view" id="view-fica-pipeline">
+        <!-- Stage tiles -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px" id="ficaPipelineTiles"></div>
+
+        <!-- Filter bar -->
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;flex:1;min-width:200px">
+            <i class="fa-solid fa-magnifying-glass" style="color:#7a92a8;font-size:12px"></i>
+            <input type="text" id="ficaPipelineSearch" placeholder="Search investor name or email…" style="background:none;border:none;outline:none;color:#e8edf2;font-size:13px;width:100%" oninput="_renderFicaPipeline()">
+          </div>
+          <button class="btn btn--secondary btn--sm" onclick="loadFicaPipeline()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+        </div>
+
+        <!-- Table -->
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">FICA / KYC Pipeline</div>
+              <div class="table-card__sub" id="ficaPipelineSubtitle">Investors by FICA stage</div>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th style="width:28%">Investor</th>
+                <th style="width:15%">Registered</th>
+                <th style="width:18%">FICA Stage</th>
+                <th style="width:15%">Documents</th>
+                <th style="width:14%">Actions</th>
+              </tr></thead>
+              <tbody id="ficaPipelineBody">
+                <tr><td colspan="5" style="text-align:center;padding:40px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -2531,6 +2579,33 @@
       <button class="modal__close" aria-label="Close" onclick="Modal.close('subAccountModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="saModalBody" style="padding-top:4px"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="manualCreditModal" onclick="if(event.target===this)Modal.close('manualCreditModal')">
+  <div class="modal" style="max-width:420px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-plus-circle" style="color:#22c55e;margin-right:8px"></i>Manual Wallet Credit</span>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin-top:2px" id="manualCreditInvestorName"></div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('manualCreditModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="manualCreditInvestorId">
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Amount (R)</label>
+        <input type="number" id="manualCreditAmount" class="form-input" placeholder="e.g. 5000.00" min="0.01" step="0.01">
+      </div>
+      <div class="form-group" style="margin-bottom:18px">
+        <label class="form-label">Notes / Reason</label>
+        <textarea id="manualCreditNotes" class="form-input" rows="3" placeholder="e.g. EFT reference ABC123 matched — manual reconciliation credit" style="resize:vertical"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn--secondary" onclick="Modal.close('manualCreditModal')">Cancel</button>
+        <button class="btn btn--success" onclick="submitManualCredit()"><i class="fa-solid fa-plus"></i> Credit Wallet</button>
+      </div>
+    </div>
   </div>
 </div>
 
