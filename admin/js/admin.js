@@ -5588,14 +5588,6 @@ async function resetTermsToDefault() {
   }
 }
 
-async function loadSettings() {
-  try {
-    const res = await API.settings.list();
-    STATE.settings = res.data || [];
-    renderSettings();
-  } catch (e) { Toast.error('Failed to load settings'); }
-}
-
 function renderSettings() {
   const body = document.getElementById('settingsBody');
   if (!STATE.settings.length) {
@@ -5620,6 +5612,151 @@ async function saveSettings() {
     await Promise.all(updates);
     Toast.success('Settings saved successfully');
   } catch (e) { Toast.error('Failed to save settings'); }
+}
+
+/* ─── 2FA / Account Security ─── */
+let _tfa2FASecret = null; // holds pending secret during setup
+
+async function loadSettings() {
+  try {
+    const res = await API.settings.list();
+    STATE.settings = res.data || [];
+    renderSettings();
+    await tfa_loadStatus(); // load 2FA status alongside platform settings
+  } catch (e) { Toast.error('Failed to load settings'); }
+}
+
+async function tfa_loadStatus() {
+  try {
+    const res = await fetch('/api/auth/2fa/status', { credentials: 'include' });
+    const { enabled } = await res.json();
+    const badge = document.getElementById('tfa-status-badge');
+    const enableBtn = document.getElementById('tfa-enable-btn');
+    const disableBtn = document.getElementById('tfa-disable-btn');
+    if (badge) {
+      badge.textContent = enabled ? '✓ Enabled' : '✗ Not enabled';
+      badge.style.background = enabled ? 'rgba(34,197,94,.15)' : 'rgba(239,68,68,.12)';
+      badge.style.color = enabled ? '#22c55e' : '#ef4444';
+    }
+    if (enableBtn) enableBtn.style.display = enabled ? 'none' : '';
+    if (disableBtn) disableBtn.style.display = enabled ? '' : 'none';
+    tfaCancelSetup();
+    tfaCancelDisable();
+  } catch (e) { console.error('[tfa_loadStatus]', e); }
+}
+
+async function tfaStartSetup() {
+  try {
+    const res = await fetch('/api/auth/2fa/setup', { method: 'POST', credentials: 'include' });
+    if (!res.ok) throw new Error((await res.json()).error || 'Setup failed');
+    const { secret, uri } = await res.json();
+    _tfa2FASecret = secret;
+    // render QR
+    const container = document.getElementById('tfa-qr-container');
+    if (container) {
+      container.innerHTML = '';
+      if (typeof QRCode !== 'undefined') {
+        new QRCode(container, { text: uri, width: 164, height: 164, correctLevel: QRCode.CorrectLevel.M });
+      } else {
+        container.innerHTML = '<div style="font-size:0.72rem;color:#7a92a8;padding:10px">QR library not loaded — use the key below</div>';
+      }
+    }
+    const keyEl = document.getElementById('tfa-manual-key');
+    if (keyEl) keyEl.textContent = secret.match(/.{1,4}/g).join(' ');
+    document.getElementById('tfa-step-0').style.display = 'none';
+    document.getElementById('tfa-step-1').style.display = '';
+    document.getElementById('tfa-step-2').style.display = 'none';
+    document.getElementById('tfa-code-input').value = '';
+    setTimeout(() => document.getElementById('tfa-code-input')?.focus(), 100);
+  } catch (e) { Toast.error('Failed to start setup: ' + e.message); }
+}
+
+function tfaCancelSetup() {
+  _tfa2FASecret = null;
+  const s0 = document.getElementById('tfa-step-0');
+  const s1 = document.getElementById('tfa-step-1');
+  const s2 = document.getElementById('tfa-step-2');
+  if (s0) s0.style.display = '';
+  if (s1) s1.style.display = 'none';
+  if (s2) s2.style.display = 'none';
+}
+
+async function tfaVerifyEnable() {
+  const code = (document.getElementById('tfa-code-input')?.value || '').replace(/\s/g, '');
+  if (code.length !== 6) { Toast.error('Enter the 6-digit code from your authenticator app'); return; }
+  if (!_tfa2FASecret) { Toast.error('Setup session expired — please start again'); tfaCancelSetup(); return; }
+  try {
+    const res = await fetch('/api/auth/2fa/enable', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: _tfa2FASecret, token: code }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Verification failed');
+    // Show recovery codes
+    const codesEl = document.getElementById('tfa-recovery-codes');
+    if (codesEl) {
+      codesEl.innerHTML = (data.recoveryCodes || []).map(c =>
+        `<div style="background:rgba(0,0,0,.2);border-radius:4px;padding:4px 6px;text-align:center">${c}</div>`
+      ).join('');
+    }
+    document.getElementById('tfa-step-0').style.display = 'none';
+    document.getElementById('tfa-step-1').style.display = 'none';
+    document.getElementById('tfa-step-2').style.display = '';
+    Toast.success('2FA enabled successfully');
+    await tfa_loadStatus();
+  } catch (e) { Toast.error(e.message || 'Invalid code — try again'); }
+}
+
+function tfaDoneSetup() {
+  _tfa2FASecret = null;
+  tfaCancelSetup();
+  tfa_loadStatus();
+}
+
+function tfaShowDisable() {
+  document.getElementById('tfa-step-0').style.display = 'none';
+  document.getElementById('tfa-step-disable').style.display = '';
+  document.getElementById('tfa-step-1').style.display = 'none';
+  document.getElementById('tfa-step-2').style.display = 'none';
+  setTimeout(() => document.getElementById('tfa-disable-code')?.focus(), 100);
+}
+
+function tfaCancelDisable() {
+  const el = document.getElementById('tfa-step-disable');
+  const s0 = document.getElementById('tfa-step-0');
+  if (el) el.style.display = 'none';
+  if (s0) s0.style.display = '';
+}
+
+async function tfaConfirmDisable() {
+  const code = (document.getElementById('tfa-disable-code')?.value || '').replace(/\s/g, '');
+  if (code.length !== 6) { Toast.error('Enter the 6-digit code from your authenticator app'); return; }
+  try {
+    const res = await fetch('/api/auth/2fa/disable', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: code }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    Toast.success('2FA disabled');
+    tfaCancelDisable();
+    await tfa_loadStatus();
+  } catch (e) { Toast.error(e.message || 'Invalid code'); }
+}
+
+async function signOutAllDevices() {
+  if (!await Confirm.ask('Sign out all devices?', {
+    body: 'This will immediately invalidate all active sessions on every device. You will need to log in again.',
+    confirmLabel: 'Sign Out All',
+  })) return;
+  try {
+    const res = await fetch('/api/auth/signout-all', { method: 'POST', credentials: 'include' });
+    if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+    Toast.success('All sessions revoked — redirecting to login…');
+    setTimeout(() => { window.location.href = '/login.html'; }, 1500);
+  } catch (e) { Toast.error('Failed: ' + e.message); }
 }
 
 /* ═══════════════════════════════════════════════
