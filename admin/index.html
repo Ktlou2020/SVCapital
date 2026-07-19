@@ -1362,6 +1362,61 @@
             </div>
           </div>
           <div>
+            <!-- Security / 2FA Panel -->
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-shield-halved" style="color:#eda5ff;margin-right:6px"></i>Account Security</span></div>
+              <div class="panel__body" id="security2FAPanel">
+                <div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:14px">Two-factor authentication adds a second layer of protection to your admin account.</div>
+                <div id="tfa-status-row" style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+                  <span id="tfa-status-badge" style="font-size:0.75rem;font-weight:700;border-radius:6px;padding:3px 10px">—</span>
+                </div>
+                <!-- Step 0: action buttons -->
+                <div id="tfa-step-0">
+                  <button id="tfa-enable-btn" class="btn btn--primary btn--sm" onclick="tfaStartSetup()" style="display:none;width:100%;margin-bottom:8px"><i class="fa-solid fa-qrcode"></i> Set Up Authenticator</button>
+                  <button id="tfa-disable-btn" class="btn btn--danger btn--sm" onclick="tfaShowDisable()" style="display:none;width:100%"><i class="fa-solid fa-shield-xmark"></i> Disable 2FA</button>
+                </div>
+                <!-- Step 1: QR + verify -->
+                <div id="tfa-step-1" style="display:none">
+                  <div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:10px">Scan this QR code with Google Authenticator or Authy, then enter the 6-digit code to confirm.</div>
+                  <div style="text-align:center;margin-bottom:12px">
+                    <div id="tfa-qr-container" style="display:inline-block;background:#fff;padding:8px;border-radius:8px;border:3px solid var(--border)"></div>
+                  </div>
+                  <div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:6px;text-align:center">Or enter manually:</div>
+                  <div id="tfa-manual-key" style="font-family:monospace;font-size:0.72rem;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:6px;padding:6px 10px;text-align:center;word-break:break-all;margin-bottom:12px;color:#eda5ff"></div>
+                  <input type="text" id="tfa-code-input" inputmode="numeric" maxlength="7" placeholder="000 000" style="width:100%;text-align:center;font-size:1.3rem;font-weight:700;letter-spacing:0.2em;padding:10px;border:2px solid var(--border);border-radius:8px;background:var(--input-bg,rgba(255,255,255,.05));color:var(--text);outline:none;margin-bottom:10px" oninput="this.value=this.value.replace(/[^0-9 ]/g,'')" onkeydown="if(event.key==='Enter')tfaVerifyEnable()">
+                  <div style="display:flex;gap:8px">
+                    <button class="btn btn--secondary btn--sm" onclick="tfaCancelSetup()" style="flex:1">Cancel</button>
+                    <button class="btn btn--primary btn--sm" onclick="tfaVerifyEnable()" style="flex:2"><i class="fa-solid fa-check"></i> Verify &amp; Enable</button>
+                  </div>
+                </div>
+                <!-- Step 2: recovery codes -->
+                <div id="tfa-step-2" style="display:none">
+                  <div style="background:rgba(237,165,255,.08);border:1px solid rgba(237,165,255,.2);border-radius:8px;padding:12px;margin-bottom:12px">
+                    <div style="font-size:0.78rem;font-weight:700;color:#eda5ff;margin-bottom:8px"><i class="fa-solid fa-key"></i> Save your recovery codes</div>
+                    <div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:10px">If you lose your phone, use one of these codes to sign in. Each code can only be used once.</div>
+                    <div id="tfa-recovery-codes" style="font-family:monospace;font-size:0.75rem;display:grid;grid-template-columns:1fr 1fr;gap:4px"></div>
+                  </div>
+                  <button class="btn btn--primary btn--sm" onclick="tfaDoneSetup()" style="width:100%"><i class="fa-solid fa-check-circle"></i> I've saved my codes — Done</button>
+                </div>
+                <!-- Disable form -->
+                <div id="tfa-step-disable" style="display:none">
+                  <div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:10px">Enter your current authenticator code to confirm disabling 2FA.</div>
+                  <input type="text" id="tfa-disable-code" inputmode="numeric" maxlength="7" placeholder="000 000" style="width:100%;text-align:center;font-size:1.3rem;font-weight:700;letter-spacing:0.2em;padding:10px;border:2px solid var(--border);border-radius:8px;background:var(--input-bg,rgba(255,255,255,.05));color:var(--text);outline:none;margin-bottom:10px" oninput="this.value=this.value.replace(/[^0-9 ]/g,'')">
+                  <div style="display:flex;gap:8px">
+                    <button class="btn btn--secondary btn--sm" onclick="tfaCancelDisable()" style="flex:1">Cancel</button>
+                    <button class="btn btn--danger btn--sm" onclick="tfaConfirmDisable()" style="flex:2"><i class="fa-solid fa-shield-xmark"></i> Disable 2FA</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Session revocation -->
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-right-from-bracket" style="color:#ef4444;margin-right:6px"></i>Active Sessions</span></div>
+              <div class="panel__body">
+                <div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:14px">Sign out all devices immediately. Use this if you suspect unauthorised access.</div>
+                <button class="btn btn--danger btn--sm" style="width:100%" onclick="signOutAllDevices()"><i class="fa-solid fa-ban"></i> Sign Out All Devices</button>
+              </div>
+            </div>
             <div class="panel mb-20">
               <div class="panel__header"><span class="panel__title">Compliance Info</span></div>
               <div class="panel__body">
@@ -2611,6 +2666,7 @@
 
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=2"></script>
