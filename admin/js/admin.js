@@ -1536,6 +1536,15 @@ function viewSubAccount(saId) {
   Modal.open('subAccountModal');
 }
 
+function _invTab(name) {
+  document.querySelectorAll('.inv-tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('[id^="invPanel-"]').forEach(p => { p.style.display = 'none'; });
+  const btn = document.getElementById('invTab-' + name);
+  const panel = document.getElementById('invPanel-' + name);
+  if (btn) btn.classList.add('active');
+  if (panel) panel.style.display = '';
+}
+
 async function viewInvestor(id) {
   const inv = STATE.investors.find(i => i.id === id);
   if (!inv) return;
@@ -1580,89 +1589,106 @@ async function viewInvestor(id) {
   const activeInvCount= invsts.filter(i=>i.status==='active').length;
 
   document.getElementById('invDetailBody').innerHTML = `
-    <div class="grid-2 mb-16">
+  <div class="tab-bar" style="display:flex;gap:4px;padding:4px;border-radius:10px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="tab-btn inv-tab-btn active" id="invTab-overview"      onclick="_invTab('overview')"><i class="fa-solid fa-gauge-simple" style="margin-right:5px"></i>Overview</button>
+    <button class="tab-btn inv-tab-btn"        id="invTab-profile"       onclick="_invTab('profile')"><i class="fa-solid fa-address-card" style="margin-right:5px"></i>Profile</button>
+    <button class="tab-btn inv-tab-btn"        id="invTab-surveys"       onclick="_invTab('surveys')"><i class="fa-solid fa-clipboard-list" style="margin-right:5px"></i>Surveys</button>
+    <button class="tab-btn inv-tab-btn"        id="invTab-investments"   onclick="_invTab('investments')"><i class="fa-solid fa-chart-line" style="margin-right:5px"></i>Investments (${invsts.length})</button>
+    <button class="tab-btn inv-tab-btn"        id="invTab-transactions"  onclick="_invTab('transactions')"><i class="fa-solid fa-arrows-rotate" style="margin-right:5px"></i>Transactions</button>
+    <button class="tab-btn inv-tab-btn"        id="invTab-admin"         onclick="_invTab('admin')"><i class="fa-solid fa-shield-halved" style="margin-right:5px"></i>Admin</button>
+  </div>
+
+  <!-- ── Overview ── -->
+  <div id="invPanel-overview">
+    <div class="flex-center gap-12 mb-16">
+      <div style="width:52px;height:52px;border-radius:50%;background:${avatarColor};color:#fff;font-size:1rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${Utils.initials(inv.first_name + ' ' + inv.last_name)}</div>
       <div>
-        <div class="flex-center gap-12 mb-16">
-          <div style="width:52px;height:52px;border-radius:50%;background:${avatarColor};color:#fff;font-size:1rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${Utils.initials(inv.first_name + ' ' + inv.last_name)}</div>
-          <div>
-            <div style="font-size:1.15rem;font-weight:800;color:var(--text)">${_esc(inv.first_name)||''} ${_esc(inv.last_name)||''}</div>
-            <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${_esc(inv.id)||''}<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id||"")},this)' title="Copy account number"><i class="fa-regular fa-copy"></i></button></div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
-              ${Utils.statusBadge(inv.status)}
-              ${inv.kyc_status==='approved'?'<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>':'<span class="badge badge--yellow">KYC Pending</span>'}
-            </div>
-          </div>
-        </div>
-        <div class="info-list">
-          <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${_esc(inv.email)||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.email)},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-          <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(inv.phone)||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.phone)},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-          <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${_esc(inv.id_number)||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id_number)},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
-          <div class="info-row"><span class="info-row__label">Province</span><span class="info-row__value">${_esc((inv.province||'').trim())||'—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Address</span><span class="info-row__value" style="font-size:0.78rem">${_esc(inv.address)||'—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Occupation</span><span class="info-row__value">${_esc(inv.occupation)||'—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Employer</span><span class="info-row__value">${_esc(invProfile.employer||'')||'—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Kin Contact</span><span class="info-row__value">${_esc(invProfile.kin_contact||'')||'—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${_esc(inv.risk_profile)||'—'}</span></div>
-          <div class="info-row"><span class="info-row__label">Date Joined</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
-        </div>
-      </div>
-      <div>
-        <div class="panel mb-12">
-          <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-coins" style="color:var(--orange);margin-right:6px"></i>Portfolio Summary</span></div>
-          <div class="panel__body">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-              <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
-                <div style="font-size:1.05rem;font-weight:800;color:#fec24f">${Utils.rand(inv.wallet_balance)}</div>
-                <div style="font-size:0.72rem;color:var(--text-muted)">Wallet</div>
-              </div>
-              <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
-                <div style="font-size:1.05rem;font-weight:800;color:var(--text)">${Utils.rand(totalInvested||inv.total_invested)}</div>
-                <div style="font-size:0.72rem;color:var(--text-muted)">Total Invested</div>
-              </div>
-              <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
-                <div style="font-size:1.05rem;font-weight:800;color:#22c55e">${Utils.rand(inv.total_returns)}</div>
-                <div style="font-size:0.72rem;color:var(--text-muted)">Returns</div>
-              </div>
-              <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
-                <div style="font-size:1.05rem;font-weight:800;color:#656565">${invsts.length} <span style="font-size:0.72rem;font-weight:400">(${activeInvCount} active)</span></div>
-                <div style="font-size:0.72rem;color:var(--text-muted)">Investments</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="panel mb-12">
-          <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-building-columns" style="color:var(--orange);margin-right:6px"></i>Bank Account</span></div>
-          <div class="panel__body">
-            <div class="info-list">
-              <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">${bankName}</span></div>
-              <div class="info-row"><span class="info-row__label">Account Holder</span><span class="info-row__value">${bankHolder}</span></div>
-              <div class="info-row"><span class="info-row__label">Account No.</span><span class="info-row__value" style="font-family:monospace">${bankMasked}</span></div>
-              <div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value">${bankBranch}</span></div>
-              <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value"><span class="badge ${bCls[bStatus]}">${bLbl[bStatus]}</span></span></div>
-            </div>
-            ${bStatus!=='none'?`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-              <button class="btn btn--secondary btn--sm" onclick='viewBankProof(${JSON.stringify(inv.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> View Proof of Bank</button>
-              ${bStatus==='pending'?`
-                <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
-                <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
-              `:''}
-            </div>`:''}
-          </div>
+        <div style="font-size:1.15rem;font-weight:800;color:var(--text)">${_esc(inv.first_name)||''} ${_esc(inv.last_name)||''}</div>
+        <div style="font-family:monospace;font-size:0.78rem;color:var(--text-muted);margin:2px 0">${_esc(inv.id)||''}<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id||"")},this)' title="Copy account number"><i class="fa-regular fa-copy"></i></button></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+          ${Utils.statusBadge(inv.status)}
+          ${inv.kyc_status==='approved'?'<span class="badge badge--green"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>':'<span class="badge badge--yellow">KYC Pending</span>'}
         </div>
       </div>
     </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:1.05rem;font-weight:800;color:#fec24f">${Utils.rand(inv.wallet_balance)}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Wallet</div>
+      </div>
+      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:1.05rem;font-weight:800;color:var(--text)">${Utils.rand(totalInvested||inv.total_invested)}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Total Invested</div>
+      </div>
+      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:1.05rem;font-weight:800;color:#22c55e">${Utils.rand(inv.total_returns)}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Returns</div>
+      </div>
+      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:1.05rem;font-weight:800;color:#656565">${invsts.length}<span style="font-size:0.72rem;font-weight:400"> (${activeInvCount} active)</span></div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Investments</div>
+      </div>
+    </div>
+    <div class="panel mb-12">
+      <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-building-columns" style="color:var(--orange);margin-right:6px"></i>Bank Account</span></div>
+      <div class="panel__body">
+        <div class="info-list">
+          <div class="info-row"><span class="info-row__label">Bank</span><span class="info-row__value">${bankName}</span></div>
+          <div class="info-row"><span class="info-row__label">Account Holder</span><span class="info-row__value">${bankHolder}</span></div>
+          <div class="info-row"><span class="info-row__label">Account No.</span><span class="info-row__value" style="font-family:monospace">${bankMasked}</span></div>
+          <div class="info-row"><span class="info-row__label">Branch Code</span><span class="info-row__value">${bankBranch}</span></div>
+          <div class="info-row"><span class="info-row__label">Status</span><span class="info-row__value"><span class="badge ${bCls[bStatus]}">${bLbl[bStatus]}</span></span></div>
+        </div>
+        ${bStatus!=='none'?`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn--secondary btn--sm" onclick='viewBankProof(${JSON.stringify(inv.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> View Proof of Bank</button>
+          ${bStatus==='pending'?`
+            <button class="btn btn--success btn--sm" onclick='approveBankAccount(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-check"></i> Approve</button>
+            <button class="btn btn--danger btn--sm" onclick='rejectBankAccount(${JSON.stringify(inv.id)})'><i class="fa-solid fa-xmark"></i> Reject</button>
+          `:''}
+        </div>`:''}
+      </div>
+    </div>
+    <div class="flex-between mt-16" style="flex-wrap:wrap;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn--success btn--sm" onclick='depositToInvestor(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, ${inv.wallet_balance || 0})'><i class="fa-solid fa-wallet"></i> Add Funds</button>
+        <button class="btn btn--secondary btn--sm" onclick='approveInvestorFica(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-id-card"></i> Approve FICA</button>
+        ${hasLoginAccount === false ? `<button class="btn btn--secondary btn--sm" id="invInviteBtn" onclick='sendLoginInvite(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.email)}, this)'><i class="fa-solid fa-envelope"></i> Send Login Invite</button>` : hasLoginAccount === true ? `<span class="badge badge--green" style="padding:6px 10px"><i class="fa-solid fa-circle-check"></i> Has login account</span>` : ''}
+        ${userRecord?.totp_enabled ? `<button class="btn btn--sm" style="background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3)" onclick='adminReset2FA(${JSON.stringify(userRecord.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, this)'><i class="fa-solid fa-shield-xmark"></i> Reset 2FA</button>` : ''}
+        <button class="btn btn--danger btn--sm" onclick='confirmDeleteInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-trash"></i> Delete</button>
+      </div>
+      <button class="btn btn--primary btn--sm" onclick='Modal.close("investorDetailModal")'><i class="fa-solid fa-check"></i> Done</button>
+    </div>
+  </div>
 
+  <!-- ── Profile ── -->
+  <div id="invPanel-profile" style="display:none">
+    <div class="info-list">
+      <div class="info-row"><span class="info-row__label">Email</span><span class="info-row__value">${_esc(inv.email)||'—'}${inv.email?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.email)},this)' title="Copy email"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+      <div class="info-row"><span class="info-row__label">Phone</span><span class="info-row__value">${_esc(inv.phone)||'—'}${inv.phone?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.phone)},this)' title="Copy phone"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+      <div class="info-row"><span class="info-row__label">SA ID Number</span><span class="info-row__value">${_esc(inv.id_number)||'—'}${inv.id_number?`<button class="copy-btn" onclick='copyToClipboard(${JSON.stringify(inv.id_number)},this)' title="Copy ID"><i class="fa-regular fa-copy"></i></button>`:''}</span></div>
+      <div class="info-row"><span class="info-row__label">Province</span><span class="info-row__value">${_esc((inv.province||'').trim())||'—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Address</span><span class="info-row__value" style="font-size:0.78rem">${_esc(inv.address)||'—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Occupation</span><span class="info-row__value">${_esc(inv.occupation)||'—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Employer</span><span class="info-row__value">${_esc(invProfile.employer||'')||'—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Kin Contact</span><span class="info-row__value">${_esc(invProfile.kin_contact||'')||'—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${_esc(inv.risk_profile)||'—'}</span></div>
+      <div class="info-row"><span class="info-row__label">Date Joined</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
+    </div>
+  </div>
+
+  <!-- ── Surveys ── -->
+  <div id="invPanel-surveys" style="display:none">
     ${(invProfile.investment_goal || invProfile.risk_reaction || invProfile.time_horizon || invProfile.savings_pct || invProfile.return_preference) ? `
     <div class="panel mb-12">
       <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-shield-halved" style="color:#eda5ff;margin-right:6px"></i>Know Your Risk Profile</span></div>
       <div class="panel__body">
         <div class="info-list">
-          ${invProfile.investment_goal    ? `<div class="info-row"><span class="info-row__label">Investment Goal</span><span class="info-row__value">${_esc(invProfile.investment_goal)}</span></div>` : ''}
-          ${invProfile.risk_reaction      ? `<div class="info-row"><span class="info-row__label">Risk Reaction</span><span class="info-row__value">${_esc(invProfile.risk_reaction)}</span></div>` : ''}
-          ${invProfile.time_horizon       ? `<div class="info-row"><span class="info-row__label">Time Horizon</span><span class="info-row__value">${_esc(invProfile.time_horizon)}</span></div>` : ''}
-          ${invProfile.savings_pct        ? `<div class="info-row"><span class="info-row__label">Savings % at SVC</span><span class="info-row__value">${_esc(invProfile.savings_pct)}</span></div>` : ''}
-          ${invProfile.return_preference  ? `<div class="info-row"><span class="info-row__label">Return Preference</span><span class="info-row__value">${_esc(invProfile.return_preference)}</span></div>` : ''}
+          ${invProfile.investment_goal   ? `<div class="info-row"><span class="info-row__label">Investment Goal</span><span class="info-row__value">${_esc(invProfile.investment_goal)}</span></div>` : ''}
+          ${invProfile.risk_reaction     ? `<div class="info-row"><span class="info-row__label">Risk Reaction</span><span class="info-row__value">${_esc(invProfile.risk_reaction)}</span></div>` : ''}
+          ${invProfile.time_horizon      ? `<div class="info-row"><span class="info-row__label">Time Horizon</span><span class="info-row__value">${_esc(invProfile.time_horizon)}</span></div>` : ''}
+          ${invProfile.savings_pct       ? `<div class="info-row"><span class="info-row__label">Savings % at SVC</span><span class="info-row__value">${_esc(invProfile.savings_pct)}</span></div>` : ''}
+          ${invProfile.return_preference ? `<div class="info-row"><span class="info-row__label">Return Preference</span><span class="info-row__value">${_esc(invProfile.return_preference)}</span></div>` : ''}
         </div>
       </div>
     </div>` : ''}
@@ -1683,16 +1709,23 @@ async function viewInvestor(id) {
       <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-briefcase" style="color:#fec24f;margin-right:6px"></i>Financial Background</span></div>
       <div class="panel__body">
         <div class="info-list">
-          ${invProfile.employment_status    ? `<div class="info-row"><span class="info-row__label">Employment</span><span class="info-row__value">${_esc(invProfile.employment_status)}</span></div>` : ''}
-          ${invProfile.income_bracket       ? `<div class="info-row"><span class="info-row__label">Income Bracket</span><span class="info-row__value">${_esc(invProfile.income_bracket)}</span></div>` : ''}
-          ${invProfile.dependents           ? `<div class="info-row"><span class="info-row__label">Dependents</span><span class="info-row__value">${_esc(invProfile.dependents)}</span></div>` : ''}
-          ${invProfile.investment_experience? `<div class="info-row"><span class="info-row__label">Experience</span><span class="info-row__value">${_esc(invProfile.investment_experience)}</span></div>` : ''}
-          ${invProfile.heard_via            ? `<div class="info-row"><span class="info-row__label">Heard Via</span><span class="info-row__value">${_esc(invProfile.heard_via)}</span></div>` : ''}
+          ${invProfile.employment_status     ? `<div class="info-row"><span class="info-row__label">Employment</span><span class="info-row__value">${_esc(invProfile.employment_status)}</span></div>` : ''}
+          ${invProfile.income_bracket        ? `<div class="info-row"><span class="info-row__label">Income Bracket</span><span class="info-row__value">${_esc(invProfile.income_bracket)}</span></div>` : ''}
+          ${invProfile.dependents            ? `<div class="info-row"><span class="info-row__label">Dependents</span><span class="info-row__value">${_esc(invProfile.dependents)}</span></div>` : ''}
+          ${invProfile.investment_experience ? `<div class="info-row"><span class="info-row__label">Experience</span><span class="info-row__value">${_esc(invProfile.investment_experience)}</span></div>` : ''}
+          ${invProfile.heard_via             ? `<div class="info-row"><span class="info-row__label">Heard Via</span><span class="info-row__value">${_esc(invProfile.heard_via)}</span></div>` : ''}
         </div>
       </div>
     </div>` : ''}
+    ${!(invProfile.investment_goal || invProfile.risk_reaction || invProfile.time_horizon || invProfile.savings_pct || invProfile.return_preference || invProfile.saving_for || invProfile.income_need || invProfile.liquidity || invProfile.product_interest || invProfile.employment_status || invProfile.income_bracket || invProfile.dependents || invProfile.investment_experience || invProfile.heard_via) ? `
+    <div style="text-align:center;padding:40px 16px;color:var(--text-muted);font-size:0.85rem">
+      <i class="fa-solid fa-clipboard-list" style="font-size:2rem;margin-bottom:10px;display:block;opacity:0.3"></i>
+      No survey responses yet. This client hasn't completed any profile quests.
+    </div>` : ''}
+  </div>
 
-    <div style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:10px"><i class="fa-solid fa-chart-line" style="color:var(--orange);margin-right:6px"></i>Investments (${invsts.length})</div>
+  <!-- ── Investments ── -->
+  <div id="invPanel-investments" style="display:none">
     <table class="data-table mb-16">
       <thead><tr><th>Pool</th><th>Product</th><th>Date Invested</th><th>Amount</th><th>Rate</th><th>Status</th><th>Maturity</th></tr></thead>
       <tbody>${invsts.length ? invsts.map(i => {
@@ -1708,8 +1741,10 @@ async function viewInvestor(id) {
         </tr>`;
       }).join(''):'<tr><td colspan="7" class="text-center text-muted" style="padding:16px">No investments on record</td></tr>'}</tbody>
     </table>
+  </div>
 
-    <div style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:10px"><i class="fa-solid fa-arrows-rotate" style="color:var(--orange);margin-right:6px"></i>Transactions (${txns.length})</div>
+  <!-- ── Transactions ── -->
+  <div id="invPanel-transactions" style="display:none">
     <table class="data-table mb-16">
       <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Reference</th><th>Date</th></tr></thead>
       <tbody>${txns.length ? txns.slice(0,10).map(t => `
@@ -1721,8 +1756,10 @@ async function viewInvestor(id) {
           <td class="td-muted">${Utils.date(t.transaction_date||t.created_at)}</td>
         </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:16px">No transactions on record</td></tr>'}</tbody>
     </table>
+  </div>
 
-    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:var(--text)">Admin Notes (Persistent)</div>
+  <!-- ── Admin ── -->
+  <div id="invPanel-admin" style="display:none">
     <div class="panel mb-16">
       <div class="panel__header">
         <span class="panel__title">Notes History</span>
@@ -1736,34 +1773,20 @@ async function viewInvestor(id) {
         <button class="btn btn--primary btn--sm" onclick='addInvestorNote(${JSON.stringify(inv.id)})'><i class="fa-solid fa-plus"></i> Add Note</button>
       </div>
     </div>
-
-    <div class="mb-12 mt-20" style="font-size:0.85rem;font-weight:700;color:var(--text)">Activity Timeline</div>
     <div class="panel mb-16">
+      <div class="panel__header"><span class="panel__title">Activity Timeline</span></div>
       <div class="panel__body" style="padding:0 4px">
         <div id="investorTimeline" style="max-height:320px;overflow-y:auto;padding:4px 0">
           <div style="text-align:center;padding:16px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i></div>
         </div>
       </div>
     </div>
-
-    <div class="flex-between mt-16" style="flex-wrap:wrap;gap:8px">
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn--success btn--sm" onclick='depositToInvestor(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, ${inv.wallet_balance || 0})'><i class="fa-solid fa-wallet"></i> Add Funds</button>
-        <button class="btn btn--secondary btn--sm" onclick='approveInvestorFica(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-id-card"></i> Approve FICA</button>
-        ${hasLoginAccount === false ? `<button class="btn btn--secondary btn--sm" id="invInviteBtn" onclick='sendLoginInvite(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.email)}, this)'><i class="fa-solid fa-envelope"></i> Send Login Invite</button>` : hasLoginAccount === true ? `<span class="badge badge--green" style="padding:6px 10px"><i class="fa-solid fa-circle-check"></i> Has login account</span>` : ''}
-        ${userRecord?.totp_enabled ? `<button class="btn btn--sm" style="background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3)" onclick='adminReset2FA(${JSON.stringify(userRecord.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, this)'><i class="fa-solid fa-shield-xmark"></i> Reset 2FA</button>` : ''}
-        <button class="btn btn--danger btn--sm" onclick='confirmDeleteInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-trash"></i> Delete</button>
-      </div>
-      <button class="btn btn--primary btn--sm" onclick='Modal.close("investorDetailModal")'><i class="fa-solid fa-check"></i> Done</button>
-    </div>
+  </div>
   `;
   Modal.open('investorDetailModal');
-  // Set textarea value after innerHTML to avoid XSS via template literals
   const ta = document.getElementById('invNewNoteTA');
   if (ta) ta.value = inv.notes || '';
-  // Load persistent notes
   loadInvestorNotes(inv.id);
-  // Load activity timeline
   loadInvestorTimeline(inv, invsts, txns);
 }
 
