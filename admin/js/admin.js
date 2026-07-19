@@ -1554,6 +1554,16 @@ async function viewInvestor(id) {
     hasLoginAccount = !!userRecord;
   } catch (_) { hasLoginAccount = null; }
 
+  // Parse investor_profile JSONB for fields saved by quests
+  let invProfile = {};
+  try {
+    if (inv.investor_profile) {
+      invProfile = typeof inv.investor_profile === 'string'
+        ? JSON.parse(inv.investor_profile)
+        : inv.investor_profile;
+    }
+  } catch (_) {}
+
   /* Parse bank details stored in notes JSON by migration */
   let bankNotes = {};
   try { if (inv.notes && inv.notes.startsWith('{')) bankNotes = JSON.parse(inv.notes); } catch(_) {}
@@ -1590,6 +1600,9 @@ async function viewInvestor(id) {
           <div class="info-row"><span class="info-row__label">Province</span><span class="info-row__value">${_esc((inv.province||'').trim())||'—'}</span></div>
           <div class="info-row"><span class="info-row__label">Address</span><span class="info-row__value" style="font-size:0.78rem">${_esc(inv.address)||'—'}</span></div>
           <div class="info-row"><span class="info-row__label">Occupation</span><span class="info-row__value">${_esc(inv.occupation)||'—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Employer</span><span class="info-row__value">${_esc(invProfile.employer||'')||'—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
+          <div class="info-row"><span class="info-row__label">Kin Contact</span><span class="info-row__value">${_esc(invProfile.kin_contact||'')||'—'}</span></div>
           <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${_esc(inv.risk_profile)||'—'}</span></div>
           <div class="info-row"><span class="info-row__label">Date Joined</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
         </div>
