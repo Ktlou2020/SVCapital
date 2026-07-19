@@ -1545,11 +1545,13 @@ async function viewInvestor(id) {
 
   document.getElementById('invDetailTitle').textContent = `${inv.first_name} ${inv.last_name} — ${inv.id}`;
 
-  // Check whether this investor has a login account (users row)
+  // Check whether this investor has a login account (users row) and 2FA status
   let hasLoginAccount = null;
+  let userRecord = null;
   try {
     const uRes = await API.list('users', { limit: 1, email: inv.email });
-    hasLoginAccount = (uRes.data || []).length > 0;
+    userRecord = (uRes.data || [])[0] || null;
+    hasLoginAccount = !!userRecord;
   } catch (_) { hasLoginAccount = null; }
 
   /* Parse bank details stored in notes JSON by migration */
@@ -1697,6 +1699,7 @@ async function viewInvestor(id) {
         <button class="btn btn--success btn--sm" onclick='depositToInvestor(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, ${inv.wallet_balance || 0})'><i class="fa-solid fa-wallet"></i> Add Funds</button>
         <button class="btn btn--secondary btn--sm" onclick='approveInvestorFica(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-id-card"></i> Approve FICA</button>
         ${hasLoginAccount === false ? `<button class="btn btn--secondary btn--sm" id="invInviteBtn" onclick='sendLoginInvite(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.email)}, this)'><i class="fa-solid fa-envelope"></i> Send Login Invite</button>` : hasLoginAccount === true ? `<span class="badge badge--green" style="padding:6px 10px"><i class="fa-solid fa-circle-check"></i> Has login account</span>` : ''}
+        ${userRecord?.totp_enabled ? `<button class="btn btn--sm" style="background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3)" onclick='adminReset2FA(${JSON.stringify(userRecord.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, this)'><i class="fa-solid fa-shield-xmark"></i> Reset 2FA</button>` : ''}
         <button class="btn btn--danger btn--sm" onclick='confirmDeleteInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-trash"></i> Delete</button>
       </div>
       <button class="btn btn--primary btn--sm" onclick='Modal.close("investorDetailModal")'><i class="fa-solid fa-check"></i> Done</button>
@@ -5744,6 +5747,28 @@ async function tfaConfirmDisable() {
     tfaCancelDisable();
     await tfa_loadStatus();
   } catch (e) { Toast.error(e.message || 'Invalid code'); }
+}
+
+async function adminReset2FA(userId, investorName, btn) {
+  if (!await Confirm.ask(`Reset 2FA for ${investorName}?`, {
+    body: 'This will disable two-factor authentication on their account. They will be able to log in with password only until they re-enable it.',
+    confirmLabel: 'Reset 2FA',
+  })) return;
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch('/api/admin/reset-2fa', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    Toast.success(`2FA removed from ${investorName}'s account`);
+    if (btn) { btn.disabled = false; btn.style.display = 'none'; }
+  } catch (e) {
+    Toast.error('Reset failed: ' + e.message);
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function signOutAllDevices() {

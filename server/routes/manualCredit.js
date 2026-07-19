@@ -73,4 +73,47 @@ router.post('/manual-credit', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/reset-2fa ─── */
+router.post('/reset-2fa', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId is required.' });
+
+    const { rows } = await pool.query(
+      'SELECT id, email, first_name, last_name, totp_enabled FROM users WHERE id = $1',
+      [userId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'User not found.' });
+    const user = rows[0];
+
+    if (!user.totp_enabled) {
+      return res.status(400).json({ error: '2FA is not enabled on this account.' });
+    }
+
+    await pool.query(
+      'UPDATE users SET totp_secret = NULL, totp_enabled = false WHERE id = $1',
+      [userId]
+    );
+    await pool.query(
+      'DELETE FROM totp_recovery_codes WHERE user_id = $1',
+      [userId]
+    );
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'user.2fa_reset',
+      entityType: 'users',
+      entityId:   userId,
+      description: `Admin reset 2FA for user ${user.first_name} ${user.last_name} (${user.email})`,
+      ip:         req.ip,
+    }).catch(() => {}));
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('/admin/reset-2fa error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 module.exports = router;
