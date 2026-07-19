@@ -247,21 +247,46 @@ router.post('/complete', requireAuth, async (req, res) => {
     const newLvl  = getLevelForXP(newXP);
     const leveledUp = newLvl.id !== prevLvl.id;
 
-    // Update investor — merge survey data into investor_profile (key allowlist)
+    // Update investor — save direct columns + merge extra keys into investor_profile
     const ALLOWED_PROFILE_KEYS = ['risk_tolerance', 'investment_goal', 'experience_level', 'time_horizon', 'survey_completed_at', 'onboarding_step'];
     const safeData = {};
     for (const k of ALLOWED_PROFILE_KEYS) {
       if (data[k] !== undefined) safeData[k] = data[k];
     }
-    await pool.query(
-      `UPDATE investors SET
-         xp_points          = $1,
-         xp_level           = $2,
-         investor_profile    = COALESCE(investor_profile, '{}') || $3::jsonb,
-         updated_at          = NOW()
-       WHERE id = $4`,
-      [newXP, newLvl.id, JSON.stringify(safeData), investorId]
-    );
+
+    if (questId === 'complete_profile') {
+      // Save occupation + address to their own columns; employer/next_of_kin/kin_contact go into investor_profile JSON
+      const profileExtra = {};
+      if (data.employer)    profileExtra.employer    = String(data.employer).slice(0, 200);
+      if (data.next_of_kin) profileExtra.next_of_kin = String(data.next_of_kin).slice(0, 200);
+      if (data.kin_contact) profileExtra.kin_contact = String(data.kin_contact).slice(0, 200);
+      const mergedProfile = JSON.stringify({ ...safeData, ...profileExtra });
+
+      await pool.query(
+        `UPDATE investors SET
+           xp_points        = $1,
+           xp_level         = $2,
+           investor_profile = COALESCE(investor_profile, '{}') || $3::jsonb,
+           occupation       = COALESCE(NULLIF($4,''), occupation),
+           address          = COALESCE(NULLIF($5,''), address),
+           updated_at       = NOW()
+         WHERE id = $6`,
+        [newXP, newLvl.id, mergedProfile,
+         data.occupation ? String(data.occupation).slice(0, 200) : '',
+         data.address    ? String(data.address).slice(0, 500)    : '',
+         investorId]
+      );
+    } else {
+      await pool.query(
+        `UPDATE investors SET
+           xp_points        = $1,
+           xp_level         = $2,
+           investor_profile = COALESCE(investor_profile, '{}') || $3::jsonb,
+           updated_at       = NOW()
+         WHERE id = $4`,
+        [newXP, newLvl.id, JSON.stringify(safeData), investorId]
+      );
+    }
 
     const nextLevel = XP_LEVELS.find(l => l.min > newXP) || null;
     console.log(`[Quests] ${investorId} completed ${questId} +${quest.xp}XP → ${newLvl.id}`);
