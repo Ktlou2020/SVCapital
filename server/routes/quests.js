@@ -248,7 +248,16 @@ router.post('/complete', requireAuth, async (req, res) => {
     const leveledUp = newLvl.id !== prevLvl.id;
 
     // Update investor — save direct columns + merge extra keys into investor_profile
-    const ALLOWED_PROFILE_KEYS = ['risk_tolerance', 'investment_goal', 'experience_level', 'time_horizon', 'survey_completed_at', 'onboarding_step'];
+    const ALLOWED_PROFILE_KEYS = [
+      'risk_tolerance', 'investment_goal', 'experience_level', 'time_horizon',
+      'survey_completed_at', 'onboarding_step',
+      // risk_profile_survey
+      'risk_reaction', 'savings_pct', 'return_preference',
+      // investment_goals
+      'saving_for', 'income_need', 'liquidity', 'product_interest',
+      // background_survey
+      'employment_status', 'income_bracket', 'dependents', 'investment_experience', 'heard_via',
+    ];
     const safeData = {};
     for (const k of ALLOWED_PROFILE_KEYS) {
       if (data[k] !== undefined) safeData[k] = data[k];

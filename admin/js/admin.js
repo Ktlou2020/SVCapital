@@ -1653,6 +1653,45 @@ async function viewInvestor(id) {
       </div>
     </div>
 
+    ${(invProfile.investment_goal || invProfile.risk_reaction || invProfile.time_horizon || invProfile.savings_pct || invProfile.return_preference) ? `
+    <div class="panel mb-12">
+      <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-shield-halved" style="color:#eda5ff;margin-right:6px"></i>Know Your Risk Profile</span></div>
+      <div class="panel__body">
+        <div class="info-list">
+          ${invProfile.investment_goal    ? `<div class="info-row"><span class="info-row__label">Investment Goal</span><span class="info-row__value">${_esc(invProfile.investment_goal)}</span></div>` : ''}
+          ${invProfile.risk_reaction      ? `<div class="info-row"><span class="info-row__label">Risk Reaction</span><span class="info-row__value">${_esc(invProfile.risk_reaction)}</span></div>` : ''}
+          ${invProfile.time_horizon       ? `<div class="info-row"><span class="info-row__label">Time Horizon</span><span class="info-row__value">${_esc(invProfile.time_horizon)}</span></div>` : ''}
+          ${invProfile.savings_pct        ? `<div class="info-row"><span class="info-row__label">Savings % at SVC</span><span class="info-row__value">${_esc(invProfile.savings_pct)}</span></div>` : ''}
+          ${invProfile.return_preference  ? `<div class="info-row"><span class="info-row__label">Return Preference</span><span class="info-row__value">${_esc(invProfile.return_preference)}</span></div>` : ''}
+        </div>
+      </div>
+    </div>` : ''}
+    ${(invProfile.saving_for || invProfile.income_need || invProfile.liquidity || invProfile.product_interest) ? `
+    <div class="panel mb-12">
+      <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-crosshairs" style="color:#fec24f;margin-right:6px"></i>Investment Goals</span></div>
+      <div class="panel__body">
+        <div class="info-list">
+          ${invProfile.saving_for       ? `<div class="info-row"><span class="info-row__label">Saving For</span><span class="info-row__value">${_esc(invProfile.saving_for)}</span></div>` : ''}
+          ${invProfile.income_need      ? `<div class="info-row"><span class="info-row__label">Income Need</span><span class="info-row__value">${_esc(invProfile.income_need)}</span></div>` : ''}
+          ${invProfile.liquidity        ? `<div class="info-row"><span class="info-row__label">Liquidity</span><span class="info-row__value">${_esc(invProfile.liquidity)}</span></div>` : ''}
+          ${invProfile.product_interest ? `<div class="info-row"><span class="info-row__label">Product Interest</span><span class="info-row__value">${_esc(invProfile.product_interest)}</span></div>` : ''}
+        </div>
+      </div>
+    </div>` : ''}
+    ${(invProfile.employment_status || invProfile.income_bracket || invProfile.dependents || invProfile.investment_experience || invProfile.heard_via) ? `
+    <div class="panel mb-12">
+      <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-briefcase" style="color:#fec24f;margin-right:6px"></i>Financial Background</span></div>
+      <div class="panel__body">
+        <div class="info-list">
+          ${invProfile.employment_status    ? `<div class="info-row"><span class="info-row__label">Employment</span><span class="info-row__value">${_esc(invProfile.employment_status)}</span></div>` : ''}
+          ${invProfile.income_bracket       ? `<div class="info-row"><span class="info-row__label">Income Bracket</span><span class="info-row__value">${_esc(invProfile.income_bracket)}</span></div>` : ''}
+          ${invProfile.dependents           ? `<div class="info-row"><span class="info-row__label">Dependents</span><span class="info-row__value">${_esc(invProfile.dependents)}</span></div>` : ''}
+          ${invProfile.investment_experience? `<div class="info-row"><span class="info-row__label">Experience</span><span class="info-row__value">${_esc(invProfile.investment_experience)}</span></div>` : ''}
+          ${invProfile.heard_via            ? `<div class="info-row"><span class="info-row__label">Heard Via</span><span class="info-row__value">${_esc(invProfile.heard_via)}</span></div>` : ''}
+        </div>
+      </div>
+    </div>` : ''}
+
     <div style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:10px"><i class="fa-solid fa-chart-line" style="color:var(--orange);margin-right:6px"></i>Investments (${invsts.length})</div>
     <table class="data-table mb-16">
       <thead><tr><th>Pool</th><th>Product</th><th>Date Invested</th><th>Amount</th><th>Rate</th><th>Status</th><th>Maturity</th></tr></thead>
