@@ -5686,7 +5686,50 @@ function getProductInfo(type) {
   return { label, color, bg: color + '1f' };   // 8-digit hex → light tint of the product colour
 }
 
-function printStatement() {
+/* ── Mobile-safe share/print helper ─────────────────────────────────────
+   On mobile (Capacitor WebView): invokes the native share sheet via
+   navigator.share() — user can print via AirPrint/Android Print or save
+   to Files/Drive. Falls back to <a download> if share isn't supported.
+   On desktop: opens a new window with a print button.               ── */
+async function _shareOrPrint(html, filename) {
+  const isMobile = navigator.maxTouchPoints > 0 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+
+  if (isMobile) {
+    // Try native share sheet (iOS/Android) — user can print from there
+    if (navigator.canShare) {
+      try {
+        const file = new File([blob], filename, { type: 'text/html' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'SV Capital' });
+          return;
+        }
+      } catch (e) {
+        if (e.name === 'AbortError') return; // user cancelled — don't fall through
+      }
+    }
+    // Fallback: download the HTML file
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    Toast.success('Saved to Downloads — open in your browser to print or save as PDF.');
+    return;
+  }
+
+  // Desktop: open blob in new tab with print bar
+  try {
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (win) { win.focus(); setTimeout(() => URL.revokeObjectURL(url), 120000); return; }
+    URL.revokeObjectURL(url);
+  } catch (_) {}
+  // Last resort: data URI
+  window.open('data:text/html;charset=utf-8,' + encodeURIComponent(html), '_blank');
+}
+
+async function printStatement() {
   const stmtDoc = document.getElementById('statementDocument');
   if (!stmtDoc || !stmtDoc.innerHTML.trim()) {
     Toast.error('Please generate a statement first, then print.');
@@ -5702,25 +5745,11 @@ function printStatement() {
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:Poppins,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff}
-.svc-pbar{
-  position:fixed;top:0;left:0;right:0;z-index:9999;
-  background:#fff;border-bottom:1px solid #e5e7eb;
-  padding:10px 20px;display:flex;align-items:center;justify-content:space-between;
-  box-shadow:0 2px 8px rgba(0,0,0,.08)
-}
+.svc-pbar{position:fixed;top:0;left:0;right:0;z-index:9999;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.08)}
 .svc-pbar h3{font-size:14px;font-weight:700;color:#111827;margin:0}
-.svc-pbtn{
-  background:linear-gradient(135deg,#fec24f,#FF5229);color:#fff;
-  border:none;border-radius:8px;padding:9px 18px;font-size:13px;
-  font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px
-}
+.svc-pbtn{background:linear-gradient(135deg,#fec24f,#FF5229);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px}
 .svc-content{padding-top:52px}
-@media print{
-  .svc-pbar{display:none!important}
-  .svc-content{padding-top:0}
-  @page{size:A4;margin:0}
-  body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-}
+@media print{.svc-pbar{display:none!important}.svc-content{padding-top:0}@page{size:A4;margin:0}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style>
 </head>
 <body>
@@ -5734,24 +5763,7 @@ ${stmtDoc.innerHTML}
 </body>
 </html>`;
 
-  try {
-    const blob = new Blob([fullHtml], { type: 'text/html' });
-    const url  = URL.createObjectURL(blob);
-    const win  = window.open(url, '_blank');
-    if (win) {
-      win.focus();
-      setTimeout(() => URL.revokeObjectURL(url), 120000);
-      return;
-    }
-    URL.revokeObjectURL(url);
-  } catch (_) { /* blob API not available */ }
-
-  // Fallback: data URI (Capacitor WebView / popup blocked)
-  try {
-    window.open('data:text/html;charset=utf-8,' + encodeURIComponent(fullHtml), '_blank');
-  } catch (_) {
-    Toast.error('Could not open print window. Try using the browser share button instead.');
-  }
+  await _shareOrPrint(fullHtml, 'SVC-Statement.html');
 }
 
 /* ── Sub-account deposit ─────────────────────── */
@@ -9414,7 +9426,7 @@ async function confirmWithdrawal() {
    ═══════════════════════════════════════════════ */
 let _lastTaxCertHTML = null; // cached for PDF download
 
-function generateTaxCertificate() {
+async function generateTaxCertificate() {
   if (!PORTAL.investor) { Toast.error('Portfolio data still loading — please wait'); return; }
 
   const inv = PORTAL.investor;
@@ -9537,10 +9549,7 @@ td:last-child{text-align:right;font-weight:600}
 
   SVC.track('svc_tax_cert_generated', { tax_year: taxYear });
 
-  const win = window.open('', '_blank', 'width=820,height=900');
-  if (!win) { Toast.error('Pop-up blocked — please allow pop-ups for this site'); return; }
-  win.document.write(html);
-  win.document.close();
+  await _shareOrPrint(html, 'SVC-IT3b-Tax-Certificate.html');
 }
 
 /* ── IT3(b) jsPDF download ── */
@@ -11100,7 +11109,7 @@ function downloadStatement() {
 }
 
 /* downloadSaStatement() — sub-account statement (matches main investor statement structure) */
-function downloadSaStatement(saId, saName) {
+async function downloadSaStatement(saId, saName) {
   const sa           = (PORTAL.subAccounts || []).find(a => a.id === saId) || { id: saId, name: saName, wallet_balance: 0 };
   const investments  = (PORTAL.investments  || []).filter(i => i.sub_account_id === saId);
   const transactions = (PORTAL.transactions || []).filter(t => t.sub_account_id === saId);
@@ -11367,19 +11376,8 @@ function downloadSaStatement(saId, saName) {
 </body>
 </html>`;
 
-  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  const win  = window.open(url, '_blank');
-  if (!win) {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `SVC-Statement-${(saName || 'Account').replace(/[^a-zA-Z0-9_-]/g, '-')}-${now.toISOString().slice(0, 10)}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    Toast.success('Statement downloaded — open in a browser to save as PDF.');
-  }
-  setTimeout(() => URL.revokeObjectURL(url), 120000);
+  const saFilename = `SVC-Statement-${(saName || 'Account').replace(/[^a-zA-Z0-9_-]/g, '-')}-${now.toISOString().slice(0, 10)}.html`;
+  await _shareOrPrint(htmlContent, saFilename);
 }
 
 /* ═══════════════════════════════════════════════
