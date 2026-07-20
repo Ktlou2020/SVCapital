@@ -569,6 +569,16 @@ const APP_META = {
     path:        '../portal/index.html',
     tags:        ['Investors', 'Client'],
   },
+  staging: {
+    label:       'Staging Portal',
+    description: 'Pre-production staging environment — test new features before they go live.',
+    icon:        'fa-solid fa-flask',
+    color:       '#f59e0b',
+    path:        'https://svcapital-staging.up.railway.app/',
+    tags:        ['Staging', 'Testing'],
+    badge:       'Staging',
+    newTab:      true,
+  },
   director: {
     label:       'Director Panel',
     description: 'Super admin controls — create employees, manage onboarding journeys, platform oversight.',
@@ -699,6 +709,7 @@ function buildTile(meta, key, isLocked) {
   const isDirectorTile = key === 'director';
   const a = document.createElement('a');
   a.href = meta.path;
+  if (meta.newTab) a.target = '_blank';
   a.className = 'app-tile' + (isPrimary ? ' app-tile--primary' : '') + (isLocked ? ' app-tile--locked' : '') + (isDirectorTile ? ' app-tile--director' : '');
   a.style.setProperty('--tile-color', meta.color);
 
