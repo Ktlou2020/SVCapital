@@ -3247,9 +3247,10 @@ function renderPoolsGrid() {
         <div style="margin-top:10px">${_capacityBar(p)}</div>
         ${waitlistCountHtml}
 
-        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:8px;display:flex;justify-content:space-between">
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:8px;display:flex;flex-wrap:wrap;gap:4px 12px">
           <span>Opens: ${Utils.date(p.start_date)}</span>
           <span>Closes: ${Utils.date(p.end_date)}</span>
+          ${p.investment_start_date || p.end_date ? `<span>Inv. Starts: ${Utils.date(p.investment_start_date || (() => { const d = new Date(p.end_date); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0]; })())}</span>` : ''}
           ${p.maturity_date ? `<span>Matures: ${Utils.date(p.maturity_date)}</span>` : ''}
         </div>
 
@@ -3651,6 +3652,15 @@ function _autoCalcMaturityDate(openDateId, termId, closeDateId) {
   closeEl.value = d.toISOString().split('T')[0];
 }
 
+function _autoCalcInvStartDate(closeDateId, targetId) {
+  const closeVal = document.getElementById(closeDateId)?.value;
+  const targetEl = document.getElementById(targetId);
+  if (!targetEl || !closeVal) return;
+  const d = new Date(closeVal);
+  d.setDate(d.getDate() + 1);
+  targetEl.value = d.toISOString().split('T')[0];
+}
+
 async function saveNewPool(btn) {
   const name = document.getElementById('newPoolName').value.trim();
   const type = document.getElementById('newPoolType').value;
@@ -3671,6 +3681,7 @@ async function saveNewPool(btn) {
         partner_name: document.getElementById('newPoolPartner').value.trim(),
         start_date: document.getElementById('newPoolOpenDate').value ? new Date(document.getElementById('newPoolOpenDate').value).toISOString() : new Date().toISOString(),
         end_date: document.getElementById('newPoolCloseDate').value ? new Date(document.getElementById('newPoolCloseDate').value).toISOString() : '',
+        investment_start_date: document.getElementById('newPoolInvStartDate').value ? new Date(document.getElementById('newPoolInvStartDate').value).toISOString() : null,
         maturity_date: document.getElementById('newPoolMaturityDate').value ? new Date(document.getElementById('newPoolMaturityDate').value).toISOString() : '',
         status: 'open', investor_count: 0,
         max_capacity,
@@ -3759,6 +3770,9 @@ function editPool(id) {
   const toDateVal = iso => { try { return iso ? new Date(iso).toISOString().split('T')[0] : ''; } catch { return ''; } };
   document.getElementById('editPoolOpenDate').value    = toDateVal(pool.start_date);
   document.getElementById('editPoolCloseDate').value   = toDateVal(pool.end_date);
+  // Investment start date: use stored value, or auto-compute as close date + 1 day
+  const _invStartFallback = pool.end_date ? (() => { const d = new Date(pool.end_date); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0]; })() : '';
+  document.getElementById('editPoolInvStartDate').value = toDateVal(pool.investment_start_date) || _invStartFallback;
   document.getElementById('editPoolMaturityDate').value = toDateVal(pool.maturity_date);
   document.getElementById('editPoolMaxCapacity').value = pool.max_capacity || '';
   const mgtFeeEl = document.getElementById('editPoolMgtFeePct');
@@ -3793,9 +3807,10 @@ async function saveEditPool(btn) {
     actual_rate:    parseFloat(document.getElementById('editPoolActualRate').value) || 0,
     partner_name:   document.getElementById('editPoolPartner').value.trim(),
     investor_count: parseInt(document.getElementById('editPoolInvCount').value) || 0,
-    start_date:     toISO(document.getElementById('editPoolOpenDate').value),
-    end_date:       toISO(document.getElementById('editPoolCloseDate').value),
-    maturity_date:  toISO(document.getElementById('editPoolMaturityDate').value),
+    start_date:            toISO(document.getElementById('editPoolOpenDate').value),
+    end_date:              toISO(document.getElementById('editPoolCloseDate').value),
+    investment_start_date: toISO(document.getElementById('editPoolInvStartDate').value) || null,
+    maturity_date:         toISO(document.getElementById('editPoolMaturityDate').value),
     max_capacity:   maxCapVal2 ? (parseFloat(maxCapVal2) || null) : null,
     management_fee_pct:        (parseFloat(document.getElementById('editPoolMgtFeePct')?.value) || 0) / 100,
     management_fee_frequency:  document.getElementById('editPoolMgtFeeFreq')?.value || 'once',

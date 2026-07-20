@@ -381,6 +381,7 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investment_pools ADD COLUMN maturity_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Pool target type: 'amount' (raise to a goal amount) or 'date' (open until a closing date)
   BEGIN ALTER TABLE investment_pools ADD COLUMN target_type TEXT DEFAULT 'amount'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investment_pools ADD COLUMN investment_start_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- EVA tracking on investments (% of net-VAT management fee configured via platform_settings eva_rate)
   BEGIN ALTER TABLE investments ADD COLUMN is_reinvestment BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN eva_amount NUMERIC(12,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
