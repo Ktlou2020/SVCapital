@@ -211,7 +211,7 @@ const MODAL_DATA = {
     title: 'Power the future. Earn from it.',
     desc: 'Your capital funds solar panel installations across Cape Town, generating clean electricity sold through long-term contracts. Annual returns are distributed throughout the term, with your full capital returned at the end.',
     stats: [
-      { label: 'Best Return', val: '21.40% p.a.' },
+      { label: 'Avg. Return', val: '21.40% p.a.' },
       { label: 'Minimum', val: 'R10,000' },
       { label: 'Terms', val: '5 / 6 / 7 yrs' }
     ],
