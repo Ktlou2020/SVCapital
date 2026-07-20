@@ -559,7 +559,7 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
 
     const summary = {
       total_invested:       rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0),
-      investor_count:       new Set(rows.map(r => r.investor_id)).size,
+      investor_count:       new Set(rows.map(r => r.sub_account_id ? `sa:${r.sub_account_id}` : `inv:${r.investor_id}`)).size,
       active_count:         rows.filter(r => r.investment_status === 'active').length,
       matured_count:        rows.filter(r => r.investment_status === 'matured').length,
       total_platform_fees:  rows.reduce((s, r) => s + (r.platform_fee || 0), 0),
