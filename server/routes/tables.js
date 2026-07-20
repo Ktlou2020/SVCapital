@@ -516,6 +516,7 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
       SELECT
         inv.id            AS investment_id,
         inv.investor_id,
+        inv.sub_account_id,
         inv.amount,
         inv.status        AS investment_status,
         inv.start_date,
@@ -529,9 +530,12 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
         i.last_name,
         i.email,
         i.phone,
-        i.kyc_status
+        i.kyc_status,
+        sa.name         AS sub_account_name,
+        sa.account_type AS sub_account_type
       FROM investments inv
       LEFT JOIN investors i ON i.id = inv.investor_id
+      LEFT JOIN sub_accounts sa ON sa.id = inv.sub_account_id
       WHERE inv.pool_id = $1
       ORDER BY inv.start_date DESC NULLS LAST
     `, [req.params.id]);

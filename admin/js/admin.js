@@ -3355,9 +3355,12 @@ async function viewPoolInvestors(poolId) {
           <tbody>
             ${investors.map(r => {
               const name = `${r.first_name||''} ${r.last_name||''}`.trim() || r.investor_id;
+              const acctCell = r.sub_account_id
+                ? `<div style="font-size:0.72rem;font-weight:700;color:#eda5ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${r.sub_account_id}">${r.sub_account_name||'Sub Account'}</div><div style="font-size:0.62rem;color:var(--text-muted);font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.sub_account_type||''}</div>`
+                : `<span style="font-family:monospace;font-size:0.75rem;color:var(--gold)">${r.investor_id}</span>`;
               return `<tr style="cursor:pointer" onclick="viewInvestor('${r.investor_id}');Modal.close('poolInvestorsModal')">
                 <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${r.email||''}</div></td>
-                <td class="clip" style="font-family:monospace;font-size:0.75rem;color:var(--gold)">${r.investor_id}</td>
+                <td class="clip">${acctCell}</td>
                 <td class="td-gold fw-700 clip">${Utils.rand(r.amount)}</td>
                 <td class="clip" style="font-size:0.78rem;color:#f97316">${r.upfront_fee > 0 ? Utils.rand(r.upfront_fee) : '—'}</td>
                 <td class="clip" style="font-size:0.78rem;color:#f97316">${Utils.rand(r.platform_fee)}</td>
