@@ -2280,7 +2280,8 @@ function renderMyInvestmentCards() {
     const totalReturn = group.reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
     const uid = 'pool_' + (inv.pool_id || inv.id);
     const _poolRec = inv.pool_id ? (PORTAL.pools || []).find(p => p.id === inv.pool_id) : null;
-    const _invStartDate = _poolRec?.investment_start_date || inv.investment_date || inv.start_date;
+    const _poolInvStart = _poolRec?.investment_start_date || (_poolRec?.end_date ? (() => { const _d = new Date(_poolRec.end_date); _d.setDate(_d.getDate() + 1); return _d.toISOString().split('T')[0]; })() : null);
+    const _invStartDate = _poolInvStart || inv.investment_date || inv.start_date;
 
     const breakdownRows = multiple ? group.map(i => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);font-size:0.78rem">
