@@ -2926,11 +2926,11 @@ function _renderAutoTopUpCard(container) {
           <strong>${Utils.rand(amount)}</strong> charged on the <strong>${day}${suffix}</strong> of each month
         </div>` : ''}
 
-      <div style="display:flex;gap:8px">
-        <button class="btn btn--primary btn--sm" onclick="openAutoTopUpModal()" style="flex:1">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn--primary btn--sm" onclick="openAutoTopUpModal()" style="width:100%">
           <i class="fa-solid fa-pen"></i> ${enabled ? 'Edit Schedule' : 'Set Up Auto Top-Up'}
         </button>
-        ${enabled ? `<button class="btn btn--secondary btn--sm" onclick="_cancelAutoTopUp()" style="color:#ef4444;border-color:rgba(239,68,68,0.3)">
+        ${enabled ? `<button class="btn btn--secondary btn--sm" onclick="_cancelAutoTopUp()" style="width:100%;color:#ef4444;border-color:rgba(239,68,68,0.3)">
           <i class="fa-solid fa-xmark"></i> Cancel
         </button>` : ''}
       </div>
