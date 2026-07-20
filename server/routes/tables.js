@@ -428,7 +428,7 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         LEFT JOIN (
           SELECT
             pool_id,
-            COUNT(DISTINCT investor_id)                                          AS live_investor_count,
+            COUNT(DISTINCT CASE WHEN sub_account_id IS NOT NULL THEN 'sa:' || sub_account_id ELSE 'inv:' || investor_id END) AS live_investor_count,
             SUM(CASE WHEN status IN ('active','matured','paid_out') THEN amount ELSE 0 END) AS live_raised,
             SUM(CASE WHEN status = 'active'  THEN amount ELSE 0 END)            AS live_active_amount,
             COUNT(*)                                                             AS live_investment_count
