@@ -3767,11 +3767,23 @@ async function _renderProductFactsheets(type, product) {
     const res = await API._fetch('GET', 'factsheets');
     sheets = (res.data || []).filter(s => poolIds.has(s.pool_id));
   } catch (_) {}
+  // Reveal factsheet buttons for pools that have at least one sheet
+  sheets.forEach(s => {
+    const btn = document.getElementById(`fsBtn-${s.pool_id}`);
+    if (btn) btn.style.display = '';
+  });
   const productSheet = product && product.factsheet_url ? {
     file_url: product.factsheet_url, file_name: product.factsheet_name || `${product.label} factsheet`,
     created_at: product.updated_at, _product: true,
   } : null;
   const all = [productSheet, ...sheets].filter(Boolean);
+  // If there's a product-level factsheet, reveal buttons for ALL pools of this product
+  if (productSheet) {
+    poolIds.forEach(pid => {
+      const btn = document.getElementById(`fsBtn-${pid}`);
+      if (btn) btn.style.display = '';
+    });
+  }
   el.innerHTML = `
     <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i> Factsheets & documents</div>
     ${all.length ? `<div style="display:flex;flex-direction:column;gap:8px">
@@ -3903,7 +3915,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
         <div class="mpc2-pills">
           <div class="mpc2-pill">
             <i class="fa-solid fa-users"></i>
-            <span><strong>${pool.investor_count || 0}</strong> investor${pool.investor_count !== 1 ? 's' : ''}</span>
+            <span><strong>${pool.live_investor_count ?? pool.investor_count ?? 0}</strong> investor${(pool.live_investor_count ?? pool.investor_count ?? 0) !== 1 ? 's' : ''}</span>
           </div>
           ${days !== null ? `<div class="mpc2-pill${urgency ? ' mpc2-pill--urgent' : ''}">
             <i class="fa-solid fa-clock"></i>
@@ -3918,12 +3930,21 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
         <!-- Funding / closure progress -->
         <div class="mpc2-progress">
           ${Utils.poolIsDateTarget(pool) ? (() => {
-            // Date-targeted pools have no funding goal — show days to closure, no bar.
-            const left = days === null ? '—' : (days === 0 ? (pool.status === 'open' || pool.status === 'waitlist' ? 'Closing today' : 'Closed') : `${days} day${days === 1 ? '' : 's'} to closure`);
+            // Date-targeted pools: show time-elapsed progress bar
+            const openD  = pool.start_date ? new Date(pool.start_date) : null;
+            const closeD = pool.end_date   ? new Date(pool.end_date)   : null;
+            const today  = new Date(); today.setHours(0,0,0,0);
+            const totalDays = (openD && closeD) ? Math.max(1, Math.round((closeD - openD) / 86400000)) : null;
+            const elapsed   = openD ? Math.max(0, Math.round((today - openD) / 86400000)) : null;
+            const timePct   = (totalDays && elapsed !== null) ? Math.min(100, Math.round(elapsed / totalDays * 100)) : null;
+            const left = days === null ? '—' : (days === 0 ? 'Closing today' : `${days} day${days === 1 ? '' : 's'} left`);
+            const barColor = timePct >= 90 ? '#ef4444' : timePct >= 70 ? '#fec24f' : pi.color;
             return `
               <div class="mpc2-progress__labels">
                 <span><i class="fa-solid fa-clock" style="margin-right:4px"></i>${left}</span>
-              </div>`;
+                ${timePct !== null ? `<span style="font-weight:700;color:${barColor}">${timePct}% of term elapsed</span>` : ''}
+              </div>
+              ${timePct !== null ? `<div class="mpc2-progress__track"><div class="mpc2-progress__fill" style="width:${timePct}%;background:linear-gradient(90deg,${barColor},${barColor}aa)"></div></div>` : ''}`;
           })() : `
             <div class="mpc2-progress__labels">
               <span>${Utils.rand(pool.raised_amount)} raised</span>
@@ -3938,7 +3959,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
         <!-- CTA + factsheet -->
         <div class="mpc2-footer">
           <div style="flex:1">${ctaHtml}</div>
-          <button class="mpc2-fs-btn" onclick="viewFactsheet('${pool.id}','${pool.name}')" title="View factsheet">
+          <button class="mpc2-fs-btn" id="fsBtn-${pool.id}" onclick="viewFactsheet('${pool.id}','${pool.name}')" title="View factsheet" style="display:none">
             <i class="fa-solid fa-file-pdf"></i>
           </button>
         </div>
