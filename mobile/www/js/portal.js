@@ -889,6 +889,10 @@ function _syncNotifDot() {
 }
 
 function markAllRead() {
+  const dismissed = _getNotifDismissed();
+  _currentNotifKeys.forEach(k => dismissed.add(k));
+  _saveNotifDismissed(dismissed);
+  _currentNotifKeys = [];
   const list = document.getElementById('notifList');
   if (list) list.innerHTML = '<div style="padding:24px 18px;text-align:center;color:#999;font-size:0.82rem">You\'re all caught up!</div>';
   const dot = document.getElementById('notifDot');
@@ -921,6 +925,19 @@ function _animateNum(el, target, prefix = '', suffix = '', duration = 900) {
   requestAnimationFrame(step);
 }
 
+/* ─── Notification dismiss persistence ─── */
+let _currentNotifKeys = [];
+function _notifDismissKey() { return _portalScopedKey('svc_notif_dismissed'); }
+function _getNotifDismissed() {
+  try { return new Set(JSON.parse(_localGet(_notifDismissKey()) || '[]')); } catch (_) { return new Set(); }
+}
+function _saveNotifDismissed(set) { _localSet(_notifDismissKey(), JSON.stringify([...set])); }
+function _weekKey() {
+  const d = new Date(); const dn = d.getDay() || 7; d.setDate(d.getDate() + 4 - dn);
+  const ys = new Date(d.getFullYear(), 0, 1);
+  return d.getFullYear() + '-W' + String(Math.ceil((((d - ys) / 86400000) + 1) / 7)).padStart(2, '0');
+}
+
 function loadNotifications() {
   const list = document.getElementById('notifList');
   if (!list) return;
@@ -931,10 +948,12 @@ function loadNotifications() {
   const tickets     = PORTAL.tickets      || [];
   const transactions= PORTAL.transactions || [];
   const pools       = PORTAL.pools        || [];
+  const wk          = _weekKey();
 
-  // 1. Low wallet balance
+  // 1. Low wallet balance (re-triggers each week while balance stays low)
   if (inv && parseFloat(inv.wallet_balance) < 500) {
     notifs.push({
+      key: `low-balance-${wk}`,
       icon: 'fa-wallet', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
       title: 'Low wallet balance',
       sub: `Your balance is ${Utils.rand(parseFloat(inv.wallet_balance) || 0)}. Top up to keep investing.`,
@@ -944,7 +963,7 @@ function loadNotifications() {
     });
   }
 
-  // 2. Investments maturing within 60 days
+  // 2. Investments maturing within 60 days (re-triggers each week)
   const now = new Date();
   const soon = investments.filter(i => {
     if (i.status !== 'active') return false;
@@ -957,6 +976,7 @@ function loadNotifications() {
     const s = soon[0];
     const daysLeft = Math.round((new Date(s.end_date || s.maturity_date) - now) / 86400000);
     notifs.push({
+      key: `maturing-soon-${s.id}-${wk}`,
       icon: 'fa-coins', iconBg: 'rgba(34,197,94,0.1)', iconColor: '#22c55e',
       title: 'Investment maturing soon',
       sub: `${s.pool_name || 'An investment'} matures in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Submit your maturity instruction.`,
@@ -970,6 +990,7 @@ function loadNotifications() {
   if (inv) {
     if (inv.fica_status === 'rejected' || inv.kyc_status === 'rejected') {
       notifs.push({
+        key: 'fica-rejected',
         icon: 'fa-triangle-exclamation', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
         title: 'FICA/KYC verification unsuccessful',
         sub: 'Your documents could not be verified. Please re-upload and resubmit.',
@@ -979,6 +1000,7 @@ function loadNotifications() {
       });
     } else if (inv.fica_status === 'pending' || inv.kyc_status === 'pending' || inv.status === 'fica_submitted') {
       notifs.push({
+        key: 'fica-pending',
         icon: 'fa-clock', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
         title: 'FICA/KYC verification in progress',
         sub: 'Your documents are under review — typically 1–2 business days.',
@@ -988,6 +1010,7 @@ function loadNotifications() {
       });
     } else if (inv.fica_status === 'approved') {
       notifs.push({
+        key: 'fica-approved',
         icon: 'fa-shield-halved', iconBg: 'rgba(237,165,255,0.13)', iconColor: '#eda5ff',
         title: 'Identity verified',
         sub: 'Your FICA/KYC verification is complete. You can invest in all available pools.',
@@ -1002,6 +1025,7 @@ function loadNotifications() {
   if (inv && inv.bank_account_number) {
     if (inv.bank_account_status === 'pending') {
       notifs.push({
+        key: 'bank-pending',
         icon: 'fa-building-columns', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
         title: 'Bank account pending verification',
         sub: `${inv.bank_name || 'Your bank account'} is being reviewed by our team. Withdrawals will be enabled once approved.`,
@@ -1011,6 +1035,7 @@ function loadNotifications() {
       });
     } else if (inv.bank_account_status === 'approved') {
       notifs.push({
+        key: 'bank-approved',
         icon: 'fa-building-columns', iconBg: 'rgba(34,197,94,0.1)', iconColor: '#22c55e',
         title: 'Bank account verified',
         sub: `Your ${inv.bank_name || 'bank'} account has been verified. You can now request withdrawals.`,
@@ -1020,6 +1045,7 @@ function loadNotifications() {
       });
     } else if (inv.bank_account_status === 'rejected') {
       notifs.push({
+        key: 'bank-rejected',
         icon: 'fa-building-columns', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
         title: 'Bank account not verified',
         sub: inv.bank_account_notes || 'Your bank details could not be verified. Please update and resubmit.',
@@ -1037,6 +1063,7 @@ function loadNotifications() {
   });
   if (overdue.length) {
     notifs.push({
+      key: `maturity-overdue-${overdue.map(i => i.id).sort().join('-')}`,
       icon: 'fa-exclamation-circle', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
       title: `${overdue.length} investment${overdue.length === 1 ? '' : 's'} awaiting instruction`,
       sub: `${overdue.map(i => i.pool_name || 'Investment').slice(0,2).join(', ')} ha${overdue.length === 1 ? 's' : 've'} matured — submit your payout instruction now.`,
@@ -1050,6 +1077,7 @@ function loadNotifications() {
   const answered = tickets.filter(t => t.admin_response && t.admin_response.trim());
   answered.forEach(t => {
     notifs.push({
+      key: `support-reply-${t.id}`,
       icon: 'fa-reply', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#656565',
       title: 'Support reply received',
       sub: `"${t.subject}" — our team has responded.`,
@@ -1063,6 +1091,7 @@ function loadNotifications() {
   const pendingWithdrawal = transactions.find(t => t.type === 'withdrawal' && t.status === 'pending');
   if (pendingWithdrawal) {
     notifs.push({
+      key: `withdrawal-pending-${pendingWithdrawal.id}`,
       icon: 'fa-money-bill-transfer', iconBg: 'rgba(99,102,241,0.1)', iconColor: '#656565',
       title: 'Withdrawal in progress',
       sub: `${Utils.rand(Math.abs(pendingWithdrawal.amount))} withdrawal is being processed — 1–2 business days.`,
@@ -1080,6 +1109,7 @@ function loadNotifications() {
   if (newPools.length) {
     const np = newPools[0];
     notifs.push({
+      key: `new-pool-${np.id}`,
       icon: 'fa-chart-line', iconBg: 'rgba(47,140,155,0.1)', iconColor: '#656565',
       title: 'New investment pool available',
       sub: `${np.name || np.pool_name} — ${Utils.pct(np.annual_rate || np.benchmark_rate)} benchmark over ${np.term_months} months.`,
@@ -1089,13 +1119,39 @@ function loadNotifications() {
     });
   }
 
-  if (!notifs.length) {
+  // 9. Investment confirmed — one per investment created in the last 30 days
+  const recentInvs = investments.filter(i => {
+    const created = new Date(i.created_at || i.start_date);
+    return !isNaN(created) && (now - created) < 30 * 86400000;
+  });
+  recentInvs.forEach(i => {
+    const startLabel = i.start_date ? Utils.date(i.start_date) : null;
+    const parts = [Utils.rand(i.amount) + ' invested'];
+    if (i.pool_name) parts.push(i.pool_name);
+    if (startLabel)  parts.push('starts ' + startLabel);
+    notifs.push({
+      key: `investment-confirmed-${i.id}`,
+      icon: 'fa-circle-check', iconBg: 'rgba(34,197,94,0.1)', iconColor: '#22c55e',
+      title: 'Investment confirmed',
+      sub: parts.join(' · '),
+      time: Utils.timeAgo(i.created_at || i.start_date),
+      action: "navigate('investments',document.querySelector('[data-view=investments]'))",
+      unread: true,
+    });
+  });
+
+  // Filter out already-dismissed notifications
+  const dismissed = _getNotifDismissed();
+  const visible = notifs.filter(n => !n.key || !dismissed.has(n.key));
+  _currentNotifKeys = visible.map(n => n.key).filter(Boolean);
+
+  if (!visible.length) {
     list.innerHTML = '<div style="padding:24px 18px;text-align:center;color:#999;font-size:0.82rem">You\'re all caught up!</div>';
     _syncNotifDot();
     return;
   }
 
-  list.innerHTML = notifs.map((n, i) => `
+  list.innerHTML = visible.map((n, i) => `
     <div class="notif-item${n.unread ? ' unread' : ''}" data-id="n${i}" ${n.action ? `onclick="${n.action};toggleNotifPanel()" style="cursor:pointer"` : ''}>
       <div class="notif-icon" style="background:${n.iconBg}"><i class="fa-solid ${n.icon}" style="color:${n.iconColor}"></i></div>
       <div class="notif-body">

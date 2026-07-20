@@ -939,9 +939,30 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
 
         // New investment → push investor
         if (table === 'investments' && created.investor_id) {
+          let poolName = created.pool_name || '';
+          let startDateStr = '';
+          try {
+            if (created.pool_id) {
+              const { rows: pr } = await pool.query(
+                'SELECT name, end_date FROM investment_pools WHERE id = $1', [created.pool_id]
+              );
+              if (pr[0]) {
+                if (!poolName && pr[0].name) poolName = pr[0].name;
+                if (pr[0].end_date) {
+                  const sd = new Date(pr[0].end_date);
+                  sd.setDate(sd.getDate() + 1);
+                  startDateStr = sd.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
+                }
+              }
+            }
+          } catch (_) {}
+          const amtStr = `R${Number(created.amount || 0).toLocaleString('en-ZA')}`;
+          const bodyParts = [`${amtStr} invested`];
+          if (poolName) bodyParts.push(poolName);
+          if (startDateStr) bodyParts.push(`starts ${startDateStr}`);
           await _sendPush(created.investor_id, {
             title: 'Investment confirmed',
-            body:  `Your investment of R${Number(created.amount || 0).toLocaleString('en-ZA')} has been confirmed.`,
+            body:  bodyParts.join(' · '),
             url:   '/portal/',
             tag:   'investment.created',
           });
