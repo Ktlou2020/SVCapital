@@ -2455,7 +2455,7 @@ function renderMyInvestmentCards() {
 
         <div class="my-inv-card__stats">
           <div class="mic-stat"><span class="mic-stat__label">${multiple ? 'Total Invested' : 'Amount Invested'}</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(Math.round(totalAmount * 0.99 * 100) / 100)}</span></div>
-          <div class="mic-stat"><span class="mic-stat__label">Launch Date</span><span class="mic-stat__value">${Utils.date(inv.investment_date || inv.start_date)}</span></div>
+          <div class="mic-stat"><span class="mic-stat__label">Start Date</span><span class="mic-stat__value">${Utils.date(inv.investment_date || inv.start_date)}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Maturity Date</span><span class="mic-stat__value">${Utils.date(inv.maturity_date)}</span></div>
           ${isPaidOut ? `
           <div class="mic-stat"><span class="mic-stat__label">Return Rate</span><span class="mic-stat__value">${Utils.pct(inv.annual_rate || inv.expected_return_rate)}</span></div>
