@@ -4245,8 +4245,8 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
 
         <!-- Funding / closure progress -->
         <div class="mpc2-progress">
-          ${Utils.poolIsDateTarget(pool) ? (() => {
-            // Date-targeted pools: show time-elapsed progress bar
+          ${(Utils.poolIsDateTarget(pool) || !!pool.end_date) ? (() => {
+            // Pools with a closing date: show time-elapsed progress bar
             const openD  = pool.start_date ? new Date(pool.start_date) : null;
             const closeD = pool.end_date   ? new Date(pool.end_date)   : null;
             const today  = new Date(); today.setHours(0,0,0,0);
