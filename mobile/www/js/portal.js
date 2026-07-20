@@ -8361,165 +8361,223 @@ function _saNormalDetail(sa, meta) {
   const balance  = parseFloat(sa.wallet_balance)  || 0;
   const invested = parseFloat(sa.total_invested)   || 0;
   const returns  = parseFloat(sa.total_returns)    || 0;
+  const total    = balance + invested;
 
   const kycStatus = sa.kyc_status || 'missing';
   const kycMeta = {
-    approved:     { label: 'KYC/FICA Verified',    icon: 'fa-circle-check',        color: '#22c55e', bg: 'rgba(34,197,94,0.15)',  border: 'rgba(34,197,94,0.3)' },
-    under_review: { label: 'Under Review',     icon: 'fa-clock',               color: '#fec24f', bg: 'rgba(254,194,79,0.15)', border: 'rgba(254,194,79,0.3)' },
-    missing:      { label: 'KYC/FICA Required',    icon: 'fa-triangle-exclamation', color: '#ef4444', bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.25)' },
+    approved:     { label: 'FICA Verified',   icon: 'fa-circle-check',         color: '#22c55e', bg: 'rgba(34,197,94,0.18)',  border: 'rgba(34,197,94,0.35)' },
+    under_review: { label: 'Under Review',    icon: 'fa-clock',                color: '#fec24f', bg: 'rgba(254,194,79,0.18)', border: 'rgba(254,194,79,0.35)' },
+    pending:      { label: 'Documents Needed',icon: 'fa-triangle-exclamation', color: '#f97316', bg: 'rgba(249,115,22,0.15)', border: 'rgba(249,115,22,0.3)' },
+    missing:      { label: 'FICA Required',   icon: 'fa-triangle-exclamation', color: '#ef4444', bg: 'rgba(239,68,68,0.15)',  border: 'rgba(239,68,68,0.3)' },
   }[kycStatus] || { label: kycStatus, icon: 'fa-circle-info', color: '#9ca3af', bg: 'rgba(156,163,175,0.1)', border: 'rgba(156,163,175,0.2)' };
 
-  const ficaDocs = SA_TYPE_META[sa.account_type]?.ficaDocs || [];
+  const ficaDocs  = SA_TYPE_META[sa.account_type]?.ficaDocs || [];
+  const ficaDone  = kycStatus === 'approved';
+  const saAllTxns = (PORTAL.transactions || []).filter(t => t.sub_account_id === sa.id).slice(0, 20);
+  const saInvs    = (PORTAL.investments  || []).filter(i => i.sub_account_id === sa.id);
 
-  const saAllTxns = (PORTAL.transactions || [])
-    .filter(t => t.sub_account_id === sa.id);
+  const txnIcon = t => ({ deposit:'fa-arrow-down-to-line', investment:'fa-seedling', withdrawal:'fa-arrow-up-from-line', return:'fa-coins', fee:'fa-receipt' }[t.type] || 'fa-circle-dot');
+  const isPos   = t => !['withdrawal','fee','investment','gift_sent'].includes(t.type);
 
-  const txnTypeIcon = t => ({
-    deposit: 'fa-download', investment: 'fa-chart-line',
-    withdrawal: 'fa-upload', return: 'fa-coins',
-  }[t.type] || 'fa-circle-dot');
+  /* ── gradient accent derived from meta.color ── */
+  const accent = meta.color;
 
   return `
-    <!-- ── Hero banner ── -->
-    <div class="sad-hero" style="background:${meta.bg}">
-      <button class="sad-close-btn" onclick="Modal.close('saDetailModal')"><i class="fa-solid fa-xmark"></i></button>
-      <div class="sad-hero__type">
-        <div class="sad-hero__icon"><i class="fa-solid ${meta.icon}"></i></div>
-        <span class="sad-hero__type-label">${meta.label} Account</span>
+  <div style="background:var(--bg);min-height:100%;font-family:inherit">
+
+    <!-- ═══ HERO ═══ -->
+    <div style="position:relative;background:${meta.bg};padding:52px 20px 0;overflow:hidden">
+      <!-- close -->
+      <button onclick="Modal.close('saDetailModal')" style="position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:50%;border:none;background:rgba(0,0,0,0.25);color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <!-- type badge -->
+      <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,0.22);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:4px 12px;font-size:0.7rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:rgba(255,255,255,0.85);margin-bottom:12px;backdrop-filter:blur(4px)">
+        <i class="fa-solid ${meta.icon}"></i> ${meta.label} Account
       </div>
-      <div class="sad-hero__name">${_esc(sa.name)}</div>
-      <div class="sad-kyc-chip" style="background:${kycMeta.bg};color:${kycMeta.color};border:1px solid ${kycMeta.border}">
+      <!-- name -->
+      <div style="font-size:1.65rem;font-weight:900;color:#fff;line-height:1.15;margin-bottom:4px;text-shadow:0 2px 12px rgba(0,0,0,0.3)">${_esc(sa.name)}</div>
+      <!-- ref -->
+      <div style="font-size:0.7rem;color:rgba(255,255,255,0.5);font-family:monospace;margin-bottom:14px;letter-spacing:0.04em">${sa.sa_reference || sa.id}</div>
+      <!-- KYC chip -->
+      <div style="display:inline-flex;align-items:center;gap:6px;background:${kycMeta.bg};border:1px solid ${kycMeta.border};border-radius:20px;padding:5px 12px;font-size:0.72rem;font-weight:700;color:${kycMeta.color};margin-bottom:20px;backdrop-filter:blur(4px)">
         <i class="fa-solid ${kycMeta.icon}"></i> ${kycMeta.label}
       </div>
-      <div class="sad-stats-row">
-        <div class="sad-stat">
-          <div class="sad-stat__label">Wallet</div>
-          <div class="sad-stat__value">${Utils.rand(balance)}</div>
+      <!-- floating stats glass card -->
+      <div style="background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.12);border-radius:16px 16px 0 0;padding:18px 20px;backdrop-filter:blur(12px);display:grid;grid-template-columns:1fr 1px 1fr 1px 1fr;gap:0;margin:0 -20px">
+        <div style="text-align:center;padding:0 6px">
+          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:rgba(255,255,255,0.45);margin-bottom:5px">Wallet</div>
+          <div style="font-size:1.05rem;font-weight:800;color:#fec24f">${Utils.rand(balance)}</div>
         </div>
-        <div class="sad-stat-divider"></div>
-        <div class="sad-stat">
-          <div class="sad-stat__label">Invested</div>
-          <div class="sad-stat__value">${Utils.rand(invested)}</div>
+        <div style="background:rgba(255,255,255,0.1)"></div>
+        <div style="text-align:center;padding:0 6px">
+          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:rgba(255,255,255,0.45);margin-bottom:5px">Invested</div>
+          <div style="font-size:1.05rem;font-weight:800;color:#fff">${Utils.rand(invested)}</div>
         </div>
-        <div class="sad-stat-divider"></div>
-        <div class="sad-stat">
-          <div class="sad-stat__label">Returns</div>
-          <div class="sad-stat__value" style="color:#4ade80">${Utils.rand(returns)}</div>
+        <div style="background:rgba(255,255,255,0.1)"></div>
+        <div style="text-align:center;padding:0 6px">
+          <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:rgba(255,255,255,0.45);margin-bottom:5px">Returns</div>
+          <div style="font-size:1.05rem;font-weight:800;color:#4ade80">${Utils.rand(returns)}</div>
         </div>
       </div>
     </div>
 
-    <!-- ── Action buttons ── -->
-    <div class="sad-actions">
-      <button class="sad-action-btn sad-action-btn--primary" onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')">
-        <i class="fa-solid fa-wallet"></i><span>Deposit</span>
+    <!-- ═══ ACTION GRID ═══ -->
+    <div style="padding:20px 16px 8px">
+      <button onclick="Modal.close('saDetailModal');openSaDeposit('${sa.id}')" style="width:100%;padding:15px;border-radius:14px;border:none;background:linear-gradient(135deg,#f97316,#fec24f);color:#fff;font-size:1rem;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;letter-spacing:0.01em;box-shadow:0 4px 20px rgba(249,115,22,0.35)">
+        <i class="fa-solid fa-wallet"></i> Deposit Funds
       </button>
-      <button class="sad-action-btn sad-action-btn--secondary" onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')">
-        <i class="fa-solid fa-chart-line"></i><span>Invest</span>
-      </button>
-      ${sa.kyc_status === 'approved' ? `<button class="sad-action-btn" onclick="openSaWithdrawal('${sa.id}')">
-        <i class="fa-solid fa-arrow-up-from-bracket"></i><span>Withdraw</span>
-      </button>` : ''}
-      <button class="sad-action-btn" onclick="Modal.close('saDetailModal');downloadSaStatement('${sa.id}','${sa.name}')">
-        <i class="fa-solid fa-file-pdf"></i><span>Statement</span>
-      </button>
-      <button class="sad-action-btn" onclick="openSaBankDetails('${sa.id}')">
-        <i class="fa-solid fa-building-columns"></i><span>Banking</span>
-      </button>
-    </div>
-
-    <!-- ── Banking Details ── -->
-    <div class="sad-section">
-      <div class="sad-section__header">
-        <i class="fa-solid fa-building-columns" style="color:${meta.color}"></i>
-        <span>Banking Details</span>
-      </div>
-      <div style="padding:8px 0;font-size:0.82rem;color:var(--text-muted)">
-        ${sa.sa_bank_name
-          ? `<div style="display:flex;justify-content:space-between;align-items:center">
-              <div>
-                <div style="font-weight:700;color:var(--text)">${sa.sa_bank_name}</div>
-                <div>${sa.sa_bank_holder} · ****${(sa.sa_bank_number||'').slice(-4)} · ${sa.sa_bank_type || 'current'}</div>
-              </div>
-              <span class="badge badge--${sa.sa_bank_status === 'pending' ? 'orange' : sa.sa_bank_status === 'approved' ? 'green' : 'gray'}">${sa.sa_bank_status || 'none'}</span>
-            </div>`
-          : `<span style="color:var(--text-dim)">No banking details on file</span>`}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button onclick="Modal.close('saDetailModal');openSaInvest('${sa.id}')" style="padding:13px 10px;border-radius:12px;border:1px solid rgba(237,165,255,0.25);background:rgba(237,165,255,0.08);color:#eda5ff;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">
+          <i class="fa-solid fa-seedling"></i> Invest
+        </button>
+        ${sa.kyc_status === 'approved' ? `
+        <button onclick="openSaWithdrawal('${sa.id}')" style="padding:13px 10px;border-radius:12px;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.07);color:#f87171;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">
+          <i class="fa-solid fa-arrow-up-from-bracket"></i> Withdraw
+        </button>` : `
+        <button onclick="openSaBankDetails('${sa.id}')" style="padding:13px 10px;border-radius:12px;border:1px solid rgba(100,180,255,0.2);background:rgba(100,180,255,0.07);color:#93c5fd;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">
+          <i class="fa-solid fa-building-columns"></i> Banking
+        </button>`}
+        <button onclick="Modal.close('saDetailModal');downloadSaStatement('${sa.id}','${sa.name}')" style="padding:13px 10px;border-radius:12px;border:1px solid rgba(156,163,175,0.2);background:rgba(156,163,175,0.07);color:#9ca3af;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">
+          <i class="fa-solid fa-file-pdf"></i> Statement
+        </button>
+        ${sa.kyc_status === 'approved' ? `
+        <button onclick="openSaBankDetails('${sa.id}')" style="padding:13px 10px;border-radius:12px;border:1px solid rgba(100,180,255,0.2);background:rgba(100,180,255,0.07);color:#93c5fd;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">
+          <i class="fa-solid fa-building-columns"></i> Banking
+        </button>` : `
+        <button onclick="openSaFicaUpload('${sa.id}')" style="padding:13px 10px;border-radius:12px;border:1px solid rgba(249,115,22,0.25);background:rgba(249,115,22,0.08);color:#fb923c;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">
+          <i class="fa-solid fa-cloud-arrow-up"></i> FICA Docs
+        </button>`}
       </div>
     </div>
 
-    <!-- ── FICA section (always shown) ── -->
-    <div class="sad-section">
-      <div class="sad-section__header">
-        <i class="fa-solid fa-id-card" style="color:${meta.color}"></i>
-        <span>Documents Required</span>
+    <!-- ═══ BANKING CARD ═══ -->
+    <div style="margin:8px 16px;border-radius:16px;border:1px solid var(--border);background:var(--bg-secondary);overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)">
+        <div style="width:32px;height:32px;border-radius:8px;background:rgba(100,180,255,0.12);display:flex;align-items:center;justify-content:center;color:#93c5fd;font-size:0.95rem">
+          <i class="fa-solid fa-building-columns"></i>
+        </div>
+        <span style="font-size:0.8rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-muted)">Banking Details</span>
       </div>
-      <div class="sad-fica-list">
+      <div style="padding:14px 16px">
+        ${sa.sa_bank_name ? `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div>
+            <div style="font-size:0.95rem;font-weight:800;color:var(--text);margin-bottom:3px">${_esc(sa.sa_bank_name)}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">${_esc(sa.sa_bank_holder||'')} · ****${(sa.sa_bank_number||'').slice(-4)} · ${(sa.sa_bank_type||'current')}</div>
+          </div>
+          <span style="flex-shrink:0;font-size:0.65rem;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;padding:4px 10px;border-radius:20px;background:${sa.sa_bank_status==='approved'?'rgba(34,197,94,0.15)':sa.sa_bank_status==='pending'?'rgba(249,115,22,0.15)':'rgba(156,163,175,0.12)'};color:${sa.sa_bank_status==='approved'?'#4ade80':sa.sa_bank_status==='pending'?'#fb923c':'#9ca3af'};border:1px solid ${sa.sa_bank_status==='approved'?'rgba(74,222,128,0.3)':sa.sa_bank_status==='pending'?'rgba(249,115,22,0.3)':'rgba(156,163,175,0.2)'}">${sa.sa_bank_status||'none'}</span>
+        </div>` : `
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:0.83rem;color:var(--text-dim)">No banking details on file</span>
+          <button onclick="openSaBankDetails('${sa.id}')" style="font-size:0.73rem;font-weight:700;padding:6px 14px;border-radius:20px;border:1px solid rgba(249,115,22,0.3);background:rgba(249,115,22,0.08);color:#fb923c;cursor:pointer">Add Details</button>
+        </div>`}
+      </div>
+    </div>
+
+    <!-- ═══ FICA / DOCUMENTS ═══ -->
+    ${ficaDone ? `
+    <div style="margin:8px 16px;border-radius:16px;border:1px solid rgba(34,197,94,0.25);background:rgba(34,197,94,0.06);padding:14px 16px;display:flex;align-items:center;gap:12px">
+      <div style="width:36px;height:36px;border-radius:50%;background:rgba(34,197,94,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <i class="fa-solid fa-circle-check" style="color:#4ade80;font-size:1.1rem"></i>
+      </div>
+      <div>
+        <div style="font-size:0.85rem;font-weight:700;color:#4ade80">FICA Verified</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:1px">All documents approved · Full access enabled</div>
+      </div>
+    </div>` : `
+    <div style="margin:8px 16px;border-radius:16px;border:1px solid var(--border);background:var(--bg-secondary);overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:32px;height:32px;border-radius:8px;background:rgba(249,115,22,0.12);display:flex;align-items:center;justify-content:center;color:#fb923c;font-size:0.95rem">
+            <i class="fa-solid fa-id-card"></i>
+          </div>
+          <span style="font-size:0.8rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-muted)">FICA Documents</span>
+        </div>
+        ${kycStatus === 'under_review' ? `<span style="font-size:0.65rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(254,194,79,0.15);color:#fec24f;border:1px solid rgba(254,194,79,0.3)">Under Review</span>` : ''}
+      </div>
+      <div style="padding:12px 16px">
         ${ficaDocs.map((d, i) => `
-          <div class="sad-fica-item" style="animation-delay:${i * 60}ms">
-            <div class="sad-fica-item__num" style="background:${meta.color}22;color:${meta.color}">${i + 1}</div>
-            <span>${d}</span>
-          </div>`).join('')}
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;${i < ficaDocs.length-1 ? 'border-bottom:1px solid var(--border)' : ''}">
+          <div style="flex-shrink:0;width:22px;height:22px;border-radius:6px;background:rgba(249,115,22,0.12);display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:800;color:#fb923c;margin-top:1px">${i+1}</div>
+          <span style="font-size:0.8rem;color:var(--text);line-height:1.4">${_esc(d)}</span>
+        </div>`).join('')}
       </div>
-      <button class="sad-upload-btn" onclick="openSaFicaUpload('${sa.id}')">
-        <i class="fa-solid fa-cloud-arrow-up"></i> Upload FICA Documents
-      </button>
-    </div>
+      <div style="padding:0 16px 16px">
+        <button onclick="openSaFicaUpload('${sa.id}')" style="width:100%;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#f97316,#fec24f);color:#fff;font-size:0.88rem;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+          <i class="fa-solid fa-cloud-arrow-up"></i> Upload FICA Documents
+        </button>
+      </div>
+    </div>`}
 
-    ${(() => {
-      const saInvs = (PORTAL.investments || []).filter(i => i.sub_account_id === sa.id);
-      if (!saInvs.length) return '';
-      return `
-    <!-- ── Investments ── -->
-    <div class="sad-section">
-      <div class="sad-section__header">
-        <i class="fa-solid fa-chart-line" style="color:${meta.color}"></i>
-        <span>Investments (${saInvs.length})</span>
+    <!-- ═══ INVESTMENTS ═══ -->
+    ${saInvs.length ? `
+    <div style="margin:8px 16px;border-radius:16px;border:1px solid var(--border);background:var(--bg-secondary);overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:32px;height:32px;border-radius:8px;background:rgba(74,222,128,0.12);display:flex;align-items:center;justify-content:center;color:#4ade80;font-size:0.95rem">
+            <i class="fa-solid fa-seedling"></i>
+          </div>
+          <span style="font-size:0.8rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-muted)">Investments</span>
+        </div>
+        <span style="font-size:0.7rem;font-weight:800;padding:3px 10px;border-radius:20px;background:rgba(74,222,128,0.12);color:#4ade80;border:1px solid rgba(74,222,128,0.25)">${saInvs.length} active</span>
       </div>
-      <div class="sad-txn-list">
-        ${saInvs.map(inv => {
-          const pi   = Utils.productInfo(inv.product_type);
+      <div>
+        ${saInvs.map((inv, i) => {
+          const pi  = Utils.productInfo(inv.product_type);
           const days = Utils.daysRemaining(inv.maturity_date);
           const isActive = inv.status === 'active';
+          const pctProg = (inv.start_date && inv.end_date) ? Math.min(100, Math.max(0, Math.round(((new Date()-new Date(inv.start_date))/(new Date(inv.end_date)-new Date(inv.start_date)))*100))) : 0;
           return `
-          <div class="sad-txn" onclick="Modal.close('saDetailModal');navigate('investments',document.querySelector('[data-view=investments]'))" style="cursor:pointer">
-            <div class="sad-txn__icon" style="background:${pi.color}1a;color:${pi.color}"><i class="fa-solid ${pi.icon}"></i></div>
-            <div class="sad-txn__info">
-              <div class="sad-txn__type">${_esc(inv.pool_name || pi.label)}</div>
-              <div class="sad-txn__date">${isActive ? (days !== null ? days + ' days left' : 'Active') : (inv.status || 'inactive')}</div>
-              ${inv.status === 'matured' && !inv.maturity_instruction ? `<button class="btn btn--ghost btn--sm" style="font-size:0.7rem;padding:2px 8px;margin-top:4px;white-space:nowrap" onclick="event.stopPropagation();Modal.close('saDetailModal');openMaturityModal('${inv.id}')">Give Instruction</button>` : ''}
+          <div onclick="Modal.close('saDetailModal');navigate('investments',document.querySelector('[data-view=investments]'))" style="padding:14px 16px;cursor:pointer;${i < saInvs.length-1 ? 'border-bottom:1px solid var(--border)' : ''}">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:40px;height:40px;border-radius:12px;background:${pi.color}1a;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <i class="fa-solid ${pi.icon}" style="color:${pi.color};font-size:1.05rem"></i>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:0.87rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(inv.pool_name || pi.label)}</div>
+                <div style="font-size:0.7rem;color:var(--text-muted);margin-top:1px">${isActive ? (days !== null ? `${days} days left` : 'Active') : (inv.status||'inactive')} · ${inv.annual_rate ? Utils.pct(inv.annual_rate) : '—'} p.a.</div>
+                ${isActive && pctProg > 0 ? `<div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.08);margin-top:6px;overflow:hidden"><div style="height:100%;width:${pctProg}%;background:${pctProg>=90?'#ef4444':pctProg>=70?'#fec24f':'#4ade80'};border-radius:2px"></div></div>` : ''}
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:0.93rem;font-weight:800;color:${isActive?'#4ade80':'#9ca3af'}">${Utils.rand(inv.amount)}</div>
+                ${inv.status === 'matured' && !inv.maturity_instruction ? `<button onclick="event.stopPropagation();Modal.close('saDetailModal');openMaturityModal('${inv.id}')" style="margin-top:4px;font-size:0.62rem;font-weight:700;padding:3px 8px;border-radius:20px;border:1px solid rgba(237,165,255,0.3);background:rgba(237,165,255,0.1);color:#eda5ff;cursor:pointer">Instruction</button>` : ''}
+              </div>
             </div>
-            <div class="sad-txn__amount" style="color:${isActive ? '#4ade80' : '#9ca3af'}">${Utils.rand(inv.amount)}</div>
           </div>`;
         }).join('')}
       </div>
-    </div>`;
-    })()}
-
-    ${saAllTxns.length ? `
-    <!-- ── All activity ── -->
-    <div class="sad-section">
-      <div class="sad-section__header">
-        <i class="fa-solid fa-clock-rotate-left" style="color:${meta.color}"></i>
-        <span>All Transactions (${saAllTxns.length})</span>
-      </div>
-      ${saAllTxns.length > 10 ? `<div style="max-height:320px;overflow-y:auto">` : ''}
-      <div class="sad-txn-list">
-        ${saAllTxns.map(t => { const _p = !['withdrawal','fee','investment','gift_sent'].includes(t.type); return `
-          <div class="sad-txn">
-            <div class="sad-txn__icon" style="background:${_p ? 'rgba(74,222,128,0.12)' : 'rgba(239,68,68,0.1)'}">
-              <i class="fa-solid ${txnTypeIcon(t)}" style="color:${_p ? '#4ade80' : '#ef4444'}"></i>
-            </div>
-            <div class="sad-txn__info">
-              <div class="sad-txn__type">${(t.type || 'transaction').replace(/_/g,' ')}</div>
-              <div class="sad-txn__date">${Utils.date(t.created_at)}</div>
-            </div>
-            <div class="sad-txn__amount" style="color:${_p ? '#4ade80' : '#ef4444'}">${_p ? '+' : '-'}${Utils.rand(Math.abs(t.amount))}</div>
-          </div>`; }).join('')}
-      </div>
-      ${saAllTxns.length > 10 ? `</div>` : ''}
     </div>` : ''}
 
-    <div style="height:32px"></div>`;
+    <!-- ═══ TRANSACTIONS ═══ -->
+    ${saAllTxns.length ? `
+    <div style="margin:8px 16px 24px;border-radius:16px;border:1px solid var(--border);background:var(--bg-secondary);overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--border)">
+        <div style="width:32px;height:32px;border-radius:8px;background:rgba(156,163,175,0.1);display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:0.95rem">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+        </div>
+        <span style="font-size:0.8rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-muted)">Recent Activity</span>
+      </div>
+      <div${saAllTxns.length > 8 ? ' style="max-height:320px;overflow-y:auto"' : ''}>
+        ${saAllTxns.map((t, i) => {
+          const pos = isPos(t);
+          return `
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;${i < saAllTxns.length-1 ? 'border-bottom:1px solid var(--border)' : ''}">
+            <div style="width:36px;height:36px;border-radius:10px;background:${pos?'rgba(74,222,128,0.1)':'rgba(239,68,68,0.08)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <i class="fa-solid ${txnIcon(t)}" style="color:${pos?'#4ade80':'#f87171'};font-size:0.85rem"></i>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.82rem;font-weight:600;color:var(--text);text-transform:capitalize">${(t.type||'transaction').replace(/_/g,' ')}</div>
+              <div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px">${Utils.date(t.transaction_date || t.created_at)}</div>
+            </div>
+            <div style="font-size:0.9rem;font-weight:800;color:${pos?'#4ade80':'#f87171'};flex-shrink:0">${pos?'+':'-'}${Utils.rand(Math.abs(parseFloat(t.amount)||0))}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+
+    <div style="height:env(safe-area-inset-bottom,16px)"></div>
+  </div>`;
 }
 
 /* ── Minor Hub ──────────────────────────────────────────────── */
