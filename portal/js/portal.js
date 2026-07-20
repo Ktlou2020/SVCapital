@@ -2279,6 +2279,8 @@ function renderMyInvestmentCards() {
     const totalAmount = group.reduce((s, i) => s + (i.amount || 0), 0);
     const totalReturn = group.reduce((s, i) => s + (i.actual_return_amount || i.expected_return_amount || 0), 0);
     const uid = 'pool_' + (inv.pool_id || inv.id);
+    const _poolRec = inv.pool_id ? (PORTAL.pools || []).find(p => p.id === inv.pool_id) : null;
+    const _invStartDate = _poolRec?.investment_start_date || inv.investment_date || inv.start_date;
 
     const breakdownRows = multiple ? group.map(i => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);font-size:0.78rem">
@@ -2311,7 +2313,7 @@ function renderMyInvestmentCards() {
 
         <div class="my-inv-card__stats">
           <div class="mic-stat"><span class="mic-stat__label">${multiple ? 'Total Invested' : 'Amount Invested'}</span><span class="mic-stat__value mic-stat__value--gold">${Utils.rand(totalAmount)}</span></div>
-          <div class="mic-stat"><span class="mic-stat__label">Start Date</span><span class="mic-stat__value">${Utils.date(inv.investment_date || inv.start_date)}</span></div>
+          <div class="mic-stat"><span class="mic-stat__label">Start Date</span><span class="mic-stat__value">${Utils.date(_invStartDate)}</span></div>
           <div class="mic-stat"><span class="mic-stat__label">Maturity Date</span><span class="mic-stat__value">${Utils.date(inv.maturity_date)}</span></div>
           ${isPaidOut ? `
           <div class="mic-stat"><span class="mic-stat__label">Return Rate</span><span class="mic-stat__value">${Utils.pct(inv.annual_rate || inv.expected_return_rate)}</span></div>
