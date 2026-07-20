@@ -1302,7 +1302,7 @@ async function _applySolarTelemetry() {
           ${s.co2_avoided_kg ? stat(`${(s.co2_avoided_kg / 1000).toFixed(1)}<span style="font-size:0.85rem"> t</span>`, 'CO₂ avoided') : ''}
           ${s.device_count ? stat(s.device_count, `inverter${s.device_count === 1 ? '' : 's'}`) : ''}
         </div>
-        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:10px">Live data from FoxCloud${s.station_name ? ` · ${String(s.station_name).replace(/[<>&]/g, '')}` : ''}</div>
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:10px">Live data from FoxCloud</div>
       </div>`;
   }
 
