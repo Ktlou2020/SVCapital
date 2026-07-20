@@ -2266,7 +2266,7 @@ async function loadMyInvestments() {
 }
 
 function renderMyInvestmentStats() {
-  const d = (PORTAL.investments || []).filter(i => !i.sub_account_id);
+  const d = PORTAL.investments || [];
   const _s = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   _s('mi-capital',  Utils.rand(d.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)));
   _s('mi-expected', Utils.rand(d.reduce((s, i) => s + (parseFloat(i.expected_return_amount) || 0), 0)));
