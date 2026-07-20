@@ -2927,10 +2927,10 @@ function _renderAutoTopUpCard(container) {
         </div>` : ''}
 
       <div style="display:flex;flex-direction:column;gap:8px">
-        <button class="btn btn--primary btn--sm" onclick="openAutoTopUpModal()" style="width:100%">
+        <button class="btn btn--primary btn--full" onclick="openAutoTopUpModal()" style="font-size:0.82rem;padding:9px 14px">
           <i class="fa-solid fa-pen"></i> ${enabled ? 'Edit Schedule' : 'Set Up Auto Top-Up'}
         </button>
-        ${enabled ? `<button class="btn btn--secondary btn--sm" onclick="_cancelAutoTopUp()" style="width:100%;color:#ef4444;border-color:rgba(239,68,68,0.3)">
+        ${enabled ? `<button class="btn btn--secondary btn--full" onclick="_cancelAutoTopUp()" style="font-size:0.82rem;padding:9px 14px;color:#ef4444;border-color:rgba(239,68,68,0.3)">
           <i class="fa-solid fa-xmark"></i> Cancel
         </button>` : ''}
       </div>
