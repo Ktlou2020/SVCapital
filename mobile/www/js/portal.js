@@ -2266,7 +2266,7 @@ async function loadMyInvestments() {
 }
 
 function renderMyInvestmentStats() {
-  const d = PORTAL.investments;
+  const d = (PORTAL.investments || []).filter(i => !i.sub_account_id);
   const _s = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   _s('mi-capital',  Utils.rand(d.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)));
   _s('mi-expected', Utils.rand(d.reduce((s, i) => s + (parseFloat(i.expected_return_amount) || 0), 0)));
@@ -2285,7 +2285,7 @@ function filterMyInvestments(filter, btn) {
 function populateMyInvProductFilter() {
   const container = document.getElementById('myInvProductFilter');
   if (!container) return;
-  const types = [...new Set((PORTAL.investments || []).map(i => i.product_type).filter(Boolean))];
+  const types = [...new Set((PORTAL.investments || []).filter(i => !i.sub_account_id).map(i => i.product_type).filter(Boolean))];
   const cur = container.dataset.activeType || '';
   const items = [
     { value: '', icon: 'fa-layer-group', label: 'All' },
@@ -2341,7 +2341,8 @@ function renderMyInvestmentCards() {
   const grid = document.getElementById('myInvestmentsGrid');
   const _pf = document.getElementById('myInvProductFilter');
   const productFilter = _pf?.dataset?.activeType || _pf?.value || '';
-  let items = PORTAL.myInvFilter === 'all' ? PORTAL.investments : PORTAL.investments.filter(i => i.status === PORTAL.myInvFilter);
+  const mainInvs = (PORTAL.investments || []).filter(i => !i.sub_account_id);
+  let items = PORTAL.myInvFilter === 'all' ? mainInvs : mainInvs.filter(i => i.status === PORTAL.myInvFilter);
   if (productFilter) items = items.filter(i => i.product_type === productFilter);
 
   if (!items.length) {
