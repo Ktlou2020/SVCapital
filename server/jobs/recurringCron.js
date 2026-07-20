@@ -352,13 +352,13 @@ async function runAutoTopUps() {
 }
 
 function startRecurringCron() {
-  // Daily at 03:00 UTC (05:00 SAST) — processes investors whose recurring_day matches today
-  cron.schedule('0 3 * * *', () => runRecurringInvestments().catch(err => console.error('[recurringCron] error:', err.message)), { timezone: 'UTC' });
-  console.log('[recurringCron] Scheduled: daily at 03:00 UTC (each investor runs on their chosen day)');
+  // Daily at 04:00 UTC (06:00 SAST) — processes investors whose recurring_day matches today
+  cron.schedule('0 4 * * *', () => runRecurringInvestments().catch(err => console.error('[recurringCron] error:', err.message)), { timezone: 'UTC' });
+  console.log('[recurringCron] Scheduled: daily at 04:00 UTC (each investor runs on their chosen day)');
 
-  // Daily at 04:00 UTC (06:00 SAST) — auto wallet top-ups
-  cron.schedule('0 4 * * *', () => runAutoTopUps().catch(err => console.error('[autoTopUp] cron error:', err.message)), { timezone: 'UTC' });
-  console.log('[recurringCron] Auto top-up scheduled: daily at 04:00 UTC');
+  // Daily at 03:00 UTC (05:00 SAST) — auto wallet top-ups
+  cron.schedule('0 3 * * *', () => runAutoTopUps().catch(err => console.error('[autoTopUp] cron error:', err.message)), { timezone: 'UTC' });
+  console.log('[recurringCron] Auto top-up scheduled: daily at 03:00 UTC');
 }
 
 module.exports = { startRecurringCron, runRecurringInvestments, runAutoTopUps };
