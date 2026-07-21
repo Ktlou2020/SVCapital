@@ -1,7 +1,8 @@
 'use strict';
 
-const router = require('express').Router();
-const pool   = require('../db/pool');
+const router      = require('express').Router();
+const pool        = require('../db/pool');
+const emailService = require('../services/email');
 
 /* ──────────────────────────────────────────────────────────
    POST /api/waitlist/international
@@ -32,6 +33,11 @@ router.post('/international', async (req, res) => {
       [safeName, req.body.email.trim().toLowerCase(), safeCountry]
     );
     console.log('[waitlist]', JSON.stringify({ email: req.body.email, country: req.body.country }));
+    emailService.sendInternationalWaitlistConfirmation({
+      full_name: safeName,
+      email: req.body.email.trim().toLowerCase(),
+      country: safeCountry,
+    }).catch(() => {});
     res.json({ success: true });
   } catch (err) {
     console.error('[waitlist] error:', err.message);
