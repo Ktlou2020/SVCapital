@@ -1088,7 +1088,7 @@ const DEFAULT_PRODUCTS = [
   {
     product_type: 'short_term', label: 'Short Term Investment', headline: 'Fast, focused growth.',
     description: 'Fund South African SMMEs through asset finance. Capital is deployed into vetted businesses generating strong short-cycle returns.',
-    key_details: ['Capital deployed to vetted SMMEs', 'Short investment cycles', 'Asset-backed where possible'].join('\n'),
+    key_details: ['Capital deployed to vetted SMMEs', 'Returns from SMME receivables financing & asset-backed loans', 'Short investment cycles', 'Asset-backed where possible'].join('\n'),
     min_investment: 1000, term_months: 5, benchmark_rate: 0.13, performance_fee_pct: 0.20,
     risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-bolt', color: '#656565',
     badge_class: 'badge--blue', sort_order: 5,
@@ -1259,6 +1259,15 @@ async function autoSetup() {
 
     // 1b2. Seed default products (idempotent — only inserts missing product types)
     await seedProducts();
+
+    // Update short_term key_details to include receivables financing bullet
+    await pool.query(`
+      UPDATE products
+      SET key_details = 'Capital deployed to vetted SMMEs\nReturns from SMME receivables financing & asset-backed loans\nShort investment cycles\nAsset-backed where possible'
+      WHERE product_type = 'short_term'
+        AND key_details NOT LIKE '%receivables%'
+    `).catch(() => {});
+
     await seedTestimonials();
 
     // 1c. Performance indexes (each wrapped individually so one failure won't abort the rest)
