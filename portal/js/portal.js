@@ -4114,9 +4114,8 @@ function _cattleHerdStatusHtml(s) {
   return `
     <div style="background:rgba(254,194,79,0.07);border:1px solid rgba(254,194,79,0.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">
       <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#fec24f;margin-bottom:10px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px">
         <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.total_purchased.toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">purchased to date</div></div>
-        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.live_count || 0).toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">currently live</div></div>
         ${weight ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${weight}<span style="font-size:0.78rem"> kg</span></div><div style="font-size:0.7rem;color:var(--text-muted)">average weight</div></div>` : ''}
       </div>
 
