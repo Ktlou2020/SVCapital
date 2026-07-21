@@ -719,7 +719,6 @@ section { position: relative; padding: 100px 0; }
   color: var(--text-dim);
   text-decoration: none;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   transition: var(--transition);
   opacity: 0.5;
 }
