@@ -717,6 +717,7 @@ section { position: relative; padding: 100px 0; }
   font-size: 0.9rem;
   font-weight: 700;
   color: var(--text-dim);
+  text-decoration: none;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   transition: var(--transition);
