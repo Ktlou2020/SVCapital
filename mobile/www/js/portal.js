@@ -4421,7 +4421,7 @@ function _cattleHerdStatusHtml(s) {
       ${genders.length ? `<div style="margin-bottom:${breeds.length ? '10px' : '0'}"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Gender</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${_esc(g.label)}: <strong>${g.count}</strong> (${Math.round(g.count / totalG * 100)}%)`)).join('')}</div></div>` : ''}
       ${breeds.length ? `<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Breeds</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 8).map(b => chip(`${_esc(b.label)}: <strong>${b.count}</strong>`)).join('')}</div></div>` : ''}
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 3).map(b => chip(`${_esc(b.label)}: <strong>${Math.round(b.count / (breeds.reduce((a,x)=>a+x.count,0)||1) * 100)}%</strong>`)).join('')}</div></div>` : ''}
       ${mortBlock}
     </div>`;
 }
