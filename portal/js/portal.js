@@ -7941,11 +7941,16 @@ function _saGoalBar(current, goal, label) {
 let _saCreateType = null;
 let _saCreateStep = 1;
 
-function openCreateSubAccountModal() {
+function openCreateSubAccountModal(preselectedType) {
   _saCreateType = null;
   _saCreateStep = 1;
-  _saShowCreateStep(1);
   Modal.open('createSaModal');
+  if (preselectedType) {
+    saSelectType(preselectedType);
+    saStep1Next();
+  } else {
+    _saShowCreateStep(1);
+  }
 }
 
 function _saShowCreateStep(step) {
