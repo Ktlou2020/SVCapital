@@ -518,6 +518,7 @@ function renderWalletReadinessPanel() {
   const pendingDeposit = (PORTAL.transactions || []).find(t => t.type === 'deposit' && t.status === 'pending');
   const pendingWithdrawal = (PORTAL.transactions || []).find(t => t.type === 'withdrawal' && t.status === 'pending');
   const ficaApproved = _isInvestorFicaApproved(inv);
+  const ficaCardApproved = inv.fica_status === 'approved';
   const bankApproved = !!inv.bank_account_number && inv.bank_account_status === 'approved';
 
   let headline = 'Your wallet is the fastest path to your next investment.';
@@ -564,8 +565,8 @@ function renderWalletReadinessPanel() {
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Verification</div>
-          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#656565'};margin-top:6px">${ficaApproved ? 'FICA/KYC approved' : 'FICA/KYC pending'}</div>
-          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${ficaApproved ? (bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.') : 'You can invest and top up. Withdrawals unlock once KYC/FICA is approved.'}</div>
+          <div style="font-size:0.88rem;font-weight:800;color:${ficaCardApproved ? '#22c55e' : '#656565'};margin-top:6px">${ficaCardApproved ? 'FICA/KYC approved' : 'FICA/KYC pending'}</div>
+          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${ficaCardApproved ? (bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.') : 'You can invest and top up. Withdrawals unlock once FICA is approved.'}</div>
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Money in motion</div>
@@ -3002,7 +3003,7 @@ function updateAutoTopUpFee() {
   const bd  = document.getElementById('atuFeeBreakdown');
   if (!bd) return;
   if (net < 50) { bd.style.display = 'none'; return; }
-  const rawFee = (net + 2) / 0.985 - net;
+  const rawFee = _pmFee(net);
   const fee    = Math.min(rawFee, 800);
   const gross  = Math.round((net + fee) * 100) / 100;
   const fmt    = v => 'R ' + v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
@@ -3020,7 +3021,7 @@ async function saveAutoTopUp() {
 
   if (enabled) {
     if (!amount || amount < 50) return Toast.error('Minimum auto top-up is R50');
-    if (!day || day < 1 || day > 28) return Toast.error('Day must be between 1 and 28');
+    if (!day || day < 1 || day > 31) return Toast.error('Day must be between 1 and 31');
   }
 
   const btn = el('atuSaveBtn');
@@ -11937,7 +11938,7 @@ async function saveRecurringInvestment() {
   if (enabled) {
     if (!amount || amount < 100) { Toast.error('Please enter a monthly amount of at least R100'); return; }
     if (!productType) { Toast.error('Please select a product type'); return; }
-    if (!day || day < 1 || day > 28) { Toast.error('Please select a valid day (1–28)'); return; }
+    if (!day || day < 1 || day > 31) { Toast.error('Please select a valid day (1–31)'); return; }
   }
 
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;

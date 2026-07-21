@@ -339,7 +339,7 @@ router.post('/auto-topup', requireAuth, async (req, res) => {
 
     if (enabled) {
       if (!amountNum || amountNum < 50) return res.status(400).json({ error: 'Minimum auto top-up amount is R50' });
-      if (!dayNum || dayNum < 1 || dayNum > 28) return res.status(400).json({ error: 'Day must be between 1 and 28' });
+      if (!dayNum || dayNum < 1 || dayNum > 31) return res.status(400).json({ error: 'Day must be between 1 and 31' });
 
       // Require saved card to enable
       const { rows } = await pool.query(
