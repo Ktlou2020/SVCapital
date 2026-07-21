@@ -259,6 +259,20 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 });
 
+/* ─── GET /api/auth/check-id?id_number=XXXXX ─── */
+router.get('/check-id', async (req, res) => {
+  const raw = String(req.query.id_number || '').replace(/\D/g, '').slice(0, 13);
+  if (!raw || raw.length !== 13) return res.json({ exists: false });
+  try {
+    const { rows } = await pool.query(
+      'SELECT 1 FROM investors WHERE id_number = $1 LIMIT 1', [raw]
+    );
+    res.json({ exists: rows.length > 0 });
+  } catch {
+    res.json({ exists: false });
+  }
+});
+
 /* ─── POST /api/auth/register ─── */
 router.post('/register', registerLimiter, async (req, res) => {
   try {
@@ -289,10 +303,18 @@ router.post('/register', registerLimiter, async (req, res) => {
     const allowedSelfRoles = ['investor'];
     const userRole = allowedSelfRoles.includes(role) ? role : 'investor';
 
-    // Check duplicate
+    // Check duplicate email
     const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase().trim()]);
     if (existing.rows.length > 0)
       return res.status(409).json({ error: 'An account with this email already exists.' });
+
+    // Check duplicate ID number
+    if (idNumber) {
+      const idClean = String(idNumber).replace(/\D/g, '').slice(0, 13);
+      const dupId = await pool.query('SELECT 1 FROM investors WHERE id_number = $1 LIMIT 1', [idClean]);
+      if (dupId.rows.length > 0)
+        return res.status(409).json({ error: 'An account with this ID number already exists. Please log in or reset your password.' });
+    }
 
     const hash = await bcrypt.hash(password, 12);
 

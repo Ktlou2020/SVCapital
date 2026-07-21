@@ -407,7 +407,7 @@ body {
 /* ─── 10. Stats Cards ───────────────────────────────────────── */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
 }
 .stat-card {
@@ -586,7 +586,7 @@ body {
   border-radius: 12px !important;
   border: 1px solid rgba(0,0,0,0.07) !important;
   background: #fff !important;
-  margin-bottom: 12px;
+  margin-bottom: 24px;
   transition: border-color 0.22s ease, transform 0.22s ease;
 }
 .award-card:hover {

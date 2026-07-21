@@ -30,8 +30,8 @@ const PARTNER_PROFILES = {
     youtubeId: 'mTIcSDeggtQ',
   },
   'MoolaLend': {
-    tagline: 'Boutique SME funder — PO & tender finance specialists',
-    profile: 'MoolaLend is a South African boutique lender that finances purchase orders and tenders for government departments, municipalities, and private companies. Their mission is to empower entrepreneurs through fair, transparent funding to support sustainable SMME growth.',
+    tagline: 'Your chomie in funding — SA\'s PO finance specialist',
+    profile: 'MoolaLend is a Bryanston-based boutique lender that specialises in Purchase Order (PO) finance for South African SMEs. They fund government tenders and private-sector purchase orders from R50,000, enabling businesses to fulfil contracts without upfront capital. Incorporated in 2021 and listed in FundingHub\'s Top 10 PO Funding Lenders in SA, MoolaLend takes a partner-first approach to SME lending.',
     website: 'https://moolalend-production.up.railway.app/',
   },
   'The Solar Experts': {
@@ -39,37 +39,35 @@ const PARTNER_PROFILES = {
     profile: 'The Solar Experts is a Somerset West-based solar energy company with over 612 completed installations across the Western Cape since 2019. They serve residential and commercial clients with systems from 5 kW to 250 kW, handled entirely by in-house electrical staff.',
     website: 'https://thesolarexperts.co.za',
   },
+  'OnFleet': {
+    tagline: 'Rent to Own. Ride. Earn. Own.',
+    profile: 'OnFleet Africa runs South Africa\'s leading rent-to-own delivery motorcycle programme. Riders with no deposit access a bike for R650–R850/week and own it outright after 18 months — with free monthly servicing included. Around 60% of riders re-enter a new contract at the 18-month mark, renting out their first bike for additional income.',
+    website: 'https://portal.onfleet.africa',
+  },
 };
 
-let _pipStylesInjected = false;
-function _ensurePipStyles() {
-  if (_pipStylesInjected) return;
-  _pipStylesInjected = true;
-  const s = document.createElement('style');
-  s.textContent = `.pip-wrap{position:relative;display:inline-flex;align-items:center;vertical-align:middle;margin-left:5px}.pip-btn{background:none;border:none;cursor:pointer;padding:0 3px;color:inherit;opacity:.55;line-height:1;font-size:.85em;transition:opacity .15s}.pip-btn:hover,.pip-wrap.open .pip-btn{opacity:1;color:#eda5ff}.pip-card{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:240px;background:#1c1c1e;border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.6);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .18s,visibility .18s;z-index:9999;text-align:left;font-size:unset;font-weight:unset}.pip-wrap:hover .pip-card,.pip-wrap.open .pip-card{opacity:1;visibility:visible;pointer-events:auto}.pip-card__name{font-weight:700;font-size:.88rem;color:#fff;margin-bottom:2px}.pip-card__tagline{font-size:.72rem;color:#eda5ff;margin-bottom:8px;line-height:1.4}.pip-card__profile{font-size:.73rem;color:rgba(255,255,255,.78);line-height:1.55;margin:0 0 8px}.pip-card__video{display:block;position:relative;border-radius:8px;overflow:hidden;margin-bottom:8px}.pip-card__video img{width:100%;height:auto;display:block}.pip-card__play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35)}.pip-card__play i{font-size:1.4rem;color:#fff}.pip-card__link{font-size:.7rem;color:#eda5ff;text-decoration:none;display:inline-flex;align-items:center;gap:4px}.pip-card__link:hover{text-decoration:underline}`;
-  document.head.appendChild(s);
-  document.addEventListener('click', e => {
-    const btn = e.target.closest('.pip-btn');
-    if (btn) {
-      e.stopPropagation();
-      const wrap = btn.closest('.pip-wrap');
-      const isOpen = wrap.classList.contains('open');
-      document.querySelectorAll('.pip-wrap.open').forEach(w => w.classList.remove('open'));
-      if (!isOpen) wrap.classList.add('open');
-      return;
-    }
-    if (!e.target.closest('.pip-card')) {
-      document.querySelectorAll('.pip-wrap.open').forEach(w => w.classList.remove('open'));
-    }
-  }, true);
+function _showPartnerModal(name) {
+  const p = PARTNER_PROFILES[name];
+  if (!p) return;
+  document.getElementById('pip-modal')?.remove();
+  const vid = p.youtubeId ? `<a href="https://www.youtube.com/watch?v=${p.youtubeId}" target="_blank" rel="noopener" style="display:block;position:relative;border-radius:10px;overflow:hidden;margin-bottom:14px;text-decoration:none"><img src="https://img.youtube.com/vi/${p.youtubeId}/mqdefault.jpg" style="width:100%;display:block" loading="lazy"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.4)"><i class="fa-solid fa-play" style="font-size:2rem;color:#fff"></i></span></a>` : '';
+  const el = document.createElement('div');
+  el.id = 'pip-modal';
+  el.innerHTML = `<div id="pip-modal-bd" style="position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)"><div style="background:#1c1c1e;border:1px solid rgba(255,255,255,.15);border-radius:18px;padding:24px 22px;max-width:360px;width:100%;position:relative;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.8)"><button onclick="document.getElementById('pip-modal').remove()" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,.1);border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;color:rgba(255,255,255,.8);display:flex;align-items:center;justify-content:center;font-size:.9rem;line-height:1"><i class="fa-solid fa-xmark"></i></button><div style="font-weight:700;font-size:1.05rem;color:#fff;margin-bottom:3px;padding-right:36px">${_esc(name)}</div><div style="font-size:.75rem;color:#eda5ff;margin-bottom:14px;line-height:1.45">${_esc(p.tagline)}</div>${vid}<p style="font-size:.8rem;color:rgba(255,255,255,.8);line-height:1.65;margin:0 0 16px">${_esc(p.profile)}</p><a href="${_safeUrl(p.website)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:7px;font-size:.8rem;color:#eda5ff;text-decoration:none;border:1px solid rgba(237,165,255,.3);border-radius:20px;padding:7px 16px"><i class="fa-solid fa-arrow-up-right-from-square"></i> Visit website</a></div></div>`;
+  document.body.appendChild(el);
+  document.getElementById('pip-modal-bd').addEventListener('click', e => { if (e.target === e.currentTarget) el.remove(); });
+  const _onKey = e => { if (e.key === 'Escape') { el.remove(); document.removeEventListener('keydown', _onKey); } };
+  document.addEventListener('keydown', _onKey);
 }
 
 function _partnerInfoBtn(name) {
-  const p = PARTNER_PROFILES[name];
-  if (!p) return '';
-  _ensurePipStyles();
-  const vid = p.youtubeId ? `<a class="pip-card__video" href="https://www.youtube.com/watch?v=${p.youtubeId}" target="_blank" rel="noopener"><img src="https://img.youtube.com/vi/${p.youtubeId}/mqdefault.jpg" alt="${_esc(name)} video" loading="lazy"><span class="pip-card__play"><i class="fa-solid fa-play"></i></span></a>` : '';
-  return `<span class="pip-wrap"><button type="button" class="pip-btn" aria-label="About ${_esc(name)}"><i class="fa-solid fa-circle-info"></i></button><div class="pip-card" role="tooltip"><div class="pip-card__name">${_esc(name)}</div><div class="pip-card__tagline">${_esc(p.tagline)}</div>${vid}<p class="pip-card__profile">${_esc(p.profile)}</p><a class="pip-card__link" href="${_safeUrl(p.website)}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> Visit website</a></div></span>`;
+  if (!PARTNER_PROFILES[name]) return '';
+  return `<button type="button" onclick="_showPartnerModal('${_esc(name)}')" aria-label="About ${_esc(name)}" style="background:none;border:none;cursor:pointer;padding:0 4px;color:inherit;opacity:.55;font-size:.85em;vertical-align:middle;line-height:1;transition:color .15s,opacity .15s" onmouseenter="this.style.color='#eda5ff';this.style.opacity='1'" onmouseleave="this.style.color='';this.style.opacity='.55'"><i class="fa-solid fa-circle-info"></i></button>`;
+}
+
+function _partnerNameLink(name, display) {
+  if (!PARTNER_PROFILES[name]) return _esc(display || name);
+  return `<span onclick="_showPartnerModal('${_esc(name)}')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px" onmouseenter="this.style.color='#eda5ff'" onmouseleave="this.style.color=''">${_esc(display || name)}</span>`;
 }
 
 let PORTAL = {
@@ -3681,7 +3679,7 @@ const _POOL_META = {
   solar_7yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#fec24f' },
   solar_6yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#fec24f' },
   solar_5yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#fec24f' },
-  cattle:        { blurb: 'Partner with Beefcor — SA\'s premier feedlot — and earn returns as your herd grows from 200kg to 500kg.', risk: 'Aggressive',   riskColor: '#ef4444' },
+  cattle:        { blurb: `Partner with ${_partnerNameLink('Beefcor')} — SA's premier feedlot — and earn returns as your herd grows from 200kg to 500kg.`, risk: 'Aggressive',   riskColor: '#ef4444' },
   short_term:    { blurb: 'Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.', risk: 'Moderate',  riskColor: '#fec24f' },
   delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Conservative', riskColor: '#22c55e' },
 };
@@ -4291,7 +4289,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
           </div>` : ''}
           ${pool.partner_name ? `<div class="mpc2-pill">
             <i class="fa-solid fa-handshake"></i>
-            <span><strong>${_esc(pool.partner_name)}</strong></span>
+            <span><strong>${_partnerNameLink(pool.partner_name)}</strong></span>
             ${_partnerInfoBtn(pool.partner_name)}
           </div>` : ''}
         </div>
@@ -4376,27 +4374,43 @@ function _cattleHerdStatusCompactHtml(s) {
 function _cattleHerdStatusHtml(s) {
   if (!s || !s.total_purchased) return '';
   const weight   = s.avg_current_weight || s.avg_entry_weight;
-  const genders  = (s.by_gender || []).filter(g => g.count > 0 && g.label.toLowerCase() !== 'unspecified');
+  const genders  = (s.by_gender || []).filter(g => g.count > 0);
   const breeds   = (s.by_breed  || []).filter(b => b.count > 0);
   const totalG   = genders.reduce((a, g) => a + g.count, 0) || 1;
-  const totalB   = breeds.reduce((a, b) => a + b.count, 0) || 1;
   const chip = txt => `<span style="font-size:0.76rem;background:rgba(254,194,79,0.14);color:#8a6d1f;border-radius:20px;padding:3px 11px">${txt}</span>`;
+
+  // Weight journey: entry → current → target market weight
+  const entry = s.avg_entry_weight, current = s.avg_current_weight, target = s.target_weight || 475;
+  let weightBar = '';
+  if (entry && current && target && target > entry) {
+    const pct = Math.min(100, Math.max(0, Math.round((current - entry) / (target - entry) * 100)));
+    weightBar = `
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">
+          <span>Entry ${entry}kg</span><span style="color:#8a6d1f;font-weight:700">Now ~${current}kg</span><span>Target ${target}kg</span>
+        </div>
+        <div style="height:8px;border-radius:5px;background:rgba(0,0,0,0.08);overflow:hidden"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#fec24f,#fec24f)"></div></div>
+        <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">${pct}% of the way to market weight</div>
+      </div>`;
+  }
 
   // Survival / mortality
   const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
-  const mortBlock = `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:var(--text)">${(100 - mortRate).toFixed(1)}%</strong></div>`;
+  const mortBlock = `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:var(--text)">${(100 - mortRate).toFixed(1)}%</strong>${s.mortality_count ? ` · ${s.mortality_count} mortalit${s.mortality_count === 1 ? 'y' : 'ies'} of ${s.total_purchased.toLocaleString('en-ZA')}` : ''}</div>`;
 
   return `
     <div style="background:rgba(254,194,79,0.07);border:1px solid rgba(254,194,79,0.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">
       <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#fec24f;margin-bottom:10px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
         <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.total_purchased.toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">purchased to date</div></div>
+        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.live_count || 0).toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">currently live</div></div>
         ${weight ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${weight}<span style="font-size:0.78rem"> kg</span></div><div style="font-size:0.7rem;color:var(--text-muted)">average weight</div></div>` : ''}
       </div>
+      ${weightBar}
       ${genders.length ? `<div style="margin-bottom:${breeds.length ? '10px' : '0'}"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Gender</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${_esc(g.label)}: <strong>${Math.round(g.count / totalG * 100)}%</strong>`)).join('')}</div></div>` : ''}
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${_esc(g.label)}: <strong>${g.count}</strong> (${Math.round(g.count / totalG * 100)}%)`)).join('')}</div></div>` : ''}
       ${breeds.length ? `<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Breeds</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 3).map(b => chip(`${_esc(b.label)}: <strong>${Math.round(b.count / totalB * 100)}%</strong>`)).join('')}</div></div>` : ''}
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 8).map(b => chip(`${_esc(b.label)}: <strong>${b.count}</strong>`)).join('')}</div></div>` : ''}
       ${mortBlock}
     </div>`;
 }
@@ -4437,7 +4451,7 @@ function _solarStatusHtml(s) {
         ${s.co2_avoided_kg ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.co2_avoided_kg / 1000).toFixed(1)}<span style="font-size:0.78rem"> t</span></div><div style="font-size:0.7rem;color:var(--text-muted)">CO₂ avoided</div></div>` : ''}
         ${s.device_count ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.device_count}</div><div style="font-size:0.7rem;color:var(--text-muted)">inverter${s.device_count === 1 ? '' : 's'}</div></div>` : ''}
       </div>
-      <div style="font-size:0.68rem;color:var(--text-muted);margin-top:9px">Live data from FoxCloud</div>
+      <div style="font-size:0.68rem;color:var(--text-muted);margin-top:9px">Live data from FoxCloud${s.station_name ? ` · ${_esc(s.station_name)}` : ''}</div>
     </div>`;
 }
 

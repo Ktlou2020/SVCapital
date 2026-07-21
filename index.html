@@ -84,24 +84,6 @@
     .partners-label { color: #656565 !important; }
     .partner-chip span { color: #656565 !important; }
 
-    /* Partner info popup */
-    .pip-wrap{position:relative;display:inline-flex;align-items:center;vertical-align:middle;margin-left:6px}
-    .pip-btn{background:none;border:none;cursor:pointer;padding:0 3px;color:rgba(255,255,255,.45);line-height:1;font-size:.85rem;transition:opacity .15s}
-    .pip-btn:hover,.pip-wrap.open .pip-btn{color:#eda5ff}
-    .pip-card{position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);
-      width:240px;background:#1c1c1e;border:1px solid rgba(255,255,255,.15);border-radius:12px;
-      padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.7);
-      opacity:0;visibility:hidden;pointer-events:none;transition:opacity .18s,visibility .18s;z-index:9999;text-align:left}
-    .pip-wrap:hover .pip-card,.pip-wrap.open .pip-card{opacity:1;visibility:visible;pointer-events:auto}
-    .pip-card__name{font-weight:700;font-size:.88rem;color:#fff;margin-bottom:2px;font-family:inherit}
-    .pip-card__tagline{font-size:.72rem;color:#eda5ff;margin-bottom:8px;line-height:1.4;font-family:inherit}
-    .pip-card__profile{font-size:.73rem;color:rgba(255,255,255,.78);line-height:1.55;margin:0 0 8px;font-family:inherit}
-    .pip-card__video{display:block;position:relative;border-radius:8px;overflow:hidden;margin-bottom:8px}
-    .pip-card__video img{width:100%;height:auto;display:block}
-    .pip-card__play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35)}
-    .pip-card__play i{font-size:1.4rem;color:#fff}
-    .pip-card__link{font-size:.7rem;color:#eda5ff;text-decoration:none;display:inline-flex;align-items:center;gap:4px;font-family:inherit}
-    .pip-card__link:hover{text-decoration:underline}
   </style>
 </head>
 <body>
@@ -170,7 +152,7 @@
         <div class="hero-trust">
           <div class="trust-item">
             <i class="fa-solid fa-shield-halved"></i>
-            <span>FSCA Regulated</span>
+            <span>SmartVest Financial Services · FSCA Regulated</span>
           </div>
           <div class="trust-divider"></div>
           <div class="trust-item">
@@ -310,7 +292,7 @@
       <div class="stats-ticker__sep"></div>
       <div class="stats-ticker__item">
         <i class="fa-solid fa-shield-halved"></i>
-        <strong>FSCA</strong> Regulated
+        <strong>SmartVest</strong> · FSCA Regulated
       </div>
       <div class="stats-ticker__sep"></div>
       <div class="stats-ticker__item">
@@ -346,7 +328,7 @@
       <div class="stats-ticker__sep"></div>
       <div class="stats-ticker__item">
         <i class="fa-solid fa-shield-halved"></i>
-        <strong>FSCA</strong> Regulated
+        <strong>SmartVest</strong> · FSCA Regulated
       </div>
       <div class="stats-ticker__sep"></div>
       <div class="stats-ticker__item">
@@ -428,7 +410,7 @@
         <!-- Solar 7-Year -->
         <article class="product-card product-card--solar product-card--featured" data-product="solar" data-risk="moderate" data-reveal="up" data-reveal-delay="200">
           <div class="product-card__bg"></div>
-          <div class="product-card__featured-ribbon">Avg. Returns</div>
+          <div class="product-card__featured-ribbon">Best Returns</div>
           <div class="product-card__badge-row">
             <span class="risk-badge risk-badge--moderate">Moderate Risk</span>
           </div>
@@ -439,7 +421,7 @@
           <p class="product-card__desc">Power South Africa's energy future. Your capital funds solar panel installations — generating clean electricity, long-term contracts, and growing returns.</p>
           <div class="product-card__stats">
             <div class="stat">
-              <span class="stat__label">Avg. Return</span>
+              <span class="stat__label">Best Return</span>
               <span class="stat__value stat__value--gold">21.40%</span>
               <span class="stat__unit">p.a. (7yr)</span>
             </div>
@@ -693,7 +675,7 @@
         </div>
         <div class="why-card" data-reveal="up" data-reveal-delay="400">
           <div class="why-card__icon" style="background:rgba(239,68,68,0.12);color:#f87171"><i class="fa-solid fa-shield-halved"></i></div>
-          <h3>FSCA Regulated</h3>
+          <h3>SmartVest · FSCA Regulated</h3>
           <p>All fund flows are managed through Smartvest Financial Services, a licensed Financial Services Provider authorised by the Financial Sector Conduct Authority. Your capital moves through a regulated, compliant entity.</p>
         </div>
         <div class="why-card" data-reveal="up" data-reveal-delay="500">
@@ -716,7 +698,7 @@
     <div class="container">
       <div class="section-header section-header--light" data-reveal="up">
         <div class="section-eyebrow section-eyebrow--light">Investment Calculator</div>
-        <h2 class="section-title section-title--light">See your money grow.</h2>
+        <h2 class="section-title section-title--light">See your money grow</h2>
         <p class="section-sub section-sub--light">Adjust the sliders and watch your wealth build in real time. No sign-up required.</p>
       </div>
 
@@ -915,21 +897,21 @@
         <div class="partner-chip">
           <i class="fa-solid fa-cow" style="color:#D4AF37"></i>
           <div>
-            <strong>Beefcor<span class="pip-wrap"><button type="button" class="pip-btn" aria-label="About Beefcor"><i class="fa-solid fa-circle-info"></i></button><div class="pip-card" role="tooltip"><div class="pip-card__name">Beefcor</div><div class="pip-card__tagline">Producers of quality cattle since 1973</div><a class="pip-card__video" href="https://www.youtube.com/watch?v=mTIcSDeggtQ" target="_blank" rel="noopener"><img src="https://img.youtube.com/vi/mTIcSDeggtQ/mqdefault.jpg" alt="Beefcor video" loading="lazy"><span class="pip-card__play"><i class="fa-solid fa-play"></i></span></a><p class="pip-card__profile">Beefcor is a vertically integrated South African cattle feedlot founded in 1973, marketing over 70,000 cattle per year. They manage the full value chain from livestock procurement to branded beef in retail stores.</p><a class="pip-card__link" href="https://www.beefcor.com" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> Visit website</a></div></span></strong>
+            <strong>Beefcor</strong>
             <span>Cattle Feedlot</span>
           </div>
         </div>
         <div class="partner-chip">
           <i class="fa-solid fa-solar-panel" style="color:#4CAF50"></i>
           <div>
-            <strong>The Solar Experts<span class="pip-wrap"><button type="button" class="pip-btn" aria-label="About The Solar Experts"><i class="fa-solid fa-circle-info"></i></button><div class="pip-card" role="tooltip"><div class="pip-card__name">The Solar Experts</div><div class="pip-card__tagline">Cape Town's trusted solar design &amp; installation specialists</div><p class="pip-card__profile">A Somerset West-based solar energy company with over 612 completed installations across the Western Cape since 2019. They serve residential and commercial clients with systems from 5 kW to 250 kW, handled entirely by in-house electrical staff.</p><a class="pip-card__link" href="https://thesolarexperts.co.za" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> Visit website</a></div></span></strong>
+            <strong>The Solar Experts</strong>
             <span>Clean Energy</span>
           </div>
         </div>
         <div class="partner-chip">
           <i class="fa-solid fa-building-columns" style="color:#656565"></i>
           <div>
-            <strong>MoolaLend<span class="pip-wrap"><button type="button" class="pip-btn" aria-label="About MoolaLend"><i class="fa-solid fa-circle-info"></i></button><div class="pip-card" role="tooltip"><div class="pip-card__name">MoolaLend</div><div class="pip-card__tagline">Boutique SME funder — PO &amp; tender finance specialists</div><p class="pip-card__profile">MoolaLend is a South African boutique lender that finances purchase orders and tenders for government departments, municipalities, and private companies. Their mission is to empower entrepreneurs through fair, transparent funding to support sustainable SMME growth.</p><a class="pip-card__link" href="https://moolalend-production.up.railway.app/" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> Visit website</a></div></span></strong>
+            <strong>MoolaLend</strong>
             <span>SMME Finance</span>
           </div>
         </div>
@@ -1025,18 +1007,18 @@
   <!-- ═══════════════════════════════════════════════
        TRUST / COMPLIANCE
   ═══════════════════════════════════════════════ -->
-  <section class="trust-section">
+  <section class="trust-section" id="about">
     <div class="container">
       <div class="trust-grid">
         <div class="trust-main">
           <div class="section-eyebrow">Regulatory Compliance</div>
           <h2 class="section-title" style="font-size:2rem;">Your money is in safe hands.</h2>
-          <p style="color:var(--text-muted); margin-bottom:1.5rem; line-height:1.7;">All fund collections and disbursements are managed by <strong>SmartVest Financial Services</strong>, a licensed Financial Services Provider authorised by the <strong>Financial Sector Conduct Authority (FSCA)</strong>.</p>
+          <p style="color:var(--text-muted); margin-bottom:1.5rem; line-height:1.7;">All fund collections and disbursements are managed by <strong style="color:#fff">SmartVest Financial Services</strong>, a licensed Financial Services Provider authorised by the <strong>Financial Sector Conduct Authority (FSCA)</strong>.</p>
           <div class="compliance-items">
             <div class="compliance-item">
               <div class="compliance-item__icon"><i class="fa-solid fa-certificate"></i></div>
               <div>
-                <strong>FSCA Authorised</strong>
+                <strong>SmartVest Financial Services — FSCA Authorised</strong>
                 <p>Authorised by the FSCA to manage short-term and long-term deposits</p>
               </div>
             </div>
@@ -1148,8 +1130,7 @@
           </a>
         </div>
         <div class="final-cta-trust">
-          <span><i class="fa-solid fa-lock"></i> FSCA Regulated</span>
-          <span><i class="fa-solid fa-shield-halved"></i> SmartVest Protected</span>
+          <span><i class="fa-solid fa-lock"></i> SmartVest Financial Services · FSCA Regulated</span>
           <span><i class="fa-solid fa-star"></i> Top 40 SA Start-Up 2018</span>
         </div>
       </div>
@@ -1189,10 +1170,10 @@
         <div class="footer-links-col">
           <h4>Company</h4>
           <ul>
-            <li><a href="https://www.svcapital.co.za/about" target="_blank">About Us</a></li>
-            <li><a href="https://www.svcapital.co.za/faqs" target="_blank">FAQs</a></li>
-            <li><a href="https://www.svcapital.co.za/investment-calculator" target="_blank">Calculator</a></li>
-            <li><a href="#" target="_blank">Blog</a></li>
+            <li><a href="#about">About Us</a></li>
+            <li><a href="#faq">FAQs</a></li>
+            <li><a href="#calculator">Calculator</a></li>
+            <li style="display:none"><a href="#">Blog</a></li>
           </ul>
         </div>
 
@@ -1246,21 +1227,5 @@
 
   <script src="js/main.js?v=5"></script>
   <script>document.querySelectorAll('.yr').forEach(function(el){el.textContent=new Date().getFullYear();});</script>
-  <script>
-    document.addEventListener('click', function(e) {
-      var btn = e.target.closest('.pip-btn');
-      if (btn) {
-        e.stopPropagation();
-        var wrap = btn.closest('.pip-wrap');
-        var isOpen = wrap.classList.contains('open');
-        document.querySelectorAll('.pip-wrap.open').forEach(function(w){w.classList.remove('open');});
-        if (!isOpen) wrap.classList.add('open');
-        return;
-      }
-      if (!e.target.closest('.pip-card')) {
-        document.querySelectorAll('.pip-wrap.open').forEach(function(w){w.classList.remove('open');});
-      }
-    }, true);
-  </script>
 </body>
 </html>
