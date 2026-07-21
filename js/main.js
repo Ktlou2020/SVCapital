@@ -578,7 +578,7 @@ function updateCalculator() {
     infoGrid.innerHTML = product.infoItems.map(item => `
       <div class="calc-info-item">
         <span class="calc-info-item__label">${item.label}</span>
-        <span class="calc-info-item__val">${item.value}</span>
+        <span class="calc-info-item__val">${item.value}${item.label === 'Partner' ? _partnerInfoBtn(product.partner) : ''}</span>
       </div>
     `).join('');
   }
