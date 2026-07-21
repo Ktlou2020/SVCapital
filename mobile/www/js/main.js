@@ -18,10 +18,10 @@ const PRODUCTS = {
     partner: 'Beefcor',
     infoItems: [
       { label: 'Partner', value: 'Beefcor Feedlot' },
+      { label: 'Sector', value: 'Agriculture' },
       { label: 'Benchmark', value: '13.00% p.a.' },
       { label: 'Perf. Fee', value: '20% above benchmark' },
       { label: 'Pool Type', value: 'Time-based pool' },
-      { label: 'Sector', value: 'Agriculture' },
     ]
   },
   solar7: {
@@ -36,10 +36,10 @@ const PRODUCTS = {
     partner: 'The Solar Experts',
     infoItems: [
       { label: 'Partner', value: 'The Solar Experts' },
+      { label: 'Sector', value: 'Energy' },
       { label: 'Benchmark', value: '13.00% p.a.' },
       { label: 'Perf. Fee', value: 'N/A' },
       { label: 'Pool Type', value: 'Time-based pool' },
-      { label: 'Sector', value: 'Renewable Energy' },
     ]
   },
   solar5: {
@@ -54,10 +54,10 @@ const PRODUCTS = {
     partner: 'The Solar Experts',
     infoItems: [
       { label: 'Partner', value: 'The Solar Experts' },
+      { label: 'Sector', value: 'Energy' },
       { label: 'Benchmark', value: '13.00% p.a.' },
       { label: 'Perf. Fee', value: 'N/A' },
       { label: 'Pool Type', value: 'Time-based pool' },
-      { label: 'Sector', value: 'Renewable Energy' },
     ]
   },
   short: {
@@ -72,10 +72,10 @@ const PRODUCTS = {
     partner: 'MoolaLend',
     infoItems: [
       { label: 'Partner', value: 'MoolaLend Pty Ltd' },
+      { label: 'Sector', value: 'Credit' },
       { label: 'Benchmark', value: '12.00% p.a.' },
       { label: 'Perf. Fee', value: 'N/A' },
       { label: 'Pool Type', value: 'Time-based pool' },
-      { label: 'Sector', value: 'SMME Finance' },
     ]
   },
   delivery: {
@@ -90,10 +90,10 @@ const PRODUCTS = {
     partner: 'OnFleet',
     infoItems: [
       { label: 'Partner', value: 'OnFleet Pty Ltd' },
+      { label: 'Sector', value: 'Logistics' },
       { label: 'Benchmark', value: 'N/A' },
       { label: 'Perf. Fee', value: 'N/A' },
       { label: 'Pool Type', value: 'Targeted amount' },
-      { label: 'Sector', value: 'Last-Mile Delivery' },
     ]
   }
 };

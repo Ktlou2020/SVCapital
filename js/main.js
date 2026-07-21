@@ -18,6 +18,7 @@ const PRODUCTS = {
     partner: 'Beefcor',
     infoItems: [
       { label: 'Partner', value: 'Beefcor Feedlot' },
+      { label: 'Sector', value: 'Agriculture' },
       { label: 'Benchmark', value: '13.00% p.a.' },
       { label: 'Perf. Fee', value: '20% above benchmark' },
       { label: 'Pool Type', value: 'Time-based pool' },
@@ -35,6 +36,7 @@ const PRODUCTS = {
     partner: 'The Solar Experts',
     infoItems: [
       { label: 'Partner', value: 'The Solar Experts' },
+      { label: 'Sector', value: 'Energy' },
       { label: 'Location', value: 'Cape Town, SA' },
       { label: 'Returns', value: 'Annual payouts' },
       { label: 'Capital', value: 'End of term' },
@@ -52,6 +54,7 @@ const PRODUCTS = {
     partner: 'The Solar Experts',
     infoItems: [
       { label: 'Partner', value: 'The Solar Experts' },
+      { label: 'Sector', value: 'Energy' },
       { label: 'Location', value: 'Cape Town, SA' },
       { label: 'Returns', value: 'Annual payouts' },
       { label: 'Capital', value: 'End of term' },
@@ -69,6 +72,7 @@ const PRODUCTS = {
     partner: 'The Solar Experts',
     infoItems: [
       { label: 'Partner', value: 'The Solar Experts' },
+      { label: 'Sector', value: 'Energy' },
       { label: 'Location', value: 'Cape Town, SA' },
       { label: 'Returns', value: 'Annual payouts' },
       { label: 'Capital', value: 'End of term' },
@@ -86,6 +90,7 @@ const PRODUCTS = {
     partner: 'MoolaLend',
     infoItems: [
       { label: 'Partner', value: 'MoolaLend Pty Ltd' },
+      { label: 'Sector', value: 'Credit' },
       { label: 'Focus', value: 'SMME Finance' },
       { label: 'Benchmark', value: '12.00% p.a.' },
       { label: 'Pool Type', value: 'Time-based pool' },
@@ -103,6 +108,7 @@ const PRODUCTS = {
     partner: 'OnFleet',
     infoItems: [
       { label: 'Partner', value: 'OnFleet Pty Ltd' },
+      { label: 'Sector', value: 'Logistics' },
       { label: 'Platforms', value: 'Mr D, Takealot, UberEats' },
       { label: 'Min. Fleet', value: '5 bikes per pool' },
       { label: 'Pool Type', value: 'Targeted amount' },
