@@ -181,7 +181,7 @@ function sendInvestmentCreated(investor, { poolName, amount, termMonths, endDate
     subject: `Investment confirmed — ${_fmt(amount)} in ${poolName}`,
     html: _wrap(`
       <h2>Investment Confirmed 🎯</h2>
-      <p>Hi ${first_name}, your investment has been placed and is now active.</p>
+      <p>Hi ${first_name}, your investment has been placed.</p>
       <span class="big">${_fmt(amount)}</span>
       <div class="box">
         <div class="row"><span class="lbl">Pool</span><span class="val">${poolName}</span></div>
