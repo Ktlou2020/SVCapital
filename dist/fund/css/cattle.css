@@ -13,7 +13,7 @@
   --amber-dark:  #f4a261;
   --red:         #e63946;
   --red-pale:    #ffe8e8;
-  --blue:        #2196F3;
+  --blue:        #656565;
   --blue-pale:   #e3f2fd;
   --dark:        #0d1e13;
   --sidebar-bg:  #0d1e13;
@@ -32,7 +32,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Poppins', system-ui, sans-serif;
   background: var(--surface-2);
   color: var(--text);
   display: flex;

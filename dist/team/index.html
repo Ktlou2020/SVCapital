@@ -1,22 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SV Capital — Team Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="css/team.css" />
   <!-- Staff Auth guard -->
   <script src="../js/staff-auth.js?v=5"></script>
   <script>document.addEventListener('DOMContentLoaded',()=>{ StaffAuth.guard('team'); StaffAuth.injectWidget(); });</script>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="../js/analytics.js"></script>
 </head>
 <body>
 
 <div id="globalLoader" style="position:fixed;inset:0;background:#0d0f14;display:flex;align-items:center;justify-content:center;z-index:9999;gap:14px;flex-direction:column">
-  <div style="width:44px;height:44px;border:3px solid rgba(124,92,252,0.2);border-top-color:#7c5cfc;border-radius:50%;animation:spin 0.7s linear infinite"></div>
+  <div style="width:44px;height:44px;border:3px solid rgba(237,165,255,0.2);border-top-color:#eda5ff;border-radius:50%;animation:spin 0.7s linear infinite"></div>
   <div style="font-size:0.82rem;color:#555c72;font-weight:600">Loading Team Dashboard…</div>
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 </div>
@@ -160,8 +177,8 @@
         <!-- Stat row -->
         <div class="grid-4" style="margin-bottom:24px">
           <div class="stat-card">
-            <div class="stat-card__accent" style="background:linear-gradient(90deg,#7c5cfc,#a78bfa)"></div>
-            <div class="stat-card__icon" style="background:rgba(124,92,252,0.15);color:var(--accent)">
+            <div class="stat-card__accent" style="background:linear-gradient(90deg,#eda5ff,#eda5ff)"></div>
+            <div class="stat-card__icon" style="background:rgba(237,165,255,0.15);color:var(--accent)">
               <i class="fa-solid fa-chart-bar"></i>
             </div>
             <div class="stat-card__value" id="db-avg-score">—</div>
@@ -320,7 +337,7 @@
           <div style="font-size:0.85rem;font-weight:800;margin-bottom:16px">KPI Dimensions Reference</div>
           <div class="grid-4" style="gap:12px">
             <div style="padding:12px;background:var(--bg-elevated);border-radius:var(--radius-sm);border:1px solid var(--border)">
-              <div style="color:#7c5cfc;font-size:0.8rem;font-weight:700;margin-bottom:4px"><i class="fa-solid fa-chart-line"></i> Revenue Contribution</div>
+              <div style="color:#eda5ff;font-size:0.8rem;font-weight:700;margin-bottom:4px"><i class="fa-solid fa-chart-line"></i> Revenue Contribution</div>
               <div style="font-size:0.67rem;color:var(--text-muted);line-height:1.4">AUM growth attributable to employee activity, referrals and client acquisition.</div>
             </div>
             <div style="padding:12px;background:var(--bg-elevated);border-radius:var(--radius-sm);border:1px solid var(--border)">
@@ -412,7 +429,7 @@
         </div>
 
         <!-- EVA mechanics explanation -->
-        <div class="card" style="margin-bottom:24px;background:linear-gradient(135deg,#1a1035,#0d1a2e);border-color:rgba(124,92,252,0.25)">
+        <div class="card" style="margin-bottom:24px;background:linear-gradient(135deg,#1a1035,#0d1a2e);border-color:rgba(237,165,255,0.25)">
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0">
             <div style="padding:0 24px 0 0;border-right:1px solid var(--border)">
               <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:6px">Step 1 — Pool Creation</div>
@@ -451,7 +468,7 @@
             <div class="stat-card__label">Operational Costs</div>
           </div>
           <div class="stat-card">
-            <div class="stat-card__icon" style="background:rgba(124,92,252,0.12);color:var(--accent)"><i class="fa-solid fa-equals"></i></div>
+            <div class="stat-card__icon" style="background:rgba(237,165,255,0.12);color:var(--accent)"><i class="fa-solid fa-equals"></i></div>
             <div class="stat-card__value" style="font-size:1.2rem" id="eva-pool-total">—</div>
             <div class="stat-card__label">EVA Pool Total</div>
           </div>
@@ -732,7 +749,7 @@
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label>Badge Colour</label>
-          <input type="color" id="bm-color" class="form-control" value="#7c5cfc" style="height:42px;padding:4px" />
+          <input type="color" id="bm-color" class="form-control" value="#eda5ff" style="height:42px;padding:4px" />
         </div>
       </div>
       <div class="form-group" style="margin-top:16px">

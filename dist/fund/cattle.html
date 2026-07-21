@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SV Capital — Cattle Investment Management</title>
@@ -8,6 +12,20 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css">
   <link rel="stylesheet" href="css/cattle.css">
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="../js/analytics.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -17,9 +35,8 @@
 <aside class="sidebar">
   <div class="sidebar-brand">
     <div class="brand-logo">
-      <img src="../assets/logo-inline.svg" alt="SV Capital" onerror="this.style.display='none'">
+      <img src="../assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="height:36px;width:auto" onerror="this.style.display='none'">
       <div>
-        <div class="brand-name">SV Capital</div>
         <div class="brand-sub">Cattle Investment</div>
       </div>
     </div>
@@ -123,8 +140,8 @@
           <div class="kpi__label">Feed Costs</div>
         </div>
         <div class="kpi" style="border-color:rgba(96,165,250,.25)">
-          <div class="kpi__head"><div class="kpi__icon" style="background:rgba(96,165,250,.12)"><i class="fa-solid fa-syringe" style="color:#60a5fa"></i></div></div>
-          <div class="kpi__value" style="color:#60a5fa" id="cost-vet">—</div>
+          <div class="kpi__head"><div class="kpi__icon" style="background:rgba(96,165,250,.12)"><i class="fa-solid fa-syringe" style="color:#656565"></i></div></div>
+          <div class="kpi__value" style="color:#656565" id="cost-vet">—</div>
           <div class="kpi__label">Vet &amp; Medical</div>
         </div>
         <div class="kpi" style="border-color:rgba(248,113,113,.25)">

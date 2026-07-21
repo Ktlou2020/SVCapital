@@ -12,11 +12,11 @@
   --border:      rgba(255,255,255,0.07);
   --border-med:  rgba(255,255,255,0.12);
 
-  --accent:      #7c5cfc;          /* purple primary */
-  --accent-glow: rgba(124,92,252,0.25);
+  --accent:      #eda5ff;          /* purple primary */
+  --accent-glow: rgba(237,165,255,0.25);
   --accent2:     #00d4aa;          /* teal secondary */
   --accent2-glow:rgba(0,212,170,0.20);
-  --gold:        #f9c846;
+  --gold:        #fec24f;
   --gold-glow:   rgba(249,200,70,0.22);
   --danger:      #ff5b5b;
   --warning:     #ffb347;
@@ -34,7 +34,7 @@
   --radius-lg:  18px;
   --radius-xl:  24px;
 
-  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --font: 'Poppins', system-ui, -apple-system, sans-serif;
   --transition: 0.18s ease;
 }
 
@@ -55,7 +55,7 @@ input, select, textarea { font-family: var(--font); }
 /* ─── Scrollbar ──────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(124,92,252,0.35); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: rgba(237,165,255,0.35); border-radius: 3px; }
 
 /* ─── App Layout ─────────────────────────────────────────────────────── */
 .app-layout {
@@ -94,7 +94,7 @@ input, select, textarea { font-family: var(--font); }
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--accent), #5b3fd4);
+  background: linear-gradient(135deg, var(--accent), #c070d8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -148,7 +148,7 @@ input, select, textarea { font-family: var(--font); }
 
 .nav-item.active {
   color: var(--accent);
-  background: rgba(124,92,252,0.12);
+  background: rgba(237,165,255,0.12);
   font-weight: 700;
 }
 
@@ -189,7 +189,7 @@ input, select, textarea { font-family: var(--font); }
 .sidebar-user__avatar {
   width: 32px; height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), #5b3fd4);
+  background: linear-gradient(135deg, var(--accent), #c070d8);
   display: flex; align-items: center; justify-content: center;
   font-size: 0.72rem; font-weight: 800; color: #fff;
   flex-shrink: 0;
@@ -339,8 +339,8 @@ input, select, textarea { font-family: var(--font); }
 }
 
 .card--glow {
-  border-color: rgba(124,92,252,0.25);
-  box-shadow: 0 0 30px rgba(124,92,252,0.08);
+  border-color: rgba(237,165,255,0.25);
+  box-shadow: 0 0 30px rgba(237,165,255,0.08);
 }
 
 /* ─── Grid Layouts ───────────────────────────────────────────────────── */
@@ -407,7 +407,7 @@ input, select, textarea { font-family: var(--font); }
 /* ─── EVA Hero Panel ─────────────────────────────────────────────────── */
 .eva-hero {
   background: linear-gradient(135deg, #1a1035 0%, #0d1a2e 60%, #0d0f14 100%);
-  border: 1px solid rgba(124,92,252,0.3);
+  border: 1px solid rgba(237,165,255,0.3);
   border-radius: var(--radius-xl);
   padding: 28px 32px;
   position: relative;
@@ -420,7 +420,7 @@ input, select, textarea { font-family: var(--font); }
   position: absolute;
   top: -60px; right: -60px;
   width: 280px; height: 280px;
-  background: radial-gradient(circle, rgba(124,92,252,0.18) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(237,165,255,0.18) 0%, transparent 70%);
   pointer-events: none;
 }
 
@@ -448,8 +448,8 @@ input, select, textarea { font-family: var(--font); }
 }
 
 .eva-hero__period {
-  background: rgba(124,92,252,0.15);
-  border: 1px solid rgba(124,92,252,0.25);
+  background: rgba(237,165,255,0.15);
+  border: 1px solid rgba(237,165,255,0.25);
   border-radius: var(--radius-sm);
   padding: 6px 14px;
   font-size: 0.78rem; font-weight: 700; color: var(--accent);
@@ -501,7 +501,7 @@ input, select, textarea { font-family: var(--font); }
   cursor: pointer;
 }
 
-.leaderboard-item:hover { border-color: var(--border-med); background: rgba(124,92,252,0.06); }
+.leaderboard-item:hover { border-color: var(--border-med); background: rgba(237,165,255,0.06); }
 
 .leaderboard-item.rank-1 {
   background: linear-gradient(135deg, rgba(249,200,70,0.08), rgba(249,200,70,0.03));
@@ -546,8 +546,8 @@ input, select, textarea { font-family: var(--font); }
 
 .lb-xp {
   display: flex; align-items: center; gap: 5px;
-  background: rgba(124,92,252,0.15);
-  border: 1px solid rgba(124,92,252,0.2);
+  background: rgba(237,165,255,0.15);
+  border: 1px solid rgba(237,165,255,0.2);
   border-radius: 20px;
   padding: 3px 10px;
   font-size: 0.72rem; font-weight: 700; color: var(--accent);
@@ -569,7 +569,7 @@ input, select, textarea { font-family: var(--font); }
 
 .xp-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), #a78bfa);
+  background: linear-gradient(90deg, var(--accent), #eda5ff);
   border-radius: 3px;
   transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
@@ -604,7 +604,7 @@ input, select, textarea { font-family: var(--font); }
 .level-2  { background: rgba(40,167,69,0.15);   color: #5cb85c; border: 1px solid rgba(40,167,69,0.25); }
 .level-3  { background: rgba(0,212,170,0.15);   color: var(--accent2); border: 1px solid rgba(0,212,170,0.25); }
 .level-4  { background: rgba(79,195,247,0.15);  color: var(--info); border: 1px solid rgba(79,195,247,0.25); }
-.level-5  { background: rgba(124,92,252,0.15);  color: var(--accent); border: 1px solid rgba(124,92,252,0.25); }
+.level-5  { background: rgba(237,165,255,0.15);  color: var(--accent); border: 1px solid rgba(237,165,255,0.25); }
 .level-6  { background: rgba(249,200,70,0.15);  color: var(--gold); border: 1px solid rgba(249,200,70,0.25); }
 
 /* ─── Streak Badge ───────────────────────────────────────────────────── */
@@ -762,7 +762,7 @@ input, select, textarea { font-family: var(--font); }
 .status--pending  { background: rgba(255,179,71,0.12); color: var(--warning); border: 1px solid rgba(255,179,71,0.2); }
 .status--approved { background: rgba(0,212,170,0.12); color: var(--success); border: 1px solid rgba(0,212,170,0.2); }
 .status--rejected { background: rgba(255,91,91,0.12);  color: var(--danger);  border: 1px solid rgba(255,91,91,0.2); }
-.status--paid     { background: rgba(124,92,252,0.12); color: var(--accent); border: 1px solid rgba(124,92,252,0.2); }
+.status--paid     { background: rgba(237,165,255,0.12); color: var(--accent); border: 1px solid rgba(237,165,255,0.2); }
 .status--open     { background: rgba(79,195,247,0.12); color: var(--info);   border: 1px solid rgba(79,195,247,0.2); }
 .status--finalised{ background: rgba(0,212,170,0.12); color: var(--success); border: 1px solid rgba(0,212,170,0.2); }
 
@@ -780,8 +780,8 @@ input, select, textarea { font-family: var(--font); }
 .challenge-card:hover { border-color: var(--border-med); transform: translateY(-2px); }
 
 .challenge-card.active-challenge {
-  border-color: rgba(124,92,252,0.3);
-  background: linear-gradient(135deg, rgba(124,92,252,0.06), var(--bg-elevated));
+  border-color: rgba(237,165,255,0.3);
+  background: linear-gradient(135deg, rgba(237,165,255,0.06), var(--bg-elevated));
 }
 
 .challenge-card.completed-challenge {
@@ -799,7 +799,7 @@ input, select, textarea { font-family: var(--font); }
   display: inline-flex; align-items: center; gap: 4px;
   padding: 3px 9px; border-radius: 20px; font-size: 0.68rem; font-weight: 700;
 }
-.reward-tag.xp  { background: rgba(124,92,252,0.15); color: var(--accent); border: 1px solid rgba(124,92,252,0.2); }
+.reward-tag.xp  { background: rgba(237,165,255,0.15); color: var(--accent); border: 1px solid rgba(237,165,255,0.2); }
 .reward-tag.zar { background: rgba(249,200,70,0.12);  color: var(--gold);   border: 1px solid rgba(249,200,70,0.2); }
 .reward-tag.badge { background: rgba(0,212,170,0.10); color: var(--accent2); border: 1px solid rgba(0,212,170,0.2); }
 
@@ -996,9 +996,9 @@ select.form-control option { background: var(--bg-card); }
 
 .heatmap-cell:hover { transform: scale(1.3); z-index: 5; }
 .heatmap-cell.level-0 { background: var(--bg-input); }
-.heatmap-cell.level-1 { background: rgba(124,92,252,0.2); }
-.heatmap-cell.level-2 { background: rgba(124,92,252,0.4); }
-.heatmap-cell.level-3 { background: rgba(124,92,252,0.65); }
+.heatmap-cell.level-1 { background: rgba(237,165,255,0.2); }
+.heatmap-cell.level-2 { background: rgba(237,165,255,0.4); }
+.heatmap-cell.level-3 { background: rgba(237,165,255,0.65); }
 .heatmap-cell.level-4 { background: var(--accent); }
 
 /* ─── Loading / Skeleton ─────────────────────────────────────────────── */

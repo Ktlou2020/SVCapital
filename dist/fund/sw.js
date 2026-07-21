@@ -3,13 +3,13 @@
    Version: 1.0.0
 ═══════════════════════════════════════════════════════════════ */
 
-const CACHE_NAME  = 'svcapital-fund-v1';
+const CACHE_NAME  = 'svcapital-fund-v3';
 const STATIC_URLS = [
   '/fund/index.html',
   '/fund/cattle.html',
   '/fund/js/fund.js',
   '/fund/js/cattle.js',
-  '/assets/logo.svg',
+  '/assets/sv-capital-logo-horizontal-white-text.png',
   '/assets/logo-inline.svg',
   '/assets/svcapital-logo-header.png'
 ];
@@ -44,14 +44,16 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  /* Pass-through for API calls — never cache table data */
-  if (url.pathname.startsWith('/tables/') || url.pathname.includes('tables/')) {
+  /* Pass-through for API calls — never cache API responses */
+  if (url.pathname.startsWith('/api/')) {
     return; /* Let it fall through to network */
   }
 
   /* For same-origin GET requests: network-first with cache fallback */
   if (event.request.method !== 'GET') return;
-  if (!url.origin.includes(self.location.origin) && !url.origin.includes('jsdelivr') && !url.origin.includes('googleapis') && !url.origin.includes('fontawesome')) return;
+  /* Only intercept same-origin and specific CDN resources we want to cache.
+     Google Fonts (googleapis/gstatic) and fontawesome are handled natively. */
+  if (!url.origin.includes(self.location.origin) && !url.origin.includes('jsdelivr')) return;
 
   event.respondWith(
     fetch(event.request)
