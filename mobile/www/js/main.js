@@ -93,6 +93,57 @@ const PRODUCTS = {
   }
 };
 
+/* ─── Partner info profiles ─── */
+const _pipEsc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const PARTNER_PROFILES = {
+  'Beefcor': {
+    tagline: 'Producers of quality cattle since 1973',
+    profile: 'Beefcor is a vertically integrated South African cattle feedlot founded in 1973, marketing over 70,000 cattle per year. They manage the full value chain from livestock procurement to branded beef in retail stores. Beefcor hosts SA\'s first commercially viable biogas plant at their Bronkhorstspruit facility.',
+    website: 'https://www.beefcor.com',
+    youtubeId: 'mTIcSDeggtQ',
+  },
+  'MoolaLend': {
+    tagline: 'Boutique SME funder — PO & tender finance specialists',
+    profile: 'MoolaLend is a South African boutique lender that finances purchase orders and tenders for government departments, municipalities, and private companies. Their mission is to empower entrepreneurs through fair, transparent funding to support sustainable SMME growth.',
+    website: 'https://moolalend-production.up.railway.app/',
+  },
+  'The Solar Experts': {
+    tagline: 'Cape Town\'s trusted solar design & installation specialists',
+    profile: 'The Solar Experts is a Somerset West-based solar energy company with over 612 completed installations across the Western Cape since 2019. They serve residential and commercial clients with systems from 5 kW to 250 kW, handled entirely by in-house electrical staff.',
+    website: 'https://thesolarexperts.co.za',
+  },
+};
+let _pipStylesInjected = false;
+function _ensurePipStyles() {
+  if (_pipStylesInjected) return;
+  _pipStylesInjected = true;
+  const s = document.createElement('style');
+  s.textContent = `.pip-wrap{position:relative;display:inline-flex;align-items:center;vertical-align:middle;margin-left:5px}.pip-btn{background:none;border:none;cursor:pointer;padding:0 3px;color:inherit;opacity:.55;line-height:1;font-size:.85em;transition:opacity .15s}.pip-btn:hover,.pip-wrap.open .pip-btn{opacity:1;color:#eda5ff}.pip-card{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:240px;background:#1c1c1e;border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.6);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .18s,visibility .18s;z-index:9999;text-align:left;font-size:unset;font-weight:unset}.pip-wrap:hover .pip-card,.pip-wrap.open .pip-card{opacity:1;visibility:visible;pointer-events:auto}.pip-card__name{font-weight:700;font-size:.88rem;color:#fff;margin-bottom:2px}.pip-card__tagline{font-size:.72rem;color:#eda5ff;margin-bottom:8px;line-height:1.4}.pip-card__profile{font-size:.73rem;color:rgba(255,255,255,.78);line-height:1.55;margin:0 0 8px}.pip-card__video{display:block;position:relative;border-radius:8px;overflow:hidden;margin-bottom:8px}.pip-card__video img{width:100%;height:auto;display:block}.pip-card__play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35)}.pip-card__play i{font-size:1.4rem;color:#fff}.pip-card__link{font-size:.7rem;color:#eda5ff;text-decoration:none;display:inline-flex;align-items:center;gap:4px}.pip-card__link:hover{text-decoration:underline}`;
+  document.head.appendChild(s);
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.pip-btn');
+    if (btn) {
+      e.stopPropagation();
+      const wrap = btn.closest('.pip-wrap');
+      const isOpen = wrap.classList.contains('open');
+      document.querySelectorAll('.pip-wrap.open').forEach(w => w.classList.remove('open'));
+      if (!isOpen) wrap.classList.add('open');
+      return;
+    }
+    if (!e.target.closest('.pip-card')) {
+      document.querySelectorAll('.pip-wrap.open').forEach(w => w.classList.remove('open'));
+    }
+  }, true);
+}
+function _partnerInfoBtn(name) {
+  const p = PARTNER_PROFILES[name];
+  if (!p) return '';
+  _ensurePipStyles();
+  const safeUrl = u => (typeof u === 'string' && /^https?:\/\//i.test(u)) ? u : '#';
+  const vid = p.youtubeId ? `<a class="pip-card__video" href="https://www.youtube.com/watch?v=${p.youtubeId}" target="_blank" rel="noopener"><img src="https://img.youtube.com/vi/${p.youtubeId}/mqdefault.jpg" alt="${_pipEsc(name)} video" loading="lazy"><span class="pip-card__play"><i class="fa-solid fa-play"></i></span></a>` : '';
+  return `<span class="pip-wrap"><button type="button" class="pip-btn" aria-label="About ${_pipEsc(name)}"><i class="fa-solid fa-circle-info"></i></button><div class="pip-card" role="tooltip"><div class="pip-card__name">${_pipEsc(name)}</div><div class="pip-card__tagline">${_pipEsc(p.tagline)}</div>${vid}<p class="pip-card__profile">${_pipEsc(p.profile)}</p><a class="pip-card__link" href="${safeUrl(p.website)}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> Visit website</a></div></span>`;
+}
+
 /* ─── FAQ Data ─── */
 const FAQ_DATA = {
   general: [
@@ -489,7 +540,7 @@ function updateCalculator() {
     infoGrid.innerHTML = product.infoItems.map(item => `
       <div class="calc-info-item">
         <span class="calc-info-item__label">${item.label}</span>
-        <span class="calc-info-item__val">${item.value}</span>
+        <span class="calc-info-item__val">${item.value}${item.label === 'Partner' ? _partnerInfoBtn(product.partner) : ''}</span>
       </div>
     `).join('');
   }

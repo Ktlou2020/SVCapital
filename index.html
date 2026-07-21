@@ -83,6 +83,25 @@
     .why-card p { color: #656565 !important; }
     .partners-label { color: #656565 !important; }
     .partner-chip span { color: #656565 !important; }
+
+    /* Partner info popup */
+    .pip-wrap{position:relative;display:inline-flex;align-items:center;vertical-align:middle;margin-left:6px}
+    .pip-btn{background:none;border:none;cursor:pointer;padding:0 3px;color:rgba(255,255,255,.45);line-height:1;font-size:.85rem;transition:opacity .15s}
+    .pip-btn:hover,.pip-wrap.open .pip-btn{color:#eda5ff}
+    .pip-card{position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);
+      width:240px;background:#1c1c1e;border:1px solid rgba(255,255,255,.15);border-radius:12px;
+      padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.7);
+      opacity:0;visibility:hidden;pointer-events:none;transition:opacity .18s,visibility .18s;z-index:9999;text-align:left}
+    .pip-wrap:hover .pip-card,.pip-wrap.open .pip-card{opacity:1;visibility:visible;pointer-events:auto}
+    .pip-card__name{font-weight:700;font-size:.88rem;color:#fff;margin-bottom:2px;font-family:inherit}
+    .pip-card__tagline{font-size:.72rem;color:#eda5ff;margin-bottom:8px;line-height:1.4;font-family:inherit}
+    .pip-card__profile{font-size:.73rem;color:rgba(255,255,255,.78);line-height:1.55;margin:0 0 8px;font-family:inherit}
+    .pip-card__video{display:block;position:relative;border-radius:8px;overflow:hidden;margin-bottom:8px}
+    .pip-card__video img{width:100%;height:auto;display:block}
+    .pip-card__play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35)}
+    .pip-card__play i{font-size:1.4rem;color:#fff}
+    .pip-card__link{font-size:.7rem;color:#eda5ff;text-decoration:none;display:inline-flex;align-items:center;gap:4px;font-family:inherit}
+    .pip-card__link:hover{text-decoration:underline}
   </style>
 </head>
 <body>
@@ -896,21 +915,21 @@
         <div class="partner-chip">
           <i class="fa-solid fa-cow" style="color:#D4AF37"></i>
           <div>
-            <strong>Beefcor</strong>
+            <strong>Beefcor<span class="pip-wrap"><button type="button" class="pip-btn" aria-label="About Beefcor"><i class="fa-solid fa-circle-info"></i></button><div class="pip-card" role="tooltip"><div class="pip-card__name">Beefcor</div><div class="pip-card__tagline">Producers of quality cattle since 1973</div><a class="pip-card__video" href="https://www.youtube.com/watch?v=mTIcSDeggtQ" target="_blank" rel="noopener"><img src="https://img.youtube.com/vi/mTIcSDeggtQ/mqdefault.jpg" alt="Beefcor video" loading="lazy"><span class="pip-card__play"><i class="fa-solid fa-play"></i></span></a><p class="pip-card__profile">Beefcor is a vertically integrated South African cattle feedlot founded in 1973, marketing over 70,000 cattle per year. They manage the full value chain from livestock procurement to branded beef in retail stores.</p><a class="pip-card__link" href="https://www.beefcor.com" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> Visit website</a></div></span></strong>
             <span>Cattle Feedlot</span>
           </div>
         </div>
         <div class="partner-chip">
           <i class="fa-solid fa-solar-panel" style="color:#4CAF50"></i>
           <div>
-            <strong>The Solar Experts</strong>
+            <strong>The Solar Experts<span class="pip-wrap"><button type="button" class="pip-btn" aria-label="About The Solar Experts"><i class="fa-solid fa-circle-info"></i></button><div class="pip-card" role="tooltip"><div class="pip-card__name">The Solar Experts</div><div class="pip-card__tagline">Cape Town's trusted solar design &amp; installation specialists</div><p class="pip-card__profile">A Somerset West-based solar energy company with over 612 completed installations across the Western Cape since 2019. They serve residential and commercial clients with systems from 5 kW to 250 kW, handled entirely by in-house electrical staff.</p><a class="pip-card__link" href="https://thesolarexperts.co.za" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> Visit website</a></div></span></strong>
             <span>Clean Energy</span>
           </div>
         </div>
         <div class="partner-chip">
           <i class="fa-solid fa-building-columns" style="color:#656565"></i>
           <div>
-            <strong>MoolaLend</strong>
+            <strong>MoolaLend<span class="pip-wrap"><button type="button" class="pip-btn" aria-label="About MoolaLend"><i class="fa-solid fa-circle-info"></i></button><div class="pip-card" role="tooltip"><div class="pip-card__name">MoolaLend</div><div class="pip-card__tagline">Boutique SME funder — PO &amp; tender finance specialists</div><p class="pip-card__profile">MoolaLend is a South African boutique lender that finances purchase orders and tenders for government departments, municipalities, and private companies. Their mission is to empower entrepreneurs through fair, transparent funding to support sustainable SMME growth.</p><a class="pip-card__link" href="https://moolalend-production.up.railway.app/" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> Visit website</a></div></span></strong>
             <span>SMME Finance</span>
           </div>
         </div>
@@ -1227,5 +1246,21 @@
 
   <script src="js/main.js?v=5"></script>
   <script>document.querySelectorAll('.yr').forEach(function(el){el.textContent=new Date().getFullYear();});</script>
+  <script>
+    document.addEventListener('click', function(e) {
+      var btn = e.target.closest('.pip-btn');
+      if (btn) {
+        e.stopPropagation();
+        var wrap = btn.closest('.pip-wrap');
+        var isOpen = wrap.classList.contains('open');
+        document.querySelectorAll('.pip-wrap.open').forEach(function(w){w.classList.remove('open');});
+        if (!isOpen) wrap.classList.add('open');
+        return;
+      }
+      if (!e.target.closest('.pip-card')) {
+        document.querySelectorAll('.pip-wrap.open').forEach(function(w){w.classList.remove('open');});
+      }
+    }, true);
+  </script>
 </body>
 </html>
