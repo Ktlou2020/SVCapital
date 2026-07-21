@@ -10048,6 +10048,7 @@ function updateGiftPreview() {
             || '—';
   const msg = document.getElementById('giftMessage')?.value?.trim() || '';
   const inv = PORTAL.investor;
+  const walletBal = parseFloat(inv?.wallet_balance) || 0;
 
   const amtEl = document.getElementById('previewAmount');
   const toEl  = document.getElementById('previewTo');
@@ -10058,6 +10059,19 @@ function updateGiftPreview() {
   if (document.getElementById('previewFrom') && inv) {
     document.getElementById('previewFrom').textContent = `From: ${inv.first_name} ${inv.last_name}`;
   }
+
+  // Inline balance check
+  const balHint = document.getElementById('giftBalanceHint');
+  const sendBtn = document.getElementById('giftSendBtn');
+  const overBudget = amt > 0 && walletBal > 0 && amt > walletBal;
+  if (balHint) {
+    if (overBudget) {
+      balHint.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> Amount exceeds your wallet balance of ${Utils.rand(walletBal)}</span>`;
+    } else {
+      balHint.textContent = `Your wallet balance: ${Utils.rand(walletBal)}`;
+    }
+  }
+  if (sendBtn) sendBtn.disabled = overBudget;
 }
 
 function onGiftEmailInput() {
