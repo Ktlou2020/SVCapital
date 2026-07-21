@@ -4399,29 +4399,15 @@ function _cattleHerdStatusCompactHtml(s) {
 function _cattleHerdStatusHtml(s) {
   if (!s || !s.total_purchased) return '';
   const weight   = s.avg_current_weight || s.avg_entry_weight;
-  const genders  = (s.by_gender || []).filter(g => g.count > 0);
-  const breeds   = (s.by_breed  || []).filter(b => b.count > 0);
+  const genders  = (s.by_gender || []).filter(g => g.count > 0 && (g.label || '').toLowerCase() !== 'unspecified');
+  const breeds   = (s.by_breed  || []).filter(b => b.count > 0 && (b.label || '').toLowerCase() !== 'unspecified');
   const totalG   = genders.reduce((a, g) => a + g.count, 0) || 1;
   const chip = txt => `<span style="font-size:0.76rem;background:rgba(254,194,79,0.14);color:#8a6d1f;border-radius:20px;padding:3px 11px">${txt}</span>`;
 
-  // Weight journey: entry → current → target market weight
-  const entry = s.avg_entry_weight, current = s.avg_current_weight, target = s.target_weight || 475;
-  let weightBar = '';
-  if (entry && current && target && target > entry) {
-    const pct = Math.min(100, Math.max(0, Math.round((current - entry) / (target - entry) * 100)));
-    weightBar = `
-      <div style="margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">
-          <span>Entry ${entry}kg</span><span style="color:#8a6d1f;font-weight:700">Now ~${current}kg</span><span>Target ${target}kg</span>
-        </div>
-        <div style="height:8px;border-radius:5px;background:rgba(0,0,0,0.08);overflow:hidden"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#fec24f,#fec24f)"></div></div>
-        <div style="font-size:0.68rem;color:var(--text-muted);margin-top:4px">${pct}% of the way to market weight</div>
-      </div>`;
-  }
 
   // Survival / mortality
   const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
-  const mortBlock = `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:var(--text)">${(100 - mortRate).toFixed(1)}%</strong>${s.mortality_count ? ` · ${s.mortality_count} mortalit${s.mortality_count === 1 ? 'y' : 'ies'} of ${s.total_purchased.toLocaleString('en-ZA')}` : ''}</div>`;
+  const mortBlock = `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:var(--text)">${(100 - mortRate).toFixed(1)}%</strong></div>`;
 
   return `
     <div style="background:rgba(254,194,79,0.07);border:1px solid rgba(254,194,79,0.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">
@@ -4431,7 +4417,7 @@ function _cattleHerdStatusHtml(s) {
         <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.live_count || 0).toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">currently live</div></div>
         ${weight ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${weight}<span style="font-size:0.78rem"> kg</span></div><div style="font-size:0.7rem;color:var(--text-muted)">average weight</div></div>` : ''}
       </div>
-      ${weightBar}
+
       ${genders.length ? `<div style="margin-bottom:${breeds.length ? '10px' : '0'}"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Gender</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${_esc(g.label)}: <strong>${g.count}</strong> (${Math.round(g.count / totalG * 100)}%)`)).join('')}</div></div>` : ''}
       ${breeds.length ? `<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Breeds</div>
