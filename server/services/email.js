@@ -863,6 +863,29 @@ function sendAlert(investor, { subject, message }) {
   });
 }
 
+/* ── 20. International waitlist confirmation ─────────────── */
+function sendInternationalWaitlistConfirmation({ full_name, email, country }) {
+  const first = (full_name || '').split(' ')[0] || 'there';
+  return _send({
+    to: email,
+    subject: `You're on the SV Capital international waitlist`,
+    type: 'waitlist',
+    html: _wrap(`
+      <h2>You're on the list! 🌍</h2>
+      <p>Hi ${escHtml(first)},</p>
+      <p>Thank you for your interest in SV Capital. We've added you to our international waitlist and will reach out as soon as the platform becomes available in <strong>${escHtml(country)}</strong>.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Name</span><span class="val">${escHtml(full_name)}</span></div>
+        <div class="row"><span class="lbl">Country</span><span class="val">${escHtml(country)}</span></div>
+        <div class="row"><span class="lbl">Status</span><span class="val gold">On Waitlist</span></div>
+      </div>
+      <p>In the meantime, feel free to browse our <a href="${BASE_URL}">investment products</a> and learn more about what we offer.</p>
+      <p>We'll be in touch soon!</p>
+    `),
+    text: `Hi ${first},\n\nThanks for joining the SV Capital international waitlist. We'll notify you when the platform is available in ${country}.\n\nVisit us: ${BASE_URL}`,
+  });
+}
+
 module.exports = {
   sendWelcome,
   sendLeaveRequestSubmitted,
@@ -890,4 +913,5 @@ module.exports = {
   sendGiftReceived,
   sendGiftInvite,
   sendAlert,
+  sendInternationalWaitlistConfirmation,
 };

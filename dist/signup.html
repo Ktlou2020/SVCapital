@@ -253,10 +253,16 @@
       transition: all 0.25s;
     }
 
+    @keyframes step-pulse {
+      0%   { box-shadow: 0 0 0 0   rgba(255,130,21,0.45), 0 2px 8px rgba(255,130,21,0.35); }
+      60%  { box-shadow: 0 0 0 6px rgba(255,130,21,0),    0 2px 8px rgba(255,130,21,0.35); }
+      100% { box-shadow: 0 0 0 0   rgba(255,130,21,0),    0 2px 8px rgba(255,130,21,0.35); }
+    }
     .form-step.active .step-num {
       background: linear-gradient(135deg, #FF9B0C, #FF5229);
       color: #fff;
       box-shadow: 0 2px 8px rgba(255,130,21,0.35);
+      animation: step-pulse 1.8s ease-out infinite;
     }
 
     .form-step.done .step-num {
@@ -775,7 +781,7 @@
         </div>
         <div class="fica-left-info__item">
           <i class="fa-solid fa-check-circle"></i>
-          <span>Verification is reviewed within <strong style="color:#FF9B0C">1–2 business days</strong>. You'll be notified by email.</span>
+          <span>Once your FICA documents are submitted, they will be reviewed within <strong style="color:#FF9B0C">1–2 business days</strong>. You'll be notified by email once verified.</span>
         </div>
       </div>
     </div>
@@ -1059,7 +1065,7 @@
         <i class="fa-solid fa-shield-halved"></i>
         <p>
           <strong>FICA Verification Required</strong><br>
-          South African law requires us to verify your identity before you can invest. Upload clear photos or scans of the documents below. Your files are encrypted and reviewed within <strong>1–2 business days</strong>.
+          South African law requires us to verify your identity before you can invest. Upload clear photos or scans of the documents below. Your files are encrypted — once submitted, your FICA documents will be reviewed within <strong>1–2 business days</strong>.
         </p>
       </div>
 
@@ -1604,7 +1610,7 @@ async function _doSubmit(skippedFica) {
       `Welcome, ${firstName}! Your investor account has been created. ` +
       (skippedFica
         ? 'Please upload your FICA documents in your portal to start investing.'
-        : 'Your FICA documents have been submitted and will be reviewed within 1–2 business days.');
+        : 'Your FICA documents have been submitted. Our compliance team will review them within 1–2 business days and notify you by email.');
 
     setTimeout(() => { window.location.href = '/portal/index.html'; }, 2500);
 
