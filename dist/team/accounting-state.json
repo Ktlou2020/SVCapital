@@ -1,0 +1,761 @@
+{
+  "acct_businesses": [
+    {
+      "id": "sv-fsp-smartvest",
+      "name": "Smartvest Financial Services",
+      "registrationNumber": "K2021/000000/07",
+      "vatNumber": "4380314789",
+      "fspNumber": "52449",
+      "country": "ZA",
+      "currency": "ZAR",
+      "isFSP": true,
+      "createdAt": "2026-06-13T17:55:40.459Z"
+    }
+  ],
+  "acct_active": "sv-fsp-smartvest",
+  "acct_coa_sv-fsp-smartvest": [
+    {
+      "code": "1000",
+      "name": "Cash and Bank",
+      "type": "asset",
+      "category": "current",
+      "balance": 0,
+      "id": "acct-mqcnoyd1"
+    },
+    {
+      "code": "1100",
+      "name": "Accounts Receivable",
+      "type": "asset",
+      "category": "current",
+      "balance": 0,
+      "id": "acct-mqcnoyd3"
+    },
+    {
+      "code": "1200",
+      "name": "Inventory",
+      "type": "asset",
+      "category": "current",
+      "balance": 0,
+      "id": "acct-mqcnoyd4"
+    },
+    {
+      "code": "1300",
+      "name": "Prepaid Expenses",
+      "type": "asset",
+      "category": "current",
+      "balance": 0,
+      "id": "acct-mqcnoyd5"
+    },
+    {
+      "code": "1400",
+      "name": "Other Current Assets",
+      "type": "asset",
+      "category": "current",
+      "balance": 0,
+      "id": "acct-mqcnoyd6"
+    },
+    {
+      "code": "1500",
+      "name": "Client Investment Portfolio",
+      "type": "asset",
+      "category": "current",
+      "balance": 0,
+      "id": "acct-mqcnoyd7"
+    },
+    {
+      "code": "1600",
+      "name": "Property & Equipment",
+      "type": "asset",
+      "category": "fixed",
+      "balance": 0,
+      "id": "acct-mqcnoyd8"
+    },
+    {
+      "code": "1700",
+      "name": "Intangible Assets",
+      "type": "asset",
+      "category": "fixed",
+      "balance": 0,
+      "id": "acct-mqcnoyd9"
+    },
+    {
+      "code": "2000",
+      "name": "Accounts Payable",
+      "type": "liability",
+      "category": "current",
+      "balance": 0,
+      "id": "acct-mqcnoyda"
+    },
+    {
+      "code": "2100",
+      "name": "Client Funds Held (FSP)",
+      "type": "liability",
+      "category": "current",
+      "balance": 0,
+      "id": "acct-mqcnoydb"
+    },
+    {
+      "code": "2200",
+      "name": "Short-term Loans",
+      "type": "liability",
+      "category": "current",
+      "balance": 0,
+      "id": "acct-mqcnoydc"
+    },
+    {
+      "code": "2500",
+      "name": "Long-term Loans",
+      "type": "liability",
+      "category": "long_term",
+      "balance": 0,
+      "id": "acct-mqcnoydd"
+    },
+    {
+      "code": "3000",
+      "name": "Share Capital",
+      "type": "equity",
+      "category": "equity",
+      "balance": 0,
+      "id": "acct-mqcnoyde"
+    },
+    {
+      "code": "3100",
+      "name": "Retained Earnings",
+      "type": "equity",
+      "category": "equity",
+      "balance": 0,
+      "id": "acct-mqcnoydf"
+    },
+    {
+      "code": "4000",
+      "name": "Sales Revenue",
+      "type": "revenue",
+      "category": "operating",
+      "balance": 0,
+      "id": "acct-mqcnoydg"
+    },
+    {
+      "code": "4100",
+      "name": "Platform Fee Revenue (1%)",
+      "type": "revenue",
+      "category": "operating",
+      "balance": 0,
+      "id": "acct-mqcnoydh"
+    },
+    {
+      "code": "4200",
+      "name": "Investment Return Income",
+      "type": "revenue",
+      "category": "operating",
+      "balance": 0,
+      "id": "acct-mqcnoydi"
+    },
+    {
+      "code": "4300",
+      "name": "Performance Fee Income",
+      "type": "revenue",
+      "category": "operating",
+      "balance": 0,
+      "id": "acct-mqcnoydj"
+    },
+    {
+      "code": "4400",
+      "name": "Management Fee Income",
+      "type": "revenue",
+      "category": "operating",
+      "balance": 0,
+      "id": "acct-mqcnoydk"
+    },
+    {
+      "code": "5000",
+      "name": "Cost of Sales",
+      "type": "expense",
+      "category": "cogs",
+      "balance": 0,
+      "id": "acct-mqcnoydl"
+    },
+    {
+      "code": "6000",
+      "name": "Salaries & Wages",
+      "type": "expense",
+      "category": "operating",
+      "balance": 0,
+      "id": "acct-mqcnoydm"
+    },
+    {
+      "code": "6100",
+      "name": "Rent",
+      "type": "expense",
+      "category": "operating",
+      "balance": 0,
+      "id": "acct-mqcnoydn"
+    },
+    {
+      "code": "6200",
+      "name": "Utilities",
+      "type": "expense",
+      "category": "operating",
+      "balance": 0,
+      "id": "acct-mqcnoydo"
+    },
+    {
+      "code": "6300",
+      "name": "Marketing",
+      "type": "expense",
+      "category": "operating",
+      "balance": 0,
+      "id": "acct-mqcnoydp"
+    },
+    {
+      "code": "6400",
+      "name": "Professional Fees",
+      "type": "expense",
+      "category": "operating",
+      "balance": 0,
+      "id": "acct-mqcnoydq"
+    },
+    {
+      "code": "6500",
+      "name": "Bank Charges",
+      "type": "expense",
+      "category": "operating",
+      "balance": 0,
+      "id": "acct-mqcnoydr"
+    },
+    {
+      "code": "6600",
+      "name": "Depreciation",
+      "type": "expense",
+      "category": "operating",
+      "balance": 0,
+      "id": "acct-mqcnoyds"
+    },
+    {
+      "code": "6700",
+      "name": "Other Expenses",
+      "type": "expense",
+      "category": "other",
+      "balance": 0,
+      "id": "acct-mqcnoydt"
+    },
+    {
+      "code": "6800",
+      "name": "FSP Compliance Costs",
+      "type": "expense",
+      "category": "operating",
+      "balance": 0,
+      "id": "acct-mqcnoydu"
+    },
+    {
+      "code": "6810",
+      "name": "Fund Administration Costs",
+      "type": "expense",
+      "category": "operating",
+      "balance": 0,
+      "id": "acct-mqcnoydv"
+    }
+  ],
+  "acct_transactions_sv-fsp-smartvest": [
+    {
+      "id": "acct-mqcnoydw",
+      "accountId": "acct-mqcnoyd1",
+      "type": "debit",
+      "amount": 100000,
+      "description": "Investor deposit: Thabo Nkosi — DEP-001",
+      "reference": "DEP-XN-001",
+      "date": "2024-01-10"
+    },
+    {
+      "id": "acct-mqcnoydx",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 100000,
+      "description": "Investor deposit: Thabo Nkosi — DEP-001",
+      "reference": "DEP-XN-001",
+      "date": "2024-01-10"
+    },
+    {
+      "id": "acct-mqcnoydy",
+      "accountId": "acct-mqcnoydb",
+      "type": "debit",
+      "amount": 1000,
+      "description": "1% platform fee on deposit: Thabo Nkosi",
+      "reference": "FEE-XN-001",
+      "date": "2024-01-10"
+    },
+    {
+      "id": "acct-mqcnoydz",
+      "accountId": "acct-mqcnoydh",
+      "type": "credit",
+      "amount": 1000,
+      "description": "1% platform fee on deposit: Thabo Nkosi",
+      "reference": "FEE-XN-001",
+      "date": "2024-01-10"
+    },
+    {
+      "id": "acct-mqcnoye0",
+      "accountId": "acct-mqcnoyd1",
+      "type": "debit",
+      "amount": 75000,
+      "description": "Investor deposit: Thabo Nkosi — DEP-002",
+      "reference": "DEP-XN-003",
+      "date": "2024-02-25"
+    },
+    {
+      "id": "acct-mqcnoye1",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 75000,
+      "description": "Investor deposit: Thabo Nkosi — DEP-002",
+      "reference": "DEP-XN-003",
+      "date": "2024-02-25"
+    },
+    {
+      "id": "acct-mqcnoye2",
+      "accountId": "acct-mqcnoydb",
+      "type": "debit",
+      "amount": 750,
+      "description": "1% platform fee on deposit: Thabo Nkosi",
+      "reference": "FEE-XN-003",
+      "date": "2024-02-25"
+    },
+    {
+      "id": "acct-mqcnoye3",
+      "accountId": "acct-mqcnoydh",
+      "type": "credit",
+      "amount": 750,
+      "description": "1% platform fee on deposit: Thabo Nkosi",
+      "reference": "FEE-XN-003",
+      "date": "2024-02-25"
+    },
+    {
+      "id": "acct-mqcnoye4",
+      "accountId": "acct-mqcnoyd1",
+      "type": "debit",
+      "amount": 50000,
+      "description": "Investor deposit: Thabo Nkosi — DEP-003",
+      "reference": "DEP-XN-006",
+      "date": "2024-01-28"
+    },
+    {
+      "id": "acct-mqcnoye5",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 50000,
+      "description": "Investor deposit: Thabo Nkosi — DEP-003",
+      "reference": "DEP-XN-006",
+      "date": "2024-01-28"
+    },
+    {
+      "id": "acct-mqcnoye6",
+      "accountId": "acct-mqcnoydb",
+      "type": "debit",
+      "amount": 500,
+      "description": "1% platform fee on deposit: Thabo Nkosi",
+      "reference": "FEE-XN-006",
+      "date": "2024-01-28"
+    },
+    {
+      "id": "acct-mqcnoye7",
+      "accountId": "acct-mqcnoydh",
+      "type": "credit",
+      "amount": 500,
+      "description": "1% platform fee on deposit: Thabo Nkosi",
+      "reference": "FEE-XN-006",
+      "date": "2024-01-28"
+    },
+    {
+      "id": "acct-mqcnoye8",
+      "accountId": "acct-mqcnoyd1",
+      "type": "debit",
+      "amount": 80000,
+      "description": "Investor deposit: Priya Naidoo — DEP-004",
+      "reference": "DEP-XN-008",
+      "date": "2024-01-10"
+    },
+    {
+      "id": "acct-mqcnoye9",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 80000,
+      "description": "Investor deposit: Priya Naidoo — DEP-004",
+      "reference": "DEP-XN-008",
+      "date": "2024-01-10"
+    },
+    {
+      "id": "acct-mqcnoyea",
+      "accountId": "acct-mqcnoydb",
+      "type": "debit",
+      "amount": 800,
+      "description": "1% platform fee on deposit: Priya Naidoo",
+      "reference": "FEE-XN-008",
+      "date": "2024-01-10"
+    },
+    {
+      "id": "acct-mqcnoyeb",
+      "accountId": "acct-mqcnoydh",
+      "type": "credit",
+      "amount": 800,
+      "description": "1% platform fee on deposit: Priya Naidoo",
+      "reference": "FEE-XN-008",
+      "date": "2024-01-10"
+    },
+    {
+      "id": "acct-mqcnoyec",
+      "accountId": "acct-mqcnoyd1",
+      "type": "debit",
+      "amount": 60000,
+      "description": "Investor deposit: Priya Naidoo — DEP-005",
+      "reference": "DEP-XN-011",
+      "date": "2024-02-25"
+    },
+    {
+      "id": "acct-mqcnoyed",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 60000,
+      "description": "Investor deposit: Priya Naidoo — DEP-005",
+      "reference": "DEP-XN-011",
+      "date": "2024-02-25"
+    },
+    {
+      "id": "acct-mqcnoyee",
+      "accountId": "acct-mqcnoydb",
+      "type": "debit",
+      "amount": 600,
+      "description": "1% platform fee on deposit: Priya Naidoo",
+      "reference": "FEE-XN-011",
+      "date": "2024-02-25"
+    },
+    {
+      "id": "acct-mqcnoyef",
+      "accountId": "acct-mqcnoydh",
+      "type": "credit",
+      "amount": 600,
+      "description": "1% platform fee on deposit: Priya Naidoo",
+      "reference": "FEE-XN-011",
+      "date": "2024-02-25"
+    },
+    {
+      "id": "acct-mqcnoyeg",
+      "accountId": "acct-mqcnoyd1",
+      "type": "debit",
+      "amount": 70000,
+      "description": "Investor deposit: Sipho Zulu — DEP-006",
+      "reference": "DEP-XN-013",
+      "date": "2024-01-20"
+    },
+    {
+      "id": "acct-mqcnoyeh",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 70000,
+      "description": "Investor deposit: Sipho Zulu — DEP-006",
+      "reference": "DEP-XN-013",
+      "date": "2024-01-20"
+    },
+    {
+      "id": "acct-mqcnoyei",
+      "accountId": "acct-mqcnoydb",
+      "type": "debit",
+      "amount": 700,
+      "description": "1% platform fee on deposit: Sipho Zulu",
+      "reference": "FEE-XN-013",
+      "date": "2024-01-20"
+    },
+    {
+      "id": "acct-mqcnoyej",
+      "accountId": "acct-mqcnoydh",
+      "type": "credit",
+      "amount": 700,
+      "description": "1% platform fee on deposit: Sipho Zulu",
+      "reference": "FEE-XN-013",
+      "date": "2024-01-20"
+    },
+    {
+      "id": "acct-mqcnoyek",
+      "accountId": "acct-mqcnoyd7",
+      "type": "debit",
+      "amount": 100000,
+      "description": "Investment allocated: Cattle Finance Q1 2024 — Thabo Nkosi",
+      "reference": "INV-XN-001",
+      "date": "2024-01-15"
+    },
+    {
+      "id": "acct-mqcnoyel",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 100000,
+      "description": "Investment allocated: Cattle Finance Q1 2024 — Thabo Nkosi",
+      "reference": "INV-XN-001",
+      "date": "2024-01-15"
+    },
+    {
+      "id": "acct-mqcnoyem",
+      "accountId": "acct-mqcnoydb",
+      "type": "debit",
+      "amount": 107415,
+      "description": "Investment payout: Cattle Finance Q1 2024 — Thabo Nkosi",
+      "reference": "PAY-XN-001",
+      "date": "2024-07-15"
+    },
+    {
+      "id": "acct-mqcnoyen",
+      "accountId": "acct-mqcnoyd7",
+      "type": "credit",
+      "amount": 100000,
+      "description": "Investment payout: Cattle Finance Q1 2024 — Thabo Nkosi",
+      "reference": "PAY-XN-001",
+      "date": "2024-07-15"
+    },
+    {
+      "id": "acct-mqcnoyeo",
+      "accountId": "acct-mqcnoydi",
+      "type": "credit",
+      "amount": 7415,
+      "description": "Investment return income: Cattle Finance Q1 2024 — Thabo Nkosi",
+      "reference": "PAY-XN-001",
+      "date": "2024-07-15"
+    },
+    {
+      "id": "acct-mqcnoyep",
+      "accountId": "acct-mqcnoyd7",
+      "type": "debit",
+      "amount": 75000,
+      "description": "Investment allocated: Solar Energy 7-Year — Thabo Nkosi",
+      "reference": "INV-XN-002",
+      "date": "2024-03-01"
+    },
+    {
+      "id": "acct-mqcnoyeq",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 75000,
+      "description": "Investment allocated: Solar Energy 7-Year — Thabo Nkosi",
+      "reference": "INV-XN-002",
+      "date": "2024-03-01"
+    },
+    {
+      "id": "acct-mqcnoyer",
+      "accountId": "acct-mqcnoyd7",
+      "type": "debit",
+      "amount": 50000,
+      "description": "Investment allocated: Delivery Bikes Cycle 3 — Thabo Nkosi",
+      "reference": "INV-XN-003",
+      "date": "2024-02-01"
+    },
+    {
+      "id": "acct-mqcnoyes",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 50000,
+      "description": "Investment allocated: Delivery Bikes Cycle 3 — Thabo Nkosi",
+      "reference": "INV-XN-003",
+      "date": "2024-02-01"
+    },
+    {
+      "id": "acct-mqcnoyet",
+      "accountId": "acct-mqcnoyd7",
+      "type": "debit",
+      "amount": 80000,
+      "description": "Investment allocated: Cattle Finance Q1 2024 — Priya Naidoo",
+      "reference": "INV-XN-004",
+      "date": "2024-01-15"
+    },
+    {
+      "id": "acct-mqcnoyeu",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 80000,
+      "description": "Investment allocated: Cattle Finance Q1 2024 — Priya Naidoo",
+      "reference": "INV-XN-004",
+      "date": "2024-01-15"
+    },
+    {
+      "id": "acct-mqcnoyev",
+      "accountId": "acct-mqcnoydb",
+      "type": "debit",
+      "amount": 85932,
+      "description": "Investment payout: Cattle Finance Q1 2024 — Priya Naidoo",
+      "reference": "PAY-XN-004",
+      "date": "2024-07-15"
+    },
+    {
+      "id": "acct-mqcnoyew",
+      "accountId": "acct-mqcnoyd7",
+      "type": "credit",
+      "amount": 80000,
+      "description": "Investment payout: Cattle Finance Q1 2024 — Priya Naidoo",
+      "reference": "PAY-XN-004",
+      "date": "2024-07-15"
+    },
+    {
+      "id": "acct-mqcnoyex",
+      "accountId": "acct-mqcnoydi",
+      "type": "credit",
+      "amount": 5932,
+      "description": "Investment return income: Cattle Finance Q1 2024 — Priya Naidoo",
+      "reference": "PAY-XN-004",
+      "date": "2024-07-15"
+    },
+    {
+      "id": "acct-mqcnoyey",
+      "accountId": "acct-mqcnoyd7",
+      "type": "debit",
+      "amount": 60000,
+      "description": "Investment allocated: Solar Energy 7-Year — Priya Naidoo",
+      "reference": "INV-XN-005",
+      "date": "2024-03-01"
+    },
+    {
+      "id": "acct-mqcnoyez",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 60000,
+      "description": "Investment allocated: Solar Energy 7-Year — Priya Naidoo",
+      "reference": "INV-XN-005",
+      "date": "2024-03-01"
+    },
+    {
+      "id": "acct-mqcnoyf0",
+      "accountId": "acct-mqcnoyd7",
+      "type": "debit",
+      "amount": 30000,
+      "description": "Investment allocated: SMME Short-Term Q2 — Sipho Zulu",
+      "reference": "INV-XN-006",
+      "date": "2024-04-01"
+    },
+    {
+      "id": "acct-mqcnoyf1",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 30000,
+      "description": "Investment allocated: SMME Short-Term Q2 — Sipho Zulu",
+      "reference": "INV-XN-006",
+      "date": "2024-04-01"
+    },
+    {
+      "id": "acct-mqcnoyf2",
+      "accountId": "acct-mqcnoyd7",
+      "type": "debit",
+      "amount": 40000,
+      "description": "Investment allocated: Delivery Bikes Cycle 3 — Sipho Zulu",
+      "reference": "INV-XN-007",
+      "date": "2024-02-01"
+    },
+    {
+      "id": "acct-mqcnoyf3",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 40000,
+      "description": "Investment allocated: Delivery Bikes Cycle 3 — Sipho Zulu",
+      "reference": "INV-XN-007",
+      "date": "2024-02-01"
+    },
+    {
+      "id": "acct-mqcnoyf4",
+      "accountId": "acct-mqcnoyd7",
+      "type": "debit",
+      "amount": 150000,
+      "description": "Investment allocated: Solar Energy 7-Year — Maria Santos",
+      "reference": "INV-XN-008",
+      "date": "2024-03-01"
+    },
+    {
+      "id": "acct-mqcnoyf5",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 150000,
+      "description": "Investment allocated: Solar Energy 7-Year — Maria Santos",
+      "reference": "INV-XN-008",
+      "date": "2024-03-01"
+    },
+    {
+      "id": "acct-mqcnoyf6",
+      "accountId": "acct-mqcnoyd7",
+      "type": "debit",
+      "amount": 100000,
+      "description": "Investment allocated: Cattle Finance Q1 2024 — Maria Santos",
+      "reference": "INV-XN-009",
+      "date": "2024-01-15"
+    },
+    {
+      "id": "acct-mqcnoyf7",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 100000,
+      "description": "Investment allocated: Cattle Finance Q1 2024 — Maria Santos",
+      "reference": "INV-XN-009",
+      "date": "2024-01-15"
+    },
+    {
+      "id": "acct-mqcnoyf8",
+      "accountId": "acct-mqcnoydb",
+      "type": "debit",
+      "amount": 107415,
+      "description": "Investment payout: Cattle Finance Q1 2024 — Maria Santos",
+      "reference": "PAY-XN-009",
+      "date": "2024-07-15"
+    },
+    {
+      "id": "acct-mqcnoyf9",
+      "accountId": "acct-mqcnoyd7",
+      "type": "credit",
+      "amount": 100000,
+      "description": "Investment payout: Cattle Finance Q1 2024 — Maria Santos",
+      "reference": "PAY-XN-009",
+      "date": "2024-07-15"
+    },
+    {
+      "id": "acct-mqcnoyfa",
+      "accountId": "acct-mqcnoydi",
+      "type": "credit",
+      "amount": 7415,
+      "description": "Investment return income: Cattle Finance Q1 2024 — Maria Santos",
+      "reference": "PAY-XN-009",
+      "date": "2024-07-15"
+    },
+    {
+      "id": "acct-mqcnoyfb",
+      "accountId": "acct-mqcnoyd7",
+      "type": "debit",
+      "amount": 25000,
+      "description": "Investment allocated: SMME Short-Term Q2 — James Mokoena",
+      "reference": "INV-XN-010",
+      "date": "2024-04-01"
+    },
+    {
+      "id": "acct-mqcnoyfc",
+      "accountId": "acct-mqcnoydb",
+      "type": "credit",
+      "amount": 25000,
+      "description": "Investment allocated: SMME Short-Term Q2 — James Mokoena",
+      "reference": "INV-XN-010",
+      "date": "2024-04-01"
+    }
+  ],
+  "acct_synced_txn_sv-fsp-smartvest": [
+    "TXN-001",
+    "TXN-003",
+    "TXN-006",
+    "TXN-008",
+    "TXN-011",
+    "TXN-013"
+  ],
+  "acct_synced_inv_sv-fsp-smartvest": [
+    "INV-TXN-001",
+    "INV-TXN-001-PAYOUT",
+    "INV-TXN-002",
+    "INV-TXN-003",
+    "INV-TXN-004",
+    "INV-TXN-004-PAYOUT",
+    "INV-TXN-005",
+    "INV-TXN-006",
+    "INV-TXN-007",
+    "INV-TXN-008",
+    "INV-TXN-009",
+    "INV-TXN-009-PAYOUT",
+    "INV-TXN-010"
+  ],
+  "acct_last_sync_sv-fsp-smartvest": "2026-06-13T17:55:40.460Z"
+}

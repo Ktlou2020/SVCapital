@@ -1,11 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SV Capital — Staff Login</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -15,8 +19,8 @@
       --surface:   #111318;
       --surface2:  #1a1c24;
       --border:    rgba(255,255,255,0.07);
-      --purple:    #7c5cfc;
-      --purple-h:  #6347e0;
+      --purple:    #eda5ff;
+      --purple-h:  #eda5ff;
       --teal:      #00d4aa;
       --text:      #e8eaf6;
       --muted:     #6b7280;
@@ -26,7 +30,7 @@
     html, body {
       min-height: 100vh;
       background: var(--bg);
-      font-family: 'Inter', sans-serif;
+      font-family: 'Poppins', sans-serif;
       color: var(--text);
       overflow-x: hidden;
     }
@@ -36,8 +40,8 @@
       content: '';
       position: fixed; inset: 0; z-index: 0;
       background-image:
-        linear-gradient(rgba(124,92,252,0.04) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(124,92,252,0.04) 1px, transparent 1px);
+        linear-gradient(rgba(237,165,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(237,165,255,0.04) 1px, transparent 1px);
       background-size: 48px 48px;
       pointer-events: none;
     }
@@ -46,7 +50,7 @@
     .orb {
       position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.18; z-index: 0; pointer-events: none;
     }
-    .orb--1 { width: 500px; height: 500px; background: #7c5cfc; top: -120px; left: -100px; animation: drift1 14s ease-in-out infinite alternate; }
+    .orb--1 { width: 500px; height: 500px; background: #eda5ff; top: -120px; left: -100px; animation: drift1 14s ease-in-out infinite alternate; }
     .orb--2 { width: 360px; height: 360px; background: #00d4aa; bottom: -80px; right: -60px; animation: drift2 18s ease-in-out infinite alternate; }
     .orb--3 { width: 280px; height: 280px; background: #e84393; top: 50%; right: 10%; animation: drift3 22s ease-in-out infinite alternate; }
 
@@ -155,7 +159,7 @@
     }
     .form-input:focus {
       border-color: var(--purple);
-      box-shadow: 0 0 0 3px rgba(124,92,252,0.15);
+      box-shadow: 0 0 0 3px rgba(237,165,255,0.15);
     }
     .form-input.error { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(239,68,68,0.12); }
 
@@ -177,7 +181,7 @@
     .emp-preview-card {
       display: none;
       background: var(--surface2);
-      border: 1px solid rgba(124,92,252,0.3);
+      border: 1px solid rgba(237,165,255,0.3);
       border-radius: 12px;
       padding: 16px;
       margin-bottom: 20px;
@@ -193,7 +197,7 @@
     .emp-name { font-size: 1rem; font-weight: 700; }
     .emp-role-chip {
       display: inline-flex; align-items: center; gap: 5px;
-      background: rgba(124,92,252,0.12); border: 1px solid rgba(124,92,252,0.2);
+      background: rgba(237,165,255,0.12); border: 1px solid rgba(237,165,255,0.2);
       border-radius: 20px; padding: 3px 10px;
       font-size: 0.72rem; font-weight: 600; color: var(--purple);
       margin-top: 3px;
@@ -201,15 +205,15 @@
 
     .btn-primary {
       width: 100%; padding: 14px;
-      background: linear-gradient(135deg, var(--purple), #5b3fd4);
+      background: linear-gradient(135deg, var(--purple), #c070d8);
       border: none; border-radius: 10px;
       color: #fff; font-size: 0.95rem; font-weight: 700;
       cursor: pointer; font-family: inherit;
       display: flex; align-items: center; justify-content: center; gap: 10px;
       transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
-      box-shadow: 0 4px 20px rgba(124,92,252,0.35);
+      box-shadow: 0 4px 20px rgba(237,165,255,0.35);
     }
-    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(124,92,252,0.5); }
+    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(237,165,255,0.5); }
     .btn-primary:active:not(:disabled){ transform: translateY(0); }
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -248,8 +252,8 @@
       transition: border-color 0.2s, box-shadow 0.2s;
       caret-color: var(--purple);
     }
-    .pin-box:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(124,92,252,0.15); }
-    .pin-box.filled { border-color: rgba(124,92,252,0.5); }
+    .pin-box:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(237,165,255,0.15); }
+    .pin-box.filled { border-color: rgba(237,165,255,0.5); }
     .pin-box.error  { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(239,68,68,0.12); }
 
     .spinner {
@@ -295,13 +299,40 @@
     .fp-success-sub   { font-size: 0.85rem; color: var(--muted); line-height: 1.6; margin-bottom: 18px; }
     .fp-success-note  { font-size: 0.75rem; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 13px; margin-bottom: 20px; line-height: 1.5; text-align: left; }
 
+    /* PIN setup rules */
+    .pin-rules { margin-bottom: 20px; display: flex; flex-direction: column; gap: 6px; }
+    .pin-rule { font-size: 0.75rem; color: var(--muted); display: flex; align-items: center; gap: 8px; transition: color 0.2s; }
+    .pin-rule i { font-size: 0.45rem; }
+    .pin-rule.valid   { color: var(--teal); }
+    .pin-rule.invalid { color: var(--danger); }
+
+    /* Lockout display */
+    .lockout-timer { font-size: 1.8rem; font-weight: 800; color: var(--danger); font-variant-numeric: tabular-nums; margin: 8px 0; }
+
     /* Responsive */
     @media (max-width: 860px) {
       .page { grid-template-columns: 1fr; }
       .left-panel { display: none; }
       .right-panel { padding: 40px 24px; }
     }
+    @media (max-width: 480px) {
+      .pin-wrap { gap: 6px; }
+      .pin-box  { width: 44px; height: 52px; font-size: 1.1rem; }
+    }
   </style>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="../js/analytics.js"></script>
 </head>
 <body>
 
@@ -316,7 +347,7 @@
   <div class="left-panel">
 
     <div class="brand-mark">
-      <div class="brand-icon"><img src="../assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital"></div>
+      <div class="brand-icon"><img src="../assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="height:36px;width:auto"></div>
       <div class="brand-text-wrap">
         <div class="brand-sub">Staff Portal</div>
       </div>
@@ -335,7 +366,7 @@
     <div class="app-preview">
       <div class="app-preview-row">
         <div class="app-chip">
-          <div class="app-chip-icon" style="background:#7c5cfc"><i class="fa-solid fa-user-circle"></i></div>
+          <div class="app-chip-icon" style="background:#eda5ff"><i class="fa-solid fa-user-circle"></i></div>
           <div><div class="app-chip-label">My Dashboard</div><div class="app-chip-desc">For every team member</div></div>
         </div>
         <div class="app-chip">
@@ -355,7 +386,7 @@
       </div>
       <div class="app-preview-row">
         <div class="app-chip">
-          <div class="app-chip-icon" style="background:#06b6d4"><i class="fa-solid fa-handshake"></i></div>
+          <div class="app-chip-icon" style="background:#656565"><i class="fa-solid fa-handshake"></i></div>
           <div><div class="app-chip-label">IFA Portal</div><div class="app-chip-desc">Adviser tools</div></div>
         </div>
         <div class="app-chip">
@@ -431,24 +462,76 @@
           </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Enter your 4-digit PIN</label>
-          <div class="pin-wrap" id="pinWrap">
-            <input class="pin-box" id="p1" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
-            <input class="pin-box" id="p2" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
-            <input class="pin-box" id="p3" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
-            <input class="pin-box" id="p4" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off" />
+        <!-- Lockout message -->
+        <div id="lockoutMsg" style="display:none;text-align:center;padding:16px 0 20px">
+          <div style="font-size:2rem;margin-bottom:8px">🔒</div>
+          <div style="font-weight:700;margin-bottom:6px">Account temporarily locked</div>
+          <div style="font-size:0.82rem;color:var(--muted);margin-bottom:10px">Too many incorrect attempts. Try again in</div>
+          <div class="lockout-timer" id="lockoutTimer">15:00</div>
+        </div>
+
+        <!-- PIN entry -->
+        <div id="pinSection">
+          <div class="form-group">
+            <label class="form-label" id="pinLabel">Enter your PIN</label>
+            <div class="pin-wrap" id="pinWrap"></div>
+            <div style="text-align:center;font-size:0.72rem;color:var(--muted);margin-top:8px" id="pinHint"></div>
           </div>
-          <div style="text-align:center;font-size:0.72rem;color:var(--muted);margin-top:8px">
-            Your PIN was set by your administrator
+
+          <button type="button" class="btn-primary" id="btnLogin" disabled>
+            Sign In&nbsp;<i class="fa-solid fa-right-to-bracket"></i>
+          </button>
+        </div>
+
+        <button type="button" class="btn-ghost" id="btnBackToEmail">
+          <i class="fa-solid fa-arrow-left"></i>&nbsp;Use a different email
+        </button>
+
+      </div>
+
+      <!-- ── STEP 3: Set PIN (first-time only) ── -->
+      <div id="step3" style="display:none">
+
+        <div style="margin-bottom:4px">
+          <div style="font-size:0.88rem;color:var(--muted);margin-bottom:14px">
+            Choose a secure 6-digit PIN you'll use for all future logins.
+          </div>
+          <div class="pin-rules">
+            <div class="pin-rule" id="rule-len"><i class="fa-solid fa-circle"></i>&nbsp;6 digits</div>
+            <div class="pin-rule" id="rule-norepeat"><i class="fa-solid fa-circle"></i>&nbsp;Not all the same digit</div>
+            <div class="pin-rule" id="rule-noseq"><i class="fa-solid fa-circle"></i>&nbsp;Not a simple sequence</div>
           </div>
         </div>
 
-        <button type="button" class="btn-primary" id="btnLogin" disabled>
-          Sign In&nbsp;<i class="fa-solid fa-right-to-bracket"></i>
+        <div class="form-group">
+          <label class="form-label">New 6-digit PIN</label>
+          <div class="pin-wrap" id="newPinWrap">
+            <input class="pin-box" id="np1" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="new-password" />
+            <input class="pin-box" id="np2" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="new-password" />
+            <input class="pin-box" id="np3" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="new-password" />
+            <input class="pin-box" id="np4" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="new-password" />
+            <input class="pin-box" id="np5" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="new-password" />
+            <input class="pin-box" id="np6" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="new-password" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Confirm PIN</label>
+          <div class="pin-wrap" id="confirmPinWrap">
+            <input class="pin-box" id="cp1" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="new-password" />
+            <input class="pin-box" id="cp2" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="new-password" />
+            <input class="pin-box" id="cp3" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="new-password" />
+            <input class="pin-box" id="cp4" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="new-password" />
+            <input class="pin-box" id="cp5" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="new-password" />
+            <input class="pin-box" id="cp6" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="new-password" />
+          </div>
+        </div>
+
+        <button type="button" class="btn-primary" id="btnSetPin" disabled>
+          Set PIN &amp; Sign In&nbsp;<i class="fa-solid fa-shield-halved"></i>
         </button>
-        <button type="button" class="btn-ghost" id="btnBackToEmail">
-          <i class="fa-solid fa-arrow-left"></i>&nbsp;Use a different email
+        <button type="button" class="btn-ghost" id="btnBackFromStep3">
+          <i class="fa-solid fa-arrow-left"></i>&nbsp;Use a different account
         </button>
 
       </div>
@@ -502,215 +585,357 @@
 <script>
 /* ─── State ─────────────────────────────────────────── */
 let _foundEmployee = null;
-let _lookingUp     = false;  // guard against double-clicks
+let _setupToken    = null;
+let _isFirstTime   = false;
+let _lockCountdown = null;
+let _lookingUp     = false;
 
-/* ─── On load: redirect if already logged in ─────────── */
+/* ─── On load ─────────────────────────────────────── */
 window.addEventListener('DOMContentLoaded', () => {
-  // staffSession bypass — already logged in via team login
   const s = StaffAuth.getSession();
   if (s) { window.location.replace('hub.html'); return; }
-
-  // JWT bypass — if logged in via /login.html (JWT auth), redirect to admin
-  // (hub.html requires staffSession which JWT users don't have)
   try {
     const jwt = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
     if (jwt) {
       const p = JSON.parse(atob(jwt.split('.')[1]));
-      if (p && p.exp * 1000 > Date.now()) {
-        window.location.replace('/admin/index.html');
-        return;
-      }
+      if (p && p.exp * 1000 > Date.now()) { window.location.replace('/admin/index.html'); return; }
     }
   } catch(_) {}
-
-  wirePinBoxes();
   wireButtons();
+  wireStep3PinBoxes();
 });
 
-/* ─── Wire all button/input events (no inline onclick= attributes) ──────
-   CSP script-src-attr 'none' blocks onclick= / onkeydown= attributes.
-   All handlers must be attached here via addEventListener.
-   ──────────────────────────────────────────────────────────────────── */
+/* ─── Wire buttons ─────────────────────────────────── */
 function wireButtons() {
-  // Step 1 — Continue button
   document.getElementById('btnContinue').addEventListener('click', lookupEmail);
-
-  // Step 1 — Email Enter key
-  document.getElementById('emailInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') lookupEmail();
-  });
-
-  // Step 1 — Forgot PIN link
+  document.getElementById('emailInput').addEventListener('keydown', e => { if (e.key === 'Enter') lookupEmail(); });
   document.getElementById('btnForgotPin').addEventListener('click', showForgotPin);
-
-  // Step 2 — Sign In button
   document.getElementById('btnLogin').addEventListener('click', attemptLogin);
-
-  // Step 2 — Back to email button
   document.getElementById('btnBackToEmail').addEventListener('click', resetToStep1);
-
-  // Forgot PIN panel — Close/back button
+  document.getElementById('btnSetPin').addEventListener('click', handleSetPin);
+  document.getElementById('btnBackFromStep3').addEventListener('click', resetToStep1);
   document.getElementById('btnCloseForgot').addEventListener('click', closeForgotPin);
-
-  // Forgot PIN panel — Send reset link button
   document.getElementById('fpBtn').addEventListener('click', submitFpReset);
-
-  // Forgot PIN panel — Back to Sign In (success state)
   document.getElementById('btnFpBackToLogin').addEventListener('click', closeForgotPin);
-
-  // Forgot PIN panel — Enter key on email input
-  document.getElementById('fpEmailInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') submitFpReset();
-  });
+  document.getElementById('fpEmailInput').addEventListener('keydown', e => { if (e.key === 'Enter') submitFpReset(); });
 }
 
 /* ─── STEP 1 — Email lookup ─────────────────────────── */
 async function lookupEmail() {
   if (_lookingUp) return;
-
   const emailRaw = document.getElementById('emailInput').value.trim().toLowerCase();
   if (!emailRaw)               { shakeInput('emailInput'); return showError('Please enter your work email address.'); }
   if (!emailRaw.includes('@')) { shakeInput('emailInput'); return showError('Please enter a valid email address.'); }
 
   _lookingUp = true;
   hideError();
-
-  const btn     = document.getElementById('btnContinue');
+  const btn = document.getElementById('btnContinue');
   const origHTML = btn.innerHTML;
-  btn.disabled  = true;
+  btn.disabled = true;
   btn.innerHTML = '<div class="spinner"></div>&nbsp;Looking up…';
 
   try {
     const res  = await fetch('/api/auth/staff-lookup', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email: emailRaw }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: emailRaw }),
     });
     const data = await res.json();
-
     if (!res.ok) {
       shakeInput('emailInput');
       showError(data.error || 'No staff account found for that email address.');
-      btn.disabled  = false;
-      btn.innerHTML = origHTML;
-      _lookingUp    = false;
+      btn.disabled = false; btn.innerHTML = origHTML; _lookingUp = false;
       return;
     }
-
     _foundEmployee = data.employee;
+    _isFirstTime   = !data.employee.pin_set;
     showStep2(data.employee);
-
   } catch(err) {
     console.error('Staff lookup error:', err);
     showError('Could not reach the server. Please check your connection and try again.');
-    btn.disabled  = false;
-    btn.innerHTML = origHTML;
-    _lookingUp    = false;
+    btn.disabled = false; btn.innerHTML = origHTML; _lookingUp = false;
   }
 }
 
 /* ─── STEP 2 — Show PIN screen ───────────────────────── */
 function showStep2(emp) {
   _lookingUp = false;
+  buildStepIndicator(_isFirstTime);
 
-  // Update step indicator
-  document.getElementById('stepDot1').classList.remove('active');
-  document.getElementById('stepDot1').classList.add('done');
-  document.getElementById('stepLine1').classList.add('done');
-  document.getElementById('stepDot2').classList.add('active');
-
-  // Fill employee preview
   const avatar = document.getElementById('empAvatar');
   avatar.textContent = emp.avatar_initials || (emp.first_name[0] + emp.last_name[0]).toUpperCase();
-  avatar.style.background = emp.avatar_color || '#7c5cfc';
-
+  avatar.style.background = emp.avatar_color || '#eda5ff';
   document.getElementById('empName').textContent = emp.first_name + ' ' + emp.last_name;
-  document.getElementById('empRoleChip').innerHTML =
-    `<i class="fa-solid fa-id-badge"></i> ${emp.role}`;
+  document.getElementById('empRoleChip').innerHTML = `<i class="fa-solid fa-id-badge"></i> ${emp.role}`;
 
-  // Show/hide panels
   document.getElementById('step1').style.display = 'none';
-  document.getElementById('step2').style.display  = 'block';
+  document.getElementById('step2').style.display = 'block';
 
-  // Focus first PIN box
-  setTimeout(() => document.getElementById('p1').focus(), 100);
-}
-
-/* ─── STEP 2 — PIN validation ────────────────────────── */
-async function attemptLogin() {
-  const pin = ['p1','p2','p3','p4'].map(id => document.getElementById(id).value).join('');
-  if (pin.length < 4) return;
-
-  // Derive expected PIN: last 4 digits of SA ID number
-  const idNum  = (_foundEmployee.id_number || '').replace(/\D/g,'');
-  const expectedPin = idNum.slice(-4);
-
-  // Fallback: if no ID number seeded, use last 4 of bank account number
-  const bankAcc = (_foundEmployee.bank_account_number || '').replace(/\D/g,'');
-  const fallbackPin = bankAcc.slice(-4);
-
-  const valid =
-    pin === expectedPin   ||
-    (expectedPin === '' && pin === fallbackPin);
-
-  if (!valid) {
-    // Shake PIN boxes and show error
-    document.querySelectorAll('.pin-box').forEach(b => {
-      b.classList.add('error');
-      b.value = '';
-    });
-    const wrap = document.getElementById('pinWrap');
-    wrap.classList.add('shake');
-    setTimeout(() => { wrap.classList.remove('shake'); document.querySelectorAll('.pin-box').forEach(b=>b.classList.remove('error')); }, 500);
-    showError('Incorrect PIN. Please try again.');
-    document.getElementById('p1').focus();
+  if (emp.locked) {
+    showLockout(emp.lockedSecsRemaining || 900);
     return;
   }
 
-  // ✅ Valid — create session and redirect
+  document.getElementById('pinLabel').textContent = _isFirstTime
+    ? 'Enter last 4 digits of your ID number'
+    : 'Enter your 6-digit PIN';
+  document.getElementById('pinHint').textContent = _isFirstTime
+    ? 'This is your one-time temporary PIN'
+    : '';
+
+  renderPinBoxes(_isFirstTime ? 4 : 6);
+  setTimeout(() => document.querySelector('#pinWrap .pin-box')?.focus(), 100);
+}
+
+/* ─── Build step indicator ───────────────────────────── */
+function buildStepIndicator(isFirstTime) {
+  document.getElementById('stepIndicator').innerHTML = isFirstTime ? `
+    <div class="step done" id="stepDot1"><div class="step-dot">1</div><span>Email</span></div>
+    <div class="step-line done" id="stepLine1"></div>
+    <div class="step active" id="stepDot2"><div class="step-dot">2</div><span>Temp PIN</span></div>
+    <div class="step-line" id="stepLine2"></div>
+    <div class="step" id="stepDot3"><div class="step-dot">3</div><span>Set PIN</span></div>
+    <div class="step-line" id="stepLine3"></div>
+    <div class="step" id="stepDot4"><div class="step-dot"><i class="fa-solid fa-check" style="font-size:0.6rem"></i></div><span>Access</span></div>
+  ` : `
+    <div class="step done" id="stepDot1"><div class="step-dot">1</div><span>Email</span></div>
+    <div class="step-line done" id="stepLine1"></div>
+    <div class="step active" id="stepDot2"><div class="step-dot">2</div><span>Verify</span></div>
+    <div class="step-line" id="stepLine2"></div>
+    <div class="step" id="stepDot3"><div class="step-dot"><i class="fa-solid fa-check" style="font-size:0.6rem"></i></div><span>Access</span></div>
+  `;
+}
+
+/* ─── Render & wire PIN boxes in #pinWrap ────────────── */
+function renderPinBoxes(count) {
+  const wrap = document.getElementById('pinWrap');
+  wrap.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const inp = document.createElement('input');
+    inp.className = 'pin-box';
+    inp.maxLength = 1;
+    inp.setAttribute('inputmode', 'numeric');
+    inp.setAttribute('pattern', '[0-9]');
+    inp.setAttribute('autocomplete', 'off');
+    wrap.appendChild(inp);
+  }
+  const boxes = Array.from(wrap.querySelectorAll('.pin-box'));
+  boxes.forEach((box, i) => {
+    box.addEventListener('input', e => {
+      e.target.value = e.target.value.replace(/\D/g, '');
+      e.target.classList.toggle('filled', !!e.target.value);
+      if (e.target.value && i < boxes.length - 1) boxes[i + 1].focus();
+      const allFilled = boxes.every(b => b.value.length === 1);
+      document.getElementById('btnLogin').disabled = !allFilled;
+      if (allFilled) setTimeout(() => attemptLogin(), 120);
+    });
+    box.addEventListener('keydown', e => {
+      if (e.key === 'Backspace' && !e.target.value && i > 0) boxes[i - 1].focus();
+      if (e.key === 'Enter') attemptLogin();
+    });
+    if (i === 0) {
+      box.addEventListener('paste', e => {
+        const pasted = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
+        if (pasted.length >= count) {
+          e.preventDefault();
+          boxes.forEach((b, j) => { b.value = pasted[j] || ''; b.classList.toggle('filled', !!pasted[j]); });
+          document.getElementById('btnLogin').disabled = false;
+          setTimeout(() => attemptLogin(), 150);
+        }
+      });
+    }
+  });
+}
+
+/* ─── Lockout display ───────────────────────────────── */
+function showLockout(secs) {
+  clearInterval(_lockCountdown);
+  document.getElementById('lockoutMsg').style.display = 'block';
+  document.getElementById('pinSection').style.display = 'none';
+  document.getElementById('btnLogin').disabled = true;
+
+  function tick() {
+    const m = Math.floor(secs / 60), s = secs % 60;
+    document.getElementById('lockoutTimer').textContent = `${m}:${String(s).padStart(2, '0')}`;
+    if (secs <= 0) {
+      clearInterval(_lockCountdown);
+      document.getElementById('lockoutMsg').style.display = 'none';
+      document.getElementById('pinSection').style.display = 'block';
+      document.getElementById('btnLogin').disabled = true; // still need boxes filled
+    }
+    secs--;
+  }
+  tick();
+  _lockCountdown = setInterval(tick, 1000);
+}
+
+/* ─── STEP 2 — Attempt login (server-side validation) ── */
+async function attemptLogin() {
+  const boxes = Array.from(document.querySelectorAll('#pinWrap .pin-box'));
+  const pin   = boxes.map(b => b.value).join('');
+  const expected = _isFirstTime ? 4 : 6;
+  if (pin.length < expected) return;
+
   hideError();
   const loginBtn = document.getElementById('btnLogin');
-  if (loginBtn) { loginBtn.disabled = true; loginBtn.innerHTML = '<div class="spinner"></div>&nbsp;Signing in…'; }
+  loginBtn.disabled = true;
+  loginBtn.innerHTML = '<div class="spinner"></div>&nbsp;Verifying…';
 
-  // Update step indicator
-  document.getElementById('stepDot2').classList.remove('active');
-  document.getElementById('stepDot2').classList.add('done');
-  document.getElementById('stepLine2').classList.add('done');
-  document.getElementById('stepDot3').classList.add('done');
-
-  // Write staffSession (for team/* pages)
-  StaffAuth.setSession(_foundEmployee);
-
-  // Exchange PIN for a real JWT so fund/admin/ifa API calls work without
-  // re-authentication. Fire-and-forget — redirect happens regardless.
   try {
-    const tr = await fetch('/api/auth/staff-token', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email: _foundEmployee.email, pin }),
+    const tr  = await fetch('/api/auth/staff-token', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: _foundEmployee.email, pin }),
     });
-    if (tr.ok) {
-      const td = await tr.json();
-      // Store JWT in localStorage so api.js Auth helpers and fund.js fetch calls
-      // can attach it as Bearer token. Also stored in httpOnly cookie by server.
-      localStorage.setItem('svc_token', td.token);
-      localStorage.setItem('svc_user', JSON.stringify({
-        id:        _foundEmployee.id,
-        email:     _foundEmployee.email,
-        role:      td.role,
-        firstName: _foundEmployee.first_name,
-        lastName:  _foundEmployee.last_name,
-        empId:     _foundEmployee.id,
-      }));
-    }
-  } catch (_) { /* non-blocking — staffSession still works for team pages */ }
+    const td = await tr.json();
 
-  // Redirect: check if there was a pending destination
+    if (td.locked || td.lockedSecsRemaining) {
+      loginBtn.innerHTML = 'Sign In&nbsp;<i class="fa-solid fa-right-to-bracket"></i>';
+      showLockout(td.lockedSecsRemaining || 900);
+      return;
+    }
+
+    if (!tr.ok) {
+      boxes.forEach(b => { b.classList.add('error'); b.value = ''; });
+      const wrap = document.getElementById('pinWrap');
+      wrap.classList.add('shake');
+      setTimeout(() => { wrap.classList.remove('shake'); boxes.forEach(b => b.classList.remove('error')); }, 500);
+      showError(td.error || 'Incorrect PIN. Please try again.');
+      boxes[0]?.focus();
+      loginBtn.disabled = true;
+      loginBtn.innerHTML = 'Sign In&nbsp;<i class="fa-solid fa-right-to-bracket"></i>';
+      return;
+    }
+
+    if (td.requiresPinSetup) {
+      _setupToken = td.setupToken;
+      showStep3();
+      return;
+    }
+
+    finalizeLogin(td.token, td.role);
+  } catch(err) {
+    console.error('Login error:', err);
+    showError('Could not reach the server. Please check your connection and try again.');
+    loginBtn.disabled = false;
+    loginBtn.innerHTML = 'Sign In&nbsp;<i class="fa-solid fa-right-to-bracket"></i>';
+  }
+}
+
+/* ─── STEP 3 — Show PIN setup ───────────────────────── */
+function showStep3() {
+  const sd2 = document.getElementById('stepDot2'), sl2 = document.getElementById('stepLine2');
+  const sd3 = document.getElementById('stepDot3');
+  if (sd2) { sd2.classList.remove('active'); sd2.classList.add('done'); }
+  if (sl2) sl2.classList.add('done');
+  if (sd3) sd3.classList.add('active');
+
+  document.getElementById('step2').style.display = 'none';
+  document.getElementById('step3').style.display = 'block';
+  hideError();
+  setTimeout(() => document.getElementById('np1')?.focus(), 100);
+}
+
+/* ─── Wire step-3 PIN boxes (static HTML, wired once) ── */
+function wireStep3PinBoxes() {
+  wirePinRow(['np1','np2','np3','np4','np5','np6'], () => {
+    validatePinRules();
+    const confDone = ['cp1','cp2','cp3','cp4','cp5','cp6'].every(id => document.getElementById(id)?.value.length === 1);
+    if (confDone) checkSetPinReady();
+    else document.getElementById('cp1')?.focus();
+  });
+  wirePinRow(['cp1','cp2','cp3','cp4','cp5','cp6'], checkSetPinReady);
+}
+
+function wirePinRow(ids, onComplete) {
+  const boxes = ids.map(id => document.getElementById(id)).filter(Boolean);
+  boxes.forEach((box, i) => {
+    box.addEventListener('input', e => {
+      e.target.value = e.target.value.replace(/\D/g, '');
+      e.target.classList.toggle('filled', !!e.target.value);
+      if (e.target.value && i < boxes.length - 1) boxes[i + 1].focus();
+      if (boxes.every(b => b.value.length === 1)) onComplete?.();
+    });
+    box.addEventListener('keydown', e => {
+      if (e.key === 'Backspace' && !e.target.value && i > 0) boxes[i - 1].focus();
+      if (e.key === 'Enter') onComplete?.();
+    });
+  });
+}
+
+function validatePinRules() {
+  const pin = ['np1','np2','np3','np4','np5','np6'].map(id => document.getElementById(id)?.value || '').join('');
+  const hasLen   = pin.length === 6;
+  const noRepeat = hasLen && !/^(.)\1{5}$/.test(pin);
+  const noSeq    = hasLen && !/^(012345|123456|234567|345678|456789|987654|876543|765432|654321|543210)$/.test(pin);
+  const set = (id, ok) => { const el = document.getElementById(id); if (el) el.className = 'pin-rule' + (hasLen ? (ok ? ' valid' : ' invalid') : ''); };
+  set('rule-len', hasLen);
+  set('rule-norepeat', noRepeat);
+  set('rule-noseq', noSeq);
+  return hasLen && noRepeat && noSeq;
+}
+
+function checkSetPinReady() {
+  validatePinRules();
+  const newFull  = ['np1','np2','np3','np4','np5','np6'].every(id => document.getElementById(id)?.value.length === 1);
+  const confFull = ['cp1','cp2','cp3','cp4','cp5','cp6'].every(id => document.getElementById(id)?.value.length === 1);
+  document.getElementById('btnSetPin').disabled = !(newFull && confFull);
+}
+
+/* ─── STEP 3 — Submit set PIN ────────────────────────── */
+async function handleSetPin() {
+  const newPin  = ['np1','np2','np3','np4','np5','np6'].map(id => document.getElementById(id)?.value || '').join('');
+  const confPin = ['cp1','cp2','cp3','cp4','cp5','cp6'].map(id => document.getElementById(id)?.value || '').join('');
+
+  if (newPin.length !== 6) return showError('Please enter a 6-digit PIN.');
+  if (newPin !== confPin)  { shakePinRow('confirmPinWrap'); return showError('PINs do not match. Please try again.'); }
+  if (!validatePinRules()) return showError('PIN does not meet the requirements listed above.');
+
+  hideError();
+  const btn = document.getElementById('btnSetPin');
+  const origHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div>&nbsp;Setting PIN…';
+
+  try {
+    const res  = await fetch('/api/auth/set-pin', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ setupToken: _setupToken, pin: newPin }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      showError(data.error || 'Could not set PIN. Please try again.');
+      btn.disabled = false; btn.innerHTML = origHTML;
+      return;
+    }
+
+    // Advance indicator
+    const sd3 = document.getElementById('stepDot3'), sl3 = document.getElementById('stepLine3');
+    const sd4 = document.getElementById('stepDot4');
+    if (sd3) { sd3.classList.remove('active'); sd3.classList.add('done'); }
+    if (sl3) sl3.classList.add('done');
+    if (sd4) sd4.classList.add('done');
+
+    finalizeLogin(data.token, data.role);
+  } catch(err) {
+    console.error('Set PIN error:', err);
+    showError('Could not reach the server. Please check your connection and try again.');
+    btn.disabled = false; btn.innerHTML = origHTML;
+  }
+}
+
+/* ─── Finalize login ─────────────────────────────────── */
+function finalizeLogin(token, role) {
+  localStorage.setItem('svc_token', token);
+  localStorage.setItem('svc_user', JSON.stringify({
+    id: _foundEmployee.id, email: _foundEmployee.email, role,
+    firstName: _foundEmployee.first_name, lastName: _foundEmployee.last_name,
+    empId: _foundEmployee.id, _staffSso: true,
+  }));
+  StaffAuth.setSession(_foundEmployee);
   const redirect = sessionStorage.getItem('staffLoginRedirect');
   sessionStorage.removeItem('staffLoginRedirect');
-
   setTimeout(() => {
-    if (redirect && redirect !== '/team/login.html' && redirect !== '/team/hub.html' && !redirect.includes('login.html') && !redirect.includes('hub.html')) {
+    if (redirect && !redirect.includes('login.html') && !redirect.includes('hub.html')) {
       window.location.replace(redirect);
     } else {
       window.location.replace('hub.html');
@@ -718,10 +943,32 @@ async function attemptLogin() {
   }, 600);
 }
 
+/* ─── Back to step 1 ─────────────────────────────────── */
+function resetToStep1() {
+  _foundEmployee = null; _setupToken = null; _isFirstTime = false;
+  clearInterval(_lockCountdown);
+  document.getElementById('step1').style.display = 'block';
+  document.getElementById('step2').style.display = 'none';
+  document.getElementById('step3').style.display = 'none';
+  document.getElementById('lockoutMsg').style.display = 'none';
+  document.getElementById('pinSection').style.display = 'block';
+  document.getElementById('stepIndicator').innerHTML = `
+    <div class="step active" id="stepDot1"><div class="step-dot">1</div><span>Email</span></div>
+    <div class="step-line" id="stepLine1"></div>
+    <div class="step" id="stepDot2"><div class="step-dot">2</div><span>Verify</span></div>
+    <div class="step-line" id="stepLine2"></div>
+    <div class="step" id="stepDot3"><div class="step-dot"><i class="fa-solid fa-check" style="font-size:0.6rem"></i></div><span>Access</span></div>
+  `;
+  document.getElementById('btnContinue').disabled = false;
+  hideError();
+  setTimeout(() => document.getElementById('emailInput').focus(), 50);
+}
+
 /* ─── Forgot PIN Flow ────────────────────────────────── */
 function showForgotPin() {
   document.getElementById('step1').style.display = 'none';
   document.getElementById('step2').style.display = 'none';
+  document.getElementById('step3').style.display = 'none';
   document.getElementById('stepIndicator').style.display = 'none';
   document.getElementById('forgotPinPanel').classList.add('show');
   document.getElementById('fpAlert').style.display = 'none';
@@ -736,18 +983,19 @@ function closeForgotPin() {
   document.getElementById('stepIndicator').style.display = '';
   document.getElementById('step1').style.display = 'block';
   document.getElementById('step2').style.display = 'none';
+  document.getElementById('step3').style.display = 'none';
   if (document.getElementById('fpEmailInput')) document.getElementById('fpEmailInput').value = '';
   document.getElementById('fpAlert').style.display = 'none';
   hideError();
 }
 
 function submitFpReset() {
-  const emailEl = document.getElementById('fpEmailInput');
-  const alertEl = document.getElementById('fpAlert');
+  const emailEl  = document.getElementById('fpEmailInput');
+  const alertEl  = document.getElementById('fpAlert');
   const alertMsg = document.getElementById('fpAlertMsg');
-  const btn     = document.getElementById('fpBtn');
-  const btnCnt  = document.getElementById('fpBtnContent');
-  const email   = emailEl.value.toLowerCase().trim();
+  const btn      = document.getElementById('fpBtn');
+  const btnCnt   = document.getElementById('fpBtnContent');
+  const email    = emailEl.value.toLowerCase().trim();
 
   alertEl.style.display = 'none';
   if (!email || !email.includes('@') || !email.includes('.')) {
@@ -757,10 +1005,8 @@ function submitFpReset() {
     setTimeout(() => emailEl.classList.remove('error'), 600);
     return;
   }
-
   btn.disabled = true;
   btnCnt.innerHTML = '<div class="spinner"></div> Sending…';
-
   setTimeout(() => {
     document.getElementById('fpFormState').style.display = 'none';
     document.getElementById('fpEmailSent').textContent = email;
@@ -770,81 +1016,12 @@ function submitFpReset() {
   }, 1200);
 }
 
-/* ─── Back to step 1 ─────────────────────────────────── */
-function resetToStep1() {
-  _foundEmployee = null;
-  ['p1','p2','p3','p4'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('step1').style.display = 'block';
-  document.getElementById('step2').style.display  = 'none';
-  document.getElementById('stepDot1').classList.add('active');
-  document.getElementById('stepDot1').classList.remove('done');
-  document.getElementById('stepLine1').classList.remove('done');
-  document.getElementById('stepDot2').classList.remove('active','done');
-  document.getElementById('btnContinue').disabled = false;
-  hideError();
-  setTimeout(() => document.getElementById('emailInput').focus(), 50);
-}
-
-/* ─── PIN box wiring: auto-advance, backspace ─────────── */
-function wirePinBoxes() {
-  const boxes = [
-    document.getElementById('p1'),
-    document.getElementById('p2'),
-    document.getElementById('p3'),
-    document.getElementById('p4'),
-  ];
-
-  boxes.forEach((box, i) => {
-    box.addEventListener('input', e => {
-      const v = e.target.value.replace(/\D/g,'');
-      e.target.value = v;
-      if (v) {
-        e.target.classList.add('filled');
-        if (i < 3) boxes[i+1].focus();
-      } else {
-        e.target.classList.remove('filled');
-      }
-      // Enable/disable Sign In button
-      const all4 = boxes.every(b => b.value.length === 1);
-      const btn  = document.getElementById('btnLogin');
-      if (btn) btn.disabled = !all4;
-      // Auto submit when all 4 filled
-      if (all4) setTimeout(() => attemptLogin(), 120);
-    });
-
-    box.addEventListener('keydown', e => {
-      if (e.key === 'Backspace' && !e.target.value && i > 0) {
-        boxes[i-1].focus();
-      }
-      if (e.key === 'Enter') attemptLogin();
-    });
-
-    // Allow paste of full 4-digit PIN into first box
-    if (i === 0) {
-      box.addEventListener('paste', e => {
-        const pasted = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g,'');
-        if (pasted.length >= 4) {
-          e.preventDefault();
-          boxes.forEach((b, j) => {
-            b.value = pasted[j] || '';
-            b.classList.toggle('filled', !!pasted[j]);
-          });
-          const btn = document.getElementById('btnLogin');
-          if (btn) btn.disabled = false;
-          setTimeout(() => attemptLogin(), 150);
-        }
-      });
-    }
-  });
-}
-
 /* ─── UI helpers ─────────────────────────────────────── */
 function showError(msg) {
   const box = document.getElementById('alertBox');
   document.getElementById('alertMsg').textContent = msg;
-  box.classList.add('show');
   box.classList.remove('alert--success');
-  box.classList.add('alert--error');
+  box.classList.add('show', 'alert--error');
 }
 
 function hideError() {
@@ -857,7 +1034,13 @@ function shakeInput(id) {
   setTimeout(() => el.classList.remove('shake', 'error'), 600);
 }
 
-
+function shakePinRow(wrapperId) {
+  const wrap = document.getElementById(wrapperId);
+  if (!wrap) return;
+  wrap.classList.add('shake');
+  wrap.querySelectorAll('.pin-box').forEach(b => { b.classList.add('error'); b.value = ''; b.classList.remove('filled'); });
+  setTimeout(() => { wrap.classList.remove('shake'); wrap.querySelectorAll('.pin-box').forEach(b => b.classList.remove('error')); }, 500);
+}
 </script>
 </body>
 </html>

@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SV Capital — IFA Portal Login</title>
@@ -13,8 +17,8 @@
       --orange:       #FF8215;
       --orange-dark:  #E56200;
       --orange-light: #FF9B0C;
-      --teal:         #2F8C9B;
-      --teal-dark:    #1E6E7A;
+      --teal:         #656565;
+      --teal-dark:    #656565;
       --green:        #22C55E;
       --bg:           #F7F8FA;
       --bg-white:     #FFFFFF;
@@ -26,8 +30,8 @@
       --shadow-lg:    0 20px 60px rgba(0,0,0,0.14);
       --radius:       12px;
       --radius-lg:    18px;
-      --font:         'Inter', -apple-system, sans-serif;
-      --serif:        'DM Serif Display', Georgia, serif;
+      --font:         'Poppins', -apple-system, sans-serif;
+      --serif:        'Poppins', Georgia, serif;
       --ease:         0.25s cubic-bezier(0.4,0,0.2,1);
     }
 
@@ -319,6 +323,20 @@
       .login-right { padding: 40px 24px; }
     }
   </style>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="../js/analytics.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -332,9 +350,8 @@
 
     <div class="login-left__content">
       <div class="brand">
-        <img src="../assets/logo-inline.svg" alt="SV Capital" />
+        <img src="../assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="height:36px;width:auto">
         <div>
-          <div class="brand__name">SV Capital</div>
           <div class="brand__sub">FSP #52449 · FSCA Regulated</div>
         </div>
       </div>
@@ -361,7 +378,7 @@
         </div>
         <div class="feature-item">
           <div class="feature-icon feature-icon--gold"><i class="fa-solid fa-chart-line"></i></div>
-          <div class="feature-text"><strong>Performance Tracking</strong> — Monitor investments, expected returns, and maturity timelines</div>
+          <div class="feature-text"><strong>Performance Tracking</strong> — Monitor investments, target returns, and maturity timelines</div>
         </div>
         <div class="feature-item">
           <div class="feature-icon feature-icon--green"><i class="fa-solid fa-coins"></i></div>

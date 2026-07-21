@@ -1,11 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="assets/logo-192.png" />
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>SV Capital — Sign In</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -15,8 +19,8 @@
       --orange-light:   #FF9B0C;
       --orange-pale:    rgba(255,130,21,0.08);
       --orange-shadow:  0 8px 32px rgba(255,130,21,0.25);
-      --teal:           #2F8C9B;
-      --teal-dark:      #1E6E7A;
+      --teal:           #656565;
+      --teal-dark:      #656565;
       --green:          #22C55E;
       --text-h:         #1a1a1a;
       --text-body:      #303030;
@@ -31,8 +35,8 @@
       --radius:         12px;
       --radius-lg:      18px;
       --radius-xl:      24px;
-      --font:           'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      --serif:          'DM Serif Display', Georgia, serif;
+      --font:           'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+      --serif:          'Poppins', Georgia, serif;
       --ease:           0.25s cubic-bezier(0.4,0,0.2,1);
     }
 
@@ -56,7 +60,7 @@
     /* ─── Left Panel (Brand) ─── */
     .login-left {
       flex: 1;
-      background: linear-gradient(145deg, #1a3a4a 0%, #0d2535 60%, #162030 100%);
+      background: linear-gradient(145deg, #2a2a2a 0%, #1a1a1a 60%, #222222 100%);
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -82,7 +86,7 @@
       position: absolute;
       bottom: -80px; left: -80px;
       width: 400px; height: 400px;
-      background: radial-gradient(circle, rgba(47,140,155,0.12) 0%, transparent 65%);
+      background: radial-gradient(circle, rgba(101,101,101,0.10) 0%, transparent 65%);
       border-radius: 50%;
       pointer-events: none;
     }
@@ -95,7 +99,7 @@
       opacity: 0.06;
     }
     .login-deco--1 { width: 280px; height: 280px; border: 2px solid rgba(255,155,12,1); top: 10%; right: 5%; }
-    .login-deco--2 { width: 160px; height: 160px; border: 2px solid rgba(47,140,155,1); bottom: 15%; right: 15%; opacity: 0.1; }
+    .login-deco--2 { width: 160px; height: 160px; border: 2px solid rgba(255,255,255,1); bottom: 15%; right: 15%; opacity: 0.1; }
 
     .login-left__content {
       position: relative;
@@ -112,9 +116,8 @@
     }
 
     .login-brand img {
-      width: 56px;
-      height: 56px;
-      border-radius: 12px;
+      height: 64px;
+      width: auto;
     }
 
     .login-brand__name {
@@ -226,7 +229,7 @@
 
     .login-product-tag--cattle  { background: rgba(217,119,6,0.15);  color: #F59E0B; border: 1px solid rgba(217,119,6,0.25);  }
     .login-product-tag--solar   { background: rgba(234,88,12,0.12);  color: #FB923C; border: 1px solid rgba(234,88,12,0.20);  }
-    .login-product-tag--smme    { background: rgba(37,99,235,0.12);  color: #60A5FA; border: 1px solid rgba(37,99,235,0.20);  }
+    .login-product-tag--smme    { background: rgba(37,99,235,0.12);  color: #656565; border: 1px solid rgba(37,99,235,0.20);  }
 
     /* FSCA badge */
     .login-fsca {
@@ -306,49 +309,6 @@
       color: var(--text-muted);
       line-height: 1.5;
     }
-
-    /* Role selector */
-    .role-tabs {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-bottom: 24px;
-    }
-
-    .role-tab {
-      background: var(--bg);
-      border: 2px solid var(--border);
-      border-radius: var(--radius);
-      padding: 12px;
-      cursor: pointer;
-      text-align: center;
-      transition: all var(--ease);
-      position: relative;
-    }
-
-    .role-tab.active {
-      background: var(--orange-pale);
-      border-color: var(--orange);
-    }
-
-    .role-tab i {
-      font-size: 1.1rem;
-      color: var(--text-dim);
-      display: block;
-      margin-bottom: 6px;
-      transition: color var(--ease);
-    }
-
-    .role-tab.active i { color: var(--orange); }
-
-    .role-tab__name {
-      font-size: 0.78rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      transition: color var(--ease);
-    }
-
-    .role-tab.active .role-tab__name { color: var(--orange-dark); }
 
     /* Form fields */
     .form-group {
@@ -554,6 +514,19 @@
       .login-right { width: 100%; max-width: 100%; min-width: 0; padding: 40px 24px; border-left: none; }
     }
   </style>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="/js/analytics.js"></script>
 </head>
 <body>
 <div class="login-layout">
@@ -567,11 +540,7 @@
 
       <!-- Brand -->
       <div class="login-brand">
-        <img src="assets/logo-inline.svg" alt="SV Capital logo">
-        <div>
-          <div class="login-brand__name">SV Capital</div>
-          <div class="login-brand__tagline">Investments that make sense</div>
-        </div>
+        <img src="assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital logo">
       </div>
 
       <!-- Hero -->
@@ -600,13 +569,6 @@
         </div>
       </div>
 
-      <!-- Products -->
-      <div style="margin-bottom:12px;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);font-weight:700">Available Investment Products</div>
-      <div class="login-products">
-        <span class="login-product-tag login-product-tag--cattle">Cattle Finance</span>
-        <span class="login-product-tag login-product-tag--solar">Solar Energy</span>
-        <span class="login-product-tag login-product-tag--smme">SMME Short-Term</span>
-      </div>
 
       <!-- FSCA -->
       <div class="login-fsca">
@@ -634,19 +596,6 @@
         <p class="login-form-sub">Enter your credentials to access your SV Capital portfolio.</p>
       </div>
 
-      <!-- Role selector -->
-      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:10px">Access Level</div>
-      <div class="role-tabs" id="roleTabs">
-        <button type="button" class="role-tab active" id="roleInvestor" onclick="selectRole('investor')">
-          <i class="fa-solid fa-chart-pie"></i>
-          <span class="role-tab__name">Investor Portal</span>
-        </button>
-        <button type="button" class="role-tab" id="roleAdmin" onclick="selectRole('admin')">
-          <i class="fa-solid fa-shield-halved"></i>
-          <span class="role-tab__name">Admin Console</span>
-        </button>
-      </div>
-
       <!-- Error -->
       <div class="form-error" id="formError">
         <i class="fa-solid fa-triangle-exclamation"></i>
@@ -654,7 +603,7 @@
       </div>
 
       <!-- Form -->
-      <form id="loginForm" onsubmit="handleLogin(event)">
+      <form id="loginForm" onsubmit="handleLogin(event)" novalidate>
         <div class="form-group">
           <label class="form-label" for="emailInput">Email Address</label>
           <div class="form-input-wrap">
@@ -677,12 +626,31 @@
         <button type="submit" class="btn-login" id="loginBtn">
           <span id="loginBtnText"><i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In</span>
         </button>
+        <button type="button" class="btn-biometric" id="biometricBtn" style="display:none;width:100%;padding:12px;margin-top:8px;background:transparent;border:1.5px solid rgba(255,155,12,0.3);border-radius:10px;color:#FF9B0C;font-size:0.9rem;font-weight:600;cursor:pointer;align-items:center;justify-content:center;gap:8px" onclick="loginWithBiometric()">
+          <i class="fa-solid fa-fingerprint" style="font-size:1.1rem"></i>
+          Sign in with Face ID / Fingerprint
+        </button>
 
         <div class="login-links">
           <a href="#" class="login-link" onclick="showForgotPassword(event)">Forgot password?</a>
           <a href="index.html" class="login-link"><i class="fa-solid fa-arrow-left" style="font-size:0.7rem;margin-right:4px"></i>Back to website</a>
         </div>
       </form>
+
+      <!-- 2FA verification step (shown after password success if 2FA enabled) -->
+      <div id="twoFAStep" style="display:none">
+        <div style="text-align:center;margin-bottom:20px">
+          <i class="fa-solid fa-mobile-screen-button" style="font-size:2rem;color:#FF9B0C;margin-bottom:10px;display:block"></i>
+          <div style="font-size:1rem;font-weight:700;color:#303030">Two-Factor Authentication</div>
+          <div style="font-size:0.82rem;color:#6b7280;margin-top:6px">Enter the 6-digit code from your authenticator app</div>
+        </div>
+        <div style="margin-bottom:14px">
+          <input type="text" id="totpInput" inputmode="numeric" pattern="[0-9]{6}" maxlength="12" placeholder="000 000" style="width:100%;text-align:center;font-size:1.6rem;font-weight:700;letter-spacing:0.25em;padding:14px;border:2px solid #e5e7eb;border-radius:10px;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='#FF9B0C'" onblur="this.style.borderColor='#e5e7eb'" onkeydown="if(event.key==='Enter')verify2FA()" />
+        </div>
+        <div id="twoFAError" style="display:none;color:#ef4444;font-size:0.82rem;margin-bottom:10px;text-align:center"></div>
+        <button type="button" id="verify2FABtn" onclick="verify2FA()" style="width:100%;padding:13px;background:linear-gradient(135deg,#FF9B0C,#FF5229);color:#fff;border:none;border-radius:10px;font-size:0.95rem;font-weight:700;cursor:pointer;margin-bottom:10px">Verify Code</button>
+        <button type="button" onclick="back2FAStep()" style="width:100%;padding:10px;background:transparent;color:#6b7280;border:1px solid #e5e7eb;border-radius:10px;font-size:0.85rem;cursor:pointer">← Back to Sign In</button>
+      </div>
 
       <!-- ─── FORGOT PASSWORD PANEL ─── -->
       <div class="forgot-panel" id="forgotPanel">
@@ -729,7 +697,13 @@
       <!-- Footer -->
       <div class="login-footer">
         <a href="index.html">www.svcapital.co.za</a>
-        <div class="login-footer__copy">© 2024 SmartVest Financial Services (Pty) Ltd. All rights reserved.</div>
+        <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:6px">
+          <a href="terms.html" target="_blank" rel="noopener">Terms of Use</a>
+          <a href="popia.html" target="_blank" rel="noopener">Privacy Policy</a>
+          <a href="paia.html" target="_blank" rel="noopener">PAIA Manual</a>
+          <a href="complaints.html" target="_blank" rel="noopener">Complaints</a>
+        </div>
+        <div class="login-footer__copy">© <span class="yr"></span> SmartVest Financial Services (Pty) Ltd. All rights reserved.</div>
       </div>
 
     </div>
@@ -737,11 +711,18 @@
 
 </div>
 
+<script>document.querySelectorAll('.yr').forEach(function(e){e.textContent=new Date().getFullYear();});</script>
+<!-- Capacitor native bridge -->
+<script>
+if (window.Capacitor) {
+  window.__SVC_NATIVE__   = true;
+  window.__SVC_API_BASE__ = 'https://svcapital-production.up.railway.app/api/';
+}
+</script>
+<script src="/js/native.js"></script>
 <script src="js/api.js?v=2"></script>
 <script>
   'use strict';
-
-  let selectedRole = 'investor';
 
   /* ─── If already logged in, redirect to correct portal ─── */
   (function checkExistingSession() {
@@ -766,15 +747,75 @@
         const redirectMap = {
           admin:        'admin/index.html',
           director:     'admin/index.html',
-          investor:     'portal/index.html',
+          investor:     'portal/',
           ifa:          'ifa/index.html',
           fund_manager: 'fund/index.html',
           staff:        'team/hub.html',
         };
-        window.location.replace(redirectMap[payload.role] || 'portal/index.html');
+        window.location.replace(redirectMap[payload.role] || 'portal/');
       }
     } catch (_) {}
   })();
+
+
+
+  function _ensureLoginAssistUI() {
+    const pwInput = document.getElementById('passwordInput');
+    if (pwInput && !document.getElementById('capsLockHint')) {
+      const hint = document.createElement('div');
+      hint.id = 'capsLockHint';
+      hint.style.cssText = 'display:none;margin-top:8px;font-size:0.74rem;font-weight:700;color:#ef4444';
+      hint.innerHTML = '<i class="fa-solid fa-arrow-up-a-z" style="margin-right:6px"></i>Caps Lock is on';
+      pwInput.closest('.form-group')?.appendChild(hint);
+    }
+    const totpInput = document.getElementById('totpInput');
+    if (totpInput && !document.getElementById('totpHint')) {
+      const hint = document.createElement('div');
+      hint.id = 'totpHint';
+      hint.style.cssText = 'margin-top:8px;font-size:0.74rem;color:#6b7280;text-align:center';
+      hint.textContent = 'Paste or type the 6-digit code — spaces are added automatically.';
+      totpInput.parentNode?.appendChild(hint);
+    }
+  }
+
+  function _toggleCapsLockHint(e) {
+    const hint = document.getElementById('capsLockHint');
+    if (!hint) return;
+    const on = !!(e && typeof e.getModifierState === 'function' && e.getModifierState('CapsLock'));
+    hint.style.display = on ? 'block' : 'none';
+  }
+
+  function initLoginAssists() {
+    _ensureLoginAssistUI();
+    const emailEl = document.getElementById('emailInput');
+    const pwEl = document.getElementById('passwordInput');
+    const forgotEl = document.getElementById('forgotEmailInput');
+    const totpEl = document.getElementById('totpInput');
+    const savedEmail = localStorage.getItem('svc_last_login_email');
+    if (emailEl && savedEmail && !emailEl.value) emailEl.value = savedEmail;
+    if (emailEl && !document.getElementById('twoFAStep')?.style.display) setTimeout(() => emailEl.focus(), 60);
+
+    [emailEl, pwEl, forgotEl].forEach(el => {
+      if (!el) return;
+      el.addEventListener('input', () => {
+        document.getElementById('formError')?.classList.remove('show');
+        document.getElementById('forgotError')?.classList.remove('show');
+      });
+    });
+
+    if (pwEl) {
+      ['keydown','keyup','focus','blur'].forEach(evt => pwEl.addEventListener(evt, _toggleCapsLockHint));
+      pwEl.addEventListener('blur', () => _toggleCapsLockHint(null));
+    }
+
+    if (totpEl) {
+      totpEl.addEventListener('input', () => {
+        const digits = totpEl.value.replace(/\D/g, '').slice(0, 6);
+        totpEl.value = digits.length > 3 ? `${digits.slice(0,3)} ${digits.slice(3)}` : digits;
+        if (digits.length === 6) setTimeout(() => verify2FA(), 120);
+      });
+    }
+  }
 
   /* ─── Forgot Password Flow ─── */
   function showForgotPassword(e) {
@@ -782,6 +823,8 @@
     document.getElementById('loginForm').style.display = 'none';
     document.querySelectorAll('.login-links').forEach(el => el.style.display = 'none');
     document.getElementById('forgotPanel').classList.add('show');
+    const loginEmail = document.getElementById('emailInput')?.value?.trim();
+    if (loginEmail && document.getElementById('forgotEmailInput')) document.getElementById('forgotEmailInput').value = loginEmail;
     document.getElementById('forgotError').classList.remove('show');
     document.getElementById('forgotSuccessPanel').classList.remove('show');
     document.getElementById('forgotFormState').style.display = 'block';
@@ -793,6 +836,7 @@
     document.querySelectorAll('.login-links').forEach(el => el.style.display = '');
     document.getElementById('forgotPanel').classList.remove('show');
     if (document.getElementById('forgotEmailInput')) document.getElementById('forgotEmailInput').value = '';
+    setTimeout(() => document.getElementById('emailInput')?.focus(), 60);
     document.getElementById('forgotError').classList.remove('show');
   }
 
@@ -817,7 +861,7 @@
     btnTxt.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Sending…';
 
     try {
-      await fetch('/api/auth/forgot-password', {
+      await fetch((window.__SVC_API_BASE__ || '/api/') + 'auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -829,15 +873,6 @@
     document.getElementById('forgotSuccessPanel').classList.add('show');
     btn.disabled = false;
     btnTxt.innerHTML = '<i class="fa-solid fa-paper-plane" style="margin-right:8px"></i>Send Reset Link';
-  }
-
-  function selectRole(role) {
-    selectedRole = role;
-    document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
-    document.getElementById(`role${role.charAt(0).toUpperCase() + role.slice(1)}`).classList.add('active');
-
-    const emailEl = document.getElementById('emailInput');
-    emailEl.placeholder = role === 'admin' ? 'your@email.com' : 'your@email.com';
   }
 
   function togglePassword() {
@@ -866,50 +901,131 @@
     });
   }
 
+  let _pending2FAToken = null;
+
   async function handleLogin(e) {
     e.preventDefault();
     const email    = document.getElementById('emailInput').value.toLowerCase().trim();
     const password = document.getElementById('passwordInput').value;
-    const remember = document.getElementById('rememberMe')?.checked !== false;
     const errorEl  = document.getElementById('formError');
     const btn      = document.getElementById('loginBtn');
     const btnText  = document.getElementById('loginBtnText');
-
     errorEl.classList.remove('show');
-    btn.disabled = true;
-    btn.classList.add('loading');
+    btn.disabled = true; btn.classList.add('loading');
     btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i>Signing in…';
-
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email, password }),
-      });
+      const _loginHeaders = { 'Content-Type': 'application/json' };
+      if (window.__SVC_NATIVE__ && window.Capacitor) _loginHeaders['x-platform'] = window.Capacitor.getPlatform();
+      const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'auth/login', { method: 'POST', headers: _loginHeaders, credentials: 'include', body: JSON.stringify({ email, password }) });
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Invalid credentials.');
+      if (!res.ok) throw new Error(data.error || 'Invalid credentials.');
+      if (data.requires2FA) {
+        _pending2FAToken = data.pending2FAToken;
+        btn.disabled = false; btn.classList.remove('loading');
+        btnText.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In';
+        show2FAStep();
+        return;
       }
 
       /* Store token */
-      const store = remember ? localStorage : sessionStorage;
-      store.setItem('svc_token', data.token);
-      store.setItem('svc_user',  JSON.stringify(data.user));
+      localStorage.setItem('svc_token', data.token);
+      localStorage.setItem('svc_user',  JSON.stringify(data.user));
+      localStorage.setItem('svc_last_login_email', email);
+
+      // Save for biometric re-login
+      if (window.__SVC_NATIVE__) {
+        localStorage.setItem('svc_bio_token', JSON.stringify({ token: data.token, user: data.user, redirect: data.redirect || '/portal/' }));
+      }
 
       btnText.innerHTML = '<i class="fa-solid fa-check" style="margin-right:8px"></i>Redirecting…';
-      setTimeout(() => {
-        window.location.href = data.redirect || 'portal/index.html';
-      }, 350);
-
+      // On native Android, bypass the /portal/ → / redirect chain and go straight
+      // to index.html. The extra navigation triggers a second native.js load which
+      // re-fires initPush() before Firebase is ready, crashing the app.
+      const dest = window.__SVC_NATIVE__ ? '/portal/' : (data.redirect || 'portal/');
+      setTimeout(() => { window.location.href = dest; }, 350);
     } catch (err) {
-      btn.disabled = false;
-      btn.classList.remove('loading');
+      btn.disabled = false; btn.classList.remove('loading');
       btnText.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px"></i>Sign In';
       showError(err.message || 'Login failed. Please try again.');
     }
   }
+
+  async function loginWithBiometric() {
+    const saved = localStorage.getItem('svc_bio_token');
+    if (!saved) { showError('Please sign in with your password first to enable biometric login.'); return; }
+    try {
+      // Use Capacitor NativeBiometric if available
+      if (window.Capacitor && window.Capacitor.Plugins.NativeBiometric) {
+        await window.Capacitor.Plugins.NativeBiometric.verifyIdentity({ reason: 'Sign in to SV Capital', title: 'Biometric Login', subtitle: 'Use Face ID or fingerprint' });
+      }
+      // Token validated — proceed
+      const data = JSON.parse(saved);
+      localStorage.setItem('svc_token', data.token);
+      localStorage.setItem('svc_user', JSON.stringify(data.user));
+      window.location.href = window.__SVC_NATIVE__ ? '/portal/' : (data.redirect || '/portal/');
+    } catch (err) {
+      showError('Biometric authentication failed. Please sign in with your password.');
+    }
+  }
+
+  // Show biometric button if native and token saved
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('biometricBtn');
+    if (btn && window.__SVC_NATIVE__ && localStorage.getItem('svc_bio_token')) {
+      btn.style.display = 'flex';
+    }
+  });
+
+  function show2FAStep() {
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('twoFAStep').style.display = 'block';
+    setTimeout(() => document.getElementById('totpInput')?.focus(), 100);
+  }
+
+  async function verify2FA() {
+    const code   = (document.getElementById('totpInput')?.value || '').replace(/\s/g,'');
+    const btn    = document.getElementById('verify2FABtn');
+    const errEl  = document.getElementById('twoFAError');
+    if (!/^\d{6}$/.test(code)) { if (errEl) { errEl.textContent = 'Please enter your 6-digit code.'; errEl.style.display = 'block'; } return; }
+    btn.disabled = true; btn.textContent = 'Verifying…';
+    if (errEl) errEl.style.display = 'none';
+    try {
+      const res = await fetch((window.__SVC_API_BASE__ || '/api/') + 'auth/2fa/verify-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ pending2FAToken: _pending2FAToken, token: code }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Invalid code.');
+      localStorage.setItem('svc_token', data.token);
+      localStorage.setItem('svc_user',  JSON.stringify(data.user));
+      const savedLoginEmail = document.getElementById('emailInput')?.value?.trim().toLowerCase();
+      if (savedLoginEmail) localStorage.setItem('svc_last_login_email', savedLoginEmail);
+      btn.textContent = 'Verified ✓';
+      const dest2fa = window.__SVC_NATIVE__ ? '/portal/' : (data.redirect || 'portal/');
+      setTimeout(() => { window.location.href = dest2fa; }, 350);
+    } catch (err) {
+      btn.disabled = false; btn.textContent = 'Verify Code';
+      if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }
+    }
+  }
+
+  function back2FAStep() {
+    _pending2FAToken = null;
+    document.getElementById('twoFAStep').style.display = 'none';
+    document.getElementById('loginForm').style.display = 'block';
+  }
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    initLoginAssists();
+    var loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+      loginForm.addEventListener('submit', function() {
+        if (window.SVC) SVC.track('svc_login_attempted', {});
+      });
+    }
+    if (sessionStorage.getItem('openForgot') === '1' || location.hash === '#forgot') {
+      sessionStorage.removeItem('openForgot');
+      showForgotPassword({ preventDefault: function(){} });
+    }
+  });
 </script>
 </body>
 </html>

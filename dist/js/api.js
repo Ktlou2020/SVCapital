@@ -5,9 +5,22 @@
 
 'use strict';
 
+/* ─── Platform tag for analytics/audit (ios | android | web) ───
+   Sent as the X-Platform header so the server records which platform each
+   request came from (powers admin "Mobile App Activity"). */
+function _svcPlatform() {
+  try {
+    if (window.Capacitor && typeof window.Capacitor.getPlatform === 'function') {
+      return window.Capacitor.getPlatform();   // 'ios' | 'android' | 'web'
+    }
+  } catch (_) {}
+  return 'web';
+}
+
 /* ─── API Base URL ─── */
-// Always use /api — the Express server handles routing from any subpath
-const _API_BASE = '/api/';
+// In Capacitor native context, window.__SVC_API_BASE__ is injected by mobile/scripts/build.js
+// Otherwise fall back to the relative /api/ path (web / PWA)
+const _API_BASE = (typeof window !== 'undefined' && window.__SVC_API_BASE__) || '/api/';
 
 /* ─── Auth token management ─── */
 const Auth = {
@@ -27,7 +40,11 @@ const Auth = {
         localStorage.removeItem('svc_user');  sessionStorage.removeItem('svc_user');
         return null;
       }
-    } catch (_) {}
+    } catch (_) {
+      localStorage.removeItem('svc_token'); sessionStorage.removeItem('svc_token');
+      localStorage.removeItem('svc_user');  sessionStorage.removeItem('svc_user');
+      return null;
+    }
     return token;
   },
 
@@ -86,6 +103,15 @@ const Auth = {
   },
 
   /**
+   * Sign out of all devices by revoking all server sessions.
+   */
+  async signOutAll() {
+    try { await API._fetch('POST', 'auth/signout-all'); } catch (_) {}
+    this.clear();
+    window.location.href = '/login.html';
+  },
+
+  /**
    * Check if user is authenticated via JWT or staffSession
    */
   isLoggedIn() {
@@ -127,13 +153,14 @@ const Auth = {
   async login(email, password, remember = true) {
     const res = await fetch(`${_API_BASE}auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Platform': _svcPlatform() },
       credentials: 'include',
       body: JSON.stringify({ email, password }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Login failed');
     Auth.setToken(data.token, data.user, remember);
+    if (typeof window !== 'undefined' && window.SVC) SVC.track('login', { method: 'password' });
     return data;
   },
 
@@ -143,13 +170,14 @@ const Auth = {
   async register(payload) {
     const res = await fetch(`${_API_BASE}auth/register`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Platform': _svcPlatform() },
       credentials: 'include',
       body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Registration failed');
     Auth.setToken(data.token, data.user, true);
+    if (typeof window !== 'undefined' && window.SVC) SVC.track('sign_up', { method: 'password', has_referral: !!(payload && payload.referredBy) });
     return data;
   },
 
@@ -158,6 +186,7 @@ const Auth = {
    * Works regardless of which login path was used.
    */
   async logout(redirectTo = '/login.html') {
+    if (typeof window !== 'undefined' && window.SVC) SVC.track('svc_logout', {});
     try {
       await fetch(`${_API_BASE}auth/logout`, { method: 'POST', credentials: 'include' });
     } catch (_) {}
@@ -199,6 +228,7 @@ const API = {
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
+        'X-Platform': _svcPlatform(),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     };
@@ -206,13 +236,21 @@ const API = {
 
     const r = await fetch(url, opts);
 
-    // Handle 401 — redirect to login
+    // Handle 401 — try silent token refresh before giving up
     if (r.status === 401) {
+      try {
+        const refreshRes = await fetch(`${_API_BASE}auth/refresh`, { method: 'POST', credentials: 'include' });
+        if (refreshRes.ok) {
+          const { token } = await refreshRes.json();
+          if (token) { Auth.setToken(token); }
+          // Retry the original request once with new token
+          const retryOpts = { ...opts, headers: { ...opts.headers, Authorization: `Bearer ${token}` } };
+          const retry = await fetch(url, retryOpts);
+          if (retry.ok) { if (retry.status === 204) return true; return retry.json(); }
+        }
+      } catch (_) {}
       Auth.clear();
-      // Only redirect if we're not already on a login page
-      if (!window.location.pathname.includes('login')) {
-        window.location.href = '/login.html';
-      }
+      if (!window.location.pathname.includes('login')) window.location.href = '/login.html';
       throw new Error('Session expired — please log in again.');
     }
 
@@ -284,6 +322,13 @@ const API = {
     get:    (id)       => API.getById('investments', id),
     create: (data)     => API.post('investments', data),
     update: (id, data) => API.patch('investments', id, data),
+  },
+  products: {
+    list:   (opts)     => API.list('products', opts || {}),
+    get:    (id)       => API.getById('products', id),
+    create: (data)     => API.post('products', data),
+    update: (id, data) => API.patch('products', id, data),
+    delete: (id)       => API.delete('products', id),
   },
   transactions: {
     list:   (opts)     => API.list('transactions', opts || {}),
@@ -407,21 +452,49 @@ const Utils = {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   },
 
-  /* Product display info */
+  /* Product color/icon cache — populated from GET /api/products so admin changes flow everywhere */
+  _productCache: {},
+  setProductCache(products) {
+    if (!Array.isArray(products)) return;
+    products.forEach(p => { if (p.product_type) this._productCache[p.product_type] = p; });
+  },
+
+  /* Product display info — checks API cache first, falls back to static map */
   productInfo(type) {
     const map = {
-      cattle:         { label: 'Cattle Investment',       icon: 'fa-cow',        color: '#D4AF37', badgeClass: 'badge--gold' },
-      solar:          { label: 'Solar Investment',        icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
-      solar_7yr:      { label: 'Solar Investment (7yr)',  icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
-      solar_6yr:      { label: 'Solar Investment (6yr)',  icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
-      solar_5yr:      { label: 'Solar Investment (5yr)',  icon: 'fa-solar-panel', color: '#22c55e', badgeClass: 'badge--green' },
-      short_term:     { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#3b82f6', badgeClass: 'badge--blue' },
-      smme:           { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#3b82f6', badgeClass: 'badge--blue' },
-      delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#f97316', badgeClass: 'badge--orange' },
-      delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#f97316', badgeClass: 'badge--orange' },
-      other:          { label: 'Other',                   icon: 'fa-circle',      color: '#8ea3b8', badgeClass: 'badge--gray' },
+      cattle:         { label: 'Cattle Investment',       icon: 'fa-cow',        color: '#fec24f', badgeClass: 'badge--gold' },
+      solar:          { label: 'Solar Investment',        icon: 'fa-solar-panel', color: '#65ed00', badgeClass: 'badge--green' },
+      solar_7yr:      { label: 'Solar Investment (7yr)',  icon: 'fa-solar-panel', color: '#65ed00', badgeClass: 'badge--green' },
+      solar_6yr:      { label: 'Solar Investment (6yr)',  icon: 'fa-solar-panel', color: '#65ed00', badgeClass: 'badge--green' },
+      solar_5yr:      { label: 'Solar Investment (5yr)',  icon: 'fa-solar-panel', color: '#65ed00', badgeClass: 'badge--green' },
+      short_term:     { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#ff5229', badgeClass: 'badge--orange' },
+      smme:           { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#ff5229', badgeClass: 'badge--orange' },
+      delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
+      delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
+      gridfarmer:     { label: 'GridFarmer',              icon: 'fa-seedling',    color: '#65ed00', badgeClass: 'badge--green'  },
+      other:          { label: 'Other',                   icon: 'fa-circle',      color: '#656565', badgeClass: 'badge--gray' },
     };
-    return map[type] || { label: type, icon: 'fa-circle', color: '#8ea3b8', badgeClass: 'badge--gray' };
+    const KNOWN_CI = new Set(['cattle','solar','solar_5yr','solar_6yr','solar_7yr','short_term','smme','delivery_bike','delivery_bikes','gridfarmer']);
+    const base = map[type] || { label: type || 'Other', icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
+    const cached = this._productCache[type];
+    if (!cached) return base;
+    return {
+      ...base,
+      label:      cached.label      || base.label,
+      icon:       cached.icon       || base.icon,
+      color:      KNOWN_CI.has(type) ? base.color : (cached.color || base.color),
+      badgeClass: cached.badge_class || base.badgeClass,
+    };
+  },
+
+  ciProductPalette: ['#fec24f', '#ff5229', '#ffe86a', '#ffb782', '#fec24f', '#eda5ff', '#65ed00', '#0096ff', '#656565', '#303030'],
+
+  productColor(product) {
+    const type = (product && product.product_type) || product;
+    const KNOWN = ['cattle', 'solar', 'solar_5yr', 'solar_6yr', 'solar_7yr', 'short_term', 'smme', 'delivery_bike', 'delivery_bikes'];
+    if (KNOWN.includes(type)) return this.productInfo(type).color;
+    if (product && product.color) return product.color;
+    return this.productInfo(type).color;
   },
 
   /* Status badge HTML */
@@ -432,7 +505,7 @@ const Utils = {
       filling:          ['badge--blue',   'Filling'],
       approved:         ['badge--green',  'Approved'],
       completed:        ['badge--green',  'Completed'],
-      paid_out:         ['badge--green',  'Paid Out'],
+      paid_out:         ['badge--purple', 'Matured'],   // merged into Matured
       matured:          ['badge--purple', 'Matured'],
       pending:          ['badge--orange', 'Pending'],
       pending_fica:     ['badge--orange', 'Pending FICA'],
@@ -462,7 +535,7 @@ const Utils = {
       waived:           ['badge--gray',   'Waived'],
     };
     const [cls, label] = map[status] || ['badge--gray', status];
-    return `<span class="badge ${cls}">${label}</span>`;
+    return `<span class="badge ${cls}" style="text-transform:uppercase;letter-spacing:0.04em">${label}</span>`;
   },
 
   /* Priority badge */
@@ -487,17 +560,53 @@ const Utils = {
     return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
   },
 
-  /* Pool fill percentage */
+  /* Pool fill percentage — prefer live_raised from server aggregation */
   poolFillPct(pool) {
     if (!pool.target_amount) return 0;
-    return Math.min(100, Math.round((pool.raised_amount / pool.target_amount) * 100));
+    const raised = pool.live_raised ?? pool.raised_amount ?? 0;
+    return Math.min(100, Math.round((raised / pool.target_amount) * 100));
   },
 
-  /* Days remaining */
+  /* Days remaining — treats a date-only string (YYYY-MM-DD) as expiring at
+     23:58 local time on that day so pools stay open all day until close. */
   daysRemaining(dateStr) {
     if (!dateStr) return null;
-    const diff = new Date(dateStr) - Date.now();
+    let d;
+    if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      // If end_date is today's local date return 0 so callers show "Closing today".
+      // Math.ceil on a sub-day fraction would otherwise return 1 all day.
+      const now = new Date();
+      const todayStr = now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0');
+      if (dateStr === todayStr) return 0;
+      // Use local-date constructor — new Date('YYYY-MM-DD') parses as UTC midnight
+      // which shifts the calendar day backward in UTC+ zones like SAST.
+      const [y, mo, dy] = dateStr.split('-').map(Number);
+      d = new Date(y, mo - 1, dy, 23, 58, 0, 0);
+    } else {
+      d = new Date(dateStr);
+    }
+    const diff = d - Date.now();
     return Math.max(0, Math.ceil(diff / 86400000));
+  },
+
+  /* Is this pool targeting a closing DATE rather than a goal AMOUNT? */
+  poolIsDateTarget(pool) {
+    return (pool && pool.target_type) === 'date';
+  },
+
+  /* Date-target fill — fraction of the open→close window that has elapsed (0–100).
+     Used to show a countdown progress bar for date-targeted pools. */
+  poolDateProgressPct(pool) {
+    const end   = pool && pool.end_date ? new Date(pool.end_date).getTime() : null;
+    if (!end) return 0;
+    const now   = Date.now();
+    const start = pool.start_date ? new Date(pool.start_date).getTime() : null;
+    if (!start || start >= end) return now >= end ? 100 : 0;
+    if (now <= start) return 0;
+    if (now >= end)   return 100;
+    return Math.min(100, Math.max(0, Math.round((now - start) / (end - start) * 100)));
   }
 };
 
@@ -511,12 +620,28 @@ const Toast = {
     this.container.className = 'toast-container';
     document.body.appendChild(this.container);
   },
-  show(message, type = 'info', duration = 4000) {
+  show(message, type = 'info', duration) {
+    // Durations per type — success/error/warning stay longer so users can read confirmations
+    const defaults = { success: 6500, error: 6000, warning: 6000, info: 4000 };
+    const ms = duration ?? defaults[type] ?? 4000;
     if (!this.container) this.init();
+    // Cap at 4 visible toasts — remove oldest when exceeded
+    const existing = this.container.querySelectorAll('.toast');
+    if (existing.length >= 4) existing[0].remove();
     const icons = { success: 'fa-check-circle', error: 'fa-circle-xmark', info: 'fa-circle-info', warning: 'fa-triangle-exclamation' };
     const toast = document.createElement('div');
     toast.className = `toast toast--${type}`;
-    toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span class="toast__msg">${message}</span>`;
+    const icon = document.createElement('i');
+    icon.className = `fa-solid ${icons[type] || icons.info}`;
+    const msg = document.createElement('span');
+    msg.className = 'toast__msg';
+    msg.textContent = message;
+    const dismiss = document.createElement('button');
+    dismiss.setAttribute('style', 'background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;margin-left:4px;padding:0 2px;font-size:0.9rem;line-height:1');
+    dismiss.title = 'Dismiss';
+    dismiss.textContent = '×';
+    dismiss.addEventListener('click', () => toast.remove());
+    toast.append(icon, msg, dismiss);
     this.container.appendChild(toast);
     setTimeout(() => {
       toast.style.animation = 'none';
@@ -524,25 +649,53 @@ const Toast = {
       toast.style.transform = 'translateX(100%)';
       toast.style.transition = '0.3s ease';
       setTimeout(() => toast.remove(), 300);
-    }, duration);
+    }, ms);
   },
-  success: (msg) => Toast.show(msg, 'success'),
-  error:   (msg) => Toast.show(msg, 'error'),
-  info:    (msg) => Toast.show(msg, 'info'),
-  warning: (msg) => Toast.show(msg, 'warning'),
+  success: (msg, ms) => Toast.show(msg, 'success', ms),
+  error:   (msg, ms) => Toast.show(msg, 'error',   ms),
+  info:    (msg, ms) => Toast.show(msg, 'info',     ms),
+  warning: (msg, ms) => Toast.show(msg, 'warning',  ms),
+  warn:    (msg, ms) => Toast.show(msg, 'warning',  ms),
 };
 
 /* ═══════════════════════════════════════════════
    MODAL SYSTEM
    ═══════════════════════════════════════════════ */
 const Modal = {
+  _prevFocus: null,
+  _trapHandler: null,
   open(id) {
     const el = document.getElementById(id);
-    if (el) { el.classList.add('open'); document.body.style.overflow = 'hidden'; }
+    if (!el) return;
+    el.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    Modal._prevFocus = document.activeElement;
+    const focusable = el.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable[0]) focusable[0].focus();
+    // Focus trap
+    Modal._trapHandler = (e) => {
+      if (e.key !== 'Tab') return;
+      const items = [...el.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey ? document.activeElement === first : document.activeElement === last) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      }
+    };
+    el.addEventListener('keydown', Modal._trapHandler);
   },
   close(id) {
     const el = document.getElementById(id);
-    if (el) { el.classList.remove('open'); document.body.style.overflow = ''; }
+    if (!el) return;
+    el.classList.remove('open');
+    document.body.style.overflow = '';
+    el.removeAttribute('role');
+    el.removeAttribute('aria-modal');
+    if (Modal._trapHandler) { el.removeEventListener('keydown', Modal._trapHandler); Modal._trapHandler = null; }
+    if (Modal._prevFocus) { Modal._prevFocus.focus(); Modal._prevFocus = null; }
   },
   closeAll() {
     document.querySelectorAll('.modal-overlay.open').forEach(m => {

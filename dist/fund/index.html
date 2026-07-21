@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SV Capital — Fund Management</title>
@@ -10,16 +14,33 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="SV Capital" />
-  <link rel="apple-touch-icon" href="../assets/svcapital-logo-header.png" />
+  <link rel="apple-touch-icon" href="../assets/logo-192.png" />
   <!-- /PWA -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="css/fund.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
+  <link rel="stylesheet" href="css/fund.css?v=2" />
+  <link rel="stylesheet" href="css/fund-premium.css" />
   <!-- Staff Auth (optional session widget — guard disabled for open access) -->
   <script src="../js/staff-auth.js?v=3"></script>
   <script>document.addEventListener('DOMContentLoaded',()=>{ StaffAuth.injectWidget(); });</script>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="../js/analytics.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet">
 </head>
 <body>
 <div class="app">
@@ -28,9 +49,8 @@
   <aside class="sidebar">
     <div class="sidebar__brand">
       <a href="../admin/index.html" class="brand-row">
-        <img src="../assets/logo-inline.svg" alt="SV Capital" />
+        <img src="../assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="height:36px;width:auto">
         <div>
-          <div class="brand-name">SV Capital</div>
           <div class="brand-sub">Fund Management</div>
         </div>
       </a>
@@ -62,7 +82,11 @@
       </a>
       <a href="shortterm.html" class="nav-btn" style="text-decoration:none">
         <i class="fa-solid fa-hand-holding-dollar"></i> Short-Term Loans
-        <span style="font-size:9px;background:rgba(59,130,246,.25);color:#60a5fa;padding:1px 6px;border-radius:8px;margin-left:auto">NAV</span>
+        <span style="font-size:9px;background:rgba(59,130,246,.25);color:#656565;padding:1px 6px;border-radius:8px;margin-left:auto">NAV</span>
+      </a>
+      <a href="gridfarmer.html" class="nav-btn" style="text-decoration:none">
+        <i class="fa-solid fa-seedling"></i> GridFarmer
+        <span style="font-size:9px;background:rgba(101,237,0,.25);color:#65ed00;padding:1px 6px;border-radius:8px;margin-left:auto">NEW</span>
       </a>
 
       <div class="nav-label">Operations</div>
@@ -74,14 +98,10 @@
         <i class="fa-solid fa-calendar-days"></i> Payout Schedules
       </button>
 
-      <div class="nav-label">Intelligence</div>
-      <button class="nav-btn" data-view="intelligence" onclick="navigate('intelligence',this)">
-        <i class="fa-solid fa-brain"></i> Fund Intelligence
-        <span style="font-size:9px;background:rgba(168,85,247,.25);color:#c084fc;padding:1px 6px;border-radius:8px;margin-left:auto">AI</span>
-      </button>
+
       <button class="nav-btn" data-view="forecast" onclick="navigate('forecast',this)">
         <i class="fa-solid fa-chart-gantt"></i> Cash Flow Forecast
-        <span style="font-size:9px;background:rgba(20,184,166,.2);color:#2dd4bf;padding:1px 6px;border-radius:8px;margin-left:auto">12M</span>
+        <span style="font-size:9px;background:rgba(20,184,166,.2);color:#656565;padding:1px 6px;border-radius:8px;margin-left:auto">12M</span>
       </button>
 
       <div class="nav-label">Compliance</div>
@@ -107,6 +127,12 @@
       <button class="nav-btn" data-view="notifications" onclick="navigate('notifications',this)">
         <i class="fa-solid fa-bell"></i> Notification Centre
         <span class="nav-badge" id="unreadNotifBadge" style="display:none">0</span>
+      </button>
+
+      <div class="nav-label">Investors</div>
+      <button class="nav-btn" data-view="investor-summary" onclick="navigate('investor-summary',this)">
+        <i class="fa-solid fa-users"></i> Investor Summary
+        <span style="font-size:9px;background:rgba(34,197,94,.25);color:#4ade80;padding:1px 6px;border-radius:8px;margin-left:auto">NEW</span>
       </button>
 
       <div class="nav-label">Reference</div>
@@ -148,8 +174,12 @@
         <a href="shortterm.html" class="btn btn--secondary btn--sm" title="Short-Term Loans">
           <i class="fa-solid fa-hand-holding-dollar"></i> STL
         </a>
-        <button class="btn btn--sm" style="background:rgba(168,85,247,.18);color:#c084fc;border:1px solid rgba(168,85,247,.3)" onclick="navigate('intelligence',document.querySelector('[data-view=intelligence]'))">
-          <i class="fa-solid fa-brain"></i> Intelligence
+        <a href="gridfarmer.html" class="btn btn--sm" title="GridFarmer Maize" style="background:rgba(101,237,0,.15);color:#65ed00;border:1px solid rgba(101,237,0,.3)">
+          <i class="fa-solid fa-seedling"></i> GF
+        </a>
+
+        <button class="btn btn--sm btn--secondary" onclick="openCmdPalette()" title="Command Palette (Ctrl+K)" style="font-family:monospace;letter-spacing:-0.5px">
+          <i class="fa-solid fa-magnifying-glass"></i> ⌘K
         </button>
         <button class="btn btn--sm btn--secondary" id="topbarNotifBtn" style="position:relative" onclick="navigate('notifications',document.querySelector('[data-view=notifications]'))" title="Notification Centre">
           <i class="fa-solid fa-bell"></i>
@@ -167,6 +197,31 @@
            DASHBOARD
       ════════════════════════════════ -->
       <div class="view active" id="view-dashboard">
+
+        <!-- Fund Hero Banner -->
+        <div class="fund-hero-banner">
+          <div class="fund-hero__left">
+            <div class="fund-hero__eyebrow">SV Capital · Operations Console</div>
+            <div class="fund-hero__title">Fund Management <span>Dashboard</span></div>
+            <div class="fund-hero__chips">
+              <span class="fund-hero__chip fund-hero__chip--gold"><i class="fa-solid fa-coins"></i> <span id="heroAUM">Live AUM</span></span>
+              <span class="fund-hero__chip fund-hero__chip--teal"><i class="fa-solid fa-layer-group"></i> <span id="heroPools">—</span> active pools</span>
+              <span class="fund-hero__chip fund-hero__chip--green"><i class="fa-solid fa-play-circle"></i> <span id="heroRuns">—</span> active runs</span>
+              <span class="fund-hero__chip fund-hero__chip--orange"><i class="fa-solid fa-shield-halved"></i> FSCA Regulated · FSP #52449</span>
+            </div>
+          </div>
+          <div class="fund-hero__right">
+            <a href="cattle.html" class="btn btn--sm" style="background:rgba(116,198,157,0.18);color:#74c69d;border:1px solid rgba(116,198,157,0.3)">
+              <i class="fa-solid fa-cow"></i> Cattle
+            </a>
+            <a href="solar.html" class="btn btn--sm" style="background:rgba(245,158,11,0.18);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)">
+              <i class="fa-solid fa-solar-panel"></i> Solar
+            </a>
+            <button class="btn btn--primary btn--sm" onclick="navigate('runs',document.querySelector('[data-view=runs]'));setTimeout(openNewRunModal,100)">
+              <i class="fa-solid fa-plus"></i> New Fund Run
+            </button>
+          </div>
+        </div>
 
         <div class="stats-grid stats-grid--4">
           <div class="kpi kpi--gold">
@@ -209,13 +264,16 @@
           </div>
           <div class="kpi kpi--purple">
             <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-chart-pie"></i></div></div>
-            <div class="kpi__value">—</div>
+            <div class="kpi__value" id="ds-alpha">—</div>
             <div class="kpi__label">Avg Alpha vs Benchmark</div>
           </div>
         </div>
 
+        <!-- Risk Indicators Strip -->
+        <div id="dashRiskStrip"></div>
+
         <!-- ── Investment Products Row ── -->
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
           <a href="cattle.html" style="text-decoration:none">
             <div style="background:linear-gradient(135deg,#0a1f0a,#0d2e0d);border:1px solid rgba(116,198,157,.2);border-radius:12px;padding:18px 20px;transition:border-color .2s;cursor:pointer" onmouseenter="this.style.borderColor='rgba(116,198,157,.5)'" onmouseleave="this.style.borderColor='rgba(116,198,157,.2)'">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
@@ -246,16 +304,37 @@
             <div style="background:linear-gradient(135deg,#0d1832,#0a1428);border:1px solid rgba(59,130,246,.2);border-radius:12px;padding:18px 20px;transition:border-color .2s;cursor:pointer" onmouseenter="this.style.borderColor='rgba(59,130,246,.5)'" onmouseleave="this.style.borderColor='rgba(59,130,246,.2)'">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
                 <div style="background:rgba(59,130,246,.12);width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center">
-                  <i class="fa-solid fa-hand-holding-dollar" style="color:#60a5fa;font-size:16px"></i>
+                  <i class="fa-solid fa-hand-holding-dollar" style="color:#656565;font-size:16px"></i>
                 </div>
-                <span style="font-size:9px;background:rgba(59,130,246,.18);color:#60a5fa;padding:2px 7px;border-radius:8px;font-weight:700;text-transform:uppercase">NAV</span>
+                <span style="font-size:9px;background:rgba(59,130,246,.18);color:#656565;padding:2px 7px;border-radius:8px;font-weight:700;text-transform:uppercase">NAV</span>
               </div>
               <div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:2px">Short-Term Loans</div>
               <div style="font-size:11px;color:rgba(255,255,255,.4)">Business disbursements · overdue tracking</div>
-              <div style="margin-top:10px;font-size:11px;color:#60a5fa;font-weight:600">Open Module →</div>
+              <div style="margin-top:10px;font-size:11px;color:#656565;font-weight:600">Open Module →</div>
+            </div>
+          </a>
+          <a href="gridfarmer.html" style="text-decoration:none">
+            <div style="background:linear-gradient(135deg,#0a1a00,#0d2800);border:1px solid rgba(101,237,0,.2);border-radius:12px;padding:18px 20px;transition:border-color .2s;cursor:pointer" onmouseenter="this.style.borderColor='rgba(101,237,0,.5)'" onmouseleave="this.style.borderColor='rgba(101,237,0,.2)'">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+                <div style="background:rgba(101,237,0,.12);width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center">
+                  <i class="fa-solid fa-seedling" style="color:#65ed00;font-size:16px"></i>
+                </div>
+                <span style="font-size:9px;background:rgba(101,237,0,.18);color:#65ed00;padding:2px 7px;border-radius:8px;font-weight:700;text-transform:uppercase">NEW</span>
+              </div>
+              <div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:2px">GridFarmer</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.4)">White maize production rights · Oct 2026</div>
+              <div style="margin-top:10px;font-size:11px;color:#65ed00;font-weight:600">Open Product Page →</div>
             </div>
           </a>
         </div>
+
+        <!-- Portfolio Composition Panel -->
+        <div class="panel mb-20" id="dashPortfolioPanel" style="margin-bottom:18px">
+          <div style="text-align:center;padding:24px;color:rgba(255,255,255,.4)"><i class="fa-solid fa-spinner fa-spin"></i> Loading portfolio…</div>
+        </div>
+
+        <!-- Live Event Ticker -->
+        <div id="dashEventTicker" style="margin-bottom:18px"></div>
 
         <div class="grid-2">
           <!-- Recent Fund Runs -->
@@ -266,8 +345,8 @@
             </div>
             <div class="tbl-wrap">
               <table class="data-table">
-                <thead><tr><th>Run</th><th>Product</th><th>Capital</th><th>Rate</th><th>Net Return</th><th>Status</th></tr></thead>
-                <tbody id="dashRunsBody"><tr><td colspan="6"><div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div></td></tr></tbody>
+                <thead><tr><th>Run</th><th>Product</th><th>Capital</th><th>Rate</th><th>Alpha</th><th>Net Return</th><th>Status</th></tr></thead>
+                <tbody id="dashRunsBody"><tr><td colspan="7"><div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div></td></tr></tbody>
               </table>
             </div>
           </div>
@@ -295,6 +374,17 @@
           </div>
         </div>
 
+        <!-- Capital Waterfall Chart -->
+        <div class="panel mt-16" style="margin-top:18px">
+          <div class="panel__hd">
+            <div><div class="panel__title"><i class="fa-solid fa-water" style="color:#D4AF37;margin-right:8px"></i>Return Waterfall — Gross to Net</div>
+            <div class="panel__sub">Completed fund runs · fee attribution</div></div>
+          </div>
+          <div class="panel__bd">
+            <div class="chart-box chart-box--md"><canvas id="dashWaterfallChart"></canvas></div>
+          </div>
+        </div>
+
         <!-- Returns chart - full width -->
         <div class="panel mt-16" style="margin-top:18px">
           <div class="panel__hd">
@@ -305,75 +395,16 @@
           </div>
         </div>
 
-        <!-- Product Consoles -->
+        <!-- Live Product Consoles (dynamically rendered) -->
         <div class="panel" style="margin-top:18px">
           <div class="panel__hd">
             <div>
               <div class="panel__title">Product Management Consoles</div>
-              <div class="panel__sub">Access product-specific operational tools and live NAV</div>
+              <div class="panel__sub">Live operational data · Click to open full product dashboard</div>
             </div>
           </div>
-          <div class="panel__bd" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;padding:16px">
-
-            <!-- Cattle Finance -->
-            <a href="cattle.html" style="text-decoration:none">
-              <div style="background:linear-gradient(135deg,#0d1e13,#1a3a26);border-radius:12px;padding:20px;color:#fff;cursor:pointer;transition:transform .18s,box-shadow .18s;display:block"
-                   onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 30px rgba(45,106,79,.35)'"
-                   onmouseout="this.style.transform='';this.style.boxShadow=''">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-                  <div style="width:40px;height:40px;background:rgba(116,198,157,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">🐄</div>
-                  <div>
-                    <div style="font-size:14px;font-weight:700">Cattle Finance</div>
-                    <div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.8px">Live Product</div>
-                  </div>
-                  <div style="margin-left:auto;font-size:10px;background:rgba(116,198,157,.2);color:#74c69d;padding:3px 8px;border-radius:20px;font-weight:700">ACTIVE</div>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-                  <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Target Return</div><div style="font-size:16px;font-weight:800;color:#74c69d">14.83%</div></div>
-                  <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Cycle Term</div><div style="font-size:16px;font-weight:800">~183 days</div></div>
-                </div>
-                <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:14px">Physical cattle backed · Feedlot backgrounding · Live NAV engine</div>
-                <div style="display:flex;align-items:center;justify-content:space-between">
-                  <span style="font-size:11px;color:#74c69d;font-weight:600"><i class="fa-solid fa-chart-line"></i> View NAV Dashboard</span>
-                  <i class="fa-solid fa-arrow-right" style="color:rgba(255,255,255,.3)"></i>
-                </div>
-              </div>
-            </a>
-
-            <!-- Solar — Coming Soon -->
-            <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:20px;color:#fff;opacity:.65">
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-                <div style="width:40px;height:40px;background:rgba(255,193,7,.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">☀️</div>
-                <div>
-                  <div style="font-size:14px;font-weight:700">Solar Finance</div>
-                  <div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.8px">5/6/7 Year Terms</div>
-                </div>
-                <div style="margin-left:auto;font-size:10px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.4);padding:3px 8px;border-radius:20px;font-weight:700">SOON</div>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-                <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Target Return</div><div style="font-size:16px;font-weight:800;color:#ffc107">13.5–21.4%</div></div>
-                <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Term</div><div style="font-size:16px;font-weight:800">5–7 Years</div></div>
-              </div>
-              <div style="font-size:11px;color:rgba(255,255,255,.5)">Solar asset backed · Long-term amortising · NAV console coming soon</div>
-            </div>
-
-            <!-- SMME Short-Term -->
-            <div style="background:linear-gradient(135deg,#1e1a0d,#2e2510);border-radius:12px;padding:20px;color:#fff;opacity:.65">
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-                <div style="width:40px;height:40px;background:rgba(244,162,97,.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">🏢</div>
-                <div>
-                  <div style="font-size:14px;font-weight:700">SMME Short-Term</div>
-                  <div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.8px">5-Month Loan</div>
-                </div>
-                <div style="margin-left:auto;font-size:10px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.4);padding:3px 8px;border-radius:20px;font-weight:700">SOON</div>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-                <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Target Return</div><div style="font-size:16px;font-weight:800;color:#f4a261">13.92%</div></div>
-                <div><div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px">Term</div><div style="font-size:16px;font-weight:800">~150 days</div></div>
-              </div>
-              <div style="font-size:11px;color:rgba(255,255,255,.5)">Working capital loans · SMME portfolio tracking · Coming soon</div>
-            </div>
-
+          <div id="dashProductConsoles">
+            <div style="text-align:center;padding:24px;color:rgba(255,255,255,.4)"><i class="fa-solid fa-spinner fa-spin"></i> Loading product data…</div>
           </div>
         </div>
       </div>
@@ -609,14 +640,25 @@
       <div class="view" id="view-pools">
         <div class="panel">
           <div class="panel__hd">
-            <div><div class="panel__title">Investment Pool Overview</div><div class="panel__sub">All pools — click "New Run" to create a fund run for any pool</div></div>
+            <div><div class="panel__title">Investment Pool Overview</div><div class="panel__sub">All pools — link underlying product records and create fund runs</div></div>
           </div>
           <div class="tbl-wrap">
             <table class="data-table">
-              <thead><tr><th>Pool</th><th>Product</th><th>Raised</th><th>Target</th><th>Fill Rate</th><th>Benchmark</th><th>Investors</th><th>Actions</th></tr></thead>
-              <tbody id="poolsOverviewBody"><tr><td colspan="8"><div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div></td></tr></tbody>
+              <thead><tr><th>Pool</th><th>Product</th><th>Raised</th><th>Target</th><th>Fill Rate</th><th>Benchmark</th><th>Investors</th><th>Linked Products</th><th>Actions</th></tr></thead>
+              <tbody id="poolsOverviewBody"><tr><td colspan="9"><div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div></td></tr></tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      <!-- Pool → Product Link Modal -->
+      <div class="overlay" id="poolLinkModal" onclick="if(event.target===this)M.close('poolLinkModal')">
+        <div class="modal" style="max-width:520px;width:90%">
+          <div class="modal__hd">
+            <div class="modal__title" id="poolLinkTitle">Link Products to Pool</div>
+            <button class="modal__close" onclick="M.close('poolLinkModal')">&times;</button>
+          </div>
+          <div class="modal__bd" id="poolLinkBody" style="max-height:520px;overflow-y:auto;padding:16px"></div>
         </div>
       </div>
 
@@ -663,6 +705,38 @@
             <div class="kpi__value" id="rpt-fee-income">—</div>
             <div class="kpi__label">Total Fee Income</div>
           </div>
+        </div>
+
+        <!-- Performance Intelligence Row -->
+        <div class="stats-grid stats-grid--4 mb-20">
+          <div class="kpi kpi--purple">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-chart-bar"></i></div></div>
+            <div class="kpi__value" id="rpt-moic">—</div>
+            <div class="kpi__label">MOIC (avg fund)</div>
+          </div>
+          <div class="kpi kpi--teal">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-percent"></i></div></div>
+            <div class="kpi__value" id="rpt-irr">—</div>
+            <div class="kpi__label">Ann. Return (IRR proxy)</div>
+          </div>
+          <div class="kpi kpi--gold">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-calendar-days"></i></div></div>
+            <div class="kpi__value" id="rpt-avg-days">—</div>
+            <div class="kpi__label">Avg Term (days)</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-hand-holding-dollar"></i></div></div>
+            <div class="kpi__value" id="rpt-fee-pct">—</div>
+            <div class="kpi__label">Fee Drag</div>
+          </div>
+        </div>
+
+        <!-- Export & Tools bar -->
+        <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn--sm btn--secondary" onclick="exportReportsCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+          <button class="btn btn--sm btn--secondary" onclick="exportFundRunsPDF()"><i class="fa-solid fa-file-pdf"></i> Export PDF</button>
+          <button class="btn btn--sm" style="background:rgba(237,165,255,.18);color:#eda5ff;border:1px solid rgba(237,165,255,.3)" onclick="openScenarioModal()"><i class="fa-solid fa-flask"></i> Scenario Compare</button>
+          <div style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.35)">Completed runs only · MOIC &amp; IRR are proxies based on reported returns</div>
         </div>
 
         <div class="grid-2">
@@ -874,13 +948,13 @@
           <div>
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
               <div style="width:36px;height:36px;background:rgba(45,212,191,.15);border-radius:9px;display:flex;align-items:center;justify-content:center">
-                <i class="fa-solid fa-chart-gantt" style="color:#2dd4bf;font-size:16px"></i>
+                <i class="fa-solid fa-chart-gantt" style="color:#656565;font-size:16px"></i>
               </div>
               <div style="font-size:17px;font-weight:900;color:#fff">12-Month Cash Flow Forecast</div>
             </div>
             <p style="font-size:12px;color:rgba(255,255,255,.4);margin:0">Projected inflows (maturities + repayments) vs outflows (payout obligations) across all products</p>
           </div>
-          <button class="btn btn--sm" style="background:rgba(45,212,191,.15);color:#2dd4bf;border:1px solid rgba(45,212,191,.3)" onclick="loadForecast()">
+          <button class="btn btn--sm" style="background:rgba(45,212,191,.15);color:#656565;border:1px solid rgba(45,212,191,.3)" onclick="loadForecast()">
             <i class="fa-solid fa-rotate"></i> Recalculate
           </button>
         </div>
@@ -947,17 +1021,15 @@
         </div>
       </div>
 
-      <!-- ════════════════════════════════
-           FUND INTELLIGENCE
-      ════════════════════════════════ -->
-      <div class="view" id="view-intelligence">
+      <!-- FUND INTELLIGENCE hidden -->
+      <div class="view" id="view-intelligence" style="display:none">
 
         <!-- Hero banner -->
-        <div style="background:linear-gradient(135deg,#1a0d2e,#160b25);border:1px solid rgba(168,85,247,.2);border-radius:16px;padding:24px 28px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap">
+        <div style="background:linear-gradient(135deg,#1a0d2e,#160b25);border:1px solid rgba(237,165,255,.2);border-radius:16px;padding:24px 28px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap">
           <div>
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-              <div style="width:38px;height:38px;background:rgba(168,85,247,.18);border-radius:10px;display:flex;align-items:center;justify-content:center">
-                <i class="fa-solid fa-brain" style="color:#c084fc;font-size:17px"></i>
+              <div style="width:38px;height:38px;background:rgba(237,165,255,.18);border-radius:10px;display:flex;align-items:center;justify-content:center">
+                <i class="fa-solid fa-brain" style="color:#eda5ff;font-size:17px"></i>
               </div>
               <div>
                 <div style="font-size:18px;font-weight:900;color:#fff">Fund Intelligence</div>
@@ -968,7 +1040,7 @@
               Real-time analysis of your fund's available capital, upcoming obligations, and data-driven deployment recommendations across all product lines.
             </p>
           </div>
-          <button class="btn btn--sm" style="background:rgba(168,85,247,.2);color:#c084fc;border:1px solid rgba(168,85,247,.3);flex-shrink:0" onclick="loadIntelligence()">
+          <button class="btn btn--sm" style="background:rgba(237,165,255,.2);color:#eda5ff;border:1px solid rgba(237,165,255,.3);flex-shrink:0" onclick="loadIntelligence()">
             <i class="fa-solid fa-rotate"></i> Refresh Analysis
           </button>
         </div>
@@ -976,7 +1048,7 @@
         <!-- Loading placeholder -->
         <div id="intelligenceContent">
           <div class="panel"><div class="panel__bd" style="padding:60px;text-align:center;color:rgba(255,255,255,.3)">
-            <i class="fa-solid fa-brain" style="font-size:40px;margin-bottom:16px;color:rgba(168,85,247,.3)"></i>
+            <i class="fa-solid fa-brain" style="font-size:40px;margin-bottom:16px;color:rgba(237,165,255,.3)"></i>
             <p style="margin:0;font-size:14px">Loading Fund Intelligence…</p>
           </div></div>
         </div>
@@ -1176,6 +1248,63 @@
         <!-- Notification list -->
         <div id="notifList">
           <div class="panel"><div class="panel__bd" style="padding:40px;text-align:center;color:rgba(255,255,255,.4)"><i class="fa-solid fa-spinner fa-spin" style="font-size:28px;margin-bottom:12px"></i><p>Loading notifications…</p></div></div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════
+           INVESTOR SUMMARY
+      ════════════════════════════════ -->
+      <div class="view" id="view-investor-summary">
+        <div class="stats-grid stats-grid--4 mb-20">
+          <div class="kpi kpi--gold">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-users"></i></div></div>
+            <div class="kpi__value" id="inv-total">—</div>
+            <div class="kpi__label">Unique Investors</div>
+          </div>
+          <div class="kpi kpi--teal">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-coins"></i></div></div>
+            <div class="kpi__value" id="inv-capital">—</div>
+            <div class="kpi__label">Total Capital Allocated</div>
+          </div>
+          <div class="kpi kpi--green">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-arrow-trend-up"></i></div></div>
+            <div class="kpi__value" id="inv-expected">—</div>
+            <div class="kpi__label">Total Target Returns</div>
+          </div>
+          <div class="kpi kpi--purple">
+            <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-chart-bar"></i></div></div>
+            <div class="kpi__value" id="inv-moic">—</div>
+            <div class="kpi__label">Avg MOIC</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
+          <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:7px 12px;flex:1;min-width:200px">
+            <i class="fa-solid fa-search" style="color:rgba(255,255,255,.3);font-size:12px"></i>
+            <input type="text" id="invSearch" placeholder="Search by investor name…" style="background:none;border:none;outline:none;color:#fff;font-size:13px;width:100%" oninput="renderInvestorSummaryTable()">
+          </div>
+          <select id="invProductFilter" class="f-select" style="width:180px" onchange="renderInvestorSummaryTable()">
+            <option value="">All Products</option>
+            <option value="cattle">Cattle Finance</option>
+            <option value="solar_7yr">Solar 7yr</option>
+            <option value="solar_6yr">Solar 6yr</option>
+            <option value="solar_5yr">Solar 5yr</option>
+            <option value="short_term">Short-Term</option>
+            <option value="fund_run">Fund Run</option>
+          </select>
+          <button class="btn btn--sm btn--secondary" onclick="exportInvestorSummaryCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+        </div>
+
+        <div class="panel">
+          <div class="panel__hd">
+            <div><div class="panel__title">Investor Portfolio Summary</div><div class="panel__sub" id="invSubtitle">Loading…</div></div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="data-table">
+              <thead><tr><th>Investor</th><th>Allocations</th><th>Products</th><th>Total Capital</th><th>Expected Payout</th><th>MOIC</th><th>Status</th></tr></thead>
+              <tbody id="invSummaryBody"><tr><td colspan="7"><div class="empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading…</p></div></td></tr></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -1413,10 +1542,49 @@
   </div>
 </div>
 
+<!-- ════════════════════════════════
+     COMMAND PALETTE (Ctrl+K)
+════════════════════════════════ -->
+<div class="overlay" id="cmdPaletteOverlay" onclick="if(event.target===this)closeCmdPalette()" style="display:none;align-items:flex-start;padding-top:80px">
+  <div style="background:#1a1f2e;border:1px solid rgba(212,175,55,.3);border-radius:14px;width:100%;max-width:580px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.6)">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.08)">
+      <i class="fa-solid fa-magnifying-glass" style="color:rgba(255,255,255,.4);font-size:14px"></i>
+      <input type="text" id="cmdInput" placeholder="Search views, actions… (↑↓ navigate, Enter select)" autocomplete="off"
+        style="flex:1;background:none;border:none;outline:none;color:#fff;font-size:15px"
+        oninput="renderCmdResults(this.value)" onkeydown="cmdKeyNav(event)">
+      <kbd style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:4px;font-size:10px;padding:2px 6px;color:rgba(255,255,255,.4)">ESC</kbd>
+    </div>
+    <div id="cmdResults" style="max-height:400px;overflow-y:auto;padding:8px 0"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     SCENARIO COMPARISON MODAL
+════════════════════════════════ -->
+<div class="overlay" id="scenarioModal" onclick="if(event.target===this)M.close('scenarioModal')">
+  <div class="modal modal--lg">
+    <div class="modal__hd">
+      <span class="modal__title"><i class="fa-solid fa-flask" style="color:#D4AF37;margin-right:8px"></i>Scenario Comparison</span>
+      <button class="modal__close" onclick="M.close('scenarioModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__bd">
+      <p style="color:rgba(255,255,255,.5);font-size:13px;margin-bottom:18px">Compare three fund scenarios side-by-side — adjust capital, rate and term.</p>
+      <div id="scenarioGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px"></div>
+      <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:16px">
+        <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,.7);margin-bottom:14px">Results Comparison</div>
+        <div id="scenarioResults" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px"></div>
+      </div>
+    </div>
+    <div class="modal__ft">
+      <button class="btn btn--secondary btn--sm" onclick="M.close('scenarioModal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast-box" id="toastBox"></div>
 
-<script src="js/fund.js"></script>
+<script src="js/fund.js?v=2"></script>
 <script>
   // Quick preset loader for calculator
   function applyPreset(rate, days, product) {

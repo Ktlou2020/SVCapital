@@ -6,11 +6,16 @@
 'use strict';
 
 /* ─── API Helpers ─────────────────────────────────────────────────────── */
-const API_BASE = '../';
+const API_BASE = '/api/';
+
+function _authHeader() {
+  const t = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+  return t ? { 'Authorization': 'Bearer ' + t } : {};
+}
 
 async function apiGet(path) {
   try {
-    const res = await fetch(API_BASE + path);
+    const res = await fetch(API_BASE + path, { credentials: 'include', headers: _authHeader() });
     if (!res.ok) return { data: [], total: 0 };
     return await res.json();
   } catch { return { data: [], total: 0 }; }
@@ -19,7 +24,8 @@ async function apiGet(path) {
 async function apiPost(path, body) {
   const res = await fetch(API_BASE + path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ..._authHeader() },
     body: JSON.stringify(body)
   });
   return await res.json();
@@ -28,7 +34,8 @@ async function apiPost(path, body) {
 async function apiPut(path, body) {
   const res = await fetch(API_BASE + path, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ..._authHeader() },
     body: JSON.stringify(body)
   });
   return await res.json();
@@ -37,14 +44,15 @@ async function apiPut(path, body) {
 async function apiPatch(path, body) {
   const res = await fetch(API_BASE + path, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ..._authHeader() },
     body: JSON.stringify(body)
   });
   return await res.json();
 }
 
 async function apiDelete(path) {
-  await fetch(API_BASE + path, { method: 'DELETE' });
+  await fetch(API_BASE + path, { method: 'DELETE', credentials: 'include', headers: _authHeader() });
 }
 
 async function fetchAll(table) {
@@ -101,8 +109,8 @@ const LEVELS = [
   { level: 2, title: 'Associate',   minXP: 500,  color: '#5cb85c' },
   { level: 3, title: 'Senior',      minXP: 1200, color: '#00d4aa' },
   { level: 4, title: 'Lead',        minXP: 2500, color: '#4fc3f7' },
-  { level: 5, title: 'Director',    minXP: 4500, color: '#7c5cfc' },
-  { level: 6, title: 'MVP',         minXP: 7000, color: '#f9c846' },
+  { level: 5, title: 'Director',    minXP: 4500, color: '#eda5ff' },
+  { level: 6, title: 'MVP',         minXP: 7000, color: '#fec24f' },
 ];
 
 function getLevel(xp) {
@@ -125,7 +133,7 @@ function getXpProgress(xp) {
 function kpiColor(v) {
   if (v >= 90) return '#00d4aa';
   if (v >= 75) return '#4fc3f7';
-  if (v >= 60) return '#f9c846';
+  if (v >= 60) return '#fec24f';
   if (v >= 40) return '#ffb347';
   return '#ff5b5b';
 }
@@ -325,7 +333,7 @@ function renderDashboard() {
       const xp = Number(emp.xp_points) || 0;
       const lvl = getLevel(xp);
       const xpProg = getXpProgress(xp);
-      const col = emp.avatar_color || '#7c5cfc';
+      const col = emp.avatar_color || '#eda5ff';
       const eva = evaCalc.find(e => e.emp.id === emp.id);
       return `
         <div class="emp-card">
@@ -410,7 +418,7 @@ function renderDashboardChart() {
   const datasets = [];
   const dims = ['revenue_contribution','client_satisfaction','compliance_score','task_completion_rate','team_collaboration'];
   const dimLabels = ['Revenue','Client','Compliance','Tasks','Team'];
-  const colors = ['#7c5cfc','#00d4aa','#4fc3f7','#f9c846','#fd79a8'];
+  const colors = ['#eda5ff','#00d4aa','#4fc3f7','#fec24f','#fd79a8'];
   dims.forEach((d, i) => {
     datasets.push({
       label: dimLabels[i],
@@ -460,7 +468,7 @@ function renderLeaderboard() {
     const rank = idx + 1;
     const rankClass = rank <= 3 ? `rank-${rank}` : 'rank-n';
     const lvl = getLevel(item.xp);
-    const col = item.emp.avatar_color || '#7c5cfc';
+    const col = item.emp.avatar_color || '#eda5ff';
     const xpProg = getXpProgress(item.xp);
     return `
       <div class="leaderboard-item rank-${rank <= 3 ? rank : 'n'}" style="cursor:pointer" onclick="openKpiDetail('${item.emp.id}')">
@@ -499,7 +507,7 @@ function renderLbPeriodTable() {
   const evaCalc = _activePeriod ? calcEVA(_activePeriod, _employees, _kpiScores) : [];
   const rows = evaCalc.sort((a,b) => b.totalShare - a.totalShare);
   tbody.innerHTML = rows.map(row => {
-    const col = row.emp.avatar_color || '#7c5cfc';
+    const col = row.emp.avatar_color || '#eda5ff';
     return `<tr>
       <td><div style="display:flex;align-items:center;gap:10px">
         <div class="lb-avatar" style="width:32px;height:32px;font-size:0.72rem;background:${col}">${row.emp.avatar_initials||'?'}</div>
@@ -542,7 +550,7 @@ function renderKpis() {
   tbody.innerHTML = scores.map(k => {
     const emp = _employees.find(e => e.id === k.employee_id);
     const name = emp ? `${emp.first_name} ${emp.last_name}` : k.employee_id;
-    const col  = emp?.avatar_color || '#7c5cfc';
+    const col  = emp?.avatar_color || '#eda5ff';
     const init = emp?.avatar_initials || '?';
     const dims = ['revenue_contribution','client_satisfaction','task_completion_rate','response_time_score','compliance_score','innovation_score','team_collaboration','attendance_score'];
     const dimBars = dims.map(d => {
@@ -581,7 +589,7 @@ function renderKpiRadar(empId) {
   const labels = ['Revenue','Client Sat.','Tasks','Response','Compliance','Innovation','Team','Attendance'];
 
   let datasets = [];
-  const colors = ['#7c5cfc','#00d4aa','#f9c846','#fd79a8','#4fc3f7','#ff5b5b'];
+  const colors = ['#eda5ff','#00d4aa','#fec24f','#fd79a8','#4fc3f7','#ff5b5b'];
 
   if (empId) {
     const emp = _employees.find(e => e.id === empId);
@@ -591,10 +599,10 @@ function renderKpiRadar(empId) {
       datasets.push({
         label: emp ? `${emp.first_name} ${emp.last_name}` : empId,
         data: dims.map(d => Number(kpi[d]) || 0),
-        backgroundColor: 'rgba(124,92,252,0.15)',
-        borderColor: '#7c5cfc',
+        backgroundColor: 'rgba(237,165,255,0.15)',
+        borderColor: '#eda5ff',
         borderWidth: 2,
-        pointBackgroundColor: '#7c5cfc',
+        pointBackgroundColor: '#eda5ff',
       });
     }
   } else {
@@ -650,9 +658,9 @@ function renderLeave() {
   ).map(lr => {
     const emp  = _employees.find(e => e.id === lr.employee_id);
     const name = emp ? `${emp.first_name} ${emp.last_name}` : lr.employee_id;
-    const col  = emp?.avatar_color || '#7c5cfc';
+    const col  = emp?.avatar_color || '#eda5ff';
     const init = emp?.avatar_initials || '?';
-    const typeColors = { annual: '#4fc3f7', sick: '#ff5b5b', study: '#f9c846', family: '#fd79a8', unpaid: '#8b91a8' };
+    const typeColors = { annual: '#4fc3f7', sick: '#ff5b5b', study: '#fec24f', family: '#fd79a8', unpaid: '#8b91a8' };
     const dotCol = typeColors[lr.leave_type] || '#8b91a8';
     return `
       <div class="leave-card">
@@ -731,7 +739,7 @@ function renderEva() {
   const tbody = document.getElementById('eva-breakdown-body');
   if (tbody) {
     tbody.innerHTML = evaCalc.sort((a,b) => b.totalShare - a.totalShare).map(row => {
-      const col = row.emp.avatar_color || '#7c5cfc';
+      const col = row.emp.avatar_color || '#eda5ff';
       return `<tr>
         <td><div style="display:flex;align-items:center;gap:10px">
           <div class="lb-avatar" style="width:30px;height:30px;font-size:0.68rem;background:${col}">${row.emp.avatar_initials||'?'}</div>
@@ -758,7 +766,7 @@ function renderEvaChart(evaCalc) {
   const ctx = document.getElementById('evaDonut');
   if (!ctx) return;
   if (_charts.evaDonut) { _charts.evaDonut.destroy(); }
-  const colors = ['#7c5cfc','#00d4aa','#f9c846','#fd79a8','#4fc3f7','#ff5b5b'];
+  const colors = ['#eda5ff','#00d4aa','#fec24f','#fd79a8','#4fc3f7','#ff5b5b'];
   _charts.evaDonut = new Chart(ctx, {
     type: 'doughnut',
     data: {
@@ -816,7 +824,7 @@ function renderAchievements() {
   if (achGrid) {
     achGrid.innerHTML = _achievements.map(ach => {
       const emp = _employees.find(e => e.id === ach.employee_id);
-      const col = ach.badge_color || '#7c5cfc';
+      const col = ach.badge_color || '#eda5ff';
       return `
         <div class="achievement-card">
           <div class="ach-icon" style="background:${col}22;color:${col}">
@@ -838,7 +846,7 @@ function renderSettings() {
   const grid = document.getElementById('settings-emp-grid');
   if (!grid) return;
   grid.innerHTML = _employees.map(emp => {
-    const col = emp.avatar_color || '#7c5cfc';
+    const col = emp.avatar_color || '#eda5ff';
     const xp  = Number(emp.xp_points) || 0;
     const lvl = getLevel(xp);
     return `
@@ -996,7 +1004,7 @@ async function submitBadge() {
     badge_id:    'BADGE-' + Date.now(),
     badge_name:  form.querySelector('#bm-name').value,
     badge_icon:  form.querySelector('#bm-icon').value || 'fa-medal',
-    badge_color: form.querySelector('#bm-color').value || '#7c5cfc',
+    badge_color: form.querySelector('#bm-color').value || '#eda5ff',
     category:    form.querySelector('#bm-category').value,
     description: form.querySelector('#bm-desc').value,
     xp_awarded:  xpAward,
@@ -1063,7 +1071,7 @@ function openKpiDetail(empId) {
 
   const kpi = _kpiScores.filter(k => k.employee_id === empId)
     .sort((a,b) => b.period_month.localeCompare(a.period_month))[0];
-  const col = emp.avatar_color || '#7c5cfc';
+  const col = emp.avatar_color || '#eda5ff';
   const xp  = Number(emp.xp_points) || 0;
   const lvl = getLevel(xp);
   const xpProg = getXpProgress(xp);
@@ -1071,8 +1079,8 @@ function openKpiDetail(empId) {
   const evaRow  = evaCalc.find(r => r.emp.id === empId);
 
   const dims = [
-    { key: 'revenue_contribution', label: 'Revenue Contribution', icon: 'fa-chart-line', color: '#7c5cfc' },
-    { key: 'client_satisfaction',  label: 'Client Satisfaction',  icon: 'fa-star',       color: '#f9c846' },
+    { key: 'revenue_contribution', label: 'Revenue Contribution', icon: 'fa-chart-line', color: '#eda5ff' },
+    { key: 'client_satisfaction',  label: 'Client Satisfaction',  icon: 'fa-star',       color: '#fec24f' },
     { key: 'task_completion_rate', label: 'Task Completion',       icon: 'fa-check-circle',color: '#00d4aa' },
     { key: 'response_time_score',  label: 'Response Time',         icon: 'fa-bolt',       color: '#4fc3f7' },
     { key: 'compliance_score',     label: 'Compliance',            icon: 'fa-shield',     color: '#0984e3' },
@@ -1124,7 +1132,7 @@ function openKpiDetail(empId) {
 
   modal.querySelector('#kdm-badges').innerHTML = achList.length > 0
     ? `<div class="badge-grid">${achList.map(a =>
-        `<div class="badge-pill" style="color:${a.badge_color||'#7c5cfc'};border-color:${a.badge_color||'#7c5cfc'}44">
+        `<div class="badge-pill" style="color:${a.badge_color||'#eda5ff'};border-color:${a.badge_color||'#eda5ff'}44">
           <i class="fa-solid ${a.badge_icon||'fa-medal'}"></i> ${a.badge_name}
         </div>`).join('')}</div>`
     : `<div style="font-size:0.75rem;color:var(--text-muted)">No badges yet</div>`;

@@ -1,31 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SV Capital — Admin Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="../css/admin.css" />
-  <link rel="stylesheet" href="../css/ci-theme.css" />
-  <link rel="stylesheet" href="../css/sv-intelligence.css" />
+  <link rel="stylesheet" href="../css/admin-premium.css" />
+  <link rel="stylesheet" href="../css/admin-v2.css" />
+  <!-- sv-intelligence hidden -->
   <!-- Staff Auth guard -->
   <script src="../js/staff-auth.js?v=3"></script>
   <script>document.addEventListener('DOMContentLoaded',()=>{ StaffAuth.guard('admin'); StaffAuth.injectWidget(); });</script>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="../js/analytics.js"></script>
 </head>
 <body>
-
+<div id="adminLoadingBar"></div>
 <div class="app-layout">
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 
   <!-- ═══ SIDEBAR ═══ -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar__brand">
       <a href="../index.html" class="sv-portal-logo" title="SV Capital — Home">
-        <img src="../assets/logo-inline.svg" alt="SV Capital" width="38" height="38" style="display:block;border-radius:8px;">
+        <img src="../assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="display:block;height:36px;width:auto">
         <div class="brand-text">
-          <span class="brand-name">SV Capital</span>
           <span class="brand-role">Admin Console</span>
         </div>
       </a>
@@ -34,7 +52,7 @@
     <nav class="sidebar__nav">
       <div class="nav-section-label">Overview</div>
       <button class="nav-item active" data-view="dashboard" onclick="navigate('dashboard', this)">
-        <i class="fa-solid fa-grid-2"></i> Dashboard
+        <i class="fa-solid fa-border-all"></i> Dashboard
       </button>
 
       <div class="nav-section-label">Investors</div>
@@ -49,8 +67,18 @@
         <i class="fa-solid fa-id-card"></i> KYC / FICA
         <span class="nav-badge" id="kycBadge">0</span>
       </button>
+      <button class="nav-item" data-view="intlinterest" onclick="navigate('intlinterest', this)">
+        <i class="fa-solid fa-earth-africa"></i> International Interest
+        <span class="nav-badge" id="intlInterestBadge" style="display:none">0</span>
+      </button>
+      <button class="nav-item" data-view="fica-pipeline" onclick="navigate('fica-pipeline', this)">
+        <i class="fa-solid fa-filter"></i> FICA Pipeline
+      </button>
 
       <div class="nav-section-label">Investments</div>
+      <button class="nav-item" data-view="products" onclick="navigate('products', this)">
+        <i class="fa-solid fa-box-open"></i> Products
+      </button>
       <button class="nav-item" data-view="pools" onclick="navigate('pools', this)">
         <i class="fa-solid fa-layer-group"></i> Investment Pools
       </button>
@@ -65,17 +93,61 @@
       <button class="nav-item" data-view="transactions" onclick="navigate('transactions', this)">
         <i class="fa-solid fa-arrows-rotate"></i> Transactions
       </button>
+      <button class="nav-item" data-view="withdrawals" onclick="navigate('withdrawals', this)">
+        <i class="fa-solid fa-arrow-up-from-bracket"></i> Withdrawals
+        <span class="nav-badge" id="withdrawalBadge" style="display:none">0</span>
+      </button>
 
       <div class="nav-section-label">Operations</div>
+      <button class="nav-item" data-view="opsconsole" onclick="navigate('opsconsole', this)">
+        <i class="fa-solid fa-terminal"></i><span>Ops Console</span>
+      </button>
       <button class="nav-item" data-view="support" onclick="navigate('support', this)">
         <i class="fa-solid fa-headset"></i> Support Tickets
         <span class="nav-badge" id="ticketBadge">0</span>
       </button>
+      <button class="nav-item" data-view="aml" onclick="navigate('aml', this)">
+        <i class="fa-solid fa-shield-halved"></i><span>AML Review</span>
+        <span class="nav-badge" id="amlBadge" style="display:none">0</span>
+      </button>
+      <button class="nav-item" data-view="comms" onclick="navigate('comms', this)">
+        <i class="fa-solid fa-paper-plane"></i><span>Communications</span>
+      </button>
+      <button class="nav-item" data-view="emaillogs" onclick="navigate('emaillogs', this)">
+        <i class="fa-solid fa-envelope-open-text"></i><span>Email Logs</span>
+      </button>
+      <button class="nav-item" data-view="feedback" onclick="navigate('feedback', this)">
+        <i class="fa-solid fa-star"></i><span>Feedback</span>
+        <span class="nav-badge" id="feedbackBadge" style="display:none">0</span>
+      </button>
       <button class="nav-item" data-view="analytics" onclick="navigate('analytics', this)">
         <i class="fa-solid fa-chart-pie"></i> Analytics
       </button>
+      <button class="nav-item" data-view="compliance" onclick="navigate('compliance', this)">
+        <i class="fa-solid fa-calendar-check"></i> Compliance Calendar
+      </button>
+      <button class="nav-item" data-view="auditlog" onclick="navigate('auditlog', this)">
+        <i class="fa-solid fa-scroll"></i> Audit Log
+      </button>
+      <button class="nav-item" data-view="terms" onclick="navigate('terms', this)">
+        <i class="fa-solid fa-file-contract"></i> Terms of Use
+      </button>
+      <button class="nav-item" data-view="privacy" onclick="navigate('privacy', this)">
+        <i class="fa-solid fa-shield-halved"></i> Privacy Policy
+      </button>
+      <button class="nav-item" data-view="accepted-docs" onclick="navigate('accepted-docs', this)">
+        <i class="fa-solid fa-file-circle-check"></i> Accepted Client Docs
+        <span class="nav-badge" id="acceptedDocsBadge" style="display:none">0</span>
+      </button>
       <button class="nav-item" data-view="settings" onclick="navigate('settings', this)">
         <i class="fa-solid fa-gear"></i> Settings
+      </button>
+      <button class="nav-item" data-view="migrate" onclick="navigate('migrate', this)">
+        <i class="fa-solid fa-database"></i> Data Migration
+      </button>
+      <button class="nav-item" data-view="reconciliation" onclick="navigate('reconciliation', this)">
+        <i class="fa-solid fa-scale-balanced"></i> Reconciliation
+        <span class="nav-badge" id="reconcBadge" style="display:none;background:#f97316">!</span>
       </button>
     </nav>
 
@@ -94,6 +166,9 @@
   <div class="main-content">
     <header class="topbar">
       <div class="topbar__left">
+        <button class="sidebar-mobile-toggle" id="sidebarToggleBtn" onclick="toggleSidebar()" title="Toggle sidebar">
+          <i class="fa-solid fa-bars"></i>
+        </button>
         <div>
           <div class="topbar__title" id="topbarTitle">Dashboard</div>
           <div class="topbar__breadcrumb">SV Capital Admin Console</div>
@@ -103,6 +178,10 @@
         <i class="fa-solid fa-magnifying-glass"></i>
         <input type="text" placeholder="Search investors, pools, transactions..." id="globalSearch" />
       </div>
+      <button onclick="openAdminCmd()" title="Command Palette (Ctrl+K)"
+        style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 12px;color:#7a92a8;font-size:12px;cursor:pointer;font-family:monospace;display:flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0">
+        <i class="fa-solid fa-magnifying-glass" style="font-size:11px"></i> ⌘K
+      </button>
       <div class="topbar__actions">
         <div style="position:relative">
           <button class="topbar-btn" title="Notifications" onclick="toggleAdminNotif()" id="adminNotifBtn">
@@ -110,29 +189,14 @@
             <span class="notif-dot" id="adminNotifDot"></span>
           </button>
           <div id="adminNotifPanel" style="display:none;position:absolute;top:calc(100% + 8px);right:0;width:320px;background:#fff;border:1px solid rgba(0,0,0,0.09);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.13);z-index:999;overflow:hidden">
-            <div style="padding:14px 18px 10px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;justify-content:space-between">
-              <span style="font-size:0.88rem;font-weight:800;color:#1a1a1a">Admin Alerts</span>
+            <div style="padding:14px 18px 10px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:0.88rem;font-weight:800;color:var(--text)">Admin Alerts</span>
               <button onclick="adminMarkAllRead()" style="font-size:0.7rem;color:#FF8215;font-weight:700;background:none;border:none;cursor:pointer">Mark all read</button>
             </div>
-            <div style="max-height:340px;overflow-y:auto">
-              <div class="notif-item unread">
-                <div class="notif-icon" style="background:rgba(239,68,68,0.1)"><i class="fa-solid fa-user-clock" style="color:#ef4444"></i></div>
-                <div class="notif-body"><div class="notif-title">KYC documents pending</div><div class="notif-sub">3 investors are awaiting FICA verification review.</div><div class="notif-time">1 hour ago</div></div>
-              </div>
-              <div class="notif-item unread">
-                <div class="notif-icon" style="background:rgba(255,130,21,0.1)"><i class="fa-solid fa-wallet" style="color:#FF8215"></i></div>
-                <div class="notif-body"><div class="notif-title">New wallet top-up</div><div class="notif-sub">Thabo Khumalo deposited R5,000 via Paystack.</div><div class="notif-time">2 hours ago</div></div>
-              </div>
-              <div class="notif-item">
-                <div class="notif-icon" style="background:rgba(34,197,94,0.1)"><i class="fa-solid fa-coins" style="color:#22c55e"></i></div>
-                <div class="notif-body"><div class="notif-title">Pool funded</div><div class="notif-sub">Cattle Pool Q2 has reached its funding target.</div><div class="notif-time">Yesterday</div></div>
-              </div>
-              <div class="notif-item">
-                <div class="notif-icon" style="background:rgba(47,140,155,0.1)"><i class="fa-solid fa-headset" style="color:#2F8C9B"></i></div>
-                <div class="notif-body"><div class="notif-title">New support ticket</div><div class="notif-sub">Ticket #TKT-007 opened by Lerato Dlamini — Withdrawal query.</div><div class="notif-time">2 days ago</div></div>
-              </div>
+            <div id="adminNotifBody" style="max-height:340px;overflow-y:auto">
+              <div style="padding:24px 18px;text-align:center;color:var(--text-muted);font-size:0.82rem">Loading alerts…</div>
             </div>
-            <div style="padding:10px 18px;border-top:1px solid rgba(0,0,0,0.07);text-align:center">
+            <div style="padding:10px 18px;border-top:1px solid rgba(255,255,255,0.07);text-align:center">
               <button onclick="navigate('support', document.querySelector('[data-view=support]'));toggleAdminNotif()" style="font-size:0.78rem;color:#FF8215;font-weight:600;background:none;border:none;cursor:pointer">View all in Support &rarr;</button>
             </div>
           </div>
@@ -164,32 +228,61 @@
            VIEW: DASHBOARD
       ══════════════════════════════════ -->
       <div class="view active" id="view-dashboard">
+
+        <!-- Admin Welcome Strip -->
+        <div class="admin-welcome-strip" id="adminWelcomeStrip">
+          <div class="admin-welcome-strip__left">
+            <div class="admin-welcome-strip__eyebrow" id="adminWelcomeGreeting">Good morning</div>
+            <div class="admin-welcome-strip__name" id="adminWelcomeName">Admin Console</div>
+            <div class="admin-welcome-strip__chips">
+              <span class="admin-chip admin-chip--orange"><i class="fa-solid fa-shield-halved"></i> <span id="adminChipRole">Administrator</span></span>
+              <span class="admin-chip admin-chip--teal" id="adminChipKyc" style="display:none"><i class="fa-solid fa-id-card"></i> <span id="adminChipKycVal">0</span> KYC pending</span>
+              <span class="admin-chip admin-chip--red" id="adminChipTickets" style="display:none"><i class="fa-solid fa-headset"></i> <span id="adminChipTicketsVal">0</span> open tickets</span>
+              <span class="admin-chip admin-chip--green"><i class="fa-solid fa-circle-check"></i> FSCA Regulated · FSP #52449</span>
+            </div>
+          </div>
+          <div class="admin-welcome-strip__right">
+            <button class="btn btn--sm btn--secondary" onclick="navigate('kyc', document.querySelector('[data-view=kyc]'))">
+              <i class="fa-solid fa-id-card"></i> KYC Queue
+            </button>
+            <button class="btn btn--primary btn--sm" onclick="navigate('investors', document.querySelector('[data-view=investors]'))">
+              <i class="fa-solid fa-users"></i> Investors
+            </button>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-bottom:12px;gap:8px">
+          <button class="btn btn--secondary btn--sm" onclick="exportAumReport()">
+            <i class="fa-solid fa-file-arrow-down"></i> Export AUM Report
+          </button>
+        </div>
+
         <div class="stats-row" id="dashStats">
-          <div class="stat-card stat-card--gold">
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('investors', document.querySelector('[data-view=investors]'))">
             <div class="stat-card__header">
               <div class="stat-card__icon"><i class="fa-solid fa-users"></i></div>
-              <div class="stat-card__trend up"><i class="fa-solid fa-arrow-trend-up"></i> +12%</div>
+              <div class="stat-card__trend up" id="ds-trend-investors"><i class="fa-solid fa-arrow-trend-up"></i> —</div>
             </div>
             <div class="stat-card__value" id="ds-investors">—</div>
             <div class="stat-card__label">Total Investors</div>
           </div>
-          <div class="stat-card stat-card--green">
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('investments', document.querySelector('[data-view=investments]'))">
             <div class="stat-card__header">
               <div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div>
-              <div class="stat-card__trend up"><i class="fa-solid fa-arrow-trend-up"></i> +8%</div>
+              <div class="stat-card__trend up" id="ds-trend-invested"><i class="fa-solid fa-arrow-trend-up"></i> —</div>
             </div>
             <div class="stat-card__value" id="ds-invested">—</div>
             <div class="stat-card__label">Total Invested (AUM)</div>
           </div>
-          <div class="stat-card stat-card--blue">
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('transactions', document.querySelector('[data-view=transactions]'))">
             <div class="stat-card__header">
               <div class="stat-card__icon"><i class="fa-solid fa-money-bill-transfer"></i></div>
-              <div class="stat-card__trend up"><i class="fa-solid fa-arrow-trend-up"></i> +15%</div>
+              <div class="stat-card__trend up" id="ds-trend-returns"><i class="fa-solid fa-arrow-trend-up"></i> —</div>
             </div>
             <div class="stat-card__value" id="ds-returns">—</div>
             <div class="stat-card__label">Total Returns Paid</div>
           </div>
-          <div class="stat-card stat-card--purple">
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('pools', document.querySelector('[data-view=pools]'))">
             <div class="stat-card__header">
               <div class="stat-card__icon"><i class="fa-solid fa-layer-group"></i></div>
               <div class="stat-card__trend neutral">Live</div>
@@ -207,9 +300,9 @@
               <div class="panel__header">
                 <span class="panel__title">Assets Under Management — Monthly</span>
                 <div class="tab-bar">
-                  <button class="tab-btn active">6M</button>
-                  <button class="tab-btn">1Y</button>
-                  <button class="tab-btn">All</button>
+                  <button class="tab-btn active" onclick="switchAumTab('6m',this)">6M</button>
+                  <button class="tab-btn" onclick="switchAumTab('1y',this)">1Y</button>
+                  <button class="tab-btn" onclick="switchAumTab('all',this)">All</button>
                 </div>
               </div>
               <div class="panel__body">
@@ -233,7 +326,7 @@
               <div style="overflow-x:auto">
                 <table class="data-table">
                   <thead><tr>
-                    <th>Investor</th><th>Product</th><th>Amount</th><th>Return Rate</th><th>Status</th><th>Date</th>
+                    <th style="width:28%">Investor</th><th style="width:18%">Product</th><th style="width:14%">Amount</th><th style="width:14%">Return Rate</th><th style="width:14%">Status</th><th style="width:12%">Date</th>
                   </tr></thead>
                   <tbody id="recentInvestmentsBody">
                     <tr><td colspan="6" class="text-center text-muted" style="padding:24px">Loading...</td></tr>
@@ -267,11 +360,20 @@
             </div>
 
             <!-- Pending Actions -->
-            <div class="panel">
+            <div class="panel mb-20">
               <div class="panel__header">
                 <span class="panel__title">Pending Actions</span>
               </div>
               <div class="panel__body" id="pendingActionsWidget">Loading...</div>
+            </div>
+
+            <!-- Activity Feed -->
+            <div class="panel">
+              <div class="panel__header">
+                <span class="panel__title">Recent Activity</span>
+                <span class="last-refreshed" id="activityRefreshed"></span>
+              </div>
+              <div class="panel__body" style="padding:0" id="activityFeedWidget">Loading...</div>
             </div>
           </div>
         </div>
@@ -281,11 +383,13 @@
            VIEW: INVESTORS
       ══════════════════════════════════ -->
       <div class="view" id="view-investors">
-        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)" id="investorStats">
-          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-check"></i></div></div><div class="stat-card__value" id="is-active">—</div><div class="stat-card__label">Active Investors</div></div>
-          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-clock"></i></div></div><div class="stat-card__value" id="is-pending">—</div><div class="stat-card__label">Pending FICA</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-wallet"></i></div></div><div class="stat-card__value" id="is-wallet">—</div><div class="stat-card__label">Total Wallet Balances</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="is-aum">—</div><div class="stat-card__label">Investor AUM</div></div>
+        <div class="stats-row" style="grid-template-columns:repeat(6,1fr)" id="investorStats">
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="document.getElementById('investorStatusFilter').value='';document.getElementById('investorStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-users"></i></div></div><div class="stat-card__value" id="is-total">—</div><div class="stat-card__label">Total Investors</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="document.getElementById('investorStatusFilter').value='active';document.getElementById('investorStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-check"></i></div></div><div class="stat-card__value" id="is-active">—</div><div class="stat-card__label">Active</div></div>
+          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('kyc', document.querySelector('[data-view=kyc]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-clock"></i></div></div><div class="stat-card__value" id="is-pending">—</div><div class="stat-card__label">Pending KYC</div></div>
+          <div class="stat-card stat-card--red" style="--red:#ef4444;cursor:pointer" onclick="document.getElementById('investorStatusFilter').value='suspended';document.getElementById('investorStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-user-slash"></i></div></div><div class="stat-card__value" id="is-suspended">—</div><div class="stat-card__label">Suspended</div></div>
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('transactions', document.querySelector('[data-view=transactions]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-wallet"></i></div></div><div class="stat-card__value" id="is-wallet">—</div><div class="stat-card__label">Total Wallets</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('analytics', document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="is-aum">—</div><div class="stat-card__label">AUM</div></div>
         </div>
 
         <div class="table-card">
@@ -295,31 +399,69 @@
               <div class="table-card__sub" id="investorCount">Loading...</div>
             </div>
             <div class="table-card__controls">
-              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search name, email, ID..." id="investorSearch" /></div>
+              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search name, email, ID, phone…" id="investorSearch" /></div>
               <select class="tbl-filter" id="investorStatusFilter">
                 <option value="">All Status</option>
                 <option value="active">Active</option>
-                <option value="pending_fica">Pending FICA</option>
-                <option value="fica_submitted">FICA Submitted</option>
                 <option value="suspended">Suspended</option>
+                <option value="pending">Pending</option>
+              </select>
+              <select class="tbl-filter" id="investorKycFilter">
+                <option value="">All KYC</option>
+                <option value="approved">Verified</option>
+                <option value="pending">Pending</option>
+                <option value="rejected">Rejected</option>
+              </select>
+              <select class="tbl-filter" id="investorProvinceFilter">
+                <option value="">All Provinces</option>
+                <option value="Gauteng">Gauteng</option>
+                <option value="Western Cape">Western Cape</option>
+                <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                <option value="Eastern Cape">Eastern Cape</option>
+                <option value="Limpopo">Limpopo</option>
+                <option value="Mpumalanga">Mpumalanga</option>
+                <option value="North West">North West</option>
+                <option value="Free State">Free State</option>
+                <option value="Northern Cape">Northern Cape</option>
+              </select>
+              <select class="tbl-filter" id="investorLoginFilter">
+                <option value="">All Accounts</option>
+                <option value="no_login">No Login Yet</option>
+                <option value="has_login">Has Login</option>
               </select>
               <button class="btn btn--primary btn--sm" onclick="openAddInvestorModal()">
                 <i class="fa-solid fa-plus"></i> Add Investor
               </button>
+              <button class="btn btn--secondary btn--sm" onclick="openManualAdjModal()">
+                <i class="fa-solid fa-sliders"></i> Adjustment
+              </button>
+              <button class="btn btn--secondary btn--sm" onclick="exportInvestorsCSV()">
+                <i class="fa-solid fa-file-csv"></i> Export
+              </button>
+              <button class="btn btn--secondary btn--sm density-btn" id="invDensityBtn" onclick="toggleTableDensity('investorsCard','invDensityBtn')" title="Toggle compact view">
+                <i class="fa-solid fa-bars-staggered"></i>
+              </button>
             </div>
           </div>
-          <div style="overflow-x:auto">
-            <table class="data-table">
+          <div id="invBulkBar" style="display:none;align-items:center;gap:10px;padding:8px 14px;background:rgba(255,155,12,0.07);border:1px solid rgba(255,155,12,0.22);border-radius:8px;margin:0 0 10px">
+            <i class="fa-solid fa-envelope" style="color:var(--orange)"></i>
+            <span id="invBulkCount" style="font-weight:700;font-size:0.82rem;color:var(--text)">0 selected</span>
+            <button class="btn btn--primary btn--sm" onclick="bulkSendLoginInvites()"><i class="fa-solid fa-paper-plane"></i> Send Login Invite</button>
+            <button class="btn btn--ghost btn--sm" onclick="clearInvestorSelection()"><i class="fa-solid fa-xmark"></i> Clear</button>
+          </div>
+          <div style="overflow-x:auto" id="investorsCard">
+            <table class="data-table" id="investorsTable" style="table-layout:fixed;width:100%">
               <thead><tr>
-                <th>Investor</th><th>Contact</th><th>FICA</th><th>Wallet</th><th>Invested</th><th>Returns</th><th>Joined</th><th>Actions</th>
+                <th style="width:3%;padding:8px 10px"><input type="checkbox" id="invSelectAll" onchange="toggleAllInvestors(this)" title="Select all on this page"></th>
+                <th style="width:23%">Investor</th><th style="width:20%">Contact</th><th style="width:16%">KYC / Status</th><th style="width:15%">Portfolio</th><th style="width:10%">Investments</th><th style="width:13%">Actions</th>
               </tr></thead>
               <tbody id="investorsBody">
-                <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
+                <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
               </tbody>
             </table>
           </div>
           <div class="table-card__footer">
-            <span id="investorsFooterText">—</span>
+            <span id="investorsFooterText">—</span><span class="last-refreshed" id="investorsRefreshed"></span>
             <div class="pagination" id="investorsPagination"></div>
           </div>
         </div>
@@ -341,12 +483,12 @@
             <div class="stat-card__value" id="ifa-active">—</div>
             <div class="stat-card__label">Active IFAs</div>
           </div>
-          <div class="stat-card stat-card--blue">
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('investors', document.querySelector('[data-view=investors]'))">
             <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-users-between-lines"></i></div></div>
             <div class="stat-card__value" id="ifa-clients">—</div>
             <div class="stat-card__label">Total IFA Clients</div>
           </div>
-          <div class="stat-card stat-card--purple">
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('analytics', document.querySelector('[data-view=analytics]'))">
             <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div>
             <div class="stat-card__value" id="ifa-aum">—</div>
             <div class="stat-card__label">IFA-Managed AUM</div>
@@ -376,7 +518,7 @@
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>IFA</th><th>Company</th><th>License</th><th>Clients</th><th>AUM Managed</th><th>Commission</th><th>Status</th><th>Joined</th><th>Actions</th>
+                <th style="width:22%">IFA</th><th style="width:15%">Company</th><th style="width:11%">License</th><th style="width:8%">Clients</th><th style="width:11%">AUM</th><th style="width:9%">Comm.</th><th style="width:9%">Status</th><th style="width:9%">Joined</th><th style="width:6%">Actions</th>
               </tr></thead>
               <tbody id="ifaBody">
                 <tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
@@ -394,17 +536,28 @@
       ══════════════════════════════════ -->
       <div class="view" id="view-kyc">
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
-          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hourglass-half"></i></div></div><div class="stat-card__value" id="kyc-pending">—</div><div class="stat-card__label">Pending Review</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-magnifying-glass"></i></div></div><div class="stat-card__value" id="kyc-review">—</div><div class="stat-card__label">Under Review</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-circle"></i></div></div><div class="stat-card__value" id="kyc-approved">—</div><div class="stat-card__label">Approved</div></div>
-          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-circle-xmark"></i></div></div><div class="stat-card__value" id="kyc-rejected">—</div><div class="stat-card__label">Rejected</div></div>
+          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="document.getElementById('kycStatusFilter').value='pending';document.getElementById('kycStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hourglass-half"></i></div></div><div class="stat-card__value" id="kyc-pending">—</div><div class="stat-card__label">Pending Review</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="document.getElementById('kycStatusFilter').value='under_review';document.getElementById('kycStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-magnifying-glass"></i></div></div><div class="stat-card__value" id="kyc-review">—</div><div class="stat-card__label">Under Review</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="document.getElementById('kycStatusFilter').value='approved';document.getElementById('kycStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-circle"></i></div></div><div class="stat-card__value" id="kyc-approved">—</div><div class="stat-card__label">Approved</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="document.getElementById('kycStatusFilter').value='rejected';document.getElementById('kycStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-circle-xmark"></i></div></div><div class="stat-card__value" id="kyc-rejected">—</div><div class="stat-card__label">Rejected</div></div>
         </div>
 
+        <!-- Doc-type breakdown stats -->
+        <div id="kycDocTypeStats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px"></div>
+
         <div class="table-card">
-          <div class="table-card__header">
-            <div><div class="table-card__title">KYC Documents</div><div class="table-card__sub">FICA verification queue</div></div>
-            <div class="table-card__controls" style="gap:8px">
-              <select class="tbl-filter" id="kycStatusFilter">
+          <div class="table-card__header" style="flex-wrap:wrap;gap:8px">
+            <div><div class="table-card__title">KYC / FICA Documents</div><div class="table-card__sub">All submitted documents including bank verification</div></div>
+            <div class="table-card__controls" style="gap:8px;flex-wrap:wrap">
+              <input type="text" class="tbl-filter" id="kycSearch" placeholder="Search investor…" style="min-width:160px" oninput="renderKYCTable()">
+              <select class="tbl-filter" id="kycDocTypeFilter" onchange="renderKYCTable()">
+                <option value="">All Doc Types</option>
+                <option value="id_document">ID Document</option>
+                <option value="proof_of_address">Proof of Address</option>
+                <option value="proof_of_bank">Proof of Bank</option>
+                <option value="other">Other</option>
+              </select>
+              <select class="tbl-filter" id="kycStatusFilter" onchange="renderKYCTable()">
                 <option value="">All Status</option>
                 <option value="pending">Pending</option>
                 <option value="under_review">Under Review</option>
@@ -412,14 +565,24 @@
                 <option value="rejected">Rejected</option>
               </select>
               <button class="btn btn--primary btn--sm" onclick="openKycUploadModal('','')">
-                <i class="fa-solid fa-upload"></i> Upload Document
+                <i class="fa-solid fa-upload"></i> Upload
+              </button>
+              <button class="btn btn--secondary btn--sm" onclick="exportKYCCSV()">
+                <i class="fa-solid fa-file-csv"></i> Export
               </button>
             </div>
+          </div>
+          <div id="kycBulkBar" style="display:none;background:rgba(255,155,12,0.08);border:1px solid rgba(255,155,12,0.25);border-radius:10px;padding:10px 16px;margin:0 16px 12px;align-items:center;gap:12px">
+            <span id="kycBulkCount" style="font-size:0.85rem;font-weight:600;color:#303030">0 selected</span>
+            <div style="flex:1"></div>
+            <button class="btn btn--success btn--sm" onclick="bulkApproveKyc()"><i class="fa-solid fa-check-double"></i> Bulk Approve</button>
+            <button class="btn btn--danger btn--sm" onclick="bulkRejectKyc()"><i class="fa-solid fa-xmark"></i> Bulk Reject</button>
+            <button class="btn btn--secondary btn--sm" onclick="clearKycSelection()"><i class="fa-solid fa-times"></i> Clear</button>
           </div>
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>Investor</th><th>Document Type</th><th>File</th><th>Status</th><th>Submitted</th><th>Document</th><th>Actions</th><th></th>
+                <th style="width:4%"><input type="checkbox" id="kycSelectAll" onchange="toggleAllKyc(this.checked)" style="cursor:pointer;width:16px;height:16px;accent-color:#FF9B0C" title="Select all actionable"></th><th style="width:22%">Investor</th><th style="width:15%">Document Type</th><th style="width:12%">File</th><th style="width:10%">Status</th><th style="width:10%">Submitted</th><th style="width:10%">Document</th><th style="width:17%">Actions</th>
               </tr></thead>
               <tbody id="kycBody">
                 <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
@@ -432,21 +595,43 @@
       <!-- ══════════════════════════════════
            VIEW: POOLS
       ══════════════════════════════════ -->
+      <!-- ══════════════════════════════════
+           VIEW: PRODUCTS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-products">
+        <div class="flex-between mb-16" style="flex-wrap:wrap;gap:10px">
+          <div>
+            <h2 style="font-size:1rem;font-weight:700;color:var(--white)">Products</h2>
+            <p style="font-size:0.75rem;color:var(--text-muted)">Manage investment products shown on pools and the home page. Average return is auto-calculated from matured pools.</p>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn--primary" onclick="openProductModal()"><i class="fa-solid fa-plus"></i> New Product</button>
+          </div>
+        </div>
+        <div class="grid-3" id="productsGrid">
+          <div class="text-center text-muted" style="grid-column:1/-1;padding:32px">Loading...</div>
+        </div>
+      </div>
+
       <div class="view" id="view-pools">
         <div class="flex-between mb-16" style="flex-wrap:wrap;gap:10px">
           <div>
             <h2 style="font-size:1rem;font-weight:700;color:var(--white)">Investment Pools</h2>
             <p style="font-size:0.75rem;color:var(--text-muted)">Manage all active and historical investment pools</p>
           </div>
-          <button class="btn btn--primary" onclick="openAddPoolModal()"><i class="fa-solid fa-plus"></i> New Pool</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn--secondary" onclick="exportPoolsCSV()"><i class="fa-solid fa-file-csv"></i> Export</button>
+            <button class="btn btn--secondary" onclick="runPoolCycler(this)" title="Cycle any pools whose close date has passed"><i class="fa-solid fa-rotate"></i> Run Pool Cycler</button>
+            <button class="btn btn--primary" onclick="openAddPoolModal()"><i class="fa-solid fa-plus"></i> New Pool</button>
+          </div>
         </div>
 
-        <div class="tab-bar">
+        <div class="tab-bar" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <button class="tab-btn active" onclick="filterPools('all', this)">All Pools</button>
           <button class="tab-btn" onclick="filterPools('open', this)">Open</button>
           <button class="tab-btn" onclick="filterPools('active', this)">Active</button>
           <button class="tab-btn" onclick="filterPools('matured', this)">Matured</button>
-          <button class="tab-btn" onclick="filterPools('paid_out', this)">Paid Out</button>
+          <div class="tbl-search" style="margin-left:auto"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search pools by name, product, ID…" id="poolSearch" oninput="renderPoolsGrid()" /></div>
         </div>
 
         <div class="grid-3" id="poolsGrid">
@@ -459,47 +644,54 @@
       ══════════════════════════════════ -->
       <div class="view" id="view-investments">
         <div class="stats-row" style="grid-template-columns:repeat(5,1fr)">
-          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="inv-total">—</div><div class="stat-card__label">Total Investments</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-play"></i></div></div><div class="stat-card__value" id="inv-active">—</div><div class="stat-card__label">Active</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-double"></i></div></div><div class="stat-card__value" id="inv-paidout">—</div><div class="stat-card__label">Paid Out</div></div>
-          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hourglass-end"></i></div></div><div class="stat-card__value" id="inv-matured">—</div><div class="stat-card__label">Matured</div></div>
-          <div class="stat-card stat-card--orange"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div><div class="stat-card__value" id="inv-capital">—</div><div class="stat-card__label">Capital Deployed</div></div>
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="document.getElementById('investmentStatusFilter').value='';document.getElementById('investmentStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="inv-total">—</div><div class="stat-card__label">Total Investments</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="document.getElementById('investmentStatusFilter').value='active';document.getElementById('investmentStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-play"></i></div></div><div class="stat-card__value" id="inv-active">—</div><div class="stat-card__label">Active</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="document.getElementById('investmentStatusFilter').value='matured';document.getElementById('investmentStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hourglass-end"></i></div></div><div class="stat-card__value" id="inv-matured">—</div><div class="stat-card__label">Matured</div></div>
+          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('analytics', document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div><div class="stat-card__value" id="inv-capital">—</div><div class="stat-card__label">Capital Deployed</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('analytics', document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div><div class="stat-card__value" id="inv-avgrate">—</div><div class="stat-card__label">Avg. Annual Rate</div></div>
         </div>
 
         <div class="table-card">
           <div class="table-card__header">
             <div><div class="table-card__title">All Investments</div></div>
             <div class="table-card__controls">
-              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search investor, pool..." id="investmentSearch" /></div>
+              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search investor, account, pool…" id="investmentSearch" /></div>
               <select class="tbl-filter" id="investmentProductFilter">
                 <option value="">All Products</option>
                 <option value="cattle">Cattle</option>
-                <option value="solar_7yr">Solar 7yr</option>
-                <option value="solar_6yr">Solar 6yr</option>
-                <option value="solar_5yr">Solar 5yr</option>
-                <option value="short_term">Short-Term</option>
-                <option value="delivery_bike">Delivery Bike</option>
+                <option value="solar">Solar</option>
+                <option value="smme">SMME / Short-Term</option>
+                <option value="delivery_bikes">Delivery Bikes</option>
+                <option value="other">Other</option>
               </select>
               <select class="tbl-filter" id="investmentStatusFilter">
                 <option value="">All Status</option>
                 <option value="active">Active</option>
                 <option value="matured">Matured</option>
-                <option value="paid_out">Paid Out</option>
+                <option value="cancelled">Cancelled</option>
               </select>
+              <button class="btn btn--secondary btn--sm" onclick="exportInvestmentsCSV()">
+                <i class="fa-solid fa-file-csv"></i> Export
+              </button>
             </div>
+          </div>
+          <div id="invBulkBar" style="display:none;align-items:center;gap:12px;padding:10px 16px;background:rgba(212,175,55,0.1);border:1px solid rgba(212,175,55,0.3);border-radius:8px;margin-bottom:8px">
+            <span style="font-size:0.85rem;font-weight:600;color:#1a1a1a"><span id="invBulkCount">0</span> selected</span>
+            <button class="btn btn--primary btn--sm" onclick="bulkTriggerPayout()"><i class="fa-solid fa-money-bill-transfer"></i> Mark Matured</button>
+            <button class="btn btn--secondary btn--sm" onclick="document.querySelectorAll('.inv-select-cb').forEach(cb=>cb.checked=false);_invUpdateBulkBar()">Clear</button>
           </div>
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>Investor</th><th>Pool</th><th>Product</th><th>Amount</th><th>Exp. Return</th><th>Status</th><th>Maturity</th><th>Actions</th>
+                <th style="width:4%"></th><th style="width:18%">Investor</th><th style="width:9%">Date</th><th style="width:16%">Pool</th><th style="width:10%">Product</th><th style="width:10%">Amount</th><th style="width:7%">Rate</th><th style="width:9%">Status</th><th style="width:10%">Maturity</th><th style="width:7%">Actions</th>
               </tr></thead>
               <tbody id="investmentsBody">
-                <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
+                <tr><td colspan="10" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
               </tbody>
             </table>
           </div>
           <div class="table-card__footer">
-            <span id="investmentsFooter">—</span>
+            <span id="investmentsFooter">—</span><span class="last-refreshed" id="investmentsRefreshed"></span>
             <div class="pagination" id="investmentsPagination"></div>
           </div>
         </div>
@@ -515,11 +707,19 @@
               <div class="table-card__title">Maturity Instructions</div>
               <div class="table-card__sub">Investor payout and reinvestment instructions</div>
             </div>
+            <div class="table-card__controls">
+              <button class="btn btn--success btn--sm" onclick="processAllMaturity()">
+                <i class="fa-solid fa-play"></i> Process All Submitted
+              </button>
+              <button class="btn btn--secondary btn--sm" onclick="exportMaturityCSV()">
+                <i class="fa-solid fa-file-csv"></i> Export
+              </button>
+            </div>
           </div>
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>Investor</th><th>Pool</th><th>Instruction</th><th>Payout Amount</th><th>Status</th><th>Submitted</th><th>Actions</th>
+                <th style="width:22%">Investor</th><th style="width:22%">Pool</th><th style="width:16%">Instruction</th><th style="width:11%">Payout</th><th style="width:10%">Status</th><th style="width:10%">Submitted</th><th style="width:9%">Actions</th>
               </tr></thead>
               <tbody id="maturityBody">
                 <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
@@ -534,10 +734,10 @@
       ══════════════════════════════════ -->
       <div class="view" id="view-transactions">
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-down"></i></div></div><div class="stat-card__value" id="txn-deposits">—</div><div class="stat-card__label">Total Deposits</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-up"></i></div></div><div class="stat-card__value" id="txn-invested">—</div><div class="stat-card__label">Capital Invested</div></div>
-          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-star"></i></div></div><div class="stat-card__value" id="txn-returns">—</div><div class="stat-card__label">Returns Paid</div></div>
-          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-receipt"></i></div></div><div class="stat-card__value" id="txn-count">—</div><div class="stat-card__label">Total Transactions</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="document.getElementById('txnTypeFilter').value='deposit';document.getElementById('txnTypeFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-down"></i></div></div><div class="stat-card__value" id="txn-deposits">—</div><div class="stat-card__label">Total Deposits</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="document.getElementById('txnTypeFilter').value='investment';document.getElementById('txnTypeFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-up"></i></div></div><div class="stat-card__value" id="txn-invested">—</div><div class="stat-card__label">Capital Invested</div></div>
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="document.getElementById('txnTypeFilter').value='return';document.getElementById('txnTypeFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-star"></i></div></div><div class="stat-card__value" id="txn-returns">—</div><div class="stat-card__label">Returns Paid</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="document.getElementById('txnTypeFilter').value='';document.getElementById('txnTypeFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-receipt"></i></div></div><div class="stat-card__value" id="txn-count">—</div><div class="stat-card__label">Total Transactions</div></div>
         </div>
 
         <div class="table-card">
@@ -557,12 +757,15 @@
               <button class="btn btn--primary btn--sm" onclick="openAddTxnModal()">
                 <i class="fa-solid fa-plus"></i> Record Transaction
               </button>
+              <button class="btn btn--secondary btn--sm" onclick="exportTransactionsCSV()">
+                <i class="fa-solid fa-file-csv"></i> Export CSV
+              </button>
             </div>
           </div>
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>Investor</th><th>Type</th><th>Amount</th><th>Status</th><th>Reference</th><th>Description</th><th>Date</th><th>Action</th>
+                <th style="width:20%">Investor</th><th style="width:9%">Type</th><th style="width:11%">Amount</th><th style="width:10%">Status</th><th style="width:13%">Reference</th><th style="width:19%">Description</th><th style="width:10%">Date</th><th style="width:8%">Action</th>
               </tr></thead>
               <tbody id="txnBody">
                 <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
@@ -570,8 +773,82 @@
             </table>
           </div>
           <div class="table-card__footer">
-            <span id="txnFooter">—</span>
+            <span id="txnFooter">—</span><span class="last-refreshed" id="txnRefreshed"></span>
             <div class="pagination" id="txnPagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: WITHDRAWALS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-withdrawals">
+        <!-- Pending Withdrawals -->
+        <div class="table-card mb-20">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Pending Withdrawals</div>
+              <div style="font-size:0.78rem;color:var(--text-muted)">Approve or reject pending investor withdrawal requests</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn--secondary btn--sm" onclick="exportWithdrawalsCSV()"><i class="fa-solid fa-file-csv"></i> Export</button>
+              <button class="btn btn--secondary btn--sm" onclick="loadWithdrawals()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+          </div>
+          <!-- Filter bar -->
+          <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input type="text"   id="wdFilterName" placeholder="Investor name / ID…"  class="form-input" style="height:30px;font-size:0.78rem;width:170px" oninput="renderWithdrawalsTable()">
+            <input type="text"   id="wdFilterRef"  placeholder="Reference…"           class="form-input" style="height:30px;font-size:0.78rem;width:130px" oninput="renderWithdrawalsTable()">
+            <input type="number" id="wdFilterMin"  placeholder="Min R"                class="form-input" style="height:30px;font-size:0.78rem;width:80px"  oninput="renderWithdrawalsTable()">
+            <input type="number" id="wdFilterMax"  placeholder="Max R"                class="form-input" style="height:30px;font-size:0.78rem;width:80px"  oninput="renderWithdrawalsTable()">
+            <input type="date"   id="wdFilterFrom"                                    class="form-input" style="height:30px;font-size:0.78rem;width:130px" oninput="renderWithdrawalsTable()">
+            <input type="date"   id="wdFilterTo"                                      class="form-input" style="height:30px;font-size:0.78rem;width:130px" oninput="renderWithdrawalsTable()">
+            <button class="btn btn--ghost btn--sm" onclick="clearWithdrawalFilters()"><i class="fa-solid fa-xmark"></i> Clear</button>
+            <span id="wdFilterCount" style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)"></span>
+          </div>
+          <!-- Bulk action bar (shown when rows are selected) -->
+          <div id="wdBulkBar" style="display:none;padding:8px 16px;background:rgba(237,165,255,0.07);border-bottom:1px solid rgba(237,165,255,0.18);align-items:center;gap:10px;flex-wrap:wrap">
+            <i class="fa-solid fa-circle-check" style="color:#eda5ff"></i>
+            <span id="wdSelCount" style="font-weight:700;font-size:0.82rem;color:#eda5ff">0 selected</span>
+            <select id="wdBulkStatus" class="form-select" style="height:30px;font-size:0.78rem;width:190px">
+              <option value="">— Apply status —</option>
+              <option value="completed">Mark as Completed</option>
+              <option value="rejected">Mark as Rejected</option>
+              <option value="pending">Reset to Pending</option>
+            </select>
+            <button class="btn btn--primary btn--sm" onclick="_bulkApplyWithdrawalStatus()"><i class="fa-solid fa-bolt"></i> Apply to Selected</button>
+            <button class="btn btn--ghost btn--sm" onclick="_clearWithdrawalSelection()">Deselect All</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th style="width:3%;padding-left:14px"><input type="checkbox" id="wdSelectAll" onchange="_toggleSelectAllWithdrawals(this)" title="Select all"></th>
+                <th style="width:11%">Date</th><th style="width:22%">Investor</th><th style="width:11%">Amount</th><th style="width:16%">Bank</th><th style="width:16%">Reference</th><th style="width:21%">Actions</th>
+              </tr></thead>
+              <tbody id="withdrawalsPendingBody">
+                <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- Completed / Rejected Withdrawals -->
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Completed &amp; Rejected</div>
+              <div style="font-size:0.78rem;color:var(--text-muted)">Historical processed withdrawals</div>
+            </div>
+            <button class="btn btn--secondary btn--sm" onclick="exportWithdrawalsCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th style="width:3%"></th><th style="width:11%">Date</th><th style="width:24%">Investor</th><th style="width:11%">Amount</th><th style="width:17%">Bank</th><th style="width:17%">Reference</th><th style="width:17%">Status</th>
+              </tr></thead>
+              <tbody id="withdrawalsCompletedBody">
+                <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -581,10 +858,10 @@
       ══════════════════════════════════ -->
       <div class="view" id="view-support">
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
-          <div class="stat-card stat-card--red" style="--red:#ef4444"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-ticket"></i></div></div><div class="stat-card__value" id="tkt-open">—</div><div class="stat-card__label">Open Tickets</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-spinner"></i></div></div><div class="stat-card__value" id="tkt-inprogress">—</div><div class="stat-card__label">In Progress</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check"></i></div></div><div class="stat-card__value" id="tkt-resolved">—</div><div class="stat-card__label">Resolved</div></div>
-          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-exclamation-triangle"></i></div></div><div class="stat-card__value" id="tkt-urgent">—</div><div class="stat-card__label">High/Urgent</div></div>
+          <div class="stat-card stat-card--red" style="--red:#ef4444;cursor:pointer" onclick="document.getElementById('ticketStatusFilter').value='open';document.getElementById('ticketStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-ticket"></i></div></div><div class="stat-card__value" id="tkt-open">—</div><div class="stat-card__label">Open Tickets</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="document.getElementById('ticketStatusFilter').value='in_progress';document.getElementById('ticketStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-spinner"></i></div></div><div class="stat-card__value" id="tkt-inprogress">—</div><div class="stat-card__label">In Progress</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="document.getElementById('ticketStatusFilter').value='resolved';document.getElementById('ticketStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check"></i></div></div><div class="stat-card__value" id="tkt-resolved">—</div><div class="stat-card__label">Resolved</div></div>
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="document.getElementById('ticketPriorityFilter').value='high';document.getElementById('ticketPriorityFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-exclamation-triangle"></i></div></div><div class="stat-card__value" id="tkt-urgent">—</div><div class="stat-card__label">High/Urgent</div></div>
         </div>
 
         <div class="table-card">
@@ -610,7 +887,7 @@
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>Investor</th><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th><th>Assigned</th><th>Created</th><th>Actions</th>
+                <th style="width:20%">Investor</th><th style="width:22%">Subject</th><th style="width:12%">Category</th><th style="width:9%">Priority</th><th style="width:9%">Status</th><th style="width:12%">Assigned</th><th style="width:9%">Created</th><th style="width:7%">Actions</th>
               </tr></thead>
               <tbody id="ticketsBody">
                 <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
@@ -621,14 +898,218 @@
       </div>
 
       <!-- ══════════════════════════════════
+           VIEW: OPERATIONS CONSOLE
+      ══════════════════════════════════ -->
+      <div class="view" id="view-opsconsole">
+
+        <!-- Platform Health Strip -->
+        <div class="panel mb-16" id="opsHealthPanel">
+          <div class="panel__header" style="display:flex;align-items:center;justify-content:space-between">
+            <span class="panel__title"><i class="fa-solid fa-satellite-dish" style="color:var(--orange);margin-right:8px"></i>Platform Health</span>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span id="opsHealthChecked" style="font-size:0.72rem;color:var(--text-muted)">Checking…</span>
+              <button class="btn btn--secondary btn--sm" onclick="loadOpsConsole()"><i class="fa-solid fa-rotate"></i> Refresh All</button>
+            </div>
+          </div>
+          <div class="panel__body">
+            <div id="opsHealthGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
+              <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem;grid-column:1/-1">Checking services…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPI tiles row -->
+        <div class="stats-row mb-16" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))" id="opsKpiRow">
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">AUM</span></div><div class="stat-card__value" id="ops-aum">—</div><div class="stat-card__label">Active Under Management</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('investors',document.querySelector('[data-view=investors]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-wallet"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">WALLETS</span></div><div class="stat-card__value" id="ops-wallets">—</div><div class="stat-card__label">Total Wallet Pool</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('transactions',document.querySelector('[data-view=transactions]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-down-to-arc"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">DEPOSITS</span></div><div class="stat-card__value" id="ops-dep-val">—</div><div class="stat-card__label">Pending Deposits</div></div>
+          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('withdrawals',document.querySelector('[data-view=withdrawals]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-arrow-up-from-arc"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">WITHDRAWALS</span></div><div class="stat-card__value" id="ops-with-val">—</div><div class="stat-card__label">Pending Withdrawals</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('kyc',document.querySelector('[data-view=kyc]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-id-card"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">FICA</span></div><div class="stat-card__value" id="ops-fica">—</div><div class="stat-card__label">FICA Pending</div></div>
+          <div class="stat-card stat-card--red" style="--red:#ef4444;cursor:pointer" onclick="navigate('support',document.querySelector('[data-view=support]'))"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-headset"></i></div><span style="font-size:0.68rem;color:var(--text-muted);font-weight:600">SUPPORT</span></div><div class="stat-card__value" id="ops-tickets">—</div><div class="stat-card__label">Open Tickets</div></div>
+        </div>
+
+        <!-- Money in Motion + Investor Growth side-by-side -->
+        <div class="grid-2 mb-16">
+
+          <!-- Money in Motion -->
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-money-bill-transfer" style="color:var(--orange);margin-right:8px"></i>Money in Motion</span>
+              <button class="btn btn--secondary btn--sm" onclick="navigate('transactions', document.querySelector('[data-view=transactions]'))"><i class="fa-solid fa-arrow-right"></i> Transactions</button>
+            </div>
+            <div class="panel__body" id="opsMoneyPanel">
+              <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem">Loading…</div>
+            </div>
+          </div>
+
+          <!-- Investor Pulse -->
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-users" style="color:#656565;margin-right:8px"></i>Investor Pulse</span>
+              <button class="btn btn--secondary btn--sm" onclick="navigate('investors', document.querySelector('[data-view=investors]'))"><i class="fa-solid fa-arrow-right"></i> Investors</button>
+            </div>
+            <div class="panel__body" id="opsInvestorPulse">
+              <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem">Loading…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Funnel + AUM by Product side-by-side -->
+        <div class="grid-2 mb-16">
+
+          <!-- Investor Lifecycle Funnel -->
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-filter" style="color:var(--orange);margin-right:8px"></i>Investor Lifecycle Funnel</span></div>
+            <div class="panel__body" id="opsFunnelPanel">
+              <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem">Loading…</div>
+            </div>
+          </div>
+
+          <!-- AUM by Product -->
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-chart-pie" style="color:var(--orange);margin-right:8px"></i>AUM by Product</span></div>
+            <div class="panel__body">
+              <div class="chart-wrap chart-wrap--md"><canvas id="opsAumByTypeChart"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Pools + 7-day Velocity side-by-side -->
+        <div class="grid-2 mb-16">
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-trophy" style="color:#f59e0b;margin-right:8px"></i>Top Pools by Volume</span>
+              <button class="btn btn--secondary btn--sm" onclick="navigate('pools', document.querySelector('[data-view=pools]'))"><i class="fa-solid fa-arrow-right"></i> Pools</button>
+            </div>
+            <div class="panel__body" id="opsTopPools">
+              <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem">Loading…</div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-bolt" style="color:var(--orange);margin-right:8px"></i>7-Day Transaction Velocity</span></div>
+            <div class="panel__body">
+              <div class="chart-wrap chart-wrap--md"><canvas id="opsVelocityChart"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Communications Intelligence -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-paper-plane" style="color:var(--orange);margin-right:8px"></i>Communications Intelligence</span>
+            <button class="btn btn--secondary btn--sm" onclick="navigate('comms', document.querySelector('[data-view=comms]'))"><i class="fa-solid fa-arrow-right"></i> Broadcast</button>
+          </div>
+          <div class="panel__body" id="opsCommsPanel">
+            <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Live Audit Stream + Quick Actions side-by-side -->
+        <div class="grid-2 mb-16">
+
+          <!-- Live Audit Stream -->
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-scroll" style="color:var(--orange);margin-right:8px"></i>Live Audit Stream</span>
+              <button class="btn btn--secondary btn--sm" onclick="navigate('auditlog', document.querySelector('[data-view=auditlog]'))"><i class="fa-solid fa-arrow-right"></i> Full Log</button>
+            </div>
+            <div class="panel__body" id="opsAuditStream" style="max-height:400px;overflow-y:auto">
+              <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:0.82rem">Loading…</div>
+            </div>
+          </div>
+
+          <!-- Quick Actions + Platform Links -->
+          <div class="panel" style="display:flex;flex-direction:column;gap:0">
+            <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-rocket" style="color:var(--orange);margin-right:8px"></i>Quick Actions</span></div>
+            <div class="panel__body" style="flex:1;display:flex;flex-direction:column;gap:10px" id="opsQuickActions">
+              <button class="btn btn--primary" style="justify-content:flex-start;gap:10px" onclick="navigate('comms', document.querySelector('[data-view=comms]'))"><i class="fa-solid fa-paper-plane" style="width:16px"></i> Send Broadcast</button>
+              <button class="btn btn--secondary" style="justify-content:flex-start;gap:10px" onclick="navigate('kyc', document.querySelector('[data-view=kyc]'))"><i class="fa-solid fa-id-card" style="width:16px"></i> Review FICA Queue</button>
+              <button class="btn btn--secondary" style="justify-content:flex-start;gap:10px" onclick="navigate('withdrawals', document.querySelector('[data-view=withdrawals]'))"><i class="fa-solid fa-money-check-dollar" style="width:16px"></i> Process Withdrawals</button>
+              <button class="btn btn--secondary" style="justify-content:flex-start;gap:10px" onclick="navigate('aml', document.querySelector('[data-view=aml]'))"><i class="fa-solid fa-shield-halved" style="width:16px"></i> AML Review</button>
+              <button class="btn btn--secondary" style="justify-content:flex-start;gap:10px" onclick="navigate('support', document.querySelector('[data-view=support]'))"><i class="fa-solid fa-headset" style="width:16px"></i> Support Tickets</button>
+              <button class="btn btn--secondary" style="justify-content:flex-start;gap:10px" onclick="opsExportSummary()"><i class="fa-solid fa-file-csv" style="width:16px"></i> Export Ops Summary CSV</button>
+              <div style="border-top:1px solid rgba(0,0,0,0.07);margin:4px 0;padding-top:10px">
+                <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800;margin-bottom:8px">External Platforms</div>
+                <div style="display:flex;flex-direction:column;gap:6px" id="opsPlatformLinks">
+                  <a href="https://resend.com/emails" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="justify-content:flex-start;gap:8px;text-decoration:none"><i class="fa-solid fa-envelope" style="color:#656565;width:14px"></i> Resend Email Dashboard <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.65rem;margin-left:auto;color:var(--text-muted)"></i></a>
+                  <a href="https://account.africastalking.com/" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="justify-content:flex-start;gap:8px;text-decoration:none"><i class="fa-solid fa-message" style="color:#22c55e;width:14px"></i> Africa's Talking Dashboard <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.65rem;margin-left:auto;color:var(--text-muted)"></i></a>
+                  <a href="https://dashboard.paystack.com/" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="justify-content:flex-start;gap:8px;text-decoration:none"><i class="fa-solid fa-credit-card" style="color:#f59e0b;width:14px"></i> Paystack Dashboard <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.65rem;margin-left:auto;color:var(--text-muted)"></i></a>
+                  <a href="https://portal.smileidentity.com/" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="justify-content:flex-start;gap:8px;text-decoration:none"><i class="fa-solid fa-fingerprint" style="color:#eda5ff;width:14px"></i> Smile Identity Portal <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.65rem;margin-left:auto;color:var(--text-muted)"></i></a>
+                  <a href="https://stitch.money/" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="justify-content:flex-start;gap:8px;text-decoration:none"><i class="fa-solid fa-building-columns" style="color:#656565;width:14px"></i> Stitch Bank Data <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.65rem;margin-left:auto;color:var(--text-muted)"></i></a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: AML COMPLIANCE
+      ══════════════════════════════════ -->
+      <div class="view" id="view-aml">
+        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)" id="amlStats">
+          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-flag"></i></div></div><div class="stat-card__value" id="aml-total">—</div><div class="stat-card__label">Total Flags</div></div>
+          <div class="stat-card stat-card--red" style="--red:#ef4444;cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i></div></div><div class="stat-card__value" id="aml-open">—</div><div class="stat-card__label">Open</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-triangle-exclamation"></i></div></div><div class="stat-card__value" id="aml-high">—</div><div class="stat-card__label">High Priority</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-circle"></i></div></div><div class="stat-card__value" id="aml-resolved">—</div><div class="stat-card__label">Resolved This Month</div></div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">AML Compliance Review</div>
+              <div class="table-card__sub">Flagged transactions and investor activity requiring AML review</div>
+            </div>
+            <button class="btn btn--secondary btn--sm" onclick="loadAML()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th style="width:11%">Date</th><th style="width:20%">Investor</th><th style="width:10%">Amount</th><th style="width:23%">Reason</th><th style="width:10%">Priority</th><th style="width:11%">Status</th><th style="width:15%">Actions</th>
+              </tr></thead>
+              <tbody id="amlTableBody">
+                <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
            VIEW: ANALYTICS
       ══════════════════════════════════ -->
       <div class="view" id="view-analytics">
+
+        <!-- Real-data charts row 1 -->
+        <div class="grid-2 mb-16">
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title">AUM Over Time (Deposits)</span></div>
+            <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="anAumChart"></canvas></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title">New Investors Per Month</span></div>
+            <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="anNewInvChart"></canvas></div></div>
+          </div>
+        </div>
+
+        <!-- Real-data charts row 2 -->
+        <div class="grid-2 mb-16">
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title">Returns Distributed Per Month</span></div>
+            <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="anReturnsChart"></canvas></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel__header"><span class="panel__title">Investment Status Breakdown</span></div>
+            <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="anStatusChart"></canvas></div></div>
+          </div>
+        </div>
+
         <div class="stats-row">
-          <div class="stat-card stat-card--gold"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div><div class="stat-card__value">14.83%</div><div class="stat-card__label">Avg Cattle Return</div></div>
-          <div class="stat-card stat-card--green"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-bolt"></i></div></div><div class="stat-card__value">R500</div><div class="stat-card__label">Lowest Min. Investment</div></div>
-          <div class="stat-card stat-card--blue"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-plus"></i></div></div><div class="stat-card__value" id="an-monthlynew">—</div><div class="stat-card__label">New Investors (30d)</div></div>
-          <div class="stat-card stat-card--purple"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-handshake"></i></div></div><div class="stat-card__value" id="an-referrals">—</div><div class="stat-card__label">Referred Investors</div></div>
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div><div class="stat-card__value">14.83%</div><div class="stat-card__label">Avg Cattle Return</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('products',document.querySelector('[data-view=products]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-bolt"></i></div></div><div class="stat-card__value">R500</div><div class="stat-card__label">Lowest Min. Investment</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('investors',document.querySelector('[data-view=investors]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-plus"></i></div></div><div class="stat-card__value" id="an-monthlynew">—</div><div class="stat-card__label">New Investors (30d)</div></div>
+          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('investors',document.querySelector('[data-view=investors]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-handshake"></i></div></div><div class="stat-card__value" id="an-referrals">—</div><div class="stat-card__label">Referred Investors</div></div>
         </div>
 
         <div class="grid-2">
@@ -642,6 +1123,34 @@
           </div>
         </div>
 
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title">Investor Conversion Funnel</span>
+            <span style="font-size:0.75rem;color:var(--text-muted)">Signup → FICA → Deposit → Investment</span>
+          </div>
+          <div class="panel__body" id="funnelPanel">
+            <div class="text-center text-muted" style="padding:20px">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Signup Friction Analysis -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-route" style="color:var(--orange);margin-right:8px"></i>Signup Friction Analysis</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <select id="frictionDaysFilter" class="tbl-filter" style="font-size:0.78rem;padding:5px 8px">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+              </select>
+              <button class="btn btn--secondary btn--sm" onclick="loadSignupFriction()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+          </div>
+          <div class="panel__body" id="frictionPanel">
+            <div class="text-center text-muted" style="padding:20px">Loading…</div>
+          </div>
+        </div>
+
         <div class="grid-2 mt-16">
           <div class="panel">
             <div class="panel__header"><span class="panel__title">Risk Profile Breakdown</span></div>
@@ -650,6 +1159,190 @@
           <div class="panel">
             <div class="panel__header"><span class="panel__title">Transaction Flow (Last 6 Months)</span></div>
             <div class="panel__body"><div class="chart-wrap chart-wrap--md"><canvas id="txnFlowChart"></canvas></div></div>
+          </div>
+        </div>
+
+        <!-- Maturity Forecast -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-calendar-check" style="color:var(--orange);margin-right:8px"></i>Capital Maturity Forecast (Next 6 Months)</span>
+          </div>
+          <div class="panel__body">
+            <div class="chart-wrap chart-wrap--md"><canvas id="maturityForecastChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Investor Cohort Retention -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-people-arrows" style="color:var(--orange);margin-right:8px"></i>Investor Cohort — Monthly New Investors</span>
+          </div>
+          <div class="panel__body">
+            <div class="chart-wrap chart-wrap--md"><canvas id="cohortChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Mobile App Activity -->
+        <div class="panel mb-16">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-mobile-screen-button" style="color:var(--orange);margin-right:8px"></i>Mobile App Activity (iOS &amp; Android)</span>
+            <button class="btn btn--secondary btn--sm" onclick="renderMobileActivity()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          </div>
+          <div class="panel__body" id="mobileActivityPanel">
+            <div class="text-center text-muted" style="padding:20px">Loading…</div>
+          </div>
+        </div>
+
+        <!-- ══ INVESTOR PERSONAS ══ -->
+        <div class="panel mb-16" id="personasSection">
+          <div class="panel__header">
+            <span class="panel__title"><i class="fa-solid fa-users-viewfinder" style="color:var(--orange);margin-right:8px"></i>Investor Personas</span>
+            <button class="btn btn--secondary btn--sm" onclick="loadPersonas()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          </div>
+          <div class="panel__body" id="personasPanel">
+            <div class="text-center text-muted" style="padding:20px">Loading personas…</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: AUDIT LOG
+      ══════════════════════════════════ -->
+      <div class="view" id="view-auditlog">
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Audit Log</div>
+              <div class="table-card__sub">Immutable record of all significant actions</div>
+            </div>
+            <div class="table-card__controls">
+              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search action, actor…" id="auditSearchInput" /></div>
+              <input type="date" class="tbl-filter" id="auditDateFrom" title="From date" />
+              <input type="date" class="tbl-filter" id="auditDateTo" title="To date" />
+              <select class="tbl-filter" id="auditTypeFilter">
+                <option value="">All Events</option>
+                <option value="user.login">Logins</option>
+                <option value="kyc">KYC Actions</option>
+                <option value="transaction">Transactions</option>
+                <option value="investment">Investments</option>
+              </select>
+              <button class="btn btn--secondary btn--sm" onclick="loadAuditLog()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th style="width:14%">Timestamp</th><th style="width:18%">Actor</th><th style="width:15%">Action</th><th style="width:14%">Target</th><th style="width:25%">Description</th><th style="width:14%">IP</th>
+              </tr></thead>
+              <tbody id="auditBody">
+                <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-card__footer">
+            <span id="auditFooter">—</span>
+            <div class="pagination" id="auditPagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: TERMS OF USE
+      ══════════════════════════════════ -->
+      <div class="view" id="view-terms">
+        <div class="grid-layout grid-layout--sidebar">
+          <div>
+            <div class="panel">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-file-contract" style="color:var(--orange);margin-right:8px"></i>Terms of Use</span>
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn--secondary btn--sm" onclick="window.open('/terms.html','_blank')"><i class="fa-solid fa-eye"></i> Preview</button>
+                  <button class="btn btn--primary btn--sm" onclick="saveTermsContent()"><i class="fa-solid fa-save"></i> Save Changes</button>
+                </div>
+              </div>
+              <div class="panel__body">
+                <p style="font-size:0.82rem;color:#6b7280;margin-bottom:12px">Edit the Terms of Use HTML content below. Use standard HTML tags (&lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt;, etc.). Changes are reflected immediately on the public <a href="/terms.html" target="_blank" style="color:var(--orange)">Terms of Use</a> page.</p>
+                <textarea id="termsEditor" style="width:100%;min-height:600px;font-family:monospace;font-size:0.82rem;padding:14px;border:1.5px solid #e5e7eb;border-radius:8px;resize:vertical;background:#0f1117;color:#e2e8f0;line-height:1.6" placeholder="Loading terms content…"></textarea>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title">Formatting Guide</span></div>
+              <div class="panel__body" style="font-size:0.82rem;color:#6b7280;line-height:1.8">
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;h2&gt;</code> — Section heading<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;h3&gt;</code> — Sub-heading<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;p&gt;</code> — Paragraph<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;ul&gt;&lt;li&gt;</code> — Bullet list<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;ol&gt;&lt;li&gt;</code> — Numbered list<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;strong&gt;</code> — Bold text<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;a href=""&gt;</code> — Link
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel__header"><span class="panel__title">Last Updated</span></div>
+              <div class="panel__body">
+                <div id="termsLastUpdated" style="font-size:0.85rem;color:#6b7280">—</div>
+                <div style="margin-top:12px">
+                  <button class="btn btn--secondary btn--sm btn--full" onclick="resetTermsToDefault()"><i class="fa-solid fa-rotate-left"></i> Reset to Default</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: PRIVACY POLICY
+      ══════════════════════════════════ -->
+      <div class="view" id="view-privacy">
+        <div class="grid-layout grid-layout--sidebar">
+          <div>
+            <div class="panel">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-shield-halved" style="color:var(--orange);margin-right:8px"></i>Privacy Policy &amp; POPIA Notice</span>
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn--secondary btn--sm" onclick="window.open('/popia.html','_blank')"><i class="fa-solid fa-eye"></i> Preview</button>
+                  <button class="btn btn--primary btn--sm" onclick="savePrivacyContent()"><i class="fa-solid fa-save"></i> Save Changes</button>
+                </div>
+              </div>
+              <div class="panel__body">
+                <p style="font-size:0.82rem;color:#6b7280;margin-bottom:12px">Edit the Privacy Policy &amp; POPIA Notice HTML content below. Changes are reflected immediately on the public <a href="/popia.html" target="_blank" style="color:var(--orange)">Privacy Policy</a> page and the sign-up flow.</p>
+                <textarea id="privacyEditor" style="width:100%;min-height:600px;font-family:monospace;font-size:0.82rem;padding:14px;border:1.5px solid #e5e7eb;border-radius:8px;resize:vertical;background:#0f1117;color:#e2e8f0;line-height:1.6" placeholder="Loading privacy policy content…"></textarea>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title">Formatting Guide</span></div>
+              <div class="panel__body" style="font-size:0.82rem;color:#6b7280;line-height:1.8">
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;h2&gt;</code> — Section heading<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;p&gt;</code> — Paragraph<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;ul&gt;&lt;li&gt;</code> — Bullet list<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;strong&gt;</code> — Bold text<br>
+                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;a href=""&gt;</code> — Link
+              </div>
+            </div>
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title">Linked From</span></div>
+              <div class="panel__body" style="font-size:0.82rem;color:#6b7280;line-height:2">
+                ✓ Sign-up consent checkbox<br>
+                ✓ Sign-up POPIA consent checkbox<br>
+                ✓ Homepage footer<br>
+                ✓ Terms of Use footer<br>
+                ✓ PAIA Manual footer
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel__header"><span class="panel__title">Last Updated</span></div>
+              <div class="panel__body">
+                <div id="privacyLastUpdated" style="font-size:0.85rem;color:#6b7280">—</div>
+                <div style="margin-top:12px">
+                  <button class="btn btn--secondary btn--sm btn--full" onclick="resetPrivacyToDefault()"><i class="fa-solid fa-rotate-left"></i> Reset to Default</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -669,6 +1362,61 @@
             </div>
           </div>
           <div>
+            <!-- Security / 2FA Panel -->
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-shield-halved" style="color:#eda5ff;margin-right:6px"></i>Account Security</span></div>
+              <div class="panel__body" id="security2FAPanel">
+                <div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:14px">Two-factor authentication adds a second layer of protection to your admin account.</div>
+                <div id="tfa-status-row" style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+                  <span id="tfa-status-badge" style="font-size:0.75rem;font-weight:700;border-radius:6px;padding:3px 10px">—</span>
+                </div>
+                <!-- Step 0: action buttons -->
+                <div id="tfa-step-0">
+                  <button id="tfa-enable-btn" class="btn btn--primary btn--sm" onclick="tfaStartSetup()" style="display:none;width:100%;margin-bottom:8px"><i class="fa-solid fa-qrcode"></i> Set Up Authenticator</button>
+                  <button id="tfa-disable-btn" class="btn btn--danger btn--sm" onclick="tfaShowDisable()" style="display:none;width:100%"><i class="fa-solid fa-shield-xmark"></i> Disable 2FA</button>
+                </div>
+                <!-- Step 1: QR + verify -->
+                <div id="tfa-step-1" style="display:none">
+                  <div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:10px">Scan this QR code with Google Authenticator or Authy, then enter the 6-digit code to confirm.</div>
+                  <div style="text-align:center;margin-bottom:12px">
+                    <div id="tfa-qr-container" style="display:inline-block;background:#fff;padding:8px;border-radius:8px;border:3px solid var(--border)"></div>
+                  </div>
+                  <div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:6px;text-align:center">Or enter manually:</div>
+                  <div id="tfa-manual-key" style="font-family:monospace;font-size:0.72rem;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:6px;padding:6px 10px;text-align:center;word-break:break-all;margin-bottom:12px;color:#eda5ff"></div>
+                  <input type="text" id="tfa-code-input" inputmode="numeric" maxlength="7" placeholder="000 000" style="width:100%;text-align:center;font-size:1.3rem;font-weight:700;letter-spacing:0.2em;padding:10px;border:2px solid var(--border);border-radius:8px;background:var(--input-bg,rgba(255,255,255,.05));color:var(--text);outline:none;margin-bottom:10px" oninput="this.value=this.value.replace(/[^0-9 ]/g,'')" onkeydown="if(event.key==='Enter')tfaVerifyEnable()">
+                  <div style="display:flex;gap:8px">
+                    <button class="btn btn--secondary btn--sm" onclick="tfaCancelSetup()" style="flex:1">Cancel</button>
+                    <button class="btn btn--primary btn--sm" onclick="tfaVerifyEnable()" style="flex:2"><i class="fa-solid fa-check"></i> Verify &amp; Enable</button>
+                  </div>
+                </div>
+                <!-- Step 2: recovery codes -->
+                <div id="tfa-step-2" style="display:none">
+                  <div style="background:rgba(237,165,255,.08);border:1px solid rgba(237,165,255,.2);border-radius:8px;padding:12px;margin-bottom:12px">
+                    <div style="font-size:0.78rem;font-weight:700;color:#eda5ff;margin-bottom:8px"><i class="fa-solid fa-key"></i> Save your recovery codes</div>
+                    <div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:10px">If you lose your phone, use one of these codes to sign in. Each code can only be used once.</div>
+                    <div id="tfa-recovery-codes" style="font-family:monospace;font-size:0.75rem;display:grid;grid-template-columns:1fr 1fr;gap:4px"></div>
+                  </div>
+                  <button class="btn btn--primary btn--sm" onclick="tfaDoneSetup()" style="width:100%"><i class="fa-solid fa-check-circle"></i> I've saved my codes — Done</button>
+                </div>
+                <!-- Disable form -->
+                <div id="tfa-step-disable" style="display:none">
+                  <div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:10px">Enter your current authenticator code to confirm disabling 2FA.</div>
+                  <input type="text" id="tfa-disable-code" inputmode="numeric" maxlength="7" placeholder="000 000" style="width:100%;text-align:center;font-size:1.3rem;font-weight:700;letter-spacing:0.2em;padding:10px;border:2px solid var(--border);border-radius:8px;background:var(--input-bg,rgba(255,255,255,.05));color:var(--text);outline:none;margin-bottom:10px" oninput="this.value=this.value.replace(/[^0-9 ]/g,'')">
+                  <div style="display:flex;gap:8px">
+                    <button class="btn btn--secondary btn--sm" onclick="tfaCancelDisable()" style="flex:1">Cancel</button>
+                    <button class="btn btn--danger btn--sm" onclick="tfaConfirmDisable()" style="flex:2"><i class="fa-solid fa-shield-xmark"></i> Disable 2FA</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Session revocation -->
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-right-from-bracket" style="color:#ef4444;margin-right:6px"></i>Active Sessions</span></div>
+              <div class="panel__body">
+                <div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:14px">Sign out all devices immediately. Use this if you suspect unauthorised access.</div>
+                <button class="btn btn--danger btn--sm" style="width:100%" onclick="signOutAllDevices()"><i class="fa-solid fa-ban"></i> Sign Out All Devices</button>
+              </div>
+            </div>
             <div class="panel mb-20">
               <div class="panel__header"><span class="panel__title">Compliance Info</span></div>
               <div class="panel__body">
@@ -693,9 +1441,520 @@
         </div>
       </div>
 
+      <!-- ══════════════════════════════════
+           VIEW: EMAIL LOGS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-emaillogs">
+        <!-- Stats row -->
+        <div id="emailLogStats" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px"></div>
+        <!-- Filters -->
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+          <input id="emailLogSearch" type="text" placeholder="Search by email…"
+            style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:0.85rem;background:var(--input-bg,#fff);color:var(--text-body);width:220px"
+            oninput="loadEmailLogs()" />
+          <select id="emailLogType" onchange="loadEmailLogs()"
+            style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:0.85rem;background:var(--input-bg,#fff);color:var(--text-body)">
+            <option value="">All types</option>
+            <option value="welcome">Welcome</option>
+            <option value="account_setup">Account Setup</option>
+            <option value="password_reset">Password Reset</option>
+            <option value="deposit_confirmed">Deposit Confirmed</option>
+            <option value="investment_created">Investment Created</option>
+            <option value="maturity_alert">Maturity Alert</option>
+            <option value="withdrawal">Withdrawal</option>
+            <option value="bank_approved">Bank Approved</option>
+            <option value="monthly_statement">Monthly Statement</option>
+            <option value="director_report">Director Report</option>
+            <option value="kyc">KYC / FICA</option>
+            <option value="support">Support</option>
+            <option value="login_alert">Login Alert</option>
+            <option value="gift">Gift</option>
+            <option value="waitlist">Waitlist</option>
+            <option value="staff_leave">Staff Leave</option>
+            <option value="general">General</option>
+          </select>
+          <select id="emailLogStatus" onchange="loadEmailLogs()"
+            style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:0.85rem;background:var(--input-bg,#fff);color:var(--text-body)">
+            <option value="">All statuses</option>
+            <option value="sent">Sent</option>
+            <option value="failed">Failed</option>
+          </select>
+          <button class="btn btn--sm btn--ghost" onclick="loadEmailLogs()" style="margin-left:auto">
+            <i class="fa-solid fa-rotate-right"></i> Refresh
+          </button>
+        </div>
+        <!-- Table -->
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem" id="emailLogsTable">
+            <thead>
+              <tr style="border-bottom:2px solid var(--border);text-align:left">
+                <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Recipient</th>
+                <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Subject</th>
+                <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Type</th>
+                <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Status</th>
+                <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Sent At</th>
+              </tr>
+            </thead>
+            <tbody id="emailLogsList"><tr><td colspan="5" style="padding:40px;text-align:center;color:var(--text-muted)">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div id="emailLogsPager" style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:0.82rem;color:var(--text-muted)"></div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: FEEDBACK / TESTIMONIALS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-feedback">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+          <div>
+            <h2 style="font-size:1.1rem;font-weight:800;margin:0">Client Feedback</h2>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin:4px 0 0">Review and approve investor testimonials for the homepage.</p>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn--sm btn--ghost" onclick="loadFeedback('pending')" id="fbFilterPending">Pending</button>
+            <button class="btn btn--sm btn--ghost" onclick="loadFeedback('approved')" id="fbFilterApproved">Approved</button>
+            <button class="btn btn--sm btn--ghost" onclick="loadFeedback('rejected')" id="fbFilterRejected">Rejected</button>
+            <button class="btn btn--sm btn--ghost" onclick="loadFeedback('all')" id="fbFilterAll" style="font-weight:700">All</button>
+          </div>
+        </div>
+        <div id="feedbackList" style="display:flex;flex-direction:column;gap:14px">
+          <p style="color:var(--text-muted);text-align:center;padding:40px 0">Loading…</p>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: COMMUNICATIONS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-comms">
+        <div class="grid-layout grid-layout--sidebar">
+
+          <!-- LEFT: Compose -->
+          <div>
+            <div class="panel mb-20">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-paper-plane" style="color:var(--orange);margin-right:8px"></i>Compose Broadcast</span>
+              </div>
+              <div class="panel__body">
+
+                <!-- Channel -->
+                <div class="form-group" style="margin-bottom:16px">
+                  <label class="form-label">Channel</label>
+                  <div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
+                      <input type="radio" name="broadcastChannel" value="email" id="bcEmail" onchange="toggleBroadcastSubject()" style="accent-color:#FF9B0C;width:16px;height:16px"> Email
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
+                      <input type="radio" name="broadcastChannel" value="sms" id="bcSms" onchange="toggleBroadcastSubject()" style="accent-color:#FF9B0C;width:16px;height:16px"> SMS
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
+                      <input type="radio" name="broadcastChannel" value="push" id="bcPush" onchange="toggleBroadcastSubject()" style="accent-color:#FF9B0C;width:16px;height:16px"> <i class="fa-solid fa-bell" style="color:#FF9B0C;font-size:0.8rem"></i>&nbsp;Push
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
+                      <input type="radio" name="broadcastChannel" value="both" id="bcBoth" onchange="toggleBroadcastSubject()" style="accent-color:#FF9B0C;width:16px;height:16px"> Email + SMS
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
+                      <input type="radio" name="broadcastChannel" value="all" id="bcAll" checked onchange="toggleBroadcastSubject()" style="accent-color:#FF9B0C;width:16px;height:16px"> All Channels
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Segment -->
+                <div class="form-group" style="margin-bottom:16px">
+                  <label class="form-label">Recipient Segment</label>
+                  <select class="form-select" id="broadcastSegment" onchange="updateBroadcastPreview()">
+                    <option value="all">All Investors</option>
+                    <option value="active">Active Investors (with active investments)</option>
+                    <option value="pending_fica">Pending FICA / KYC</option>
+                  </select>
+                </div>
+
+                <!-- Preview count -->
+                <div id="broadcastPreviewBar" style="margin-bottom:16px;padding:10px 14px;background:rgba(255,155,12,0.07);border:1px solid rgba(255,155,12,0.2);border-radius:8px;font-size:0.82rem;color:var(--text-muted)">
+                  <i class="fa-solid fa-users" style="color:var(--orange);margin-right:6px"></i>
+                  Estimated recipients: <strong id="broadcastPreviewCount" style="color:var(--white)">—</strong>
+                </div>
+
+                <!-- Subject (email only) -->
+                <div class="form-group" id="broadcastSubjectGroup" style="margin-bottom:16px">
+                  <label class="form-label">Subject Line</label>
+                  <input type="text" class="form-input" id="broadcastSubject" placeholder="e.g. Important update from SV Capital" />
+                </div>
+
+                <!-- Message -->
+                <div class="form-group" style="margin-bottom:20px">
+                  <label class="form-label">Message</label>
+                  <textarea class="form-textarea" id="broadcastMessage" rows="7" placeholder="Write your broadcast message here..."></textarea>
+                </div>
+
+                <button class="btn btn--primary" id="broadcastSendBtn" onclick="sendBroadcast()" style="width:100%">
+                  <i class="fa-solid fa-paper-plane"></i> Send Broadcast
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: History + Push Analytics -->
+          <div>
+            <div class="panel mb-20">
+              <div class="panel__header">
+                <span class="panel__title">Sent History</span>
+                <span id="broadcastHistoryCount" style="font-size:0.75rem;color:var(--text-muted)">0 broadcasts</span>
+              </div>
+              <div class="panel__body" id="broadcastHistoryBody">
+                <div style="text-align:center;padding:32px;color:var(--text-dim)">
+                  <i class="fa-solid fa-inbox" style="font-size:2rem;opacity:0.3;display:block;margin-bottom:8px"></i>
+                  No broadcasts sent yet
+                </div>
+              </div>
+            </div>
+
+            <!-- Push Analytics -->
+            <div class="panel">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-bell" style="color:var(--orange);margin-right:8px"></i>Push Analytics</span>
+                <button class="btn btn--secondary btn--sm" onclick="loadPushAnalytics()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+              </div>
+              <div class="panel__body">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+                  <div style="background:rgba(255,155,12,0.07);border:1px solid rgba(255,155,12,0.2);border-radius:10px;padding:14px;text-align:center">
+                    <div style="font-size:1.6rem;font-weight:800;color:var(--orange)" id="pushStatSubscribers">—</div>
+                    <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Total Subscribers</div>
+                  </div>
+                  <div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:14px;text-align:center">
+                    <div style="font-size:1.6rem;font-weight:800;color:#22c55e" id="pushStatSent">—</div>
+                    <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Notifications Sent</div>
+                  </div>
+                </div>
+                <div style="font-size:0.78rem;font-weight:600;color:var(--text-muted);margin-bottom:8px">Recent Notifications</div>
+                <div id="pushRecentLog" style="font-size:0.78rem;color:var(--text-dim);text-align:center;padding:12px">
+                  Loading analytics…
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: COMPLIANCE CALENDAR
+      ══════════════════════════════════ -->
+      <div class="view" id="view-compliance">
+        <div class="grid-layout grid-layout--sidebar">
+          <div>
+            <div class="panel mb-20">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-calendar-check" style="color:var(--orange);margin-right:8px"></i>FSCA Compliance Calendar</span>
+                <span style="font-size:0.75rem;color:var(--text-muted)">FSP #52449</span>
+              </div>
+              <div class="panel__body" id="complianceCalBody">Loading...</div>
+            </div>
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title">KYC Expiry Alerts</span></div>
+              <div class="panel__body" id="kycExpiryBody">Loading...</div>
+            </div>
+          </div>
+          <div>
+            <!-- Add Compliance Item -->
+            <div class="panel mb-20">
+              <div class="panel__header">
+                <span class="panel__title"><i class="fa-solid fa-plus" style="color:var(--orange);margin-right:6px"></i>Add Calendar Item</span>
+              </div>
+              <div class="panel__body">
+                <div class="form-group mb-10">
+                  <label class="form-label">Title *</label>
+                  <input type="text" class="form-input" id="compCalTitle" placeholder="e.g. Board Meeting — Q2 Review">
+                </div>
+                <div class="form-group mb-10">
+                  <label class="form-label">Description</label>
+                  <input type="text" class="form-input" id="compCalDesc" placeholder="Optional details">
+                </div>
+                <div class="form-row form-row--2 mb-10">
+                  <div class="form-group">
+                    <label class="form-label">Due Date *</label>
+                    <input type="date" class="form-input" id="compCalDate">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Priority</label>
+                    <select class="form-select" id="compCalPriority">
+                      <option value="high">High</option>
+                      <option value="medium" selected>Medium</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+                </div>
+                <button class="btn btn--primary btn--full" onclick="addComplianceItem()"><i class="fa-solid fa-plus"></i> Add Item</button>
+              </div>
+            </div>
+            <div class="panel mb-20">
+              <div class="panel__header"><span class="panel__title">Maturity Action Required</span></div>
+              <div class="panel__body" id="maturityActionBody">Loading...</div>
+            </div>
+            <div class="panel">
+              <div class="panel__header"><span class="panel__title">Document Retention Status</span></div>
+              <div class="panel__body" id="docRetentionBody">Loading...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: DATA MIGRATION
+      ══════════════════════════════════ -->
+      <div class="view" id="view-migrate">
+        <div style="max-width:680px;margin:0 auto">
+          <div class="panel mb-20">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-database" style="color:var(--orange);margin-right:8px"></i>Firebase Data Migration</span>
+            </div>
+            <div class="panel__body">
+              <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:24px;line-height:1.6">
+                Upload any combination of the JSON export files from the previous platform. All files are optional — only the data you provide will be imported. Safe to run multiple times — existing records are updated, not duplicated. <code>userAccountNumber</code> is always the unique identifier.
+              </p>
+
+              <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px" id="migFileList">
+                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-users" style="color:var(--orange);width:16px"></i> users.json</label><input class="mig-input" type="file" accept=".json" id="mig-users"></div>
+                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-layer-group" style="color:var(--orange);width:16px"></i> investmentPools.json</label><input class="mig-input" type="file" accept=".json" id="mig-pools"></div>
+                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-chart-line" style="color:var(--orange);width:16px"></i> investments.json</label><input class="mig-input" type="file" accept=".json" id="mig-investments"></div>
+                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-arrows-rotate" style="color:var(--orange);width:16px"></i> transactions.json</label><input class="mig-input" type="file" accept=".json" id="mig-transactions"></div>
+                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-building-columns" style="color:var(--orange);width:16px"></i> bankAccounts.json</label><input class="mig-input" type="file" accept=".json" id="mig-bankAccounts"></div>
+                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-location-dot" style="color:var(--orange);width:16px"></i> addressDetails.json</label><input class="mig-input" type="file" accept=".json" id="mig-addressDetails"></div>
+              </div>
+
+              <button class="btn btn--primary btn--full" id="migRunBtn" onclick="runMigration()">
+                <i class="fa-solid fa-play"></i> Run Migration
+              </button>
+
+              <!-- Results -->
+              <div id="migResults" style="display:none;margin-top:24px">
+                <div style="border-top:1px solid var(--border);padding-top:20px">
+                  <div id="migResultsContent"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ────────────────────────── RECONCILIATION ───────────────────────── -->
+      <div class="view" id="view-reconciliation">
+        <!-- KPI tiles -->
+        <div class="stats-grid stats-grid--4" id="reconcStats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px"></div>
+
+        <!-- Filter bar -->
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;flex:1;min-width:200px">
+            <i class="fa-solid fa-magnifying-glass" style="color:#7a92a8;font-size:12px"></i>
+            <input type="text" id="reconcSearch" placeholder="Search investor…" style="background:none;border:none;outline:none;color:#e8edf2;font-size:13px;width:100%" oninput="renderReconcTable()">
+          </div>
+          <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:#7a92a8;cursor:pointer">
+            <input type="checkbox" id="reconcDiscrepOnly" onchange="renderReconcTable()" style="accent-color:#f97316">
+            Discrepancies only
+          </label>
+          <button class="btn btn--secondary btn--sm" onclick="exportReconciliationCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+          <button class="btn btn--secondary btn--sm" onclick="loadReconciliation()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+        </div>
+
+        <!-- Table -->
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Financial Reconciliation</div>
+              <div class="table-card__sub" id="reconcSubtitle">Deposits vs investments vs wallet balances</div>
+            </div>
+          </div>
+          <div class="table-card__body" style="overflow-x:auto">
+            <table class="data-table" style="table-layout:fixed;width:100%">
+              <thead>
+                <tr>
+                  <th style="width:20%">Investor</th>
+                  <th style="width:12%">Total Deposited</th>
+                  <th style="width:12%">Total Invested</th>
+                  <th style="width:12%">Wallet Balance</th>
+                  <th style="width:12%">Expected Wallet</th>
+                  <th style="width:10%">Variance</th>
+                  <th style="width:12%">Status</th>
+                  <th style="width:10%">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="reconcBody">
+                <tr><td colspan="8" style="text-align:center;padding:40px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-card__footer" id="reconcFooter" style="padding:10px 18px;font-size:12px;color:#7a92a8"></div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: FICA PIPELINE
+      ══════════════════════════════════ -->
+      <div class="view" id="view-fica-pipeline">
+        <!-- Stage tiles -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px" id="ficaPipelineTiles"></div>
+
+        <!-- Filter bar -->
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;flex:1;min-width:200px">
+            <i class="fa-solid fa-magnifying-glass" style="color:#7a92a8;font-size:12px"></i>
+            <input type="text" id="ficaPipelineSearch" placeholder="Search investor name or email…" style="background:none;border:none;outline:none;color:#e8edf2;font-size:13px;width:100%" oninput="_renderFicaPipeline()">
+          </div>
+          <button class="btn btn--secondary btn--sm" onclick="loadFicaPipeline()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+        </div>
+
+        <!-- Table -->
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">FICA / KYC Pipeline</div>
+              <div class="table-card__sub" id="ficaPipelineSubtitle">Investors by FICA stage</div>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th style="width:28%">Investor</th>
+                <th style="width:15%">Registered</th>
+                <th style="width:18%">FICA Stage</th>
+                <th style="width:15%">Documents</th>
+                <th style="width:14%">Actions</th>
+              </tr></thead>
+              <tbody id="ficaPipelineBody">
+                <tr><td colspan="5" style="text-align:center;padding:40px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: ACCEPTED CLIENT DOCUMENTS
+      ══════════════════════════════════ -->
+      <div class="view" id="view-accepted-docs">
+
+        <!-- Filter bar -->
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px">
+          <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;flex:1;min-width:200px">
+            <i class="fa-solid fa-magnifying-glass" style="color:#7a92a8;font-size:12px"></i>
+            <input type="text" id="acdSearch" placeholder="Search investor name or document type…" style="background:none;border:none;outline:none;color:#e8edf2;font-size:13px;width:100%" oninput="renderAcceptedDocsTable()">
+          </div>
+          <select id="acdTypeFilter" onchange="renderAcceptedDocsTable()" style="background:var(--dark-3);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;color:#e8edf2;font-size:13px;outline:none">
+            <option value="">All document types</option>
+            <option value="terms_of_service">Terms of Service</option>
+            <option value="privacy_policy">Privacy Policy</option>
+            <option value="popia_notice">POPIA Notice</option>
+            <option value="fica_consent">FICA Consent</option>
+            <option value="risk_disclaimer">Risk Disclaimer</option>
+          </select>
+          <button class="btn btn--secondary btn--sm" onclick="exportAcceptedDocsCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+          <button class="btn btn--secondary btn--sm" onclick="loadAcceptedDocuments()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+        </div>
+
+        <!-- Stats strip -->
+        <div class="stats-grid stats-grid--4" style="margin-bottom:18px" id="acdStats"></div>
+
+        <!-- Table -->
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Accepted Client Documents</div>
+              <div class="table-card__sub" id="acdSubtitle">Policy acceptance audit trail — timestamped at signup</div>
+            </div>
+          </div>
+          <div class="table-card__body" style="overflow-x:auto">
+            <table class="data-table" style="table-layout:fixed;width:100%">
+              <thead>
+                <tr>
+                  <th style="width:22%">Investor</th>
+                  <th style="width:20%">Document</th>
+                  <th style="width:10%">Version</th>
+                  <th style="width:20%">Accepted At</th>
+                  <th style="width:18%">IP Address</th>
+                  <th style="width:10%">Browser</th>
+                </tr>
+              </thead>
+              <tbody id="acdBody">
+                <tr><td colspan="6" style="text-align:center;padding:40px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-card__footer" id="acdFooter" style="padding:10px 18px;font-size:12px;color:#7a92a8"></div>
+        </div>
+      </div>
+
+      <!-- ───────────────────── VIEW: INTERNATIONAL INTEREST ────────────────────── -->
+      <div class="view" id="view-intlinterest">
+        <div class="flex-between mb-16" style="flex-wrap:wrap;gap:10px">
+          <div>
+            <h2 style="color:#e8edf2;font-size:1.05rem;font-weight:700;margin:0">International Interest</h2>
+            <p style="color:#7a92a8;font-size:0.8rem;margin:4px 0 0">Prospects from outside South Africa who have expressed interest in investing.</p>
+          </div>
+          <button class="btn btn--secondary btn--sm" onclick="exportIntlInterestCSV()">
+            <i class="fa-solid fa-file-csv"></i> Export CSV
+          </button>
+        </div>
+
+        <div class="stats-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px" id="intlInterestStats">
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('international',document.querySelector('[data-view=international]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-earth-africa"></i></div></div><div class="stat-card__value" id="ii-total">—</div><div class="stat-card__label">Total Registrations</div></div>
+          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('international',document.querySelector('[data-view=international]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-globe"></i></div></div><div class="stat-card__value" id="ii-countries">—</div><div class="stat-card__label">Countries</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('international',document.querySelector('[data-view=international]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-calendar-plus"></i></div></div><div class="stat-card__value" id="ii-this-month">—</div><div class="stat-card__label">This Month</div></div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-card__header" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <div class="search-bar" style="flex:1;max-width:320px">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" placeholder="Search name, email or country…" oninput="filterIntlInterest(this.value)" />
+            </div>
+            <select class="form-select" style="max-width:180px;background:#1a2540;border-color:rgba(255,255,255,.1);color:#e8edf2" onchange="filterIntlInterestCountry(this.value)" id="intlCountryFilter">
+              <option value="">All countries</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="intlInterestTable">
+              <thead><tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Country</th>
+                <th>Date</th>
+              </tr></thead>
+              <tbody id="intlInterestBody">
+                <tr><td colspan="4" style="text-align:center;color:#7a92a8;padding:32px">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-card__footer" id="intlInterestFooter" style="padding:10px 18px;font-size:12px;color:#7a92a8"></div>
+        </div>
+      </div>
+
     </main>
   </div>
 </div>
+
+<!-- Migration view styles -->
+<style>
+.mig-row { display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg-secondary); border-radius:8px; }
+.mig-label { flex:0 0 220px; font-size:0.82rem; color:var(--text); display:flex; align-items:center; gap:8px; }
+.mig-input { flex:1; font-size:0.82rem; color:var(--text-muted); }
+
+/* ── Global table fix: columns respect assigned widths, content clips ── */
+.data-table { table-layout: fixed !important; width: 100% !important; }
+.data-table td { overflow: hidden; }
+.data-table th { overflow: hidden; }
+
+/* Utility: single-line clipped text (for td or inner div) */
+.clip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+  max-width: 100%;
+}
+.data-table td.clip { display: table-cell; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Tighten up th/td padding globally */
+.data-table th { padding: 8px 10px; }
+.data-table td { padding: 10px 10px; }
+</style>
 
 <!-- Mobile sidebar toggle -->
 <button class="mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">
@@ -709,9 +1968,13 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Add New Investor</span>
-      <button class="modal__close" onclick="Modal.close('addInvestorModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('addInvestorModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Account Number (auto-assigned)</label>
+        <div style="font-family:monospace;font-size:1.05rem;font-weight:800;color:var(--gold);padding:8px 12px;background:var(--bg-secondary);border-radius:8px;letter-spacing:.04em" id="newInvAccountNo">Generating…</div>
+      </div>
       <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">First Name *</label><input type="text" class="form-input" id="newInvFirstName" placeholder="Nomsa" /></div>
         <div class="form-group"><label class="form-label">Last Name *</label><input type="text" class="form-input" id="newInvLastName" placeholder="Dlamini" /></div>
@@ -744,7 +2007,7 @@
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('addInvestorModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveNewInvestor()"><i class="fa-solid fa-plus"></i> Create Investor</button>
+      <button class="btn btn--primary" onclick="saveNewInvestor(this)"><i class="fa-solid fa-plus"></i> Create Investor</button>
     </div>
   </div>
 </div>
@@ -754,9 +2017,20 @@
   <div class="modal modal--lg">
     <div class="modal__header">
       <span class="modal__title" id="invDetailTitle">Investor Profile</span>
-      <button class="modal__close" onclick="Modal.close('investorDetailModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('investorDetailModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="invDetailBody">Loading...</div>
+  </div>
+</div>
+
+<!-- Pool Investors Modal -->
+<div class="modal-overlay" id="poolInvestorsModal" onclick="if(event.target===this)Modal.close('poolInvestorsModal')">
+  <div class="modal modal--lg" style="max-width:900px">
+    <div class="modal__header">
+      <span class="modal__title" id="poolInvestorsTitle">Pool Investors</span>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('poolInvestorsModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="poolInvestorsBody">Loading...</div>
   </div>
 </div>
 
@@ -765,39 +2039,142 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Create Investment Pool</span>
-      <button class="modal__close" onclick="Modal.close('addPoolModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('addPoolModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <div class="form-row form-row--2">
-        <div class="form-group"><label class="form-label">Pool Name *</label><input type="text" class="form-input" id="newPoolName" placeholder="Cattle Pool #16" /></div>
+        <div class="form-group"><label class="form-label">Pool Name *</label><input type="text" class="form-input" id="newPoolName" placeholder="e.g. Cattle Investment - June 2025 - Beefcor" oninput="_syncPoolNameManual()" /></div>
         <div class="form-group"><label class="form-label">Product Type *</label>
-          <select class="form-select" id="newPoolType">
-            <option value="cattle">Cattle</option>
-            <option value="solar_7yr">Solar 7yr</option>
-            <option value="solar_6yr">Solar 6yr</option>
-            <option value="solar_5yr">Solar 5yr</option>
-            <option value="short_term">Short-Term</option>
-            <option value="delivery_bike">Delivery Bike</option>
+          <select class="form-select" id="newPoolType" onchange="_autoPoolName()">
+            <option value="cattle">Cattle Investment</option>
+            <option value="solar_7yr">Solar Investment (7yr)</option>
+            <option value="solar_6yr">Solar Investment (6yr)</option>
+            <option value="solar_5yr">Solar Investment (5yr)</option>
+            <option value="short_term">Short Term Investment</option>
+            <option value="delivery_bike">Delivery Bikes</option>
           </select>
         </div>
       </div>
-      <div class="form-row form-row--3">
-        <div class="form-group"><label class="form-label">Target Amount (R) *</label><input type="number" class="form-input" id="newPoolTarget" placeholder="500000" /></div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Target Type *</label>
+          <select class="form-select" id="newPoolTargetType" onchange="_syncPoolTargetType('new')">
+            <option value="amount">Amount goal (raise to a target R amount)</option>
+            <option value="date">Closing date (open until the close date)</option>
+          </select>
+        </div>
+        <div class="form-group" id="newPoolTargetWrap"><label class="form-label">Target Amount (R) *</label><input type="number" class="form-input" id="newPoolTarget" placeholder="500000" /></div>
+      </div>
+      <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Min. Investment (R)</label><input type="number" class="form-input" id="newPoolMin" placeholder="500" /></div>
-        <div class="form-group"><label class="form-label">Term (months)</label><input type="number" class="form-input" id="newPoolTerm" placeholder="12" /></div>
+        <div class="form-group"><label class="form-label">Term (months)</label><input type="number" class="form-input" id="newPoolTerm" placeholder="12" onchange="_autoCalcMaturityDate('newPoolOpenDate','newPoolTerm','newPoolMaturityDate')" /></div>
       </div>
       <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Benchmark Rate (e.g. 0.1483)</label><input type="number" class="form-input" id="newPoolRate" placeholder="0.1483" step="0.0001" /></div>
-        <div class="form-group"><label class="form-label">Partner Name</label><input type="text" class="form-input" id="newPoolPartner" placeholder="Beefcor" /></div>
+        <div class="form-group"><label class="form-label">Partner Name</label><input type="text" class="form-input" id="newPoolPartner" placeholder="Beefcor" oninput="_autoPoolName()" /></div>
+      </div>
+      <div class="form-row form-row--3">
+        <div class="form-group"><label class="form-label">Open Date</label><input type="date" class="form-input" id="newPoolOpenDate" onchange="_autoPoolName();_autoCalcMaturityDate('newPoolOpenDate','newPoolTerm','newPoolMaturityDate')" /></div>
+        <div class="form-group"><label class="form-label">Close Date</label><input type="date" class="form-input" id="newPoolCloseDate" onchange="_autoPoolName();_autoCalcInvStartDate('newPoolCloseDate','newPoolInvStartDate')" /></div>
+        <div class="form-group"><label class="form-label">Investment Start Date <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400">(auto)</span></label><input type="date" class="form-input" id="newPoolInvStartDate" /></div>
+        <div class="form-group"><label class="form-label">Maturity Date</label><input type="date" class="form-input" id="newPoolMaturityDate" /></div>
+      </div>
+      <div class="form-group"><label class="form-label">Max Capacity (ZAR)</label><input type="number" class="form-input" id="newPoolMaxCapacity" placeholder="Leave blank for unlimited" min="0" step="10000" /></div>
+      <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--border)">Fee Management</div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Upfront Management Fee (%)</label><input type="number" class="form-input" id="newPoolMgtFeePct" placeholder="e.g. 5" step="0.01" min="0" /></div>
+        <div class="form-group"><label class="form-label">Management Fee Frequency</label>
+          <select class="form-select" id="newPoolMgtFeeFreq">
+            <option value="once">Once (upfront)</option>
+            <option value="annual">Annual</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
       </div>
       <div class="form-row form-row--2">
-        <div class="form-group"><label class="form-label">Open Date</label><input type="date" class="form-input" id="newPoolOpenDate" /></div>
-        <div class="form-group"><label class="form-label">Close Date</label><input type="date" class="form-input" id="newPoolCloseDate" /></div>
+        <div class="form-group"><label class="form-label">Operational Fee (%)</label><input type="number" class="form-input" id="newPoolOpFeePct" placeholder="e.g. 1.5" step="0.01" min="0" /></div>
+        <div class="form-group"><label class="form-label">Operational Fee Frequency</label>
+          <select class="form-select" id="newPoolOpFeeFreq">
+            <option value="annual">Annual</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="monthly">Monthly</option>
+            <option value="once">Once</option>
+          </select>
+        </div>
       </div>
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('addPoolModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveNewPool()"><i class="fa-solid fa-plus"></i> Create Pool</button>
+      <button class="btn btn--primary" onclick="saveNewPool(this)"><i class="fa-solid fa-plus"></i> Create Pool</button>
+    </div>
+  </div>
+</div>
+
+<!-- Product Create / Edit Modal -->
+<div class="modal-overlay" id="productModal" onclick="if(event.target===this)Modal.close('productModal')">
+  <div class="modal modal--lg">
+    <div class="modal__header">
+      <span class="modal__title" id="productModalTitle">New Product</span>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('productModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="productId" />
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Product Key * <span style="color:var(--text-muted);font-weight:400">(used on pools, e.g. cattle)</span></label><input type="text" class="form-input" id="prodType" placeholder="cattle" /></div>
+        <div class="form-group"><label class="form-label">Product Name *</label><input type="text" class="form-input" id="prodLabel" placeholder="Cattle Investment" /></div>
+      </div>
+      <div class="form-group"><label class="form-label">Headline</label><input type="text" class="form-input" id="prodHeadline" placeholder="Grow with the herd." /></div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-input" id="prodDescription" rows="3" placeholder="Partner with Beefcor…"></textarea></div>
+      <div class="form-group"><label class="form-label">Key Details <span style="color:var(--text-muted);font-weight:400">(one per line)</span></label><textarea class="form-input" id="prodKeyDetails" rows="5" placeholder="Cattle enter feedlot at 200–230kg…&#10;Returns are determined by weight gain…"></textarea></div>
+      <div class="form-row form-row--3">
+        <div class="form-group"><label class="form-label">Minimum (R)</label><input type="number" class="form-input" id="prodMin" placeholder="500" /></div>
+        <div class="form-group"><label class="form-label">Term (months)</label><input type="number" class="form-input" id="prodTerm" placeholder="12" /></div>
+        <div class="form-group"><label class="form-label">Sort Order</label><input type="number" class="form-input" id="prodSort" placeholder="1" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Benchmark Rate (e.g. 0.13)</label><input type="number" class="form-input" id="prodBenchmark" step="0.0001" placeholder="0.13" /></div>
+        <div class="form-group"><label class="form-label">Performance Fee (e.g. 0.20 = 20%)</label><input type="number" class="form-input" id="prodPerfFee" step="0.0001" placeholder="0.20" /></div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Partner Name</label><input type="text" class="form-input" id="prodPartner" placeholder="Beefcor" /></div>
+        <div class="form-group"><label class="form-label">Risk Profile</label>
+          <select class="form-select" id="prodRisk">
+            <option value="Low">Low</option>
+            <option value="Medium" selected>Medium</option>
+            <option value="Medium-High">Medium-High</option>
+            <option value="High">High</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Icon (Font Awesome)</label><input type="text" class="form-input" id="prodIcon" placeholder="fa-cow" /></div>
+        <div class="form-group"><label class="form-label">Risk Colour</label><input type="text" class="form-input" id="prodRiskColor" placeholder="#ff9b0c" /></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Product Colour <span style="color:var(--text-muted);font-weight:400">— used on tabs, graphs &amp; statement badges</span></label>
+        <div id="prodColorSwatches" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="color" id="prodColorPicker" value="#656565" title="Pick a custom colour" style="width:46px;height:38px;padding:2px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:none" oninput="_onProdColorPick(this.value)" />
+          <input type="text" class="form-input" id="prodColor" placeholder="#D4AF37" oninput="_onProdColorText(this.value)" style="flex:1" />
+        </div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Active</label>
+          <select class="form-select" id="prodActive"><option value="true">Yes — shown on pools</option><option value="false">No — hidden</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Show on Home Page</label>
+          <select class="form-select" id="prodHomepage"><option value="true">Yes</option><option value="false">No</option></select>
+        </div>
+      </div>
+      <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--border)">Average Return (auto-calculated)</div>
+      <div id="prodAvgReturnInfo" style="font-size:0.82rem;color:var(--text-muted)">—</div>
+      <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--border)">Factsheet</div>
+      <div id="prodFactsheetCurrent" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px"></div>
+      <div class="form-group"><label class="form-label">Upload Factsheet (PDF)</label><input type="file" class="form-input" id="prodFactsheetFile" accept="application/pdf,image/*" /></div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('productModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveProduct(this)"><i class="fa-solid fa-save"></i> Save Product</button>
     </div>
   </div>
 </div>
@@ -807,10 +2184,10 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Record Transaction</span>
-      <button class="modal__close" onclick="Modal.close('addTxnModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('addTxnModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
-      <div class="form-group"><label class="form-label">Investor Name</label><input type="text" class="form-input" id="txnInvestorName" placeholder="Investor name" /></div>
+      <div class="form-group"><label class="form-label">Investor</label><select class="form-select" id="txnInvestorSelect"><option value="">Select investor…</option></select></div>
       <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Type</label>
           <select class="form-select" id="txnType">
@@ -840,7 +2217,7 @@
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('addTxnModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveNewTxn()"><i class="fa-solid fa-save"></i> Record</button>
+      <button class="btn btn--primary" onclick="saveNewTxn(this)"><i class="fa-solid fa-save"></i> Record</button>
     </div>
   </div>
 </div>
@@ -850,7 +2227,7 @@
   <div class="modal modal--lg">
     <div class="modal__header">
       <span class="modal__title" id="ticketModalTitle">Support Ticket</span>
-      <button class="modal__close" onclick="Modal.close('ticketModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('ticketModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="ticketModalBody">Loading...</div>
     <div class="modal__footer">
@@ -865,7 +2242,7 @@
   <div class="modal modal--lg">
     <div class="modal__header">
       <span class="modal__title"><i class="fa-solid fa-upload" style="color:var(--orange);margin-right:8px"></i>Upload KYC / FICA Document</span>
-      <button class="modal__close" onclick="Modal.close('kycUploadModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('kycUploadModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <form id="kycUploadForm" onsubmit="event.preventDefault()">
@@ -927,7 +2304,7 @@
   <div class="modal modal--lg">
     <div class="modal__header">
       <span class="modal__title" id="ficaDocTitle">FICA Document</span>
-      <button class="modal__close" onclick="Modal.close('ficaDocModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('ficaDocModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="ficaDocContainer" style="min-height:300px">Loading...</div>
     <div class="modal__footer">
@@ -938,11 +2315,45 @@
 </div>
 
 <!-- Edit Pool Modal -->
+<!-- ── Factsheet Manager Modal ── -->
+<div class="modal-overlay" id="adminFactsheetModal" onclick="if(event.target===this)Modal.close('adminFactsheetModal')">
+  <div class="modal modal--md">
+    <div class="modal__header">
+      <span class="modal__title" id="adminFsTitle">Product Factsheets</span>
+      <button class="modal__close" onclick="Modal.close('adminFactsheetModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:14px">Upload a PDF factsheet. The uploaded file becomes the current factsheet; previous versions are kept as history.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label class="form-label">Factsheet Name</label>
+          <input class="form-input" id="adminFsFileName" placeholder="e.g. Cattle Fund June 2025" />
+        </div>
+        <div>
+          <label class="form-label">Version (optional)</label>
+          <input class="form-input" id="adminFsVersion" placeholder="e.g. 1.2" />
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label class="form-label">PDF File</label>
+        <input class="form-input" type="file" id="adminFsFileInput" accept=".pdf,application/pdf" />
+      </div>
+      <button class="btn btn--primary btn--full" id="adminFsUploadBtn" onclick="uploadFactsheet()">
+        <i class="fa-solid fa-upload"></i> Upload Factsheet
+      </button>
+      <div style="margin-top:20px">
+        <div style="font-size:0.75rem;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">History</div>
+        <div id="adminFsList" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="editPoolModal" onclick="if(event.target===this)Modal.close('editPoolModal')">
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Edit Investment Pool</span>
-      <button class="modal__close" onclick="Modal.close('editPoolModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('editPoolModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <input type="hidden" id="editPoolId" />
@@ -955,25 +2366,32 @@
             <option value="active">Active</option>
             <option value="closed">Closed</option>
             <option value="matured">Matured</option>
-            <option value="paid_out">Paid Out</option>
           </select>
         </div>
       </div>
       <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Product Type</label>
           <select class="form-select" id="editPoolType">
-            <option value="cattle">Cattle</option>
-            <option value="solar_7yr">Solar 7yr</option>
-            <option value="solar_6yr">Solar 6yr</option>
-            <option value="solar_5yr">Solar 5yr</option>
-            <option value="short_term">Short-Term</option>
-            <option value="delivery_bike">Delivery Bike</option>
+            <option value="cattle">Cattle Investment</option>
+            <option value="solar_7yr">Solar Investment (7yr)</option>
+            <option value="solar_6yr">Solar Investment (6yr)</option>
+            <option value="solar_5yr">Solar Investment (5yr)</option>
+            <option value="short_term">Short Term Investment</option>
+            <option value="delivery_bike">Delivery Bikes</option>
           </select>
         </div>
-        <div class="form-group"><label class="form-label">Term (months)</label><input type="number" class="form-input" id="editPoolTerm" /></div>
+        <div class="form-group"><label class="form-label">Term (months)</label><input type="number" class="form-input" id="editPoolTerm" onchange="_autoCalcMaturityDate('editPoolOpenDate','editPoolTerm','editPoolMaturityDate')" /></div>
       </div>
-      <div class="form-row form-row--3">
-        <div class="form-group"><label class="form-label">Target Amount (R)</label><input type="number" class="form-input" id="editPoolTarget" /></div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Target Type</label>
+          <select class="form-select" id="editPoolTargetType" onchange="_syncPoolTargetType('edit')">
+            <option value="amount">Amount goal (raise to a target R amount)</option>
+            <option value="date">Closing date (open until the close date)</option>
+          </select>
+        </div>
+        <div class="form-group" id="editPoolTargetWrap"><label class="form-label">Target Amount (R)</label><input type="number" class="form-input" id="editPoolTarget" /></div>
+      </div>
+      <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Raised Amount (R)</label><input type="number" class="form-input" id="editPoolRaised" /></div>
         <div class="form-group"><label class="form-label">Min. Investment (R)</label><input type="number" class="form-input" id="editPoolMin" /></div>
       </div>
@@ -985,14 +2403,40 @@
         <div class="form-group"><label class="form-label">Partner Name</label><input type="text" class="form-input" id="editPoolPartner" /></div>
         <div class="form-group"><label class="form-label">Investor Count</label><input type="number" class="form-input" id="editPoolInvCount" /></div>
       </div>
+      <div class="form-row form-row--3">
+        <div class="form-group"><label class="form-label">Open Date</label><input type="date" class="form-input" id="editPoolOpenDate" onchange="_autoCalcMaturityDate('editPoolOpenDate','editPoolTerm','editPoolMaturityDate')" /></div>
+        <div class="form-group"><label class="form-label">Close Date</label><input type="date" class="form-input" id="editPoolCloseDate" onchange="_autoCalcInvStartDate('editPoolCloseDate','editPoolInvStartDate')" /></div>
+        <div class="form-group"><label class="form-label">Investment Start Date <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400">(auto)</span></label><input type="date" class="form-input" id="editPoolInvStartDate" /></div>
+        <div class="form-group"><label class="form-label">Maturity Date</label><input type="date" class="form-input" id="editPoolMaturityDate" /></div>
+      </div>
+      <div class="form-group"><label class="form-label">Max Capacity (ZAR)</label><input type="number" class="form-input" id="editPoolMaxCapacity" placeholder="Leave blank for unlimited" min="0" step="10000" /></div>
+      <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--border)">Fee Management</div>
       <div class="form-row form-row--2">
-        <div class="form-group"><label class="form-label">Open Date</label><input type="date" class="form-input" id="editPoolOpenDate" /></div>
-        <div class="form-group"><label class="form-label">Close / Maturity Date</label><input type="date" class="form-input" id="editPoolCloseDate" /></div>
+        <div class="form-group"><label class="form-label">Upfront Management Fee (%)</label><input type="number" class="form-input" id="editPoolMgtFeePct" placeholder="e.g. 5" step="0.01" min="0" /></div>
+        <div class="form-group"><label class="form-label">Management Fee Frequency</label>
+          <select class="form-select" id="editPoolMgtFeeFreq">
+            <option value="once">Once (upfront)</option>
+            <option value="annual">Annual</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Operational Fee (%)</label><input type="number" class="form-input" id="editPoolOpFeePct" placeholder="e.g. 1.5" step="0.01" min="0" /></div>
+        <div class="form-group"><label class="form-label">Operational Fee Frequency</label>
+          <select class="form-select" id="editPoolOpFeeFreq">
+            <option value="annual">Annual</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="monthly">Monthly</option>
+            <option value="once">Once</option>
+          </select>
+        </div>
       </div>
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('editPoolModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveEditPool()"><i class="fa-solid fa-save"></i> Save Changes</button>
+      <button class="btn btn--primary" onclick="saveEditPool(this)"><i class="fa-solid fa-save"></i> Save Changes</button>
     </div>
   </div>
 </div>
@@ -1002,7 +2446,7 @@
   <div class="modal modal--lg">
     <div class="modal__header">
       <span class="modal__title" id="ifaDetailTitle">IFA Details</span>
-      <button class="modal__close" onclick="Modal.close('ifaDetailModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('ifaDetailModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="ifaDetailBody">Loading...</div>
     <div class="modal__footer">
@@ -1016,7 +2460,7 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Add New IFA</span>
-      <button class="modal__close" onclick="Modal.close('addIFAModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('addIFAModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <div class="form-row form-row--2">
@@ -1045,7 +2489,7 @@
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('addIFAModal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveNewIFA()"><i class="fa-solid fa-plus"></i> Create IFA</button>
+      <button class="btn btn--primary" onclick="saveNewIFA(this)"><i class="fa-solid fa-plus"></i> Create IFA</button>
     </div>
   </div>
 </div>
@@ -1055,7 +2499,7 @@
   <div class="modal">
     <div class="modal__header">
       <span class="modal__title">Link Investor to IFA</span>
-      <button class="modal__close" onclick="Modal.close('linkClientModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('linkClientModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body">
       <input type="hidden" id="linkClientIFAId" />
@@ -1074,11 +2518,161 @@
   </div>
 </div>
 
+<!-- Manual Adjustment Modal -->
+<div class="modal-overlay" id="manualAdjModal" onclick="if(event.target===this)Modal.close('manualAdjModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title">Manual Adjustment</span>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('manualAdjModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="form-group">
+        <label class="form-label">Investor *</label>
+        <select class="form-select" id="adjInvestorSelect"><option value="">Select investor…</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Type *</label>
+        <div style="display:flex;gap:20px;margin-top:6px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
+            <input type="radio" name="adjType" value="credit" id="adjCredit" checked style="accent-color:#22c55e;width:16px;height:16px"> <span style="color:#22c55e;font-weight:600">Credit (add funds)</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;color:var(--text)">
+            <input type="radio" name="adjType" value="debit" id="adjDebit" style="accent-color:#ef4444;width:16px;height:16px"> <span style="color:#ef4444;font-weight:600">Debit (remove funds)</span>
+          </label>
+        </div>
+      </div>
+      <div class="form-row form-row--2">
+        <div class="form-group">
+          <label class="form-label">Amount (R) *</label>
+          <input type="number" class="form-input" id="adjAmount" placeholder="1000" min="0.01" step="0.01" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Reference</label>
+          <input type="text" class="form-input" id="adjReference" readonly />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description *</label>
+        <input type="text" class="form-input" id="adjDescription" placeholder="Reason for adjustment…" />
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('manualAdjModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveManualAdj(this)"><i class="fa-solid fa-sliders"></i> Apply Adjustment</button>
+    </div>
+  </div>
+</div>
+
+<!-- Withdrawal Rejection Modal -->
+<div class="modal-overlay" id="rejectModal" style="z-index:10001" onclick="if(event.target===this){this.style.display='none';this.classList.remove('open')}">
+  <div class="modal" style="max-width:440px">
+    <div class="modal__header">
+      <span class="modal__title"><i class="fa-solid fa-xmark" style="color:var(--red,#ef4444);margin-right:8px"></i><span id="rejectModalTitle">Reject</span></span>
+    </div>
+    <div class="modal__body">
+      <p id="rejectModalBody" style="color:var(--text-muted);font-size:0.88rem;margin:0 0 12px">Provide a reason below (optional).</p>
+      <textarea id="rejectReasonInput" class="form-input" rows="3" placeholder="Reason for rejection…" style="width:100%;resize:vertical;font-size:0.88rem"></textarea>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="document.getElementById('rejectModal').style.display='none';document.getElementById('rejectModal').classList.remove('open')">Cancel</button>
+      <button class="btn btn--danger" onclick="_submitRejection()"><i class="fa-solid fa-xmark"></i> Confirm Reject</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Dialog Modal -->
+<div class="modal-overlay" id="confirmModal" style="z-index:10000">
+  <div class="modal" style="max-width:420px">
+    <div class="modal__header">
+      <span class="modal__title" id="confirmModalTitle">Confirm Action</span>
+    </div>
+    <div class="modal__body">
+      <p id="confirmModalBody" style="color:var(--text-muted);font-size:0.88rem;line-height:1.6;margin:0"></p>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" id="confirmModalCancel">Cancel</button>
+      <button class="btn btn--primary" id="confirmModalOk">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Command Palette -->
+<div id="adminCmdOverlay" onclick="if(event.target===this)closeAdminCmd()"
+  style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9900;backdrop-filter:blur(4px);align-items:flex-start;justify-content:center;padding-top:80px">
+  <div style="background:#111720;border:1px solid rgba(212,175,55,.3);border-radius:14px;width:100%;max-width:580px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.7)">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.07)">
+      <i class="fa-solid fa-magnifying-glass" style="color:#7a92a8;font-size:14px"></i>
+      <input type="text" id="adminCmdInput" placeholder="Search views, investors, actions… (↑↓ Enter)" autocomplete="off"
+        style="flex:1;background:none;border:none;outline:none;color:#e8edf2;font-size:15px;font-family:inherit"
+        oninput="renderAdminCmdResults(this.value)" onkeydown="adminCmdKeyNav(event)">
+      <kbd style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:4px;font-size:10px;padding:2px 6px;color:#7a92a8">ESC</kbd>
+    </div>
+    <div id="adminCmdResults" style="max-height:420px;overflow-y:auto;padding:8px 0"></div>
+  </div>
+</div>
+
 <!-- Toast Container -->
+<!-- Bank Details Full View Modal -->
+<div class="modal-overlay" id="bankDetailsModal" onclick="if(event.target===this)Modal.close('bankDetailsModal')">
+  <div class="modal" style="max-width:460px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-building-columns" style="color:#fec24f;margin-right:8px"></i>Bank Account Details</span>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin-top:2px" id="bankDetailSubtitle"></div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('bankDetailsModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="bankDetailsBody" style="padding-top:4px"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="subAccountModal" onclick="if(event.target===this)Modal.close('subAccountModal')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-circle-nodes" style="color:#eda5ff;margin-right:8px"></i>Sub Account Details</span>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin-top:2px" id="saModalSubtitle"></div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('subAccountModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" id="saModalBody" style="padding-top:4px"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="manualCreditModal" onclick="if(event.target===this)Modal.close('manualCreditModal')">
+  <div class="modal" style="max-width:420px">
+    <div class="modal__header">
+      <div>
+        <span class="modal__title"><i class="fa-solid fa-plus-circle" style="color:#22c55e;margin-right:8px"></i>Manual Wallet Credit</span>
+        <div style="font-size:0.72rem;color:var(--text-dim);margin-top:2px" id="manualCreditInvestorName"></div>
+      </div>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('manualCreditModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="manualCreditInvestorId">
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Amount (R)</label>
+        <input type="number" id="manualCreditAmount" class="form-input" placeholder="e.g. 5000.00" min="0.01" step="0.01">
+      </div>
+      <div class="form-group" style="margin-bottom:18px">
+        <label class="form-label">Notes / Reason</label>
+        <textarea id="manualCreditNotes" class="form-input" rows="3" placeholder="e.g. EFT reference ABC123 matched — manual reconciliation credit" style="resize:vertical"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn--secondary" onclick="Modal.close('manualCreditModal')">Cancel</button>
+        <button class="btn btn--success" onclick="submitManualCredit()"><i class="fa-solid fa-plus"></i> Credit Wallet</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=2"></script>
 <script src="js/admin.js"></script>
-<script src="../js/sv-intelligence.js"></script>
+<!-- sv-intelligence.js hidden -->
 </body>
 </html>
