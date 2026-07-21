@@ -121,8 +121,8 @@ const PARTNER_PROFILES = {
     youtubeId: 'mTIcSDeggtQ',
   },
   'MoolaLend': {
-    tagline: 'Your chomie in funding — SA\'s PO finance specialist',
-    profile: 'MoolaLend is a Bryanston-based boutique lender that specialises in Purchase Order (PO) finance for South African SMEs. They fund government tenders and private-sector purchase orders from R50,000, enabling businesses to fulfil contracts without upfront capital. Incorporated in 2021 and listed in FundingHub\'s Top 10 PO Funding Lenders in SA, MoolaLend takes a partner-first approach to SME lending.',
+    tagline: "SA's receivables finance platform for registered businesses",
+    profile: 'MoolaLend is a South African receivables finance platform for registered businesses. Apply online and our automated risk engine vets your invoice instantly — strong applications are pre-approved on the spot, our team confirms funding shortly after, and the balance is released once your customer settles the invoice.',
     website: 'https://moolalend-production.up.railway.app/',
   },
   'The Solar Experts': {
