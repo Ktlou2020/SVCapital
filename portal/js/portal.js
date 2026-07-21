@@ -21,6 +21,20 @@ const DEMO_INVESTOR_ID = (() => {
 const _esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const _safeUrl = u => (typeof u === 'string' && /^https?:\/\//i.test(u)) ? u : '#';
 
+let _fsDocCache = [];
+function _openFsDoc(i) {
+  const url = (_fsDocCache[i] || {}).file_url;
+  if (!url) return;
+  if (/^https?:\/\//i.test(url)) { window.open(url, '_blank', 'noopener'); return; }
+  try {
+    const [header, b64] = url.split(',');
+    const mime = header.match(/:(.*?);/)?.[1] || 'application/pdf';
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const objUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    window.open(objUrl, '_blank', 'noopener');
+  } catch (_) { if (typeof Toast !== 'undefined') Toast.error('Could not open document'); }
+}
+
 /* ─── Partner info profiles ─── */
 const PARTNER_PROFILES = {
   'Beefcor': {
@@ -1042,6 +1056,16 @@ function loadNotifications() {
         action: "navigate('fica',document.querySelector('[data-view=fica]'))",
         unread: true,
       }));
+    } else if (inv.fica_status === 'in_progress' || inv.kyc_status === 'in_progress') {
+      notifs.push(_notif({
+        nid: 'fica-submitted',
+        icon: 'fa-file-circle-check', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
+        title: 'FICA documents submitted',
+        sub: 'Your documents have been received and will be reviewed within 1–2 business days. We\'ll notify you once verified.',
+        time: 'Under review',
+        action: "navigate('fica',document.querySelector('[data-view=fica]'))",
+        unread: true,
+      }));
     } else if (inv.fica_status === 'pending' || inv.kyc_status === 'pending' || inv.status === 'fica_submitted') {
       notifs.push({
         icon: 'fa-clock', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
@@ -1157,6 +1181,24 @@ function loadNotifications() {
       unread: false,
     });
   }
+
+  // 9. Recently confirmed investments (placed within the last 14 days)
+  const recentInvests = investments.filter(i => {
+    const created = i.created_at || i.investment_date;
+    if (!created) return false;
+    return (now - new Date(created)) < 14 * 86400000 && (i.status === 'active' || i.status === 'pending_funds' || i.status === 'pending');
+  });
+  recentInvests.forEach(ri => {
+    notifs.push(_notif({
+      nid: `inv-conf-${ri.id}`,
+      icon: 'fa-circle-check', iconBg: 'rgba(34,197,94,0.1)', iconColor: '#22c55e',
+      title: 'Investment confirmed',
+      sub: `${ri.pool_name || 'Your investment'} of ${Utils.rand(Math.abs(parseFloat(ri.amount) || 0))} has been placed and is now active.`,
+      time: Utils.timeAgo(ri.created_at || ri.investment_date),
+      action: "navigate('investments',document.querySelector('[data-view=investments]'))",
+      unread: true,
+    }));
+  });
 
   if (!notifs.length) {
     list.innerHTML = '<div style="padding:24px 18px;text-align:center;color:#999;font-size:0.82rem">You\'re all caught up!</div>';
@@ -3837,14 +3879,14 @@ async function _renderProductFactsheets(type, product) {
   }
   el.innerHTML = `
     <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i> Factsheets & documents</div>
-    ${all.length ? `<div style="display:flex;flex-direction:column;gap:8px">
-      ${all.map(s => `<a href="${_safeUrl(s.file_url)}" target="_blank" rel="noopener" class="fs-row ${s._product ? 'fs-row--current' : ''}">
+    ${all.length ? (() => { _fsDocCache = all; return `<div style="display:flex;flex-direction:column;gap:8px">
+      ${all.map((s, i) => `<a href="#" onclick="event.preventDefault();_openFsDoc(${i})" class="fs-row ${s._product ? 'fs-row--current' : ''}">
         <div class="fs-row__icon"><i class="fa-solid fa-file-pdf"></i></div>
         <div class="fs-row__info"><div class="fs-row__name">${_esc(s.file_name)}${s._product ? ' <span class="fs-current-tag">Product</span>' : ''}</div>
           <div class="fs-row__meta">${Utils.date(s.created_at)}</div></div>
         <i class="fa-solid fa-arrow-up-right-from-square fs-row__arrow"></i>
       </a>`).join('')}
-    </div>` : `<div style="font-size:0.82rem;color:var(--text-muted)">No factsheets uploaded yet for this product.</div>`}`;
+    </div>`; })() : `<div style="font-size:0.82rem;color:var(--text-muted)">No factsheets uploaded yet for this product.</div>`}`;
 }
 
 // Single open-pool card (used inside the product detail view)
@@ -4188,15 +4230,15 @@ async function viewFactsheet(poolId, poolName) {
     body.innerHTML = `
       <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:16px">${all.length} document${all.length > 1 ? 's' : ''} available</p>
       <div style="display:flex;flex-direction:column;gap:10px">
-        ${all.map(s => `
-          <a href="${_safeUrl(s.file_url)}" target="_blank" rel="noopener" class="fs-row ${s.is_current ? 'fs-row--current' : ''}">
+        ${(() => { _fsDocCache = all; return all.map((s, i) => `
+          <a href="#" onclick="event.preventDefault();_openFsDoc(${i})" class="fs-row ${s.is_current ? 'fs-row--current' : ''}">
             <div class="fs-row__icon"><i class="fa-solid fa-file-pdf"></i></div>
             <div class="fs-row__info">
               <div class="fs-row__name">${_esc(s.file_name)}${s._product ? ' <span class="fs-current-tag">Product</span>' : (s.is_current ? ' <span class="fs-current-tag">Current</span>' : '')}</div>
               <div class="fs-row__meta">${s.version ? `v${_esc(s.version)} · ` : ''}${Utils.date(s.created_at)}${s.uploaded_by ? ` · ${_esc(s.uploaded_by)}` : ''}</div>
             </div>
             <i class="fa-solid fa-arrow-up-right-from-square fs-row__arrow"></i>
-          </a>`).join('')}
+          </a>`).join(''); })()}
       </div>`;
   } catch (err) {
     body.innerHTML = `<div style="color:var(--red);text-align:center;padding:24px">Failed to load factsheets. Please try again.</div>`;
@@ -7899,11 +7941,16 @@ function _saGoalBar(current, goal, label) {
 let _saCreateType = null;
 let _saCreateStep = 1;
 
-function openCreateSubAccountModal() {
+function openCreateSubAccountModal(preselectedType) {
   _saCreateType = null;
   _saCreateStep = 1;
-  _saShowCreateStep(1);
   Modal.open('createSaModal');
+  if (preselectedType) {
+    saSelectType(preselectedType);
+    saStep1Next();
+  } else {
+    _saShowCreateStep(1);
+  }
 }
 
 function _saShowCreateStep(step) {
@@ -10001,6 +10048,7 @@ function updateGiftPreview() {
             || '—';
   const msg = document.getElementById('giftMessage')?.value?.trim() || '';
   const inv = PORTAL.investor;
+  const walletBal = parseFloat(inv?.wallet_balance) || 0;
 
   const amtEl = document.getElementById('previewAmount');
   const toEl  = document.getElementById('previewTo');
@@ -10011,6 +10059,19 @@ function updateGiftPreview() {
   if (document.getElementById('previewFrom') && inv) {
     document.getElementById('previewFrom').textContent = `From: ${inv.first_name} ${inv.last_name}`;
   }
+
+  // Inline balance check
+  const balHint = document.getElementById('giftBalanceHint');
+  const sendBtn = document.getElementById('giftSendBtn');
+  const overBudget = amt > 0 && walletBal > 0 && amt > walletBal;
+  if (balHint) {
+    if (overBudget) {
+      balHint.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> Amount exceeds your wallet balance of ${Utils.rand(walletBal)}</span>`;
+    } else {
+      balHint.textContent = `Your wallet balance: ${Utils.rand(walletBal)}`;
+    }
+  }
+  if (sendBtn) sendBtn.disabled = overBudget;
 }
 
 function onGiftEmailInput() {

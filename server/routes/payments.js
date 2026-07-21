@@ -79,10 +79,19 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
   }
 
   // Email + SMS confirmation (non-blocking)
-  Promise.all([
-    emailService.sendDepositConfirmed(investor, amount, reference, 'Paystack').catch(e => console.error('[payments] email error:', e.message)),
-    smsService.sendDepositConfirmed(investor.phone, investor.first_name, amount).catch(e => console.error('[payments] sms error:', e.message)),
-  ]);
+  Promise.resolve().then(async () => {
+    let subAccount = null;
+    if (subAccountId) {
+      try {
+        const saRes = await pool.query('SELECT name, sa_reference FROM sub_accounts WHERE id = $1', [subAccountId]);
+        if (saRes.rows[0]) subAccount = { name: saRes.rows[0].name, reference: saRes.rows[0].sa_reference };
+      } catch (_) {}
+    }
+    await Promise.all([
+      emailService.sendDepositConfirmed(investor, amount, reference, 'Paystack', subAccount).catch(e => console.error('[payments] email error:', e.message)),
+      smsService.sendDepositConfirmed(investor.phone, investor.first_name, amount).catch(e => console.error('[payments] sms error:', e.message)),
+    ]);
+  }).catch(() => {});
 
   // Audit trail
   await audit.log({
