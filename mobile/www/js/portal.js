@@ -4462,7 +4462,6 @@ function _solarStatusHtml(s) {
         ${s.co2_avoided_kg ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.co2_avoided_kg / 1000).toFixed(1)}<span style="font-size:0.78rem"> t</span></div><div style="font-size:0.7rem;color:var(--text-muted)">CO₂ avoided</div></div>` : ''}
         ${s.device_count ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.device_count}</div><div style="font-size:0.7rem;color:var(--text-muted)">inverter${s.device_count === 1 ? '' : 's'}</div></div>` : ''}
       </div>
-      <div style="font-size:0.68rem;color:var(--text-muted);margin-top:9px">Live data from FoxCloud${s.station_name ? ` · ${_esc(s.station_name)}` : ''}</div>
     </div>`;
 }
 

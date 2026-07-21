@@ -262,7 +262,7 @@ const MODAL_DATA = {
     title: 'Power the future. Earn from it.',
     desc: 'Your capital funds solar panel installations across Cape Town, generating clean electricity sold through long-term contracts. Annual returns are distributed throughout the term, with your full capital returned at the end.',
     stats: [
-      { label: 'Best Return', val: '21.40% p.a.' },
+      { label: 'Avg. Return', val: '21.40% p.a.' },
       { label: 'Minimum', val: 'R10,000' },
       { label: 'Terms', val: '5 / 6 / 7 yrs' }
     ],
@@ -1342,7 +1342,6 @@ async function _applySolarTelemetry() {
           ${s.co2_avoided_kg ? stat(`${(s.co2_avoided_kg / 1000).toFixed(1)}<span style="font-size:0.85rem"> t</span>`, 'CO₂ avoided') : ''}
           ${s.device_count ? stat(s.device_count, `inverter${s.device_count === 1 ? '' : 's'}`) : ''}
         </div>
-        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:10px">Live data from FoxCloud${s.station_name ? ` · ${String(s.station_name).replace(/[<>&]/g, '')}` : ''}</div>
       </div>`;
   }
 
