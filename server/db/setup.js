@@ -1047,7 +1047,7 @@ CREATE INDEX IF NOT EXISTS products_type_idx ON products(product_type);
    console. Parameterised inserts avoid any apostrophe-escaping issues. */
 const DEFAULT_PRODUCTS = [
   {
-    product_type: 'cattle', label: 'Cattle Investment', headline: 'Grow with the herd.',
+    product_type: 'cattle', label: 'Cattle Investment', headline: 'Grow with the herd.', partner_name: 'Beefcor',
     description: "Partner with Beefcor, one of South Africa's most respected feedlots, and watch your returns grow alongside the cattle. Each investment pool funds a herd of cattle that enters at 200–230kg and is raised to 450–500kg before sale to an abattoir.",
     key_details: [
       'Cattle enter feedlot at 200–230kg and are raised to 450–500kg',
@@ -1086,9 +1086,9 @@ const DEFAULT_PRODUCTS = [
     badge_class: 'badge--green', sort_order: 4,
   },
   {
-    product_type: 'short_term', label: 'Short Term Investment', headline: 'Fast, focused growth.',
+    product_type: 'short_term', label: 'Short Term Investment', headline: 'Fast, focused growth.', partner_name: 'MoolaLend',
     description: 'Fund South African SMMEs through asset finance. Capital is deployed into vetted businesses generating strong short-cycle returns.',
-    key_details: ['Capital deployed to vetted SMMEs', 'Short investment cycles', 'Asset-backed where possible'].join('\n'),
+    key_details: ['Capital deployed to vetted SMMEs', 'Returns from SMME receivables financing & asset-backed loans', 'Short investment cycles', 'Asset-backed where possible'].join('\n'),
     min_investment: 1000, term_months: 5, benchmark_rate: 0.13, performance_fee_pct: 0.20,
     risk_profile: 'Medium', risk_color: '#fec24f', icon: 'fa-bolt', color: '#656565',
     badge_class: 'badge--blue', sort_order: 5,
@@ -1259,6 +1259,22 @@ async function autoSetup() {
 
     // 1b2. Seed default products (idempotent — only inserts missing product types)
     await seedProducts();
+
+    // Backfill partner_name for existing products
+    await pool.query(`
+      UPDATE products SET partner_name = 'Beefcor'            WHERE product_type = 'cattle'                        AND (partner_name IS NULL OR partner_name = '');
+      UPDATE products SET partner_name = 'The Solar Experts'  WHERE product_type IN ('solar_7yr','solar_6yr','solar_5yr') AND (partner_name IS NULL OR partner_name = '');
+      UPDATE products SET partner_name = 'MoolaLend'          WHERE product_type IN ('short_term','smme')          AND (partner_name IS NULL OR partner_name = '');
+    `).catch(() => {});
+
+    // Update short_term key_details to include receivables financing bullet
+    await pool.query(`
+      UPDATE products
+      SET key_details = 'Capital deployed to vetted SMMEs\nReturns from SMME receivables financing & asset-backed loans\nShort investment cycles\nAsset-backed where possible'
+      WHERE product_type = 'short_term'
+        AND key_details NOT LIKE '%receivables%'
+    `).catch(() => {});
+
     await seedTestimonials();
 
     // 1c. Performance indexes (each wrapped individually so one failure won't abort the rest)

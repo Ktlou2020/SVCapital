@@ -79,10 +79,19 @@ async function creditWallet(investorId, amount, reference, actorEmail = null, so
   }
 
   // Email + SMS confirmation (non-blocking)
-  Promise.all([
-    emailService.sendDepositConfirmed(investor, amount, reference, 'Paystack').catch(e => console.error('[payments] email error:', e.message)),
-    smsService.sendDepositConfirmed(investor.phone, investor.first_name, amount).catch(e => console.error('[payments] sms error:', e.message)),
-  ]);
+  Promise.resolve().then(async () => {
+    let subAccount = null;
+    if (subAccountId) {
+      try {
+        const saRes = await pool.query('SELECT name, sa_reference FROM sub_accounts WHERE id = $1', [subAccountId]);
+        if (saRes.rows[0]) subAccount = { name: saRes.rows[0].name, reference: saRes.rows[0].sa_reference };
+      } catch (_) {}
+    }
+    await Promise.all([
+      emailService.sendDepositConfirmed(investor, amount, reference, 'Paystack', subAccount).catch(e => console.error('[payments] email error:', e.message)),
+      smsService.sendDepositConfirmed(investor.phone, investor.first_name, amount).catch(e => console.error('[payments] sms error:', e.message)),
+    ]);
+  }).catch(() => {});
 
   // Audit trail
   await audit.log({
@@ -339,7 +348,7 @@ router.post('/auto-topup', requireAuth, async (req, res) => {
 
     if (enabled) {
       if (!amountNum || amountNum < 50) return res.status(400).json({ error: 'Minimum auto top-up amount is R50' });
-      if (!dayNum || dayNum < 1 || dayNum > 28) return res.status(400).json({ error: 'Day must be between 1 and 28' });
+      if (!dayNum || dayNum < 1 || dayNum > 31) return res.status(400).json({ error: 'Day must be between 1 and 31' });
 
       // Require saved card to enable
       const { rows } = await pool.query(

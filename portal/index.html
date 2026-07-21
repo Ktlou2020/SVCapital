@@ -1520,22 +1520,22 @@
         <div id="subacctsEmpty">
           <div class="sa-empty-intro">You don't have any sub-accounts yet. Choose a type to get started:</div>
           <div class="sa-type-showcase">
-            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#656565;--tile-bg:linear-gradient(135deg,#1a3d42,#656565)">
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal('business')" style="--tile-color:#656565;--tile-bg:linear-gradient(135deg,#1a3d42,#656565)">
               <i class="fa-solid fa-building sa-type-tile__icon"></i>
               <div class="sa-type-tile__label">Business</div>
               <div class="sa-type-tile__desc">Invest through your registered company</div>
             </div>
-            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#eda5ff;--tile-bg:linear-gradient(135deg,#2d1d6e,#eda5ff)">
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal('trust')" style="--tile-color:#eda5ff;--tile-bg:linear-gradient(135deg,#2d1d6e,#eda5ff)">
               <i class="fa-solid fa-scale-balanced sa-type-tile__icon"></i>
               <div class="sa-type-tile__label">Trust</div>
               <div class="sa-type-tile__desc">Grow assets in a family or business trust</div>
             </div>
-            <div class="sa-type-tile" onclick="openCreateSubAccountModal()" style="--tile-color:#22c55e;--tile-bg:linear-gradient(135deg,#064e1e,#22c55e)">
+            <div class="sa-type-tile" onclick="openCreateSubAccountModal('stokvel')" style="--tile-color:#22c55e;--tile-bg:linear-gradient(135deg,#064e1e,#22c55e)">
               <i class="fa-solid fa-people-group sa-type-tile__icon"></i>
               <div class="sa-type-tile__label">Stokvel</div>
               <div class="sa-type-tile__desc">Community savings club investing together</div>
             </div>
-            <div class="sa-type-tile sa-type-tile--minor" onclick="openCreateSubAccountModal()" style="--tile-color:#ff9b0c;--tile-bg:linear-gradient(135deg,#ff5229,#ff9b0c)">
+            <div class="sa-type-tile sa-type-tile--minor" onclick="openCreateSubAccountModal('minor')" style="--tile-color:#ff9b0c;--tile-bg:linear-gradient(135deg,#ff5229,#ff9b0c)">
               <i class="fa-solid fa-child-reaching sa-type-tile__icon"></i>
               <div class="sa-type-tile__label">Minor 🌟</div>
               <div class="sa-type-tile__desc">Start your child's investment journey today</div>
@@ -1894,7 +1894,7 @@
       <!-- Email proof of payment option -->
       <div style="background:rgba(47,140,155,0.08);border:1px solid rgba(47,140,155,0.25);border-radius:10px;padding:12px 14px;font-size:0.75rem;color:#9ca3af;display:flex;gap:8px;align-items:flex-start;margin-bottom:16px">
         <i class="fa-solid fa-envelope" style="color:#656565;margin-top:2px;flex-shrink:0"></i>
-        <span>Email your proof of payment to <a href="mailto:enquiry@svcapital.co.za" style="color:#656565;font-weight:700;text-decoration:underline">enquiry@svcapital.co.za</a> — include your Investor ID in the subject line for faster processing.</span>
+        <span>Alternatively, you can email your proof of payment to <a href="mailto:enquiry@svcapital.co.za" style="color:#656565;font-weight:700;text-decoration:underline">enquiry@svcapital.co.za</a> — include your Investor ID in the subject line for faster processing.</span>
       </div>
 
       <!-- Proof of payment upload -->
@@ -2806,7 +2806,7 @@
         <div style="font-size:0.72rem;color:#9ca3af;margin-top:4px">Minimum R50. Enter the amount you want credited to your wallet — gateway fees are added on top.</div>
         <div id="atuFeeBreakdown" style="display:none;margin-top:8px;padding:8px 10px;background:rgba(255,155,12,0.06);border:1px solid rgba(255,155,12,0.2);border-radius:8px;font-size:0.75rem">
           <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text-muted)">Wallet credit</span><span id="atuFeeNet" style="font-weight:600;color:#1a1a1a"></span></div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text-muted)">Paystack fee (1.5% + R2)</span><span id="atuFeeAmt" style="color:#ef4444"></span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text-muted)">Paystack fee (2.9% + R1)</span><span id="atuFeeAmt" style="color:#ef4444"></span></div>
           <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(0,0,0,0.1);padding-top:6px;margin-top:4px"><span style="font-weight:700;color:#1a1a1a">Total card charge</span><span id="atuFeeGross" style="font-weight:700;color:#1a1a1a"></span></div>
         </div>
       </div>
@@ -2820,15 +2820,34 @@
           <option value="3">3rd</option>
           <option value="4">4th</option>
           <option value="5">5th</option>
+          <option value="6">6th</option>
           <option value="7">7th</option>
+          <option value="8">8th</option>
+          <option value="9">9th</option>
           <option value="10">10th</option>
+          <option value="11">11th</option>
+          <option value="12">12th</option>
+          <option value="13">13th</option>
           <option value="14">14th</option>
           <option value="15">15th</option>
+          <option value="16">16th</option>
+          <option value="17">17th</option>
+          <option value="18">18th</option>
+          <option value="19">19th</option>
           <option value="20">20th</option>
+          <option value="21">21st</option>
+          <option value="22">22nd</option>
+          <option value="23">23rd</option>
+          <option value="24">24th</option>
           <option value="25">25th</option>
+          <option value="26">26th</option>
+          <option value="27">27th</option>
           <option value="28">28th</option>
+          <option value="29">29th</option>
+          <option value="30">30th</option>
+          <option value="31">31st</option>
         </select>
-        <div style="font-size:0.72rem;color:#9ca3af;margin-top:4px">Limited to the 28th to avoid month-length issues.</div>
+        <div style="font-size:0.72rem;color:#9ca3af;margin-top:4px">For months with fewer days, the charge runs on the last day of that month.</div>
       </div>
 
       <div style="padding:10px 14px;background:rgba(255,155,12,0.06);border:1px solid rgba(255,155,12,0.2);border-radius:8px;font-size:0.78rem;color:var(--text-muted)">
@@ -2972,7 +2991,7 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="js/portal.js?v=16"></script>
+<script src="js/portal.js?v=22"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 // Service worker: web browsers only (not Capacitor). Handles web push notifications.

@@ -110,6 +110,57 @@ const PRODUCTS = {
   }
 };
 
+/* ─── Partner info profiles ─── */
+const _pipEsc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const _pipSafeUrl = u => (typeof u === 'string' && /^https?:\/\//i.test(u)) ? u : '#';
+const PARTNER_PROFILES = {
+  'Beefcor': {
+    tagline: 'Producers of quality cattle since 1973',
+    profile: 'Beefcor is a vertically integrated South African cattle feedlot founded in 1973, marketing over 70,000 cattle per year. They manage the full value chain from livestock procurement to branded beef in retail stores. Beefcor hosts SA\'s first commercially viable biogas plant at their Bronkhorstspruit facility.',
+    website: 'https://www.beefcor.com',
+    youtubeId: 'mTIcSDeggtQ',
+  },
+  'MoolaLend': {
+    tagline: 'Your chomie in funding — SA\'s PO finance specialist',
+    profile: 'MoolaLend is a Bryanston-based boutique lender that specialises in Purchase Order (PO) finance for South African SMEs. They fund government tenders and private-sector purchase orders from R50,000, enabling businesses to fulfil contracts without upfront capital. Incorporated in 2021 and listed in FundingHub\'s Top 10 PO Funding Lenders in SA, MoolaLend takes a partner-first approach to SME lending.',
+    website: 'https://moolalend-production.up.railway.app/',
+  },
+  'The Solar Experts': {
+    tagline: 'Cape Town\'s trusted solar design & installation specialists',
+    profile: 'The Solar Experts is a Somerset West-based solar energy company with over 612 completed installations across the Western Cape since 2019. They serve residential and commercial clients with systems from 5 kW to 250 kW, handled entirely by in-house electrical staff.',
+    website: 'https://thesolarexperts.co.za',
+  },
+  'OnFleet': {
+    tagline: 'Rent to Own. Ride. Earn. Own.',
+    profile: 'OnFleet Africa runs South Africa\'s leading rent-to-own delivery motorcycle programme. Riders with no deposit access a bike for R650–R850/week and own it outright after 18 months — with free monthly servicing included. Around 60% of riders re-enter a new contract at the 18-month mark, renting out their first bike for additional income.',
+    website: 'https://portal.onfleet.africa',
+  },
+};
+
+function _showPartnerModal(name) {
+  const p = PARTNER_PROFILES[name];
+  if (!p) return;
+  document.getElementById('pip-modal')?.remove();
+  const vid = p.youtubeId ? `<a href="https://www.youtube.com/watch?v=${p.youtubeId}" target="_blank" rel="noopener" style="display:block;position:relative;border-radius:10px;overflow:hidden;margin-bottom:14px;text-decoration:none"><img src="https://img.youtube.com/vi/${p.youtubeId}/mqdefault.jpg" style="width:100%;display:block" loading="lazy"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.4)"><i class="fa-solid fa-play" style="font-size:2rem;color:#fff"></i></span></a>` : '';
+  const el = document.createElement('div');
+  el.id = 'pip-modal';
+  el.innerHTML = `<div id="pip-modal-bd" style="position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)"><div style="background:#1c1c1e;border:1px solid rgba(255,255,255,.15);border-radius:18px;padding:24px 22px;max-width:360px;width:100%;position:relative;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.8)"><button onclick="document.getElementById('pip-modal').remove()" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,.1);border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;color:rgba(255,255,255,.8);display:flex;align-items:center;justify-content:center;font-size:.9rem;line-height:1"><i class="fa-solid fa-xmark"></i></button><div style="font-weight:700;font-size:1.05rem;color:#fff;margin-bottom:3px;padding-right:36px">${_pipEsc(name)}</div><div style="font-size:.75rem;color:#eda5ff;margin-bottom:14px;line-height:1.45">${_pipEsc(p.tagline)}</div>${vid}<p style="font-size:.8rem;color:rgba(255,255,255,.8);line-height:1.65;margin:0 0 16px">${_pipEsc(p.profile)}</p><a href="${_pipSafeUrl(p.website)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:7px;font-size:.8rem;color:#eda5ff;text-decoration:none;border:1px solid rgba(237,165,255,.3);border-radius:20px;padding:7px 16px"><i class="fa-solid fa-arrow-up-right-from-square"></i> Visit website</a></div></div>`;
+  document.body.appendChild(el);
+  document.getElementById('pip-modal-bd').addEventListener('click', e => { if (e.target === e.currentTarget) el.remove(); });
+  const _onKey = e => { if (e.key === 'Escape') { el.remove(); document.removeEventListener('keydown', _onKey); } };
+  document.addEventListener('keydown', _onKey);
+}
+
+function _partnerInfoBtn(name) {
+  if (!PARTNER_PROFILES[name]) return '';
+  return `<button type="button" onclick="_showPartnerModal('${_pipEsc(name)}')" aria-label="About ${_pipEsc(name)}" style="background:none;border:none;cursor:pointer;padding:0 4px;color:inherit;opacity:.55;font-size:.85em;vertical-align:middle;line-height:1;transition:color .15s,opacity .15s" onmouseenter="this.style.color='#eda5ff';this.style.opacity='1'" onmouseleave="this.style.color='';this.style.opacity='.55'"><i class="fa-solid fa-circle-info"></i></button>`;
+}
+
+function _partnerNameLink(name, display) {
+  if (!PARTNER_PROFILES[name]) return _pipEsc(display || name);
+  return `<span onclick="_showPartnerModal('${_pipEsc(name)}')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px" onmouseenter="this.style.color='#eda5ff'" onmouseleave="this.style.color=''">${_pipEsc(display || name)}</span>`;
+}
+
 /* ─── FAQ Data ─── */
 const FAQ_DATA = {
   general: [

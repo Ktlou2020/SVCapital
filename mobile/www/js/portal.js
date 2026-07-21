@@ -21,6 +21,69 @@ const DEMO_INVESTOR_ID = (() => {
 const _esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const _safeUrl = u => (typeof u === 'string' && /^https?:\/\//i.test(u)) ? u : '#';
 
+let _fsDocCache = [];
+function _openFsDoc(i) {
+  const url = (_fsDocCache[i] || {}).file_url;
+  if (!url) return;
+  if (/^https?:\/\//i.test(url)) { window.open(url, '_blank', 'noopener'); return; }
+  try {
+    const [header, b64] = url.split(',');
+    const mime = header.match(/:(.*?);/)?.[1] || 'application/pdf';
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const objUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    window.open(objUrl, '_blank', 'noopener');
+  } catch (_) { if (typeof Toast !== 'undefined') Toast.error('Could not open document'); }
+}
+
+/* ─── Partner info profiles ─── */
+const PARTNER_PROFILES = {
+  'Beefcor': {
+    tagline: 'Producers of quality cattle since 1973',
+    profile: 'Beefcor is a vertically integrated South African cattle feedlot founded in 1973, marketing over 70,000 cattle per year. They manage the full value chain from livestock procurement to branded beef in retail stores. Beefcor hosts SA\'s first commercially viable biogas plant at their Bronkhorstspruit facility.',
+    website: 'https://www.beefcor.com',
+    youtubeId: 'mTIcSDeggtQ',
+  },
+  'MoolaLend': {
+    tagline: 'Your chomie in funding — SA\'s PO finance specialist',
+    profile: 'MoolaLend is a Bryanston-based boutique lender that specialises in Purchase Order (PO) finance for South African SMEs. They fund government tenders and private-sector purchase orders from R50,000, enabling businesses to fulfil contracts without upfront capital. Incorporated in 2021 and listed in FundingHub\'s Top 10 PO Funding Lenders in SA, MoolaLend takes a partner-first approach to SME lending.',
+    website: 'https://moolalend-production.up.railway.app/',
+  },
+  'The Solar Experts': {
+    tagline: 'Cape Town\'s trusted solar design & installation specialists',
+    profile: 'The Solar Experts is a Somerset West-based solar energy company with over 612 completed installations across the Western Cape since 2019. They serve residential and commercial clients with systems from 5 kW to 250 kW, handled entirely by in-house electrical staff.',
+    website: 'https://thesolarexperts.co.za',
+  },
+  'OnFleet': {
+    tagline: 'Rent to Own. Ride. Earn. Own.',
+    profile: 'OnFleet Africa runs South Africa\'s leading rent-to-own delivery motorcycle programme. Riders with no deposit access a bike for R650–R850/week and own it outright after 18 months — with free monthly servicing included. Around 60% of riders re-enter a new contract at the 18-month mark, renting out their first bike for additional income.',
+    website: 'https://portal.onfleet.africa',
+  },
+};
+
+function _showPartnerModal(name) {
+  const p = PARTNER_PROFILES[name];
+  if (!p) return;
+  document.getElementById('pip-modal')?.remove();
+  const vid = p.youtubeId ? `<a href="https://www.youtube.com/watch?v=${p.youtubeId}" target="_blank" rel="noopener" style="display:block;position:relative;border-radius:10px;overflow:hidden;margin-bottom:14px;text-decoration:none"><img src="https://img.youtube.com/vi/${p.youtubeId}/mqdefault.jpg" style="width:100%;display:block" loading="lazy"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.4)"><i class="fa-solid fa-play" style="font-size:2rem;color:#fff"></i></span></a>` : '';
+  const el = document.createElement('div');
+  el.id = 'pip-modal';
+  el.innerHTML = `<div id="pip-modal-bd" style="position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)"><div style="background:#1c1c1e;border:1px solid rgba(255,255,255,.15);border-radius:18px;padding:24px 22px;max-width:360px;width:100%;position:relative;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.8)"><button onclick="document.getElementById('pip-modal').remove()" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,.1);border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;color:rgba(255,255,255,.8);display:flex;align-items:center;justify-content:center;font-size:.9rem;line-height:1"><i class="fa-solid fa-xmark"></i></button><div style="font-weight:700;font-size:1.05rem;color:#fff;margin-bottom:3px;padding-right:36px">${_esc(name)}</div><div style="font-size:.75rem;color:#eda5ff;margin-bottom:14px;line-height:1.45">${_esc(p.tagline)}</div>${vid}<p style="font-size:.8rem;color:rgba(255,255,255,.8);line-height:1.65;margin:0 0 16px">${_esc(p.profile)}</p><a href="${_safeUrl(p.website)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:7px;font-size:.8rem;color:#eda5ff;text-decoration:none;border:1px solid rgba(237,165,255,.3);border-radius:20px;padding:7px 16px"><i class="fa-solid fa-arrow-up-right-from-square"></i> Visit website</a></div></div>`;
+  document.body.appendChild(el);
+  document.getElementById('pip-modal-bd').addEventListener('click', e => { if (e.target === e.currentTarget) el.remove(); });
+  const _onKey = e => { if (e.key === 'Escape') { el.remove(); document.removeEventListener('keydown', _onKey); } };
+  document.addEventListener('keydown', _onKey);
+}
+
+function _partnerInfoBtn(name) {
+  if (!PARTNER_PROFILES[name]) return '';
+  return `<button type="button" onclick="_showPartnerModal('${_esc(name)}')" aria-label="About ${_esc(name)}" style="background:none;border:none;cursor:pointer;padding:0 4px;color:inherit;opacity:.55;font-size:.85em;vertical-align:middle;line-height:1;transition:color .15s,opacity .15s" onmouseenter="this.style.color='#eda5ff';this.style.opacity='1'" onmouseleave="this.style.color='';this.style.opacity='.55'"><i class="fa-solid fa-circle-info"></i></button>`;
+}
+
+function _partnerNameLink(name, display) {
+  if (!PARTNER_PROFILES[name]) return _esc(display || name);
+  return `<span onclick="_showPartnerModal('${_esc(name)}')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px" onmouseenter="this.style.color='#eda5ff'" onmouseleave="this.style.color=''">${_esc(display || name)}</span>`;
+}
+
 let PORTAL = {
   investor: null,
   investments: [],
@@ -469,6 +532,7 @@ function renderWalletReadinessPanel() {
   const pendingDeposit = (PORTAL.transactions || []).find(t => t.type === 'deposit' && t.status === 'pending');
   const pendingWithdrawal = (PORTAL.transactions || []).find(t => t.type === 'withdrawal' && t.status === 'pending');
   const ficaApproved = _isInvestorFicaApproved(inv);
+  const ficaCardApproved = inv.fica_status === 'approved';
   const bankApproved = !!inv.bank_account_number && inv.bank_account_status === 'approved';
 
   let headline = 'Your wallet is the fastest path to your next investment.';
@@ -515,8 +579,8 @@ function renderWalletReadinessPanel() {
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Verification</div>
-          <div style="font-size:0.88rem;font-weight:800;color:${ficaApproved ? '#22c55e' : '#656565'};margin-top:6px">${ficaApproved ? 'FICA/KYC approved' : 'FICA/KYC pending'}</div>
-          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${ficaApproved ? (bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.') : 'You can invest and top up. Withdrawals unlock once KYC/FICA is approved.'}</div>
+          <div style="font-size:0.88rem;font-weight:800;color:${ficaCardApproved ? '#22c55e' : '#656565'};margin-top:6px">${ficaCardApproved ? 'FICA/KYC approved' : 'FICA/KYC pending'}</div>
+          <div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px">${ficaCardApproved ? (bankApproved ? 'Withdrawal bank account verified.' : inv.bank_account_number ? 'Bank account pending review.' : 'Add your bank account before your first withdrawal.') : 'You can invest and top up. Withdrawals unlock once FICA is approved.'}</div>
         </div>
         <div style="padding:12px 14px;border:1px solid rgba(0,0,0,0.06);border-radius:12px;background:#fff">
           <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;font-weight:800">Money in motion</div>
@@ -995,6 +1059,16 @@ function loadNotifications() {
         title: 'FICA/KYC verification unsuccessful',
         sub: 'Your documents could not be verified. Please re-upload and resubmit.',
         time: 'Action required',
+        action: "navigate('fica',document.querySelector('[data-view=fica]'))",
+        unread: true,
+      });
+    } else if (inv.fica_status === 'in_progress' || inv.kyc_status === 'in_progress') {
+      notifs.push({
+        key: 'fica-submitted',
+        icon: 'fa-file-circle-check', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
+        title: 'FICA documents submitted',
+        sub: 'Your documents have been received and will be reviewed within 1–2 business days. We\'ll notify you once verified.',
+        time: 'Under review',
         action: "navigate('fica',document.querySelector('[data-view=fica]'))",
         unread: true,
       });
@@ -2953,7 +3027,7 @@ function updateAutoTopUpFee() {
   const bd  = document.getElementById('atuFeeBreakdown');
   if (!bd) return;
   if (net < 50) { bd.style.display = 'none'; return; }
-  const rawFee = (net + 2) / 0.985 - net;
+  const rawFee = _pmFee(net);
   const fee    = Math.min(rawFee, 800);
   const gross  = Math.round((net + fee) * 100) / 100;
   const fmt    = v => 'R ' + v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
@@ -2971,7 +3045,7 @@ async function saveAutoTopUp() {
 
   if (enabled) {
     if (!amount || amount < 50) return Toast.error('Minimum auto top-up is R50');
-    if (!day || day < 1 || day > 28) return Toast.error('Day must be between 1 and 28');
+    if (!day || day < 1 || day > 31) return Toast.error('Day must be between 1 and 31');
   }
 
   const btn = el('atuSaveBtn');
@@ -3630,7 +3704,7 @@ const _POOL_META = {
   solar_7yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#fec24f' },
   solar_6yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#fec24f' },
   solar_5yr:     { blurb: 'Funds solar energy installations for homes & businesses across SA.', risk: 'Moderate',     riskColor: '#fec24f' },
-  cattle:        { blurb: 'Partner with Beefcor — SA\'s premier feedlot — and earn returns as your herd grows from 200kg to 500kg.', risk: 'Aggressive',   riskColor: '#ef4444' },
+  cattle:        { blurb: `Partner with ${_partnerNameLink('Beefcor')} — SA's premier feedlot — and earn returns as your herd grows from 200kg to 500kg.`, risk: 'Aggressive',   riskColor: '#ef4444' },
   short_term:    { blurb: 'Fund South African SMMEs through asset finance. Capital deployed into vetted businesses generating strong short-cycle returns.', risk: 'Moderate',  riskColor: '#fec24f' },
   delivery_bike: { blurb: 'Fleet funding for delivery riders. Steady, predictable returns.',    risk: 'Conservative', riskColor: '#22c55e' },
 };
@@ -4103,14 +4177,14 @@ async function _renderProductFactsheets(type, product) {
   }
   el.innerHTML = `
     <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i> Factsheets & documents</div>
-    ${all.length ? `<div style="display:flex;flex-direction:column;gap:8px">
-      ${all.map(s => `<a href="${_safeUrl(s.file_url)}" target="_blank" rel="noopener" class="fs-row ${s._product ? 'fs-row--current' : ''}">
+    ${all.length ? (() => { _fsDocCache = all; return `<div style="display:flex;flex-direction:column;gap:8px">
+      ${all.map((s, i) => `<a href="#" onclick="event.preventDefault();_openFsDoc(${i})" class="fs-row ${s._product ? 'fs-row--current' : ''}">
         <div class="fs-row__icon"><i class="fa-solid fa-file-pdf"></i></div>
         <div class="fs-row__info"><div class="fs-row__name">${_esc(s.file_name)}${s._product ? ' <span class="fs-current-tag">Product</span>' : ''}</div>
           <div class="fs-row__meta">${Utils.date(s.created_at)}</div></div>
         <i class="fa-solid fa-arrow-up-right-from-square fs-row__arrow"></i>
       </a>`).join('')}
-    </div>` : `<div style="font-size:0.82rem;color:var(--text-muted)">No factsheets uploaded yet for this product.</div>`}`;
+    </div>`; })() : `<div style="font-size:0.82rem;color:var(--text-muted)">No factsheets uploaded yet for this product.</div>`}`;
 }
 
 // Single open-pool card (used inside the product detail view)
@@ -4240,7 +4314,8 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
           </div>` : ''}
           ${pool.partner_name ? `<div class="mpc2-pill">
             <i class="fa-solid fa-handshake"></i>
-            <span><strong>${_esc(pool.partner_name)}</strong></span>
+            <span><strong>${_partnerNameLink(pool.partner_name)}</strong></span>
+            ${_partnerInfoBtn(pool.partner_name)}
           </div>` : ''}
         </div>
 
@@ -4453,15 +4528,15 @@ async function viewFactsheet(poolId, poolName) {
     body.innerHTML = `
       <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:16px">${all.length} document${all.length > 1 ? 's' : ''} available</p>
       <div style="display:flex;flex-direction:column;gap:10px">
-        ${all.map(s => `
-          <a href="${_safeUrl(s.file_url)}" target="_blank" rel="noopener" class="fs-row ${s.is_current ? 'fs-row--current' : ''}">
+        ${(() => { _fsDocCache = all; return all.map((s, i) => `
+          <a href="#" onclick="event.preventDefault();_openFsDoc(${i})" class="fs-row ${s.is_current ? 'fs-row--current' : ''}">
             <div class="fs-row__icon"><i class="fa-solid fa-file-pdf"></i></div>
             <div class="fs-row__info">
               <div class="fs-row__name">${_esc(s.file_name)}${s._product ? ' <span class="fs-current-tag">Product</span>' : (s.is_current ? ' <span class="fs-current-tag">Current</span>' : '')}</div>
               <div class="fs-row__meta">${s.version ? `v${_esc(s.version)} · ` : ''}${Utils.date(s.created_at)}${s.uploaded_by ? ` · ${_esc(s.uploaded_by)}` : ''}</div>
             </div>
             <i class="fa-solid fa-arrow-up-right-from-square fs-row__arrow"></i>
-          </a>`).join('')}
+          </a>`).join(''); })()}
       </div>`;
   } catch (err) {
     body.innerHTML = `<div style="color:var(--red);text-align:center;padding:24px">Failed to load factsheets. Please try again.</div>`;
@@ -8141,11 +8216,16 @@ function _saGoalBar(current, goal, label) {
 let _saCreateType = null;
 let _saCreateStep = 1;
 
-function openCreateSubAccountModal() {
+function openCreateSubAccountModal(preselectedType) {
   _saCreateType = null;
   _saCreateStep = 1;
-  _saShowCreateStep(1);
   Modal.open('createSaModal');
+  if (preselectedType) {
+    saSelectType(preselectedType);
+    saStep1Next();
+  } else {
+    _saShowCreateStep(1);
+  }
 }
 
 function _saShowCreateStep(step) {
@@ -10375,6 +10455,7 @@ function updateGiftPreview() {
             || '—';
   const msg = document.getElementById('giftMessage')?.value?.trim() || '';
   const inv = PORTAL.investor;
+  const walletBal = parseFloat(inv?.wallet_balance) || 0;
 
   const amtEl = document.getElementById('previewAmount');
   const toEl  = document.getElementById('previewTo');
@@ -10385,6 +10466,19 @@ function updateGiftPreview() {
   if (document.getElementById('previewFrom') && inv) {
     document.getElementById('previewFrom').textContent = `From: ${inv.first_name} ${inv.last_name}`;
   }
+
+  // Inline balance check
+  const balHint = document.getElementById('giftBalanceHint');
+  const sendBtn = document.getElementById('giftSendBtn');
+  const overBudget = amt > 0 && walletBal > 0 && amt > walletBal;
+  if (balHint) {
+    if (overBudget) {
+      balHint.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i> Amount exceeds your wallet balance of ${Utils.rand(walletBal)}</span>`;
+    } else {
+      balHint.textContent = `Your wallet balance: ${Utils.rand(walletBal)}`;
+    }
+  }
+  if (sendBtn) sendBtn.disabled = overBudget;
 }
 
 function onGiftEmailInput() {
@@ -11887,7 +11981,7 @@ async function saveRecurringInvestment() {
   if (enabled) {
     if (!amount || amount < 100) { Toast.error('Please enter a monthly amount of at least R100'); return; }
     if (!productType) { Toast.error('Please select a product type'); return; }
-    if (!day || day < 1 || day > 28) { Toast.error('Please select a valid day (1–28)'); return; }
+    if (!day || day < 1 || day > 31) { Toast.error('Please select a valid day (1–31)'); return; }
   }
 
   const investorId = PORTAL.investor?.id || DEMO_INVESTOR_ID;
