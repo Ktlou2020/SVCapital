@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SV Capital — IFA Partner Portal</title>
@@ -9,9 +13,24 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="css/ifa.css" />
+  <link rel="stylesheet" href="css/ifa-premium.css" />
   <!-- Staff Auth guard — IFA app key -->
   <script src="../js/staff-auth.js?v=3"></script>
   <script>document.addEventListener('DOMContentLoaded',()=>{ StaffAuth.guard('ifa'); StaffAuth.injectWidget(); });</script>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="../js/analytics.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -23,9 +42,8 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar__brand">
       <a href="../index.html" class="brand-link">
-        <img src="../assets/logo-inline.svg" alt="SV Capital" />
+        <img src="../assets/sv-capital-logo-horizontal-white-text.png" alt="SV Capital" style="height:36px;width:auto">
         <div>
-          <div class="brand-name">SV Capital</div>
           <div class="brand-role">IFA Portal</div>
         </div>
       </a>
@@ -50,6 +68,9 @@
       <button class="nav-item" data-view="clients" onclick="navigate('clients', this)">
         <i class="fa-solid fa-users"></i> My Clients
       </button>
+      <button class="nav-item" data-view="refer" onclick="navigate('refer', this)">
+        <i class="fa-solid fa-user-plus"></i> Refer Client
+      </button>
 
       <div class="nav-section-label">Activity</div>
       <button class="nav-item" data-view="investments" onclick="navigate('investments', this)">
@@ -60,6 +81,11 @@
       </button>
       <button class="nav-item" data-view="support" onclick="navigate('support', this)">
         <i class="fa-solid fa-headset"></i> Support Tickets
+      </button>
+
+      <div class="nav-section-label">Finance</div>
+      <button class="nav-item" data-view="commission" onclick="navigate('commission', this)">
+        <i class="fa-solid fa-percent"></i> Commission
       </button>
 
       <div class="nav-section-label">Account</div>
@@ -106,6 +132,29 @@
            VIEW: DASHBOARD
       ══════════════════════════════════ -->
       <div class="view active" id="view-dashboard">
+
+        <!-- Welcome Banner -->
+        <div class="ifa-welcome-banner" id="ifaWelcomeBanner">
+          <div class="ifa-welcome-avatar" id="ifaWelcomeAvatar">IFA</div>
+          <div class="ifa-welcome-info">
+            <div class="ifa-welcome-greeting" id="ifaWelcomeGreeting">Good morning</div>
+            <div class="ifa-welcome-name" id="ifaWelcomeName">Loading...</div>
+            <div class="ifa-welcome-chips">
+              <span class="ifa-chip ifa-chip--teal" id="ifaChipCompany" style="display:none"><i class="fa-solid fa-building"></i> <span id="ifaChipCompanyVal">—</span></span>
+              <span class="ifa-chip ifa-chip--gold" id="ifaChipCommission" style="display:none"><i class="fa-solid fa-percent"></i> <span id="ifaChipCommissionVal">—</span> commission</span>
+              <span class="ifa-chip ifa-chip--green" id="ifaChipStatus"><i class="fa-solid fa-circle-check"></i> Active Partner</span>
+              <span class="ifa-chip ifa-chip--gray" id="ifaChipLicense" style="display:none"><i class="fa-solid fa-shield-halved"></i> FSP <span id="ifaChipLicenseVal">—</span></span>
+            </div>
+          </div>
+          <div class="ifa-welcome-actions">
+            <button class="btn btn--primary btn--sm" onclick="navigate('clients', document.querySelector('[data-view=clients]'))">
+              <i class="fa-solid fa-users"></i> View Clients
+            </button>
+            <button class="btn btn--secondary btn--sm" onclick="navigate('support', document.querySelector('[data-view=support]'))">
+              <i class="fa-solid fa-headset"></i> Support
+            </button>
+          </div>
+        </div>
 
         <!-- Stats row -->
         <div class="stats-row">
@@ -159,6 +208,43 @@
 
           <!-- Right column -->
           <div style="display:flex;flex-direction:column;gap:18px">
+            <!-- Performance Panel -->
+            <div class="ifa-perf-panel">
+              <div class="ifa-perf-panel__header">
+                <span class="ifa-perf-panel__title"><i class="fa-solid fa-chart-line"></i> My Performance</span>
+              </div>
+              <div class="ifa-perf-panel__body">
+                <div class="ifa-perf-row">
+                  <span class="ifa-perf-row__label">
+                    <span style="width:24px;height:24px;border-radius:7px;background:rgba(212,175,55,0.12);display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;color:var(--gold)"><i class="fa-solid fa-coins"></i></span>
+                    Total Client AUM
+                  </span>
+                  <span class="ifa-perf-row__value gold" id="perf-aum">—</span>
+                </div>
+                <div class="ifa-perf-row">
+                  <span class="ifa-perf-row__label">
+                    <span style="width:24px;height:24px;border-radius:7px;background:rgba(34,197,94,0.12);display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;color:var(--green)"><i class="fa-solid fa-circle-dollar-to-slot"></i></span>
+                    Client Returns
+                  </span>
+                  <span class="ifa-perf-row__value positive" id="perf-returns">—</span>
+                </div>
+                <div class="ifa-perf-row">
+                  <span class="ifa-perf-row__label">
+                    <span style="width:24px;height:24px;border-radius:7px;background:rgba(255,130,21,0.12);display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;color:var(--orange)"><i class="fa-solid fa-percent"></i></span>
+                    Est. Commission
+                  </span>
+                  <span class="ifa-perf-row__value gold" id="perf-commission">—</span>
+                </div>
+                <div class="ifa-perf-row">
+                  <span class="ifa-perf-row__label">
+                    <span style="width:24px;height:24px;border-radius:7px;background:rgba(47,140,155,0.12);display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;color:var(--teal)"><i class="fa-solid fa-users"></i></span>
+                    Linked Clients
+                  </span>
+                  <span class="ifa-perf-row__value teal" id="perf-clients">—</span>
+                </div>
+              </div>
+            </div>
+
             <!-- Pending Actions -->
             <div class="panel" style="flex:1">
               <div class="panel__header">
@@ -248,7 +334,7 @@
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>Client</th><th>Phone</th><th>FICA Status</th><th>Wallet</th><th>Invested</th><th>Investments</th><th>Action</th>
+                <th>Client</th><th>Status</th><th>Total Invested</th><th>Returns Earned</th><th>FICA Status</th><th>Joined</th><th>Actions</th>
               </tr></thead>
               <tbody id="clientsBody">
                 <tr><td colspan="7"><div class="empty-state"><i class="fa-solid fa-users"></i><p>Loading clients...</p></div></td></tr>
@@ -284,7 +370,7 @@
           <div class="stat-card stat-card--blue">
             <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-trending-up"></i></div></div>
             <div class="stat-card__value" id="inv-returns">—</div>
-            <div class="stat-card__label">Expected Returns</div>
+            <div class="stat-card__label">Target Returns</div>
           </div>
         </div>
 
@@ -312,7 +398,7 @@
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>Client</th><th>Pool</th><th>Amount</th><th>Return Rate</th><th>Exp. Return</th><th>Status</th><th>Maturity</th>
+                <th>Client</th><th>Pool</th><th>Amount</th><th>Start Date</th><th>Maturity Date</th><th>Status</th><th>Annual Rate</th>
               </tr></thead>
               <tbody id="investmentsBody">
                 <tr><td colspan="7"><div class="empty-state"><i class="fa-solid fa-chart-line"></i><p>Loading...</p></div></td></tr>
@@ -408,8 +494,8 @@
         <div class="table-card">
           <div class="table-card__header">
             <div>
-              <div class="table-card__title">Client Support Tickets</div>
-              <div class="table-card__sub">Support tickets raised by your linked clients</div>
+              <div class="table-card__title">Support Tickets</div>
+              <div class="table-card__sub">Support tickets for your clients and your own account</div>
             </div>
             <div class="table-card__controls">
               <select class="tbl-filter" id="ticketStatusFilter" onchange="renderTicketsTable(this.value)">
@@ -419,15 +505,18 @@
                 <option value="resolved">Resolved</option>
                 <option value="closed">Closed</option>
               </select>
+              <button class="btn btn--primary btn--sm" onclick="openNewTicketModal()">
+                <i class="fa-solid fa-plus"></i> New Ticket
+              </button>
             </div>
           </div>
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th>Ticket ID</th><th>Client</th><th>Subject</th><th>Priority</th><th>Status</th><th>Date</th>
+                <th>Ticket ID</th><th>Client / Source</th><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th><th>Date</th>
               </tr></thead>
               <tbody id="ticketsBody">
-                <tr><td colspan="6"><div class="empty-state"><i class="fa-solid fa-headset"></i><p>Loading...</p></div></td></tr>
+                <tr><td colspan="7"><div class="empty-state"><i class="fa-solid fa-headset"></i><p>Loading...</p></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -531,6 +620,132 @@
         </div>
       </div>
 
+      <!-- ══════════════════════════════════
+           VIEW: REFER CLIENT
+      ══════════════════════════════════ -->
+      <div class="view" id="view-refer">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+          <!-- Referral Link Card -->
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-link"></i> Your Referral Link</span>
+            </div>
+            <div class="panel__body">
+              <p style="font-size:0.84rem;color:var(--text-muted);margin-bottom:16px">
+                Share your unique referral link with potential clients. When they sign up using this link, they will be automatically linked to your IFA account.
+              </p>
+              <div style="display:flex;gap:8px;align-items:center;background:#f8fafc;border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:16px">
+                <span style="font-size:0.8rem;font-family:monospace;flex:1;word-break:break-all;color:var(--teal)" id="referralLinkText">—</span>
+                <button class="btn btn--sm btn--secondary" onclick="copyReferralLink()" title="Copy to clipboard">
+                  <i class="fa-solid fa-copy"></i> Copy
+                </button>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <a id="referralWhatsApp" href="#" target="_blank" class="btn btn--sm btn--primary" style="background:#25D366;border-color:#25D366;text-decoration:none">
+                  <i class="fa-brands fa-whatsapp"></i> Share via WhatsApp
+                </a>
+                <a id="referralEmail" href="#" class="btn btn--sm btn--secondary" style="text-decoration:none">
+                  <i class="fa-solid fa-envelope"></i> Share via Email
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Referral Stats Card -->
+          <div class="panel">
+            <div class="panel__header">
+              <span class="panel__title"><i class="fa-solid fa-chart-bar"></i> Referral Overview</span>
+            </div>
+            <div class="panel__body" id="referralOverviewBody">
+              <div style="text-align:center;padding:32px;color:var(--text-muted);font-size:0.82rem">Loading...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- KYC Status Table -->
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">KYC Onboarding Status</div>
+              <div class="table-card__sub">Track which of your referred clients still need to complete onboarding</div>
+            </div>
+            <select class="tbl-filter" id="referFicaFilter" onchange="renderReferTable(this.value)">
+              <option value="">All Statuses</option>
+              <option value="pending_fica">Pending FICA</option>
+              <option value="fica_submitted">FICA Submitted</option>
+              <option value="active">Active / Approved</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>Client</th><th>Email</th><th>Phone</th><th>FICA Status</th><th>Joined</th><th>Total Invested</th><th>Action</th>
+              </tr></thead>
+              <tbody id="referTableBody">
+                <tr><td colspan="7"><div class="empty-state"><i class="fa-solid fa-user-plus"></i><p>Loading...</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="padding:12px 20px;border-top:1px solid var(--border);font-size:0.75rem;color:var(--text-muted)">
+            <span id="referTableFooter">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════
+           VIEW: COMMISSION
+      ══════════════════════════════════ -->
+      <div class="view" id="view-commission">
+        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat-card stat-card--gold">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div>
+            <div class="stat-card__value" id="comm-rate">—</div>
+            <div class="stat-card__label">Commission Rate</div>
+          </div>
+          <div class="stat-card stat-card--blue">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-coins"></i></div></div>
+            <div class="stat-card__value" id="comm-aum">—</div>
+            <div class="stat-card__label">Total Client AUM</div>
+          </div>
+          <div class="stat-card stat-card--green">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-circle-dollar-to-slot"></i></div></div>
+            <div class="stat-card__value" id="comm-owed">—</div>
+            <div class="stat-card__label">Commission Owed</div>
+          </div>
+          <div class="stat-card stat-card--purple">
+            <div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-calendar-check"></i></div></div>
+            <div class="stat-card__value" id="comm-clients">—</div>
+            <div class="stat-card__label">Billing Clients</div>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-card__header">
+            <div>
+              <div class="table-card__title">Commission Breakdown by Client</div>
+              <div class="table-card__sub" id="commissionSubTitle">Commission is calculated as AUM × your agreed rate</div>
+            </div>
+            <button class="btn btn--secondary btn--sm" onclick="exportCommissionCSV()">
+              <i class="fa-solid fa-file-csv"></i> Export CSV
+            </button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead><tr>
+                <th>Client</th><th>FICA Status</th><th>AUM</th><th>Est. Commission</th><th>Total Returns</th><th>Joined</th>
+              </tr></thead>
+              <tbody id="commissionBody">
+                <tr><td colspan="6" class="text-center text-muted" style="padding:24px">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-card__footer">
+            <span id="commissionFooter">—</span>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div><!-- /main-content -->
 </div><!-- /app-layout -->
@@ -549,6 +764,60 @@
     <div class="modal__body" id="clientDetailBody">Loading...</div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('clientDetailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Support Ticket Modal -->
+<div class="modal-overlay" id="newTicketModal" onclick="if(event.target===this)Modal.close('newTicketModal')">
+  <div class="modal modal--md">
+    <div class="modal__header">
+      <span class="modal__title"><i class="fa-solid fa-plus"></i> New Support Ticket</span>
+      <button class="modal__close" onclick="Modal.close('newTicketModal')">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="modal__body">
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div>
+          <label style="font-size:0.8rem;font-weight:600;color:var(--text-h);display:block;margin-bottom:6px">Category</label>
+          <select class="tbl-filter" id="ticketCategory" style="width:100%;padding:9px 12px">
+            <option value="general">General Enquiry</option>
+            <option value="client_query">Client Query</option>
+            <option value="commission_query">Commission Query</option>
+            <option value="onboarding">Onboarding Assistance</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.8rem;font-weight:600;color:var(--text-h);display:block;margin-bottom:6px">Priority</label>
+          <select class="tbl-filter" id="ticketPriority" style="width:100%;padding:9px 12px">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.8rem;font-weight:600;color:var(--text-h);display:block;margin-bottom:6px">Subject <span style="color:#ef4444">*</span></label>
+          <input type="text" id="ticketSubject" placeholder="Brief description of your issue..."
+            style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:0.84rem;color:var(--text-body);background:#fff;box-sizing:border-box" />
+        </div>
+        <div>
+          <label style="font-size:0.8rem;font-weight:600;color:var(--text-h);display:block;margin-bottom:6px">Message <span style="color:#ef4444">*</span></label>
+          <textarea id="ticketMessage" rows="5" placeholder="Please describe your issue in detail..."
+            style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:0.84rem;color:var(--text-body);background:#fff;resize:vertical;box-sizing:border-box"></textarea>
+        </div>
+        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-size:0.78rem;color:var(--text-muted)">
+          <i class="fa-solid fa-circle-info" style="color:var(--teal)"></i>
+          This ticket will be submitted on behalf of your IFA account. SV Capital will respond within 1–2 business days.
+        </div>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('newTicketModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="submitNewTicket()" id="submitTicketBtn">
+        <i class="fa-solid fa-paper-plane"></i> Submit Ticket
+      </button>
     </div>
   </div>
 </div>

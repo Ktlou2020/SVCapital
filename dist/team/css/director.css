@@ -11,10 +11,10 @@
   --surface3:  #22252f;
   --border:    rgba(255,255,255,0.07);
   --border2:   rgba(255,255,255,0.12);
-  --gold:      #f59e0b;
+  --gold:      #fec24f;
   --gold-h:    #d97706;
-  --gold-glow: rgba(245,158,11,0.15);
-  --purple:    #7c5cfc;
+  --gold-glow: rgba(254,194,79,0.15);
+  --purple:    #eda5ff;
   --teal:      #00d4aa;
   --danger:    #ef4444;
   --success:   #10b981;
@@ -29,7 +29,7 @@ html, body { height: 100%; background: var(--bg); font-family: 'Poppins', sans-s
 /* ── Background grid ── */
 body::before {
   content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background-image: linear-gradient(rgba(245,158,11,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(245,158,11,0.025) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(254,194,79,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(254,194,79,0.025) 1px, transparent 1px);
   background-size: 48px 48px;
 }
 
@@ -73,7 +73,7 @@ body::before {
 }
 .dir-nav-btn i { width: 16px; text-align: center; flex-shrink: 0; }
 .dir-nav-btn:hover  { background: var(--surface2); color: var(--text); }
-.dir-nav-btn.active { background: var(--gold-glow); color: var(--gold); border: 1px solid rgba(245,158,11,0.2); }
+.dir-nav-btn.active { background: var(--gold-glow); color: var(--gold); border: 1px solid rgba(254,194,79,0.2); }
 .dir-nav-btn .nav-badge {
   margin-left: auto; background: var(--gold); color: #000;
   font-size: 0.62rem; font-weight: 800; padding: 1px 6px; border-radius: 20px;
@@ -144,9 +144,9 @@ body::before {
 /* ── Buttons ── */
 .btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 18px; border-radius: 9px; font-size: 0.82rem; font-weight: 700; cursor: pointer; font-family: inherit; border: none; transition: all 0.15s; }
 .btn i { font-size: 0.82rem; }
-.btn--gold   { background: linear-gradient(135deg, var(--gold), var(--gold-h)); color: #000; box-shadow: 0 4px 16px rgba(245,158,11,0.3); }
-.btn--gold:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(245,158,11,0.45); }
-.btn--primary { background: linear-gradient(135deg, var(--purple), #5b3fd4); color: #fff; box-shadow: 0 4px 16px rgba(124,92,252,0.25); }
+.btn--gold   { background: linear-gradient(135deg, var(--gold), var(--gold-h)); color: #000; box-shadow: 0 4px 16px rgba(254,194,79,0.3); }
+.btn--gold:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(254,194,79,0.45); }
+.btn--primary { background: linear-gradient(135deg, var(--purple), #c070d8); color: #fff; box-shadow: 0 4px 16px rgba(237,165,255,0.25); }
 .btn--primary:hover { transform: translateY(-1px); }
 .btn--danger  { background: rgba(239,68,68,0.12); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }
 .btn--danger:hover { background: rgba(239,68,68,0.2); }
@@ -182,11 +182,11 @@ body::before {
   font-size: 0.7rem; font-weight: 700;
 }
 .chip--active  { background: rgba(16,185,129,0.12); color: #10b981; }
-.chip--onboard { background: rgba(245,158,11,0.12); color: var(--gold); }
+.chip--onboard { background: rgba(254,194,79,0.12); color: var(--gold); }
 .chip--done    { background: rgba(0,212,170,0.1);   color: var(--teal); }
 .chip--off     { background: rgba(107,114,128,0.15); color: var(--muted); }
 .chip--danger  { background: rgba(239,68,68,0.1);   color: var(--danger); }
-.chip--purple  { background: rgba(124,92,252,0.12); color: var(--purple); }
+.chip--purple  { background: rgba(237,165,255,0.12); color: var(--purple); }
 
 /* ── Role badge ── */
 .role-chip {
@@ -256,7 +256,7 @@ body::before {
 .form-group select:focus,
 .form-group textarea:focus {
   border-color: var(--gold);
-  box-shadow: 0 0 0 3px rgba(245,158,11,0.1);
+  box-shadow: 0 0 0 3px rgba(254,194,79,0.1);
 }
 .form-group input::placeholder,
 .form-group textarea::placeholder { color: var(--muted); }
@@ -269,9 +269,9 @@ body::before {
   padding: 12px 16px; border-radius: 10px; font-size: 0.82rem; font-weight: 600;
   display: flex; align-items: flex-start; gap: 10px; margin-bottom: 16px;
 }
-.dir-alert--info    { background: rgba(124,92,252,0.1); border: 1px solid rgba(124,92,252,0.2); color: #c4b5fd; }
+.dir-alert--info    { background: rgba(237,165,255,0.1); border: 1px solid rgba(237,165,255,0.2); color: #eda5ff; }
 .dir-alert--success { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); color: #6ee7b7; }
-.dir-alert--warn    { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2); color: #fcd34d; }
+.dir-alert--warn    { background: rgba(254,194,79,0.1); border: 1px solid rgba(254,194,79,0.2); color: #fcd34d; }
 .dir-alert--danger  { background: rgba(239,68,68,0.1);  border: 1px solid rgba(239,68,68,0.2);  color: #fca5a5; }
 
 /* ══════════════════ ONBOARDING CHECKLIST ══════════════════ */
@@ -376,7 +376,7 @@ body::before {
   gap: 16px; z-index: 9999;
 }
 #dir-loader .spin {
-  width: 44px; height: 44px; border: 3px solid rgba(245,158,11,0.15);
+  width: 44px; height: 44px; border: 3px solid rgba(254,194,79,0.15);
   border-top-color: var(--gold); border-radius: 50%; animation: spin 0.65s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }

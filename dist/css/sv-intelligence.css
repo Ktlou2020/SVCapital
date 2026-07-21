@@ -12,7 +12,7 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #FF9B0C 0%, #FF5229 100%);
+  background: linear-gradient(135deg, #fec24f 0%, #FF5229 100%);
   border: none;
   cursor: pointer;
   display: flex;
@@ -79,7 +79,7 @@
 
 /* ── Panel header ─────────────────────────────────────────────── */
 .svi-header {
-  background: linear-gradient(135deg, #1a2235 0%, #0f1724 100%);
+  background: linear-gradient(135deg, #303030 0%, #0f1724 100%);
   padding: 16px 18px 14px;
   display: flex;
   align-items: center;
@@ -88,7 +88,7 @@
 }
 .svi-header__icon {
   width: 36px; height: 36px;
-  background: linear-gradient(135deg, #FF9B0C, #FF5229);
+  background: linear-gradient(135deg, #fec24f, #FF5229);
   border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
   font-size: 1rem; color: #fff; flex-shrink: 0;
@@ -128,7 +128,7 @@
   animation: svi-pulse 2s infinite;
   flex-shrink: 0;
 }
-.svi-status__dot.thinking { background: #FF9B0C; }
+.svi-status__dot.thinking { background: #fec24f; }
 @keyframes svi-pulse {
   0%,100% { opacity: 1; transform: scale(1); }
   50%      { opacity: 0.55; transform: scale(0.85); }
@@ -161,7 +161,7 @@
 }
 .svi-chip:hover {
   background: rgba(255,130,21,0.08);
-  border-color: #FF9B0C;
+  border-color: #fec24f;
   color: #FF5229;
 }
 
@@ -204,7 +204,7 @@
 }
 .svi-msg--ai .svi-msg__avatar {
   width: 28px; height: 28px; border-radius: 8px;
-  background: linear-gradient(135deg, #FF9B0C, #FF5229);
+  background: linear-gradient(135deg, #fec24f, #FF5229);
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-size: 0.72rem; flex-shrink: 0; font-weight: 800;
 }
@@ -214,7 +214,7 @@
   flex-direction: row-reverse;
 }
 .svi-msg--user .svi-msg__bubble {
-  background: linear-gradient(135deg, #FF9B0C, #FF5229);
+  background: linear-gradient(135deg, #fec24f, #FF5229);
   color: #fff;
   border-radius: 14px 0 14px 14px;
   padding: 11px 14px;
@@ -261,12 +261,12 @@
   display: flex; align-items: center; justify-content: center;
   font-size: 0.88rem; flex-shrink: 0;
 }
-.svi-insight-card__icon--orange { background: rgba(255,130,21,0.10); color: #FF8215; }
+.svi-insight-card__icon--orange { background: rgba(255,130,21,0.10); color: #fec24f; }
 .svi-insight-card__icon--green  { background: rgba(34,197,94,0.10);  color: #22c55e; }
-.svi-insight-card__icon--blue   { background: rgba(59,130,246,0.10); color: #3b82f6; }
+.svi-insight-card__icon--blue   { background: rgba(59,130,246,0.10); color: #656565; }
 .svi-insight-card__icon--red    { background: rgba(239,68,68,0.10);  color: #ef4444; }
-.svi-insight-card__icon--teal   { background: rgba(47,140,155,0.10); color: #2F8C9B; }
-.svi-insight-card__icon--purple { background: rgba(168,85,247,0.10); color: #a855f7; }
+.svi-insight-card__icon--teal   { background: rgba(47,140,155,0.10); color: #656565; }
+.svi-insight-card__icon--purple { background: rgba(237,165,255,0.10); color: #eda5ff; }
 
 .svi-insight-card__body { flex: 1; min-width: 0; }
 .svi-insight-card__label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af; margin-bottom: 2px; }
@@ -305,7 +305,7 @@
 }
 .svi-mini-bar__fill {
   height: 100%; border-radius: 2px;
-  background: linear-gradient(90deg, #FF9B0C, #FF5229);
+  background: linear-gradient(90deg, #fec24f, #FF5229);
   transition: width 0.6s ease;
 }
 
@@ -325,7 +325,7 @@
   border-radius: 12px;
   padding: 10px 14px;
   font-size: 0.82rem;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Poppins', sans-serif;
   color: #1f2937;
   background: #f9fafb;
   outline: none;
@@ -337,14 +337,14 @@
   overflow-y: auto;
 }
 .svi-input:focus {
-  border-color: #FF9B0C;
-  box-shadow: 0 0 0 3px rgba(255,155,12,0.12);
+  border-color: #fec24f;
+  box-shadow: 0 0 0 3px rgba(254,194,79,0.12);
   background: #fff;
 }
 .svi-send-btn {
   width: 40px; height: 40px;
   border-radius: 11px;
-  background: linear-gradient(135deg, #FF9B0C, #FF5229);
+  background: linear-gradient(135deg, #fec24f, #FF5229);
   border: none;
   cursor: pointer;
   color: #fff;
@@ -372,7 +372,7 @@
   color: #d1d5db;
   flex-shrink: 0;
 }
-.svi-powered span { color: #FF9B0C; font-weight: 700; }
+.svi-powered span { color: #fec24f; font-weight: 700; }
 
 /* ── Responsive ───────────────────────────────────────────────── */
 @media (max-width: 480px) {

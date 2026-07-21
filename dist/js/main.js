@@ -14,7 +14,7 @@ const PRODUCTS = {
     termUnit: 'months',
     termYears: 1,
     icon: 'fa-cow',
-    color: '#D4AF37',
+    color: '#fec24f',
     partner: 'Beefcor',
     infoItems: [
       { label: 'Partner', value: 'Beefcor Feedlot' },
@@ -57,6 +57,23 @@ const PRODUCTS = {
       { label: 'Capital', value: 'End of term' },
     ]
   },
+  solar6: {
+    name: 'Solar Investment (6yr)',
+    rate: 0.1390,
+    minInvest: 10000,
+    term: 72,
+    termUnit: 'months',
+    termYears: 6,
+    icon: 'fa-solar-panel',
+    color: '#4CAF50',
+    partner: 'The Solar Experts',
+    infoItems: [
+      { label: 'Partner', value: 'The Solar Experts' },
+      { label: 'Location', value: 'Cape Town, SA' },
+      { label: 'Returns', value: 'Annual payouts' },
+      { label: 'Capital', value: 'End of term' },
+    ]
+  },
   short: {
     name: 'Short-Term Investment',
     rate: 0.1392,
@@ -65,7 +82,7 @@ const PRODUCTS = {
     termUnit: 'months',
     termYears: 5/12,
     icon: 'fa-bolt',
-    color: '#3b82f6',
+    color: '#656565',
     partner: 'MoolaLend',
     infoItems: [
       { label: 'Partner', value: 'MoolaLend Pty Ltd' },
@@ -93,12 +110,63 @@ const PRODUCTS = {
   }
 };
 
+/* ─── Partner info profiles ─── */
+const _pipEsc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const _pipSafeUrl = u => (typeof u === 'string' && /^https?:\/\//i.test(u)) ? u : '#';
+const PARTNER_PROFILES = {
+  'Beefcor': {
+    tagline: 'Producers of quality cattle since 1973',
+    profile: 'Beefcor is a vertically integrated South African cattle feedlot founded in 1973, marketing over 70,000 cattle per year. They manage the full value chain from livestock procurement to branded beef in retail stores. Beefcor hosts SA\'s first commercially viable biogas plant at their Bronkhorstspruit facility.',
+    website: 'https://www.beefcor.com',
+    youtubeId: 'mTIcSDeggtQ',
+  },
+  'MoolaLend': {
+    tagline: 'Your chomie in funding — SA\'s PO finance specialist',
+    profile: 'MoolaLend is a Bryanston-based boutique lender that specialises in Purchase Order (PO) finance for South African SMEs. They fund government tenders and private-sector purchase orders from R50,000, enabling businesses to fulfil contracts without upfront capital. Incorporated in 2021 and listed in FundingHub\'s Top 10 PO Funding Lenders in SA, MoolaLend takes a partner-first approach to SME lending.',
+    website: 'https://moolalend-production.up.railway.app/',
+  },
+  'The Solar Experts': {
+    tagline: 'Cape Town\'s trusted solar design & installation specialists',
+    profile: 'The Solar Experts is a Somerset West-based solar energy company with over 612 completed installations across the Western Cape since 2019. They serve residential and commercial clients with systems from 5 kW to 250 kW, handled entirely by in-house electrical staff.',
+    website: 'https://thesolarexperts.co.za',
+  },
+  'OnFleet': {
+    tagline: 'Rent to Own. Ride. Earn. Own.',
+    profile: 'OnFleet Africa runs South Africa\'s leading rent-to-own delivery motorcycle programme. Riders with no deposit access a bike for R650–R850/week and own it outright after 18 months — with free monthly servicing included. Around 60% of riders re-enter a new contract at the 18-month mark, renting out their first bike for additional income.',
+    website: 'https://portal.onfleet.africa',
+  },
+};
+
+function _showPartnerModal(name) {
+  const p = PARTNER_PROFILES[name];
+  if (!p) return;
+  document.getElementById('pip-modal')?.remove();
+  const vid = p.youtubeId ? `<a href="https://www.youtube.com/watch?v=${p.youtubeId}" target="_blank" rel="noopener" style="display:block;position:relative;border-radius:10px;overflow:hidden;margin-bottom:14px;text-decoration:none"><img src="https://img.youtube.com/vi/${p.youtubeId}/mqdefault.jpg" style="width:100%;display:block" loading="lazy"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.4)"><i class="fa-solid fa-play" style="font-size:2rem;color:#fff"></i></span></a>` : '';
+  const el = document.createElement('div');
+  el.id = 'pip-modal';
+  el.innerHTML = `<div id="pip-modal-bd" style="position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)"><div style="background:#1c1c1e;border:1px solid rgba(255,255,255,.15);border-radius:18px;padding:24px 22px;max-width:360px;width:100%;position:relative;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.8)"><button onclick="document.getElementById('pip-modal').remove()" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,.1);border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;color:rgba(255,255,255,.8);display:flex;align-items:center;justify-content:center;font-size:.9rem;line-height:1"><i class="fa-solid fa-xmark"></i></button><div style="font-weight:700;font-size:1.05rem;color:#fff;margin-bottom:3px;padding-right:36px">${_pipEsc(name)}</div><div style="font-size:.75rem;color:#eda5ff;margin-bottom:14px;line-height:1.45">${_pipEsc(p.tagline)}</div>${vid}<p style="font-size:.8rem;color:rgba(255,255,255,.8);line-height:1.65;margin:0 0 16px">${_pipEsc(p.profile)}</p><a href="${_pipSafeUrl(p.website)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:7px;font-size:.8rem;color:#eda5ff;text-decoration:none;border:1px solid rgba(237,165,255,.3);border-radius:20px;padding:7px 16px"><i class="fa-solid fa-arrow-up-right-from-square"></i> Visit website</a></div></div>`;
+  document.body.appendChild(el);
+  document.getElementById('pip-modal-bd').addEventListener('click', e => { if (e.target === e.currentTarget) el.remove(); });
+  const _onKey = e => { if (e.key === 'Escape') { el.remove(); document.removeEventListener('keydown', _onKey); } };
+  document.addEventListener('keydown', _onKey);
+}
+
+function _partnerInfoBtn(name) {
+  if (!PARTNER_PROFILES[name]) return '';
+  return `<button type="button" onclick="_showPartnerModal('${_pipEsc(name)}')" aria-label="About ${_pipEsc(name)}" style="background:none;border:none;cursor:pointer;padding:0 4px;color:inherit;opacity:.55;font-size:.85em;vertical-align:middle;line-height:1;transition:color .15s,opacity .15s" onmouseenter="this.style.color='#eda5ff';this.style.opacity='1'" onmouseleave="this.style.color='';this.style.opacity='.55'"><i class="fa-solid fa-circle-info"></i></button>`;
+}
+
+function _partnerNameLink(name, display) {
+  if (!PARTNER_PROFILES[name]) return _pipEsc(display || name);
+  return `<span onclick="_showPartnerModal('${_pipEsc(name)}')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px" onmouseenter="this.style.color='#eda5ff'" onmouseleave="this.style.color=''">${_pipEsc(display || name)}</span>`;
+}
+
 /* ─── FAQ Data ─── */
 const FAQ_DATA = {
   general: [
     {
       q: 'Who owns and runs SV Capital?',
-      a: 'SV Capital is a privately owned company co-founded by Ayanda Majola (CEO) and Kagiso Tloubatla (COO). Ayanda is a Chartered Accountant with a passion for transformative African investments, and Kagiso brings deep expertise in finance and operational excellence.'
+      a: 'SV Capital is a South African alternative investment platform founded by experienced finance professionals with deep expertise in chartered accounting and financial strategy. Our mission is simple: democratise access to real, asset-backed investments for every South African, from R500.'
     },
     {
       q: 'How do I get started?',
@@ -194,7 +262,7 @@ const MODAL_DATA = {
     title: 'Power the future. Earn from it.',
     desc: 'Your capital funds solar panel installations across Cape Town, generating clean electricity sold through long-term contracts. Annual returns are distributed throughout the term, with your full capital returned at the end.',
     stats: [
-      { label: 'Avg. Return', val: '21.40% p.a.' },
+      { label: 'Best Return', val: '21.40% p.a.' },
       { label: 'Minimum', val: 'R10,000' },
       { label: 'Terms', val: '5 / 6 / 7 yrs' }
     ],
@@ -250,8 +318,7 @@ const MODAL_DATA = {
    ═══════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
   initNavbar();
-  initHeroChart();
-  initCalculator();
+  initDeferredVisuals();
   initFAQ();
   initScrollAnimations();
   initMobileNav();
@@ -283,24 +350,82 @@ function initNavbar() {
 function initMobileNav() {
   const toggle = document.getElementById('mobileToggle');
   const navLinks = document.getElementById('navLinks');
+  const overlay = document.getElementById('navOverlay');
 
   if (!toggle || !navLinks) return;
 
+  const closeMenu = () => {
+    navLinks.classList.remove('open');
+    document.body.classList.remove('no-scroll');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', 'Open menu');
+  };
+
+  const openMenu = () => {
+    navLinks.classList.add('open');
+    document.body.classList.add('no-scroll');
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.setAttribute('aria-label', 'Close menu');
+    const firstLink = navLinks.querySelector('a');
+    setTimeout(() => firstLink?.focus(), 30);
+  };
+
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('aria-controls', 'navLinks');
+
   toggle.addEventListener('click', () => {
-    navLinks.classList.toggle('open');
+    if (navLinks.classList.contains('open')) closeMenu();
+    else openMenu();
   });
 
-  // Close on link click
   navLinks.querySelectorAll('a').forEach(link => {
-    link.addEventListener('click', () => navLinks.classList.remove('open'));
+    link.addEventListener('click', closeMenu);
   });
 
-  // Close on outside click
-  document.addEventListener('click', (e) => {
-    if (!toggle.contains(e.target) && !navLinks.contains(e.target)) {
-      navLinks.classList.remove('open');
-    }
+  overlay?.addEventListener('click', closeMenu);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && navLinks.classList.contains('open')) closeMenu();
   });
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) closeMenu();
+  });
+}
+
+function initDeferredVisuals() {
+  const runHeroChart = () => {
+    if (document.getElementById('heroChart')) initHeroChart();
+  };
+
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(runHeroChart, { timeout: 1200 });
+  } else {
+    setTimeout(runHeroChart, 120);
+  }
+
+  const calcSection = document.getElementById('calculator');
+  let calculatorReady = false;
+  const runCalculator = () => {
+    if (calculatorReady) return;
+    calculatorReady = true;
+    initCalculator();
+  };
+
+  if (calcSection && 'IntersectionObserver' in window) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          runCalculator();
+          observer.disconnect();
+        }
+      });
+    }, { rootMargin: '160px 0px' });
+
+    observer.observe(calcSection);
+  } else {
+    runCalculator();
+  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -308,7 +433,7 @@ function initMobileNav() {
    ═══════════════════════════════════════════════ */
 function initHeroChart() {
   const canvas = document.getElementById('heroChart');
-  if (!canvas) return;
+  if (!canvas || typeof Chart === 'undefined') return;
 
   // Generate a nice upward-trending portfolio line
   const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -325,13 +450,13 @@ function initHeroChart() {
       labels,
       datasets: [{
         data,
-        borderColor: '#D4AF37',
+        borderColor: '#fec24f',
         borderWidth: 2,
         fill: true,
         backgroundColor: (ctx) => {
           const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 80);
-          gradient.addColorStop(0, 'rgba(212,175,55,0.25)');
-          gradient.addColorStop(1, 'rgba(212,175,55,0)');
+          gradient.addColorStop(0, 'rgba(254,194,79,0.25)');
+          gradient.addColorStop(1, 'rgba(254,194,79,0)');
           return gradient;
         },
         tension: 0.4,
@@ -367,15 +492,36 @@ function initCalculator() {
 
   if (!slider) return;
 
+  const solarTerms = document.getElementById('calcSolarTerms');
+
   // Tab switching
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       tabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
-      currentCalcProduct = tab.dataset.calc;
+      const calc = tab.dataset.calc;
+      const isSolar = String(calc).startsWith('solar');
+      // Show the 5/6/7-year term selector only for Solar; default to the
+      // currently-selected solar term (or 7yr).
+      if (solarTerms) solarTerms.style.display = isSolar ? 'flex' : 'none';
+      currentCalcProduct = isSolar
+        ? (String(currentCalcProduct).startsWith('solar') ? currentCalcProduct : 'solar7')
+        : calc;
       updateCalculator();
     });
   });
+
+  // Solar term selector (5 / 6 / 7 years)
+  if (solarTerms) {
+    solarTerms.querySelectorAll('.calc-term-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        solarTerms.querySelectorAll('.calc-term-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentCalcProduct = btn.dataset.solar;   // solar5 | solar6 | solar7
+        updateCalculator();
+      });
+    });
+  }
 
   // Slider input
   slider.addEventListener('input', () => {
@@ -408,7 +554,7 @@ function updateCalculator() {
   const years = product.termYears;
   let returnsEarned, totalPayout;
 
-  if (currentCalcProduct === 'solar7' || currentCalcProduct === 'solar5') {
+  if (String(currentCalcProduct).startsWith('solar')) {
     // Solar: annual returns + capital at end
     returnsEarned = amount * ratePerYear * years;
     totalPayout = amount + returnsEarned;
@@ -451,7 +597,7 @@ function updateCalculator() {
 
 function updateCalcChart(amount, totalReturns, product) {
   const canvas = document.getElementById('calcChart');
-  if (!canvas) return;
+  if (!canvas || typeof Chart === 'undefined') return;
 
   const years = Math.max(1, Math.round(product.termYears));
   const labels = [];
@@ -487,12 +633,7 @@ function updateCalcChart(amount, totalReturns, product) {
         {
           label: 'Returns',
           data: returnsData,
-          backgroundColor: (ctx) => {
-            const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 180);
-            gradient.addColorStop(0, 'rgba(254,194,79,0.9)');
-            gradient.addColorStop(1, 'rgba(254,194,79,0.3)');
-            return gradient;
-          },
+          backgroundColor: '#fec24f',
           borderColor: '#fec24f',
           borderWidth: 1,
           borderRadius: 4,
@@ -501,11 +642,11 @@ function updateCalcChart(amount, totalReturns, product) {
     },
     options: {
       responsive: true,
-      maintainAspectRatio: true,
+      maintainAspectRatio: false,
       plugins: {
         legend: {
           labels: {
-            color: '#8ea3b8',
+            color: '#656565',
             font: { size: 11 },
             boxWidth: 12,
             boxHeight: 12,
@@ -514,7 +655,7 @@ function updateCalcChart(amount, totalReturns, product) {
         tooltip: {
           backgroundColor: 'rgba(13,17,23,0.95)',
           titleColor: '#f0f4f8',
-          bodyColor: '#8ea3b8',
+          bodyColor: '#656565',
           borderColor: 'rgba(254,194,79,0.3)',
           borderWidth: 1,
           callbacks: {
@@ -526,13 +667,13 @@ function updateCalcChart(amount, totalReturns, product) {
         x: {
           stacked: true,
           grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: { color: '#4a6080', font: { size: 10 } }
+          ticks: { color: '#656565', font: { size: 10 } }
         },
         y: {
           stacked: true,
           grid: { color: 'rgba(255,255,255,0.04)' },
           ticks: {
-            color: '#4a6080',
+            color: '#656565',
             font: { size: 10 },
             callback: (val) => 'R' + (val >= 1000 ? (val/1000).toFixed(0) + 'k' : val)
           }
@@ -613,11 +754,13 @@ window.openModal = function(productKey) {
         </div>
       `).join('')}
     </div>
+    ${data.herdHtml || ''}
+    ${data.trackHtml || ''}
     <h4 style="color:var(--white); margin-bottom:12px; font-size:0.9rem; text-transform:uppercase; letter-spacing:0.08em;">Key Details</h4>
     <ul>
       ${data.points.map(p => `<li>${p}</li>`).join('')}
     </ul>
-    <a href="https://app.svcapital.co.za/register" class="btn btn--gold btn--full" target="_blank" style="margin-top:8px;">
+    <a href="signup.html" class="btn btn--gold btn--full" style="margin-top:8px;">
       Start Investing <i class="fa-solid fa-arrow-right"></i>
     </a>
     <p style="font-size:0.72rem; color:var(--text-dim); margin-top:12px; text-align:center;">
@@ -643,49 +786,60 @@ document.addEventListener('keydown', (e) => {
    SCROLL ANIMATIONS
    ═══════════════════════════════════════════════ */
 function initScrollAnimations() {
-  // Add fade-up class to key elements
+  // Legacy fade-up classes
   const targets = [
-    '.section-header',
     '.product-card',
     '.step',
     '.stat-card',
-    '.team-card',
-    '.testimonial-card',
     '.award-card',
     '.compliance-item',
     '.compare-callout',
     '.app-cta',
+    '.calc-controls',
+    '.calc-results',
+    '.sdg-badge',
   ];
 
   targets.forEach(selector => {
     document.querySelectorAll(selector).forEach(el => {
-      if (!el.classList.contains('fade-up')) {
+      if (!el.classList.contains('fade-up') && !el.dataset.reveal) {
         el.classList.add('fade-up');
       }
     });
   });
 
-  const observer = new IntersectionObserver(
+  const fadeObserver = new IntersectionObserver(
     (entries) => {
-      entries.forEach((entry, i) => {
+      entries.forEach(entry => {
         if (entry.isIntersecting) {
-          // Stagger children of grid containers
-          const delay = entry.target.closest('.products-grid, .stats-grid, .team-grid, .testimonials-grid')
+          const delay = entry.target.closest('.products-grid, .stats-grid, .sdg-badges')
             ? Array.from(entry.target.parentElement.children).indexOf(entry.target) * 80
             : 0;
-
-          setTimeout(() => {
-            entry.target.classList.add('visible');
-          }, delay);
-
-          observer.unobserve(entry.target);
+          setTimeout(() => entry.target.classList.add('visible'), delay);
+          fadeObserver.unobserve(entry.target);
         }
       });
     },
-    { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+    { threshold: 0.08, rootMargin: '0px 0px -30px 0px' }
   );
 
-  document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+  document.querySelectorAll('.fade-up').forEach(el => fadeObserver.observe(el));
+
+  // Data-reveal system — exposed globally so dynamically injected elements
+  // (e.g. testimonials loaded after DOMContentLoaded) can be observed.
+  window._revealObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in-view');
+          window._revealObserver.unobserve(entry.target);
+        }
+      });
+    },
+    { threshold: 0.1, rootMargin: '0px 0px -30px 0px' }
+  );
+
+  document.querySelectorAll('[data-reveal]').forEach(el => window._revealObserver.observe(el));
 }
 
 /* ═══════════════════════════════════════════════
@@ -794,3 +948,441 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     window.scrollTo({ top, behavior: 'smooth' });
   });
 });
+
+/* ─── Live average returns (auto-calculated from matured pools) ───────────
+   Pulls the public products feed and overrides the displayed average return
+   on the product cards, the detail modal, and the calculator with the real
+   achieved average across each product's matured pools. Falls back silently
+   to the static copy when there is no matured-pool data yet. */
+async function _applyLiveProductAverages() {
+  // Hide all product cards immediately so nothing flashes while the API fetch
+  // is in-flight. Cards are selectively un-hidden after the response arrives.
+  // Using visibility:hidden (not display:none) preserves grid layout during load.
+  const _allCards = document.querySelectorAll('.product-card[data-product]');
+  _allCards.forEach(c => { c.style.visibility = 'hidden'; });
+
+  let products = [], fetchOk = false;
+  try {
+    const r = await fetch('/api/products?_=' + Date.now());
+    if (r.ok) { const d = await r.json(); products = d.data || []; fetchOk = true; }
+  } catch (_) {}
+
+  // If the fetch failed entirely, restore cards so a network error doesn't
+  // produce a blank product section. The admin's hide setting will apply on
+  // the next successful load.
+  if (!fetchOk) { _allCards.forEach(c => { c.style.visibility = ''; }); return; }
+
+  // Populate the shared Utils cache so productInfo() returns API colors everywhere
+  if (typeof Utils !== 'undefined') Utils.setProductCache(products);
+
+  const avgByType = {}, prodByType = {};
+  products.forEach(p => {
+    prodByType[p.product_type] = p;
+    const a = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : null;
+    const c = parseInt(p.matured_pool_count) || 0;
+    if (a != null && !isNaN(a) && c > 0) avgByType[p.product_type] = a;
+  });
+
+  // Map each home-page product key → the product_type(s) it represents.
+  // `primary` is the single product whose admin-managed copy backs the modal.
+  const homeMap = {
+    cattle:   { types: ['cattle'], primary: 'cattle' },
+    solar:    { types: ['solar_7yr', 'solar_6yr', 'solar_5yr'], primary: 'solar_7yr' },
+    short:    { types: ['short_term', 'smme'], primary: 'short_term' },
+    delivery: { types: ['delivery_bike'], primary: 'delivery_bike' },
+  };
+
+  const fmtR = n => 'R' + Number(n || 0).toLocaleString('en-ZA');
+
+  const avgForHome = key => {
+    const vals = (homeMap[key].types || []).map(t => avgByType[t]).filter(v => v != null);
+    if (!vals.length) return null;
+    if (key === 'solar') return Math.max(...vals);           // headline shows best
+    return vals.reduce((s, v) => s + v, 0) / vals.length;
+  };
+
+  Object.keys(homeMap).forEach(key => {
+    const rate = avgForHome(key);
+    const prod = prodByType[homeMap[key].primary];
+
+    // 1) Average return (auto-calculated) — card + modal + calculator
+    if (rate != null) {
+      const pct = (rate * 100).toFixed(2) + '%';
+      const card = document.querySelector(`.product-card[data-product="${key}"]`);
+      const goldEl = card && card.querySelector('.stat__value--gold');
+      if (goldEl) goldEl.textContent = pct;
+      if (typeof MODAL_DATA !== 'undefined' && MODAL_DATA[key] && Array.isArray(MODAL_DATA[key].stats)) {
+        const st = MODAL_DATA[key].stats.find(s => /return/i.test(s.label));
+        if (st) st.val = pct + ' p.a.';
+      }
+      if (typeof PRODUCTS !== 'undefined' && PRODUCTS[key]) PRODUCTS[key].rate = rate;
+    }
+
+    // 2) Apply API color to product card elements on the homepage
+    const primaryType = homeMap[key].primary;
+    const apiColor = prodByType[primaryType]?.color;
+    if (apiColor) {
+      const card = document.querySelector(`.product-card[data-product="${key}"]`);
+      if (card) {
+        const bg   = card.querySelector('.product-card__bg');
+        const icon = card.querySelector('.product-card__icon');
+        const gold = card.querySelector('.stat__value--gold');
+        if (bg)   bg.style.background = `radial-gradient(circle at top right, ${apiColor}18, transparent)`;
+        if (icon) icon.style.color = apiColor;
+        if (gold) gold.style.color = apiColor;
+      }
+    }
+
+    // 3) Admin-managed product detail copy → "View Details" modal
+    if (prod && typeof MODAL_DATA !== 'undefined' && MODAL_DATA[key]) {
+      const m = MODAL_DATA[key];
+      if (prod.label)       m.eyebrow = prod.label.replace(/\s*\(\d+yr\)/gi, '').trim();
+      if (prod.headline)    m.title   = prod.headline;
+      if (prod.description) m.desc    = prod.description;
+      if (prod.key_details) {
+        const pts = prod.key_details.split('\n').map(s => s.trim()).filter(Boolean);
+        if (pts.length) m.points = pts;
+      }
+      if (Array.isArray(m.stats)) {
+        const minSt  = m.stats.find(s => /min/i.test(s.label));
+        if (minSt && prod.min_investment != null)  minSt.val  = fmtR(prod.min_investment);
+        const termSt = m.stats.find(s => /term/i.test(s.label));
+        if (termSt && prod.term_months != null && key !== 'solar') termSt.val = `${prod.term_months} Months`;
+      }
+    }
+  });
+
+  // 3) Show/hide product cards and calculator tabs based on display_on_homepage
+  const calcKeyMap = {
+    cattle:   ['cattle'],
+    solar:    ['solar_7yr', 'solar_6yr', 'solar_5yr'],
+    short:    ['short_term', 'smme'],
+    delivery: ['delivery_bike'],
+  };
+  const calcTabMap = { // calc tab data-calc values → product home key
+    cattle:   'cattle',
+    solar7:   'solar',
+    solar6:   'solar',
+    solar5:   'solar',
+    short:    'short',
+    delivery: 'delivery',
+  };
+
+  // A home key is visible only if at least one of its product_types has display_on_homepage === true
+  const homeVisible = {};
+  Object.keys(calcKeyMap).forEach(homeKey => {
+    homeVisible[homeKey] = calcKeyMap[homeKey].some(t => {
+      const p = prodByType[t];
+      return p && !!p.display_on_homepage;
+    });
+  });
+
+  // Resolve visibility for any key — homeMap group first, then direct product_type lookup
+  const resolveVisible = key => {
+    if (key in homeVisible) return homeVisible[key];
+    const p = prodByType[key]; // card data-product matches product_type directly
+    return p ? !!p.display_on_homepage : false; // not in API (inactive) → hide
+  };
+
+  // Hide/show product cards — use a class so the risk filter cannot accidentally
+  // restore cards that are hidden by display_on_homepage.
+  document.querySelectorAll('.product-card[data-product]').forEach(card => {
+    const visible = resolveVisible(card.dataset.product);
+    card.style.visibility = '';
+    card.style.display    = '';
+    card.classList.toggle('product-card--hp-hidden', !visible);
+  });
+
+  // Hide/show footer product links
+  document.querySelectorAll('[data-footer-product]').forEach(li => {
+    li.style.display = resolveVisible(li.dataset.footerProduct) ? '' : 'none';
+  });
+
+  // Update "X+ Products" stat in the deposit prompt modal
+  const visibleCount = Object.values(homeVisible).filter(Boolean).length;
+  document.querySelectorAll('.dp-stat__val').forEach(el => {
+    if (el.textContent.includes('+') && !isNaN(parseInt(el.textContent))) {
+      el.textContent = visibleCount + '+';
+    }
+  });
+
+  // Hide/show calculator tabs; if active tab hidden, activate first visible one
+  const allTabs = document.querySelectorAll('.calc-tab[data-calc]');
+  allTabs.forEach(tab => {
+    const homeKey = calcTabMap[tab.dataset.calc];
+    const visible = homeKey ? homeVisible[homeKey] : true;
+    tab.style.display = visible ? '' : 'none';
+    if (!visible && tab.classList.contains('active')) {
+      const first = Array.from(allTabs).find(t => {
+        const hk = calcTabMap[t.dataset.calc];
+        return hk ? homeVisible[hk] : true;
+      });
+      if (first) { first.classList.add('active'); currentCalcProduct = first.dataset.calc; updateCalculator(); }
+      tab.classList.remove('active');
+    }
+  });
+
+  // Next pool closing — soonest open-pool closing date across all products
+  _showNextPoolClosing(products);
+}
+
+// ── Testimonials (dynamic) ────────────────────────────────────────────────
+(async function loadTestimonials() {
+  const grid = document.getElementById('testimonialsGrid');
+  if (!grid) return;
+
+  const FALLBACKS = [
+    { rating: 5, body: 'Platform is easy to use. Returns out perform all banks for all investments. Thanks for listening to us and introducing minor accounts. Real growth and nice diversification portfolios.', display_name: 'Sello Moja', initials: 'SM', featured: true },
+    { rating: 5, body: "The organisation really projected their company's value proposition fully towards me as their new client and my money is in safe hands.", display_name: 'Kabelo Rakgantso', initials: 'KR', featured: false },
+    { rating: 5, body: 'The entire process was quite seamless. Very impressed with your App. I absolutely have no complaints.', display_name: 'Nhlakanipho Mzobe', initials: 'NM', featured: false },
+    { rating: 5, body: 'For someone who is new to investing, it is very helpful with guiding you to investments that suit your needs and pocket.', display_name: 'Russel Chiume', initials: 'RC', featured: false },
+    { rating: 5, body: 'A professional service and great investment return.', display_name: 'William Keenan', initials: 'WK', featured: false },
+    { rating: 5, body: "I'm very happy with my experience and have no complaints.", display_name: 'Roland Hepson', initials: 'RH', featured: false },
+    { rating: 5, body: 'Customer service yase SV Capital is beautiful.', display_name: 'Nolukholo Gamede', initials: 'NG', featured: false },
+    { rating: 5, body: 'Great app for investing. I love it!', display_name: 'Travis Dikoko', initials: 'TD', featured: false },
+  ];
+
+  const renderCards = (items) => {
+    grid.innerHTML = items.map((t, i) => `
+      <div class="testimonial-card${t.featured ? ' testimonial-card--featured' : ''}" data-reveal="up" data-reveal-delay="${(i + 1) * 100}">
+        <div class="testimonial-stars">${'★'.repeat(t.rating || 5)}</div>
+        <p>"${t.body}"</p>
+        <div class="testimonial-author">
+          <div class="author-avatar">${t.initials}</div>
+          <div>
+            <strong>${t.display_name}</strong>
+            <div class="testimonial-verified">Verified Investor${t.product_label ? ' · ' + t.product_label : ''}</div>
+          </div>
+        </div>
+      </div>`).join('');
+    // Cards are injected after initScrollAnimations() already ran, so the
+    // IntersectionObserver never saw them. Re-observe new cards or mark
+    // them in-view immediately if the section is already visible.
+    const section = grid.closest('section');
+    const sectionTop = section ? section.getBoundingClientRect().top : Infinity;
+    grid.querySelectorAll('[data-reveal]').forEach((el, i) => {
+      if (sectionTop < window.innerHeight) {
+        // Section already in viewport — reveal with stagger, no observer needed
+        const delay = parseInt(el.dataset.revealDelay || '0', 10);
+        setTimeout(() => el.classList.add('in-view'), delay);
+      } else if (window._revealObserver) {
+        window._revealObserver.observe(el);
+      } else {
+        el.classList.add('in-view');
+      }
+    });
+  };
+
+  try {
+    const apiBase = (typeof window.__SVC_API_BASE__ !== 'undefined' ? window.__SVC_API_BASE__ : '/api/');
+    const res = await fetch(apiBase + 'testimonials/public');
+    if (res.ok) {
+      const data = await res.json();
+      const items = Array.isArray(data) ? data : (data.testimonials || []);
+      renderCards(items.length > 0 ? items : FALLBACKS);
+    } else {
+      renderCards(FALLBACKS);
+    }
+  } catch (_) {
+    renderCards(FALLBACKS);
+  }
+})();
+
+function _showNextPoolClosing(products) {
+  let soonest = null, soonestProduct = null;
+  (products || []).forEach(p => {
+    if (!p.next_closing_date) return;
+    const d = new Date(p.next_closing_date);
+    if (isNaN(d)) return;
+    if (!soonest || d < soonest) { soonest = d; soonestProduct = p; }
+  });
+  if (!soonest) return;
+
+  const days = Math.max(0, Math.ceil((soonest - Date.now()) / 86400000));
+  const dateStr = soonest.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
+  const header = document.querySelector('#products .section-header');
+  if (!header || document.getElementById('nextPoolClosing')) return;
+
+  const el = document.createElement('div');
+  el.id = 'nextPoolClosing';
+  el.style.cssText = 'display:inline-flex;align-items:center;gap:10px;margin-top:16px;padding:9px 18px;border-radius:999px;background:rgba(254,194,79,0.12);border:1px solid rgba(254,194,79,0.3);color:#b8702a;font-weight:700;font-size:0.86rem;white-space:nowrap;max-width:calc(100vw - 48px);overflow-x:auto';
+  el.innerHTML = `<i class="fa-solid fa-clock"></i> Next pool closes ${dateStr}${days <= 60 ? ` — <span style="color:#e0571a">${days} day${days === 1 ? '' : 's'} left</span>` : ''}${soonestProduct && soonestProduct.label ? ` · ${soonestProduct.label}` : ''}`;
+  header.appendChild(el);
+}
+
+document.addEventListener('DOMContentLoaded', _applyLiveProductAverages);
+
+/* ─── Live cattle herd status on the Cattle Investment product ─────────────
+   Pulls aggregated herd data (purchased to date, breeds, average weight) from
+   the fund-management herd and surfaces it on the home page cattle card and
+   its "View Details" modal. */
+async function _applyCattleHerdStatus() {
+  let s;
+  try {
+    const r = await fetch('/api/products/cattle-stats');
+    if (!r.ok) return;
+    s = await r.json();
+  } catch (_) { return; }
+  if (!s || !s.total_purchased) return;
+
+  const num    = n => Number(n || 0).toLocaleString('en-ZA');
+  const esc    = x => String(x == null ? '' : x).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  const weight = s.avg_current_weight || s.avg_entry_weight;
+
+  // Rich "Live Herd Status" block injected into the cattle "View Details" modal
+  if (typeof MODAL_DATA !== 'undefined' && MODAL_DATA.cattle) {
+    const genders = (s.by_gender || []).filter(g => g.count > 0);
+    const breeds  = (s.by_breed  || []).filter(b => b.count > 0);
+    const totalG  = genders.reduce((a, g) => a + g.count, 0) || 1;
+    const chip = txt => `<span style="font-size:0.78rem;background:rgba(255,255,255,0.08);color:#fff;border-radius:20px;padding:3px 11px">${txt}</span>`;
+
+    // Weight journey + survival
+    const entry = s.avg_entry_weight, current = s.avg_current_weight, target = s.target_weight || 475;
+    let weightBar = '';
+    if (entry && current && target && target > entry) {
+      const wp = Math.min(100, Math.max(0, Math.round((current - entry) / (target - entry) * 100)));
+      weightBar = `<div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--text-dim);margin-bottom:5px"><span>Entry ${entry}kg</span><span style="color:#fec24f;font-weight:700">Now ~${current}kg</span><span>Target ${target}kg</span></div>
+        <div style="height:9px;border-radius:5px;background:rgba(255,255,255,0.08);overflow:hidden"><div style="height:100%;width:${wp}%;background:linear-gradient(90deg,#fec24f,#fec24f)"></div></div>
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px">${wp}% of the way to market weight</div></div>`;
+    }
+    const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
+    const mortLine = `<div style="font-size:0.76rem;color:var(--text-dim);margin-top:10px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:#fff">${(100 - mortRate).toFixed(1)}%</strong>${s.mortality_count ? ` · ${s.mortality_count} of ${num(s.total_purchased)}` : ''}</div>`;
+
+    MODAL_DATA.cattle.herdHtml = `
+      <div style="background:rgba(254,194,79,0.08);border:1px solid rgba(254,194,79,0.28);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
+        <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#fec24f;margin-bottom:12px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
+          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.total_purchased)}</div><div style="font-size:0.72rem;color:var(--text-dim)">purchased to date</div></div>
+          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.live_count)}</div><div style="font-size:0.72rem;color:var(--text-dim)">currently live</div></div>
+          ${weight ? `<div><div style="font-size:1.3rem;font-weight:800;color:#fff">${weight}<span style="font-size:0.85rem"> kg</span></div><div style="font-size:0.72rem;color:var(--text-dim)">average weight</div></div>` : ''}
+        </div>
+        ${weightBar}
+        ${genders.length ? `<div style="margin-bottom:${breeds.length ? '12px' : '0'}"><div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:6px">Gender</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${esc(g.label)}: <strong>${g.count}</strong> (${Math.round(g.count / totalG * 100)}%)`)).join('')}</div></div>` : ''}
+        ${breeds.length ? `<div><div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:6px">Breeds</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 8).map(b => chip(`${esc(b.label)}: <strong>${b.count}</strong>`)).join('')}</div></div>` : ''}
+        ${mortLine}
+      </div>`;
+  }
+
+  // Compact live-herd line on the cattle product card
+  const detail = document.querySelector('.product-card[data-product="cattle"] .product-card__detail');
+  if (detail && !detail.querySelector('[data-herd-row]')) {
+    const row = document.createElement('div');
+    row.className = 'detail-row';
+    row.setAttribute('data-herd-row', '1');
+    row.innerHTML = `<i class="fa-solid fa-cow"></i><span>${num(s.total_purchased)} cattle to date${weight ? ` · avg ${weight}kg` : ''}</span>`;
+    detail.insertBefore(row, detail.firstChild);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', _applyCattleHerdStatus);
+
+/* ─── Track record on the "View Details" modal (matured pools) ─────────────
+   Shows pools matured, average achieved return, total paid back, and a bar
+   per matured pool — the verifiable performance behind each product. */
+async function _applyTrackRecord() {
+  let data;
+  try {
+    const r = await fetch('/api/products/track-record');
+    if (!r.ok) return;
+    data = (await r.json()).data || {};
+  } catch (_) { return; }
+
+  const fam = { cattle: ['cattle'], solar: ['solar_7yr', 'solar_6yr', 'solar_5yr'], short: ['short_term', 'smme'], delivery: ['delivery_bike'] };
+  const rand = n => 'R' + Number(n || 0).toLocaleString('en-ZA');
+
+  Object.keys(fam).forEach(key => {
+    if (typeof MODAL_DATA === 'undefined' || !MODAL_DATA[key]) return;
+    let pools = [], paid = 0, sumA = 0, n = 0;
+    fam[key].forEach(t => {
+      const d = data[t]; if (!d) return;
+      pools = pools.concat(d.pools || []);
+      paid += d.total_paid_back || 0;
+      sumA += (d.avg_actual_rate || 0) * (d.matured_count || 0);
+      n += d.matured_count || 0;
+    });
+    if (!n) return;
+
+    // Show the average delivered return only (no per-pool bar graph).
+    MODAL_DATA[key].trackHtml = `
+      <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
+        <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#fec24f;margin-bottom:12px"><i class="fa-solid fa-award"></i> Track Record</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <div><div style="font-size:1.5rem;font-weight:800;color:#fec24f">${(sumA / n * 100).toFixed(2)}%</div><div style="font-size:0.72rem;color:var(--text-dim)">avg return achieved p.a.</div></div>
+          <div><div style="font-size:1.5rem;font-weight:800;color:#fff">${n}</div><div style="font-size:0.72rem;color:var(--text-dim)">pool${n === 1 ? '' : 's'} matured</div></div>
+          <div><div style="font-size:1.5rem;font-weight:800;color:#fff">${rand(paid)}</div><div style="font-size:0.72rem;color:var(--text-dim)">paid back</div></div>
+        </div>
+      </div>`;
+  });
+}
+
+document.addEventListener('DOMContentLoaded', _applyTrackRecord);
+
+/* ─── Live solar telematics (FoxESS / FoxCloud) on the Solar product ───────
+   All three solar terms share one physical installation, so a single live
+   feed (generation now, today, this month, total, CO₂ avoided) is surfaced
+   on the home page solar card and its "View Details" modal. */
+async function _applySolarTelemetry() {
+  let s;
+  try {
+    const r = await fetch('/api/products/solar-stats');
+    if (!r.ok) return;
+    s = await r.json();
+  } catch (_) { return; }
+  if (!s || s.unavailable || (!s.total_kwh && !s.today_kwh && !s.current_power_kw)) return;
+
+  const kwh = v => Number(v || 0).toLocaleString('en-ZA');
+  const total = s.total_kwh >= 1000 ? `${(s.total_kwh / 1000).toFixed(1)} MWh` : `${kwh(s.total_kwh)} kWh`;
+  const live = (s.current_power_kw || 0) > 0;
+  const stat = (val, lbl) => `<div><div style="font-size:1.3rem;font-weight:800;color:#fff">${val}</div><div style="font-size:0.72rem;color:var(--text-dim)">${lbl}</div></div>`;
+
+  if (typeof MODAL_DATA !== 'undefined' && MODAL_DATA.solar) {
+    MODAL_DATA.solar.herdHtml = `
+      <div style="background:rgba(34,197,94,0.09);border:1px solid rgba(34,197,94,0.3);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#34d27f;margin-bottom:12px">
+          <i class="fa-solid fa-solar-panel"></i> Live Solar Generation
+          ${live ? '<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:0.7rem;color:#22c55e;text-transform:none;letter-spacing:0"><span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block"></span> generating now</span>' : ''}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          ${stat(`${(s.current_power_kw || 0).toLocaleString('en-ZA')}<span style="font-size:0.85rem"> kW</span>`, 'generating now')}
+          ${stat(`${kwh(s.today_kwh)}<span style="font-size:0.85rem"> kWh</span>`, 'today')}
+          ${stat(`${kwh(s.month_kwh)}<span style="font-size:0.85rem"> kWh</span>`, 'this month')}
+          ${stat(total, 'total generated')}
+          ${s.co2_avoided_kg ? stat(`${(s.co2_avoided_kg / 1000).toFixed(1)}<span style="font-size:0.85rem"> t</span>`, 'CO₂ avoided') : ''}
+          ${s.device_count ? stat(s.device_count, `inverter${s.device_count === 1 ? '' : 's'}`) : ''}
+        </div>
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:10px">Live data from FoxCloud${s.station_name ? ` · ${String(s.station_name).replace(/[<>&]/g, '')}` : ''}</div>
+      </div>`;
+  }
+
+  // Live-generation line on the solar product card
+  const card = document.querySelector('.product-card[data-product="solar"]');
+  const descEl = card && card.querySelector('.product-card__desc');
+  if (descEl && !card.querySelector('[data-solar-row]')) {
+    const row = document.createElement('div');
+    row.setAttribute('data-solar-row', '1');
+    row.style.cssText = 'display:inline-flex;align-items:center;gap:7px;margin-top:10px;padding:5px 12px;border-radius:999px;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#1f9d57;font-weight:700;font-size:0.78rem';
+    row.innerHTML = `<i class="fa-solid fa-solar-panel"></i> ${live ? `Generating ${(s.current_power_kw || 0).toLocaleString('en-ZA')} kW now` : `${total} generated to date`}`;
+    descEl.insertAdjacentElement('afterend', row);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', _applySolarTelemetry);
+
+/* ─── Public product page: filter by risk band ───────────────────────── */
+function filterProductsByRisk(risk, btn) {
+  document.querySelectorAll('.product-risk-filter .prf-pill').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  let shown = 0;
+  document.querySelectorAll('.products-grid .product-card').forEach(card => {
+    if (card.classList.contains('product-card--hp-hidden')) return; // never reveal homepage-hidden products
+    const match = risk === 'all' || card.getAttribute('data-risk') === risk;
+    card.style.display = match ? '' : 'none';
+    if (match) shown++;
+  });
+  const empty = document.getElementById('prfEmpty');
+  if (empty) empty.style.display = shown === 0 ? 'block' : 'none';
+}
+window.filterProductsByRisk = filterProductsByRisk;

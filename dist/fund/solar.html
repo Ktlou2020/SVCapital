@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SV Capital — Solar Investment Management</title>
@@ -106,7 +110,7 @@
     .sol-kpi-sub   { font-size: 11px; color: rgba(255,255,255,.35); margin-top: 3px; }
     .sol-kpi.gold  .sol-kpi-value { color: var(--sol-gold); }
     .sol-kpi.green .sol-kpi-value { color: #74c69d; }
-    .sol-kpi.blue  .sol-kpi-value { color: #60a5fa; }
+    .sol-kpi.blue  .sol-kpi-value { color: #656565; }
     .sol-kpi.red   .sol-kpi-value { color: #f87171; }
 
     /* Section card */
@@ -157,7 +161,7 @@
       font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
       padding: 3px 9px; border-radius: 20px;
     }
-    .sol-badge-active   { background: rgba(96,165,250,.15); color: #60a5fa; }
+    .sol-badge-active   { background: rgba(96,165,250,.15); color: #656565; }
     .sol-badge-matured  { background: rgba(116,198,157,.15); color: #74c69d; }
     .sol-badge-pending  { background: rgba(245,158,11,.15); color: var(--sol-gold); }
     .sol-badge-cancelled{ background: rgba(248,113,113,.15); color: #f87171; }
@@ -376,6 +380,20 @@
       .sol-drawer { width: 100vw; }
     }
   </style>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="../js/analytics.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet">
 </head>
 <body>
 

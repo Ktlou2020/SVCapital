@@ -5,8 +5,23 @@
 'use strict';
 
 /* ─── API helpers ────────────────────────────────────────────────────── */
-const BASE = '../';
-const get    = async p => { try { const r = await fetch(BASE+p); return r.ok ? r.json() : {data:[],total:0}; } catch { return {data:[],total:0}; } };
+const BASE = '/api/';
+let _authFailed = false;
+const get = async p => {
+  if (_authFailed) return { data: [], total: 0 };
+  try {
+    const r = await fetch(BASE + p);
+    if (r.status === 401) {
+      if (!_authFailed) {
+        _authFailed = true;
+        if (typeof StaffAuth !== 'undefined') StaffAuth.clearSession();
+        window.location.replace('login.html');
+      }
+      return { data: [], total: 0 };
+    }
+    return r.ok ? r.json() : { data: [], total: 0 };
+  } catch { return { data: [], total: 0 }; }
+};
 const post   = async (p,b) => { const r = await fetch(BASE+p,{method:'POST',  headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
 const patch  = async (p,b) => { const r = await fetch(BASE+p,{method:'PATCH', headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
 const put    = async (p,b) => { const r = await fetch(BASE+p,{method:'PUT',   headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); };
@@ -36,14 +51,14 @@ const timeAgo = iso => {
   const d = Math.floor(h/24); if (d<7) return `${d}d ago`;
   return new Date(iso).toLocaleDateString('en-ZA',{day:'numeric',month:'short'});
 };
-const kpiColor = v => v>=90?'#00d4aa':v>=75?'#4fc3f7':v>=60?'#f9c846':v>=40?'#ffb347':'#ff5b5b';
+const kpiColor = v => v>=90?'#00d4aa':v>=75?'#4fc3f7':v>=60?'#fec24f':v>=40?'#ffb347':'#ff5b5b';
 const LEVELS = [
   {level:1,title:'Analyst',   minXP:0,   color:'#adb5bd'},
   {level:2,title:'Associate', minXP:500, color:'#5cb85c'},
   {level:3,title:'Senior',    minXP:1200,color:'#00d4aa'},
   {level:4,title:'Lead',      minXP:2500,color:'#4fc3f7'},
-  {level:5,title:'Director',  minXP:4500,color:'#7c5cfc'},
-  {level:6,title:'MVP',       minXP:7000,color:'#f9c846'},
+  {level:5,title:'Director',  minXP:4500,color:'#eda5ff'},
+  {level:6,title:'MVP',       minXP:7000,color:'#fec24f'},
 ];
 function getLevel(xp) { let l=LEVELS[0]; for(const L of LEVELS){if(xp>=L.minXP)l=L;} return l; }
 function getXpProgress(xp) {
@@ -53,8 +68,8 @@ function getXpProgress(xp) {
   return {pct:Math.round(cur/need*100),current:cur,needed:need,nextTitle:next.title};
 }
 const catColors = {
-  aum_growth:'#7c5cfc',technical:'#4fc3f7',compliance:'#0984e3',
-  leadership:'#f9c846',client_relations:'#fd79a8',innovation:'#00d4aa',soft_skills:'#ffb347'
+  aum_growth:'#eda5ff',technical:'#4fc3f7',compliance:'#0984e3',
+  leadership:'#fec24f',client_relations:'#fd79a8',innovation:'#00d4aa',soft_skills:'#ffb347'
 };
 const KPI_DIMS = ['revenue_contribution','client_satisfaction','task_completion_rate',
   'response_time_score','compliance_score','innovation_score','team_collaboration','attendance_score'];
@@ -84,6 +99,7 @@ let _oneOnOnes   = [];
 let _learningPaths=[];
 let _activityFeed= [];
 let _notes       = [];
+let _payslips    = [];
 let _currentView = 'dashboard';
 
 // Reader state
@@ -108,7 +124,7 @@ async function init() {
   const session = StaffAuth.getSession();
   if (!session || !session.empId) {
     document.getElementById('globalLoader').innerHTML =
-      '<p style="color:#ff5b5b;text-align:center;margin-top:40px">Session expired. <a href="login.html" style="color:#7c5cfc">Sign in again</a>.</p>';
+      '<p style="color:#ff5b5b;text-align:center;margin-top:40px">Session expired. <a href="login.html" style="color:#eda5ff">Sign in again</a>.</p>';
     return;
   }
   const myEmpId = session.empId;
@@ -157,7 +173,7 @@ async function init() {
   _emp = emps.find(e => e.id === targetEmpId) || emps.find(e => e.id === myEmpId);
   if (!_emp) {
     document.getElementById('globalLoader').innerHTML =
-      '<p style="color:#ff5b5b;text-align:center;margin-top:40px">Employee profile not found. Please <a href="login.html" style="color:#7c5cfc">sign in</a> again.</p>';
+      '<p style="color:#ff5b5b;text-align:center;margin-top:40px">Employee profile not found. Please <a href="login.html" style="color:#eda5ff">sign in</a> again.</p>';
     return;
   }
 
@@ -167,6 +183,12 @@ async function init() {
   _leaveReqs    = leaves.filter(l=>l.employee_id===_emp.id);
   _checkins     = checkins.filter(c=>c.employee_id===_emp.id).sort((a,b)=>new Date(b.checkin_date)-new Date(a.checkin_date));
   _notes        = notes.filter(n=>n.employee_id===_emp.id);
+
+  // Load payslips for this employee
+  try {
+    const psRes = await get(`tables/payslips?employee_id=${_emp.id}&sort=pay_period&order=desc&limit=100`);
+    _payslips = (psRes.data || []).filter(p => p.employee_id === _emp.id);
+  } catch(_) { _payslips = []; }
 
   buildEmpSwitcher();
   renderTopbar();
@@ -185,8 +207,12 @@ function renderTopbar() {
   const el = document.getElementById('sidebar-avatar');
   if (el) {
     el.textContent = _emp.avatar_initials || (_emp.first_name||'?')[0];
-    el.style.background = _emp.avatar_color || '#7c5cfc';
+    el.style.background = _emp.avatar_color || '#eda5ff';
   }
+  const nameEl = document.getElementById('sidebar-profile-name');
+  if (nameEl) nameEl.textContent = `${_emp.first_name||''} ${_emp.last_name||''}`.trim();
+  const roleEl = document.getElementById('sidebar-profile-role');
+  if (roleEl) roleEl.textContent = _emp.role || _emp.department || '—';
   const xpEl = document.getElementById('xp-bar');
   if (xpEl) { xpEl.style.width = pr.pct + '%'; }
   const xpLbl = document.getElementById('xp-label');
@@ -229,6 +255,7 @@ function navigate(view, btn) {
     feed:         renderActivityFeed,
     journal:      renderJournal,
     eva:          renderEvaPayslip,
+    payslips:     renderPayslips,
     profile:      renderProfile,
     calendar:     renderLeaveCalendar
   };
@@ -252,7 +279,7 @@ async function awardXP(amount, reason='') {
       employee_id: _emp.id, type:'level_up',
       title:`Level Up! You're now ${newLevel}`,
       body:`You've reached the ${newLevel} level with ${newXp} XP!`,
-      icon:'fa-star', color:'#f9c846', xp_shown:0, is_public:true,
+      icon:'fa-star', color:'#fec24f', xp_shown:0, is_public:true,
       created_at: new Date().toISOString()
     });
     _activityFeed.unshift(actEl);
@@ -286,7 +313,7 @@ async function autoAwardCourseBadge(course) {
     employee_id:_emp.id,
     badge_id:`BADGE-CRS-${course.id}`,
     badge_name:`${course.title} Graduate`,
-    badge_icon:'🎓', badge_color:'#7c5cfc',
+    badge_icon:'🎓', badge_color:'#eda5ff',
     category:'milestone',
     description:`Completed the course: ${course.title}`,
     xp_awarded:50, awarded_at:new Date().toISOString(), awarded_by:'system'
@@ -309,7 +336,7 @@ async function autoCheckBadgeUnlocks(earned) {
     if ((m.count && completed>=m.count) || (m.streak && streak>=m.streak)) {
       const badge = await post('tables/achievements', {
         employee_id:_emp.id, badge_id:m.id, badge_name:m.name,
-        badge_icon:m.icon, badge_color:'#f9c846', category:'milestone',
+        badge_icon:m.icon, badge_color:'#fec24f', category:'milestone',
         description:m.desc, xp_awarded:100, awarded_at:new Date().toISOString(), awarded_by:'system'
       });
       _achievements.push(badge);
@@ -578,7 +605,7 @@ async function completeModule(mod, score, xpReward) {
     employee_id:_emp.id, type:'course_complete',
     title:`Module completed: ${mod.title}`,
     body:`+${xpReward} XP earned in ${_readerCourse.title}`,
-    icon:'fa-graduation-cap', color:'#7c5cfc',
+    icon:'fa-graduation-cap', color:'#eda5ff',
     xp_shown:xpReward, is_public:false,
     created_at:new Date().toISOString()
   });
@@ -693,7 +720,7 @@ async function startAiGeneration() {
     modules_count:3, quiz_questions:3, pass_score:60,
     status:'active', ai_generated:true,
     thumbnail_icon:'fa-robot',
-    thumbnail_color: catColors[cat]||'#7c5cfc'
+    thumbnail_color: catColors[cat]||'#eda5ff'
   });
   _courses.push(course);
   await runAiGeneration(course, focus);
@@ -851,6 +878,23 @@ function renderDashboard() {
   const pr   = getXpProgress(xp);
   const streak = Number(_emp.streak_days)||0;
   const thisMonth = new Date().toISOString().slice(0,7);
+  const todayISO  = new Date().toISOString().slice(0,10); // YYYY-MM-DD for date comparisons
+
+  // Upcoming birthdays in the next 30 days (all employees)
+  const upcomingBirthdays = _employees
+    .filter(e => e.birth_date)
+    .map(e => {
+      const thisYear = new Date().getFullYear();
+      const [,bm,bd] = e.birth_date.split('-');
+      let bdStr = `${thisYear}-${bm}-${bd}`;
+      if (bdStr < todayISO) bdStr = `${thisYear+1}-${bm}-${bd}`;
+      const daysUntil = Math.round(
+        (new Date(bdStr+'T12:00:00Z') - new Date(todayISO+'T12:00:00Z')) / 864e5
+      );
+      return { emp: e, bdStr, daysUntil };
+    })
+    .filter(x => x.daysUntil <= 30)
+    .sort((a, b) => a.daysUntil - b.daysUntil);
   const kpi  = _kpiScores.find(k=>k.period_month===thisMonth)||_kpiScores[0]||{};
   const done = _progress.filter(p=>p.status==='completed').length;
   const eva  = calcMyEVA();
@@ -869,7 +913,7 @@ function renderDashboard() {
   el.innerHTML = `
     <!-- Profile Hero -->
     <div class="profile-hero">
-      <div class="hero-avatar" style="background:${_emp.avatar_color||'#7c5cfc'}">${_emp.avatar_initials||(_emp.first_name||'?')[0]}</div>
+      <div class="hero-avatar" style="background:${_emp.avatar_color||'#eda5ff'}">${_emp.avatar_initials||(_emp.first_name||'?')[0]}</div>
       <div class="hero-info">
         <h2>${_emp.first_name} ${_emp.last_name}</h2>
         <div class="hero-role">${_emp.role||''} · ${_emp.department||''}</div>
@@ -902,14 +946,14 @@ function renderDashboard() {
     <!-- Notifications row -->
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px">
       ${!checkedIn ? `<div class="burnout-alert" style="flex:1;min-width:200px;padding:12px 16px;cursor:pointer" onclick="navigate('checkin',document.querySelector('[data-view=checkin]'))">
-        <i class="fa-solid fa-sun" style="color:#f9c846"></i>
-        <p><strong style="color:#f9c846">Daily check-in pending</strong> — Start your day right, earn XP & keep your streak!</p>
+        <i class="fa-solid fa-sun" style="color:#fec24f"></i>
+        <p><strong style="color:#fec24f">Daily check-in pending</strong> — Start your day right, earn XP & keep your streak!</p>
       </div>` : ''}
       ${activePulse && !alreadyResponded ? `<div class="burnout-alert" style="flex:1;min-width:200px;padding:12px 16px;background:rgba(0,212,170,0.06);border-color:rgba(0,212,170,0.25);cursor:pointer" onclick="navigate('pulse',document.querySelector('[data-view=pulse]'))">
         <i class="fa-solid fa-poll" style="color:var(--accent2)"></i>
         <p><strong style="color:var(--accent2)">Pulse survey available</strong> — 3 quick questions, helps leadership make better decisions.</p>
       </div>` : ''}
-      ${openOoo ? `<div class="burnout-alert" style="flex:1;min-width:200px;padding:12px 16px;background:rgba(124,92,252,0.06);border-color:rgba(124,92,252,0.25);cursor:pointer" onclick="navigate('oneonone',document.querySelector('[data-view=oneonone]'))">
+      ${openOoo ? `<div class="burnout-alert" style="flex:1;min-width:200px;padding:12px 16px;background:rgba(237,165,255,0.06);border-color:rgba(237,165,255,0.25);cursor:pointer" onclick="navigate('oneonone',document.querySelector('[data-view=oneonone]'))">
         <i class="fa-solid fa-comments" style="color:var(--accent)"></i>
         <p><strong style="color:var(--accent)">1-on-1 scheduled</strong> — ${new Date(openOoo.scheduled_date).toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'short'})}</p>
       </div>` : ''}
@@ -928,7 +972,7 @@ function renderDashboard() {
         <div class="stat-card-trend up"><i class="fa-solid fa-arrow-trend-up"></i> View breakdown →</div>
       </div>
       <div class="stat-card" style="cursor:pointer" onclick="navigate('okrs',document.querySelector('[data-view=okrs]'))">
-        <div class="stat-card-icon" style="background:rgba(124,92,252,0.15);color:var(--accent)"><i class="fa-solid fa-bullseye"></i></div>
+        <div class="stat-card-icon" style="background:rgba(237,165,255,0.15);color:var(--accent)"><i class="fa-solid fa-bullseye"></i></div>
         <div class="stat-card-val">${myOkr?Math.round(Number(myOkr.overall_progress)||0)+'%':'—'}</div>
         <div class="stat-card-lbl">OKR Progress</div>
         <div class="stat-card-trend up"><i class="fa-solid fa-arrow-right"></i> View OKRs →</div>
@@ -952,7 +996,7 @@ function renderDashboard() {
     <div class="chart-container" style="padding:16px 20px">
       ${recentFeed.length ? recentFeed.map(f=>`
         <div class="feed-item">
-          <div class="feed-icon-wrap" style="background:${f.color||'#7c5cfc'}20;color:${f.color||'#7c5cfc'}">
+          <div class="feed-icon-wrap" style="background:${f.color||'#eda5ff'}20;color:${f.color||'#eda5ff'}">
             <i class="fa-solid ${f.icon||'fa-bolt'}"></i>
           </div>
           <div class="feed-body">
@@ -965,7 +1009,139 @@ function renderDashboard() {
       <button class="btn btn--ghost btn--sm mt-2" onclick="navigate('feed',document.querySelector('[data-view=feed]'))">
         View all activity <i class="fa-solid fa-arrow-right"></i>
       </button>
+    </div>
+
+    <!-- My Profile Summary -->
+    <div class="section-head" style="margin-top:28px"><i class="fa-solid fa-id-card"></i> My Profile</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+      <div class="chart-container" style="padding:20px">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+          <div style="width:52px;height:52px;border-radius:14px;background:${_emp.avatar_color||'#eda5ff'};display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:800;color:#fff;flex-shrink:0">${_emp.avatar_initials||(_emp.first_name||'?')[0]}</div>
+          <div>
+            <div style="font-size:1rem;font-weight:700">${_emp.first_name} ${_emp.last_name}</div>
+            <div style="font-size:0.78rem;color:var(--muted)">${_emp.role||'—'} · ${_emp.department||'—'}</div>
+            ${_emp.employee_number ? `<div style="font-size:0.7rem;font-family:monospace;color:var(--accent);margin-top:2px">${_emp.employee_number}</div>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem">
+            <i class="fa-solid fa-envelope" style="color:var(--muted);width:14px;text-align:center"></i>
+            <span style="color:var(--muted);min-width:80px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Email</span>
+            <span style="color:var(--text)">${_emp.email||'—'}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem">
+            <i class="fa-solid fa-phone" style="color:var(--muted);width:14px;text-align:center"></i>
+            <span style="color:var(--muted);min-width:80px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Phone</span>
+            <span style="color:${_emp.phone?'var(--text)':'var(--muted)'}">${_emp.phone||'Not set'}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem">
+            <i class="fa-solid fa-location-dot" style="color:var(--muted);width:14px;text-align:center"></i>
+            <span style="color:var(--muted);min-width:80px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Address</span>
+            <span style="color:${_emp.address_city?'var(--text)':'var(--muted)'}">${_emp.address_city?[_emp.address_city,_emp.address_province].filter(Boolean).join(', '):'Not set'}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem">
+            <i class="fa-solid fa-id-badge" style="color:var(--muted);width:14px;text-align:center"></i>
+            <span style="color:var(--muted);min-width:80px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em">ID Number</span>
+            <span style="color:${_emp.id_number?'var(--text)':'var(--muted)'}">${_emp.id_number?'••••••••••••••':'Not uploaded'}</span>
+          </div>
+        </div>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+          <button class="btn btn--primary btn--sm" onclick="navigate('profile',document.querySelector('[data-view=profile]'))">
+            <i class="fa-solid fa-pen"></i> Edit My Profile
+          </button>
+        </div>
+      </div>
+
+      <div class="chart-container" style="padding:20px">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px">Account Status</div>
+        ${[
+          ['fa-building-columns','Banking Details', _emp.bank_account_number ? 'Configured' : 'Not set', !!_emp.bank_account_number],
+          ['fa-file-image','Proof of Banking', _emp.proof_of_banking_url ? 'Uploaded' : 'Missing', !!_emp.proof_of_banking_url],
+          ['fa-id-card','Proof of ID', _emp.proof_of_id_url ? 'Uploaded' : 'Not uploaded', !!_emp.proof_of_id_url],
+          ['fa-location-dot','Home Address', (_emp.address_line1||_emp.address_city) ? 'On file' : 'Not set', !!((_emp.address_line1||_emp.address_city))],
+          ['fa-file-invoice-dollar','Payslips', _payslips.length ? `${_payslips.length} on file` : 'None yet', _payslips.length > 0],
+        ].map(([icon,label,val,ok])=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+            <i class="fa-solid ${icon}" style="color:var(--muted);width:14px;text-align:center;font-size:0.82rem"></i>
+            <span style="flex:1;font-size:0.8rem;color:var(--text)">${label}</span>
+            <span style="font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:20px;${ok?'background:rgba(0,212,170,0.12);color:var(--accent2)':'background:rgba(255,91,91,0.1);color:var(--danger)'}">${val}</span>
+          </div>`).join('')}
+        <div style="margin-top:14px">
+          <button class="btn btn--ghost btn--sm" onclick="navigate('profile',document.querySelector('[data-view=profile]'))">
+            View full profile <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Team Events -->
+    <div class="section-head" style="margin-top:28px;display:flex;align-items:center">
+      <i class="fa-solid fa-calendar-star"></i> Team Events
+      <a href="#" onclick="navigate('calendar',document.querySelector('[data-view=calendar]'));return false"
+         style="margin-left:auto;font-size:0.72rem;font-weight:600;color:var(--accent);text-decoration:none">
+        Full calendar <i class="fa-solid fa-arrow-right" style="font-size:0.65rem"></i>
+      </a>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:8px">
+
+      <!-- Upcoming Birthdays -->
+      <div class="chart-container" style="padding:20px">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px">
+          <i class="fa-solid fa-cake-candles" style="color:#fec24f;margin-right:5px"></i>Upcoming Birthdays
+        </div>
+        ${upcomingBirthdays.length ? upcomingBirthdays.map(({ emp, bdStr, daysUntil }) => {
+          const label = daysUntil === 0 ? '🎉 Today!' : daysUntil === 1 ? 'Tomorrow' : `in ${daysUntil} day${daysUntil!==1?'s':''}`;
+          const dateLabel = new Date(bdStr+'T12:00:00Z').toLocaleDateString('en-ZA',{day:'numeric',month:'short'});
+          return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+            <div style="width:32px;height:32px;border-radius:50%;background:${emp.avatar_color||'#eda5ff'};display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:800;color:#fff;flex-shrink:0">${emp.avatar_initials||(emp.first_name||'?')[0]}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${emp.first_name} ${emp.last_name}</div>
+              <div style="font-size:0.72rem;color:var(--muted)">${dateLabel}</div>
+            </div>
+            <span style="font-size:0.7rem;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap;background:rgba(249,200,70,0.12);color:#fec24f">${label}</span>
+          </div>`;
+        }).join('')
+        : `<div style="font-size:0.82rem;color:var(--muted);padding:8px 0"><i class="fa-solid fa-calendar-check" style="margin-right:6px"></i>No birthdays in the next 30 days.</div>`}
+      </div>
+
+      <!-- On Leave Today -->
+      <div class="chart-container" style="padding:20px">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px">
+          <i class="fa-solid fa-umbrella-beach" style="color:var(--accent);margin-right:5px"></i>On Leave Today
+        </div>
+        <div id="dash-leave-today" style="font-size:0.82rem;color:var(--muted)">
+          <i class="fa-solid fa-circle-notch fa-spin" style="font-size:0.85rem;margin-right:6px"></i>Loading…
+        </div>
+      </div>
+
     </div>`;
+
+  // Populate "On Leave Today" async after the DOM is painted
+  get('tables/leave-calendar').then(res => {
+    const leaveToday = (res.data || []).filter(l => l.start_date <= todayISO && l.end_date >= todayISO);
+    const slot = document.getElementById('dash-leave-today');
+    if (!slot) return;
+    if (!leaveToday.length) {
+      slot.innerHTML = `<span style="color:var(--accent2)"><i class="fa-solid fa-circle-check" style="margin-right:5px"></i>Nobody on leave today.</span>`;
+      return;
+    }
+    slot.innerHTML = leaveToday.map(l => {
+      const emp = _employees.find(e => e.id === l.employee_id) || l;
+      const initials = emp.avatar_initials || ((emp.first_name||'?')[0] + (emp.last_name||'')[0]).toUpperCase();
+      return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="width:32px;height:32px;border-radius:50%;background:${emp.avatar_color||'#eda5ff'};display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:800;color:#fff;flex-shrink:0">${initials}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${emp.first_name||''} ${emp.last_name||''}</div>
+          <div style="font-size:0.72rem;color:var(--muted)">${l.leave_type||'Leave'} · back ${l.end_date}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }).catch(() => {
+    const slot = document.getElementById('dash-leave-today');
+    if (slot) slot.innerHTML = `<span style="color:var(--muted)">Could not load leave data.</span>`;
+  });
 }
 
 /* ═══ VIEW: COURSES ═════════════════════════════════════════════════ */
@@ -1020,10 +1196,10 @@ function courseCardHTML(c, mode) {
   const prog = _progress.find(p=>p.course_id===c.id);
   const pct  = prog ? Math.round((Number(prog.modules_completed)||0)/(Number(c.modules_count)||1)*100) : 0;
   const isDone = prog?.status==='completed';
-  const diffC = {beginner:'#00d4aa',intermediate:'#f9c846',advanced:'#ff6b6b'}[c.difficulty]||'#6b7280';
+  const diffC = {beginner:'#00d4aa',intermediate:'#fec24f',advanced:'#ff6b6b'}[c.difficulty]||'#6b7280';
   return `<div class="course-card ${isDone?'completed':''}" onclick="${isDone?`openCertificateByProgress('${prog?.id}')`:`openCourse('${c.id}')`}">
-    <div class="course-banner" style="background:${c.thumbnail_color||'#7c5cfc'}20">
-      <i class="fa-solid ${c.thumbnail_icon||'fa-book'}" style="color:${c.thumbnail_color||'#7c5cfc'}"></i>
+    <div class="course-banner" style="background:${c.thumbnail_color||'#eda5ff'}20">
+      <i class="fa-solid ${c.thumbnail_icon||'fa-book'}" style="color:${c.thumbnail_color||'#eda5ff'}"></i>
       <span class="diff-badge" style="background:${diffC}20;color:${diffC}">${c.difficulty||'intermediate'}</span>
       ${isDone?`<span style="position:absolute;top:8px;left:8px;font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(0,212,170,0.2);color:var(--accent2)">✓ Done</span>`:''}
     </div>
@@ -1109,8 +1285,8 @@ function drawKpiCharts(history, current) {
       datasets:[{
         label:'Overall KPI',
         data: history.map(k=>Math.round(Number(k.overall_score)||0)).reverse(),
-        borderColor:'#7c5cfc',backgroundColor:'rgba(124,92,252,0.1)',
-        fill:true, tension:0.4, pointBackgroundColor:'#7c5cfc', pointRadius:4
+        borderColor:'#eda5ff',backgroundColor:'rgba(237,165,255,0.1)',
+        fill:true, tension:0.4, pointBackgroundColor:'#eda5ff', pointRadius:4
       },{
         label:'Revenue',
         data: history.map(k=>Math.round(Number(k.revenue_contribution)||0)).reverse(),
@@ -1131,8 +1307,8 @@ function drawKpiCharts(history, current) {
       datasets:[{
         label:'This Month',
         data: KPI_DIMS.map(d=>Math.round(Number(current[d])||0)),
-        borderColor:'#7c5cfc',backgroundColor:'rgba(124,92,252,0.15)',
-        pointBackgroundColor:'#7c5cfc'
+        borderColor:'#eda5ff',backgroundColor:'rgba(237,165,255,0.15)',
+        pointBackgroundColor:'#eda5ff'
       }]
     },
     options:{responsive:true,maintainAspectRatio:false,
@@ -1302,7 +1478,7 @@ function renderFeedback() {
   const public360 = _peerFeedback.filter(f=>isTrue(f.is_public)).slice(0,20);
 
   function empName(id) { const e=_employees.find(e=>e.id===id); return e?`${e.first_name} ${e.last_name}`:'Team Member'; }
-  function empAv(id)   { const e=_employees.find(e=>e.id===id); return {init:e?.avatar_initials||'?',col:e?.avatar_color||'#7c5cfc'}; }
+  function empAv(id)   { const e=_employees.find(e=>e.id===id); return {init:e?.avatar_initials||'?',col:e?.avatar_color||'#eda5ff'}; }
 
   const el = document.getElementById('view-feedback');
   el.innerHTML = `
@@ -1365,7 +1541,7 @@ function switchFeedbackTab(tab, btn) {
   const given    = _peerFeedback.filter(f=>f.from_employee_id===_emp.id);
   const teamPub  = _peerFeedback.filter(f=>isTrue(f.is_public)&&f.type==='kudos').slice(0,20);
   function empName(id) { const e=_employees.find(e=>e.id===id); return e?`${e.first_name} ${e.last_name}`:'Team Member'; }
-  function empAv(id)   { const e=_employees.find(e=>e.id===id); return {init:e?.avatar_initials||'?',col:e?.avatar_color||'#7c5cfc'}; }
+  function empAv(id)   { const e=_employees.find(e=>e.id===id); return {init:e?.avatar_initials||'?',col:e?.avatar_color||'#eda5ff'}; }
   const list = tab==='received'?received:tab==='given'?given:teamPub;
   panel.innerHTML = list.map(f=>{
     const av = empAv(tab==='received'?f.from_employee_id:tab==='given'?f.to_employee_id:f.from_employee_id);
@@ -1664,7 +1840,7 @@ function renderPaths() {
       const pct=total?Math.round(done/total*100):0;
       return `<div class="path-card">
         <div class="path-header">
-          <div class="path-icon" style="background:${path.thumbnail_color||'#7c5cfc'}20;color:${path.thumbnail_color||'#7c5cfc'}">
+          <div class="path-icon" style="background:${path.thumbnail_color||'#eda5ff'}20;color:${path.thumbnail_color||'#eda5ff'}">
             <i class="fa-solid ${path.thumbnail_icon||'fa-road'}"></i>
           </div>
           <div class="path-info">
@@ -1682,7 +1858,7 @@ function renderPaths() {
             <div style="font-size:0.68rem;color:var(--muted)">${done}/${total} done</div>
           </div>
         </div>
-        <div class="kpi-track"><div class="kpi-fill" style="width:${pct}%;background:${path.thumbnail_color||'#7c5cfc'}"></div></div>
+        <div class="kpi-track"><div class="kpi-fill" style="width:${pct}%;background:${path.thumbnail_color||'#eda5ff'}"></div></div>
         <div class="path-steps mt-1">
           ${courseIds.map((cid,i)=>{
             const c=_courses.find(x=>x.id===cid)||{title:cid};
@@ -1707,7 +1883,7 @@ async function completePath(pathId) {
   if(path.badge_reward) {
     const b=await post('tables/achievements',{
       employee_id:_emp.id, badge_id:`BADGE-PATH-${pathId}`,
-      badge_name:path.badge_reward, badge_icon:'🏆', badge_color:'#f9c846',
+      badge_name:path.badge_reward, badge_icon:'🏆', badge_color:'#fec24f',
       category:'milestone', description:`Completed learning path: ${path.title}`,
       xp_awarded:50, awarded_at:new Date().toISOString(), awarded_by:'system'
     });
@@ -1727,7 +1903,7 @@ function renderActivityFeed() {
     <div class="chart-container" style="padding:16px 20px">
       ${feed.length ? feed.map(f=>`
         <div class="feed-item">
-          <div class="feed-icon-wrap" style="background:${f.color||'#7c5cfc'}20;color:${f.color||'#7c5cfc'}">
+          <div class="feed-icon-wrap" style="background:${f.color||'#eda5ff'}20;color:${f.color||'#eda5ff'}">
             <i class="fa-solid ${f.icon||'fa-bolt'}"></i>
           </div>
           <div class="feed-body">
@@ -1937,7 +2113,7 @@ function renderMyAchievements() {
         <div class="stat-card-lbl">Badges Earned</div>
       </div>
       <div class="stat-card">
-        <div class="stat-card-icon" style="background:rgba(124,92,252,0.15);color:var(--accent)"><i class="fa-solid fa-star"></i></div>
+        <div class="stat-card-icon" style="background:rgba(237,165,255,0.15);color:var(--accent)"><i class="fa-solid fa-star"></i></div>
         <div class="stat-card-val">${Number(_emp.xp_points)||0}</div>
         <div class="stat-card-lbl">Total XP</div>
       </div>
@@ -1962,9 +2138,9 @@ function renderMyAchievements() {
     </div>
     <div class="section-head mt-2"><i class="fa-solid fa-graduation-cap"></i> Course Certificates (${_progress.filter(p=>p.status==='completed').length})</div>
     ${_progress.filter(p=>p.status==='completed').map(p=>{
-      const c=_courses.find(x=>x.id===p.course_id)||{title:p.course_id,thumbnail_icon:'fa-book',thumbnail_color:'#7c5cfc'};
+      const c=_courses.find(x=>x.id===p.course_id)||{title:p.course_id,thumbnail_icon:'fa-book',thumbnail_color:'#eda5ff'};
       return `<div class="wellbeing-card" style="display:flex;align-items:center;gap:14px;cursor:pointer" onclick="openCertificateByProgress('${p.id}')">
-        <i class="fa-solid ${c.thumbnail_icon||'fa-book'}" style="font-size:1.3rem;color:${c.thumbnail_color||'#7c5cfc'}"></i>
+        <i class="fa-solid ${c.thumbnail_icon||'fa-book'}" style="font-size:1.3rem;color:${c.thumbnail_color||'#eda5ff'}"></i>
         <div style="flex:1">
           <div style="font-weight:700;font-size:0.88rem">${c.title}</div>
           <div style="font-size:0.72rem;color:var(--muted)">Completed ${p.completed_at?timeAgo(p.completed_at):'recently'}</div>
@@ -2189,7 +2365,7 @@ function checkBirthdays() {
     banner.innerHTML = `<span style="font-size:1.4rem">🎂</span>
       <span>${isMe ? '🎉 Happy Birthday to YOU!' : `🎂 Today is ${emp.first_name} ${emp.last_name}'s birthday!`}
       ${isMe ? ' The whole team wishes you an amazing day!' : ' Wish them a happy birthday!'}</span>
-      ${!isMe ? `<button onclick="openKudosForBirthday('${emp.id}')" style="margin-left:auto;background:#0e0f13;color:#f9c846;border:none;padding:5px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.78rem">
+      ${!isMe ? `<button onclick="openKudosForBirthday('${emp.id}')" style="margin-left:auto;background:#0e0f13;color:#fec24f;border:none;padding:5px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.78rem">
         Send 🎂 Wishes
       </button>` : ''}
       <button onclick="this.parentElement.remove()" style="background:transparent;border:none;cursor:pointer;font-size:1rem;margin-left:${isMe?'auto':'8px'}">✕</button>`;
@@ -2209,7 +2385,7 @@ function checkBirthdays() {
           employee_id: emp.id, type: 'badge_earned',
           title: '🎂 Birthday! +100 XP',
           body: `Happy Birthday ${emp.first_name}! The SV Capital team celebrates you today.`,
-          icon: 'fa-cake-candles', color: '#f9c846',
+          icon: 'fa-cake-candles', color: '#fec24f',
           xp_shown: 100, is_public: true,
           created_at: new Date().toISOString()
         });
@@ -2241,11 +2417,14 @@ function renderProfile() {
   const bdFormatted = bd ? new Date(bd+'T12:00:00').toLocaleDateString('en-ZA',{day:'numeric',month:'long',year:'numeric'}) : 'Not set';
   const nextBday = bd ? getNextBirthday(bd) : null;
 
+  const addrParts = [_emp.address_line1, _emp.address_line2, _emp.address_city, _emp.address_province, _emp.address_postal_code].filter(Boolean);
+  const addrDisplay = addrParts.length ? addrParts.join(', ') : 'Not set';
+
   el.innerHTML = `
     <div class="view-header">
       <div><h1>My Profile</h1><div class="view-sub">Personal details, banking information &amp; documents</div></div>
       <div class="view-header-actions">
-        <button class="btn btn--primary" onclick="openProfileEditModal()"><i class="fa-solid fa-pen"></i> Edit Profile</button>
+        <button class="btn btn--primary" id="editProfileBtn"><i class="fa-solid fa-pen"></i> Edit Profile</button>
       </div>
     </div>
 
@@ -2255,6 +2434,7 @@ function renderProfile() {
         <div class="section-head"><i class="fa-solid fa-user"></i> Personal Information</div>
         <div class="chart-container" style="padding:0">
           ${profileRow('fa-id-card','Full Name',`${_emp.first_name} ${_emp.last_name}`)}
+          ${_emp.employee_number ? profileRow('fa-id-badge','Employee No.',`<span style="font-family:monospace">${_emp.employee_number}</span>`) : ''}
           ${profileRow('fa-envelope','Email',_emp.email||'—')}
           ${profileRow('fa-phone','Phone',_emp.phone||'—')}
           ${profileRow('fa-briefcase','Role',`${_emp.role||'—'} · ${_emp.department||'—'}`)}
@@ -2262,6 +2442,11 @@ function renderProfile() {
           ${profileRow('fa-id-badge','ID Number',_emp.id_number?maskId(_emp.id_number):'Not set')}
           ${profileRow('fa-phone-volume','Emergency Contact',_emp.emergency_contact_name?`${_emp.emergency_contact_name} · ${_emp.emergency_contact_phone||''}` :'Not set')}
           ${profileRow('fa-align-left','Bio',_emp.bio||'—')}
+        </div>
+
+        <div class="section-head mt-3"><i class="fa-solid fa-map-marker-alt"></i> Address</div>
+        <div class="chart-container" style="padding:0">
+          ${profileRow('fa-location-dot','Address',addrDisplay)}
         </div>
 
         <div class="section-head mt-3">
@@ -2274,7 +2459,7 @@ function renderProfile() {
         </div>
       </div>
 
-      <!-- Banking details -->
+      <!-- Banking details + Documents -->
       <div>
         <div class="section-head">
           <i class="fa-solid fa-building-columns"></i> Banking Information
@@ -2299,7 +2484,7 @@ function renderProfile() {
                   <div style="font-size:0.85rem;font-weight:600">${_emp.proof_of_banking_url.split('/').pop()}</div>
                   <div style="font-size:0.72rem;color:var(--muted)">Proof of banking on file</div>
                 </div>
-                <span class="chip chip-green"><i class="fa-solid fa-check"></i> Verified</span>
+                <span class="chip chip-green"><i class="fa-solid fa-check"></i> Uploaded</span>
               </div>`
             : `<div style="border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center">
                 <i class="fa-solid fa-cloud-upload" style="font-size:2rem;color:var(--muted);margin-bottom:10px;display:block"></i>
@@ -2307,7 +2492,30 @@ function renderProfile() {
                 <div style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Upload a bank confirmation letter, statement header, or cancelled cheque</div>
                 <label class="btn btn--secondary" style="cursor:pointer">
                   <i class="fa-solid fa-upload"></i> Upload Document
-                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleBankingDocUpload(this)" />
+                  <input id="bankingDocInput" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" />
+                </label>
+              </div>`
+          }
+        </div>
+
+        <div class="section-head mt-3"><i class="fa-solid fa-passport"></i> Proof of ID</div>
+        <div class="chart-container">
+          ${_emp.proof_of_id_url
+            ? `<div style="display:flex;align-items:center;gap:12px;padding:4px 0">
+                <i class="fa-solid fa-file-pdf" style="color:var(--danger);font-size:1.3rem"></i>
+                <div style="flex:1">
+                  <div style="font-size:0.85rem;font-weight:600">${_emp.proof_of_id_url.split('/').pop()}</div>
+                  <div style="font-size:0.72rem;color:var(--muted)">Proof of ID on file</div>
+                </div>
+                <span class="chip chip-green"><i class="fa-solid fa-check"></i> Uploaded</span>
+              </div>`
+            : `<div style="border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center">
+                <i class="fa-solid fa-id-card" style="font-size:2rem;color:var(--muted);margin-bottom:10px;display:block"></i>
+                <div style="font-size:0.85rem;font-weight:600;margin-bottom:4px">No ID document uploaded yet</div>
+                <div style="font-size:0.75rem;color:var(--muted);margin-bottom:14px">Upload a copy of your SA ID or passport</div>
+                <label class="btn btn--secondary" style="cursor:pointer">
+                  <i class="fa-solid fa-upload"></i> Upload ID Document
+                  <input id="idDocInput" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" />
                 </label>
               </div>`
           }
@@ -2320,7 +2528,43 @@ function renderProfile() {
           ${profileRow('fa-circle-check','Profile Status',`<span class="chip ${hasBanking?'chip-green':'chip-gold'}">${hasBanking?'Complete':'Banking Pending'}</span>`)}
         </div>
       </div>
+    </div>
+
+    <!-- Payslips -->
+    <div style="margin-top:24px">
+      <div class="section-head"><i class="fa-solid fa-file-invoice-dollar"></i> My Payslips</div>
+      ${_payslips.length === 0
+        ? `<div class="chart-container" style="text-align:center;padding:28px;color:var(--muted)">
+             <i class="fa-solid fa-file-invoice-dollar" style="font-size:1.8rem;margin-bottom:10px;display:block;opacity:0.35"></i>
+             <div style="font-size:0.82rem">No payslips on record yet.</div>
+           </div>`
+        : `<div class="chart-container" style="padding:0">
+             ${_payslips.map(p => {
+               const [yr, mo] = p.pay_period.split('-');
+               const moLabel = ['January','February','March','April','May','June','July','August','September','October','November','December'][(parseInt(mo,10)||1)-1] || mo;
+               return `<div style="display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--border)">
+                 <div style="width:36px;height:36px;border-radius:9px;background:rgba(237,165,255,0.08);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                   <i class="fa-solid fa-file-invoice-dollar"></i>
+                 </div>
+                 <div style="flex:1">
+                   <div style="font-size:0.85rem;font-weight:700">${moLabel} ${yr}</div>
+                   <div style="font-size:0.72rem;color:var(--muted)">Nett pay: R ${Number(p.nett_pay||0).toLocaleString('en-ZA',{minimumFractionDigits:2})}</div>
+                 </div>
+                 <button class="btn btn--secondary btn--sm" id="dl-${p.id}">
+                   <i class="fa-solid fa-download"></i> Download
+                 </button>
+               </div>`;
+             }).join('')}
+           </div>`
+      }
     </div>`;
+
+  document.getElementById('editProfileBtn')?.addEventListener('click', openProfileEditModal);
+  document.getElementById('bankingDocInput')?.addEventListener('change', function() { handleBankingDocUpload(this); });
+  document.getElementById('idDocInput')?.addEventListener('change', function() { handleIdDocUpload(this); });
+  _payslips.forEach(p => {
+    document.getElementById(`dl-${p.id}`)?.addEventListener('click', () => downloadPayslip(p.id));
+  });
 }
 
 function profileRow(icon, label, value) {
@@ -2356,35 +2600,219 @@ function getNextBirthday(bdStr) {
 
 function handleBankingDocUpload(input) {
   const file = input.files[0]; if (!file) return;
-  // Simulate upload — store filename as proof_of_banking_url
   const fakePath = `uploads/banking/${_emp.id}_${file.name}`;
   patch(`tables/employees/${_emp.id}`, { proof_of_banking_url: fakePath }).then(r=>{
     _emp.proof_of_banking_url = fakePath;
     renderProfile();
-    showToast(`Document "${file.name}" uploaded successfully!`, 'success');
+    showToast(`Banking document "${file.name}" uploaded successfully!`, 'success');
   });
+}
+
+function handleIdDocUpload(input) {
+  const file = input.files[0]; if (!file) return;
+  const fakePath = `uploads/id/${_emp.id}_${file.name}`;
+  patch(`tables/employees/${_emp.id}`, { proof_of_id_url: fakePath }).then(r=>{
+    _emp.proof_of_id_url = fakePath;
+    renderProfile();
+    showToast(`ID document "${file.name}" uploaded successfully!`, 'success');
+  });
+}
+
+function downloadPayslip(id) {
+  const p = _payslips.find(x => x.id === id);
+  if (!p || !_emp) { showToast('Payslip not found', 'error'); return; }
+  const w = window.open('', '_blank', 'width=900,height=720');
+  if (!w) { showToast('Allow pop-ups to download payslips', 'error'); return; }
+  w.document.write(buildEmpPayslipHTML(p, _emp));
+  w.document.close();
+  w.onload = () => w.print();
+}
+
+function buildEmpPayslipHTML(p, emp) {
+  const fmt = n => Number(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const maskAcc = n => { const s=String(n||''); return s.length>4?'*'.repeat(s.length-4)+s.slice(-4):s; };
+  const rph = (Number(emp.base_salary||0)/173.33).toFixed(5);
+  const payDateFmt = (p.pay_date||'').replace(/-/g,'/');
+  const startFmt = emp.start_date?emp.start_date.slice(0,10).replace(/-/g,'/'):'—';
+  const empCode = emp.employee_number||emp.id;
+  const addrParts = [emp.address_line1,emp.address_line2,emp.address_city,emp.address_province,emp.address_postal_code].filter(Boolean);
+  const addrHtml = addrParts.length?addrParts.join(', '):'—';
+  const [yr,mo] = (p.pay_period||'').split('-');
+  const moLabel = ['January','February','March','April','May','June','July','August','September','October','November','December'][(parseInt(mo,10)||1)-1]||mo;
+  const LOGO = 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMTA2LjkyMSIgdmlld0JveD0iMCAwIDQzMS4yMTggMTA2LjkyMSIgd2lkdGg9IjQzMS4yMTgiPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGdyYWRpZW50VW5pdHM9Im9iamVjdEJvdW5kaW5nQm94IiBpZD0ibGluZWFyLWdyYWRpZW50IiB4MT0iMC44NzQiIHgyPSIwLjExIiB5MT0iMC4wMzQiIHkyPSIwLjk4NiI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iI2ZmOWIwYyIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjAuMjA0IiBzdG9wLWNvbG9yPSIjZmY5NDBlIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMC40OTIiIHN0b3AtY29sb3I9IiNmZjgyMTUiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIwLjgyNyIgc3RvcC1jb2xvcj0iI2ZmNjQyMSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjAuOTk3IiBzdG9wLWNvbG9yPSIjZmY1MjI5Ii8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGdyYWRpZW50VW5pdHM9Im9iamVjdEJvdW5kaW5nQm94IiBpZD0ibGluZWFyLWdyYWRpZW50LTIiIHgxPSIwLjUiIHgyPSIwLjUiIHkxPSIwLjAyNyIgeTI9IjAuOTk0Ij4KICAgICAgPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZWRhNWZmIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMC4xNzUiIHN0b3AtY29sb3I9IiNlZmE5ZTUiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIwLjU0OSIgc3RvcC1jb2xvcj0iI2Y1YjNhNCIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmZWMyNGYiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgZ3JhZGllbnRVbml0cz0ib2JqZWN0Qm91bmRpbmdCb3giIGlkPSJsaW5lYXItZ3JhZGllbnQtMyIgeDI9IjEiIHkxPSIwLjUiIHkyPSIwLjUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiM2NWVkMDAiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIwLjk5NyIgc3RvcC1jb2xvcj0iIzAwOTZmZiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBncmFkaWVudFVuaXRzPSJvYmplY3RCb3VuZGluZ0JveCIgaWQ9ImxpbmVhci1ncmFkaWVudC00IiB4Mj0iMSIgeTE9IjAuNSIgeTI9IjAuNSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMC4wMDMiIHN0b3AtY29sb3I9IiMwMDk2ZmYiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjNjVlZDAwIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGhyZWY9IiNsaW5lYXItZ3JhZGllbnQtMyIgaWQ9ImxpbmVhci1ncmFkaWVudC01IiB4MT0iMC45NDMiIHgyPSIwLjAyNyIgeTE9IjAuMDQ0IiB5Mj0iMC45ODYiLz4KICAgIDxsaW5lYXJHcmFkaWVudCBncmFkaWVudFVuaXRzPSJvYmplY3RCb3VuZGluZ0JveCIgaWQ9ImxpbmVhci1ncmFkaWVudC02IiB4MT0iMC4xMzEiIHgyPSIwLjg4OSIgeTE9IjAuMDI5IiB5Mj0iMC45OTYiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAuMDAzIiBzdG9wLWNvbG9yPSIjZmZlODZhIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI2ZmYjc4MiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBncmFkaWVudFVuaXRzPSJvYmplY3RCb3VuZGluZ0JveCIgaWQ9ImxpbmVhci1ncmFkaWVudC03IiB4MT0iMC4wNDkiIHgyPSIwLjk2NSIgeTE9IjAuMDQ0IiB5Mj0iMC45NzEiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmZjliMGMiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIwLjk5NyIgc3RvcC1jb2xvcj0iI2ZmNTIyOSIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBncmFkaWVudFVuaXRzPSJvYmplY3RCb3VuZGluZ0JveCIgaWQ9ImxpbmVhci1ncmFkaWVudC04IiB4MT0iMC41IiB4Mj0iMC41IiB5MT0iMC4wNTYiIHkyPSIwLjg5MSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iI2ZlYzI0ZiIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNlZmE5ZTYiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxnIGlkPSJMb2dvIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwKSI+CiAgICA8ZyBkYXRhLW5hbWU9Ikdyb3VwIDMxNDEiIGlkPSJHcm91cF8zMTQxIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMzg2MyAzMjY5LjgyNSkiPgogICAgICA8cGF0aCBkPSJNLTE0My4xNTYtMTMuMi0xNDguMTE1LDBoLTIuNTA4TC0xNTUuNi0xMy4yaDIuMzE4bDMuOTE0LDEwLjk4MiwzLjkzMy0xMC45ODJabTEyLjczLDcuNzE0YTYuNzcxLDYuNzcxLDAsMCwxLS4wNzYsMS4wNjRoLThhMi45LDIuOSwwLDAsMCwuOTMxLDIuMDE0LDIuOTM5LDIuOTM5LDAsMCwwLDIuMDUyLjc2LDIuNTM0LDIuNTM0LDAsMCwwLDIuNDctMS40NjNoMi4zMzdBNC43MTYsNC43MTYsMCwwLDEtMTMyLjQzLS43NTFhNS4wNDUsNS4wNDUsMCwwLDEtMy4wODguOTIyQTUuMzQ3LDUuMzQ3LDAsMCwxLTEzOC4yMDYtLjVhNC44LDQuOCwwLDAsMS0xLjg2Mi0xLjksNS44LDUuOCwwLDAsMS0uNjc0LTIuODQxLDUuOTMyLDUuOTMyLDAsMCwxLC42NTYtMi44NDEsNC42MSw0LjYxLDAsMCwxLDEuODQzLTEuODksNS40ODUsNS40ODUsMCwwLDEsMi43MjYtLjY2NSw1LjMzMiw1LjMzMiwwLDAsMSwyLjY0MS42NDYsNC41NjUsNC41NjUsMCwwLDEsMS44LDEuODE1QTUuNDY1LDUuNDY1LDAsMCwxLTEzMC40MjUtNS40OTFabS0yLjI2MS0uNjg0YTIuNDY1LDIuNDY1LDAsMCwwLS44NTUtMS45MTksMy4wNTcsMy4wNTcsMCwwLDAtMi4wNzEtLjcyMiwyLjc4MiwyLjc4MiwwLDAsMC0xLjkxOS43MTMsMi45NzgsMi45NzgsMCwwLDAtLjk1LDEuOTI4Wm0xMS00LjQ2NWE0LjcsNC43LDAsMCwxLDIuMjE0LjUxMywzLjY0OCwzLjY0OCwwLDAsMSwxLjUyOSwxLjUyLDUsNSwwLDAsMSwuNTUxLDIuNDMyVjBoLTIuMTQ3Vi01Ljg1MmEzLjAzOSwzLjAzOSwwLDAsMC0uNy0yLjE1NywyLjUsMi41LDAsMCwwLTEuOTE5LS43NSwyLjUzMywyLjUzMywwLDAsMC0xLjkyOS43NSwzLjAxMywzLjAxMywwLDAsMC0uNzEyLDIuMTU3VjBoLTIuMTY2Vi0xMC40NjloMi4xNjZ2MS4yYTMuNTg1LDMuNTg1LDAsMCwxLDEuMzU4LTEuMDA3QTQuMzQzLDQuMzQzLDAsMCwxLTEyMS42ODYtMTAuNjRaTS0xMTAuNzgtOC43djUuNzk1YTEuMTEyLDEuMTEyLDAsMCwwLC4yNzUuODQ2LDEuMzcsMS4zNywwLDAsMCwuOTQuMjU2aDEuMzNWMGgtMS43MWEzLjMsMy4zLDAsMCwxLTIuMjQyLS42ODQsMi44MTksMi44MTksMCwwLDEtLjc3OS0yLjIyM1YtOC43SC0xMTQuMnYtMS43NjdoMS4yMzV2LTIuNmgyLjE4NXYyLjZoMi41NDZWLTguN1ptMTUuMzUyLTEuNzY3VjBoLTIuMTY2Vi0xLjIzNWEzLjUwNiwzLjUwNiwwLDAsMS0xLjM0LDEuMDE2LDQuMjQ3LDQuMjQ3LDAsMCwxLTEuNzU3LjM3MUE0LjcsNC43LDAsMCwxLTEwMi45LS4zNjFhMy43MDYsMy43MDYsMCwwLDEtMS41MzktMS41MkE0LjkzMSw0LjkzMSwwLDAsMS0xMDUtNC4zMTN2LTYuMTU2aDIuMTQ3djUuODMzYTMuMDM5LDMuMDM5LDAsMCwwLC43LDIuMTU3LDIuNSwyLjUsMCwwLDAsMS45MTkuNzUxLDIuNTMzLDIuNTMzLDAsMCwwLDEuOTI5LS43NTEsMy4wMTMsMy4wMTMsMCwwLDAsLjcxMi0yLjE1N3YtNS44MzNabTYuMzQ2LDEuNTJhMy40LDMuNCwwLDAsMSwxLjI2My0xLjI0NSwzLjczNywzLjczNywwLDAsMSwxLjg3MS0uNDQ3Vi04LjRILTg2LjVhMi42MzgsMi42MzgsMCwwLDAtMS45MjkuNjQ2LDMuMDg5LDMuMDg5LDAsMCwwLS42NTUsMi4yNDJWMGgtMi4xNjZWLTEwLjQ2OWgyLjE2NlptMTYuMDU1LDMuNDU4QTYuNzcyLDYuNzcyLDAsMCwxLTczLjEtNC40MjdoLThhMi45LDIuOSwwLDAsMCwuOTMxLDIuMDE0LDIuOTM5LDIuOTM5LDAsMCwwLDIuMDUyLjc2LDIuNTM0LDIuNTM0LDAsMCwwLDIuNDctMS40NjNoMi4zMzdBNC43MTYsNC43MTYsMCwwLDEtNzUuMDMxLS43NTFhNS4wNDUsNS4wNDUsMCwwLDEtMy4wODguOTIyQTUuMzQ3LDUuMzQ3LDAsMCwxLTgwLjgwNy0uNWE0LjgsNC44LDAsMCwxLTEuODYyLTEuOSw1LjgsNS44LDAsMCwxLS42NzQtMi44NDEsNS45MzIsNS45MzIsMCwwLDEsLjY1NS0yLjg0MSw0LjYxLDQuNjEsMCwwLDEsMS44NDMtMS44OSw1LjQ4NSw1LjQ4NSwwLDAsMSwyLjcyNy0uNjY1LDUuMzMyLDUuMzMyLDAsMCwxLDIuNjQxLjY0Niw0LjU2NSw0LjU2NSwwLDAsMSwxLjgwNSwxLjgxNUE1LjQ2NSw1LjQ2NSwwLDAsMS03My4wMjctNS40OTFabS0yLjI2MS0uNjg0YTIuNDY1LDIuNDY1LDAsMCwwLS44NTUtMS45MTksMy4wNTcsMy4wNTcsMCwwLDAtMi4wNzEtLjcyMiwyLjc4MiwyLjc4MiwwLDAsMC0xLjkxOS43MTMsMi45NzgsMi45NzgsMCwwLDAtLjk1LDEuOTI4Wm0xOS4wNTctLjYwOGEyLjkyLDIuOTIsMCwwLDEsMS44MDUsMS4xMjEsMy4zLDMuMywwLDAsMSwuNzQxLDIuMTA5LDMuMjY4LDMuMjY4LDAsMCwxLS41MjMsMS44MTUsMy41NDEsMy41NDEsMCwwLDEtMS41MSwxLjI3Myw1LjM0LDUuMzQsMCwwLDEtMi4zLjQ2NUgtNjMuM1YtMTMuMmg1LjAzNWE1LjQsNS40LDAsMCwxLDIuMzE4LjQ1NiwzLjQsMy40LDAsMCwxLDEuNDYzLDEuMjI2LDMuMTE2LDMuMTE2LDAsMCwxLC40OTQsMS43MkEyLjk0NSwyLjk0NSwwLDAsMS01NC42LTcuOSwzLjU0LDMuNTQsMCwwLDEtNTYuMjMxLTYuNzgzWm0tNC45LS44NzRoMi42NzlhMi41NzMsMi41NzMsMCwwLDAsMS42NjItLjQ4NCwxLjY5MiwxLjY5MiwwLDAsMCwuNi0xLjQsMS43MjYsMS43MjYsMCwwLDAtLjYtMS40LDIuNTA2LDIuNTA2LDAsMCwwLTEuNjYyLS41aC0yLjY3OVptMi45MjYsNS44OUEyLjU4OSwyLjU4OSwwLDAsMC01Ni40NzgtMi4zYTEuODM4LDEuODM4LDAsMCwwLC42MjctMS40ODIsMS45MjMsMS45MjMsMCwwLDAtLjY2NS0xLjUzOSwyLjYyMiwyLjYyMiwwLDAsMC0xLjc2Ny0uNTdoLTIuODV2NC4xMjNabTE3LjgtMy43MjRhNi43NzIsNi43NzIsMCwwLDEtLjA3NiwxLjA2NGgtOGEyLjksMi45LDAsMCwwLC45MzEsMi4wMTQsMi45MzksMi45MzksMCwwLDAsMi4wNTIuNzYsMi41MzQsMi41MzQsMCwwLDAsMi40Ny0xLjQ2M2gyLjMzN2E0LjcxNiw0LjcxNiwwLDAsMS0xLjcyLDIuMzY2QTUuMDQ1LDUuMDQ1LDAsMCwxLTQ1LjUuMTcxLDUuMzQ3LDUuMzQ3LDAsMCwxLTQ4LjE4NC0uNWE0LjgsNC44LDAsMCwxLTEuODYyLTEuOSw1LjgsNS44LDAsMCwxLS42NzQtMi44NDEsNS45MzIsNS45MzIsMCwwLDEsLjY1Ni0yLjg0MSw0LjYxLDQuNjEsMCwwLDEsMS44NDMtMS44OUE1LjQ4NSw1LjQ4NSwwLDAsMS00NS41LTEwLjY0YTUuMzMyLDUuMzMyLDAsMCwxLDIuNjQxLjY0Niw0LjU2NSw0LjU2NSwwLDAsMSwxLjgwNSwxLjgxNUE1LjQ2NSw1LjQ2NSwwLDAsMS00MC40LTUuNDkxWm0tMi4yNjEtLjY4NGEyLjQ2NSwyLjQ2NSwwLDAsMC0uODU1LTEuOTE5LDMuMDU3LDMuMDU3LDAsMCwwLTIuMDcxLS43MjIsMi43ODIsMi43ODIsMCwwLDAtMS45MTkuNzEzLDIuOTc4LDIuOTc4LDAsMCwwLS45NSwxLjkyOFptMTUuMTQzLTQuMjk0LTYuNDIyLDE1LjM5aC0yLjI0MmwyLjEyOC01LjA5Mi00LjEyMy0xMC4zaDIuNDEzbDIuOTQ1LDcuOTgsMy4wNTktNy45OFpNLTIwLjAxNi4xNzFBNS4zNjEsNS4zNjEsMCwwLDEtMjIuNy0uNWE0Ljg0NSw0Ljg0NSwwLDAsMS0xLjg4MS0xLjksNS43MzEsNS43MzEsMCwwLDEtLjY4NC0yLjg0MSw1LjYyMSw1LjYyMSwwLDAsMSwuNy0yLjgzMSw0Ljg1Niw0Ljg1NiwwLDAsMSwxLjkxOS0xLjksNS41NjgsNS41NjgsMCwwLDEsMi43MTctLjY2NSw1LjU2OCw1LjU2OCwwLDAsMSwyLjcxNy42NjUsNC44NTYsNC44NTYsMCwwLDEsMS45MTksMS45LDUuNjIxLDUuNjIxLDAsMCwxLC43LDIuODMxQTUuNSw1LjUsMCwwLDEtMTUuMy0yLjQxMyw1LDUsMCwwLDEtMTcuMjcxLS41LDUuNjY4LDUuNjY4LDAsMCwxLTIwLjAxNi4xNzFabTAtMS44ODFhMy4yMjMsMy4yMjMsMCwwLDAsMS41NjgtLjQsMy4wNCwzLjA0LDAsMCwwLDEuMTg4LTEuMiwzLjg0OCwzLjg0OCwwLDAsMCwuNDU2LTEuOTM4LDMuOTI4LDMuOTI4LDAsMCwwLS40MzctMS45MjlBMi45NSwyLjk1LDAsMCwwLTE4LjQtOC4zNmEzLjE3LDMuMTcsMCwwLDAtMS41NTgtLjQsMy4xMTcsMy4xMTcsMCwwLDAtMS41NDkuNCwyLjg0OCwyLjg0OCwwLDAsMC0xLjEzLDEuMTg3LDQuMDc1LDQuMDc1LDAsMCwwLS40MTgsMS45MjksMy42NzMsMy42NzMsMCwwLDAsLjg2NSwyLjYxMkEyLjg1NywyLjg1NywwLDAsMC0yMC4wMTYtMS43MVptMTQuMTkzLTguOTNhNC43LDQuNywwLDAsMSwyLjIxNC41MTMsMy42NDgsMy42NDgsMCwwLDEsMS41MywxLjUyQTUsNSwwLDAsMS0xLjUzLTYuMTc1VjBILTMuNjc3Vi01Ljg1MmEzLjAzOSwzLjAzOSwwLDAsMC0uNy0yLjE1N0EyLjUsMi41LDAsMCwwLTYuMy04Ljc1OWEyLjUzMywyLjUzMywwLDAsMC0xLjkyOS43NUEzLjAxMywzLjAxMywwLDAsMC04Ljk0LTUuODUyVjBoLTIuMTY2Vi0xMC40NjlILTguOTR2MS4yYTMuNTg1LDMuNTg1LDAsMCwxLDEuMzU5LTEuMDA3QTQuMzQzLDQuMzQzLDAsMCwxLTUuODI0LTEwLjY0Wk0xLjgzMy01LjI4MmE1Ljc5NCw1Ljc5NCwwLDAsMSwuNjU1LTIuNzkzQTQuOCw0LjgsMCwwLDEsNC4yNzUtOS45NjVhNC44Miw0LjgyLDAsMCwxLDIuNTE4LS42NzUsNC45MSw0LjkxLDAsMCwxLDIuMDIzLjQ0N0E0LjE0LDQuMTQsMCwwLDEsMTAuNC05LjAwNlYtMTQuMDZoMi4xODVWMEgxMC40Vi0xLjU3N0E0LjA1NSw0LjA1NSwwLDAsMSw4LjkzLS4zMjMsNC41NjksNC41NjksMCwwLDEsNi43NzMuMTcxYTQuNjg1LDQuNjg1LDAsMCwxLTIuNS0uNjkzQTQuODk1LDQuODk1LDAsMCwxLDIuNDg5LTIuNDYxLDUuOTYyLDUuOTYyLDAsMCwxLDEuODMzLTUuMjgyWm04LjU2OS4wMzhhMy43OTEsMy43OTEsMCwwLDAtLjQ0Ni0xLjg4MUEzLjEzNCwzLjEzNCwwLDAsMCw4Ljc4Ny04LjM0MWEzLjA1NywzLjA1NywwLDAsMC0xLjU1OC0uNDE4LDMuMTEyLDMuMTEyLDAsMCwwLTEuNTU4LjQwOEEzLjA4MSwzLjA4MSwwLDAsMCw0LjUtNy4xNTRhMy43MzcsMy43MzcsMCwwLDAtLjQ0NywxLjg3MiwzLjksMy45LDAsMCwwLC40NDcsMS45QTMuMTUsMy4xNSwwLDAsMCw1LjY4MS0yLjEzOGEzLjAyMSwzLjAyMSwwLDAsMCwxLjU0OS40MjgsMy4wNTcsMy4wNTcsMCwwLDAsMS41NTgtLjQxOEEzLjExOSwzLjExOSwwLDAsMCw5Ljk1Ni0zLjM1MywzLjg0NSwzLjg0NSwwLDAsMCwxMC40LTUuMjQ0Wk0yNS41NjUtOC43djUuNzk1YTEuMTEyLDEuMTEyLDAsMCwwLC4yNzYuODQ2LDEuMzcsMS4zNywwLDAsMCwuOTQuMjU2aDEuMzNWMEgyNi40YTMuMywzLjMsMCwwLDEtMi4yNDItLjY4NCwyLjgxOSwyLjgxOSwwLDAsMS0uNzc5LTIuMjIzVi04LjdIMjIuMTQ1di0xLjc2N0gyMy4zOHYtMi42aDIuMTg1djIuNmgyLjU0NlYtOC43Wk0zNi44NS0xMC42NGE0LjM5MSw0LjM5MSwwLDAsMSwyLjEzOC41MTMsMy42NTEsMy42NTEsMCwwLDEsMS40ODIsMS41Miw1LjA3Miw1LjA3MiwwLDAsMSwuNTQyLDIuNDMyVjBIMzguODY0Vi01Ljg1MmEzLjAzOSwzLjAzOSwwLDAsMC0uNy0yLjE1NywyLjUsMi41LDAsMCwwLTEuOTE5LS43NSwyLjUzMywyLjUzMywwLDAsMC0xLjkyOS43NUEzLjAxMywzLjAxMywwLDAsMCwzMy42LTUuODUyVjBIMzEuNDM1Vi0xNC4wNkgzMy42djQuODA3QTMuNjMyLDMuNjMyLDAsMCwxLDM1LTEwLjI3OSw0LjY2OSw0LjY2OSwwLDAsMSwzNi44NS0xMC42NFpNNTQuNjkxLTUuNDkxYTYuNzcyLDYuNzcyLDAsMCwxLS4wNzYsMS4wNjRoLThhMi45LDIuOSwwLDAsMCwuOTMxLDIuMDE0LDIuOTM5LDIuOTM5LDAsMCwwLDIuMDUyLjc2LDIuNTM0LDIuNTM0LDAsMCwwLDIuNDctMS40NjNoMi4zMzdhNC43MTYsNC43MTYsMCwwLDEtMS43MiwyLjM2NkE1LjA0NSw1LjA0NSwwLDAsMSw0OS42LjE3MSw1LjM0Nyw1LjM0NywwLDAsMSw0Ni45MTEtLjVhNC44LDQuOCwwLDAsMS0xLjg2Mi0xLjksNS44LDUuOCwwLDAsMS0uNjc0LTIuODQxLDUuOTMyLDUuOTMyLDAsMCwxLC42NTYtMi44NDEsNC42MSw0LjYxLDAsMCwxLDEuODQzLTEuODlBNS40ODUsNS40ODUsMCwwLDEsNDkuNi0xMC42NGE1LjMzMiw1LjMzMiwwLDAsMSwyLjY0MS42NDYsNC41NjUsNC41NjUsMCwwLDEsMS44MDUsMS44MTVBNS40NjUsNS40NjUsMCwwLDEsNTQuNjkxLTUuNDkxWk01Mi40My02LjE3NWEyLjQ2NSwyLjQ2NSwwLDAsMC0uODU1LTEuOTE5QTMuMDU3LDMuMDU3LDAsMCwwLDQ5LjUtOC44MTZhMi43ODIsMi43ODIsMCwwLDAtMS45MTkuNzEzLDIuOTc4LDIuOTc4LDAsMCwwLS45NSwxLjkyOFpNNzAuNDQyLjEzM2E2Ljg0LDYuODQsMCwwLDEtMy4zOTEtLjg2NEE2LjQwNiw2LjQwNiwwLDAsMSw2NC42LTMuMTQ1YTYuOCw2LjgsMCwwLDEtLjktMy40ODcsNi43NDQsNi43NDQsMCwwLDEsLjktMy40NzcsNi40MjYsNi40MjYsMCwwLDEsMi40NTEtMi40LDYuODQsNi44NCwwLDAsMSwzLjM5MS0uODY0LDYuODc3LDYuODc3LDAsMCwxLDMuNDEuODY0LDYuMzU4LDYuMzU4LDAsMCwxLDIuNDQyLDIuNCw2LjgsNi44LDAsMCwxLC44OTMsMy40NzcsNi44NTIsNi44NTIsMCwwLDEtLjg5MywzLjQ4N0E2LjMzOCw2LjMzOCwwLDAsMSw3My44NTMtLjczMSw2Ljg3Nyw2Ljg3NywwLDAsMSw3MC40NDIuMTMzWm0wLTEuODgxYTQuNTUyLDQuNTUyLDAsMCwwLDIuMzM3LS42LDQuMTQ5LDQuMTQ5LDAsMCwwLDEuNjA1LTEuNzEsNS40OTEsNS40OTEsMCwwLDAsLjU3OS0yLjU3NUE1LjQzMyw1LjQzMywwLDAsMCw3NC4zODUtOS4yYTQuMSw0LjEsMCwwLDAtMS42MDUtMS42OTEsNC42MDksNC42MDksMCwwLDAtMi4zMzctLjU4OSw0LjYwOSw0LjYwOSwwLDAsMC0yLjMzNy41ODlBNC4xLDQuMSwwLDAsMCw2Ni41LTkuMmE1LjQzMyw1LjQzMywwLDAsMC0uNTc5LDIuNTY1QTUuNDkxLDUuNDkxLDAsMCwwLDY2LjUtNC4wNTZhNC4xNDksNC4xNDksMCwwLDAsMS42MDUsMS43MUE0LjU1Miw0LjU1MiwwLDAsMCw3MC40NDItMS43NDhabTEyLjM2OS03LjJhMy40LDMuNCwwLDAsMSwxLjI2My0xLjI0NSwzLjczNywzLjczNywwLDAsMSwxLjg3MS0uNDQ3Vi04LjRIODUuNGEyLjYzOCwyLjYzOCwwLDAsMC0xLjkyOS42NDYsMy4wODksMy4wODksMCwwLDAtLjY1NSwyLjI0MlYwSDgwLjY0NlYtMTAuNDY5aDIuMTY2Wm01LjczOCwzLjY2N0E1Ljc5NCw1Ljc5NCwwLDAsMSw4OS4yLTguMDc1YTQuOCw0LjgsMCwwLDEsMS43ODYtMS44OTEsNC44Miw0LjgyLDAsMCwxLDIuNTE4LS42NzUsNC45MSw0LjkxLDAsMCwxLDIuMDIzLjQ0Nyw0LjE0LDQuMTQsMCwwLDEsMS41ODcsMS4xODdWLTE0LjA2SDk5LjNWMEg5Ny4xMThWLTEuNTc3QTQuMDU1LDQuMDU1LDAsMCwxLDk1LjY0Ni0uMzIzYTQuNTY5LDQuNTY5LDAsMCwxLTIuMTU3LjQ5NCw0LjY4NSw0LjY4NSwwLDAsMS0yLjUtLjY5M0E0Ljg5NSw0Ljg5NSwwLDAsMSw4OS4yLTIuNDYxLDUuOTYyLDUuOTYyLDAsMCwxLDg4LjU0OS01LjI4MlptOC41NjkuMDM4YTMuNzkxLDMuNzkxLDAsMCwwLS40NDctMS44ODFBMy4xMzQsMy4xMzQsMCwwLDAsOTUuNS04LjM0MWEzLjA1NywzLjA1NywwLDAsMC0xLjU1OC0uNDE4LDMuMTEyLDMuMTEyLDAsMCwwLTEuNTU4LjQwOCwzLjA4MSwzLjA4MSwwLDAsMC0xLjE2OSwxLjIsMy43MzcsMy43MzcsMCwwLDAtLjQ0NiwxLjg3MiwzLjksMy45LDAsMCwwLC40NDYsMS45QTMuMTUsMy4xNSwwLDAsMCw5Mi40LTIuMTM4YTMuMDIxLDMuMDIxLDAsMCwwLDEuNTQ5LjQyOEEzLjA1NywzLjA1NywwLDAsMCw5NS41LTIuMTI4YTMuMTE5LDMuMTE5LDAsMCwwLDEuMTY5LTEuMjI1QTMuODQ1LDMuODQ1LDAsMCwwLDk3LjExOC01LjI0NFptNy40NjctNi42MTJhMS4zNDIsMS4zNDIsMCwwLDEtLjk4OC0uNCwxLjM0MiwxLjM0MiwwLDAsMS0uNC0uOTg4LDEuMzQyLDEuMzQyLDAsMCwxLC40LS45ODgsMS4zNDIsMS4zNDIsMCwwLDEsLjk4OC0uNCwxLjMxOSwxLjMxOSwwLDAsMSwuOTY5LjQsMS4zNDIsMS4zNDIsMCwwLDEsLjQuOTg4LDEuMzQyLDEuMzQyLDAsMCwxLS40Ljk4OEExLjMxOSwxLjMxOSwwLDAsMSwxMDQuNTg1LTExLjg1NlptMS4wNjQsMS4zODdWMGgtMi4xNjZWLTEwLjQ2OVptOS40NjItLjE3MWE0LjcsNC43LDAsMCwxLDIuMjE0LjUxMywzLjY0OCwzLjY0OCwwLDAsMSwxLjUyOSwxLjUyLDUsNSwwLDAsMSwuNTUxLDIuNDMyVjBoLTIuMTQ3Vi01Ljg1MmEzLjAzOSwzLjAzOSwwLDAsMC0uNy0yLjE1NywyLjUsMi41LDAsMCwwLTEuOTE5LS43NSwyLjUzMywyLjUzMywwLDAsMC0xLjkyOS43NUEzLjAxMywzLjAxMywwLDAsMCwxMTItNS44NTJWMGgtMi4xNjZWLTEwLjQ2OUgxMTJ2MS4yYTMuNTg1LDMuNTg1LDAsMCwxLDEuMzU4LTEuMDA3QTQuMzQzLDQuMzQzLDAsMCwxLDExNS4xMTEtMTAuNjRabTcuNjU3LDUuMzU4YTUuNzk0LDUuNzk0LDAsMCwxLC42NTUtMi43OTMsNC44LDQuOCwwLDAsMSwxLjc4Ni0xLjg5MSw0Ljc4NSw0Ljc4NSwwLDAsMSwyLjUtLjY3NSw0LjU3LDQuNTcsMCwwLDEsMi4xNTcuNDg0LDQuMzc2LDQuMzc2LDAsMCwxLDEuNDczLDEuMjA3di0xLjUyaDIuMTg1VjBoLTIuMTg1Vi0xLjU1OGE0LjMsNC4zLDAsMCwxLTEuNSwxLjIzNSw0LjYyNiw0LjYyNiwwLDAsMS0yLjE2Ni40OTQsNC42LDQuNiwwLDAsMS0yLjQ3LS42OTMsNC45MTgsNC45MTgsMCwwLDEtMS43NzctMS45MzhBNS45NjIsNS45NjIsMCwwLDEsMTIyLjc2OS01LjI4MlptOC41NjkuMDM4YTMuNzkxLDMuNzkxLDAsMCwwLS40NDctMS44ODEsMy4xMzQsMy4xMzQsMCwwLDAtMS4xNjktMS4yMTYsMy4wNTcsMy4wNTcsMCwwLDAtMS41NTgtLjQxOCwzLjExMiwzLjExMiwwLDAsMC0xLjU1OC40MDgsMy4wODEsMy4wODEsMCwwLDAtMS4xNjksMS4yLDMuNzM3LDMuNzM3LDAsMCwwLS40NDYsMS44NzIsMy45LDMuOSwwLDAsMCwuNDQ2LDEuOSwzLjE1LDMuMTUsMCwwLDAsMS4xNzgsMS4yNDQsMy4wMjEsMy4wMjEsMCwwLDAsMS41NDkuNDI4LDMuMDU3LDMuMDU3LDAsMCwwLDEuNTU4LS40MTgsMy4xMTgsMy4xMTgsMCwwLDAsMS4xNjktMS4yMjVBMy44NDUsMy44NDUsMCwwLDAsMTMxLjMzOC01LjI0NFptOC41MzEtMy43YTMuNCwzLjQsMCwwLDEsMS4yNjQtMS4yNDVBMy43MzcsMy43MzcsMCwwLDEsMTQzLTEwLjY0Vi04LjRoLS41NTFhMi42MzgsMi42MzgsMCwwLDAtMS45MjguNjQ2LDMuMDg5LDMuMDg5LDAsMCwwLS42NTYsMi4yNDJWMEgxMzcuN1YtMTAuNDY5aDIuMTY2Wm0xNS44ODQtMS41MkwxNDkuMzMsNC45MjFoLTIuMjQybDIuMTI4LTUuMDkyLTQuMTIzLTEwLjNoMi40MTNsMi45NDUsNy45OCwzLjA1OS03Ljk4WiIgZGF0YS1uYW1lPSJQYXRoIDE2NTAiIGZpbGw9IiMzMDMwMzAiIGlkPSJQYXRoXzE2NTAiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDQxMzggLTMxODIuNDk3KSIvPgogICAgICA8cGF0aCBkPSJNMjg2Ljg2NS05NS4wNDZhMTAuNTkzLDEwLjU5MywwLDAsMS00LjI1OS04LjM5NGgxMC40NzNhMy45MDcsMy45MDcsMCwwLDAsMS4xLDIuNzA2LDMuNTM4LDMuNTM4LDAsMCwwLDIuNDU1Ljg1MSwzLjU0NywzLjU0NywwLDAsMCwyLjIzLS42NzYsMi4yNDIsMi4yNDIsMCwwLDAsLjg3Ny0xLjg3OSwyLjY1OSwyLjY1OSwwLDAsMC0xLjQ1My0yLjQwNiwyNS42ODYsMjUuNjg2LDAsMCwwLTQuNzExLTEuOSw0Mi4xOSw0Mi4xOSwwLDAsMS01LjU4Ny0yLjIzLDEwLjcsMTAuNywwLDAsMS0zLjcwOC0zLjE1Nyw4Ljc1Myw4Ljc1MywwLDAsMS0xLjU3OC01LjQzNyw5LjkxMiw5LjkxMiwwLDAsMSwxLjctNS44MzksMTAuNTM1LDEwLjUzNSwwLDAsMSw0LjcxLTMuNjgzLDE3LjU4OSwxNy41ODksMCwwLDEsNi44MTYtMS4yNTNxNi4xNjMsMCw5Ljg0NywyLjg4MmExMC4zNjcsMTAuMzY3LDAsMCwxLDMuOTMzLDguMDkzSDI5OS4wNDNhMy4xNTMsMy4xNTMsMCwwLDAtLjk3Ny0yLjQwNiwzLjUxNywzLjUxNywwLDAsMC0yLjM4LS44LDIuNTQ3LDIuNTQ3LDAsMCwwLTEuOC42NTEsMi40LDIuNCwwLDAsMC0uNywxLjg1NCwyLjI4MywyLjI4MywwLDAsMCwuNzc3LDEuNzI4LDcuMTE4LDcuMTE4LDAsMCwwLDEuOTI5LDEuMjUzcTEuMTUyLjUyNiwzLjQwOCwxLjMyN2E0Mi4wNzEsNDIuMDcxLDAsMCwxLDUuNTM2LDIuMjgsMTEuMywxMS4zLDAsMCwxLDMuNzU4LDMuMTU4LDguMTE0LDguMTE0LDAsMCwxLDEuNTc5LDUuMTM2LDEwLjQsMTAuNCwwLDAsMS0xLjU3OSw1LjY2MywxMC44MzQsMTAuODM0LDAsMCwxLTQuNTU5LDMuOTU5LDE1LjksMTUuOSwwLDAsMS03LjA0MSwxLjQ1M0ExNi41NjQsMTYuNTY0LDAsMCwxLDI4Ni44NjUtOTUuMDQ2WiIgZGF0YS1uYW1lPSJQYXRoIDE1ODAiIGZpbGw9IiMzMDMwMzAiIGlkPSJQYXRoXzE1ODAiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDM2OTcuOTIgLTMxMTkuNjg5KSIvPgogICAgICA8cGF0aCBkPSJNMzYyLjUxNC0xMjcuNjA2LDM1MC4zMzctOTIuMjc3SDMzNy43NTlsLTEyLjIyNy0zNS4zMjloMTAuNTIzbDguMDE4LDI1LjUwNiw3Ljk2OC0yNS41MDZaIiBkYXRhLW5hbWU9IlBhdGggMTU4MSIgZmlsbD0iIzMwMzAzMCIgaWQ9IlBhdGhfMTU4MSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzY4Ny4wMTUgLTMxMTkuODc3KSIvPgogICAgICA8cGF0aCBkPSJNMzk5LjMyMi0xMTkuNDMyYTE1LjY2MywxNS42NjMsMCwwLDEsNi4xODgtNi4zNjUsMTguMzI2LDE4LjMyNiwwLDAsMSw5LjIyMS0yLjI4LDE3LjQ5LDE3LjQ5LDAsMCwxLDExLjEyNSwzLjUzMywxNi4wMjksMTYuMDI5LDAsMCwxLDUuODEyLDkuNkg0MjEuMUE3LjA4OSw3LjA4OSwwLDAsMCw0MTguNDY0LTExOGE3LjE1Nyw3LjE1NywwLDAsMC0zLjg4My0xLjA1Myw2LjcyMiw2LjcyMiwwLDAsMC01LjQzOCwyLjQzLDkuOCw5LjgsMCwwLDAtMi4wMjksNi40ODksOS44ODMsOS44ODMsMCwwLDAsMi4wMjksNi41NCw2LjcyMiw2LjcyMiwwLDAsMCw1LjQzOCwyLjQzLDcuMTU4LDcuMTU4LDAsMCwwLDMuODgzLTEuMDUzLDcuMDg1LDcuMDg1LDAsMCwwLDIuNjMxLTMuMDU2aDEwLjU3M2ExNi4wMjksMTYuMDI5LDAsMCwxLTUuODEyLDkuNiwxNy40OSwxNy40OSwwLDAsMS0xMS4xMjUsMy41MzMsMTguMzExLDE4LjMxMSwwLDAsMS05LjIyMS0yLjI4LDE1LjY1MiwxNS42NTIsMCwwLDEtNi4xODgtNi4zNjQsMTkuNTQyLDE5LjU0MiwwLDAsMS0yLjE4LTkuMzQ2QTE5LjQzNCwxOS40MzQsMCwwLDEsMzk5LjMyMi0xMTkuNDMyWiIgZGF0YS1uYW1lPSJQYXRoIDE1ODIiIGZpbGw9IiMzMDMwMzAiIGlkPSJQYXRoXzE1ODIiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDM2NjguODIzIC0zMTE5Ljc1OCkiLz4KICAgICAgPHBhdGggZD0iTTQ3NC41NjMtOTguMDRINDYyLjAzNWwtMS45LDUuNzYzSDQ0OS44MDlsMTIuODc4LTM1LjMyOWgxMS4zMjZsMTIuODI4LDM1LjMyOUg0NzYuNDY3Wm0tMi40NTUtNy41MTdMNDY4LjMtMTE2Ljk4MmwtMy43NTksMTEuNDI1WiIgZGF0YS1uYW1lPSJQYXRoIDE1ODMiIGZpbGw9IiMzMDMwMzAiIGlkPSJQYXRoXzE1ODMiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDM2NTUuNDQzIC0zMTE5Ljg3NykiLz4KICAgICAgPHBhdGggZD0iTTUzMy41NDMtMTA5Ljk5MmExMC42ODUsMTAuNjg1LDAsMCwxLTQuNDYsNC4yMDksMTUuNDI5LDE1LjQyOSwwLDAsMS03LjI5MSwxLjU3OGgtNC44NjF2MTEuOTI2aC05LjgyMnYtMzUuMzI5aDE0LjY4M2ExNS45NDMsMTUuOTQzLDAsMCwxLDcuMjQxLDEuNSwxMC4zNCwxMC4zNCwwLDAsMSw0LjQ4NSw0LjE1OSwxMi4yMSwxMi4yMSwwLDAsMSwxLjUsNi4xMTRBMTEuNzIxLDExLjcyMSwwLDAsMSw1MzMuNTQzLTEwOS45OTJaTTUyNS0xMTUuODNxMC0zLjg1OC00LjE2LTMuODU5aC0zLjkwOXY3LjY2N2gzLjkwOVE1MjUtMTEyLjAyMSw1MjUtMTE1LjgzWiIgZGF0YS1uYW1lPSJQYXRoIDE1ODQiIGZpbGw9IiMzMDMwMzAiIGlkPSJQYXRoXzE1ODQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDM2NDAuODg2IC0zMTE5Ljg3NykiLz4KICAgICAgPHBhdGggZD0iTTU2My4wMTMtMTI3LjYwNnYzNS4zMjloLTkuODIydi0zNS4zMjlaIiBkYXRhLW5hbWU9IlBhdGggMTU4NSIgZmlsbD0iIzMwMzAzMCIgaWQ9IlBhdGhfMTU4NSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzYyOS4xOCAtMzExOS44NzcpIi8+CiAgICAgIDxwYXRoIGQ9Ik02MDMuMTg0LTEyNy42MDZ2Ny44MThoLTkuNDIxdjI3LjUxMWgtOS44MjJ2LTI3LjUxMWgtOS4zMnYtNy44MThaIiBkYXRhLW5hbWU9IlBhdGggMTU4NiIgZmlsbD0iIzMwMzAzMCIgaWQ9IlBhdGhfMTU4NiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzYyMy43MzUgLTMxMTkuODc3KSIvPgogICAgICA8cGF0aCBkPSJNNjQyLjctOTguMDRINjMwLjE3NmwtMS45LDUuNzYzSDYxNy45NDlsMTIuODc4LTM1LjMyOWgxMS4zMjVMNjU0Ljk4LTkyLjI3N0g2NDQuNjA4Wm0tMi40NTYtNy41MTctMy44MDktMTEuNDI1LTMuNzU4LDExLjQyNVoiIGRhdGEtbmFtZT0iUGF0aCAxNTg3IiBmaWxsPSIjMzAzMDMwIiBpZD0iUGF0aF8xNTg3IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgzNjEyLjcyOCAtMzExOS44NzcpIi8+CiAgICAgIDxwYXRoIGQ9Ik02ODUuMDcxLTk5Ljc5NGgxMC45NzR2Ny41MTdoLTIwLjh2LTM1LjMyOWg5LjgyMloiIGRhdGEtbmFtZT0iUGF0aCAxNTg4IiBmaWxsPSIjMzAzMDMwIiBpZD0iUGF0aF8xNTg4IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgzNTk4LjE3MiAtMzExOS44NzcpIi8+CiAgICAgIDxnIGRhdGEtbmFtZT0iR3JvdXAgMzE0MSIgaWQ9Ikdyb3VwXzMxNDEtMiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzg2MyAtMzI2OS44MjUpIj4KICAgICAgICA8cGF0aCBkPSJNMTg2LjgzNy03OC4wNDFzLTEwLjQxMS0yMS42MTgtLjA3My00MS43MjYsMzMuOTc1LTI0LjIyMywzMy45NzUtMjQuMjIzLDEwLjQxLDIxLjYxOS4wNzMsNDEuNzI3UzE4Ni44MzctNzguMDQxLDE4Ni44MzctNzguMDQxWiIgZGF0YS1uYW1lPSJQYXRoIDE2MTMiIGZpbGw9InVybCgjbGluZWFyLWdyYWRpZW50KSIgaWQ9IlBhdGhfMTYxMyIgb3BhY2l0eT0iMC44IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTM5LjU2OSAxNTcuOTY5KSIvPgogICAgICAgIDxwYXRoIGQ9Ik0xODAuOTYzLTgyLjcwOHMyMC42NTgtMTUuNjEyLDIwLjY1OC00MC4wMTEtMjAuNjU4LTQwLjAxMS0yMC42NTgtNDAuMDExLTIwLjY1NywxNS42MTItMjAuNjU3LDQwLjAxMVMxODAuOTYzLTgyLjcwOCwxODAuOTYzLTgyLjcwOFoiIGRhdGEtbmFtZT0iUGF0aCAxNjE0IiBmaWxsPSJ1cmwoI2xpbmVhci1ncmFkaWVudC0yKSIgaWQ9IlBhdGhfMTYxNCIgb3BhY2l0eT0iMC44IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTM0LjAxIDE2Mi43MykiLz4KICAgICAgICA8cGF0aCBkPSJNMTQ0LjAyNi00Ni44NzhhMTguNzkzLDE4Ljc5MywwLDAsMCwxMi41ODgsNS4wODdBMTguNzkxLDE4Ljc5MSwwLDAsMCwxNjkuMi00Ni44NzdhMTguNzksMTguNzksMCwwLDAtMTIuNTg3LTUuMDg3QTE4LjgsMTguOCwwLDAsMCwxNDQuMDI2LTQ2Ljg3OFoiIGRhdGEtbmFtZT0iUGF0aCAxNjE2IiBmaWxsPSJ1cmwoI2xpbmVhci1ncmFkaWVudC0zKSIgaWQ9IlBhdGhfMTYxNiIgb3BhY2l0eT0iMC44IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTI5Ljg3NCAxMzQuNTkxKSIvPgogICAgICAgIDxwYXRoIGQ9Ik0xOTcuMTE1LTQ2Ljg3OEExOC43OSwxOC43OSwwLDAsMCwyMDkuNy00MS43OTFhMTguNzk0LDE4Ljc5NCwwLDAsMCwxMi41ODgtNS4wODZBMTguNzkzLDE4Ljc5MywwLDAsMCwyMDkuNy01MS45NjQsMTguNzkxLDE4Ljc5MSwwLDAsMCwxOTcuMTE1LTQ2Ljg3OFoiIGRhdGEtbmFtZT0iUGF0aCAxNjE3IiBmaWxsPSJ1cmwoI2xpbmVhci1ncmFkaWVudC00KSIgaWQ9IlBhdGhfMTYxNyIgb3BhY2l0eT0iMC44IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTQzLjM2MiAxMzQuNTkxKSIvPgogICAgICAgIDxwYXRoIGQ9Ik0xODguMTkzLTcxLjY4OXMtMi45MzUtMjEuMSwxMS4yNjItMzUuMywzNS4zLTExLjI2MSwzNS4zLTExLjI2MSwyLjkzNiwyMS4xLTExLjI2MSwzNS4zUzE4OC4xOTMtNzEuNjg5LDE4OC4xOTMtNzEuNjg5WiIgZGF0YS1uYW1lPSJQYXRoIDE2MTgiIGZpbGw9InVybCgjbGluZWFyLWdyYWRpZW50LTUpIiBpZD0iUGF0aF8xNjE4IiBvcGFjaXR5PSIwLjgiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0xNDEuMDMxIDE1MS40OTQpIi8+CiAgICAgICAgPHBhdGggZD0iTTE3NC40MzMtNzguMDQxczEwLjQxMS0yMS42MTguMDc0LTQxLjcyNi0zMy45NzUtMjQuMjIzLTMzLjk3NS0yNC4yMjMtMTAuNDExLDIxLjYxOS0uMDc0LDQxLjcyN1MxNzQuNDMzLTc4LjA0MSwxNzQuNDMzLTc4LjA0MVoiIGRhdGEtbmFtZT0iUGF0aCAxNjE5IiBmaWxsPSJ1cmwoI2xpbmVhci1ncmFkaWVudC02KSIgaWQ9IlBhdGhfMTYxOSIgb3BhY2l0eT0iMC44IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTI3LjgwNiAxNTcuOTY5KSIvPgogICAgICAgIDxwYXRoIGQ9Ik0xNzEuODctNzEuNjg5czIuOTM1LTIxLjEtMTEuMjYyLTM1LjMtMzUuMy0xMS4yNjEtMzUuMy0xMS4yNjEtMi45MzUsMjEuMSwxMS4yNjIsMzUuM1MxNzEuODctNzEuNjg5LDE3MS44Ny03MS42ODlaIiBkYXRhLW5hbWU9IlBhdGggMTYyMCIgZmlsbD0idXJsKCNsaW5lYXItZ3JhZGllbnQtNykiIGlkPSJQYXRoXzE2MjAiIG9wYWNpdHk9IjAuOCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTEyNS4wNTUgMTUxLjQ5NCkiLz4KICAgICAgICA8cGF0aCBkPSJNMTg2LjI3LTI2LjA5czUuMDc0LTMuODM1LDUuMDc0LTkuODI3LTUuMDc0LTkuODI4LTUuMDc0LTkuODI4UzE4MS4yLTQxLjkxLDE4MS4yLTM1LjkxNywxODYuMjctMjYuMDksMTg2LjI3LTI2LjA5WiIgZGF0YS1uYW1lPSJQYXRoIDE2MTUiIGZpbGw9InVybCgjbGluZWFyLWdyYWRpZW50LTgpIiBpZD0iUGF0aF8xNjE1IiBvcGFjaXR5PSIwLjgiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0xMzkuMzE4IDEzMy4wMSkiLz4KICAgICAgICA8ZyBkYXRhLW5hbWU9Ikdyb3VwIDMwMzgiIGlkPSJHcm91cF8zMDM4IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSg4OS4xODcgMTMuNDQxKSI+CiAgICAgICAgICA8cGF0aCBkPSJNMTIyLjYxNSwxOC4wMTh2LjY3NEgxMjEuNXYzLjQ5MWgtLjgzNVYxOC42OTNoLTEuMTF2LS42NzRaIiBkYXRhLW5hbWU9IlBhdGggMTYyMyIgZmlsbD0iIzMwMzAzMCIgaWQ9IlBhdGhfMTYyMyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTExOS41NTkgLTE4LjAxOCkiLz4KICAgICAgICAgIDxwYXRoIGQ9Ik0xMjguODcsMTguMDE4bC0xLjMyNSwzLjEtMS4zMjQtMy4xaC0uOTV2NC4xNjZoLjgzNnYtMi43MWwxLjEyMSwyLjcxaC42MzNsMS4xMTYtMi43MXYyLjcxaC44MzZWMTguMDE4WiIgZGF0YS1uYW1lPSJQYXRoIDE2MjQiIGZpbGw9IiMzMDMwMzAiIGlkPSJQYXRoXzE2MjQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0xMjEuMDEgLTE4LjAxOCkiLz4KICAgICAgICA8L2c+CiAgICAgIDwvZz4KICAgIDwvZz4KICA8L2c+Cjwvc3ZnPg==';
+  const hasBanking = emp.bank_name || emp.bank_account_number;
+  const bankSection = hasBanking ? `
+<div class="bank">
+  <div class="bank-lbl">&#128197; Payment Paid To</div>
+  <div class="bank-grid">
+    <div><div class="bk-l">Bank</div><div class="bk-v">${emp.bank_name||'—'}</div></div>
+    <div><div class="bk-l">Account Number</div><div class="bk-v">${emp.bank_account_number?maskAcc(emp.bank_account_number):'—'}</div></div>
+    <div><div class="bk-l">Account Type</div><div class="bk-v">${emp.bank_account_type||'—'}</div></div>
+    <div><div class="bk-l">Account Holder</div><div class="bk-v">${emp.bank_account_holder||emp.first_name+' '+emp.last_name}</div></div>
+  </div>
+</div>` : '';
+
+  const bonusRow = Number(p.bonus||0)>0 ? `<tr><td>Bonus / Commission</td><td></td><td class="r">${fmt(p.bonus)}</td><td></td><td></td><td></td></tr>` : '';
+  const otherEarnRow = Number(p.other_earnings||0)>0 ? `<tr><td>Other earnings</td><td></td><td class="r">${fmt(p.other_earnings)}</td><td></td><td></td><td></td></tr>` : '';
+  const otherDedRow = Number(p.other_deductions||0)>0 ? `<tr><td></td><td></td><td></td><td>Other deductions</td><td></td><td class="r">${fmt(p.other_deductions)}</td></tr>` : '';
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/>
+<title>Payslip ${moLabel} ${yr} ${emp.first_name} ${emp.last_name}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#e8edf2}
+body{font-family:Arial,Helvetica,sans-serif;font-size:9.5pt;color:#1a1a1a;min-height:100vh;padding:24px 0}
+.page{background:#fff;max-width:820px;margin:0 auto;box-shadow:0 4px 40px rgba(0,0,0,0.18);border-radius:3px;overflow:hidden}
+.hdr{background:linear-gradient(135deg,#0d2535 0%,#1a3a4a 100%);padding:22px 30px;display:flex;justify-content:space-between;align-items:flex-start}
+.hdr-co-name{font-size:14pt;font-weight:900;color:#fff;letter-spacing:-0.02em;margin-bottom:7px}
+.hdr-co-addr{font-size:8pt;color:rgba(255,255,255,0.6);line-height:1.65}
+.hdr-right{text-align:right;min-width:180px}
+.hdr-pd-lbl{font-size:7pt;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}
+.hdr-pd-val{font-size:13pt;font-weight:800;color:#fec24f;margin-bottom:12px;letter-spacing:0.02em}
+.hdr-logo{width:170px;height:auto;display:block;margin-left:auto}
+.emp-strip{padding:16px 30px;background:#f7f9fc;border-bottom:2px solid #e2e8f0;display:grid;grid-template-columns:1fr 1fr;gap:4px 36px}
+.er{display:flex;padding:2.5px 0;font-size:8.5pt}
+.el{font-weight:700;color:#6b7280;min-width:128px;flex-shrink:0;font-size:7.5pt;text-transform:uppercase;letter-spacing:.04em}
+.ev{color:#111827;font-weight:500}
+.sec{background:#0d2535;color:#fff;font-size:7pt;font-weight:800;text-transform:uppercase;letter-spacing:.12em;padding:6px 30px}
+.tw{padding:0 30px}
+table{width:100%;border-collapse:collapse;font-size:8.8pt}
+th{font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:9px 5px 7px;border-bottom:1.5px solid #cbd5e1;text-align:left}
+th.r,td.r{text-align:right}
+td{padding:5.5px 5px;border-bottom:1px solid #f1f5f9;vertical-align:top;color:#374151}
+.tr-tot td{font-weight:700;border-top:1.5px solid #94a3b8;border-bottom:1.5px solid #94a3b8;background:#f8fafc;color:#0f172a;padding:8px 5px}
+.tr-nett td{font-weight:800;font-size:11.5pt;color:#0d2535;padding:10px 5px;border-bottom:2.5px solid #fec24f}
+.tr-nett td.r{color:#fec24f}
+.bank{padding:14px 30px 16px;background:#fffbf5;border-top:1.5px solid #fed7aa;border-bottom:1.5px solid #fed7aa;margin-top:4px}
+.bank-lbl{font-size:7.5pt;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#b45309;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.bank-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 16px}
+.bk-l{font-size:7pt;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.bk-v{font-size:9pt;color:#431407;font-weight:600}
+.ftr{padding:11px 30px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #e2e8f0;background:#f9fafb}
+.ftr-l{font-size:6.5pt;color:#9ca3af;font-style:italic}
+.ftr-r{font-size:6.5pt;color:#9ca3af}
+.print-row{padding:18px;text-align:center;background:#f0f4f8}
+.pbtn{padding:11px 36px;background:linear-gradient(135deg,#fec24f,#FF5229);color:#fff;border:none;border-radius:8px;font-size:10pt;font-weight:700;cursor:pointer;font-family:Arial;letter-spacing:.02em;box-shadow:0 3px 12px rgba(255,130,21,0.35)}
+@media print{html{background:#fff}body{padding:0}.page{box-shadow:none;border-radius:0}.print-row{display:none}}
+</style></head>
+<body><div class="page">
+
+<div class="hdr">
+  <div>
+    <div class="hdr-co-name">Smartvest Capital (Pty) Ltd</div>
+    <div class="hdr-co-addr">The Station · 63 Peter Place · Bryanston<br>Johannesburg · 2191<br>Reg. No: 2017/499533/07 &nbsp;|&nbsp; FSP Licence: #52449</div>
+  </div>
+  <div class="hdr-right">
+    <div class="hdr-pd-lbl">Pay Date</div>
+    <div class="hdr-pd-val">${payDateFmt}</div>
+    <img class="hdr-logo" src="data:image/svg+xml;base64,${LOGO}" alt="SV Capital"/>
+  </div>
+</div>
+
+<div class="emp-strip">
+  <div>
+    <div class="er"><span class="el">Employee</span><span class="ev">${emp.first_name} ${emp.last_name}</span></div>
+    <div class="er"><span class="el">Job Title</span><span class="ev">${emp.role||'—'}</span></div>
+    <div class="er"><span class="el">Address</span><span class="ev">${addrHtml}</span></div>
+  </div>
+  <div>
+    <div class="er"><span class="el">Employee Code</span><span class="ev">${empCode}</span></div>
+    <div class="er"><span class="el">Identity Number</span><span class="ev">${emp.id_number||'—'}</span></div>
+    <div class="er"><span class="el">Employed From</span><span class="ev">${startFmt}</span></div>
+    <div class="er"><span class="el">Rate Per Hour</span><span class="ev">R ${rph}</span></div>
+  </div>
+</div>
+
+<div class="sec" style="margin-top:14px">Earnings &amp; Deductions — ${moLabel} ${yr}</div>
+<div class="tw" style="padding-top:10px">
+<table>
+  <thead><tr>
+    <th style="width:32%">Earnings</th><th style="width:10%">Units</th>
+    <th class="r" style="width:15%">Amount (R)</th>
+    <th style="width:25%">Deductions</th>
+    <th class="r" style="width:8%">Opening Bal.</th>
+    <th class="r" style="width:10%">Amount (R)</th>
+  </tr></thead>
+  <tbody>
+    <tr><td>Basic salary</td><td></td><td class="r">${fmt(p.basic_salary)}</td><td>PAYE Tax</td><td></td><td class="r">${fmt(p.tax)}</td></tr>
+    ${bonusRow}
+    ${otherEarnRow}
+    <tr><td></td><td></td><td></td><td>Unemployment Insurance Fund</td><td></td><td class="r">${fmt(p.uif_employee)}</td></tr>
+    ${otherDedRow}
+  </tbody>
+  <tfoot>
+    <tr class="tr-tot"><td>Total Earnings</td><td></td><td class="r">${fmt(p.total_earnings)}</td><td>Total Deductions</td><td></td><td class="r">${fmt(p.total_deductions)}</td></tr>
+    <tr class="tr-nett"><td colspan="3"></td><td><strong>Nett Pay</strong></td><td></td><td class="r"><strong>${fmt(p.nett_pay)}</strong></td></tr>
+  </tfoot>
+</table>
+</div>
+
+<div class="sec" style="margin-top:14px">Company Contributions &amp; Year-to-Date Totals</div>
+<div class="tw" style="padding-top:10px;padding-bottom:12px">
+<table>
+  <thead><tr>
+    <th style="width:30%">Company Contributions</th><th class="r" style="width:20%">Amount (R)</th>
+    <th style="width:30%">YTD Totals</th><th class="r" style="width:20%">Amount (R)</th>
+  </tr></thead>
+  <tbody>
+    <tr><td>Unemployment Insurance Fund</td><td class="r">${fmt(p.uif_company)}</td><td><b>Taxable earnings</b></td><td class="r"><b>${fmt(p.ytd_taxable_earnings)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Taxable company contributions</b></td><td class="r"><b>${fmt(p.ytd_taxable_company_contributions||0)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Taxable fringe benefits</b></td><td class="r"><b>${fmt(p.ytd_taxable_fringe_benefits||0)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Provision for tax on annual bonus</b></td><td class="r"><b>${fmt(p.ytd_provision_annual_bonus||0)}</b></td></tr>
+    <tr><td></td><td></td><td><b>Tax paid</b></td><td class="r"><b>${fmt(p.ytd_tax_paid)}</b></td></tr>
+  </tbody>
+</table>
+</div>
+
+${bankSection}
+
+<div class="ftr">
+  <div class="ftr-l">CONFIDENTIAL — This payslip is for the named employee only and must not be shared.</div>
+  <div class="ftr-r">Smartvest Capital (Pty) Ltd &nbsp;·&nbsp; ${moLabel} ${yr}</div>
+</div>
+
+<div class="print-row">
+  <button class="pbtn" onclick="window.print()">Download / Save as PDF</button>
+</div>
+</div></body></html>`;
 }
 
 function openProfileEditModal() {
   const el = document.getElementById('generic-modal');
-  el.innerHTML = `<div class="modal" style="width:560px">
+  el.innerHTML = `<div class="modal" style="width:600px;max-height:90vh;display:flex;flex-direction:column">
     <div class="modal-header">
       <i class="fa-solid fa-user" style="color:var(--accent)"></i>
       <h3>Edit My Profile</h3>
-      <button class="btn btn--ghost btn--sm" style="margin-left:auto" onclick="closeModal('generic-modal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="btn btn--ghost btn--sm" style="margin-left:auto" id="profModalClose"><i class="fa-solid fa-xmark"></i></button>
     </div>
-    <div class="modal-body">
-      <div class="section-head" style="margin-top:0">Personal</div>
+    <div class="modal-body" style="overflow-y:auto;flex:1">
+      <div class="section-head" style="margin-top:0">Contact Information</div>
       <div class="form-row">
-        <div class="form-group"><label>Phone</label><input id="prof-phone" value="${_emp.phone||''}" placeholder="+27 82 000 0000" /></div>
+        <div class="form-group"><label>Phone</label><input id="prof-phone" value="${_emp.phone||''}" placeholder="+27 82 000 0000" inputmode="tel" /></div>
         <div class="form-group"><label>Date of Birth</label><input type="date" id="prof-dob" value="${_emp.birth_date||''}" /></div>
       </div>
-      <div class="form-group"><label>SA ID Number</label><input id="prof-idnum" value="${_emp.id_number||''}" placeholder="YYMMDD0000000" /></div>
+      <div class="form-group"><label>SA ID Number</label><input id="prof-idnum" value="${_emp.id_number||''}" placeholder="YYMMDD0000000" inputmode="numeric" /></div>
       <div class="form-group"><label>Bio</label><textarea id="prof-bio" rows="2">${_emp.bio||''}</textarea></div>
       <div class="form-row">
         <div class="form-group"><label>Emergency Contact Name</label><input id="prof-ecname" value="${_emp.emergency_contact_name||''}" /></div>
-        <div class="form-group"><label>Emergency Contact Phone</label><input id="prof-ecphone" value="${_emp.emergency_contact_phone||''}" /></div>
+        <div class="form-group"><label>Emergency Contact Phone</label><input id="prof-ecphone" value="${_emp.emergency_contact_phone||''}" placeholder="+27 82 000 0000" inputmode="tel" /></div>
       </div>
+
+      <div class="section-head">Address</div>
+      <div class="form-group"><label>Address Line 1</label><input id="prof-addr1" value="${_emp.address_line1||''}" placeholder="Street address" /></div>
+      <div class="form-group"><label>Address Line 2</label><input id="prof-addr2" value="${_emp.address_line2||''}" placeholder="Suburb / Complex (optional)" /></div>
+      <div class="form-row">
+        <div class="form-group"><label>City</label><input id="prof-city" value="${_emp.address_city||''}" /></div>
+        <div class="form-group"><label>Province</label>
+          <select id="prof-province">
+            <option value="">Select province…</option>
+            ${['Gauteng','Western Cape','KwaZulu-Natal','Eastern Cape','Free State','Limpopo','Mpumalanga','North West','Northern Cape'].map(p=>`<option value="${p}" ${_emp.address_province===p?'selected':''}>${p}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="max-width:200px"><label>Postal Code</label><input id="prof-postal" value="${_emp.address_postal_code||''}" placeholder="0000" inputmode="numeric" maxlength="4" /></div>
+
       <div class="section-head">Banking Details</div>
       <div class="form-group"><label>Bank Name</label>
         <select id="prof-bank">
@@ -2392,7 +2820,7 @@ function openProfileEditModal() {
         </select>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Account Number</label><input id="prof-accnum" value="${_emp.bank_account_number||''}" placeholder="Account number" /></div>
+        <div class="form-group"><label>Account Number</label><input id="prof-accnum" value="${_emp.bank_account_number||''}" placeholder="Account number" inputmode="numeric" /></div>
         <div class="form-group"><label>Account Type</label>
           <select id="prof-acctype">
             ${['Cheque','Savings','Transmission'].map(t=>`<option ${_emp.bank_account_type===t?'selected':''}>${t}</option>`).join('')}
@@ -2400,34 +2828,75 @@ function openProfileEditModal() {
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Branch Code</label><input id="prof-branch" value="${_emp.bank_branch_code||''}" placeholder="6-digit code" /></div>
+        <div class="form-group"><label>Branch Code</label><input id="prof-branch" value="${_emp.bank_branch_code||''}" placeholder="6-digit code" inputmode="numeric" /></div>
         <div class="form-group"><label>Account Holder Name</label><input id="prof-holder" value="${_emp.bank_account_holder||''}" placeholder="As on bank account" /></div>
+      </div>
+
+      <div class="section-head">Documents</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px">
+        <div>
+          <div style="font-size:0.78rem;font-weight:600;margin-bottom:6px;color:var(--muted)">Proof of Banking</div>
+          <label class="btn btn--secondary btn--sm" style="cursor:pointer;width:100%;justify-content:center">
+            <i class="fa-solid fa-upload"></i> ${_emp.proof_of_banking_url ? 'Replace' : 'Upload'}
+            <input id="prof-bankdoc" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" />
+          </label>
+          ${_emp.proof_of_banking_url ? `<div style="font-size:0.7rem;color:var(--success);margin-top:4px"><i class="fa-solid fa-check"></i> On file</div>` : ''}
+        </div>
+        <div>
+          <div style="font-size:0.78rem;font-weight:600;margin-bottom:6px;color:var(--muted)">Proof of ID</div>
+          <label class="btn btn--secondary btn--sm" style="cursor:pointer;width:100%;justify-content:center">
+            <i class="fa-solid fa-upload"></i> ${_emp.proof_of_id_url ? 'Replace' : 'Upload'}
+            <input id="prof-iddoc" type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" />
+          </label>
+          ${_emp.proof_of_id_url ? `<div style="font-size:0.7rem;color:var(--success);margin-top:4px"><i class="fa-solid fa-check"></i> On file</div>` : ''}
+        </div>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn--secondary" onclick="closeModal('generic-modal')">Cancel</button>
-      <button class="btn btn--primary" onclick="saveProfile()"><i class="fa-solid fa-floppy-disk"></i> Save Profile</button>
+      <button class="btn btn--secondary" id="profModalCancel">Cancel</button>
+      <button class="btn btn--primary" id="profModalSave"><i class="fa-solid fa-floppy-disk"></i> Save Profile</button>
     </div>
   </div>`;
   el.classList.add('open');
+
+  document.getElementById('profModalClose').addEventListener('click', () => closeModal('generic-modal'));
+  document.getElementById('profModalCancel').addEventListener('click', () => closeModal('generic-modal'));
+  document.getElementById('profModalSave').addEventListener('click', saveProfile);
+  document.getElementById('prof-bankdoc').addEventListener('change', function() { handleBankingDocUpload(this); closeModal('generic-modal'); });
+  document.getElementById('prof-iddoc').addEventListener('change', function() { handleIdDocUpload(this); closeModal('generic-modal'); });
 }
 
 async function saveProfile() {
+  // Empty values are sent as null. This matters for DATE columns like
+  // birth_date — Postgres rejects '' (invalid date), which previously failed
+  // the whole save so nothing (incl. ID number) persisted.
+  const val = id => { const v = (document.getElementById(id)?.value || '').trim(); return v === '' ? null : v; };
+  const birth_date = val('prof-dob');
+  const id_number  = val('prof-idnum');
   const updates = {
-    phone:               document.getElementById('prof-phone').value,
-    birth_date:          document.getElementById('prof-dob').value,
-    id_number:           document.getElementById('prof-idnum').value,
-    bio:                 document.getElementById('prof-bio').value,
-    emergency_contact_name:  document.getElementById('prof-ecname').value,
-    emergency_contact_phone: document.getElementById('prof-ecphone').value,
-    bank_name:           document.getElementById('prof-bank').value,
-    bank_account_number: document.getElementById('prof-accnum').value,
-    bank_account_type:   document.getElementById('prof-acctype').value,
-    bank_branch_code:    document.getElementById('prof-branch').value,
-    bank_account_holder: document.getElementById('prof-holder').value,
+    phone:                   val('prof-phone'),
+    birth_date,
+    id_number,
+    bio:                     val('prof-bio'),
+    emergency_contact_name:  val('prof-ecname'),
+    emergency_contact_phone: val('prof-ecphone'),
+    address_line1:           val('prof-addr1'),
+    address_line2:           val('prof-addr2'),
+    address_city:            val('prof-city'),
+    address_province:        val('prof-province'),
+    address_postal_code:     val('prof-postal'),
+    bank_name:               val('prof-bank'),
+    bank_account_number:     val('prof-accnum'),
+    bank_account_type:       val('prof-acctype'),
+    bank_branch_code:        val('prof-branch'),
+    bank_account_holder:     val('prof-holder'),
   };
   const r = await patch(`tables/employees/${_emp.id}`, updates);
+  if (r && r.error) { showToast(r.error || 'Could not save profile — please try again.', 'error'); return; }
   Object.assign(_emp, r);
+  // Reflect locally in case the API response omits a field on this view
+  _emp.birth_date = birth_date;
+  _emp.id_number  = id_number;
   closeModal('generic-modal');
   renderProfile();
   renderTopbar();
@@ -2439,9 +2908,9 @@ function renderLeaveCalendar() {
   const el = document.getElementById('view-calendar');
   const allLeave = []; // will load all employees' approved leave
 
-  // Gather all leave from all employees by fetching fresh
-  fetchAll('leave_requests').then(allReqs => {
-    const approved = allReqs.filter(l => l.status === 'approved' || l.status === 'pending');
+  // Load everyone's APPROVED leave from the shared team calendar endpoint
+  get('tables/leave-calendar').then(res => {
+    const approved = res.data || [];
 
     const today = new Date();
     const calYear  = today.getFullYear();
@@ -2473,16 +2942,32 @@ function renderCalendarView(container, leaveList, year, month) {
   const dayNames   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
   // Build leave map: date-str → [employee records]
+  // Use string-based date arithmetic to avoid timezone shifts (toISOString
+  // converts to UTC, which can move a local-midnight date to the previous day).
   const leaveMap = {};
   leaveList.forEach(l => {
-    const start = new Date(l.start_date+'T00:00:00');
-    const end   = new Date(l.end_date+'T00:00:00');
-    const emp   = _employees.find(e=>e.id===l.employee_id);
-    if (!emp) return;
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
-      const key = d.toISOString().slice(0,10);
-      if (!leaveMap[key]) leaveMap[key] = [];
-      leaveMap[key].push({ emp, leave: l });
+    // Normalise to YYYY-MM-DD regardless of whether pg returned a Date object
+    // or an ISO timestamp string (e.g. "2026-07-09T00:00:00.000Z").
+    const startStr = (l.start_date instanceof Date ? l.start_date : new Date(l.start_date + (String(l.start_date).length === 10 ? 'T12:00:00Z' : ''))).toISOString().slice(0,10);
+    const endStr   = (l.end_date   instanceof Date ? l.end_date   : new Date(l.end_date   + (String(l.end_date  ).length === 10 ? 'T12:00:00Z' : ''))).toISOString().slice(0,10);
+    // The shared calendar embeds the employee's display fields on each leave
+    // row (staff can't read other employees' records directly).
+    const emp = _employees.find(e=>e.id===l.employee_id) || {
+      id: l.employee_id,
+      first_name: l.first_name || 'Employee',
+      last_name:  l.last_name || '',
+      avatar_color: l.avatar_color || '#eda5ff',
+      avatar_initials: l.avatar_initials || ((l.first_name||'E')[0] + (l.last_name||'')[0]).toUpperCase(),
+    };
+    // Iterate every calendar day in the leave range using UTC noon to stay
+    // safely inside the intended calendar day regardless of client timezone.
+    let cur = startStr;
+    while (cur <= endStr) {
+      if (!leaveMap[cur]) leaveMap[cur] = [];
+      leaveMap[cur].push({ emp, leave: l });
+      const next = new Date(cur + 'T12:00:00Z');
+      next.setUTCDate(next.getUTCDate() + 1);
+      cur = next.toISOString().slice(0,10);
     }
   });
 
@@ -2528,7 +3013,7 @@ function renderCalendarView(container, leaveList, year, month) {
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
       <span style="font-size:0.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Team:</span>
       ${_employees.map(e=>`<div style="display:flex;align-items:center;gap:5px;font-size:0.75rem">
-        <div style="width:10px;height:10px;border-radius:50%;background:${e.avatar_color||'#7c5cfc'}"></div>
+        <div style="width:10px;height:10px;border-radius:50%;background:${e.avatar_color||'#eda5ff'}"></div>
         ${e.first_name}
       </div>`).join('')}
       <span style="margin-left:8px;font-size:0.72rem;color:var(--muted)">|</span>
@@ -2554,17 +3039,17 @@ function renderCalendarView(container, leaveList, year, month) {
           const bdays   = bdMap[dateStr] || [];
           const isWeekend = new Date(dateStr).getDay()===0||new Date(dateStr).getDay()===6;
           return `<div style="min-height:80px;border:1px solid var(--border);padding:6px 8px;
-              background:${isToday?'rgba(124,92,252,0.12)':isWeekend?'rgba(255,255,255,0.01)':'transparent'};
+              background:${isToday?'rgba(237,165,255,0.12)':isWeekend?'rgba(255,255,255,0.01)':'transparent'};
               position:relative">
             <div style="font-size:0.8rem;font-weight:${isToday?'800':'600'};color:${isToday?'var(--accent)':'var(--text)'}">
               ${d}
             </div>
-            ${bdays.map(emp=>`<div style="font-size:0.65rem;background:rgba(249,200,70,0.15);border-radius:4px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#f9c846">
+            ${bdays.map(emp=>`<div style="font-size:0.65rem;background:rgba(249,200,70,0.15);border-radius:4px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fec24f">
               🎂 ${emp.first_name}
             </div>`).join('')}
             ${onLeave.slice(0,3).map(({emp,leave})=>`
               <div title="${emp.first_name} ${emp.last_name} — ${leave.leave_type}" style="font-size:0.65rem;border-radius:4px;padding:1px 5px;margin-top:2px;
-                   background:${emp.avatar_color||'#7c5cfc'}25;color:${emp.avatar_color||'#7c5cfc'};
+                   background:${emp.avatar_color||'#eda5ff'}25;color:${emp.avatar_color||'#eda5ff'};
                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
                 ${emp.avatar_initials||emp.first_name[0]}  ${emp.first_name}
               </div>`).join('')}
@@ -2577,24 +3062,26 @@ function renderCalendarView(container, leaveList, year, month) {
     <!-- Who is on leave this month -->
     <div class="section-head mt-3"><i class="fa-solid fa-calendar-xmark"></i> Leave This Month</div>
     ${leaveList.filter(l=>{
-        const s=new Date(l.start_date+'T00:00:00'); const e=new Date(l.end_date+'T00:00:00');
-        return (s.getFullYear()===year&&s.getMonth()===month)||(e.getFullYear()===year&&e.getMonth()===month);
+        const sm=l.start_date.slice(0,7); const em=l.end_date.slice(0,7);
+        const ym=`${year}-${String(month+1).padStart(2,'0')}`;
+        return sm===ym||em===ym||(sm<ym&&em>ym);
       }).length
       ? leaveList.filter(l=>{
-          const s=new Date(l.start_date+'T00:00:00'); const e=new Date(l.end_date+'T00:00:00');
-          return (s.getFullYear()===year&&s.getMonth()===month)||(e.getFullYear()===year&&e.getMonth()===month);
+          const sm=l.start_date.slice(0,7); const em=l.end_date.slice(0,7);
+          const ym=`${year}-${String(month+1).padStart(2,'0')}`;
+          return sm===ym||em===ym||(sm<ym&&em>ym);
         }).map(l=>{
-          const emp=_employees.find(e=>e.id===l.employee_id)||{};
+          const emp=_employees.find(e=>e.id===l.employee_id)||{ first_name:l.first_name, last_name:l.last_name, avatar_color:l.avatar_color, avatar_initials:l.avatar_initials };
           const sc={approved:'chip-green',pending:'chip-gold',rejected:'chip-red'};
           return `<div class="kudos-card">
-            <div class="kudos-avatar" style="background:${emp.avatar_color||'#7c5cfc'}">${emp.avatar_initials||'?'}</div>
+            <div class="kudos-avatar" style="background:${emp.avatar_color||'#eda5ff'}">${emp.avatar_initials||'?'}</div>
             <div class="kudos-body">
               <div class="kudos-top">
                 <span class="kudos-from">${emp.first_name||''} ${emp.last_name||''}</span>
                 <span class="kudos-kpi">${l.leave_type||'Leave'}</span>
                 <span class="chip ${sc[l.status]||'chip-gray'}" style="margin-left:auto">${l.status}</span>
               </div>
-              <div class="kudos-msg">${l.start_date} → ${l.end_date} &nbsp;·&nbsp; ${l.days_requested||'?'} days
+              <div class="kudos-msg">${l.start_date.slice(0,10)} → ${l.end_date.slice(0,10)} &nbsp;·&nbsp; ${l.days_requested||'?'} days
                 ${l.reason?` &nbsp;·&nbsp; "${l.reason}"`:''}
               </div>
             </div>
@@ -2633,9 +3120,8 @@ function shiftCalMonth(dir) {
   if (_calMonth > 11) { _calMonth = 0; _calYear++; }
   if (_calMonth < 0)  { _calMonth = 11; _calYear--; }
   const el = document.getElementById('view-calendar');
-  fetchAll('leave_requests').then(allReqs => {
-    const approved = allReqs.filter(l=>l.status==='approved'||l.status==='pending');
-    renderCalendarView(el, approved, _calYear, _calMonth);
+  get('tables/leave-calendar').then(res => {
+    renderCalendarView(el, res.data || [], _calYear, _calMonth);
   });
 }
 
@@ -2686,7 +3172,7 @@ function showXpPopup(amount) {
 }
 
 function launchConfetti() {
-  const cols=['#7c5cfc','#00d4aa','#f9c846','#ff6b6b','#4fc3f7'];
+  const cols=['#eda5ff','#00d4aa','#fec24f','#ff6b6b','#4fc3f7'];
   for(let i=0;i<60;i++) {
     const el=document.createElement('div');
     el.className='confetti-piece';
@@ -2702,6 +3188,8 @@ window.navigate = navigate;
 window.openProfileEditModal = openProfileEditModal;
 window.saveProfile = saveProfile;
 window.handleBankingDocUpload = handleBankingDocUpload;
+window.handleIdDocUpload = handleIdDocUpload;
+window.downloadPayslip   = downloadPayslip;
 window.openKudosForBirthday = openKudosForBirthday;
 window.shiftCalMonth = shiftCalMonth;
 window.openCourse = openCourse;
@@ -2756,13 +3244,13 @@ const HELP_CONTENT = {
     icon: 'fa-house',
     intro: 'Your personal command centre. Everything important at a glance.',
     sections: [
-      { heading: 'Profile Hero', icon: 'fa-user-circle', color: '#7c5cfc',
+      { heading: 'Profile Hero', icon: 'fa-user-circle', color: '#eda5ff',
         text: 'Shows your name, role, current XP level, and daily streak. The XP bar at the top tracks your progress to the next level. Click the avatar (bottom of sidebar) to jump to Achievements.' },
-      { heading: 'Smart Notifications', icon: 'fa-bell', color: '#f59e0b',
+      { heading: 'Smart Notifications', icon: 'fa-bell', color: '#fec24f',
         text: 'Context-aware reminders appear here automatically — daily check-in reminder, active pulse surveys, upcoming 1-on-1s, and wellbeing alerts (3+ stressed check-ins triggers a burnout warning).' },
       { heading: 'Stats Cards', icon: 'fa-chart-bar', color: '#00d4aa',
         text: 'Quick KPI overview, your estimated EVA bonus share, courses completed this month, and streak count. These update in real time as you take actions.' },
-      { heading: 'Recent Activity', icon: 'fa-bolt', color: '#f59e0b',
+      { heading: 'Recent Activity', icon: 'fa-bolt', color: '#fec24f',
         text: 'The last few things you\'ve done — course completions, kudos, check-ins, OKR milestones. Full history is in the Activity Feed view (⚡ in sidebar).' },
     ]
   },
@@ -2771,15 +3259,15 @@ const HELP_CONTENT = {
     icon: 'fa-book-open',
     intro: 'Your learning library. Complete courses to earn XP, boost KPI dimensions, and unlock certificates.',
     sections: [
-      { heading: 'Course Cards', icon: 'fa-layer-group', color: '#7c5cfc',
+      { heading: 'Course Cards', icon: 'fa-layer-group', color: '#eda5ff',
         text: 'Each card shows: title, category, difficulty, estimated time, XP reward, and which KPI dimension it boosts. Colour-coded by category (purple = AUM Growth, teal = Innovation, pink = Client Relations, etc.).' },
       { heading: 'Starting a Course', icon: 'fa-play', color: '#00d4aa',
         text: 'Click "Start Course" or "Continue" to open the Course Reader. Use the left panel to jump between modules. Complete the quiz at the end of each module to progress.' },
-      { heading: 'Quizzes', icon: 'fa-question-circle', color: '#f59e0b',
+      { heading: 'Quizzes', icon: 'fa-question-circle', color: '#fec24f',
         text: 'Each module ends with a multiple-choice quiz. You need to score above the pass mark (usually 70%) to complete the module and earn XP. You can retry if you don\'t pass.' },
       { heading: 'Certificates', icon: 'fa-certificate', color: '#e84393',
         text: 'Completing a full course generates a certificate with your name, date, and a unique certificate ID. View all certificates in the Achievements view.' },
-      { heading: 'AI Course Generator', icon: 'fa-robot', color: '#7c5cfc',
+      { heading: 'AI Course Generator', icon: 'fa-robot', color: '#eda5ff',
         text: 'Click "Generate with AI" to create a personalised 3-module course on any topic. Enter a title, focus area, category and the KPI you want to boost. The system generates full lesson content and quizzes tailored to your role in seconds.' },
     ]
   },
@@ -2792,7 +3280,7 @@ const HELP_CONTENT = {
         text: 'Paths marked "Mandatory" must be completed. They often have a deadline and are tied to compliance or onboarding requirements. Optional paths earn bonus XP and badges.' },
       { heading: 'Path Progress', icon: 'fa-stairs', color: '#00d4aa',
         text: 'Courses in a path unlock sequentially. Complete course 1 to unlock course 2. A progress bar shows your overall path completion percentage.' },
-      { heading: 'Path Rewards', icon: 'fa-trophy', color: '#f59e0b',
+      { heading: 'Path Rewards', icon: 'fa-trophy', color: '#fec24f',
         text: 'Completing a full learning path awards bonus XP on top of the individual course XP, plus a special path completion badge.' },
     ]
   },
@@ -2801,9 +3289,9 @@ const HELP_CONTENT = {
     icon: 'fa-chart-bar',
     intro: 'Your 8 performance dimensions tracked monthly. KPIs directly determine your individual EVA bonus share.',
     sections: [
-      { heading: '8 KPI Dimensions', icon: 'fa-sliders', color: '#7c5cfc',
+      { heading: '8 KPI Dimensions', icon: 'fa-sliders', color: '#eda5ff',
         text: 'Revenue Contribution, Client Satisfaction, Task Completion, Response Time, Compliance Score, Innovation Score, Team Collaboration, and Attendance. Each scored 0–100.' },
-      { heading: 'How Scores are Set', icon: 'fa-pen', color: '#f59e0b',
+      { heading: 'How Scores are Set', icon: 'fa-pen', color: '#fec24f',
         text: 'Your manager scores you monthly in the Team Dashboard. You can boost your own scores by: completing courses (auto-boost), completing OKRs (+10 pts), giving kudos, and maintaining daily check-in streaks (attendance).' },
       { heading: 'Trend Chart', icon: 'fa-chart-line', color: '#00d4aa',
         text: 'The line chart shows your score trends across the last 6 months. The radar chart compares your profile shape against the ideal 100% benchmark.' },
@@ -2816,11 +3304,11 @@ const HELP_CONTENT = {
     icon: 'fa-bullseye',
     intro: 'Objectives and Key Results. Set your goals, track progress, and earn XP + KPI boosts on completion.',
     sections: [
-      { heading: 'What is an OKR?', icon: 'fa-info-circle', color: '#7c5cfc',
+      { heading: 'What is an OKR?', icon: 'fa-info-circle', color: '#eda5ff',
         text: 'An Objective is a qualitative goal ("I want to improve client satisfaction"). Key Results are measurable milestones that prove you\'ve hit it (3 per objective). When all 3 KRs reach 100%, the OKR is complete.' },
       { heading: 'Creating an OKR', icon: 'fa-plus', color: '#00d4aa',
         text: 'Click "+ New OKR". Set your objective, add 3 key results with targets, and link it to a KPI dimension. Each OKR completion auto-boosts that KPI by +10 points and awards +100 XP.' },
-      { heading: 'Updating Progress', icon: 'fa-arrows-alt', color: '#f59e0b',
+      { heading: 'Updating Progress', icon: 'fa-arrows-alt', color: '#fec24f',
         text: 'Click any OKR card to update key result progress with sliders. The overall % auto-calculates. Your manager can also add notes.' },
     ]
   },
@@ -2831,7 +3319,7 @@ const HELP_CONTENT = {
     sections: [
       { heading: 'Giving Kudos', icon: 'fa-heart', color: '#e84393',
         text: 'Select a colleague, choose a KPI dimension their work exemplifies, write a message, and send. You earn +25 XP for every kudos you give. Kudos are visible on the team wall (if marked public).' },
-      { heading: '360° Feedback', icon: 'fa-circle-nodes', color: '#7c5cfc',
+      { heading: '360° Feedback', icon: 'fa-circle-nodes', color: '#eda5ff',
         text: 'Request structured feedback from peers across multiple KPI dimensions, with a 1–5 rating and comments. This helps build a more accurate picture of your performance.' },
       { heading: 'Received / Given / Team Wall Tabs', icon: 'fa-tab', color: '#00d4aa',
         text: 'Switch between feedback you\'ve received, feedback you\'ve given, and the public team kudos wall where everyone\'s recognition is visible.' },
@@ -2842,11 +3330,11 @@ const HELP_CONTENT = {
     icon: 'fa-poll',
     intro: 'A quick weekly survey to measure team health, engagement, and satisfaction.',
     sections: [
-      { heading: 'The Survey', icon: 'fa-clipboard-list', color: '#7c5cfc',
+      { heading: 'The Survey', icon: 'fa-clipboard-list', color: '#eda5ff',
         text: 'Each week contains 3 short questions plus an eNPS (Employee Net Promoter Score) question. Surveys take 2–3 minutes. Complete it to earn +20 XP.' },
       { heading: 'eNPS', icon: 'fa-chart-bar', color: '#00d4aa',
         text: 'On a scale of 0–10, how likely are you to recommend SV Capital as a great place to work? This is the Employee Net Promoter Score — a global standard metric for employee engagement.' },
-      { heading: 'Previous Responses', icon: 'fa-history', color: '#f59e0b',
+      { heading: 'Previous Responses', icon: 'fa-history', color: '#fec24f',
         text: 'View your past survey responses below the current survey. Your answers help leadership understand team morale trends over time.' },
     ]
   },
@@ -2855,11 +3343,11 @@ const HELP_CONTENT = {
     icon: 'fa-comments',
     intro: 'Structured one-on-one meetings with your manager. Track agendas, action items, and notes.',
     sections: [
-      { heading: 'Upcoming & Past Meetings', icon: 'fa-calendar', color: '#7c5cfc',
+      { heading: 'Upcoming & Past Meetings', icon: 'fa-calendar', color: '#eda5ff',
         text: 'Upcoming meetings show the date, agenda, and any topics you\'ve submitted. Past meetings show outcomes, manager notes, and action items.' },
       { heading: 'Action Items', icon: 'fa-check-square', color: '#00d4aa',
         text: 'Action items from 1-on-1s appear here. Tick them off when done — each completed action earns +10 XP. Your manager tracks completion rates.' },
-      { heading: 'Adding Pre-Meeting Notes', icon: 'fa-pen', color: '#f59e0b',
+      { heading: 'Adding Pre-Meeting Notes', icon: 'fa-pen', color: '#fec24f',
         text: 'Before a meeting, click "Add Notes" to submit talking points, questions, or updates you want to cover. Your manager can see these in advance.' },
       { heading: 'Requesting a Meeting', icon: 'fa-plus', color: '#e84393',
         text: 'Click "Request 1-on-1" to propose a new meeting. Add an agenda and any topics. Your manager will confirm the time.' },
@@ -2870,7 +3358,7 @@ const HELP_CONTENT = {
     icon: 'fa-sun',
     intro: 'A 30-second daily ritual that builds your streak, earns XP, and helps the business track team wellbeing.',
     sections: [
-      { heading: 'Mood Selector', icon: 'fa-face-smile', color: '#f59e0b',
+      { heading: 'Mood Selector', icon: 'fa-face-smile', color: '#fec24f',
         text: 'Choose from 5 moods: Energised 🔥, Happy 😊, Neutral 😐, Stressed 😰, or Exhausted 😴. Be honest — your responses are anonymised in aggregate reporting. Streak and XP are awarded regardless of mood.' },
       { heading: 'Tasks', icon: 'fa-list-check', color: '#00d4aa',
         text: 'Enter how many tasks you planned for the day and how many you completed yesterday. This feeds your task completion KPI over time.' },
@@ -2885,13 +3373,13 @@ const HELP_CONTENT = {
     icon: 'fa-calendar-days',
     intro: 'Submit, track and manage your leave requests.',
     sections: [
-      { heading: 'Leave Types', icon: 'fa-tags', color: '#7c5cfc',
+      { heading: 'Leave Types', icon: 'fa-tags', color: '#eda5ff',
         text: 'Annual Leave, Sick Leave, Study Leave, Family Responsibility Leave, and Unpaid Leave. Each type has different balances and EVA implications.' },
       { heading: 'EVA Impact', icon: 'fa-chart-line', color: '#e84393',
         text: 'Extended leave can reduce your EVA bonus share for that period. The "EVA Impact %" shown on each request indicates the reduction. This resets next period.' },
       { heading: 'Approval Process', icon: 'fa-check-double', color: '#00d4aa',
         text: 'Once submitted, your manager reviews your request in the Team Dashboard. Status changes from "pending" → "approved" or "rejected". You\'ll see the updated status here.' },
-      { heading: 'Leave Calendar', icon: 'fa-calendar-week', color: '#f59e0b',
+      { heading: 'Leave Calendar', icon: 'fa-calendar-week', color: '#fec24f',
         text: 'See the full team leave calendar in the 📅 calendar view (sidebar). Plan leave to avoid clashing with critical team coverage periods.' },
     ]
   },
@@ -2900,9 +3388,9 @@ const HELP_CONTENT = {
     icon: 'fa-trophy',
     intro: 'Your badge collection, certificates, and XP milestones.',
     sections: [
-      { heading: 'Earning Badges', icon: 'fa-medal', color: '#f59e0b',
+      { heading: 'Earning Badges', icon: 'fa-medal', color: '#fec24f',
         text: 'Badges are awarded automatically for milestones: completing 5 courses, 7-day streak, giving 10 kudos, 100% OKR completion, and more. Each badge awards bonus XP.' },
-      { heading: 'Certificates', icon: 'fa-certificate', color: '#7c5cfc',
+      { heading: 'Certificates', icon: 'fa-certificate', color: '#eda5ff',
         text: 'Every completed course generates a certificate. Click any certificate to open the printable PDF-ready certificate overlay with your name, date, and unique ID.' },
       { heading: 'XP & Levels', icon: 'fa-star', color: '#00d4aa',
         text: 'Analyst (0) → Associate (500) → Senior (1,200) → Lead (2,500) → Director (4,500) → MVP (7,000). Your level is displayed on your profile and the leaderboard.' },
@@ -2913,7 +3401,7 @@ const HELP_CONTENT = {
     icon: 'fa-bolt',
     intro: 'A chronological record of all your XP events, milestones, and notable actions.',
     sections: [
-      { heading: 'What Appears Here', icon: 'fa-list', color: '#7c5cfc',
+      { heading: 'What Appears Here', icon: 'fa-list', color: '#eda5ff',
         text: 'Course completions, badges earned, kudos given and received, OKR milestones, level-ups, streak milestones, and onboarding steps. All timestamped.' },
       { heading: 'Public vs Private', icon: 'fa-eye', color: '#00d4aa',
         text: 'Some events are public (visible to the whole team on the team dashboard) — like level-ups and badges. Others are private — like personal notes and journal entries.' },
@@ -2924,11 +3412,11 @@ const HELP_CONTENT = {
     icon: 'fa-pen-to-square',
     intro: 'Your completely private digital journal. Reflect, plan, and write freely.',
     sections: [
-      { heading: 'Privacy', icon: 'fa-lock', color: '#7c5cfc',
+      { heading: 'Privacy', icon: 'fa-lock', color: '#eda5ff',
         text: '100% private. No manager, director, or admin can see your journal entries. This is your personal space.' },
       { heading: 'Creating Notes', icon: 'fa-plus', color: '#00d4aa',
         text: 'Click "New Note" to open the editor. Add a title, write your content, and choose whether to pin it. Pinned notes appear at the top of your journal.' },
-      { heading: 'Editing & Deleting', icon: 'fa-pen', color: '#f59e0b',
+      { heading: 'Editing & Deleting', icon: 'fa-pen', color: '#fec24f',
         text: 'Click any note to edit it. Use the delete button to remove it permanently. Edits are saved with a timestamp.' },
     ]
   },
@@ -2937,11 +3425,11 @@ const HELP_CONTENT = {
     icon: 'fa-money-bill-trend-up',
     intro: 'Your transparent payslip-style breakdown of how your EVA bonus is calculated.',
     sections: [
-      { heading: 'The Formula', icon: 'fa-calculator', color: '#7c5cfc',
+      { heading: 'The Formula', icon: 'fa-calculator', color: '#eda5ff',
         text: 'Gross Revenue = Total AUM × 2.5%. EVA Pool = Revenue − Costs. Team Pool = EVA Pool × 50%. Your share = (KPI Score × EVA Weight) / All Weights × Individual Pool + Collective Pool / Headcount.' },
       { heading: 'Individual vs Collective', icon: 'fa-users', color: '#00d4aa',
         text: '60% of the Team Pool is split based on KPI performance (weighted). The other 40% is split equally among all active employees — the "collective" share. You earn both.' },
-      { heading: 'EVA Weight', icon: 'fa-weight-scale', color: '#f59e0b',
+      { heading: 'EVA Weight', icon: 'fa-weight-scale', color: '#fec24f',
         text: 'Your EVA weight (0.5–2.0) is set by your role. A weight of 1.8 (Investment Analyst) means you get 1.8× more individual pool allocation than someone with weight 1.0.' },
       { heading: 'Improving Your Share', icon: 'fa-trending-up', color: '#e84393',
         text: 'Boost your KPI scores by completing courses, hitting OKRs, maintaining streaks, and giving kudos. The improvement table at the bottom shows the exact ZAR impact of a 10-point KPI increase.' },
@@ -2952,13 +3440,13 @@ const HELP_CONTENT = {
     icon: 'fa-id-card',
     intro: 'Your personal and banking details. Keep everything up to date for accurate EVA payments.',
     sections: [
-      { heading: 'Personal Details', icon: 'fa-user', color: '#7c5cfc',
+      { heading: 'Personal Details', icon: 'fa-user', color: '#eda5ff',
         text: 'Your name, email, phone, date of birth, and SA ID number. The ID number determines your login PIN (last 4 digits). Keep this accurate.' },
       { heading: 'Banking Details', icon: 'fa-building-columns', color: '#00d4aa',
         text: 'Your bank account details for EVA bonus payments. Account number is masked for security (•••••1234). Click Edit to update. Upload proof of banking using the upload button.' },
       { heading: 'Emergency Contact', icon: 'fa-phone-volume', color: '#e84393',
         text: 'Add an emergency contact name and phone number. This is only accessed by HR in genuine emergencies.' },
-      { heading: 'Sensitive Field Masking', icon: 'fa-eye-slash', color: '#f59e0b',
+      { heading: 'Sensitive Field Masking', icon: 'fa-eye-slash', color: '#fec24f',
         text: 'SA ID number and bank account number are masked in the display for your protection. Only you can see and edit them.' },
     ]
   },
@@ -2967,9 +3455,9 @@ const HELP_CONTENT = {
     icon: 'fa-calendar-days',
     intro: 'Full team leave visibility. See who is off when and plan accordingly.',
     sections: [
-      { heading: 'The Monthly Grid', icon: 'fa-calendar', color: '#7c5cfc',
+      { heading: 'The Monthly Grid', icon: 'fa-calendar', color: '#eda5ff',
         text: 'A full month grid showing all approved leave. Each employee has a unique colour. Leave blocks span the correct days. Use the arrows to navigate months.' },
-      { heading: 'Birthday Overlays', icon: 'fa-birthday-cake', color: '#f59e0b',
+      { heading: 'Birthday Overlays', icon: 'fa-birthday-cake', color: '#fec24f',
         text: 'A 🎂 chip appears on each team member\'s birthday. The "Birthdays This Month" section below the grid lists everyone celebrating this month.' },
       { heading: 'Who\'s On Leave', icon: 'fa-user-clock', color: '#e84393',
         text: 'The "On Leave Today" section at the bottom shows everyone currently on leave with their leave type and return date.' },
@@ -3009,8 +3497,8 @@ function renderHelpContent(view) {
 
   body.innerHTML = `
     <!-- View intro -->
-    <div style="background:rgba(124,92,252,0.08);border:1px solid rgba(124,92,252,0.15);border-radius:12px;padding:14px 16px;margin-bottom:20px;display:flex;gap:12px;align-items:flex-start">
-      <i class="fa-solid ${content.icon}" style="color:#7c5cfc;font-size:1rem;margin-top:2px;flex-shrink:0"></i>
+    <div style="background:rgba(237,165,255,0.08);border:1px solid rgba(237,165,255,0.15);border-radius:12px;padding:14px 16px;margin-bottom:20px;display:flex;gap:12px;align-items:flex-start">
+      <i class="fa-solid ${content.icon}" style="color:#eda5ff;font-size:1rem;margin-top:2px;flex-shrink:0"></i>
       <div>
         <div style="font-size:0.88rem;font-weight:800;color:#e8eaf6;margin-bottom:4px">${content.title}</div>
         <div style="font-size:0.78rem;color:#9ca3af;line-height:1.6">${content.intro}</div>
@@ -3033,7 +3521,7 @@ function renderHelpContent(view) {
       <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#6b7280;margin-bottom:10px">Jump to view</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">
         ${Object.entries(HELP_CONTENT).map(([key, hc]) => `
-          <button onclick="navigate('${key}',document.querySelector('[data-view=${key}]'));toggleHelpPanel();" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:4px 10px;font-size:0.72rem;font-weight:600;color:#9ca3af;cursor:pointer;font-family:inherit;transition:all 0.15s" onmouseover="this.style.background='rgba(124,92,252,0.12)';this.style.color='#c4b5fd'" onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.color='#9ca3af'">
+          <button onclick="navigate('${key}',document.querySelector('[data-view=${key}]'));toggleHelpPanel();" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:4px 10px;font-size:0.72rem;font-weight:600;color:#9ca3af;cursor:pointer;font-family:inherit;transition:all 0.15s" onmouseover="this.style.background='rgba(237,165,255,0.12)';this.style.color='#eda5ff'" onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.color='#9ca3af'">
             <i class="fa-solid ${hc.icon}" style="margin-right:4px;font-size:0.68rem"></i>${hc.title}
           </button>
         `).join('')}
@@ -3082,7 +3570,7 @@ async function checkOnboardingBanner() {
   if (chipsEl) {
     const incomplete = defaultTasks.slice(ob.tasks_completed||0, (ob.tasks_completed||0) + 3);
     chipsEl.innerHTML = incomplete.map(t => `
-      <button onclick="navigate('${t.view}',document.querySelector('[data-view=${t.view}]'))" style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:20px;padding:4px 12px;font-size:0.72rem;font-weight:600;color:#f59e0b;cursor:pointer;font-family:inherit;transition:background 0.15s">
+      <button onclick="navigate('${t.view}',document.querySelector('[data-view=${t.view}]'))" style="display:inline-flex;align-items:center;gap:6px;background:rgba(254,194,79,0.1);border:1px solid rgba(254,194,79,0.25);border-radius:20px;padding:4px 12px;font-size:0.72rem;font-weight:600;color:#fec24f;cursor:pointer;font-family:inherit;transition:background 0.15s">
         <i class="fa-solid ${t.icon}" style="font-size:0.68rem"></i> ${t.title}
       </button>
     `).join('') + `<span style="font-size:0.72rem;color:#6b7280;align-self:center">${tasksLeft} tasks remaining</span>`;
@@ -3229,7 +3717,7 @@ function refreshOnboardingBanner(count, total, completed, tasks) {
 
   if (chipsEl) {
     chipsEl.innerHTML = incomplete.map(t => `
-      <button onclick="navigate('${t.view}',document.querySelector('[data-view=${t.view}]'))" style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:20px;padding:4px 12px;font-size:0.72rem;font-weight:600;color:#f59e0b;cursor:pointer;font-family:inherit;transition:background 0.15s">
+      <button onclick="navigate('${t.view}',document.querySelector('[data-view=${t.view}]'))" style="display:inline-flex;align-items:center;gap:6px;background:rgba(254,194,79,0.1);border:1px solid rgba(254,194,79,0.25);border-radius:20px;padding:4px 12px;font-size:0.72rem;font-weight:600;color:#fec24f;cursor:pointer;font-family:inherit;transition:background 0.15s">
         <i class="fa-solid ${t.icon}" style="font-size:0.68rem"></i> ${t.title}
       </button>
     `).join('') + `<span style="font-size:0.72rem;color:#6b7280;align-self:center">${tasksLeft} task${tasksLeft!==1?'s':''} remaining</span>`;
@@ -3251,7 +3739,7 @@ async function handleOnboardingCompletion() {
     title:       '🎉 Onboarding journey complete!',
     body:        'You have completed all required onboarding tasks. Welcome to the team!',
     icon:        'fa-rocket',
-    color:       '#f59e0b',
+    color:       '#fec24f',
     xp_shown:    150,
     is_public:   true,
     created_at:  new Date().toISOString(),
@@ -3266,7 +3754,7 @@ async function handleOnboardingCompletion() {
         <div style="width:44px;height:44px;border-radius:12px;background:rgba(0,212,170,0.15);border:1px solid rgba(0,212,170,0.4);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">🎉</div>
         <div style="flex:1">
           <div style="font-size:0.9rem;font-weight:800;color:#00d4aa;margin-bottom:2px">Onboarding complete! Welcome to SV Capital! 🚀</div>
-          <div style="font-size:0.78rem;color:#9ca3af;line-height:1.4">You've completed all required onboarding steps and earned <strong style="color:#f59e0b">+150 bonus XP</strong>. You're officially ready to go — the team is excited to have you!</div>
+          <div style="font-size:0.78rem;color:#9ca3af;line-height:1.4">You've completed all required onboarding steps and earned <strong style="color:#fec24f">+150 bonus XP</strong>. You're officially ready to go — the team is excited to have you!</div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
           <span style="font-size:1.6rem;font-weight:900;color:#00d4aa">100%</span>
@@ -3362,3 +3850,284 @@ window.navigate = function(view, btn) {
 
 // Export syncOnboardingProgress for use from window scope
 window.syncOnboardingProgress = syncOnboardingProgress;
+
+/* ═══════════════════════════════════════════════════════════════
+   VIEW: MY PAYSLIPS
+   ═══════════════════════════════════════════════════════════════ */
+
+function renderPayslips() {
+  const el = document.getElementById('view-payslips');
+  if (!el) return;
+
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  const ytdYear   = new Date().getFullYear();
+  const ytdSlips  = _payslips.filter(p => p.pay_period && p.pay_period.startsWith(String(ytdYear)));
+  const ytdGross  = ytdSlips.reduce((s, p) => s + (Number(p.gross_pay) || 0), 0);
+  const ytdNett   = ytdSlips.reduce((s, p) => s + (Number(p.nett_pay)  || 0), 0);
+  const ytdEva    = ytdSlips.reduce((s, p) => s + (Number(p.eva_bonus) || 0), 0);
+  const latest    = _payslips[0] || null;
+  const latestNett = latest ? Number(latest.nett_pay) || 0 : 0;
+
+  el.innerHTML = `
+    <div class="view-header">
+      <div><h1>My Payslips</h1><div class="view-sub">Full pay history, YTD summary & individual downloads</div></div>
+      <div class="view-header-actions">
+        <button class="btn btn--secondary" onclick="exportPayslipsCSV()"><i class="fa-solid fa-table"></i> Export CSV</button>
+        <button class="btn btn--primary" onclick="exportPayslipsPDF()"><i class="fa-solid fa-file-pdf"></i> Full History PDF</button>
+      </div>
+    </div>
+
+    <!-- YTD KPI tiles -->
+    <div class="cards-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
+      <div class="stat-card">
+        <div class="stat-card-icon" style="background:rgba(237,165,255,0.15);color:var(--accent)"><i class="fa-solid fa-coins"></i></div>
+        <div class="stat-card-val">R ${ytdGross.toLocaleString('en-ZA',{maximumFractionDigits:0})}</div>
+        <div class="stat-card-lbl">Gross Pay YTD ${ytdYear}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-icon" style="background:rgba(0,212,170,0.15);color:var(--accent2)"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+        <div class="stat-card-val">R ${ytdNett.toLocaleString('en-ZA',{maximumFractionDigits:0})}</div>
+        <div class="stat-card-lbl">Nett Pay YTD ${ytdYear}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-icon" style="background:rgba(249,200,70,0.15);color:var(--gold)"><i class="fa-solid fa-bolt"></i></div>
+        <div class="stat-card-val">R ${ytdEva.toLocaleString('en-ZA',{maximumFractionDigits:0})}</div>
+        <div class="stat-card-lbl">EVA Bonuses YTD</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-icon" style="background:rgba(255,91,91,0.12);color:#ff5b5b"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+        <div class="stat-card-val">R ${latestNett.toLocaleString('en-ZA',{maximumFractionDigits:0})}</div>
+        <div class="stat-card-lbl">Last Month Nett</div>
+      </div>
+    </div>
+
+    ${_payslips.length === 0
+      ? `<div class="chart-container" style="text-align:center;padding:48px;color:var(--muted)">
+           <i class="fa-solid fa-file-invoice-dollar" style="font-size:2.5rem;margin-bottom:14px;display:block;opacity:0.25"></i>
+           <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px">No payslips on record yet</div>
+           <div style="font-size:0.78rem">Payslips are generated at the end of each pay period by the finance team.</div>
+         </div>`
+      : `<div class="chart-container" style="padding:0;overflow-x:auto">
+           <table class="data-table" style="min-width:600px">
+             <thead>
+               <tr>
+                 <th>Pay Period</th>
+                 <th>Base Salary</th>
+                 <th>EVA Bonus</th>
+                 <th>Gross Pay</th>
+                 <th>Deductions</th>
+                 <th>Nett Pay</th>
+                 <th>Status</th>
+                 <th></th>
+               </tr>
+             </thead>
+             <tbody id="payslipsTableBody">
+               ${_payslips.map((p, i) => {
+                 const [yr, mo] = (p.pay_period || '—').split('-');
+                 const moLabel = MONTHS[(parseInt(mo, 10) || 1) - 1] || mo;
+                 const gross  = Number(p.gross_pay) || 0;
+                 const nett   = Number(p.nett_pay)  || 0;
+                 const base   = Number(p.base_salary) || Number(p.basic_salary) || 0;
+                 const eva    = Number(p.eva_bonus) || 0;
+                 const ded    = gross - nett;
+                 const st     = p.status || 'pending';
+                 const stCol  = st === 'paid' ? '#00d4aa' : st === 'finalised' ? '#eda5ff' : '#fec24f';
+                 return `<tr>
+                   <td style="font-weight:700">${moLabel} ${yr}</td>
+                   <td>R ${base.toLocaleString('en-ZA',{maximumFractionDigits:2})}</td>
+                   <td style="color:var(--gold)">R ${eva.toLocaleString('en-ZA',{maximumFractionDigits:2})}</td>
+                   <td>R ${gross.toLocaleString('en-ZA',{maximumFractionDigits:2})}</td>
+                   <td style="color:#ff5b5b">−R ${ded.toLocaleString('en-ZA',{maximumFractionDigits:2})}</td>
+                   <td style="font-weight:800;color:var(--accent2)">R ${nett.toLocaleString('en-ZA',{maximumFractionDigits:2})}</td>
+                   <td><span style="background:${stCol}18;color:${stCol};border:1px solid ${stCol}40;border-radius:20px;padding:2px 10px;font-size:0.72rem;font-weight:700">${st}</span></td>
+                   <td><button class="btn btn--secondary btn--sm" id="psDl-${i}" data-pid="${p.id}"><i class="fa-solid fa-download"></i></button></td>
+                 </tr>`;
+               }).join('')}
+             </tbody>
+           </table>
+         </div>`
+    }`;
+
+  _payslips.forEach((p, i) => {
+    document.getElementById(`psDl-${i}`)?.addEventListener('click', () => downloadPayslip(p.id));
+  });
+}
+
+function exportPayslipsCSV() {
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const rows = [['Pay Period','Base Salary','EVA Bonus','Gross Pay','Deductions','Nett Pay','Status']];
+  _payslips.forEach(p => {
+    const [yr, mo] = (p.pay_period || '').split('-');
+    const moLabel  = MONTHS[(parseInt(mo,10)||1)-1] || mo;
+    const gross    = Number(p.gross_pay)   || 0;
+    const nett     = Number(p.nett_pay)    || 0;
+    const base     = Number(p.base_salary) || Number(p.basic_salary) || 0;
+    const eva      = Number(p.eva_bonus)   || 0;
+    rows.push([`${moLabel} ${yr}`, base.toFixed(2), eva.toFixed(2), gross.toFixed(2), (gross-nett).toFixed(2), nett.toFixed(2), p.status||'pending']);
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = `SVC-Payslips-${_emp?.first_name||'Employee'}-${new Date().getFullYear()}.csv`;
+  a.click(); showToast('Payslips CSV exported', 'success');
+}
+
+function exportPayslipsPDF() {
+  if (!window.jspdf) { showToast('PDF library not loaded', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(124,92,252);
+  doc.text('SV Capital — Payslip History', 14, 18);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(107,114,128);
+  doc.text(`Employee: ${_emp?.first_name||''} ${_emp?.last_name||''} · ${_emp?.role||''} · Generated: ${new Date().toLocaleDateString('en-ZA')}`, 14, 25);
+
+  const rows = _payslips.map(p => {
+    const [yr, mo] = (p.pay_period||'').split('-');
+    const moLabel  = MONTHS[(parseInt(mo,10)||1)-1]||mo;
+    const gross    = Number(p.gross_pay)   || 0;
+    const nett     = Number(p.nett_pay)    || 0;
+    const base     = Number(p.base_salary) || Number(p.basic_salary) || 0;
+    const eva      = Number(p.eva_bonus)   || 0;
+    return [`${moLabel} ${yr}`, `R ${base.toFixed(2)}`, `R ${eva.toFixed(2)}`, `R ${gross.toFixed(2)}`, `-R ${(gross-nett).toFixed(2)}`, `R ${nett.toFixed(2)}`, p.status||'pending'];
+  });
+
+  doc.autoTable({
+    startY: 30,
+    head: [['Period','Base','EVA Bonus','Gross','Deductions','Nett','Status']],
+    body: rows,
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [124,92,252], textColor: 255, fontStyle:'bold' },
+    alternateRowStyles: { fillColor: [245,245,252] },
+    columnStyles: { 5: { fontStyle:'bold', textColor:[0,212,170] } },
+    margin: { left:14, right:14 },
+  });
+
+  doc.save(`SVC-Payslips-${_emp?.first_name||'Employee'}-${new Date().getFullYear()}.pdf`);
+  showToast('Payslip history PDF downloaded', 'success');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   COMMAND PALETTE
+   ═══════════════════════════════════════════════════════════════ */
+
+const EMP_CMD_ITEMS = [
+  { label:'Dashboard',           icon:'fa-house',              group:'Navigate', action:()=>navigate('dashboard',   document.querySelector('[data-view=dashboard]')) },
+  { label:'My Courses',          icon:'fa-book-open',          group:'Navigate', action:()=>navigate('courses',     document.querySelector('[data-view=courses]')) },
+  { label:'Learning Paths',      icon:'fa-road',               group:'Navigate', action:()=>navigate('paths',       document.querySelector('[data-view=paths]')) },
+  { label:'My KPIs',             icon:'fa-chart-bar',          group:'Navigate', action:()=>navigate('kpis',        document.querySelector('[data-view=kpis]')) },
+  { label:'My OKRs',             icon:'fa-bullseye',           group:'Navigate', action:()=>navigate('okrs',        document.querySelector('[data-view=okrs]')) },
+  { label:'Feedback & Kudos',    icon:'fa-hands-clapping',     group:'Navigate', action:()=>navigate('feedback',    document.querySelector('[data-view=feedback]')) },
+  { label:'Pulse Survey',        icon:'fa-poll',               group:'Navigate', action:()=>navigate('pulse',       document.querySelector('[data-view=pulse]')) },
+  { label:'1-on-1s',             icon:'fa-comments',           group:'Navigate', action:()=>navigate('oneonone',    document.querySelector('[data-view=oneonone]')) },
+  { label:'Daily Check-in',      icon:'fa-sun',                group:'Navigate', action:()=>navigate('checkin',     document.querySelector('[data-view=checkin]')) },
+  { label:'My Leave',            icon:'fa-umbrella-beach',     group:'Navigate', action:()=>navigate('leave',       document.querySelector('[data-view=leave]')) },
+  { label:'Leave Calendar',      icon:'fa-calendar-days',      group:'Navigate', action:()=>navigate('calendar',    document.querySelector('[data-view=calendar]')) },
+  { label:'EVA Statement',       icon:'fa-money-bill-trend-up',group:'Navigate', action:()=>navigate('eva',         document.querySelector('[data-view=eva]')) },
+  { label:'My Payslips',         icon:'fa-file-invoice-dollar',group:'Navigate', action:()=>navigate('payslips',    document.querySelector('[data-view=payslips]')) },
+  { label:'Achievements',        icon:'fa-trophy',             group:'Navigate', action:()=>navigate('achievements',document.querySelector('[data-view=achievements]')) },
+  { label:'Activity Feed',       icon:'fa-bolt',               group:'Navigate', action:()=>navigate('feed',        document.querySelector('[data-view=feed]')) },
+  { label:'Journal',             icon:'fa-pen-to-square',      group:'Navigate', action:()=>navigate('journal',     document.querySelector('[data-view=journal]')) },
+  { label:'My Profile',          icon:'fa-id-card',            group:'Navigate', action:()=>navigate('profile',     document.querySelector('[data-view=profile]')) },
+  { label:'Export Payslips CSV', icon:'fa-table',              group:'Actions',  action:()=>{ navigate('payslips',document.querySelector('[data-view=payslips]')); setTimeout(exportPayslipsCSV,300); } },
+  { label:'Download Payslips PDF',icon:'fa-file-pdf',          group:'Actions',  action:()=>{ navigate('payslips',document.querySelector('[data-view=payslips]')); setTimeout(exportPayslipsPDF,300); } },
+  { label:'Generate AI Course',  icon:'fa-robot',              group:'Actions',  action:()=>{ if(typeof openAiGenModal==='function') openAiGenModal(); } },
+  { label:'Go to Team Dashboard',icon:'fa-people-group',       group:'Actions',  action:()=>{ window.location.href='index.html'; } },
+  { label:'Go to App Hub',       icon:'fa-grid-2',             group:'Actions',  action:()=>{ window.location.href='hub.html'; } },
+];
+
+let _empCmdActive = -1;
+
+function openEmpCmd() {
+  const overlay = document.getElementById('empCmdOverlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  _empCmdActive = -1;
+  const inp = document.getElementById('empCmdInput');
+  if (inp) { inp.value = ''; inp.focus(); }
+  renderEmpCmdResults('');
+}
+
+function closeEmpCmd() {
+  const overlay = document.getElementById('empCmdOverlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function renderEmpCmdResults(q) {
+  const list = document.getElementById('empCmdList');
+  if (!list) return;
+  _empCmdActive = -1;
+  const query = (q || '').toLowerCase().trim();
+  const hits  = query ? EMP_CMD_ITEMS.filter(c => c.label.toLowerCase().includes(query) || c.group.toLowerCase().includes(query)) : EMP_CMD_ITEMS;
+
+  const groups = {};
+  hits.forEach(c => { (groups[c.group] = groups[c.group] || []).push(c); });
+
+  let html = '';
+  const gIdx = { i: 0 };
+  Object.entries(groups).forEach(([grp, items]) => {
+    html += `<div style="padding:4px 14px 2px;font-size:0.63rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.25)">${grp}</div>`;
+    items.forEach(item => {
+      const idx = gIdx.i++;
+      html += `<div class="emp-cmd-item" data-idx="${idx}"
+        style="display:flex;align-items:center;gap:12px;padding:9px 14px;cursor:pointer;border-radius:8px;margin:0 6px;transition:background 0.12s"
+        onmouseover="empCmdHover(${idx})" onclick="empCmdSelect(${idx})">
+        <i class="fa-solid ${item.icon}" style="width:16px;text-align:center;color:rgba(237,165,255,0.85);font-size:0.85rem"></i>
+        <span style="font-size:0.88rem;color:#e2e4f0">${item.label}</span>
+      </div>`;
+    });
+  });
+
+  list.innerHTML = html || `<div style="padding:24px;text-align:center;color:rgba(255,255,255,0.3);font-size:0.85rem">No results for "${q}"</div>`;
+  list._hits = hits;
+}
+
+function empCmdHover(idx) {
+  _empCmdActive = idx;
+  document.querySelectorAll('#empCmdList .emp-cmd-item').forEach(el => {
+    el.style.background = +el.dataset.idx === idx ? 'rgba(237,165,255,0.15)' : '';
+  });
+}
+
+function empCmdSelect(idx) {
+  const list = document.getElementById('empCmdList');
+  const hits = list?._hits || EMP_CMD_ITEMS;
+  if (hits[idx]) { closeEmpCmd(); hits[idx].action(); }
+}
+
+function empCmdKeyNav(e) {
+  const list  = document.getElementById('empCmdList');
+  const items = list?.querySelectorAll('.emp-cmd-item') || [];
+  const count = items.length;
+  if (!count) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _empCmdActive = (_empCmdActive + 1) % count;
+    empCmdHover(_empCmdActive);
+    items[_empCmdActive]?.scrollIntoView({ block:'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _empCmdActive = (_empCmdActive - 1 + count) % count;
+    empCmdHover(_empCmdActive);
+    items[_empCmdActive]?.scrollIntoView({ block:'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (_empCmdActive >= 0) empCmdSelect(_empCmdActive);
+  } else if (e.key === 'Escape') {
+    closeEmpCmd();
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    const overlay = document.getElementById('empCmdOverlay');
+    if (overlay && overlay.style.display !== 'none') closeEmpCmd();
+    else openEmpCmd();
+  } else if (e.key === 'Escape') {
+    const overlay = document.getElementById('empCmdOverlay');
+    if (overlay && overlay.style.display !== 'none') closeEmpCmd();
+  }
+});

@@ -1,11 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SV Capital — Staff Hub</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -17,7 +21,7 @@
       --surface3: #22252f;
       --border:   rgba(255,255,255,0.07);
       --border2:  rgba(255,255,255,0.12);
-      --purple:   #7c5cfc;
+      --purple:   #eda5ff;
       --teal:     #00d4aa;
       --text:     #e8eaf6;
       --muted:    #6b7280;
@@ -27,7 +31,7 @@
     html, body {
       min-height: 100vh;
       background: var(--bg);
-      font-family: 'Inter', sans-serif;
+      font-family: 'Poppins', sans-serif;
       color: var(--text);
       overflow-x: hidden;
     }
@@ -36,14 +40,14 @@
       content: '';
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background-image:
-        linear-gradient(rgba(124,92,252,0.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(124,92,252,0.035) 1px, transparent 1px);
+        linear-gradient(rgba(237,165,255,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(237,165,255,0.035) 1px, transparent 1px);
       background-size: 52px 52px;
     }
 
     /* Orbs */
     .orb { position: fixed; border-radius: 50%; filter: blur(100px); opacity: 0.12; z-index: 0; pointer-events: none; }
-    .orb--1 { width: 600px; height: 600px; background: #7c5cfc; top: -200px; left: -150px; animation: float1 16s ease-in-out infinite alternate; }
+    .orb--1 { width: 600px; height: 600px; background: #eda5ff; top: -200px; left: -150px; animation: float1 16s ease-in-out infinite alternate; }
     .orb--2 { width: 400px; height: 400px; background: #00d4aa; bottom: -100px; right: -80px; animation: float2 20s ease-in-out infinite alternate; }
     @keyframes float1 { to { transform: translate(30px, 50px); } }
     @keyframes float2 { to { transform: translate(-20px, -30px); } }
@@ -54,7 +58,7 @@
       display: flex; align-items: center; justify-content: center;
       flex-direction: column; gap: 16px; z-index: 9999;
     }
-    #globalLoader .spin { width: 40px; height: 40px; border: 3px solid rgba(124,92,252,0.15); border-top-color: var(--purple); border-radius: 50%; animation: spin 0.65s linear infinite; }
+    #globalLoader .spin { width: 40px; height: 40px; border: 3px solid rgba(237,165,255,0.15); border-top-color: var(--purple); border-radius: 50%; animation: spin 0.65s linear infinite; }
     #globalLoader .load-text { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -74,10 +78,10 @@
     .topbar-brand { display: flex; align-items: center; gap: 12px; }
     .topbar-icon {
       width: 38px; height: 38px; border-radius: 10px;
-      background: linear-gradient(135deg, #7c5cfc, #00d4aa);
+      overflow: hidden; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
-      font-size: 1rem; color: #fff;
     }
+    .topbar-icon img { width: 38px; height: 38px; object-fit: contain; display: block; }
     .topbar-name { font-size: 1.05rem; font-weight: 800; letter-spacing: -0.02em; }
     .topbar-sub  { font-size: 0.72rem; color: var(--muted); }
 
@@ -116,7 +120,7 @@
     .hero-left {}
     .hero-greeting { font-size: 0.85rem; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
     .hero-name { font-size: 2.4rem; font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 10px; }
-    .hero-name em { font-style: normal; background: linear-gradient(135deg, #7c5cfc, #00d4aa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero-name em { font-style: normal; background: linear-gradient(135deg, #eda5ff, #00d4aa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 
     .role-badge {
       display: inline-flex; align-items: center; gap: 8px;
@@ -327,13 +331,57 @@
       box-shadow: 0 8px 40px rgba(245,158,11,0.25), 0 0 0 1px #f59e0b;
     }
 
+    /* ── Notifications ── */
+    .notif-list { display: flex; flex-direction: column; gap: 10px; }
+    .notif-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-left: 3px solid var(--notif-color, var(--purple));
+      border-radius: 12px; padding: 14px 18px;
+      display: flex; align-items: flex-start; gap: 14px;
+    }
+    .notif-icon-wrap {
+      width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+      background: color-mix(in srgb, var(--notif-color, var(--purple)) 15%, transparent);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.9rem; color: var(--notif-color, var(--purple));
+    }
+    .notif-body { flex: 1; min-width: 0; }
+    .notif-title { font-size: 0.88rem; font-weight: 700; margin-bottom: 2px; }
+    .notif-text { font-size: 0.8rem; color: var(--muted2); line-height: 1.45; }
+    .notif-meta { font-size: 0.72rem; color: var(--muted); margin-top: 5px; }
+    .notif-action {
+      flex-shrink: 0; align-self: center;
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 0.75rem; font-weight: 700; color: var(--purple);
+      text-decoration: none; padding: 5px 13px; border-radius: 20px;
+      background: color-mix(in srgb, var(--purple) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--purple) 25%, transparent);
+      transition: background 0.15s;
+    }
+    .notif-action:hover { background: color-mix(in srgb, var(--purple) 22%, transparent); }
+
     /* Responsive */
     @media (max-width: 640px) {
       .hero { flex-direction: column; gap: 16px; }
       .app-tile--primary { flex-direction: column; }
       .topbar-right .session-pill .session-role { display: none; }
+      .notif-card { flex-wrap: wrap; }
+      .notif-action { margin-top: 4px; }
     }
   </style>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="../js/analytics.js"></script>
 </head>
 <body>
 
@@ -351,9 +399,8 @@
   <!-- ── Topbar ── -->
   <header class="topbar">
     <div class="topbar-brand">
-      <div class="topbar-icon"><i class="fa-solid fa-gem"></i></div>
+      <div class="topbar-icon"><img src="../assets/logo-192.png" alt="SV Capital"></div>
       <div>
-        <div class="topbar-name">SV Capital</div>
         <div class="topbar-sub">Staff Portal</div>
       </div>
     </div>
@@ -410,6 +457,15 @@
     <div class="session-expire" id="sessionExpire"></div>
   </div>
 
+  <!-- ── Notifications ── -->
+  <div id="hubNotifications" style="display:none; margin-bottom:40px">
+    <div class="section-head">
+      <div class="section-title"><i class="fa-solid fa-bell" style="margin-right:6px;font-size:0.75rem"></i>Notifications</div>
+      <div class="section-count" id="notifCountBadge"></div>
+    </div>
+    <div id="notifList" class="notif-list"></div>
+  </div>
+
   <!-- ── Permitted apps ── -->
   <div id="appsSection">
     <div class="section-head">
@@ -445,11 +501,11 @@ const ROLE_COLORS = {
   'CEO':                '#f59e0b',
   'Operations Manager': '#00d4aa',
   'Finance Manager':    '#e84393',
-  'Tech Lead':          '#06b6d4',
-  'Investment Analyst': '#7c5cfc',
+  'Tech Lead':          '#656565',
+  'Investment Analyst': '#eda5ff',
   'Compliance Officer': '#10b981',
   'Client Relations':   '#fb923c',
-  'Marketing':          '#a855f7',
+  'Marketing':          '#eda5ff',
   'Junior Analyst':     '#64748b',
   'Admin':              '#64748b',
 };
@@ -468,7 +524,7 @@ const APP_META = {
     label:       'My Dashboard',
     description: 'Your personal hub — KPIs, EVA payslip, learning paths, kudos, leave requests, journal & more.',
     icon:        'fa-solid fa-user-circle',
-    color:       '#7c5cfc',
+    color:       '#eda5ff',
     path:        'employee.html',
     tags:        ['Personal', 'Required'],
     primary:     true,
@@ -501,7 +557,7 @@ const APP_META = {
     label:       'IFA Portal',
     description: 'Independent Financial Adviser tools — commissions, portfolio reviews & client reporting.',
     icon:        'fa-solid fa-handshake',
-    color:       '#06b6d4',
+    color:       '#656565',
     path:        '../ifa/index.html',
     tags:        ['IFA', 'Advisory'],
   },
@@ -513,6 +569,16 @@ const APP_META = {
     path:        '../portal/index.html',
     tags:        ['Investors', 'Client'],
   },
+  staging: {
+    label:       'Staging Portal',
+    description: 'Pre-production staging environment — test new features before they go live.',
+    icon:        'fa-solid fa-flask',
+    color:       '#f59e0b',
+    path:        'https://svcapital-staging.up.railway.app/',
+    tags:        ['Staging', 'Testing'],
+    badge:       'Staging',
+    newTab:      true,
+  },
   director: {
     label:       'Director Panel',
     description: 'Super admin controls — create employees, manage onboarding journeys, platform oversight.',
@@ -521,6 +587,14 @@ const APP_META = {
     path:        'director.html',
     tags:        ['Directors Only', 'Super Admin'],
     badge:       'Super Admin',
+  },
+  accounting: {
+    label:       'Accounting',
+    description: 'Full double-entry accounting — invoices, bills, financial statements, management accounts & budgets.',
+    icon:        'fa-solid fa-calculator',
+    color:       '#656565',
+    path:        'accounting.html',
+    tags:        ['Finance', 'Accounting'],
   },
 };
 
@@ -555,6 +629,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   populateSession(session);
   renderApps(session);
   checkDeniedRedirect();
+  loadNotifications(session);
 
   // Hide loader, show content
   document.getElementById('globalLoader').style.display = 'none';
@@ -572,19 +647,18 @@ function populateHero(session) {
   document.getElementById('xpValue').textContent      = (session.xpPoints || 0).toLocaleString() + ' XP';
 
   const roleDot = document.getElementById('roleDot');
-  roleDot.style.background = ROLE_COLORS[session.role] || '#7c5cfc';
+  roleDot.style.background = ROLE_COLORS[session.role] || '#eda5ff';
 
   // Topbar
   const topAvatar = document.getElementById('topAvatar');
   topAvatar.textContent     = session.avatarInitials;
-  topAvatar.style.background = session.avatarColor || '#7c5cfc';
+  topAvatar.style.background = session.avatarColor || '#eda5ff';
   document.getElementById('topName').textContent = session.firstName + ' ' + session.lastName;
   document.getElementById('topRole').textContent = session.role;
 
   const allowed = StaffAuth.getAllowedApps(session);
-  const total   = Object.keys(APP_META).length;
   document.getElementById('accessCount').innerHTML =
-    `You have access to <strong>${allowed.length}</strong> of ${total} available apps.`;
+    `You have access to <strong>${allowed.length}</strong> app${allowed.length !== 1 ? 's' : ''}.`;
 }
 
 /* ── Session bar ── */
@@ -627,27 +701,7 @@ function renderApps(session) {
     grid.appendChild(tile);
   });
 
-  // Locked apps section
-  if (locked.length > 0) {
-    document.getElementById('lockedSection').style.display = 'block';
-    document.getElementById('lockedCountBadge').textContent = locked.length + ' apps';
-    const lockedGrid = document.getElementById('lockedGrid');
-    lockedGrid.innerHTML = '';
-    locked.forEach(key => {
-      const meta = APP_META[key];
-      if (!meta) return;
-      const el = document.createElement('div');
-      el.className = 'locked-tile';
-      el.innerHTML = `
-        <div class="locked-tile-icon"><i class="${meta.icon}"></i></div>
-        <div>
-          <div class="locked-tile-label">${meta.label}</div>
-          <div class="locked-tile-tag"><i class="fa-solid fa-lock"></i> Role restricted</div>
-        </div>
-      `;
-      lockedGrid.appendChild(el);
-    });
-  }
+  // Locked apps are not shown — users should not see apps they can't access
 }
 
 function buildTile(meta, key, isLocked) {
@@ -655,6 +709,7 @@ function buildTile(meta, key, isLocked) {
   const isDirectorTile = key === 'director';
   const a = document.createElement('a');
   a.href = meta.path;
+  if (meta.newTab) a.target = '_blank';
   a.className = 'app-tile' + (isPrimary ? ' app-tile--primary' : '') + (isLocked ? ' app-tile--locked' : '') + (isDirectorTile ? ' app-tile--director' : '');
   a.style.setProperty('--tile-color', meta.color);
 
@@ -719,6 +774,125 @@ function showToast(msg) {
   document.getElementById('toastMsg').textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+/* ── Notifications ── */
+async function loadNotifications(session) {
+  const token = localStorage.getItem('svc_token') || sessionStorage.getItem('svc_token');
+  if (!token || !session.empId) return;
+
+  let jwtRole = '';
+  try { jwtRole = JSON.parse(atob(token.split('.')[1])).role || ''; } catch(_) {}
+  const isDirector = ['admin', 'director'].includes(jwtRole);
+
+  const h = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const api = url => fetch(url, { headers: h, credentials: 'include' });
+
+  try {
+    const reqs = [
+      api(`/api/tables/activity_feed?employee_id=${encodeURIComponent(session.empId)}&sort=created_at&order=desc&limit=10`),
+    ];
+    if (isDirector) {
+      reqs.push(api('/api/tables/leave_requests?status=pending&sort=created_at&order=desc&limit=20'));
+    }
+
+    const [feedRes, leaveRes] = await Promise.all(reqs);
+    const feed    = feedRes.ok  ? (await feedRes.json()).data  || [] : [];
+    const pending = leaveRes && leaveRes.ok ? (await leaveRes.json()).data || [] : [];
+
+    if (!feed.length && !pending.length) return;
+
+    let empMap = {};
+    if (pending.length) {
+      try {
+        const er = await api('/api/tables/employees?limit=500');
+        if (er.ok) (await er.json()).data?.forEach(e => { empMap[e.id] = e; });
+      } catch(_) {}
+    }
+
+    _renderNotifications(feed, pending, empMap);
+  } catch(e) {
+    console.error('[hub] notifications error:', e);
+  }
+}
+
+function _notifTimeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const h = Math.floor(mins / 60);
+  if (h < 24)    return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+function _esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _renderNotifications(feed, pending, empMap) {
+  const total = feed.length + pending.length;
+  if (!total) return;
+
+  document.getElementById('hubNotifications').style.display = 'block';
+  document.getElementById('notifCountBadge').textContent = total;
+
+  const list = document.getElementById('notifList');
+  list.innerHTML = '';
+
+  const TYPE_CFG = {
+    leave_approved:  { icon: 'fa-solid fa-circle-check',  color: '#10b981' },
+    leave_rejected:  { icon: 'fa-solid fa-circle-xmark',  color: '#ef4444' },
+    leave_submitted: { icon: 'fa-solid fa-paper-plane',   color: '#eda5ff' },
+    achievement:     { icon: 'fa-solid fa-trophy',        color: '#f59e0b' },
+    xp_gain:         { icon: 'fa-solid fa-bolt',          color: '#eda5ff' },
+    kpi_update:      { icon: 'fa-solid fa-chart-line',    color: '#00d4aa' },
+  };
+  const DEFAULT_CFG = { icon: 'fa-solid fa-bell', color: '#6b7280' };
+
+  // Director: pending leave requests first (need action)
+  pending.forEach(lr => {
+    const emp  = empMap[lr.employee_id];
+    const name = emp ? `${emp.first_name} ${emp.last_name}` : `Employee`;
+    const startFmt = lr.start_date ? new Date(lr.start_date + 'T00:00:00').toLocaleDateString('en-ZA', { day:'numeric', month:'short' }) : '';
+    const endFmt   = lr.end_date   ? new Date(lr.end_date   + 'T00:00:00').toLocaleDateString('en-ZA', { day:'numeric', month:'short' }) : '';
+    const days = lr.days_requested || '?';
+
+    const card = document.createElement('div');
+    card.className = 'notif-card';
+    card.style.setProperty('--notif-color', '#f59e0b');
+    card.innerHTML = `
+      <div class="notif-icon-wrap"><i class="fa-solid fa-calendar-clock"></i></div>
+      <div class="notif-body">
+        <div class="notif-title">Leave Request — ${_esc(name)}</div>
+        <div class="notif-text">${_esc(lr.leave_type || 'Leave')}: ${_esc(startFmt)}–${_esc(endFmt)} &nbsp;·&nbsp; ${_esc(days)} day${days !== 1 ? 's' : ''}</div>
+        <div class="notif-meta">${_notifTimeAgo(lr.created_at)} &nbsp;·&nbsp; Awaiting approval</div>
+      </div>
+      <a href="director.html" class="notif-action"><i class="fa-solid fa-arrow-up-right"></i> Review</a>
+    `;
+    list.appendChild(card);
+  });
+
+  // Activity feed items
+  feed.forEach(item => {
+    const cfg   = TYPE_CFG[item.type] || DEFAULT_CFG;
+    const color = item.color || cfg.color;
+    const icon  = item.icon  || cfg.icon;
+
+    const card = document.createElement('div');
+    card.className = 'notif-card';
+    card.style.setProperty('--notif-color', color);
+    card.innerHTML = `
+      <div class="notif-icon-wrap"><i class="${_esc(icon)}"></i></div>
+      <div class="notif-body">
+        <div class="notif-title">${_esc(item.title || 'Notification')}</div>
+        ${item.body ? `<div class="notif-text">${_esc(item.body)}</div>` : ''}
+        <div class="notif-meta">${_notifTimeAgo(item.created_at)}</div>
+      </div>
+    `;
+    list.appendChild(card);
+  });
 }
 
 </script>

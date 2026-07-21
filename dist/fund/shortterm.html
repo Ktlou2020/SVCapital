@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="../assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="../assets/logo-192.png" />
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SV Capital — Short-Term Investment Management</title>
@@ -10,8 +14,8 @@
   <link rel="stylesheet" href="css/fund.css">
   <style>
     :root {
-      --stl-blue:   #3b82f6;
-      --stl-teal:   #14b8a6;
+      --stl-blue:   #656565;
+      --stl-teal:   #656565;
       --stl-green:  #22c55e;
       --stl-amber:  #f59e0b;
       --stl-red:    #ef4444;
@@ -115,7 +119,7 @@
 
     /* Badges */
     .stl-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
-    .stl-badge-active     { background: rgba(59,130,246,.15);  color: #60a5fa; }
+    .stl-badge-active     { background: rgba(59,130,246,.15);  color: #656565; }
     .stl-badge-repaid     { background: rgba(34,197,94,.15);   color: #4ade80; }
     .stl-badge-overdue    { background: rgba(239,68,68,.15);   color: #f87171; }
     .stl-badge-partial    { background: rgba(245,158,11,.15);  color: #fbbf24; }
@@ -131,7 +135,7 @@
     /* Buttons */
     .stl-btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 7px; transition: all .15s; }
     .stl-btn-primary   { background: var(--stl-blue); color: #fff; }
-    .stl-btn-primary:hover { background: #2563eb; }
+    .stl-btn-primary:hover { background: #656565; }
     .stl-btn-secondary { background: rgba(255,255,255,.08); color: rgba(255,255,255,.8); border: 1px solid rgba(255,255,255,.12); }
     .stl-btn-secondary:hover { background: rgba(255,255,255,.13); color: #fff; }
     .stl-btn-sm { padding: 5px 11px; font-size: 12px; }
@@ -196,7 +200,7 @@
     .stl-drawer-hd { padding:20px 24px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:12px;flex-shrink:0; }
     .stl-drawer-title { font-size:16px;font-weight:800;color:#fff;flex:1; }
     .stl-drawer-body { padding:20px 24px;flex:1;overflow-y:auto; }
-    .stl-doc-btn { background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:#60a5fa;font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s; }
+    .stl-doc-btn { background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:#656565;font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s; }
     .stl-doc-btn:hover { background:rgba(59,130,246,.22); }
 
     @media (max-width: 900px) {
@@ -204,6 +208,20 @@
       .stl-kpi-row { grid-template-columns: 1fr 1fr; }
     }
   </style>
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5LEPWC7EFP', {
+      send_page_view: true,
+      cookie_flags: 'SameSite=None;Secure',
+      anonymize_ip: false
+    });
+  </script>
+  <script src="../js/analytics.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet">
 </head>
 <body>
 
