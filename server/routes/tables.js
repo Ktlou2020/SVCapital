@@ -1384,15 +1384,29 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           });
         }
 
-        // FICA status approved → record fica_approved_at timestamp (once only)
+        // FICA status approved → only allow if all 3 required docs are approved
         if (table === 'investors' && body.fica_status === 'approved') {
+          const REQUIRED_DOCS = ['id_document', 'proof_of_address', 'proof_of_bank'];
+          const { rows: approvedDocs } = await pool.query(
+            `SELECT DISTINCT doc_type FROM kyc_documents
+             WHERE investor_id = $1 AND status = 'approved' AND doc_type = ANY($2)`,
+            [req.params.id, REQUIRED_DOCS]
+          );
+          const approvedSet = new Set(approvedDocs.map(d => d.doc_type));
+          const allApproved = REQUIRED_DOCS.every(t => approvedSet.has(t));
+          if (!allApproved) {
+            const missing = REQUIRED_DOCS.filter(t => !approvedSet.has(t));
+            return res.status(400).json({
+              error: `Cannot approve FICA: the following required documents are not yet approved: ${missing.join(', ')}.`,
+            });
+          }
           await pool.query(
             'UPDATE investors SET fica_approved_at=NOW() WHERE id=$1 AND fica_approved_at IS NULL',
             [req.params.id]
           ).catch(() => {});
         }
 
-        // KYC document approved → email investor ONLY once all 3 required docs are approved
+        // KYC document approved → promote investor FICA status and email ONLY once all 3 required docs are approved
         if (table === 'kyc_documents' && body.status === 'approved' && updated.investor_id) {
           const REQUIRED_DOCS = ['id_document', 'proof_of_address', 'proof_of_bank'];
           const { rows: approvedDocs } = await pool.query(
@@ -1403,6 +1417,15 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           const approvedSet = new Set(approvedDocs.map(d => d.doc_type));
           const allApproved = REQUIRED_DOCS.every(t => approvedSet.has(t));
           if (allApproved) {
+            // Promote investor FICA status to approved
+            await pool.query(
+              `UPDATE investors
+               SET fica_status = 'approved',
+                   fica_approved_at = COALESCE(fica_approved_at, NOW()),
+                   updated_at = NOW()
+               WHERE id = $1 AND fica_status != 'approved'`,
+              [updated.investor_id]
+            ).catch(() => {});
             const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
             if (inv[0]) await emailService.sendKycApproved(inv[0]);
           }
