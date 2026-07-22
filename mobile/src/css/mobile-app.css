@@ -584,6 +584,15 @@ input[style], textarea[style], select[style] {
   font-size: 16px !important; padding: 9px 11px !important; border-radius: 8px !important;
   width: 100% !important; max-width: 100% !important;
 }
+/* Icon-prefixed inputs (login, signup) — restore left padding zeroed by shorthand above */
+.form-input-wrap .form-input,
+.form-input-wrap input,
+.form-input-wrap input.form-input,
+.input-icon-wrap .form-input,
+.input-icon-wrap input,
+.input-icon-wrap input.form-input {
+  padding-left: 52px !important;
+}
 .form-group label, .form-label { font-size: 0.75rem !important; }
 select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !important; }
 /* Hide auto-save meta text — overlaps "Personal Information" heading on mobile */
