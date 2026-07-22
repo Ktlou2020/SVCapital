@@ -773,6 +773,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-top: 4px;
 }
 .product-risk-filter .prf-pills {
   display: flex;
