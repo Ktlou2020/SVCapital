@@ -4280,7 +4280,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
           <!-- Title + blurb -->
           <div style="margin-top:14px">
             <div class="mpc2-title">${_esc(pool.name)}</div>
-            <div class="mpc2-blurb">${_esc(meta.blurb)}</div>
+            <div class="mpc2-blurb">${meta.blurb}</div>
           </div>
         </div>
 
