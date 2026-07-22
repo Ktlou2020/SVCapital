@@ -11,7 +11,7 @@ Capacitor-based native wrapper for the SV Capital Investor Portal.
 
 | Tool | Version | Install |
 |------|---------|---------|
-| Node.js | 20+ | https://nodejs.org |
+| Node.js | 18+ | https://nodejs.org |
 | npm | 9+ | bundled with Node |
 | Android Studio | Latest | https://developer.android.com/studio |
 | Xcode | 15+ (macOS only) | App Store |
