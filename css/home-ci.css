@@ -418,15 +418,18 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 .faq-item {
   background: #fff !important;
   border: 1px solid var(--ci-border) !important;
+  overflow: hidden !important;
 }
 .faq-item.open { border-color: var(--ci-orange-border) !important; }
-.faq-question { color: var(--ci-text) !important; }
+.faq-question { color: var(--ci-text) !important; cursor: pointer !important; }
 .faq-question:hover { color: var(--ci-orange) !important; }
-.faq-question i { color: var(--ci-orange) !important; }
+.faq-question i { color: var(--ci-orange) !important; pointer-events: none; }
 .faq-answer {
   color: var(--ci-text-muted) !important;
   background: var(--ci-section-bg) !important;
+  overflow: hidden !important;
 }
+.faq-item.open .faq-answer { max-height: 600px !important; padding: 0 24px 20px !important; }
 .faq-answer a { color: var(--ci-orange) !important; }
 
 /* ═══════════════════════════════════════════════════════════════

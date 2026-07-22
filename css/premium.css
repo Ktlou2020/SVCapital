@@ -764,11 +764,24 @@ body {
 /* ─── Public products page: risk filter ──────────────────────────────── */
 .product-risk-filter {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 14px;
-  margin: 0 auto 40px;
-  text-align: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 40px;
+  flex-wrap: wrap;
+}
+.prf-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.prf-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 .product-risk-filter .prf-label {
   font-size: 0.72rem;
@@ -776,12 +789,12 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: var(--gold, #fec24f);
+  white-space: nowrap;
 }
 .product-risk-filter .prf-pills {
   display: inline-flex;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
+  gap: 8px;
 }
 .product-risk-filter .prf-pill {
   border: 1.5px solid rgba(255,255,255,0.18);

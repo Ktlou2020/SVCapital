@@ -186,8 +186,18 @@ section { position: relative; padding: 100px 0; }
 }
 
 .btn--full { width: 100%; justify-content: center; }
+.btn--sm { padding: 9px 18px; font-size: 0.82rem; }
 .btn--lg { padding: 16px 36px; font-size: 1rem; }
 .btn--xl { padding: 18px 44px; font-size: 1.05rem; border-radius: var(--radius-lg); }
+.btn--outline-dark {
+  background: transparent;
+  color: #1a1a1a;
+  border-color: rgba(0,0,0,0.2);
+}
+.btn--outline-dark:hover {
+  background: rgba(0,0,0,0.06);
+  border-color: rgba(0,0,0,0.35);
+}
 
 /* ═══════════════════════════════════════════════
    NAVBAR

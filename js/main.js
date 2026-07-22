@@ -1248,7 +1248,7 @@ async function _applyCattleHerdStatus() {
     MODAL_DATA.cattle.herdHtml = `
       <div style="background:rgba(254,194,79,0.08);border:1px solid rgba(254,194,79,0.28);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
         <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#fec24f;margin-bottom:12px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
-        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:14px">
+        <div style="display:flex;flex-wrap:wrap;gap:24px;margin-bottom:14px">
           <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.total_purchased)}</div><div style="font-size:0.72rem;color:var(--text-dim)">purchased to date</div></div>
           ${weight ? `<div><div style="font-size:1.3rem;font-weight:800;color:#fff">${weight}<span style="font-size:0.85rem"> kg</span></div><div style="font-size:0.72rem;color:var(--text-dim)">average weight</div></div>` : ''}
         </div>

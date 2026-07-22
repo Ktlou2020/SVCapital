@@ -7644,32 +7644,11 @@ function shareReferral(method) {
    DARK MODE
    ═══════════════════════════════════════════════════════════════ */
 function initDarkMode() {
-  // Dark mode is disabled on the native app — always force light mode and
-  // clear any previously-saved dark preference.
-  if (window.__SVC_NATIVE__) {
-    _applyDark(false);
-    return;
-  }
-  const saved = localStorage.getItem('svc_dark_mode');
-  if (saved === 'dark') _applyDark(true);
+  document.body.classList.remove('dark-mode');
+  localStorage.removeItem('svc_dark_mode');
 }
-
-function toggleDarkMode() {
-  // No-op on native — dark mode is disabled there.
-  if (window.__SVC_NATIVE__) return;
-  const isDark = document.body.classList.contains('dark-mode');
-  _applyDark(!isDark);
-  SVC.track('svc_dark_mode_toggle', { dark_mode: !isDark });
-}
-
-function _applyDark(on) {
-  document.body.classList.toggle('dark-mode', on);
-  localStorage.setItem('svc_dark_mode', on ? 'dark' : 'light');
-  const icon = document.getElementById('darkModeIcon');
-  if (icon) {
-    icon.className = on ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
-  }
-}
+function toggleDarkMode() {}
+function _applyDark() { document.body.classList.remove('dark-mode'); }
 
 /* ═══════════════════════════════════════════════════════════════
    GUIDED TOUR
