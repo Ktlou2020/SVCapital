@@ -4100,30 +4100,58 @@ function _cattleHerdStatusCompactHtml(s) {
 
 function _cattleHerdStatusHtml(s) {
   if (!s || !s.total_purchased) return '';
-  const weight   = s.avg_current_weight || s.avg_entry_weight;
-  const genders  = (s.by_gender || []).filter(g => g.count > 0 && (g.label || '').toLowerCase() !== 'unspecified');
-  const breeds   = (s.by_breed  || []).filter(b => b.count > 0 && (b.label || '').toLowerCase() !== 'unspecified');
-  const totalG   = genders.reduce((a, g) => a + g.count, 0) || 1;
-  const chip = txt => `<span style="font-size:0.76rem;background:rgba(254,194,79,0.14);color:#8a6d1f;border-radius:20px;padding:3px 11px">${txt}</span>`;
+  const weight  = s.avg_current_weight || s.avg_entry_weight;
+  const genders = (s.by_gender || []).filter(g => g.count > 0 && (g.label || '').toLowerCase() !== 'unspecified');
+  const breeds  = (s.by_breed  || []).filter(b => b.count > 0 && (b.label || '').toLowerCase() !== 'unspecified');
+  const totalG  = genders.reduce((a, g) => a + g.count, 0) || 1;
+  const totalB  = breeds.reduce((a, b) => a + b.count, 0) || 1;
 
+  const gChip = txt => `<span style="font-size:0.73rem;background:rgba(254,194,79,0.15);color:#8a6d1f;border-radius:6px;padding:3px 9px;font-weight:600;white-space:nowrap">${txt}</span>`;
+  const bChip = txt => `<span style="font-size:0.73rem;background:rgba(0,0,0,0.05);color:var(--text-muted);border-radius:6px;padding:3px 9px;white-space:nowrap">${txt}</span>`;
 
-  // Survival / mortality
   const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
-  const mortBlock = `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:var(--text)">${(100 - mortRate).toFixed(1)}%</strong></div>`;
+  const survival = (100 - mortRate).toFixed(1);
 
   return `
-    <div style="background:rgba(254,194,79,0.07);border:1px solid rgba(254,194,79,0.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">
-      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#fec24f;margin-bottom:10px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px">
-        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.total_purchased.toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">purchased to date</div></div>
-        ${weight ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${weight}<span style="font-size:0.78rem"> kg</span></div><div style="font-size:0.7rem;color:var(--text-muted)">average weight</div></div>` : ''}
+    <div style="background:rgba(254,194,79,0.06);border:1px solid rgba(254,194,79,0.22);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+
+      <!-- Header row -->
+      <div style="display:flex;align-items:center;margin-bottom:12px">
+        <span style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#b8860b"><i class="fa-solid fa-cow" style="margin-right:5px"></i>Live Herd Status</span>
+        <span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;background:rgba(34,197,94,0.1);border-radius:100px;padding:2px 9px;font-size:0.67rem;color:#16a34a;font-weight:700">
+          <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block"></span>Live
+        </span>
       </div>
 
-      ${genders.length ? `<div style="margin-bottom:${breeds.length ? '10px' : '0'}"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Gender</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${_esc(g.label)}: <strong>${g.count}</strong> (${Math.round(g.count / totalG * 100)}%)`)).join('')}</div></div>` : ''}
-      ${breeds.length ? `<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Breeds</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 3).map(b => chip(`${_esc(b.label)}: <strong>${Math.round(b.count / (breeds.reduce((a,x)=>a+x.count,0)||1) * 100)}%</strong>`)).join('')}</div></div>` : ''}
-      ${mortBlock}
+      <!-- Compact stat strip: Total · Weight · Survival -->
+      <div style="display:flex;align-items:stretch;border:1px solid rgba(0,0,0,0.07);border-radius:8px;overflow:hidden;margin-bottom:12px">
+        <div style="padding:9px 14px;flex:0 0 auto">
+          <div style="font-size:1.15rem;font-weight:800;color:var(--text);line-height:1.1">${s.total_purchased.toLocaleString('en-ZA')}</div>
+          <div style="font-size:0.67rem;color:var(--text-muted);margin-top:2px">purchased to date</div>
+        </div>
+        ${weight ? `<div style="width:1px;background:rgba(0,0,0,0.07);flex-shrink:0"></div>
+        <div style="padding:9px 14px;flex:0 0 auto">
+          <div style="font-size:1.15rem;font-weight:800;color:var(--text);line-height:1.1">${weight}<span style="font-size:0.78rem;font-weight:600"> kg</span></div>
+          <div style="font-size:0.67rem;color:var(--text-muted);margin-top:2px">average weight</div>
+        </div>` : ''}
+        <div style="flex:1"></div>
+        <div style="padding:9px 14px;border-left:1px solid rgba(0,0,0,0.07);flex-shrink:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-end">
+          <div style="font-size:1rem;font-weight:800;color:#16a34a;line-height:1.1"><i class="fa-solid fa-heart-pulse" style="font-size:0.8rem;margin-right:3px"></i>${survival}%</div>
+          <div style="font-size:0.67rem;color:var(--text-muted);margin-top:2px">survival rate</div>
+        </div>
+      </div>
+
+      <!-- Breakdown grid: Gender | Breeds -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${genders.length ? `<div>
+          <div style="font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:6px">Gender</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">${genders.map(g => gChip(`${_esc(g.label)} <strong>${Math.round(g.count / totalG * 100)}%</strong>`)).join('')}</div>
+        </div>` : ''}
+        ${breeds.length ? `<div>
+          <div style="font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:6px">Breeds</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">${breeds.slice(0, 4).map(b => bChip(`${_esc(b.label)} ${Math.round(b.count / totalB * 100)}%`)).join('')}</div>
+        </div>` : ''}
+      </div>
     </div>`;
 }
 
