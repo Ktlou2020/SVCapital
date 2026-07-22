@@ -27,11 +27,17 @@
   <style>
     #topUpModal.modal-overlay { background: rgba(0,0,0,0.82) !important; }
     #paymentModalBox {
-      background: #303030 !important;
+      background: #0f1117 !important;
       border: 1px solid rgba(255,155,12,0.25) !important;
-      box-shadow: 0 24px 64px rgba(0,0,0,0.55) !important;
-      color: var(--white, #f0f4ff) !important;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.65) !important;
+      color: #f0f4ff !important;
     }
+    #paymentModalBox [style*="background:#1a1d23"],
+    #paymentModalBox [style*="background: #1a1d23"] { background: #0f1117 !important; }
+    #paymentModalBox [style*="background:#141720"],
+    #paymentModalBox [style*="background: #141720"] { background: #0a0d13 !important; }
+    #paymentModalBox [style*="background:#252933"],
+    #paymentModalBox [style*="background: #252933"] { background: #161920 !important; }
     #paymentModalBox * { box-sizing: border-box; }
   </style>
   <!-- Google Analytics 4 -->
@@ -176,9 +182,6 @@
         <button class="topbar-btn" title="Take a tour" onclick="startTour()" id="tourBtn" style="position:relative">
           <i class="fa-solid fa-map"></i>
           <span class="tour-btn-pulse"></span>
-        </button>
-        <button class="topbar-btn dark-mode-toggle" title="Toggle dark mode" onclick="toggleDarkMode()" id="darkModeBtn" aria-label="Toggle dark mode">
-          <i class="fa-solid fa-moon" id="darkModeIcon"></i>
         </button>
         <div style="position:relative">
           <button class="topbar-btn" title="Notifications" onclick="toggleNotifPanel()" id="notifBtn" aria-label="Open notifications">
@@ -722,33 +725,6 @@
             <button class="btn btn--sm" onclick="openInvestNowPicker()" style="white-space:nowrap;background:linear-gradient(135deg,#ff9b0c,#ff5229);color:#fff;border:none;font-weight:700">
               <i class="fa-solid fa-bolt"></i> Invest Now
             </button>
-          </div>
-        </div>
-
-        <!-- How to Invest steps -->
-        <div class="invest-guide-strip mb-16">
-          <div class="igs-step">
-            <div class="igs-num">1</div>
-            <i class="fa-solid fa-wallet igs-icon"></i>
-            <div class="igs-text"><b>Fund Wallet</b><span>Top up via Paystack or EFT</span></div>
-          </div>
-          <i class="fa-solid fa-chevron-right igs-arrow"></i>
-          <div class="igs-step igs-step--active">
-            <div class="igs-num">2</div>
-            <i class="fa-solid fa-layer-group igs-icon"></i>
-            <div class="igs-text"><b>Choose a Pool</b><span>Browse open opportunities below</span></div>
-          </div>
-          <i class="fa-solid fa-chevron-right igs-arrow"></i>
-          <div class="igs-step">
-            <div class="igs-num">3</div>
-            <i class="fa-solid fa-coins igs-icon"></i>
-            <div class="igs-text"><b>Confirm Amount</b><span>Set your investment size</span></div>
-          </div>
-          <i class="fa-solid fa-chevron-right igs-arrow"></i>
-          <div class="igs-step">
-            <div class="igs-num">4</div>
-            <i class="fa-solid fa-chart-line igs-icon"></i>
-            <div class="igs-text"><b>Earn Returns</b><span>Track in My Investments</span></div>
           </div>
         </div>
 
@@ -1344,11 +1320,11 @@
                     <option value="2023">March 2022 – February 2023</option>
                   </select>
                 </div>
-                <div style="display:flex;gap:10px">
-                  <button class="btn btn--success" style="flex:1" onclick="generateTaxCertificate()">
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                  <button class="btn btn--success" style="flex:1;min-width:160px" onclick="generateTaxCertificate()">
                     <i class="fa-solid fa-file-arrow-down"></i> Preview / Print Certificate
                   </button>
-                  <button class="btn btn--secondary" style="flex:1" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(_lastTaxCertHTML),200)">
+                  <button class="btn btn--secondary" style="flex:1;min-width:130px" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(_lastTaxCertHTML),200)">
                     <i class="fa-solid fa-file-pdf"></i> Download PDF
                   </button>
                 </div>
@@ -2991,7 +2967,7 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="js/portal.js?v=23"></script>
+<script src="js/portal.js?v=32"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 // Service worker: web browsers only (not Capacitor). Handles web push notifications.

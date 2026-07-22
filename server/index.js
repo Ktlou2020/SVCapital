@@ -38,7 +38,7 @@ app.use(helmet({
       styleSrc:      ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'cdnjs.cloudflare.com'],
       fontSrc:       ["'self'", 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com'],
       // Narrowed from '*' — external images only allowed from trusted chart/QR sources
-      imgSrc:        ["'self'", 'data:', 'blob:', 'api.qrserver.com', 'chart.googleapis.com'],
+      imgSrc:        ["'self'", 'data:', 'blob:', 'api.qrserver.com', 'chart.googleapis.com', 'img.youtube.com', 'i.ytimg.com'],
       connectSrc:    ["'self'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com', 'api.paystack.co', '*.paystack.co', 'pay.ozow.com'],
       frameSrc:      ["'self'", 'checkout.paystack.com'],
       objectSrc:     ["'none'"],

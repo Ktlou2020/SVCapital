@@ -1679,7 +1679,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadPortalData(_attempt = 0, _opts = {}) {
-  const MAX_ATTEMPTS = 3;
+  const MAX_ATTEMPTS = 4;
   try {
     // allSettled so a single failing endpoint never kills the whole portal load.
     const [invResult, invstResult, txnResult, poolResult, payResult, prodResult] = await Promise.allSettled([
@@ -1861,7 +1861,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
 
     // Network / timeout errors: retry with backoff (handles Railway cold-start)
     if (_attempt < MAX_ATTEMPTS - 1) {
-      const delay = (_attempt + 1) * 3000; // 3 s, 6 s
+      const delay = (_attempt + 1) * 5000; // 5 s, 10 s, 15 s
       console.log(`[portal] Retrying data load in ${delay}ms…`);
       await new Promise(r => setTimeout(r, delay));
       return loadPortalData(_attempt + 1, _opts);
@@ -4280,7 +4280,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
           <!-- Title + blurb -->
           <div style="margin-top:14px">
             <div class="mpc2-title">${_esc(pool.name)}</div>
-            <div class="mpc2-blurb">${_esc(meta.blurb)}</div>
+            <div class="mpc2-blurb">${meta.blurb}</div>
           </div>
         </div>
 
@@ -4412,9 +4412,8 @@ function _cattleHerdStatusHtml(s) {
   return `
     <div style="background:rgba(254,194,79,0.07);border:1px solid rgba(254,194,79,0.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">
       <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#fec24f;margin-bottom:10px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px">
         <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.total_purchased.toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">purchased to date</div></div>
-        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.live_count || 0).toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">currently live</div></div>
         ${weight ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${weight}<span style="font-size:0.78rem"> kg</span></div><div style="font-size:0.7rem;color:var(--text-muted)">average weight</div></div>` : ''}
       </div>
 
@@ -4462,7 +4461,6 @@ function _solarStatusHtml(s) {
         ${s.co2_avoided_kg ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.co2_avoided_kg / 1000).toFixed(1)}<span style="font-size:0.78rem"> t</span></div><div style="font-size:0.7rem;color:var(--text-muted)">CO₂ avoided</div></div>` : ''}
         ${s.device_count ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.device_count}</div><div style="font-size:0.7rem;color:var(--text-muted)">inverter${s.device_count === 1 ? '' : 's'}</div></div>` : ''}
       </div>
-      <div style="font-size:0.68rem;color:var(--text-muted);margin-top:9px">Live data from FoxCloud${s.station_name ? ` · ${_esc(s.station_name)}` : ''}</div>
     </div>`;
 }
 
@@ -7646,32 +7644,11 @@ function shareReferral(method) {
    DARK MODE
    ═══════════════════════════════════════════════════════════════ */
 function initDarkMode() {
-  // Dark mode is disabled on the native app — always force light mode and
-  // clear any previously-saved dark preference.
-  if (window.__SVC_NATIVE__) {
-    _applyDark(false);
-    return;
-  }
-  const saved = localStorage.getItem('svc_dark_mode');
-  if (saved === 'dark') _applyDark(true);
+  document.body.classList.remove('dark-mode');
+  localStorage.removeItem('svc_dark_mode');
 }
-
-function toggleDarkMode() {
-  // No-op on native — dark mode is disabled there.
-  if (window.__SVC_NATIVE__) return;
-  const isDark = document.body.classList.contains('dark-mode');
-  _applyDark(!isDark);
-  SVC.track('svc_dark_mode_toggle', { dark_mode: !isDark });
-}
-
-function _applyDark(on) {
-  document.body.classList.toggle('dark-mode', on);
-  localStorage.setItem('svc_dark_mode', on ? 'dark' : 'light');
-  const icon = document.getElementById('darkModeIcon');
-  if (icon) {
-    icon.className = on ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
-  }
-}
+function toggleDarkMode() {}
+function _applyDark() { document.body.classList.remove('dark-mode'); }
 
 /* ═══════════════════════════════════════════════════════════════
    GUIDED TOUR
@@ -7681,7 +7658,7 @@ const TOUR_STEPS = [
   {
     id: 'welcome',
     type: 'center',
-    icon: 'fa-hand-wave',
+    icon: 'fa-door-open',
     title: 'Welcome to your Investor Portal!',
     body: 'Let us give you a quick tour of everything available to you. It takes about 2 minutes and you\'ll earn <strong>100 XP</strong> when you\'re done.',
   },
@@ -7740,14 +7717,6 @@ const TOUR_STEPS = [
     icon: 'fa-graduation-cap',
     title: 'Learning Hub',
     body: 'Educational modules tailored to your investment level. Complete them to earn XP and become a more confident investor.',
-  },
-  {
-    id: 'nav_referral',
-    target: '[data-view="referral"]',
-    position: 'right',
-    icon: 'fa-share-nodes',
-    title: 'Refer & Earn',
-    body: 'Share your unique referral link. When a friend joins and invests, you both benefit.',
   },
   {
     id: 'complete',

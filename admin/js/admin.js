@@ -2933,7 +2933,7 @@ function _viewProductFactsheet(id) {
 
 function openProductModal() {
   document.getElementById('productModalTitle').textContent = 'New Product';
-  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodRisk','prodIcon','prodColor','prodRiskColor'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodSector','prodRisk','prodIcon','prodColor','prodRiskColor'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('prodActive').value = 'true';
   document.getElementById('prodHomepage').value = 'true';
   document.getElementById('prodRisk').value = 'Medium';   // default risk profile for new products
@@ -2963,6 +2963,7 @@ function editProduct(id) {
   document.getElementById('prodBenchmark').value   = p.benchmark_rate || '';
   document.getElementById('prodPerfFee').value     = p.performance_fee_pct || '';
   document.getElementById('prodPartner').value     = p.partner_name || '';
+  document.getElementById('prodSector').value      = p.sector || '';
   document.getElementById('prodRisk').value        = p.risk_profile || '';
   document.getElementById('prodIcon').value        = p.icon || '';
   document.getElementById('prodColor').value       = p.color || '';
@@ -3035,6 +3036,7 @@ async function saveProduct(btn) {
     benchmark_rate:      num('prodBenchmark'),
     performance_fee_pct: num('prodPerfFee'),
     partner_name:        document.getElementById('prodPartner').value.trim() || null,
+    sector:              document.getElementById('prodSector').value || null,
     risk_profile:        document.getElementById('prodRisk').value.trim() || null,
     icon:                document.getElementById('prodIcon').value.trim() || null,
     color:               document.getElementById('prodColor').value.trim() || null,

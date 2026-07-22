@@ -1523,14 +1523,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (avEl && firstName) avEl.textContent = ((firstName[0] || '') + (lastName[0] || '')).toUpperCase() || '?';
   } catch (_) {}
 
-  // Try to render from cache immediately — hides cover instantly on repeat launches
+  // Try to render from cache immediately — hides cover instantly on repeat launches.
+  // No TTL: always show cached data right away; the background refresh below keeps it fresh.
   let _cacheRendered = false;
-  const _CACHE_TTL = 10 * 60 * 1000; // 10 minutes
   try {
     const raw = localStorage.getItem('svc_portal_cache');
     if (raw) {
       const c = JSON.parse(raw);
-      if (c && c.cachedAt && (Date.now() - c.cachedAt) < _CACHE_TTL) {
+      if (c && c.cachedAt) {
         PORTAL.investor     = c.investor     || null;
         PORTAL.investments  = c.investments  || [];
         PORTAL.transactions = c.transactions || [];
@@ -1547,19 +1547,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Silently refresh data in the background — don't block UI or re-render charts
     loadPortalData(0, { skipCharts: true }).catch(() => {});
   } else {
-    // First load or expired cache — show progressive status text during cold-start waits
+    // No cache at all (first visit) — wait for fresh data with progressive status text
     const _coverText = document.getElementById('_nativeCoverText');
     const _t1 = _coverText ? setTimeout(() => {
       if (_coverText.textContent.includes('Loading')) _coverText.textContent = 'Server waking up, please wait…';
     }, 4000) : null;
     const _t2 = _coverText ? setTimeout(() => {
       if (_coverText.textContent.includes('waking')) _coverText.textContent = 'Almost there…';
-    }, 9000) : null;
+    }, 12000) : null;
 
     await loadPortalData();
     if (_t1) clearTimeout(_t1);
     if (_t2) clearTimeout(_t2);
-    // Reveal content — remove the native loading cover now that data is ready
     if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
   }
 
@@ -1609,7 +1608,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadPortalData(_attempt = 0, _opts = {}) {
-  const MAX_ATTEMPTS = 3;
+  const MAX_ATTEMPTS = 4;
   try {
     // allSettled so a single failing endpoint (e.g. a new table not yet migrated)
     // never kills the whole portal load — each result is independently unpacked.
@@ -1752,7 +1751,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
 
     // Network / timeout errors: retry with backoff (handles Railway cold-start)
     if (_attempt < MAX_ATTEMPTS - 1) {
-      const delay = (_attempt + 1) * 3000; // 3 s, 6 s
+      const delay = (_attempt + 1) * 5000; // 5 s, 10 s, 15 s
       console.log(`[portal] Retrying data load in ${delay}ms…`);
       await new Promise(r => setTimeout(r, delay));
       return loadPortalData(_attempt + 1);
@@ -2034,6 +2033,7 @@ function dismissOnboarding() {
 
 function renderOverviewInvestments() {
   const body = document.getElementById('overviewInvestmentsBody');
+  if (!body) return;
   const active = PORTAL.investments.filter(i => i.status === 'active');
 
   if (!active.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No active investments. <a href="#" onclick="navigate(\'marketplace\', null)" style="color:var(--gold)">Browse pools →</a></td></tr>'; return; }
@@ -2062,6 +2062,7 @@ function renderOverviewInvestments() {
 
 function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
+  if (!body) return;
   const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0)).slice(0, 5);
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
 
@@ -3982,7 +3983,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
           <!-- Title + blurb -->
           <div style="margin-top:14px">
             <div class="mpc2-title">${_esc(pool.name)}</div>
-            <div class="mpc2-blurb">${_esc(meta.blurb)}</div>
+            <div class="mpc2-blurb">${meta.blurb}</div>
           </div>
         </div>
 
@@ -4100,31 +4101,58 @@ function _cattleHerdStatusCompactHtml(s) {
 
 function _cattleHerdStatusHtml(s) {
   if (!s || !s.total_purchased) return '';
-  const weight   = s.avg_current_weight || s.avg_entry_weight;
-  const genders  = (s.by_gender || []).filter(g => g.count > 0 && (g.label || '').toLowerCase() !== 'unspecified');
-  const breeds   = (s.by_breed  || []).filter(b => b.count > 0 && (b.label || '').toLowerCase() !== 'unspecified');
-  const totalG   = genders.reduce((a, g) => a + g.count, 0) || 1;
-  const chip = txt => `<span style="font-size:0.76rem;background:rgba(254,194,79,0.14);color:#8a6d1f;border-radius:20px;padding:3px 11px">${txt}</span>`;
+  const weight  = s.avg_current_weight || s.avg_entry_weight;
+  const genders = (s.by_gender || []).filter(g => g.count > 0 && (g.label || '').toLowerCase() !== 'unspecified');
+  const breeds  = (s.by_breed  || []).filter(b => b.count > 0 && (b.label || '').toLowerCase() !== 'unspecified');
+  const totalG  = genders.reduce((a, g) => a + g.count, 0) || 1;
+  const totalB  = breeds.reduce((a, b) => a + b.count, 0) || 1;
 
+  const gChip = txt => `<span style="font-size:0.73rem;background:rgba(254,194,79,0.15);color:#8a6d1f;border-radius:6px;padding:3px 9px;font-weight:600;white-space:nowrap">${txt}</span>`;
+  const bChip = txt => `<span style="font-size:0.73rem;background:rgba(0,0,0,0.05);color:var(--text-muted);border-radius:6px;padding:3px 9px;white-space:nowrap">${txt}</span>`;
 
-  // Survival / mortality
   const mortRate = s.total_purchased ? (s.mortality_count || 0) / s.total_purchased * 100 : 0;
-  const mortBlock = `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:var(--text)">${(100 - mortRate).toFixed(1)}%</strong></div>`;
+  const survival = (100 - mortRate).toFixed(1);
 
   return `
-    <div style="background:rgba(254,194,79,0.07);border:1px solid rgba(254,194,79,0.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">
-      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#fec24f;margin-bottom:10px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
-        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.total_purchased.toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">purchased to date</div></div>
-        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.live_count || 0).toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">currently live</div></div>
-        ${weight ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${weight}<span style="font-size:0.78rem"> kg</span></div><div style="font-size:0.7rem;color:var(--text-muted)">average weight</div></div>` : ''}
+    <div style="background:rgba(254,194,79,0.06);border:1px solid rgba(254,194,79,0.22);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+
+      <!-- Header row -->
+      <div style="display:flex;align-items:center;margin-bottom:12px">
+        <span style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#b8860b"><i class="fa-solid fa-cow" style="margin-right:5px"></i>Live Herd Status</span>
+        <span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;background:rgba(34,197,94,0.1);border-radius:100px;padding:2px 9px;font-size:0.67rem;color:#16a34a;font-weight:700">
+          <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block"></span>Live
+        </span>
       </div>
 
-      ${genders.length ? `<div style="margin-bottom:${breeds.length ? '10px' : '0'}"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Gender</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${genders.map(g => chip(`${_esc(g.label)}: <strong>${g.count}</strong> (${Math.round(g.count / totalG * 100)}%)`)).join('')}</div></div>` : ''}
-      ${breeds.length ? `<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:5px">Breeds</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${breeds.slice(0, 3).map(b => chip(`${_esc(b.label)}: <strong>${Math.round(b.count / (breeds.reduce((a,x)=>a+x.count,0)||1) * 100)}%</strong>`)).join('')}</div></div>` : ''}
-      ${mortBlock}
+      <!-- Compact stat strip: Total · Weight · Survival -->
+      <div style="display:flex;align-items:stretch;border:1px solid rgba(0,0,0,0.07);border-radius:8px;overflow:hidden;margin-bottom:12px">
+        <div style="padding:9px 14px;flex:0 0 auto">
+          <div style="font-size:1.15rem;font-weight:800;color:var(--text);line-height:1.1">${s.total_purchased.toLocaleString('en-ZA')}</div>
+          <div style="font-size:0.67rem;color:var(--text-muted);margin-top:2px">purchased to date</div>
+        </div>
+        ${weight ? `<div style="width:1px;background:rgba(0,0,0,0.07);flex-shrink:0"></div>
+        <div style="padding:9px 14px;flex:0 0 auto">
+          <div style="font-size:1.15rem;font-weight:800;color:var(--text);line-height:1.1">${weight}<span style="font-size:0.78rem;font-weight:600"> kg</span></div>
+          <div style="font-size:0.67rem;color:var(--text-muted);margin-top:2px">average weight</div>
+        </div>` : ''}
+        <div style="flex:1"></div>
+        <div style="padding:9px 14px;border-left:1px solid rgba(0,0,0,0.07);flex-shrink:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-end">
+          <div style="font-size:1rem;font-weight:800;color:#16a34a;line-height:1.1"><i class="fa-solid fa-heart-pulse" style="font-size:0.8rem;margin-right:3px"></i>${survival}%</div>
+          <div style="font-size:0.67rem;color:var(--text-muted);margin-top:2px">survival rate</div>
+        </div>
+      </div>
+
+      <!-- Breakdown grid: Gender | Breeds -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${genders.length ? `<div>
+          <div style="font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:6px">Gender</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">${genders.map(g => gChip(`${_esc(g.label)} <strong>${Math.round(g.count / totalG * 100)}%</strong>`)).join('')}</div>
+        </div>` : ''}
+        ${breeds.length ? `<div>
+          <div style="font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:6px">Breeds</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">${breeds.slice(0, 4).map(b => bChip(`${_esc(b.label)} ${Math.round(b.count / totalB * 100)}%`)).join('')}</div>
+        </div>` : ''}
+      </div>
     </div>`;
 }
 
@@ -4164,7 +4192,6 @@ function _solarStatusHtml(s) {
         ${s.co2_avoided_kg ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.co2_avoided_kg / 1000).toFixed(1)}<span style="font-size:0.78rem"> t</span></div><div style="font-size:0.7rem;color:var(--text-muted)">CO₂ avoided</div></div>` : ''}
         ${s.device_count ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.device_count}</div><div style="font-size:0.7rem;color:var(--text-muted)">inverter${s.device_count === 1 ? '' : 's'}</div></div>` : ''}
       </div>
-      <div style="font-size:0.68rem;color:var(--text-muted);margin-top:9px">Live data from FoxCloud${s.station_name ? ` · ${_esc(s.station_name)}` : ''}</div>
     </div>`;
 }
 
@@ -7371,32 +7398,11 @@ function shareReferral(method) {
    DARK MODE
    ═══════════════════════════════════════════════════════════════ */
 function initDarkMode() {
-  // Dark mode is disabled on the native app — always force light mode and
-  // clear any previously-saved dark preference.
-  if (window.__SVC_NATIVE__) {
-    _applyDark(false);
-    return;
-  }
-  const saved = localStorage.getItem('svc_dark_mode');
-  if (saved === 'dark') _applyDark(true);
+  document.body.classList.remove('dark-mode');
+  localStorage.removeItem('svc_dark_mode');
 }
-
-function toggleDarkMode() {
-  // No-op on native — dark mode is disabled there.
-  if (window.__SVC_NATIVE__) return;
-  const isDark = document.body.classList.contains('dark-mode');
-  _applyDark(!isDark);
-  SVC.track('svc_dark_mode_toggle', { dark_mode: !isDark });
-}
-
-function _applyDark(on) {
-  document.body.classList.toggle('dark-mode', on);
-  localStorage.setItem('svc_dark_mode', on ? 'dark' : 'light');
-  const icon = document.getElementById('darkModeIcon');
-  if (icon) {
-    icon.className = on ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
-  }
-}
+function toggleDarkMode() {}
+function _applyDark() { document.body.classList.remove('dark-mode'); }
 
 /* ═══════════════════════════════════════════════════════════════
    GUIDED TOUR
@@ -7406,7 +7412,7 @@ const TOUR_STEPS = [
   {
     id: 'welcome',
     type: 'center',
-    icon: 'fa-hand-wave',
+    icon: 'fa-door-open',
     title: 'Welcome to your Investor Portal!',
     body: 'Let us give you a quick tour of everything available to you. It takes about 2 minutes and you\'ll earn <strong>100 XP</strong> when you\'re done.',
   },
@@ -7465,14 +7471,6 @@ const TOUR_STEPS = [
     icon: 'fa-graduation-cap',
     title: 'Learning Hub',
     body: 'Educational modules tailored to your investment level. Complete them to earn XP and become a more confident investor.',
-  },
-  {
-    id: 'nav_referral',
-    target: '[data-view="referral"]',
-    position: 'right',
-    icon: 'fa-share-nodes',
-    title: 'Refer & Earn',
-    body: 'Share your unique referral link. When a friend joins and invests, you both benefit.',
   },
   {
     id: 'complete',
@@ -11948,10 +11946,18 @@ function _renderAnalyticsKPIs() {
     ? done.reduce((s, i) => {
         const start = new Date(i.start_date || i.created_at);
         const end   = new Date(i.end_date || i.maturity_date || i.updated_at);
-        return s + (isNaN(start) || isNaN(end) ? (i.term_days || 0) : Math.max(0, (end - start) / 86400000));
+        const actual = isNaN(start) || isNaN(end) ? 0 : Math.max(0, (end - start) / 86400000);
+        const expected = (parseFloat(i.term_months) || 0) * 30;
+        return s + Math.max(actual, expected, 30);
       }, 0) / done.length
     : 0;
-  const irr = moic > 0 && avgDays > 0 ? (Math.pow(moic, 365 / avgDays) - 1) : 0;
+  // Weighted-average annual rate across all investments (contracted rate × amount)
+  const totalAmt = all.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const weightedRate = totalAmt > 0
+    ? all.reduce((s, i) => s + (parseFloat(i.annual_rate || i.expected_return_rate || 0)) * (parseFloat(i.amount) || 0), 0) / totalAmt
+    : 0;
+  const irr = weightedRate > 0 ? weightedRate
+    : (moic > 0 && avgDays > 0 ? (Math.pow(moic, 365 / avgDays) - 1) : 0);
 
   const byPool = {};
   done.forEach(i => {
@@ -11968,7 +11974,7 @@ function _renderAnalyticsKPIs() {
 
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   set('an-moic',    moic > 0 ? moic.toFixed(3) + 'x' : '—');
-  set('an-irr',     irr > 0 ? (irr * 100).toFixed(1) + '% p.a.' : '—');
+  set('an-irr',     irr > 0 ? Math.min(irr * 100, 9999).toFixed(2) + '% p.a.' : '—');
   set('an-best',    bestPool !== '—' ? bestPool : (all.length ? (all[0].pool_name || '—') : '—'));
   set('an-avgdays', avgDays > 0 ? Math.round(avgDays) + ' d' : '—');
 }

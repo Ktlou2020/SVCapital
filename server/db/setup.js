@@ -312,6 +312,7 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investments ADD COLUMN pool_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN payout_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN maturity_alert_sent_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investments ADD COLUMN maturity_3day_alert_sent_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Investor bank detail columns for wallet withdrawals
   BEGIN ALTER TABLE investors ADD COLUMN bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN bank_account_holder TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;

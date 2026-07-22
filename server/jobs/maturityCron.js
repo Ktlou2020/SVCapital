@@ -323,12 +323,14 @@ async function reinvestAmount(client, inv, amount, productType, sourcePoolName) 
 }
 
 /* ────────────────────────────────────────────────────────────
-   Advance maturity alerts (30-day / 7-day). Unchanged behaviour.
+   Advance maturity alerts (30-day / 7-day / 3-day).
    ──────────────────────────────────────────────────────────── */
 async function runMaturityAlerts() {
   console.log('[maturity] running maturity alert scan…');
   try {
     const now = new Date();
+
+    // ── 30-day and 7-day alerts ─────────────────────────────
     const { rows: investments } = await pool.query(`
       SELECT i.*, inv.email, inv.first_name
       FROM investments i
@@ -355,14 +357,87 @@ async function runMaturityAlerts() {
       await pool.query('UPDATE investments SET maturity_alert_sent_at = NOW() WHERE id = $1', [inv.id]);
       sent++;
     }
+
+    // ── 3-day alerts (separate tracking column) ─────────────
+    const { rows: threeDayInvs } = await pool.query(`
+      SELECT i.*, inv.email, inv.first_name
+      FROM investments i
+      JOIN investors inv ON inv.id = i.investor_id
+      WHERE i.status = 'active'
+        AND i.end_date IS NOT NULL
+        AND i.end_date > NOW()
+        AND i.end_date <= NOW() + INTERVAL '4 days'
+        AND i.maturity_3day_alert_sent_at IS NULL
+    `);
+
+    for (const inv of threeDayInvs) {
+      const daysLeft = Math.ceil((new Date(inv.end_date) - now) / 86400000);
+      if (daysLeft < 2 || daysLeft > 4) continue;
+
+      await emailService.sendMaturity3DayAlert(
+        { email: inv.email, first_name: inv.first_name, id: inv.investor_id },
+        { poolName: inv.pool_name || inv.pool_id || 'your investment',
+          amount: inv.amount, expectedReturn: inv.expected_return || 0,
+          endDate: inv.end_date }
+      );
+      await pool.query(
+        'UPDATE investments SET maturity_3day_alert_sent_at = NOW() WHERE id = $1',
+        [inv.id]
+      );
+      sent++;
+    }
+
     console.log(`[maturity] done — ${sent} alert(s) sent`);
   } catch (err) {
     console.error('[maturity] alert error:', err.message);
   }
 }
 
+/* ────────────────────────────────────────────────────────────
+   Monthly maturity reminder — runs on the 1st of each month.
+   Sends each investor a summary of investments maturing in the
+   next 30 days so they can prepare their maturity instructions.
+   ──────────────────────────────────────────────────────────── */
+async function runMonthlyMaturityReminder() {
+  console.log('[maturity] running monthly maturity reminder…');
+  try {
+    const { rows } = await pool.query(`
+      SELECT i.*, inv.email, inv.first_name, inv.id AS investor_id_col
+      FROM investments i
+      JOIN investors inv ON inv.id = i.investor_id
+      WHERE i.status = 'active'
+        AND i.end_date IS NOT NULL
+        AND i.end_date > NOW()
+        AND i.end_date <= NOW() + INTERVAL '31 days'
+      ORDER BY i.investor_id, i.end_date
+    `);
+
+    // Group by investor
+    const byInvestor = {};
+    for (const row of rows) {
+      const key = row.investor_id;
+      if (!byInvestor[key]) {
+        byInvestor[key] = {
+          investor: { email: row.email, first_name: row.first_name, id: key },
+          investments: [],
+        };
+      }
+      byInvestor[key].investments.push(row);
+    }
+
+    let sent = 0;
+    for (const { investor, investments } of Object.values(byInvestor)) {
+      await emailService.sendMonthlyMaturitySummary(investor, investments);
+      sent++;
+    }
+    console.log(`[maturity] monthly reminder done — ${sent} investor(s) notified`);
+  } catch (err) {
+    console.error('[maturity] monthly reminder error:', err.message);
+  }
+}
+
 function startMaturityCron() {
-  // 23:00 SAST — mature investments/pools + execute payout instructions.
+  // 23:00 SAST daily — maturity processing + 30-day / 7-day / 3-day alerts.
   cron.schedule('0 23 * * *', async () => {
     try {
       await runMaturityProcessing();
@@ -372,6 +447,21 @@ function startMaturityCron() {
     }
   }, { timezone: 'Africa/Johannesburg' });
   console.log('[maturity] scheduled: daily at 23:00 SAST — maturity processing + alerts');
+
+  // 08:00 SAST on the 1st of each month — monthly maturity summary to investors.
+  cron.schedule('0 8 1 * *', async () => {
+    try {
+      await runMonthlyMaturityReminder();
+    } catch (err) {
+      console.error('[maturity] monthly reminder cron error:', err.message);
+    }
+  }, { timezone: 'Africa/Johannesburg' });
+  console.log('[maturity] scheduled: 1st of month at 08:00 SAST — monthly maturity reminder');
 }
 
-module.exports = { startMaturityCron, runMaturityProcessing, runMaturityAlerts };
+module.exports = {
+  startMaturityCron,
+  runMaturityProcessing,
+  runMaturityAlerts,
+  runMonthlyMaturityReminder,
+};
