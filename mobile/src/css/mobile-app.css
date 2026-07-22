@@ -173,12 +173,9 @@ input, textarea, [contenteditable] {
   display: none !important;
 }
 
-/* Full-width sidebar drawer — covers full screen from top so logo is visible */
+/* Sidebar drawer — slides in from top of screen so logo is visible */
 .sidebar {
-  width: 100vw !important;
-  max-width: 100vw !important;
   top: 0 !important;
-  border-right: none !important;
   padding-top: 0 !important;
   padding-bottom: env(safe-area-inset-bottom, 0px) !important;
 }
