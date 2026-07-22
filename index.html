@@ -26,8 +26,8 @@
   <script defer src="https://cdn.jsdelivr.net/npm/countup.js@2.8.0/dist/countUp.umd.js"></script>
 
   <link rel="stylesheet" href="css/style.css?v=11" />
-  <link rel="stylesheet" href="css/home-ci.css" />
-  <link rel="stylesheet" href="css/premium.css" />
+  <link rel="stylesheet" href="css/home-ci.css?v=2" />
+  <link rel="stylesheet" href="css/premium.css?v=3" />
   <!-- Google Analytics 4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
   <script>
@@ -376,14 +376,12 @@
       </div>
 
       <div class="product-risk-filter" data-reveal="up">
-        <div class="prf-left">
-          <span class="prf-label">Risk</span>
-          <div class="prf-pills">
-            <button class="prf-pill active" data-risk="all" onclick="filterProductsByRisk('all', this)">All</button>
-            <button class="prf-pill" data-risk="conservative" onclick="filterProductsByRisk('conservative', this)">Low</button>
-            <button class="prf-pill" data-risk="moderate" onclick="filterProductsByRisk('moderate', this)">Medium</button>
-            <button class="prf-pill" data-risk="aggressive" onclick="filterProductsByRisk('aggressive', this)">High</button>
-          </div>
+        <span class="prf-label">Risk</span>
+        <div class="prf-pills">
+          <button class="prf-pill active" data-risk="all" onclick="filterProductsByRisk('all', this)">All</button>
+          <button class="prf-pill" data-risk="conservative" onclick="filterProductsByRisk('conservative', this)">Low</button>
+          <button class="prf-pill" data-risk="moderate" onclick="filterProductsByRisk('moderate', this)">Medium</button>
+          <button class="prf-pill" data-risk="aggressive" onclick="filterProductsByRisk('aggressive', this)">High</button>
         </div>
         <div class="prf-actions">
           <a href="#calculator" class="btn btn--sm btn--outline-dark">
@@ -393,8 +391,8 @@
             <i class="fa-solid fa-bolt"></i> Invest Now
           </a>
         </div>
-        <div class="prf-empty" id="prfEmpty" style="display:none">No products in this risk band right now.</div>
       </div>
+      <div class="prf-empty" id="prfEmpty" style="display:none">No products in this risk band right now.</div>
 
       <div class="products-grid">
 

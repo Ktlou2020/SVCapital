@@ -766,23 +766,21 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 20px;
+  justify-content: space-between;
+  gap: 16px;
   margin: 0 0 40px;
 }
-.prf-left {
-  display: flex;
+.product-risk-filter .prf-pills {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-  flex: 1 1 auto;
-  min-width: 0;
   flex-wrap: wrap;
+  gap: 8px;
 }
 .prf-actions {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 0 0 auto;
-  margin-left: auto;
+  flex-shrink: 0;
 }
 .product-risk-filter .prf-label {
   font-size: 0.72rem;
@@ -791,11 +789,7 @@ body {
   letter-spacing: 0.14em;
   color: var(--gold, #fec24f);
   white-space: nowrap;
-}
-.product-risk-filter .prf-pills {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-shrink: 0;
 }
 .product-risk-filter .prf-pill {
   border: 1.5px solid rgba(255,255,255,0.18);
