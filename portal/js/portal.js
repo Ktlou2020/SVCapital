@@ -1514,13 +1514,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     const firstName = cached.firstName || cached.first_name || cached.name?.split(' ')[0] || '';
     const lastName  = cached.lastName  || cached.last_name  || cached.name?.split(' ').slice(1).join(' ') || '';
     const nameEl = document.getElementById('welcomeName');
-    if (nameEl && firstName) nameEl.textContent = `${firstName} ${lastName}`.trim();
+    // Always replace "Loading..." — use cached name if available, otherwise a neutral dash
+    if (nameEl) nameEl.textContent = firstName ? `${firstName} ${lastName}`.trim() : '—';
     const greetEl = document.getElementById('topbarGreeting');
-    if (greetEl && firstName) greetEl.textContent = `${_timeGreeting()}, ${firstName} 👋`;
+    if (greetEl) greetEl.textContent = firstName ? `${_timeGreeting()}, ${firstName} 👋` : _timeGreeting();
     const greetEl2 = document.getElementById('welcomeGreeting');
     if (greetEl2) greetEl2.textContent = _timeGreeting();
     const avEl = document.getElementById('welcomeAvatar');
     if (avEl && firstName) avEl.textContent = ((firstName[0] || '') + (lastName[0] || '')).toUpperCase() || '?';
+  } catch (_) {}
+  // Always clear "Loading..." from data tables immediately — render a spinner row instead
+  try {
+    const _spinRow = (cols) => `<tr><td colspan="${cols}" style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Loading…</td></tr>`;
+    const ib = document.getElementById('overviewInvestmentsBody');
+    const tb = document.getElementById('overviewTxnBody');
+    if (ib) ib.innerHTML = _spinRow(6);
+    if (tb) tb.innerHTML = _spinRow(4);
   } catch (_) {}
 
   // Try to render from cache immediately — hides cover instantly on repeat launches.
@@ -1547,18 +1556,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Silently refresh data in the background — don't block UI or re-render charts
     loadPortalData(0, { skipCharts: true }).catch(() => {});
   } else {
-    // No cache at all (first visit) — wait for fresh data with progressive status text
+    // No cache (first visit) — show progressive status while Railway may be cold-starting
+    const _statusRow = (cols, msg) => `<tr><td colspan="${cols}" style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem">${msg}</td></tr>`;
+    const _updateStatus = (msg) => {
+      const ib = document.getElementById('overviewInvestmentsBody');
+      const tb = document.getElementById('overviewTxnBody');
+      if (ib) ib.innerHTML = _statusRow(6, msg);
+      if (tb) tb.innerHTML = _statusRow(4, msg);
+    };
     const _coverText = document.getElementById('_nativeCoverText');
-    const _t1 = _coverText ? setTimeout(() => {
-      if (_coverText.textContent.includes('Loading')) _coverText.textContent = 'Server waking up, please wait…';
-    }, 4000) : null;
-    const _t2 = _coverText ? setTimeout(() => {
-      if (_coverText.textContent.includes('waking')) _coverText.textContent = 'Almost there…';
-    }, 12000) : null;
+    const _t1 = setTimeout(() => {
+      const wake = '<i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Server is waking up — this can take up to 30 seconds…';
+      _updateStatus(wake);
+      if (_coverText) _coverText.textContent = 'Server waking up, please wait…';
+    }, 5000);
+    const _t2 = setTimeout(() => {
+      const almost = '<i class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Almost there…';
+      _updateStatus(almost);
+      if (_coverText) _coverText.textContent = 'Almost there…';
+    }, 20000);
 
     await loadPortalData();
-    if (_t1) clearTimeout(_t1);
-    if (_t2) clearTimeout(_t2);
+    clearTimeout(_t1);
+    clearTimeout(_t2);
     if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
   }
 
@@ -1757,11 +1777,16 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
       return loadPortalData(_attempt + 1);
     }
 
-    // All attempts exhausted — ensure investor stub exists so renderOverview clears "Loading..."
+    // All attempts exhausted — clear any stale "Loading..." and show an actionable error
     if (!PORTAL.investor) PORTAL.investor = { id: DEMO_INVESTOR_ID };
     try { renderOverview(); } catch (_) {}
+    const _retryRow = (cols) => `<tr><td colspan="${cols}" style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b;margin-right:6px"></i>Could not reach server. <a href="#" onclick="location.reload()" style="color:var(--gold);text-decoration:none;font-weight:600">Tap to retry →</a></td></tr>`;
+    const _ib = document.getElementById('overviewInvestmentsBody');
+    const _tb = document.getElementById('overviewTxnBody');
+    if (_ib && (!PORTAL.investments.length || _ib.textContent.includes('Loading'))) _ib.innerHTML = _retryRow(6);
+    if (_tb && (!PORTAL.transactions.length || _tb.textContent.includes('Loading'))) _tb.innerHTML = _retryRow(4);
     if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
-    Toast.error('Could not connect to server — pull down to refresh');
+    Toast.error('Could not connect to server — tap "Tap to retry" to reload');
   }
 }
 
