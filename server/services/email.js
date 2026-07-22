@@ -232,6 +232,87 @@ function sendMaturityAlert(investor, { poolName, amount, expectedReturn, endDate
   });
 }
 
+/* ── 4b. 3-day maturity reminder ────────────────────────── */
+function sendMaturity3DayAlert(investor, { poolName, amount, expectedReturn, endDate }) {
+  const { email, first_name, id } = investor;
+  if (id) setImmediate(() => push.sendPushToInvestor(id, {
+    title: 'Investment Matures in 3 Days ⚠️',
+    body: `${poolName} matures on ${_date(endDate)}. Submit your maturity instruction now to avoid delays.`,
+    url: `${BASE_URL}/portal/`,
+  }).catch(() => {}));
+  return _send({
+    to: email,
+    subject: `Urgent: ${poolName} matures in 3 days — action required`,
+    html: _wrap(`
+      <h2>3-Day Maturity Reminder ⚠️</h2>
+      <p>Hi ${first_name}, this is a final reminder that your investment in <strong>${poolName}</strong>
+         matures in <strong class="gold">3 days</strong> on <strong>${_date(endDate)}</strong>.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Pool</span><span class="val">${poolName}</span></div>
+        <div class="row"><span class="lbl">Principal</span><span class="val">${_fmt(amount)}</span></div>
+        <div class="row"><span class="lbl">Target Return</span><span class="val green">${_fmt(expectedReturn)}</span></div>
+        <div class="row"><span class="lbl">Maturity Date</span><span class="val gold">${_date(endDate)}</span></div>
+      </div>
+      <p>If you haven't already, please log in and submit your <strong>maturity instruction</strong>
+         (reinvest or pay out) before the maturity date to ensure your funds are processed without delay.</p>
+      <a href="${BASE_URL}/portal/" class="btn">Submit Instruction Now →</a>
+    `),
+    text: `Hi ${first_name}, final reminder: your ${poolName} investment matures in 3 days on ${_date(endDate)}. Log in to submit your maturity instruction: ${BASE_URL}/portal/`,
+  });
+}
+
+/* ── 4c. Monthly maturity summary (1st of month) ─────────── */
+function sendMonthlyMaturitySummary(investor, investments) {
+  const { email, first_name, id } = investor;
+  const rows = investments.map(inv => `
+    <div class="row">
+      <span class="lbl">${inv.pool_name || inv.pool_id}</span>
+      <span class="val gold">${_date(inv.end_date)}</span>
+    </div>
+    <div class="row">
+      <span class="lbl" style="padding-left:16px;font-size:0.82em">Principal</span>
+      <span class="val">${_fmt(inv.amount)}</span>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <span class="lbl" style="padding-left:16px;font-size:0.82em">Target Return</span>
+      <span class="val green">${_fmt(inv.expected_return || 0)}</span>
+    </div>`).join('');
+
+  const count = investments.length;
+  const totalPrincipal = investments.reduce((s, i) => s + parseFloat(i.amount || 0), 0);
+  const totalReturn    = investments.reduce((s, i) => s + parseFloat(i.expected_return || 0), 0);
+
+  if (id) setImmediate(() => push.sendPushToInvestor(id, {
+    title: 'Monthly Investment Update 📋',
+    body: `You have ${count} investment${count === 1 ? '' : 's'} maturing this month. Log in to review.`,
+    url: `${BASE_URL}/portal/`,
+  }).catch(() => {}));
+
+  return _send({
+    to: email,
+    subject: `Your SV Capital monthly update — ${count} investment${count === 1 ? '' : 's'} maturing`,
+    html: _wrap(`
+      <h2>Monthly Investment Update 📋</h2>
+      <p>Hi ${first_name}, here is a summary of your investments maturing over the next 30 days.</p>
+      <div class="box">
+        ${rows}
+        <div class="row" style="border-top:1px solid rgba(0,0,0,0.1);margin-top:10px;padding-top:10px">
+          <span class="lbl"><strong>Total Principal</strong></span>
+          <span class="val"><strong>${_fmt(totalPrincipal)}</strong></span>
+        </div>
+        <div class="row">
+          <span class="lbl"><strong>Total Target Return</strong></span>
+          <span class="val green"><strong>${_fmt(totalReturn)}</strong></span>
+        </div>
+      </div>
+      <p>Please ensure you have submitted a <strong>maturity instruction</strong> for each investment
+         before its maturity date to avoid any delays in processing.</p>
+      <a href="${BASE_URL}/portal/" class="btn">Review My Investments →</a>
+    `),
+    text: `Hi ${first_name}, you have ${count} investment${count === 1 ? '' : 's'} maturing in the next 30 days. Total principal: ${_fmt(totalPrincipal)}. Log in to review: ${BASE_URL}/portal/`,
+  });
+}
+
 /* ── 5. Investment matured / paid out ────────────────────── */
 function sendInvestmentMatured(investor, { poolName, amount, actualReturn }) {
   const { email, first_name } = investor;
@@ -900,6 +981,8 @@ module.exports = {
   sendDepositConfirmed,
   sendInvestmentCreated,
   sendMaturityAlert,
+  sendMaturity3DayAlert,
+  sendMonthlyMaturitySummary,
   sendInvestmentMatured,
   sendTicketResponse,
   sendTicketAssigned,
