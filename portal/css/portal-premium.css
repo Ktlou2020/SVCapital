@@ -869,7 +869,7 @@
   display: flex;
   align-items: center;
   gap: 24px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: linear-gradient(135deg, #111317 0%, #1a1d23 100%);
   border-radius: 18px;
   padding: 24px 28px;
   margin-bottom: 20px;
@@ -3307,7 +3307,7 @@ body.dark-mode .rewards-stat__label { color: #6b7280 !important; }
   gap: 16px;
   margin-bottom: 24px;
   padding: 22px 22px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: linear-gradient(135deg, #111317 0%, #1a1d23 100%);
   border-radius: 20px;
   color: #fff;
   position: relative;
