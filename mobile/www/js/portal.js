@@ -1679,7 +1679,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadPortalData(_attempt = 0, _opts = {}) {
-  const MAX_ATTEMPTS = 3;
+  const MAX_ATTEMPTS = 4;
   try {
     // allSettled so a single failing endpoint never kills the whole portal load.
     const [invResult, invstResult, txnResult, poolResult, payResult, prodResult] = await Promise.allSettled([
@@ -1861,7 +1861,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
 
     // Network / timeout errors: retry with backoff (handles Railway cold-start)
     if (_attempt < MAX_ATTEMPTS - 1) {
-      const delay = (_attempt + 1) * 3000; // 3 s, 6 s
+      const delay = (_attempt + 1) * 5000; // 5 s, 10 s, 15 s
       console.log(`[portal] Retrying data load in ${delay}ms…`);
       await new Promise(r => setTimeout(r, delay));
       return loadPortalData(_attempt + 1, _opts);

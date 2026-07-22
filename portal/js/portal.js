@@ -1523,14 +1523,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (avEl && firstName) avEl.textContent = ((firstName[0] || '') + (lastName[0] || '')).toUpperCase() || '?';
   } catch (_) {}
 
-  // Try to render from cache immediately — hides cover instantly on repeat launches
+  // Try to render from cache immediately — hides cover instantly on repeat launches.
+  // No TTL: always show cached data right away; the background refresh below keeps it fresh.
   let _cacheRendered = false;
-  const _CACHE_TTL = 10 * 60 * 1000; // 10 minutes
   try {
     const raw = localStorage.getItem('svc_portal_cache');
     if (raw) {
       const c = JSON.parse(raw);
-      if (c && c.cachedAt && (Date.now() - c.cachedAt) < _CACHE_TTL) {
+      if (c && c.cachedAt) {
         PORTAL.investor     = c.investor     || null;
         PORTAL.investments  = c.investments  || [];
         PORTAL.transactions = c.transactions || [];
@@ -1547,19 +1547,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Silently refresh data in the background — don't block UI or re-render charts
     loadPortalData(0, { skipCharts: true }).catch(() => {});
   } else {
-    // First load or expired cache — show progressive status text during cold-start waits
+    // No cache at all (first visit) — wait for fresh data with progressive status text
     const _coverText = document.getElementById('_nativeCoverText');
     const _t1 = _coverText ? setTimeout(() => {
       if (_coverText.textContent.includes('Loading')) _coverText.textContent = 'Server waking up, please wait…';
     }, 4000) : null;
     const _t2 = _coverText ? setTimeout(() => {
       if (_coverText.textContent.includes('waking')) _coverText.textContent = 'Almost there…';
-    }, 9000) : null;
+    }, 12000) : null;
 
     await loadPortalData();
     if (_t1) clearTimeout(_t1);
     if (_t2) clearTimeout(_t2);
-    // Reveal content — remove the native loading cover now that data is ready
     if (window.__SVC_HIDE_COVER) window.__SVC_HIDE_COVER();
   }
 
@@ -1609,7 +1608,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadPortalData(_attempt = 0, _opts = {}) {
-  const MAX_ATTEMPTS = 3;
+  const MAX_ATTEMPTS = 4;
   try {
     // allSettled so a single failing endpoint (e.g. a new table not yet migrated)
     // never kills the whole portal load — each result is independently unpacked.
@@ -1752,7 +1751,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
 
     // Network / timeout errors: retry with backoff (handles Railway cold-start)
     if (_attempt < MAX_ATTEMPTS - 1) {
-      const delay = (_attempt + 1) * 3000; // 3 s, 6 s
+      const delay = (_attempt + 1) * 5000; // 5 s, 10 s, 15 s
       console.log(`[portal] Retrying data load in ${delay}ms…`);
       await new Promise(r => setTimeout(r, delay));
       return loadPortalData(_attempt + 1);
