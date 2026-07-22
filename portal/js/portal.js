@@ -11917,10 +11917,18 @@ function _renderAnalyticsKPIs() {
     ? done.reduce((s, i) => {
         const start = new Date(i.start_date || i.created_at);
         const end   = new Date(i.end_date || i.maturity_date || i.updated_at);
-        return s + (isNaN(start) || isNaN(end) ? (i.term_days || 0) : Math.max(0, (end - start) / 86400000));
+        const actual = isNaN(start) || isNaN(end) ? 0 : Math.max(0, (end - start) / 86400000);
+        const expected = (parseFloat(i.term_months) || 0) * 30;
+        return s + Math.max(actual, expected, 30);
       }, 0) / done.length
     : 0;
-  const irr = moic > 0 && avgDays > 0 ? (Math.pow(moic, 365 / avgDays) - 1) : 0;
+  // Weighted-average annual rate across all investments (contracted rate × amount)
+  const totalAmt = all.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const weightedRate = totalAmt > 0
+    ? all.reduce((s, i) => s + (parseFloat(i.annual_rate || i.expected_return_rate || 0)) * (parseFloat(i.amount) || 0), 0) / totalAmt
+    : 0;
+  const irr = weightedRate > 0 ? weightedRate
+    : (moic > 0 && avgDays > 0 ? (Math.pow(moic, 365 / avgDays) - 1) : 0);
 
   const byPool = {};
   done.forEach(i => {
