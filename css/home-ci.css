@@ -34,7 +34,7 @@
 
 /* ── Scrollbar ─────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 7px; }
-::-webkit-scrollbar-track { background: #0d1117; }
+::-webkit-scrollbar-track { background: #1a1a1a; }
 ::-webkit-scrollbar-thumb { background: rgba(255,130,21,0.30); border-radius: 6px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--ci-orange); }
 
@@ -460,7 +460,7 @@ input[type="range"] { accent-color: var(--ci-orange) !important; }
 /* ═══════════════════════════════════════════════════════════════
    FOOTER — dark with CI orange accents
    ═══════════════════════════════════════════════════════════════ */
-.footer { background: #0a0e15 !important; }
+.footer { background: #1a1a1a !important; }
 .footer-logo .logo-sv { color: var(--ci-orange) !important; }
 .footer-logo .logo-capital { color: #fff !important; }
 .footer-desc { color: rgba(255,255,255,0.50) !important; }

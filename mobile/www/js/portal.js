@@ -7679,7 +7679,7 @@ const TOUR_STEPS = [
   {
     id: 'welcome',
     type: 'center',
-    icon: 'fa-hand-wave',
+    icon: 'fa-door-open',
     title: 'Welcome to your Investor Portal!',
     body: 'Let us give you a quick tour of everything available to you. It takes about 2 minutes and you\'ll earn <strong>100 XP</strong> when you\'re done.',
   },
@@ -7738,14 +7738,6 @@ const TOUR_STEPS = [
     icon: 'fa-graduation-cap',
     title: 'Learning Hub',
     body: 'Educational modules tailored to your investment level. Complete them to earn XP and become a more confident investor.',
-  },
-  {
-    id: 'nav_referral',
-    target: '[data-view="referral"]',
-    position: 'right',
-    icon: 'fa-share-nodes',
-    title: 'Refer & Earn',
-    body: 'Share your unique referral link. When a friend joins and invests, you both benefit.',
   },
   {
     id: 'complete',
