@@ -773,12 +773,12 @@
 }
 .faq-quick-q:hover { color: var(--ci-orange, #fec24f); }
 .faq-quick-q i { transition: transform 0.25s ease; color: #9ca3af; font-size: 0.72rem; }
-.faq-quick-q.open i { transform: rotate(180deg); color: var(--ci-orange, #fec24f); }
+.faq-quick-item.open .faq-quick-q i { transform: rotate(180deg); color: var(--ci-orange, #fec24f); }
 .faq-quick-a {
   font-size: 0.79rem; color: #6b7280; line-height: 1.65;
   padding: 0 0 12px; display: none;
 }
-.faq-quick-a.open { display: block; animation: viewFadeIn 0.2s ease; }
+.faq-quick-item.open .faq-quick-a { display: block; animation: viewFadeIn 0.2s ease; }
 
 /* ─── 35. Pool closed / full badge ─────────────────────────── */
 .market-pool-card.pool-full {
