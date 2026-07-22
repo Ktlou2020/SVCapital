@@ -2033,6 +2033,7 @@ function dismissOnboarding() {
 
 function renderOverviewInvestments() {
   const body = document.getElementById('overviewInvestmentsBody');
+  if (!body) return;
   const active = PORTAL.investments.filter(i => i.status === 'active');
 
   if (!active.length) { body.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">No active investments. <a href="#" onclick="navigate(\'marketplace\', null)" style="color:var(--gold)">Browse pools →</a></td></tr>'; return; }
@@ -2061,6 +2062,7 @@ function renderOverviewInvestments() {
 
 function renderOverviewTxns() {
   const body = document.getElementById('overviewTxnBody');
+  if (!body) return;
   const recent = [...PORTAL.transactions].sort((a, b) => new Date(b.transaction_date || b.created_at || 0) - new Date(a.transaction_date || a.created_at || 0)).slice(0, 5);
   const typeColors = { deposit: 'green', investment: 'blue', return: 'gold', payout: 'green', fee: 'orange', referral_bonus: 'purple', withdrawal: 'red', gift_sent: 'orange', gift_received: 'green', reward: 'purple' };
 
