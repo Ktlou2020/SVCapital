@@ -2145,10 +2145,7 @@ section { position: relative; padding: 100px 0; }
   color: var(--text-dim);
   line-height: 1.6;
   margin-bottom: 16px;
-  background: var(--dark-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 14px 16px;
+  padding: 14px 0;
 }
 
 .footer-legal-row {
