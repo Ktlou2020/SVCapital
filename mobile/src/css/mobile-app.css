@@ -173,13 +173,14 @@ input, textarea, [contenteditable] {
   display: none !important;
 }
 
-/* Full-width sidebar drawer — extends below the fixed topbar so the
-   SV Capital logo in sidebar__brand is the first thing the user sees */
+/* Full-width sidebar drawer — covers full screen from top so logo is visible */
 .sidebar {
   width: 100vw !important;
   max-width: 100vw !important;
-  top: calc(52px + max(env(safe-area-inset-top, 0px), var(--native-sb-h, 0px))) !important;
+  top: 0 !important;
   border-right: none !important;
+  padding-top: 0 !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
 }
 
 /* ─────────────────────────────────────────────────────────────
