@@ -764,14 +764,18 @@ body {
 /* ─── Public products page: risk filter ──────────────────────────────── */
 .product-risk-filter {
   display: flex;
-  flex-direction: row;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   margin: 0 0 40px;
 }
+.prf-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .product-risk-filter .prf-pills {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
