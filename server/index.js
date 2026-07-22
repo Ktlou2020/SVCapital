@@ -342,6 +342,17 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   emailQueueCron.schedule('*/2 * * * *', () => {
     processQueue().catch(e => console.error('[emailQueue cron]', e.message));
   });
+
+  // Self-ping every 4 minutes — keeps the Node process and DB pool warm so
+  // the first real user request is never cold. Works on all Railway plan tiers.
+  const http = require('http');
+  emailQueueCron.schedule('*/4 * * * *', () => {
+    const req = http.get(`http://localhost:${PORT}/api/health`, res => {
+      res.resume(); // drain response body so socket is freed
+    });
+    req.on('error', () => {}); // ignore — server may be mid-restart
+    req.setTimeout(5000, () => req.destroy());
+  });
 });
 
 /* ─── Graceful Shutdown ─── */
