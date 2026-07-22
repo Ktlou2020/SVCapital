@@ -11,7 +11,7 @@ Capacitor-based native wrapper for the SV Capital Investor Portal.
 
 | Tool | Version | Install |
 |------|---------|---------|
-| Node.js | 18+ | https://nodejs.org |
+| Node.js | 20+ | https://nodejs.org |
 | npm | 9+ | bundled with Node |
 | Android Studio | Latest | https://developer.android.com/studio |
 | Xcode | 15+ (macOS only) | App Store |
@@ -56,6 +56,7 @@ After running `cap add android` / `cap add ios`, copy these files into the gener
 # Android
 cp -r android-config/app/src/main/res/*               android/app/src/main/res/
 cp    android-config/app/src/main/AndroidManifest.xml  android/app/src/main/
+cp    android-config/variables.gradle                   android/variables.gradle
 
 # iOS — copy Info.plist and Privacy Manifest into Xcode project
 cp ios-config/App/App/Info.plist        ios/App/App/
