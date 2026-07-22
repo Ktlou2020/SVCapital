@@ -2278,7 +2278,7 @@ async function saveNewInvestor(btn) {
         phone: document.getElementById('newInvPhone').value.trim(),
         id_number: document.getElementById('newInvIdNum').value.trim(),
         risk_profile: document.getElementById('newInvRisk').value,
-        city: document.getElementById('newInvCity').value.trim(),
+        address: document.getElementById('newInvCity').value.trim(),
         province: document.getElementById('newInvProvince').value,
         notes: document.getElementById('newInvNotes').value.trim(),
         status: 'pending', fica_status: 'pending',
