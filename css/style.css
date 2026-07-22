@@ -1518,6 +1518,7 @@ section { position: relative; padding: 100px 0; }
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   padding: 40px;
+  text-align: center;
 }
 
 .app-cta__text h3 {
@@ -1531,9 +1532,11 @@ section { position: relative; padding: 100px 0; }
   color: var(--text-muted);
   margin-bottom: 24px;
   max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-.app-btns { display: flex; gap: 16px; flex-wrap: wrap; }
+.app-btns { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
 
 .app-store-btn {
   display: flex;
@@ -1560,7 +1563,7 @@ section { position: relative; padding: 100px 0; }
   flex-direction: column;
 }
 
-.app-store-btn span { font-size: 0.7rem; color: var(--text-muted); }
+.app-store-btn span { font-size: 0.7rem; color: var(--white); }
 .app-store-btn strong { font-size: 0.95rem; }
 
 /* ═══════════════════════════════════════════════
