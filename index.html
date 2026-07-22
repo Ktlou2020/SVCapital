@@ -72,7 +72,7 @@
     .partner-chip:hover { background:rgba(255,255,255,0.07);border-color:rgba(212,175,55,0.25); }
     .partner-chip i { font-size:1.4rem; }
     .partner-chip strong { display:block;font-size:0.88rem;font-weight:700;color:#e2e8f0;line-height:1.2; }
-    .partner-chip span { font-size:0.72rem;color:#656565; }
+    .partner-chip span { font-size:0.72rem;color:#e2e8f0; }
 
     /* Dark-background contrast overrides — home-ci.css forces #1a1a1a on .section-title; these dark sections need light text */
     .why-section .section-eyebrow { color: var(--ci-orange, #FF8215) !important; }
@@ -82,7 +82,9 @@
     .why-section .section-sub { color: rgba(255,255,255,0.62) !important; }
     .why-card p { color: #656565 !important; }
     .partners-label { color: #656565 !important; }
-    .partner-chip span { color: #656565 !important; }
+    .partner-chip span { color: #e2e8f0 !important; }
+    .partner-chip__info { background:none;border:none;cursor:pointer;padding:0 0 0 6px;color:#e2e8f0;opacity:.55;font-size:.85rem;line-height:1;transition:color .15s,opacity .15s;flex-shrink:0; }
+    .partner-chip__info:hover { color:#eda5ff;opacity:1; }
 
     /* Partner strip inside product cards */
     .product-card__partner {
@@ -940,29 +942,33 @@
           <i class="fa-solid fa-cow" style="color:#D4AF37"></i>
           <div>
             <strong>Beefcor</strong>
-            <span>Cattle Feedlot</span>
+            <span>Agriculture</span>
           </div>
+          <button type="button" class="partner-chip__info" onclick="_showPartnerModal('Beefcor')" aria-label="About Beefcor"><i class="fa-solid fa-circle-info"></i></button>
         </div>
         <div class="partner-chip">
           <i class="fa-solid fa-solar-panel" style="color:#4CAF50"></i>
           <div>
             <strong>The Solar Experts</strong>
-            <span>Clean Energy</span>
+            <span>Energy</span>
           </div>
+          <button type="button" class="partner-chip__info" onclick="_showPartnerModal('The Solar Experts')" aria-label="About The Solar Experts"><i class="fa-solid fa-circle-info"></i></button>
         </div>
         <div class="partner-chip">
           <i class="fa-solid fa-building-columns" style="color:#656565"></i>
           <div>
             <strong>MoolaLend</strong>
-            <span>SMME Finance</span>
+            <span>Credit</span>
           </div>
+          <button type="button" class="partner-chip__info" onclick="_showPartnerModal('MoolaLend')" aria-label="About MoolaLend"><i class="fa-solid fa-circle-info"></i></button>
         </div>
         <div class="partner-chip">
           <i class="fa-solid fa-motorcycle" style="color:#fb923c"></i>
           <div>
             <strong>OnFleet</strong>
-            <span>Last-Mile Delivery</span>
+            <span>Logistics</span>
           </div>
+          <button type="button" class="partner-chip__info" onclick="_showPartnerModal('OnFleet')" aria-label="About OnFleet"><i class="fa-solid fa-circle-info"></i></button>
         </div>
       </div>
     </div>
