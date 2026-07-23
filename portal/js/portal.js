@@ -4144,7 +4144,7 @@ function _cattleHerdStatusHtml(s) {
   const survival = (100 - mortRate).toFixed(1);
 
   return `
-    <div style="background:rgba(254,194,79,0.06);border:1px solid rgba(254,194,79,0.22);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+    <div style="background:rgba(254,194,79,0.06);border:1px solid rgba(254,194,79,0.22);border-radius:12px;padding:14px 16px;margin-top:16px;margin-bottom:14px">
 
       <!-- Header row -->
       <div style="display:flex;align-items:center;margin-bottom:12px">
