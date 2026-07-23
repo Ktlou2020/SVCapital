@@ -1033,6 +1033,7 @@ CREATE TABLE IF NOT EXISTS products (
   color               TEXT DEFAULT '#656565',
   badge_class         TEXT DEFAULT 'badge--gray',
   partner_name        TEXT,
+  sector              TEXT,                   -- e.g. "Agriculture", "Energy"
   factsheet_url       TEXT,                   -- base64 data URL or external link
   factsheet_name      TEXT,
   is_active           BOOLEAN DEFAULT true,
@@ -1247,6 +1248,7 @@ async function autoSetup() {
         BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_type TEXT DEFAULT 'current'; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_status TEXT DEFAULT 'none'; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_reference TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE products ADD COLUMN sector TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
       END $$
     `);
 
