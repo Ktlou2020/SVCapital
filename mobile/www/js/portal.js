@@ -3907,12 +3907,12 @@ async function renderProductDetailView(type) {
     : (isSolar ? '<div id="prodSolarStatus" style="margin-top:20px;margin-bottom:16px"></div>' : '');
 
   grid.innerHTML = `
-    <div style="grid-column:1/-1">
+    <div style="grid-column:1/-1;padding:0 12px">
       <button class="btn btn--ghost btn--sm" onclick="backToProducts()" style="margin-bottom:14px"><i class="fa-solid fa-arrow-left"></i> All products</button>
 
       <div class="market-pool-card mpc-v2" style="cursor:default">
         <div class="mpc2-accent" style="background:linear-gradient(90deg,${color},${color}88)"></div>
-        <div style="padding:16px 16px 8px">
+        <div style="padding:16px 20px 8px">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
             <div class="mpc2-icon" style="background:${color}18;color:${color}"><i class="fa-solid ${icon}"></i></div>
             <div>

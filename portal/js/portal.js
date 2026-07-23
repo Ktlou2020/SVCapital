@@ -3721,7 +3721,7 @@ async function renderProductDetailView(type) {
 
       <div class="market-pool-card mpc-v2" style="cursor:default">
         <div class="mpc2-accent" style="background:linear-gradient(90deg,${color},${color}88)"></div>
-        <div style="padding:4px 2px">
+        <div style="padding:16px 16px 8px">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
             <div class="mpc2-icon" style="background:${color}18;color:${color}"><i class="fa-solid ${icon}"></i></div>
             <div>
