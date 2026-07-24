@@ -420,21 +420,8 @@ function renderTaskCompletionPanel() {
   const doneCount = tasks.filter(t => t.done).length;
   const pending = tasks.filter(t => !t.done);
   meta.textContent = `${doneCount}/${tasks.length} complete`;
+  if (!pending.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
-  if (!pending.length) {
-    body.innerHTML = `
-      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:space-between">
-        <div>
-          <div style="font-size:0.9rem;font-weight:800;color:#1a1a1a;margin-bottom:4px">You're set up and ready to invest confidently.</div>
-          <div style="font-size:0.8rem;color:var(--text-muted)">Use Quick Actions to top up, browse new pools or generate your latest statement.</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn--secondary btn--sm" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i> Statement</button>
-          <button class="btn btn--primary btn--sm" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-plus"></i> Invest more</button>
-        </div>
-      </div>`;
-    return;
-  }
   body.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:14px">
       ${tasks.map(task => `
