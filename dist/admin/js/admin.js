@@ -6880,22 +6880,30 @@ function _opsR(v) {
   return `R${Number(v).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 }
 
+function _applyEmailToggleUI(enabled) {
+  const chk   = document.getElementById('emailToggleChk');
+  const track  = document.getElementById('emailToggleTrack');
+  const thumb  = document.getElementById('emailToggleThumb');
+  const label  = document.getElementById('emailToggleLabel');
+  const status = document.getElementById('emailControlsStatus');
+  if (chk)   { chk.checked = enabled; chk.disabled = false; }
+  if (track)  track.style.background = enabled ? '#22c55e' : '#3f3f3f';
+  if (thumb)  thumb.style.transform  = enabled ? 'translateX(22px)' : 'none';
+  if (label)  { label.textContent = enabled ? 'Enabled' : 'Disabled'; label.style.color = enabled ? '#22c55e' : '#ef4444'; }
+  if (status) status.textContent = enabled ? 'Emails are being sent' : 'All emails suppressed';
+}
+
 async function _loadEmailToggle() {
   try {
-    const res = await API.settings.list();
-    const row = (res.data || []).find(s => s.key === 'resend_emails_enabled');
-    const enabled = !row || row.value !== 'false';
-    const chk   = document.getElementById('emailToggleChk');
-    const track  = document.getElementById('emailToggleTrack');
-    const thumb  = document.getElementById('emailToggleThumb');
-    const label  = document.getElementById('emailToggleLabel');
+    const res = await fetch('/api/settings/email-toggle', { credentials: 'include' });
+    if (!res.ok) throw new Error(res.statusText);
+    const { enabled } = await res.json();
+    _applyEmailToggleUI(enabled);
+  } catch (e) {
+    console.error('[emailToggle] load failed:', e);
     const status = document.getElementById('emailControlsStatus');
-    if (chk) { chk.checked = enabled; chk.disabled = false; }
-    if (track) track.style.background = enabled ? '#22c55e' : '#3f3f3f';
-    if (thumb) thumb.style.transform = enabled ? 'translateX(22px)' : 'none';
-    if (label) { label.textContent = enabled ? 'Enabled' : 'Disabled'; label.style.color = enabled ? '#22c55e' : '#ef4444'; }
-    if (status) status.textContent = enabled ? 'Emails are being sent' : 'All emails suppressed';
-  } catch (e) { console.error('[emailToggle] load failed:', e); }
+    if (status) status.textContent = 'Failed to load — refresh to retry';
+  }
 }
 
 async function toggleEmailDelivery() {
@@ -6904,9 +6912,15 @@ async function toggleEmailDelivery() {
   const newVal = !chk.checked;
   chk.disabled = true;
   try {
-    await API.settings.update('resend_emails_enabled', { value: String(newVal) });
+    const res = await fetch('/api/settings/email-toggle', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: newVal }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+    _applyEmailToggleUI(newVal);
     Toast.success(newVal ? 'Email delivery enabled' : 'Email delivery disabled');
-    await _loadEmailToggle();
   } catch (e) {
     Toast.error('Failed to update email setting');
     chk.disabled = false;
