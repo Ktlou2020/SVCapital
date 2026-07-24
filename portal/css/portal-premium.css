@@ -622,7 +622,7 @@
   letter-spacing: 0.1em; color: #3d8a00; white-space: nowrap;
 }
 
-@media (max-width: 500px) {
+@media (max-width: 640px) {
   .mc2__stats { grid-template-columns: repeat(2,1fr); gap: 8px; }
   .mc2__stat:not(:last-child) { border-right: none; }
   .mc2__stat { padding: 0; }
@@ -868,6 +868,7 @@
 .xp-hero {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 24px;
   background: linear-gradient(135deg, #111317 0%, #1a1d23 100%);
   border-radius: 18px;
@@ -953,7 +954,7 @@
 .level-step.current .level-step__icon { transform: scale(1.12); }
 .level-step__name { font-size: 0.65rem; font-weight: 700; color: #6b7280; text-align: center; }
 .level-step.done .level-step__name, .level-step.current .level-step__name { color: #1a1a1a; }
-.level-step__reward { font-size: 0.6rem; font-weight: 800; }
+.level-step__reward { font-size: 0.72rem; font-weight: 800; }
 
 /* ── Quest Categories ───────────────────────────────────────── */
 .quest-category { }
@@ -1214,7 +1215,7 @@
 .learn-tab-sub  { font-size: 0.7rem; color: #9ca3af; margin-top: 2px; }
 .learn-tab-recommended {
   display: inline-block;
-  font-size: 0.6rem; font-weight: 800;
+  font-size: 0.72rem; font-weight: 800;
   text-transform: uppercase; letter-spacing: 0.06em;
   background: var(--ci-orange, #fec24f); color: #fff;
   padding: 2px 7px; border-radius: 100px;
@@ -1437,7 +1438,7 @@ body.dark-mode .tour-body { color: #9ca3af !important; }
 }
 .tour-skip-btn:hover { color: #6b7280; }
 .tour-prev-btn {
-  width: 34px; height: 34px;
+  width: 44px; height: 44px;
   border-radius: 10px;
   background: rgba(0,0,0,0.06);
   border: none;
@@ -1749,7 +1750,7 @@ body.dark-mode .deposit-prompt-products span {
   display: flex; align-items: center; gap: 8px; justify-content: center; text-align: center;
   flex-wrap: wrap;
 }
-.invest-calc-caption { font-size: 0.6rem; color: #9ca3af; }
+.invest-calc-caption { font-size: 0.72rem; color: #9ca3af; }
 .invest-calc-val { font-size: 1rem; font-weight: 800; color: #1a1a1a; }
 .invest-calc-total { color: var(--gold, #fec24f) !important; font-size: 1.15rem !important; }
 .invest-calc-plus, .invest-calc-equals { font-size: 1rem; font-weight: 700; color: #9ca3af; }
@@ -1953,7 +1954,7 @@ body {
   border: 1px solid rgba(0,0,0,0.08) !important;
   color: #6b7280 !important;
   border-radius: 9px !important;
-  width: 36px !important; height: 36px !important;
+  width: 44px !important; height: 44px !important;
   font-size: 0.82rem !important;
   transition: all 0.18s ease !important;
 }
@@ -2232,7 +2233,7 @@ body {
   letter-spacing: 0.02em !important;
 }
 .mps { background: #F7F8FA !important; border-radius: 10px !important; padding: 10px !important; }
-.mps__label { font-size: 0.6rem !important; letter-spacing: 0.08em !important; color: #9ca3af !important; font-weight: 700 !important; }
+.mps__label { font-size: 0.72rem !important; letter-spacing: 0.08em !important; color: #9ca3af !important; font-weight: 700 !important; }
 .mps__value { font-size: 0.88rem !important; font-weight: 800 !important; color: #111827 !important; }
 
 /* ─── MY INVESTMENT CARDS ─── */
@@ -2296,7 +2297,7 @@ body {
 }
 .modal__close {
   color: #9ca3af !important;
-  width: 30px !important; height: 30px !important;
+  width: 44px !important; height: 44px !important;
   border-radius: 8px !important;
   display: flex !important; align-items: center !important; justify-content: center !important;
   transition: all 0.15s !important;
@@ -2762,6 +2763,10 @@ body.dark-mode .tab-btn.active { color: #fec24f !important; }
   display:grid;grid-template-columns:repeat(3,1fr);gap:0;
   border-bottom:1px solid rgba(255,255,255,0.07);
 }
+@media (max-width: 480px) {
+  .minor-stats { grid-template-columns: 1fr 1fr; }
+  .minor-stat:nth-child(2) { border-right: none; }
+}
 .minor-stat {
   text-align:center;padding:16px 8px;
   border-right:1px solid rgba(255,255,255,0.07);
@@ -2915,7 +2920,7 @@ body.dark-mode .tab-btn.active { color: #fec24f !important; }
   border: none;
   cursor: pointer;
   color: #9ca3af;
-  font-size: 0.6rem;
+  font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -3092,7 +3097,7 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
   font-size:1.35rem;flex-shrink:0;
 }
 .mpc2-badge {
-  font-size:0.62rem;font-weight:800;padding:3px 9px;border-radius:999px;
+  font-size:0.72rem;font-weight:800;padding:3px 9px;border-radius:999px;
   border:1px solid transparent;letter-spacing:0.03em;white-space:nowrap;
 }
 .mpc2-badge--featured { background:rgba(254,194,79,0.12);color:#d97706;border-color:rgba(254,194,79,0.28); }
@@ -3111,7 +3116,7 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
   font-family:'Poppins','Poppins',Georgia,serif;
   font-size:1.55rem;font-weight:800;line-height:1;letter-spacing:-0.03em;color:#111827;
 }
-.mpc2-metric__lbl { font-size:0.62rem;color:#9ca3af;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-top:4px; }
+.mpc2-metric__lbl { font-size:0.72rem;color:#9ca3af;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-top:4px; }
 
 .mpc2-pills { display:flex;flex-wrap:wrap;gap:6px;padding:12px 20px 0; }
 .mpc2-pill {
@@ -3125,13 +3130,13 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
 .mpc2-pill--urgent i { color:#dc2626; }
 
 .mpc2-progress { padding:12px 20px 0; }
-.mpc2-progress__labels { display:flex;justify-content:space-between;font-size:0.68rem;color:#9ca3af;margin-bottom:6px; }
+.mpc2-progress__labels { display:flex;justify-content:space-between;font-size:0.75rem;color:#9ca3af;margin-bottom:6px; }
 .mpc2-progress__track  { height:6px;border-radius:3px;background:rgba(0,0,0,0.07);overflow:hidden; }
 .mpc2-progress__fill   { height:100%;border-radius:3px;transition:width 0.5s cubic-bezier(0.22,1,0.36,1); }
 
 .mpc2-footer { display:flex;align-items:center;gap:8px;padding:14px 20px 20px; }
 .mpc2-fs-btn {
-  flex-shrink:0;width:40px;height:40px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);
+  flex-shrink:0;width:44px;height:44px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);
   background:#f8f9fb;color:#6b7280;cursor:pointer;display:flex;align-items:center;justify-content:center;
   font-size:1rem;transition:all 0.2s;
 }
@@ -3150,7 +3155,7 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
 .fs-row__name { font-size:0.83rem;font-weight:700;color:#111827;display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
 .fs-row__meta { font-size:0.68rem;color:#9ca3af;margin-top:2px; }
 .fs-row__arrow { font-size:0.8rem;color:#d1d5db;flex-shrink:0; }
-.fs-current-tag { font-size:0.6rem;font-weight:800;background:rgba(34,197,94,0.15);color:#16a34a;padding:1px 6px;border-radius:99px;border:1px solid rgba(34,197,94,0.25); }
+.fs-current-tag { font-size:0.72rem;font-weight:800;background:rgba(34,197,94,0.15);color:#16a34a;padding:1px 6px;border-radius:99px;border:1px solid rgba(34,197,94,0.25); }
 
 /* ─── Dark mode overrides for v2 cards ── */
 body.dark-mode .mpc-v2 { background:#303030 !important;border-color:rgba(255,255,255,0.07) !important; }
@@ -3276,7 +3281,7 @@ body.dark-mode #feedbackCard .card__header { border-color: rgba(255,255,255,0.06
   margin-top: 8px;
 }
 .rewards-stat__label {
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: #9ca3af;
   text-transform: uppercase;
@@ -3512,6 +3517,9 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   position: relative;
   z-index: 1;
 }
+@media (max-width: 480px) {
+  .atl-card__figures { grid-template-columns: 1fr 1fr; }
+}
 .atl-card__figures > div {
   display: flex;
   flex-direction: column;
@@ -3524,7 +3532,7 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
 }
 .atl-card__k {
   display: block;
-  font-size: 0.58rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: rgba(255,255,255,0.38);
@@ -3651,8 +3659,8 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   /* ── Tap targets: larger hits for thumbs ── */
   .btn { min-height: 42px; }
   .btn--sm { min-height: 36px; padding: 7px 12px; }
-  .topbar-btn { width: 40px !important; height: 40px !important; }
-  .modal__close { width: 36px !important; height: 36px !important; }
+  .topbar-btn { width: 44px !important; height: 44px !important; }
+  .modal__close { width: 44px !important; height: 44px !important; }
   .tab-btn { min-height: 40px; padding: 9px 14px; }
   .nav-item { padding: 11px 20px !important; min-height: 44px; }
 

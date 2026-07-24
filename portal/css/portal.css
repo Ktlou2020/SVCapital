@@ -76,7 +76,7 @@
 }
 
 .ph-stat { display: flex; flex-direction: column; gap: 2px; }
-.ph-stat__label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); font-weight: 700; }
+.ph-stat__label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); font-weight: 700; }
 .ph-stat__value { font-size: 1rem; font-weight: 800; color: var(--white); }
 
 /* ─── Wallet Card ─── */
@@ -194,7 +194,7 @@
 }
 
 .inv-stat__label {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-dim);
@@ -1502,6 +1502,9 @@ select option { background: #1a1a2e; color: #fff; }
   gap: 10px;
   margin-bottom: 16px;
 }
+@media (max-width: 640px) {
+  .withdraw-amount-grid { grid-template-columns: 1fr 1fr; }
+}
 
 /* ─── Notification badge ─── */
 .notif-badge {
@@ -1513,7 +1516,7 @@ select option { background: #1a1a2e; color: #fff; }
   padding: 0 5px;
   background: #ef4444;
   color: #fff;
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   font-weight: 700;
   border-radius: 100px;
   line-height: 1;
