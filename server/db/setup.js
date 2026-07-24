@@ -1127,6 +1127,19 @@ const DEFAULT_PRODUCTS = [
     badge_class: 'badge--gold', sort_order: 9,
   },
   {
+    product_type: 'ilobola', label: 'iLobola', headline: 'Save for what matters most.',
+    description: 'A dedicated savings and growth vehicle designed to help you accumulate funds for lobola. Earn competitive returns while working toward one of life's most meaningful milestones.',
+    key_details: [
+      'Purpose-built savings vehicle for lobola preparation',
+      'Competitive fixed returns over a defined term',
+      'Flexible contribution amounts',
+      'Withdraw at maturity or roll over to a new cycle',
+    ].join('\n'),
+    min_investment: 500, term_months: 12, benchmark_rate: 0.13, performance_fee_pct: 0.20,
+    risk_profile: 'Low-Medium', risk_color: '#22c55e', icon: 'fa-heart', color: '#eda5ff',
+    badge_class: 'badge--purple', sort_order: 10,
+  },
+  {
     product_type: 'gridfarmer', label: 'GridFarmer', headline: 'Buy a hectare, not a fund.',
     description: 'Own a uniquely identified 1-hectare white maize GPS grid. Your return is tethered to the physical yield of your specific plot — satellite-monitored, GPS-verified at harvest. Not a pool, not an index.',
     key_details: [
@@ -1301,6 +1314,23 @@ Returns determined by weight gain and market price per kilogram
 Beefcor guarantees 99% cattle survival rate
 Minimum 5-year holding period for 12J tax benefit',
          5000, 60, 0.13, 0.20, 'Medium-High', '#fec24f', 'fa-cow', '#fec24f', 'badge--gold', 'Beefcor', 9)
+      ON CONFLICT (product_type) DO NOTHING
+    `).catch(() => {});
+
+    // Upsert iLobola product (safe on existing deployments)
+    await pool.query(`
+      INSERT INTO products
+        (id, product_type, label, headline, description, key_details,
+         min_investment, term_months, benchmark_rate, performance_fee_pct,
+         risk_profile, risk_color, icon, color, badge_class, sort_order)
+      VALUES
+        ('PROD-ILOBOLA', 'ilobola', 'iLobola', 'Save for what matters most.',
+         'A dedicated savings and growth vehicle designed to help you accumulate funds for lobola. Earn competitive returns while working toward one of life''s most meaningful milestones.',
+         'Purpose-built savings vehicle for lobola preparation
+Competitive fixed returns over a defined term
+Flexible contribution amounts
+Withdraw at maturity or roll over to a new cycle',
+         500, 12, 0.13, 0.20, 'Low-Medium', '#22c55e', 'fa-heart', '#eda5ff', 'badge--purple', 10)
       ON CONFLICT (product_type) DO NOTHING
     `).catch(() => {});
 

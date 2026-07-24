@@ -32,6 +32,8 @@ const PRODUCT_TYPE_MAP = {
   'Solar Investment - 6 Years': 'solar',
   '12J Investment':             'cattle_12j',
   '12J Cattle Investment':      'cattle_12j',
+  'iLobola':                    'ilobola',
+  'iLobola Investment':         'ilobola',
 };
 
 const POOL_STATUS_MAP = {
