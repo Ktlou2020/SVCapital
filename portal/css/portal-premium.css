@@ -3698,6 +3698,20 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   /* ── Sub-account card stacking ── */
   .sa-showcase-grid { grid-template-columns: 1fr !important; }
 
+  /* ── Topbar: reduce padding on mobile (overrides the 26px !important base rule) ── */
+  .topbar { padding: 0 12px !important; }
+
+  /* ── Marketplace risk filter: scroll horizontally instead of overflowing ──
+     6 nowrap buttons sum to ~394px min-width; viewport inner is ~315px at 375px.
+     Allow the bar to scroll so no button is clipped. ── */
+  #marketRiskTabBar {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    max-width: 100%;
+  }
+  #marketRiskTabBar::-webkit-scrollbar { display: none; }
+
   /* ── XP progress bar: prevent horizontal page overflow ──
      The bar has 4 white-space:nowrap children whose combined
      min-content width (~430px) exceeds the mobile viewport.
