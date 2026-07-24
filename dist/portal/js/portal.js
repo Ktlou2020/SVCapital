@@ -2117,9 +2117,10 @@ function renderPortfolioTrendChart() {
   }
 
   // ── Backward-reconstruct: start from today's actual value ───
+  // Anchor matches the hero KPI: active investments + wallet balance.
   const currentValue = Math.max(0,
     (parseFloat(PORTAL.investor?.wallet_balance) || 0) +
-    (parseFloat(PORTAL.investor?.total_invested)  || 0)
+    (PORTAL.investments || []).filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)
   );
   const dataRev = []; let val = currentValue;
   // Buckets are ordered oldest→newest; iterate newest→oldest
