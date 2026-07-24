@@ -3445,7 +3445,7 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
    ═══════════════════════════════════════════════════════════════ */
 #myInvestmentsGrid {
   display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)) !important;
   gap: 16px !important;
 }
 
@@ -3710,4 +3710,62 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
     .main-content { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important; }
     .toast-container { bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important; }
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Mobile-web polish — world-class at every phone width
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Hide desktop-only topbar buttons on mobile */
+@media (max-width: 768px) {
+  /* Website link + Sign Out — shown on desktop, redundant on mobile (bottom nav handles nav) */
+  .topbar__actions .btn--secondary.btn--sm,
+  .topbar__actions a.btn--secondary.btn--sm {
+    display: none !important;
+  }
+
+  /* Account switcher: let it shrink to content, don't overflow */
+  .account-switcher {
+    width: auto !important;
+    max-width: 140px !important;
+    font-size: 0.75rem !important;
+  }
+
+  /* Payment modal: amount input fills width instead of fixed 180px */
+  #pmAmount {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Payment quick-amount chips: 2×4 grid instead of 4×2 */
+  .pm-chip-grid,
+  div:has(> .pm-chip) {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Minimum touch-target & readable font floors */
+  .pm-chip { min-height: 44px !important; font-size: 0.85rem !important; }
+
+  /* Stat labels — bump sub-11px labels up to readable floor */
+  .mic-stat__label,
+  .stat-label,
+  .metric-label { font-size: max(0.65rem, 10px) !important; }
+
+  /* Modal content doesn't overflow viewport on narrow screens */
+  .modal-content,
+  .modal-body {
+    width: 100% !important;
+    max-width: 100vw !important;
+    margin: 0 !important;
+    border-radius: 20px 20px 0 0 !important;
+  }
+}
+
+/* FAB sits between 769px and 900px where the hamburger topbar is also shown — hide it */
+@media (min-width: 769px) and (max-width: 900px) {
+  .fab,
+  #mobileFab,
+  [id*="Fab"],
+  [class*="fab"] { display: none !important; }
 }
