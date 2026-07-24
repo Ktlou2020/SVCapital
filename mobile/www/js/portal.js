@@ -12442,6 +12442,11 @@ function _renderAnalyticsTimeline() {
     const days    = (!isNaN(start) && !isNaN(end)) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '—');
     const status  = (pool.status === 'matured' || pool.status === 'paid_out') ? 'matured' : (i.status || pool.status);
     const sc      = statusMeta(status);
+    const isMatured   = status === 'matured' || status === 'paid_out';
+    const actualRate  = parseFloat(pool.actual_rate || i.pool_actual_rate || 0);
+    const targetRate  = parseFloat(pool.annual_rate || i.annual_rate || i.expected_return_rate || 0);
+    const rateVal     = isMatured && actualRate > 0 ? actualRate : targetRate;
+    const rateLbl     = isMatured && actualRate > 0 ? 'Return Achieved' : 'Target Return';
     return `
       <div class="atl-card">
         <div class="atl-card__head">
@@ -12450,7 +12455,7 @@ function _renderAnalyticsTimeline() {
         </div>
         <div class="atl-card__figures">
           <div><span class="atl-card__k">Invested</span><span class="atl-card__v">R ${capital.toLocaleString('en-ZA')}</span></div>
-          <div><span class="atl-card__k">Target Return</span><span class="atl-card__v" style="color:#16a34a">${Utils.pct(pool.annual_rate || i.annual_rate || i.expected_return_rate || 0)}</span></div>
+          <div><span class="atl-card__k">${rateLbl}</span><span class="atl-card__v" style="color:${isMatured && actualRate > 0 ? '#eda5ff' : '#16a34a'}">${Utils.pct(rateVal)}</span></div>
           <div><span class="atl-card__k">Duration</span><span class="atl-card__v">${typeof days === 'number' ? days + ' d' : days}</span></div>
         </div>
         <div class="atl-card__dates">
