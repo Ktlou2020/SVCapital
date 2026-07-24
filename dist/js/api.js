@@ -471,10 +471,12 @@ const Utils = {
       smme:           { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#ff5229', badgeClass: 'badge--orange' },
       delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
       delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
+      cattle_12j:     { label: '12J Cattle Investment',   icon: 'fa-cow',         color: '#fec24f', badgeClass: 'badge--gold'   },
+      ilobola:        { label: 'iLobola',                 icon: 'fa-heart',       color: '#eda5ff', badgeClass: 'badge--purple' },
       gridfarmer:     { label: 'GridFarmer',              icon: 'fa-seedling',    color: '#65ed00', badgeClass: 'badge--green'  },
       other:          { label: 'Other',                   icon: 'fa-circle',      color: '#656565', badgeClass: 'badge--gray' },
     };
-    const KNOWN_CI = new Set(['cattle','solar','solar_5yr','solar_6yr','solar_7yr','short_term','smme','delivery_bike','delivery_bikes','gridfarmer']);
+    const KNOWN_CI = new Set(['cattle','solar','solar_5yr','solar_6yr','solar_7yr','short_term','smme','delivery_bike','delivery_bikes','cattle_12j','ilobola','gridfarmer']);
     const base = map[type] || { label: type || 'Other', icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
     const cached = this._productCache[type];
     if (!cached) return base;
@@ -491,7 +493,7 @@ const Utils = {
 
   productColor(product) {
     const type = (product && product.product_type) || product;
-    const KNOWN = ['cattle', 'solar', 'solar_5yr', 'solar_6yr', 'solar_7yr', 'short_term', 'smme', 'delivery_bike', 'delivery_bikes'];
+    const KNOWN = ['cattle', 'solar', 'solar_5yr', 'solar_6yr', 'solar_7yr', 'short_term', 'smme', 'delivery_bike', 'delivery_bikes', 'cattle_12j', 'ilobola'];
     if (KNOWN.includes(type)) return this.productInfo(type).color;
     if (product && product.color) return product.color;
     return this.productInfo(type).color;
