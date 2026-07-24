@@ -18,11 +18,30 @@ const PRODUCT_TYPE_MAP = {
   'Cattle Investment':          'cattle',
   'Solar Investment - 5 Years': 'solar',
   'Solar Investment - 6 Years': 'solar',
+  'Solar Investment - 7 Years': 'solar',
   '12J Investment':             'cattle_12j',
   '12J Cattle Investment':      'cattle_12j',
   'iLobola':                    'ilobola',
   'iLobola Investment':         'ilobola',
 };
+/* Maps the productId field (Firestore document reference) to our product_type.
+   Pools export uses productId, not productName, so this is the primary resolver. */
+const PRODUCT_ID_MAP = {
+  '0J1g67Ln99nMOct6vnqS': 'delivery_bikes',
+  '8r3TlnGkizidu1JCgbDp': 'smme',
+  'BjrELvLGvQzTSDt9ztGK': 'solar',
+  'Q3R5RN21GWJ4lGCtI72R': 'cattle_12j',
+  'SfpCxgJjP6i5GUz1JWYp': 'solar',
+  'gSjiuqRg3E8IEO2hwfmu': 'cattle',
+  'lwKM2GFyCXNd88l1nCAK': 'ilobola',
+  'xKQkwQMa0Hnj0dAmGsWH': 'solar',
+};
+function resolveProductType(p) {
+  return PRODUCT_TYPE_MAP[p.productName]
+      || PRODUCT_ID_MAP[p.productId]
+      || PRODUCT_TYPE_MAP[p.name]
+      || 'other';
+}
 const POOL_STATUS_MAP       = { MATURED:'matured', ACTIVE:'active', OPEN:'open', CLOSED:'closed' };
 const INVESTMENT_STATUS_MAP = { MATURED:'matured', ACTIVE:'active', PAID_OUT:'matured', COMPLETE:'matured', CANCELLED:'cancelled' };
 const TX_TYPE_MAP = {
@@ -237,15 +256,15 @@ router.post('/run',
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
           ON CONFLICT (id) DO UPDATE SET
             name=EXCLUDED.name, status=EXCLUDED.status, actual_rate=EXCLUDED.actual_rate,
-            source_id=EXCLUDED.source_id, updated_at=NOW()
+            product_type=EXCLUDED.product_type, source_id=EXCLUDED.source_id, updated_at=NOW()
         `, [
-          pid, p._id, p.name, PRODUCT_TYPE_MAP[p.productName]||'other',
+          pid, p._id, p.name, resolveProductType(p),
           POOL_STATUS_MAP[p.status]||'closed',
           parseFloat(p.maxTotal)||0, parseFloat(p.returnPercentage)||0, termMonths,
           p.launchDate   ? new Date(p.launchDate)   : null,
           p.closingDate  ? new Date(p.closingDate)  : null,
           p.maturityDate ? new Date(p.maturityDate) : null,
-          `Migrated from previous platform. Product: ${p.productName}`,
+          `Migrated from previous platform. Product: ${p.productId || p.productName || p.name}`,
         ]);
         sourceIdToPoolId[p._id] = pid;
       }
