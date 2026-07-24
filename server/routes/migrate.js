@@ -364,4 +364,54 @@ router.post('/run',
   }
 );
 
+/* ── POST /api/migrate/resend-setup-emails ── */
+router.post('/resend-setup-emails',
+  requireAuth,
+  requireRole('admin', 'director'),
+  async (req, res) => {
+    const JWT_SECRET = process.env.JWT_SECRET;
+    const BASE_URL   = process.env.BASE_URL || 'https://platform.svcapital.co.za';
+
+    if (!JWT_SECRET) return res.status(500).json({ error: 'JWT_SECRET not configured.' });
+
+    /* Fetch all investor-role users */
+    const { rows: users } = await pool.query(
+      `SELECT id, email, first_name FROM users WHERE role = 'investor' ORDER BY created_at`
+    );
+
+    let sent = 0;
+    const errors = [];
+
+    for (const user of users) {
+      try {
+        const jti       = require('crypto').randomBytes(16).toString('hex');
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        const token     = jwt.sign(
+          { sub: user.id, purpose: 'password_reset', jti },
+          JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+
+        /* Invalidate any prior pending reset tokens for this user */
+        await pool.query(
+          `DELETE FROM password_reset_tokens WHERE user_id = $1 AND used_at IS NULL`,
+          [user.id]
+        );
+        await pool.query(
+          `INSERT INTO password_reset_tokens (jti, user_id, expires_at) VALUES ($1, $2, $3)`,
+          [jti, user.id, expiresAt]
+        );
+
+        const resetLink = `${BASE_URL}/reset-password?token=${token}`;
+        await emailService.sendAccountSetup(user.email, user.first_name || user.email, resetLink);
+        sent++;
+      } catch (err) {
+        errors.push(`${user.email}: ${err.message}`);
+      }
+    }
+
+    res.json({ ok: true, total: users.length, sent, errors: errors.slice(0, 20) });
+  }
+);
+
 module.exports = router;
