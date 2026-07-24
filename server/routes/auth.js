@@ -536,6 +536,42 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
       } else {
         console.warn(`[auth] forgot-password cooldown: skipped resend for ${emailAddr}`);
       }
+    } else {
+      // No users row — check if this is an investor who has never logged in.
+      // Auto-create their account and send an account-setup email so the reset
+      // link actually arrives rather than silently dropping.
+      const { rows: invRows } = await pool.query(
+        `SELECT id, first_name, last_name, email FROM investors
+         WHERE LOWER(email) = $1 AND status = 'active'`,
+        [emailAddr]
+      );
+      if (invRows.length > 0) {
+        const inv = invRows[0];
+        const tempHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+        const { rows: [newUser] } = await pool.query(`
+          INSERT INTO users (email, password_hash, role, first_name, last_name, investor_id)
+          VALUES ($1, $2, 'investor', $3, $4, $5)
+          ON CONFLICT (email) DO UPDATE
+            SET investor_id = COALESCE(users.investor_id, EXCLUDED.investor_id)
+          RETURNING id, email, first_name
+        `, [emailAddr, tempHash, inv.first_name || '', inv.last_name || '', inv.id]);
+        const jti       = crypto.randomBytes(16).toString('hex');
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7-day setup link
+        const token     = jwt.sign(
+          { sub: newUser.id, purpose: 'password_reset', jti },
+          JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+        await pool.query('DELETE FROM password_reset_tokens WHERE user_id=$1 AND used=false', [newUser.id]);
+        await pool.query(
+          'INSERT INTO password_reset_tokens (jti, user_id, expires_at) VALUES ($1, $2, $3)',
+          [jti, newUser.id, expiresAt]
+        );
+        const setupLink = `${process.env.BASE_URL || 'https://platform.svcapital.co.za'}/reset-password.html?token=${token}`;
+        setImmediate(() => emailService.sendAccountSetup(newUser.email, inv.first_name || emailAddr, setupLink)
+          .catch(err => console.error('[email] first-time setup failed:', err.message)));
+        console.log(`[auth] forgot-password: created login + sent setup link to first-time investor ${emailAddr}`);
+      }
     }
     res.json({ success: true, message: 'If this email is registered, a reset link has been sent.' });
   } catch (err) {
