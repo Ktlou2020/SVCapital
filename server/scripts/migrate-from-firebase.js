@@ -30,7 +30,8 @@ const PRODUCT_TYPE_MAP = {
   'Cattle Investment':          'cattle',
   'Solar Investment - 5 Years': 'solar',
   'Solar Investment - 6 Years': 'solar',
-  '12J Investment':             'cattle',
+  '12J Investment':             'cattle_12j',
+  '12J Cattle Investment':      'cattle_12j',
 };
 
 const POOL_STATUS_MAP = {
