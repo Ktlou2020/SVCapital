@@ -448,7 +448,8 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
       const invOrder   = orderClause.replace(/\b(id|investor_id|pool_id|status|product_type|created_at|start_date|end_date|amount)\b/g, 'i.$1');
       query = `
         SELECT i.*,
-               COALESCE(ip.product_type, i.product_type) AS product_type
+               COALESCE(ip.product_type, i.product_type) AS product_type,
+               ip.actual_rate AS pool_actual_rate
         FROM investments i
         LEFT JOIN investment_pools ip ON ip.id = i.pool_id
         ${invWhere}
