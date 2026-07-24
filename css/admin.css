@@ -56,7 +56,7 @@ ul { list-style: none; }
 img { max-width: 100%; display: block; }
 
 /* ─── Layout ─── */
-.app-layout { display: flex; min-height: 100vh; overflow-x: hidden; }
+.app-layout { display: flex; min-height: 100vh; }
 /* min-width:0 lets the flex item shrink below its content min-width,
    preventing any wide child from inflating the main column beyond 100vw */
 
@@ -174,7 +174,6 @@ img { max-width: 100%; display: block; }
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  overflow-x: hidden;
 }
 
 /* ─── TOP BAR ─── */
