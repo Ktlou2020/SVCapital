@@ -24,12 +24,16 @@ async function runMonthlyStatements() {
          FROM investors WHERE status = 'active' AND email IS NOT NULL`
       ),
       pool.query(
-        `SELECT investor_id, pool_name, product_type, amount, annual_rate, start_date, end_date, status, expected_return
+        `SELECT i.investor_id, i.pool_name, i.product_type, i.amount, i.annual_rate,
+                i.start_date, i.end_date, i.status, i.expected_return,
+                ip.actual_rate AS pool_actual_rate
          FROM (
            SELECT *, ROW_NUMBER() OVER (PARTITION BY investor_id ORDER BY created_at DESC) rn
            FROM investments
            WHERE investor_id IN (SELECT id FROM investors WHERE status='active' AND email IS NOT NULL)
-         ) ranked WHERE rn <= 20`
+         ) i
+         LEFT JOIN investment_pools ip ON ip.id = i.pool_id
+         WHERE i.rn <= 20`
       ),
       pool.query(
         `SELECT investor_id, type, amount, status, created_at

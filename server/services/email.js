@@ -534,7 +534,7 @@ function sendMonthlyStatement(investor, { investments, recentTransactions }) {
       <tr>
         <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#e5e7eb">${i.pool_name}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#fec24f;font-weight:600">${rand(i.amount)}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#10b981">${pct(i.annual_rate)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#10b981">${pct(i.pool_actual_rate || i.annual_rate)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#9ca3af">${fmtDate(i.end_date)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a"><span style="background:${statusColor(i.status)}22;color:${statusColor(i.status)};padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600">${i.status}</span></td>
       </tr>`).join('')

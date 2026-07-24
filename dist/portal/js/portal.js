@@ -5418,13 +5418,8 @@ function buildStatementHTML(opts) {
   if (incInvestments && investments.length > 0) {
     const invRows = investments.map(inv => {
       const info = getProductInfo(inv.product_type);
-      // Actual rate ACHIEVED: only meaningful once matured. While active, show "—".
-      const isMatured = inv.status === 'matured' || inv.status === 'paid_out';
-      const baseRate = (Number(inv.expected_return_rate) || 0) * 100;
-      const expRet = Number(inv.expected_return) || 0;
-      const actRet = Number(inv.actual_return) || 0;
-      const achievedRate = expRet > 0 ? baseRate * (actRet / expRet) : baseRate;
-      const rateCell = isMatured ? `${achievedRate.toFixed(2)}%` : '—';
+      const poolRate = (Number(inv.pool_actual_rate) || 0) * 100;
+      const rateCell = poolRate > 0 ? `${poolRate.toFixed(2)}%` : '—';
       const maturity = inv.maturity_date ? fmtDate(inv.maturity_date) : '—';
       const statusColor = inv.status === 'active' ? '#656565' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
       return `<tr style="border-bottom:1px solid #f0f0f0">
@@ -10928,12 +10923,8 @@ function downloadSaStatement(saId, saName) {
   if (investments.length > 0) {
     const invRows = investments.map(inv => {
       const info       = getProductInfo(inv.product_type);
-      const isMatured  = inv.status === 'matured' || inv.status === 'paid_out';
-      const baseRate   = (Number(inv.expected_return_rate) || 0) * 100;
-      const expRet     = Number(inv.expected_return) || 0;
-      const actRet     = Number(inv.actual_return) || 0;
-      const achieved   = expRet > 0 ? baseRate * (actRet / expRet) : baseRate;
-      const rateCell   = isMatured ? `${achieved.toFixed(2)}%` : '—';
+      const poolRate2  = (Number(inv.pool_actual_rate) || 0) * 100;
+      const rateCell   = poolRate2 > 0 ? `${poolRate2.toFixed(2)}%` : '—';
       const statusColor = inv.status === 'active' ? '#656565' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
       return `<tr style="border-bottom:1px solid #f0f0f0">
         <td style="padding:8px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${inv.id}</td>
