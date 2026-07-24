@@ -263,7 +263,6 @@ async function migrate() {
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
         ON CONFLICT (id) DO UPDATE SET
           name         = EXCLUDED.name,
-          status       = EXCLUDED.status,
           actual_rate  = EXCLUDED.actual_rate,
           product_type = EXCLUDED.product_type,
           source_id    = EXCLUDED.source_id,
