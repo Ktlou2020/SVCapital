@@ -441,6 +441,21 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         LIMIT $${params.length - 1} OFFSET $${params.length}
       `;
       countQuery = `SELECT COUNT(*) FROM investment_pools ip ${whereClause}`;
+    } else if (table === 'investments') {
+      // Always resolve product_type from the linked pool so migrated investments
+      // display the correct product label regardless of what was stored on the row.
+      const invWhere   = where   ? where.replace(/\b(id|investor_id|pool_id|status|product_type|created_at)\b/g, 'i.$1') : '';
+      const invOrder   = orderClause.replace(/\b(id|investor_id|pool_id|status|product_type|created_at)\b/g, 'i.$1');
+      query = `
+        SELECT i.*,
+               COALESCE(ip.product_type, i.product_type) AS product_type
+        FROM investments i
+        LEFT JOIN investment_pools ip ON ip.id = i.pool_id
+        ${invWhere}
+        ${invOrder}
+        LIMIT $${params.length - 1} OFFSET $${params.length}
+      `;
+      countQuery = `SELECT COUNT(*) FROM investments i LEFT JOIN investment_pools ip ON ip.id = i.pool_id ${invWhere}`;
     } else {
       query = `
         SELECT * FROM ${table}
@@ -590,10 +605,23 @@ router.get('/:table/:id', requireAuth, validateTable, async (req, res) => {
     }
 
 
-    const { rows } = await pool.query(
-      `SELECT * FROM ${table} WHERE ${key} = $1 LIMIT 1`,
-      [req.params.id]
-    );
+    let rows;
+    if (table === 'investments') {
+      const r = await pool.query(
+        `SELECT i.*, COALESCE(ip.product_type, i.product_type) AS product_type
+         FROM investments i
+         LEFT JOIN investment_pools ip ON ip.id = i.pool_id
+         WHERE i.${key} = $1 LIMIT 1`,
+        [req.params.id]
+      );
+      rows = r.rows;
+    } else {
+      const r = await pool.query(
+        `SELECT * FROM ${table} WHERE ${key} = $1 LIMIT 1`,
+        [req.params.id]
+      );
+      rows = r.rows;
+    }
     if (!rows[0]) return res.status(404).json({ error: 'Record not found.' });
 
     // Investor data isolation: verify the row belongs to this investor
