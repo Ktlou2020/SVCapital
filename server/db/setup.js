@@ -1128,7 +1128,7 @@ const DEFAULT_PRODUCTS = [
   },
   {
     product_type: 'ilobola', label: 'iLobola', headline: 'Save for what matters most.',
-    description: 'A dedicated savings and growth vehicle designed to help you accumulate funds for lobola. Earn competitive returns while working toward one of life's most meaningful milestones.',
+    description: "A dedicated savings and growth vehicle designed to help you accumulate funds for lobola. Earn competitive returns while working toward one of life's most meaningful milestones.",
     key_details: [
       'Purpose-built savings vehicle for lobola preparation',
       'Competitive fixed returns over a defined term',
