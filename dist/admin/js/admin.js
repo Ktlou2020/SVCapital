@@ -1549,10 +1549,23 @@ async function viewInvestor(id) {
   const inv = STATE.investors.find(i => i.id === id);
   if (!inv) return;
 
-  const invsts = STATE.investments.filter(i => i.investor_id === id);
-  const txns = STATE.transactions.filter(t => t.investor_id === id);
-
   document.getElementById('invDetailTitle').textContent = `${inv.first_name} ${inv.last_name} — ${inv.id}`;
+  // Open modal immediately with a spinner so it feels responsive
+  document.getElementById('invDetailBody').innerHTML = '<div style="text-align:center;padding:48px"><i class="fa-solid fa-spinner fa-spin fa-2x" style="color:var(--text-muted)"></i></div>';
+  Modal.open('investorDetailModal');
+
+  // Fetch complete investments and transactions for this investor live from the server
+  // so we are never limited by the global STATE cache size.
+  let invsts = STATE.investments.filter(i => i.investor_id === id);
+  let txns   = STATE.transactions.filter(t => t.investor_id === id);
+  try {
+    const [invstRes, txnRes] = await Promise.all([
+      API._fetch('GET', 'tables/investments',  null, { investor_id: id, limit: 2000 }),
+      API._fetch('GET', 'tables/transactions', null, { investor_id: id, limit: 2000 }),
+    ]);
+    if (invstRes?.data?.length) invsts = invstRes.data;
+    if (txnRes?.data?.length)  txns   = txnRes.data;
+  } catch (_) { /* fall back to STATE data already set above */ }
 
   // Check whether this investor has a login account (users row) and 2FA status
   let hasLoginAccount = null;
@@ -1726,36 +1739,43 @@ async function viewInvestor(id) {
 
   <!-- ── Investments ── -->
   <div id="invPanel-investments" style="display:none">
-    <table class="data-table mb-16">
-      <thead><tr><th>Pool</th><th>Product</th><th>Date Invested</th><th>Amount</th><th>Rate</th><th>Status</th><th>Maturity</th></tr></thead>
-      <tbody>${invsts.length ? invsts.map(i => {
-        const pi = Utils.productInfo(i.product_type);
-        return `<tr>
-          <td class="td-strong">${i.pool_name||'—'}</td>
-          <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
-          <td class="td-muted">${Utils.date(i.start_date||i.created_at)}</td>
-          <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
-          <td class="td-green">${i.annual_rate?Utils.pct(i.annual_rate):'—'}</td>
-          <td>${Utils.statusBadge(i.status)}</td>
-          <td class="td-muted">${Utils.date(i.end_date)}</td>
-        </tr>`;
-      }).join(''):'<tr><td colspan="7" class="text-center text-muted" style="padding:16px">No investments on record</td></tr>'}</tbody>
-    </table>
+    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px">${invsts.length} investment${invsts.length!==1?'s':''} · ${Utils.rand(invsts.filter(i=>i.status==='active').reduce((s,i)=>s+(parseFloat(i.amount)||0),0))} active capital</div>
+    <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
+      <table class="data-table mb-16">
+        <thead style="position:sticky;top:0;z-index:1"><tr><th>Pool</th><th>Product</th><th>Date Invested</th><th>Amount</th><th>Rate</th><th>Status</th><th>Maturity</th></tr></thead>
+        <tbody>${invsts.length ? invsts.map(i => {
+          const pi = Utils.productInfo(i.product_type);
+          return `<tr>
+            <td class="td-strong">${_esc(i.pool_name)||'—'}</td>
+            <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
+            <td class="td-muted">${Utils.date(i.start_date||i.created_at)}</td>
+            <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
+            <td class="td-green">${i.annual_rate?Utils.pct(i.annual_rate):'—'}</td>
+            <td>${Utils.statusBadge(i.status)}</td>
+            <td class="td-muted">${Utils.date(i.end_date)}</td>
+          </tr>`;
+        }).join(''):'<tr><td colspan="7" class="text-center text-muted" style="padding:16px">No investments on record</td></tr>'}</tbody>
+      </table>
+    </div>
   </div>
 
   <!-- ── Transactions ── -->
   <div id="invPanel-transactions" style="display:none">
-    <table class="data-table mb-16">
-      <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Reference</th><th>Date</th></tr></thead>
-      <tbody>${txns.length ? txns.slice(0,10).map(t => `
-        <tr>
-          <td>${Utils.statusBadge(t.type)}</td>
-          <td class="${(t.amount||0)>=0?'td-green':'td-red'} fw-700">${(t.amount||0)>=0?'+':''}${Utils.rand(Math.abs(t.amount||0))}</td>
-          <td>${Utils.statusBadge(t.status)}</td>
-          <td class="td-muted" style="font-size:0.78rem">${t.reference||'—'}</td>
-          <td class="td-muted">${Utils.date(t.transaction_date||t.created_at)}</td>
-        </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:16px">No transactions on record</td></tr>'}</tbody>
-    </table>
+    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px">${txns.length} transaction${txns.length!==1?'s':''}</div>
+    <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
+      <table class="data-table mb-16">
+        <thead style="position:sticky;top:0;z-index:1"><tr><th>Type</th><th>Amount</th><th>Status</th><th>Reference</th><th>Description</th><th>Date</th></tr></thead>
+        <tbody>${txns.length ? txns.map(t => `
+          <tr>
+            <td>${Utils.statusBadge(t.type)}</td>
+            <td class="${(parseFloat(t.amount)||0)<0?'td-red':'td-green'} fw-700">${(parseFloat(t.amount)||0)<0?'':'+'}${Utils.rand(t.amount)}</td>
+            <td>${Utils.statusBadge(t.status)}</td>
+            <td class="td-muted" style="font-size:0.78rem;font-family:monospace">${_esc(t.reference)||'—'}</td>
+            <td class="td-muted" style="font-size:0.78rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(t.description||t.notes)||'—'}</td>
+            <td class="td-muted">${Utils.date(t.transaction_date||t.created_at)}</td>
+          </tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:16px">No transactions on record</td></tr>'}</tbody>
+      </table>
+    </div>
   </div>
 
   <!-- ── Admin ── -->
@@ -1783,7 +1803,7 @@ async function viewInvestor(id) {
     </div>
   </div>
   `;
-  Modal.open('investorDetailModal');
+  // Modal already opened above; just restore tab state and side effects
   const ta = document.getElementById('invNewNoteTA');
   if (ta) ta.value = inv.notes || '';
   loadInvestorNotes(inv.id);
