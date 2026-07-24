@@ -2401,9 +2401,9 @@ async function loadMyInvestments() {
 function renderMyInvestmentStats() {
   const d = PORTAL.investments || [];
   const _s = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  _s('mi-capital',  Utils.rand(d.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)));
+  _s('mi-capital',  Utils.rand(d.filter(i => !i.is_reinvestment).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)));
   _s('mi-expected', Utils.rand(d.reduce((s, i) => s + (parseFloat(i.expected_return_amount) || 0), 0)));
-  _s('mi-earned',   Utils.rand(d.reduce((s, i) => s + (parseFloat(i.actual_return_amount) || 0), 0)));
+  _s('mi-earned',   Utils.rand(d.reduce((s, i) => s + (parseFloat(i.amount) || 0) * (parseFloat(i.pool_actual_rate) || 0), 0)));
   _s('mi-count',    d.length);
 }
 
@@ -11069,8 +11069,8 @@ function downloadStatement() {
     })
     .sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at));
 
-  const totalInvested = PORTAL.investments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = PORTAL.investments.reduce((s, i) => s + (Number(i.actual_return_amount) || 0), 0);
+  const totalInvested = PORTAL.investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const totalReturns  = PORTAL.investments.reduce((s, i) => s + (Number(i.amount) || 0) * (Number(i.pool_actual_rate) || 0), 0);
   const walletBal     = Number(investor.wallet_balance) || 0;
   const portfolioVal  = totalInvested + walletBal + totalReturns;
 

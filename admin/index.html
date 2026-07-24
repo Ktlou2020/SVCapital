@@ -907,6 +907,28 @@
 
         <!-- Platform Health Strip -->
         <div class="panel mb-16" id="opsHealthPanel">
+          <!-- Email Controls card -->
+          <div class="panel mb-16" id="emailControlsPanel">
+            <div class="panel__header" style="display:flex;align-items:center;justify-content:space-between">
+              <span class="panel__title"><i class="fa-solid fa-envelope" style="color:#eda5ff;margin-right:8px"></i>Email Controls</span>
+              <span id="emailControlsStatus" style="font-size:0.72rem;color:var(--text-muted)">Loading…</span>
+            </div>
+            <div class="panel__body" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+              <div>
+                <div style="font-size:0.85rem;font-weight:600;color:var(--text)">Resend Email Delivery</div>
+                <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">When disabled, all outbound emails are suppressed and logged as failed.</div>
+              </div>
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
+                <span id="emailToggleLabel" style="font-size:0.82rem;font-weight:700;color:var(--text-muted)">Loading…</span>
+                <div style="position:relative;width:48px;height:26px" onclick="toggleEmailDelivery()">
+                  <input type="checkbox" id="emailToggleChk" style="opacity:0;width:0;height:0;position:absolute" disabled>
+                  <span id="emailToggleTrack" style="position:absolute;inset:0;border-radius:26px;background:#3f3f3f;transition:background .2s;cursor:pointer"></span>
+                  <span id="emailToggleThumb" style="position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s;cursor:pointer"></span>
+                </div>
+              </label>
+            </div>
+          </div>
+
           <div class="panel__header" style="display:flex;align-items:center;justify-content:space-between">
             <span class="panel__title"><i class="fa-solid fa-satellite-dish" style="color:var(--orange);margin-right:8px"></i>Platform Health</span>
             <div style="display:flex;align-items:center;gap:10px">
