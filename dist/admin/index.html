@@ -1507,8 +1507,11 @@
             <option value="sent">Sent</option>
             <option value="failed">Failed</option>
           </select>
-          <button class="btn btn--sm btn--ghost" onclick="loadEmailLogs()" style="margin-left:auto">
+          <button class="btn btn--sm btn--ghost" onclick="loadEmailLogs()">
             <i class="fa-solid fa-rotate-right"></i> Refresh
+          </button>
+          <button class="btn btn--sm btn--primary" style="margin-left:auto" onclick="retryAllFailedEmails()">
+            <i class="fa-solid fa-paper-plane"></i> Resend All Failed
           </button>
         </div>
         <!-- Table -->
@@ -1521,9 +1524,10 @@
                 <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Type</th>
                 <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Status</th>
                 <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Sent At</th>
+                <th style="padding:10px 12px;color:var(--text-muted);font-weight:600"></th>
               </tr>
             </thead>
-            <tbody id="emailLogsList"><tr><td colspan="5" style="padding:40px;text-align:center;color:var(--text-muted)">Loading…</td></tr></tbody>
+            <tbody id="emailLogsList"><tr><td colspan="6" style="padding:40px;text-align:center;color:var(--text-muted)">Loading…</td></tr></tbody>
           </table>
         </div>
         <div id="emailLogsPager" style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:0.82rem;color:var(--text-muted)"></div>

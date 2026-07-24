@@ -9373,29 +9373,27 @@ async function loadEmailLogs(resetPage = true) {
       _emailLogsOffset === 0 ? API._fetch('GET', 'email-logs/stats') : Promise.resolve(null),
     ]);
 
-    // Stats chips
+    // Stats chips — clickable to filter
     if (statsRes) {
       const statsEl = document.getElementById('emailLogStats');
       if (statsEl) {
         const t = statsRes.totals || {};
-        statsEl.innerHTML = `
-          <div style="background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px">
-            <div style="font-size:1.4rem;font-weight:800">${parseInt(t.total||0).toLocaleString('en-ZA')}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted)">Total Emails</div>
-          </div>
-          <div style="background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px">
-            <div style="font-size:1.4rem;font-weight:800;color:#22c55e">${parseInt(t.sent||0).toLocaleString('en-ZA')}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted)">Sent</div>
-          </div>
-          <div style="background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px">
-            <div style="font-size:1.4rem;font-weight:800;color:#ef4444">${parseInt(t.failed||0).toLocaleString('en-ZA')}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted)">Failed</div>
-          </div>
-          ${(statsRes.byType||[]).slice(0,4).map(b => `
-          <div style="background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px">
-            <div style="font-size:1.2rem;font-weight:800">${parseInt(b.total).toLocaleString('en-ZA')}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted)">${EMAIL_TYPE_LABELS[b.type] || b.type}</div>
-          </div>`).join('')}`;
+        const chip = (val, label, num, color) => {
+          const numFmt = parseInt(num||0).toLocaleString('en-ZA');
+          const style = `background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px;cursor:${val?'pointer':'default'};transition:box-shadow 0.15s` + (val ? ';user-select:none' : '');
+          const onclick = val ? `onclick="_emailLogFilterStatus('${val}')"` : '';
+          return `<div style="${style}" ${onclick} title="${val ? 'Click to filter by '+label : ''}">
+            <div style="font-size:1.4rem;font-weight:800${color?';color:'+color:''}">${numFmt}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">${label}</div>
+          </div>`;
+        };
+        statsEl.innerHTML =
+          chip('', 'Total Emails', t.total, '') +
+          chip('sent', 'Sent', t.sent, '#22c55e') +
+          chip('failed', 'Failed', t.failed, '#ef4444') +
+          (statsRes.byType||[]).slice(0,4).map(b =>
+            chip('', EMAIL_TYPE_LABELS[b.type] || b.type, b.total, '')
+          ).join('');
       }
     }
 
@@ -9403,23 +9401,29 @@ async function loadEmailLogs(resetPage = true) {
     const logs = logsRes.data || [];
     if (!tbody) return;
     if (!logs.length) {
-      tbody.innerHTML = '<tr><td colspan="5" style="padding:40px;text-align:center;color:var(--text-muted)">No emails found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:40px;text-align:center;color:var(--text-muted)">No emails found.</td></tr>';
       if (pager) pager.innerHTML = '';
       return;
     }
 
+    const RETRYABLE_TYPES = new Set(['account_setup', 'password_reset']);
     tbody.innerHTML = logs.map(l => {
       const sent = l.sent_at ? new Date(l.sent_at).toLocaleString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Johannesburg' }) : '—';
-      const statusPill = l.status === 'sent'
-        ? `<span style="background:#dcfce7;color:#166534;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600">Sent</span>`
-        : `<span style="background:#fee2e2;color:#991b1b;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600" title="${l.error || ''}">Failed</span>`;
+      const isFailed = l.status !== 'sent';
+      const statusPill = isFailed
+        ? `<span style="background:#fee2e2;color:#991b1b;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600" title="${(l.error||'').replace(/"/g,"'")}">Failed</span>`
+        : `<span style="background:#dcfce7;color:#166534;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600">Sent</span>`;
       const typePill = `<span style="background:rgba(254,194,79,0.1);color:#b45309;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600">${EMAIL_TYPE_LABELS[l.type] || l.type}</span>`;
+      const resendBtn = isFailed && RETRYABLE_TYPES.has(l.type)
+        ? `<button class="btn btn--sm btn--ghost" style="font-size:0.72rem;padding:3px 8px" onclick="retrySingleEmail('${l.id}', this)"><i class="fa-solid fa-paper-plane"></i> Resend</button>`
+        : '';
       return `<tr style="border-bottom:1px solid var(--border)">
         <td style="padding:10px 12px">${l.to_email}</td>
-        <td style="padding:10px 12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.subject}">${l.subject}</td>
+        <td style="padding:10px 12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(l.subject||'').replace(/"/g,"'")}">${l.subject || ''}</td>
         <td style="padding:10px 12px">${typePill}</td>
         <td style="padding:10px 12px">${statusPill}</td>
         <td style="padding:10px 12px;white-space:nowrap">${sent}</td>
+        <td style="padding:10px 12px">${resendBtn}</td>
       </tr>`;
     }).join('');
 
@@ -9438,6 +9442,45 @@ async function loadEmailLogs(resetPage = true) {
         </div>`;
     }
   } catch (err) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="padding:40px;text-align:center;color:#ef4444">${err.message}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="padding:40px;text-align:center;color:#ef4444">${err.message}</td></tr>`;
+  }
+}
+
+function _emailLogFilterStatus(status) {
+  const sel = document.getElementById('emailLogStatus');
+  if (sel) { sel.value = status; loadEmailLogs(); }
+}
+
+async function retrySingleEmail(id, btn) {
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; }
+  try {
+    await API._fetch('POST', `email-logs/${id}/retry`);
+    Toast.success('Email resent successfully.');
+    if (btn) { btn.innerHTML = '<i class="fa-solid fa-check"></i> Sent'; btn.style.color = '#22c55e'; }
+  } catch (e) {
+    Toast.error(e.message || 'Failed to resend.');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Resend'; }
+  }
+}
+
+async function retryAllFailedEmails() {
+  const typeEl = document.getElementById('emailLogType');
+  const type = typeEl?.value || '';
+  const RETRYABLE = ['account_setup', 'password_reset'];
+  if (type && !RETRYABLE.includes(type)) {
+    return Toast.error(`Bulk resend is only supported for Account Setup and Password Reset emails.`);
+  }
+  const label = type ? (EMAIL_TYPE_LABELS[type] || type) : 'Account Setup';
+  if (!await Confirm.ask(`Resend all failed ${label} emails?`, {
+    body: 'This will send setup links to investors whose emails previously failed. Up to 500 at a time.',
+    confirmLabel: 'Resend All',
+  })) return;
+  try {
+    Toast.info('Processing… this may take a moment.');
+    const res = await API._fetch('POST', 'email-logs/retry-failed', { type: type || 'account_setup' });
+    Toast.success(`Done: ${res.sent} sent, ${res.errors} errors out of ${res.processed} processed.`);
+    loadEmailLogs();
+  } catch (e) {
+    Toast.error(e.message || 'Bulk resend failed.');
   }
 }
