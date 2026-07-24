@@ -46,10 +46,11 @@
 
 /* ─── Reset ─── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 14px; scroll-behavior: smooth; }
+html { font-size: 14px; scroll-behavior: smooth; overflow-x: hidden; }
 body { background: var(--black); color: var(--text); font-family: var(--font); line-height: 1.5; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
-a { color: inherit; text-decoration: none; transition: var(--transition); }
-button { cursor: pointer; border: none; background: none; font-family: inherit; font-size: inherit; color: inherit; }
+a { color: inherit; text-decoration: none; transition: var(--transition); touch-action: manipulation; }
+button { cursor: pointer; border: none; background: none; font-family: inherit; font-size: inherit; color: inherit; touch-action: manipulation; }
+[role="button"] { touch-action: manipulation; }
 input, select, textarea { font-family: inherit; font-size: inherit; }
 ul { list-style: none; }
 img { max-width: 100%; display: block; }
