@@ -8340,6 +8340,28 @@ async function recalculatePoolStats(btn) {
   }
 }
 
+async function backfillFicaFromKyc(btn) {
+  const resultEl = document.getElementById('ficaBackfillResult');
+  if (!await Confirm.ask(
+    'Approve FICA for all KYC-approved investors?',
+    { body: 'This will set fica_status = "approved" and status = "active" for every investor whose kyc_status is already "approved". Continue?', confirmLabel: 'Run Backfill' }
+  )) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/backfill/fica-from-kyc');
+    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Updated <strong>${data.updated}</strong> investor${data.updated !== 1 ? 's' : ''} (${data.fromKyc} from KYC→FICA, ${data.fromFica} from FICA→KYC sync).</span>`;
+    Toast.success(`FICA backfill complete — ${data.updated} investors updated`);
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    Toast.error(e.message || 'Backfill failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-shield-check"></i> Approve FICA for all KYC-approved clients';
+  }
+}
+
 /* ═══════════════════════════════════════════════
    COMPLIANCE CALENDAR
    ═══════════════════════════════════════════════ */

@@ -219,4 +219,53 @@ router.post('/pools/recalculate', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/backfill/fica-from-kyc ──────────────────────────────
+   One-shot backfill: any investor whose kyc_status is already 'approved'
+   gets fica_status set to 'approved', fica_approved_at stamped (if not
+   already set), and their account status promoted to 'active'.
+   Also syncs the reverse: fica_status='approved' → kyc_status='approved'.
+   Safe to run multiple times — the WHERE guards prevent double-writes.
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/backfill/fica-from-kyc', async (req, res) => {
+  try {
+    // kyc_status approved → set fica_status approved + activate
+    const { rowCount: fromKyc } = await pool.query(`
+      UPDATE investors
+         SET fica_status      = 'approved',
+             kyc_status       = 'approved',
+             fica_approved_at = COALESCE(fica_approved_at, NOW()),
+             status           = CASE WHEN status IN ('pending','pending_fica','fica_submitted','inactive') THEN 'active' ELSE status END,
+             updated_at       = NOW()
+       WHERE kyc_status = 'approved'
+         AND fica_status <> 'approved'
+    `);
+
+    // fica_status approved → ensure kyc_status is also approved
+    const { rowCount: fromFica } = await pool.query(`
+      UPDATE investors
+         SET kyc_status  = 'approved',
+             status      = CASE WHEN status IN ('pending','pending_fica','fica_submitted','inactive') THEN 'active' ELSE status END,
+             updated_at  = NOW()
+       WHERE fica_status = 'approved'
+         AND kyc_status <> 'approved'
+    `);
+
+    const total = fromKyc + fromFica;
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'investors.backfill_fica_from_kyc',
+      entityType: 'investors',
+      description: `Backfilled FICA approval for ${total} investors (${fromKyc} from KYC, ${fromFica} from FICA sync)`,
+      ip:         req.ip,
+    }).catch(() => {}));
+
+    res.json({ success: true, updated: total, fromKyc, fromFica });
+  } catch (err) {
+    console.error('/admin/backfill/fica-from-kyc error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 module.exports = router;
