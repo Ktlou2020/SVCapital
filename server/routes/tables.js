@@ -1081,6 +1081,25 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
             }
           }
 
+          // Update pool aggregate counters on new investments
+          if (clean.pool_id) {
+            await pool.query(
+              `UPDATE investment_pools
+                  SET raised_amount    = COALESCE(raised_amount, 0) + $1,
+                      current_invested = COALESCE(current_invested, 0) + $1,
+                      investor_count   = (
+                        SELECT COUNT(DISTINCT CASE WHEN sub_account_id IS NOT NULL
+                                                   THEN 'sa:' || sub_account_id
+                                                   ELSE 'inv:' || investor_id END)
+                        FROM investments
+                        WHERE pool_id = $2 AND status IN ('active','matured','paid_out')
+                      ),
+                      updated_at       = NOW()
+                WHERE id = $2`,
+              [investAmt, clean.pool_id]
+            );
+          }
+
           console.log(`[investment hook] R${platformFee} fee + R${investAmt} deducted from wallet for investment ${clean.id}`);
         } catch (err) {
           console.error('[investment hook] error:', err.message);

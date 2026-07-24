@@ -8281,6 +8281,24 @@ async function resendSetupEmails() {
   }
 }
 
+async function recalculatePoolStats(btn) {
+  const resultEl = document.getElementById('poolRecalcResult');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Recalculating…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/pools/recalculate');
+    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Updated ${data.poolsUpdated} pool${data.poolsUpdated !== 1 ? 's' : ''} successfully.</span>`;
+    Toast.success(`Pool stats recalculated (${data.poolsUpdated} pools updated)`);
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    Toast.error(e.message || 'Recalculation failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-calculator"></i> Recalculate Pool Stats';
+  }
+}
+
 /* ═══════════════════════════════════════════════
    COMPLIANCE CALENDAR
    ═══════════════════════════════════════════════ */

@@ -1766,6 +1766,16 @@
                   <p style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">Each recipient gets a 7-day link to set their password. Safe to resend — existing unused tokens are replaced.</p>
                   <div id="migResendResult" style="display:none;margin-top:12px"></div>
                 </div>
+
+                <!-- Pool stats recalculator -->
+                <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
+                  <p style="font-weight:600;margin-bottom:6px">Recalculate Pool Statistics</p>
+                  <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Recomputes <code>investor_count</code>, <code>raised_amount</code>, and <code>current_invested</code> for every pool from live investment data. Safe to run at any time.</p>
+                  <button class="btn btn--secondary" onclick="recalculatePoolStats(this)">
+                    <i class="fa-solid fa-calculator"></i> Recalculate Pool Stats
+                  </button>
+                  <div id="poolRecalcResult" style="margin-top:10px;font-size:0.82rem"></div>
+                </div>
               </div>
             </div>
           </div>
