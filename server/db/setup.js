@@ -1226,6 +1226,7 @@ async function autoSetup() {
         BEGIN ALTER TABLE audit_events ADD COLUMN actor_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE audit_events ADD COLUMN platform TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE investment_pools ADD COLUMN cycled_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE investment_pools ADD COLUMN source_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         -- Merge legacy 'paid_out' status into 'matured' (pools + investments)
         BEGIN UPDATE investment_pools SET status = 'matured' WHERE status = 'paid_out'; EXCEPTION WHEN others THEN NULL; END;
         BEGIN UPDATE investments      SET status = 'matured' WHERE status = 'paid_out'; EXCEPTION WHEN others THEN NULL; END;

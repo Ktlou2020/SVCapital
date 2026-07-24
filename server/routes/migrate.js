@@ -36,8 +36,10 @@ const KYC_DOC_TYPE_MAP = {
 
 function extractPoolId(p) {
   if (!p) return null;
-  const parts = p.split('/');
-  return parts[parts.length - 1];
+  // p may be a plain path string "investmentPools/ID" or an object { path: "investmentPools/ID" }
+  const str = (typeof p === 'object' && p !== null) ? (p.path || p.id || '') : String(p);
+  const parts = str.split('/');
+  return parts[parts.length - 1] || null;
 }
 
 /* Run items through fn in parallel batches to avoid DB connection exhaustion */
@@ -111,6 +113,8 @@ router.post('/run',
 
     const poolById = {};
     pools.forEach(p => { if (p._id) poolById[p._id] = p; });
+    // Maps original _id → DB pool id (built during pool insert step)
+    const sourceIdToPoolId = {};
 
     /* Pre-aggregate invested amounts per user — avoids O(n²) scan */
     const investedByUser = {};
@@ -225,13 +229,14 @@ router.post('/run',
           termMonths = Math.round((new Date(p.maturityDate) - new Date(p.launchDate)) / (1000*60*60*24*30));
         await pool.query(`
           INSERT INTO investment_pools
-            (id, name, product_type, status, target_amount, actual_rate,
+            (id, source_id, name, product_type, status, target_amount, actual_rate,
              term_months, start_date, end_date, maturity_date, description, updated_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
           ON CONFLICT (id) DO UPDATE SET
-            name=EXCLUDED.name, status=EXCLUDED.status, actual_rate=EXCLUDED.actual_rate, updated_at=NOW()
+            name=EXCLUDED.name, status=EXCLUDED.status, actual_rate=EXCLUDED.actual_rate,
+            source_id=EXCLUDED.source_id, updated_at=NOW()
         `, [
-          pid, p.name, PRODUCT_TYPE_MAP[p.productName]||'other',
+          pid, p._id, p.name, PRODUCT_TYPE_MAP[p.productName]||'other',
           POOL_STATUS_MAP[p.status]||'closed',
           parseFloat(p.maxTotal)||0, parseFloat(p.returnPercentage)||0, termMonths,
           p.launchDate   ? new Date(p.launchDate)   : null,
@@ -239,6 +244,7 @@ router.post('/run',
           p.maturityDate ? new Date(p.maturityDate) : null,
           `Migrated from previous platform. Product: ${p.productName}`,
         ]);
+        sourceIdToPoolId[p._id] = pid;
       }
     );
     counts.pools = poolResult.ok;
@@ -248,10 +254,14 @@ router.post('/run',
     const invResult = await inBatches(
       investments.filter(inv => inv._id && inv.userAccountNumber),
       async inv => {
-        const origPoolId = extractPoolId(inv.pool?.path);
+        // Pool ref: try inv.pool.path (object), inv.pool (string path), or inv.investmentPool
+        const poolRef    = inv.pool?.path || inv.pool || inv.investmentPool || null;
+        const origPoolId = extractPoolId(poolRef);
+        const dbPoolId   = origPoolId ? (sourceIdToPoolId[origPoolId] || `POOL-MIGR-${origPoolId}`) : null;
         const srcPool    = origPoolId ? poolById[origPoolId] : null;
         const amount     = parseFloat(inv.investedAmount) || 0;
         const rate       = parseFloat(srcPool?.returnPercentage) || 0;
+        const poolName   = (typeof inv.pool === 'object' ? inv.pool?.name : null) || srcPool?.name || '';
         let matInstr = null;
         if (inv.maturityInstruction?.instruction) {
           matInstr = inv.maturityInstruction.instruction.toLowerCase()
@@ -267,8 +277,8 @@ router.post('/run',
             status=EXCLUDED.status, maturity_instruction=EXCLUDED.maturity_instruction, updated_at=NOW()
         `, [
           `INV-MIGR-${inv._id}`, inv.userAccountNumber,
-          origPoolId ? `POOL-MIGR-${origPoolId}` : null,
-          inv.pool?.name||'', PRODUCT_TYPE_MAP[inv.product?.name]||'other', amount,
+          dbPoolId,
+          poolName, PRODUCT_TYPE_MAP[inv.product?.name]||'other', amount,
           INVESTMENT_STATUS_MAP[inv.status]||'active',
           inv.dateInvested  ? new Date(inv.dateInvested)         : new Date(),
           srcPool?.maturityDate ? new Date(srcPool.maturityDate) : null,
