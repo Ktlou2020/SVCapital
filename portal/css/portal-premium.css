@@ -3697,6 +3697,23 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
 
   /* ── Sub-account card stacking ── */
   .sa-showcase-grid { grid-template-columns: 1fr !important; }
+
+  /* ── XP progress bar: prevent horizontal page overflow ──
+     The bar has 4 white-space:nowrap children whose combined
+     min-content width (~430px) exceeds the mobile viewport.
+     Hide the non-essential "next level" label and shrink the
+     track floor so the bar fits within the viewport. ── */
+  .xp-progress-next { display: none !important; }
+  .xp-progress-track { min-width: 40px !important; }
+  .xp-progress-bar-wrap { max-width: 100%; overflow: hidden; }
+
+  /* ── Portfolio hero: single-column, no chart on mobile ── */
+  .portfolio-hero {
+    grid-template-columns: 1fr !important;
+  }
+  .portfolio-hero__right { display: none !important; }
+  .portfolio-hero__left  { grid-column: 1 !important; }
+  .portfolio-hero__stats { grid-column: 1 !important; }
 }
 
 /* ── Very small screens (< 390px / iPhone SE) ─────────────────── */
