@@ -1775,7 +1775,7 @@ function renderOverview(skipCharts) {
 
   const totalInvested = PORTAL.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
   const totalRet      = PORTAL.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-  const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0) + totalRet;
+  const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0);
   const returnPct     = totalInvested > 0 ? (totalRet / totalInvested * 100).toFixed(1) : '0';
   const activeCount = PORTAL.investments.filter(i => i.status === 'active').length;
   const firstName   = inv.first_name || 'Investor';
