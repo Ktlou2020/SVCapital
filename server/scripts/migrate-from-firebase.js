@@ -30,11 +30,28 @@ const PRODUCT_TYPE_MAP = {
   'Cattle Investment':          'cattle',
   'Solar Investment - 5 Years': 'solar',
   'Solar Investment - 6 Years': 'solar',
+  'Solar Investment - 7 Years': 'solar',
   '12J Investment':             'cattle_12j',
   '12J Cattle Investment':      'cattle_12j',
   'iLobola':                    'ilobola',
   'iLobola Investment':         'ilobola',
 };
+const PRODUCT_ID_MAP = {
+  '0J1g67Ln99nMOct6vnqS': 'delivery_bikes',
+  '8r3TlnGkizidu1JCgbDp': 'smme',
+  'BjrELvLGvQzTSDt9ztGK': 'solar',
+  'Q3R5RN21GWJ4lGCtI72R': 'cattle_12j',
+  'SfpCxgJjP6i5GUz1JWYp': 'solar',
+  'gSjiuqRg3E8IEO2hwfmu': 'cattle',
+  'lwKM2GFyCXNd88l1nCAK': 'ilobola',
+  'xKQkwQMa0Hnj0dAmGsWH': 'solar',
+};
+function resolveProductType(p) {
+  return PRODUCT_TYPE_MAP[p.productName]
+      || PRODUCT_ID_MAP[p.productId]
+      || PRODUCT_TYPE_MAP[p.name]
+      || 'other';
+}
 
 const POOL_STATUS_MAP = {
   MATURED: 'matured',
@@ -230,7 +247,7 @@ async function migrate() {
   for (const p of pools) {
     if (!p._id) continue;
     const id          = `POOL-MIGR-${p._id}`;
-    const productType = PRODUCT_TYPE_MAP[p.productName] || 'other';
+    const productType = resolveProductType(p);
 
     let termMonths = null;
     if (p.launchDate && p.maturityDate) {
@@ -245,11 +262,12 @@ async function migrate() {
            term_months, start_date, end_date, maturity_date, description, updated_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
         ON CONFLICT (id) DO UPDATE SET
-          name        = EXCLUDED.name,
-          status      = EXCLUDED.status,
-          actual_rate = EXCLUDED.actual_rate,
-          source_id   = EXCLUDED.source_id,
-          updated_at  = NOW()
+          name         = EXCLUDED.name,
+          status       = EXCLUDED.status,
+          actual_rate  = EXCLUDED.actual_rate,
+          product_type = EXCLUDED.product_type,
+          source_id    = EXCLUDED.source_id,
+          updated_at   = NOW()
       `, [
         id,
         p._id,
@@ -262,7 +280,7 @@ async function migrate() {
         p.launchDate   ? new Date(p.launchDate)   : null,
         p.closingDate  ? new Date(p.closingDate)  : null,
         p.maturityDate ? new Date(p.maturityDate) : null,
-        `Migrated from previous platform. Product: ${p.productName}`,
+        `Migrated from previous platform. Product: ${p.productId || p.productName || p.name}`,
       ]);
       sourceIdToPoolId[p._id] = id;
       poolOk++;
