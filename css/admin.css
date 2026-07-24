@@ -93,7 +93,7 @@ img { max-width: 100%; display: block; }
 .sidebar__nav { padding: 16px 0; flex: 1; }
 
 .nav-section-label {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--text-dim);
@@ -132,7 +132,7 @@ img { max-width: 100%; display: block; }
   margin-left: auto;
   background: var(--red);
   color: white;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 10px;
@@ -161,7 +161,7 @@ img { max-width: 100%; display: block; }
 }
 
 .sidebar-user__info .user-name { font-size: 0.8rem; font-weight: 700; color: var(--white); display: block; }
-.sidebar-user__info .user-role { font-size: 0.68rem; color: var(--text-dim); }
+.sidebar-user__info .user-role { font-size: 0.75rem; color: var(--text-dim); }
 
 /* ─── MAIN CONTENT ─── */
 .main-content {
