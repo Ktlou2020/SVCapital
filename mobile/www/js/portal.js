@@ -5311,8 +5311,8 @@ function updateStmtQuickStats() {
   const investments  = PORTAL.investments  || [];
   const transactions = PORTAL.transactions || [];
   const investor     = PORTAL.investor     || {};
-  const totalInvested = investments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = investments.reduce((s, i) => s + (Number(i.actual_return_amount) || 0), 0);
+  const totalInvested = investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const totalReturns  = investments.reduce((s, i) => s + (Number(i.amount) || 0) * (Number(i.pool_actual_rate) || 0), 0);
   const walletBal     = Number(investor.wallet_balance) || 0;
   const totalValue    = totalInvested + walletBal + totalReturns;
 
@@ -5386,9 +5386,9 @@ function generateStatement() {
     return d >= from && d <= to;
   });
 
-  // Compute stats
-  const totalInvested = investments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = investments.reduce((s, i) => s + (Number(i.actual_return_amount) || 0), 0);
+  // Compute stats — reinvestments excluded from Capital Deployed to avoid double-counting
+  const totalInvested = investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const totalReturns  = investments.reduce((s, i) => s + (Number(i.amount) || 0) * (Number(i.pool_actual_rate) || 0), 0);
   const activeInv     = investments.filter(i => i.status === 'active').length;
   const walletBal     = Number(investor.wallet_balance) || 0;
   const totalValue    = totalInvested + walletBal + totalReturns;
@@ -5518,8 +5518,8 @@ function buildStatementHTML(opts) {
       const p = inv.product_type || 'unknown';
       if (!byProduct[p]) byProduct[p] = { count: 0, capital: 0, returns: 0 };
       byProduct[p].count++;
-      byProduct[p].capital += Number(inv.amount) || 0;
-      byProduct[p].returns += Number(inv.actual_return_amount) || 0;
+      if (!inv.is_reinvestment) byProduct[p].capital += Number(inv.amount) || 0;
+      byProduct[p].returns += (Number(inv.amount) || 0) * (Number(inv.pool_actual_rate) || 0);
     });
 
     const perfRows = Object.entries(byProduct).map(([prod, d]) => {
@@ -11177,8 +11177,8 @@ async function downloadSaStatement(saId, saName) {
   const transactions = (PORTAL.transactions || []).filter(t => t.sub_account_id === saId);
   const investor     = PORTAL.investor || {};
 
-  const totalInvested = investments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = investments.reduce((s, i) => s + (Number(i.actual_return_amount) || 0), 0);
+  const totalInvested = investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const totalReturns  = investments.reduce((s, i) => s + (Number(i.amount) || 0) * (Number(i.pool_actual_rate) || 0), 0);
   const walletBal     = Number(sa.wallet_balance) || 0;
   const totalValue    = totalInvested + walletBal + totalReturns;
   const activeInv     = investments.filter(i => i.status === 'active').length;
@@ -11232,8 +11232,8 @@ async function downloadSaStatement(saId, saName) {
       const p = inv.product_type || 'unknown';
       if (!byProduct[p]) byProduct[p] = { count: 0, capital: 0, returns: 0 };
       byProduct[p].count++;
-      byProduct[p].capital += Number(inv.amount) || 0;
-      byProduct[p].returns += Number(inv.actual_return_amount) || 0;
+      if (!inv.is_reinvestment) byProduct[p].capital += Number(inv.amount) || 0;
+      byProduct[p].returns += (Number(inv.amount) || 0) * (Number(inv.pool_actual_rate) || 0);
     });
     const perfRows = Object.entries(byProduct).map(([prod, d]) => {
       const pct  = d.capital > 0 ? ((d.returns / d.capital) * 100).toFixed(2) : '0.00';
