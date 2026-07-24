@@ -444,8 +444,8 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
     } else if (table === 'investments') {
       // Always resolve product_type from the linked pool so migrated investments
       // display the correct product label regardless of what was stored on the row.
-      const invWhere   = where   ? where.replace(/\b(id|investor_id|pool_id|status|product_type|created_at)\b/g, 'i.$1') : '';
-      const invOrder   = orderClause.replace(/\b(id|investor_id|pool_id|status|product_type|created_at)\b/g, 'i.$1');
+      const invWhere   = where   ? where.replace(/\b(id|investor_id|pool_id|status|product_type|created_at|start_date|end_date|amount)\b/g, 'i.$1') : '';
+      const invOrder   = orderClause.replace(/\b(id|investor_id|pool_id|status|product_type|created_at|start_date|end_date|amount)\b/g, 'i.$1');
       query = `
         SELECT i.*,
                COALESCE(ip.product_type, i.product_type) AS product_type
