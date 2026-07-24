@@ -364,6 +364,25 @@ router.post('/run',
   }
 );
 
+/* ── GET /api/migrate/investor-users ── list all investor login accounts */
+router.get('/investor-users',
+  requireAuth,
+  requireRole('admin', 'director'),
+  async (req, res) => {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.email, u.first_name, u.last_name, u.created_at,
+              EXISTS(
+                SELECT 1 FROM password_reset_tokens t
+                WHERE t.user_id = u.id AND t.used_at IS NOT NULL
+              ) AS has_logged_in
+       FROM users u
+       WHERE u.role = 'investor'
+       ORDER BY u.first_name, u.last_name`
+    );
+    res.json({ ok: true, users: rows });
+  }
+);
+
 /* ── POST /api/migrate/resend-setup-emails ── */
 router.post('/resend-setup-emails',
   requireAuth,
@@ -374,17 +393,23 @@ router.post('/resend-setup-emails',
 
     if (!JWT_SECRET) return res.status(500).json({ error: 'JWT_SECRET not configured.' });
 
-    /* Fetch all investor-role users */
-    const { rows: users } = await pool.query(
-      `SELECT id, email, first_name FROM users WHERE role = 'investor' ORDER BY created_at`
-    );
+    /* Optional: restrict to a specific subset of user IDs */
+    const { userIds } = req.body || {};
+    let queryText = `SELECT id, email, first_name FROM users WHERE role = 'investor' ORDER BY created_at`;
+    let queryParams = [];
+    if (Array.isArray(userIds) && userIds.length) {
+      queryText  = `SELECT id, email, first_name FROM users WHERE role = 'investor' AND id = ANY($1) ORDER BY created_at`;
+      queryParams = [userIds];
+    }
+
+    const { rows: users } = await pool.query(queryText, queryParams);
 
     let sent = 0;
     const errors = [];
 
     for (const user of users) {
       try {
-        const jti       = require('crypto').randomBytes(16).toString('hex');
+        const jti       = crypto.randomBytes(16).toString('hex');
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
         const token     = jwt.sign(
           { sub: user.id, purpose: 'password_reset', jti },
@@ -392,7 +417,6 @@ router.post('/resend-setup-emails',
           { expiresIn: '7d' }
         );
 
-        /* Invalidate any prior pending reset tokens for this user */
         await pool.query(
           `DELETE FROM password_reset_tokens WHERE user_id = $1 AND used_at IS NULL`,
           [user.id]
