@@ -90,4 +90,37 @@ router.put('/eva-rate', requireAuth, requireRole('admin', 'director'), async (re
   }
 });
 
+/* GET /api/settings/email-toggle — admin/director only */
+router.get('/email-toggle', requireAuth, requireRole('admin', 'director'), async (req, res) => {
+  try {
+    // Upsert so the row always exists after the first read
+    const { rows } = await db.query(`
+      INSERT INTO platform_settings (key, value, description, updated_at)
+      VALUES ('resend_emails_enabled', 'true', 'Set to false to suppress all outbound Resend emails', NOW())
+      ON CONFLICT (key) DO UPDATE SET updated_at = platform_settings.updated_at
+      RETURNING value
+    `);
+    const enabled = rows[0]?.value !== 'false';
+    res.json({ enabled });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* PUT /api/settings/email-toggle — admin/director only */
+router.put('/email-toggle', requireAuth, requireRole('admin', 'director'), async (req, res) => {
+  const { enabled } = req.body;
+  if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be boolean' });
+  try {
+    await db.query(`
+      INSERT INTO platform_settings (key, value, description, updated_at)
+      VALUES ('resend_emails_enabled', $1, 'Set to false to suppress all outbound Resend emails', NOW())
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+    `, [enabled ? 'true' : 'false']);
+    res.json({ ok: true, enabled });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
