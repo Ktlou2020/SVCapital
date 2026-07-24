@@ -116,4 +116,47 @@ router.post('/reset-2fa', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/pools/recalculate ───────────────────────────────────
+   Recomputes investor_count, raised_amount, and current_invested for every
+   pool from the live investments table.  Safe to run at any time.
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/pools/recalculate', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`
+      UPDATE investment_pools ip
+         SET investor_count   = sub.cnt,
+             raised_amount    = sub.raised,
+             current_invested = sub.active_amt,
+             updated_at       = NOW()
+        FROM (
+          SELECT
+            pool_id,
+            COUNT(DISTINCT CASE WHEN sub_account_id IS NOT NULL
+                                THEN 'sa:' || sub_account_id
+                                ELSE 'inv:' || investor_id END) AS cnt,
+            SUM(CASE WHEN status IN ('active','matured','paid_out') THEN amount ELSE 0 END) AS raised,
+            SUM(CASE WHEN status = 'active' THEN amount ELSE 0 END)                        AS active_amt
+          FROM investments
+          WHERE pool_id IS NOT NULL
+          GROUP BY pool_id
+        ) sub
+       WHERE ip.id = sub.pool_id
+    `);
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'pools.recalculate',
+      entityType: 'investment_pools',
+      description: `Recalculated stats for ${rowCount} pools`,
+      ip:         req.ip,
+    }).catch(() => {}));
+
+    res.json({ success: true, poolsUpdated: rowCount });
+  } catch (err) {
+    console.error('/admin/pools/recalculate error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 module.exports = router;
