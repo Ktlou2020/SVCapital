@@ -46,8 +46,8 @@
 
 /* ─── Reset ─── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 14px; scroll-behavior: smooth; overflow-x: hidden; }
-body { background: var(--black); color: var(--text); font-family: var(--font); line-height: 1.5; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+html { font-size: 14px; scroll-behavior: smooth; }
+body { background: var(--black); color: var(--text); font-family: var(--font); line-height: 1.5; -webkit-font-smoothing: antialiased; }
 a { color: inherit; text-decoration: none; transition: var(--transition); touch-action: manipulation; }
 button { cursor: pointer; border: none; background: none; font-family: inherit; font-size: inherit; color: inherit; touch-action: manipulation; }
 [role="button"] { touch-action: manipulation; }
@@ -56,7 +56,9 @@ ul { list-style: none; }
 img { max-width: 100%; display: block; }
 
 /* ─── Layout ─── */
-.app-layout { display: flex; min-height: 100vh; }
+.app-layout { display: flex; min-height: 100vh; overflow-x: hidden; }
+/* min-width:0 lets the flex item shrink below its content min-width,
+   preventing any wide child from inflating the main column beyond 100vw */
 
 /* ─── SIDEBAR ─── */
 .sidebar {
@@ -168,9 +170,11 @@ img { max-width: 100%; display: block; }
 .main-content {
   margin-left: var(--sidebar-w);
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 /* ─── TOP BAR ─── */
