@@ -1431,46 +1431,63 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           });
         }
 
-        // FICA status approved → only allow if all 3 required docs are approved
+        // FICA status approved → only allow if all 3 required docs are approved.
+        // bank_statement is treated as equivalent to proof_of_bank (supports migrated clients).
         if (table === 'investors' && body.fica_status === 'approved') {
           const REQUIRED_DOCS = ['id_document', 'proof_of_address', 'proof_of_bank'];
+          const BANK_ALIASES   = ['proof_of_bank', 'bank_statement'];
           const { rows: approvedDocs } = await pool.query(
             `SELECT DISTINCT doc_type FROM kyc_documents
-             WHERE investor_id = $1 AND status = 'approved' AND doc_type = ANY($2)`,
-            [req.params.id, REQUIRED_DOCS]
+             WHERE investor_id = $1 AND status = 'approved'
+               AND doc_type = ANY($2)`,
+            [req.params.id, [...REQUIRED_DOCS, ...BANK_ALIASES]]
           );
           const approvedSet = new Set(approvedDocs.map(d => d.doc_type));
-          const allApproved = REQUIRED_DOCS.every(t => approvedSet.has(t));
+          // bank_statement satisfies the proof_of_bank requirement
+          const hasBankDoc = BANK_ALIASES.some(t => approvedSet.has(t));
+          const allApproved = approvedSet.has('id_document') && approvedSet.has('proof_of_address') && hasBankDoc;
           if (!allApproved) {
-            const missing = REQUIRED_DOCS.filter(t => !approvedSet.has(t));
+            const missing = [];
+            if (!approvedSet.has('id_document'))    missing.push('id_document');
+            if (!approvedSet.has('proof_of_address')) missing.push('proof_of_address');
+            if (!hasBankDoc)                         missing.push('proof_of_bank or bank_statement');
             return res.status(400).json({
               error: `Cannot approve FICA: the following required documents are not yet approved: ${missing.join(', ')}.`,
             });
           }
           await pool.query(
-            'UPDATE investors SET fica_approved_at=NOW() WHERE id=$1 AND fica_approved_at IS NULL',
+            `UPDATE investors
+                SET fica_approved_at = COALESCE(fica_approved_at, NOW()),
+                    kyc_status       = 'approved',
+                    status           = CASE WHEN status IN ('pending','pending_fica','fica_submitted') THEN 'active' ELSE status END,
+                    updated_at       = NOW()
+              WHERE id = $1`,
             [req.params.id]
           ).catch(() => {});
         }
 
-        // KYC document approved → promote investor FICA status and email ONLY once all 3 required docs are approved
+        // KYC document approved → promote investor FICA/KYC status once all 3 required docs are approved.
+        // bank_statement is treated as equivalent to proof_of_bank (supports migrated clients).
         if (table === 'kyc_documents' && body.status === 'approved' && updated.investor_id) {
-          const REQUIRED_DOCS = ['id_document', 'proof_of_address', 'proof_of_bank'];
+          const BANK_ALIASES = ['proof_of_bank', 'bank_statement'];
           const { rows: approvedDocs } = await pool.query(
             `SELECT DISTINCT doc_type FROM kyc_documents
-             WHERE investor_id = $1 AND status = 'approved' AND doc_type = ANY($2)`,
-            [updated.investor_id, REQUIRED_DOCS]
+             WHERE investor_id = $1 AND status = 'approved'
+               AND doc_type = ANY($2)`,
+            [updated.investor_id, ['id_document', 'proof_of_address', ...BANK_ALIASES]]
           );
           const approvedSet = new Set(approvedDocs.map(d => d.doc_type));
-          const allApproved = REQUIRED_DOCS.every(t => approvedSet.has(t));
+          const hasBankDoc  = BANK_ALIASES.some(t => approvedSet.has(t));
+          const allApproved = approvedSet.has('id_document') && approvedSet.has('proof_of_address') && hasBankDoc;
           if (allApproved) {
-            // Promote investor FICA status to approved
             await pool.query(
               `UPDATE investors
-               SET fica_status = 'approved',
-                   fica_approved_at = COALESCE(fica_approved_at, NOW()),
-                   updated_at = NOW()
-               WHERE id = $1 AND fica_status != 'approved'`,
+                  SET fica_status       = 'approved',
+                      kyc_status        = 'approved',
+                      status            = CASE WHEN status IN ('pending','pending_fica','fica_submitted') THEN 'active' ELSE status END,
+                      fica_approved_at  = COALESCE(fica_approved_at, NOW()),
+                      updated_at        = NOW()
+                WHERE id = $1 AND fica_status != 'approved'`,
               [updated.investor_id]
             ).catch(() => {});
             const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);

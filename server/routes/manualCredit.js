@@ -116,6 +116,66 @@ router.post('/reset-2fa', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/investments/allocate-pools ──────────────────────────
+   Matches investments to pools by name (case-insensitive, trimmed).
+   Updates pool_id (and pool_name to the canonical pool name) on any
+   investment whose pool_id is NULL but whose pool_name matches a known pool.
+   Also updates investments that have a mismatched/stale pool_id.
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/investments/allocate-pools', async (req, res) => {
+  try {
+    const { rows: pools } = await pool.query(
+      `SELECT id, name FROM investment_pools WHERE name IS NOT NULL`
+    );
+
+    // Build a case-insensitive name → pool map
+    const poolByName = new Map();
+    for (const p of pools) {
+      if (p.name) poolByName.set(p.name.trim().toLowerCase(), p);
+    }
+
+    // Fetch investments that are unallocated (pool_id IS NULL) and have a pool_name
+    const { rows: investments } = await pool.query(
+      `SELECT id, pool_name, pool_id
+         FROM investments
+        WHERE pool_name IS NOT NULL AND pool_name <> ''`
+    );
+
+    let matched = 0;
+    const unmatched = [];
+
+    for (const inv of investments) {
+      const key = (inv.pool_name || '').trim().toLowerCase();
+      const matchedPool = poolByName.get(key);
+      if (matchedPool && inv.pool_id !== matchedPool.id) {
+        await pool.query(
+          `UPDATE investments SET pool_id = $1, pool_name = $2, updated_at = NOW() WHERE id = $3`,
+          [matchedPool.id, matchedPool.name, inv.id]
+        );
+        matched++;
+      } else if (!matchedPool) {
+        unmatched.push(inv.pool_name);
+      }
+    }
+
+    const uniqueUnmatched = [...new Set(unmatched)].slice(0, 20);
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'investments.allocate_pools',
+      entityType: 'investments',
+      description: `Allocated ${matched} investments to pools by name matching. ${uniqueUnmatched.length} pool names had no match.`,
+      ip:         req.ip,
+    }).catch(() => {}));
+
+    res.json({ success: true, matched, unmatched: uniqueUnmatched });
+  } catch (err) {
+    console.error('/admin/investments/allocate-pools error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 /* ─── POST /api/admin/pools/recalculate ───────────────────────────────────
    Recomputes investor_count, raised_amount, and current_invested for every
    pool from the live investments table.  Safe to run at any time.
