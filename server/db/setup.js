@@ -1112,6 +1112,21 @@ const DEFAULT_PRODUCTS = [
     badge_class: 'badge--orange', sort_order: 7,
   },
   {
+    product_type: 'cattle_12j', label: '12J Cattle Investment', headline: 'Tax-efficient cattle returns.',
+    partner_name: 'Beefcor',
+    description: "Section 12J tax-incentivised cattle investment. Partner with Beefcor's feedlot to grow returns while qualifying for a full SARS income tax deduction on invested capital.",
+    key_details: [
+      'Full SARS Section 12J income tax deduction on invested capital',
+      'Cattle enter feedlot at 200–230kg and are raised to 450–500kg',
+      'Returns determined by weight gain and market price per kilogram',
+      'Beefcor guarantees 99% cattle survival rate',
+      'Minimum 5-year holding period for 12J tax benefit',
+    ].join('\n'),
+    min_investment: 5000, term_months: 60, benchmark_rate: 0.13, performance_fee_pct: 0.20,
+    risk_profile: 'Medium-High', risk_color: '#fec24f', icon: 'fa-cow', color: '#fec24f',
+    badge_class: 'badge--gold', sort_order: 9,
+  },
+  {
     product_type: 'gridfarmer', label: 'GridFarmer', headline: 'Buy a hectare, not a fund.',
     description: 'Own a uniquely identified 1-hectare white maize GPS grid. Your return is tethered to the physical yield of your specific plot — satellite-monitored, GPS-verified at harvest. Not a pool, not an index.',
     key_details: [
@@ -1269,6 +1284,24 @@ async function autoSetup() {
       UPDATE products SET partner_name = 'Beefcor'            WHERE product_type = 'cattle'                        AND (partner_name IS NULL OR partner_name = '');
       UPDATE products SET partner_name = 'The Solar Experts'  WHERE product_type IN ('solar_7yr','solar_6yr','solar_5yr') AND (partner_name IS NULL OR partner_name = '');
       UPDATE products SET partner_name = 'MoolaLend'          WHERE product_type IN ('short_term','smme')          AND (partner_name IS NULL OR partner_name = '');
+    `).catch(() => {});
+
+    // Upsert cattle_12j product (safe on existing deployments)
+    await pool.query(`
+      INSERT INTO products
+        (id, product_type, label, headline, description, key_details,
+         min_investment, term_months, benchmark_rate, performance_fee_pct,
+         risk_profile, risk_color, icon, color, badge_class, partner_name, sort_order)
+      VALUES
+        ('PROD-CATTLE_12J', 'cattle_12j', '12J Cattle Investment', 'Tax-efficient cattle returns.',
+         'Section 12J tax-incentivised cattle investment. Partner with Beefcor''s feedlot to grow returns while qualifying for a full SARS income tax deduction on invested capital.',
+         'Full SARS Section 12J income tax deduction on invested capital
+Cattle enter feedlot at 200–230kg and are raised to 450–500kg
+Returns determined by weight gain and market price per kilogram
+Beefcor guarantees 99% cattle survival rate
+Minimum 5-year holding period for 12J tax benefit',
+         5000, 60, 0.13, 0.20, 'Medium-High', '#fec24f', 'fa-cow', '#fec24f', 'badge--gold', 'Beefcor', 9)
+      ON CONFLICT (product_type) DO NOTHING
     `).catch(() => {});
 
     // Update short_term key_details to include receivables financing bullet
