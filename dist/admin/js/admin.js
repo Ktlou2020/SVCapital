@@ -1142,6 +1142,33 @@ function updateBulkBar() {
   const cnt = document.getElementById('invBulkCount');
   if (bar) bar.style.display = selectedInvestors.size ? 'flex' : 'none';
   if (cnt) cnt.textContent = `${selectedInvestors.size} investor${selectedInvestors.size !== 1 ? 's' : ''} selected`;
+  _updateSelectAllBanner();
+}
+
+function _updateSelectAllBanner() {
+  const banner = document.getElementById('invSelectAllBanner');
+  if (!banner) return;
+  const total = filteredInvestors.length;
+  const allSelected = selectedInvestors.size === total && total > 0;
+  const start = (investorPage - 1) * INV_PAGE_SIZE;
+  const pageIds = filteredInvestors.slice(start, start + INV_PAGE_SIZE).map(i => i.id);
+  const pageAllSelected = pageIds.length > 0 && pageIds.every(id => selectedInvestors.has(id));
+  if (allSelected) {
+    banner.style.display = 'block';
+    banner.innerHTML = `All <strong>${total}</strong> investors are selected. <a href="#" style="color:var(--orange);font-weight:700;text-decoration:underline" onclick="clearInvestorSelection();return false">Clear selection</a>`;
+  } else if (pageAllSelected && total > pageIds.length) {
+    banner.style.display = 'block';
+    banner.innerHTML = `All <strong>${pageIds.length}</strong> investors on this page are selected. <a href="#" style="color:var(--orange);font-weight:700;text-decoration:underline" onclick="selectAllAcrossPages();return false">Select all ${total} investors</a>`;
+  } else {
+    banner.style.display = 'none';
+    banner.innerHTML = '';
+  }
+}
+
+function selectAllAcrossPages() {
+  filteredInvestors.forEach(inv => selectedInvestors.add(inv.id));
+  renderInvestorsTable();
+  updateBulkBar();
 }
 
 function toggleInvestorSelect(id, checked) {
@@ -1167,6 +1194,8 @@ function toggleAllInvestors(cb) {
 
 function clearInvestorSelection() {
   selectedInvestors.clear();
+  const banner = document.getElementById('invSelectAllBanner');
+  if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; }
   renderInvestorsTable();
   updateBulkBar();
 }
