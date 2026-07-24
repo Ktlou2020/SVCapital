@@ -3822,7 +3822,7 @@ async function _renderProductTrackRecord(type, color) {
       </div>
       <div style="flex:1;min-width:130px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:16px">
         <div style="font-size:1.6rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${Utils.rand(paidBack)}</div>
-        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">paid back to investors</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">invested to date</div>
       </div>
     </div>`;
 }
