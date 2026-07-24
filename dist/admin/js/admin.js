@@ -8173,17 +8173,93 @@ async function runMigration() {
   }
 }
 
+let _emailInvestors = [];
+
+async function loadInvestorUsersForEmail() {
+  const btn    = document.getElementById('migLoadUsersBtn');
+  const list   = document.getElementById('migEmailList');
+  const toolbar = document.getElementById('migEmailToolbar');
+  const sendBtn = document.getElementById('migResendBtn');
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading…';
+
+  try {
+    const data = await API._fetch('GET', 'migrate/investor-users');
+    _emailInvestors = data.users || [];
+    renderInvestorEmailList();
+    toolbar.style.display = 'block';
+    list.style.display = 'block';
+    sendBtn.style.display = 'block';
+    updateEmailStats();
+  } catch (e) {
+    Toast.error(e.message || 'Failed to load investors');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Reload';
+  }
+}
+
+function renderInvestorEmailList() {
+  const q = (document.getElementById('migEmailSearch')?.value || '').toLowerCase();
+  const list = document.getElementById('migEmailList');
+  const filtered = _emailInvestors.filter(u =>
+    !q || `${u.first_name} ${u.last_name} ${u.email}`.toLowerCase().includes(q)
+  );
+
+  if (!filtered.length) {
+    list.innerHTML = '<div style="padding:14px;text-align:center;color:var(--text-muted);font-size:0.8rem">No investors found</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(u => `
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''">
+      <input type="checkbox" class="email-investor-cb" data-id="${u.id}" checked style="accent-color:#eda5ff;width:14px;height:14px;flex-shrink:0" onchange="updateEmailStats()">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.first_name || ''} ${u.last_name || ''}</div>
+        <div style="font-size:0.74rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.email}</div>
+      </div>
+      ${u.has_logged_in ? '<span style="font-size:0.68rem;padding:2px 6px;background:rgba(34,197,94,0.12);color:#22c55e;border-radius:4px;flex-shrink:0">logged in</span>' : ''}
+    </label>
+  `).join('');
+
+  updateEmailStats();
+}
+
+function filterInvestorEmailList() {
+  renderInvestorEmailList();
+}
+
+function toggleAllEmailInvestors(checked) {
+  document.querySelectorAll('.email-investor-cb').forEach(cb => { cb.checked = checked; });
+  updateEmailStats();
+}
+
+function updateEmailStats() {
+  const total    = document.querySelectorAll('.email-investor-cb').length;
+  const selected = document.querySelectorAll('.email-investor-cb:checked').length;
+  const stats    = document.getElementById('migEmailStats');
+  const label    = document.getElementById('migResendLabel');
+  if (stats) stats.textContent = `${selected} of ${total} selected`;
+  if (label) label.textContent = selected ? `Send to ${selected} Investor${selected !== 1 ? 's' : ''}` : 'Send Setup Emails';
+}
+
 async function resendSetupEmails() {
   const btn = document.getElementById('migResendBtn');
   const resultEl = document.getElementById('migResendResult');
-  if (!confirm('This will send a password-setup email to every investor account. Continue?')) return;
+
+  const checked = [...document.querySelectorAll('.email-investor-cb:checked')];
+  if (!checked.length) return Toast.error('Select at least one investor.');
+
+  const userIds = checked.map(cb => cb.dataset.id);
+  if (!confirm(`Send account setup emails to ${userIds.length} investor${userIds.length !== 1 ? 's' : ''}?`)) return;
 
   btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending emails…';
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending…';
   resultEl.style.display = 'none';
 
   try {
-    const data = await API._fetch('POST', 'migrate/resend-setup-emails');
+    const data = await API._fetch('POST', 'migrate/resend-setup-emails', { userIds });
     const errHtml = data.errors?.length
       ? `<div style="margin-top:8px;font-size:0.75rem;color:#ef4444"><strong>${data.errors.length} failed:</strong><br>${data.errors.map(e => `• ${e}`).join('<br>')}</div>`
       : '';
@@ -8193,12 +8269,13 @@ async function resendSetupEmails() {
         Sent <strong>${data.sent}</strong> of <strong>${data.total}</strong> emails successfully.
       </div>${errHtml}`;
     resultEl.style.display = 'block';
-    Toast.success(`${data.sent} setup emails sent`);
+    Toast.success(`${data.sent} setup email${data.sent !== 1 ? 's' : ''} sent`);
   } catch (e) {
     Toast.error(e.message || 'Failed to send emails');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-envelope"></i> Resend Account Setup Emails to All Investors';
+    updateEmailStats();
+    btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> <span id="migResendLabel">${document.getElementById('migResendLabel')?.textContent || 'Send Setup Emails'}</span>`;
   }
 }
 

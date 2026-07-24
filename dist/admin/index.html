@@ -1734,11 +1734,38 @@
               <!-- Utilities -->
               <div style="border-top:1px solid var(--border);margin-top:28px;padding-top:20px">
                 <p style="font-size:0.8rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px">Post-Migration Utilities</p>
-                <button class="btn btn--secondary btn--full" id="migResendBtn" onclick="resendSetupEmails()">
-                  <i class="fa-solid fa-envelope"></i> Resend Account Setup Emails to All Investors
-                </button>
-                <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px">Sends a 7-day password-setup link to every investor login account. Safe to run multiple times — existing unused tokens are replaced.</p>
-                <div id="migResendResult" style="display:none;margin-top:12px"></div>
+
+                <!-- Setup email sender -->
+                <div style="background:var(--bg-secondary);border-radius:10px;padding:16px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap">
+                    <span style="font-size:0.85rem;font-weight:600;color:var(--text)"><i class="fa-solid fa-envelope" style="color:#eda5ff;margin-right:6px"></i>Account Setup Emails</span>
+                    <button class="btn btn--sm btn--secondary" id="migLoadUsersBtn" onclick="loadInvestorUsersForEmail()">
+                      <i class="fa-solid fa-rotate"></i> Load Investors
+                    </button>
+                  </div>
+
+                  <!-- Search + select-all toolbar (hidden until loaded) -->
+                  <div id="migEmailToolbar" style="display:none;margin-bottom:10px">
+                    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+                      <input type="text" id="migEmailSearch" placeholder="Search by name or email…"
+                        oninput="filterInvestorEmailList()"
+                        style="flex:1;min-width:160px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.8rem;color:var(--text);outline:none">
+                      <button class="btn btn--sm btn--ghost" onclick="toggleAllEmailInvestors(true)">All</button>
+                      <button class="btn btn--sm btn--ghost" onclick="toggleAllEmailInvestors(false)">None</button>
+                    </div>
+                    <div id="migEmailStats" style="font-size:0.75rem;color:var(--text-muted);margin-bottom:8px"></div>
+                  </div>
+
+                  <!-- Investor checklist -->
+                  <div id="migEmailList" style="max-height:260px;overflow-y:auto;display:none;border:1px solid var(--border);border-radius:6px;margin-bottom:12px"></div>
+
+                  <!-- Send button -->
+                  <button class="btn btn--primary btn--full" id="migResendBtn" onclick="resendSetupEmails()" style="display:none">
+                    <i class="fa-solid fa-paper-plane"></i> <span id="migResendLabel">Send Setup Emails</span>
+                  </button>
+                  <p style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">Each recipient gets a 7-day link to set their password. Safe to resend — existing unused tokens are replaced.</p>
+                  <div id="migResendResult" style="display:none;margin-top:12px"></div>
+                </div>
               </div>
             </div>
           </div>
