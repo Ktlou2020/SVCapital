@@ -6547,6 +6547,29 @@ function exportKYCCSV() {
   Toast.success(`Exported ${STATE.kyc.length} KYC records`);
 }
 
+async function allocateInvestmentsToPools(btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Allocating…';
+  try {
+    const data = await API._fetch('POST', 'admin/investments/allocate-pools');
+    const unmatchedNote = data.unmatched?.length
+      ? ` (${data.unmatched.length} pool name${data.unmatched.length !== 1 ? 's' : ''} unmatched)`
+      : '';
+    Toast.success(`Allocated ${data.matched} investment${data.matched !== 1 ? 's' : ''} to pools${unmatchedNote}`);
+    if (data.unmatched?.length) {
+      console.warn('[allocate-pools] unmatched pool names:', data.unmatched);
+    }
+    // Reload investments so the Pool column updates immediately
+    STATE.investments = (await API.investments.list({ limit: 5000 })).data || [];
+    filterInvestments();
+  } catch (e) {
+    Toast.error(e.message || 'Allocation failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-link"></i> Allocate to Pools';
+  }
+}
+
 function exportInvestmentsCSV() {
   if (!STATE.investments.length) { Toast.error('Load investments first'); return; }
   const headers = ['ID','Investor ID','Pool','Product','Amount','Rate','Status','Start Date','End Date','Maturity Instruction'];

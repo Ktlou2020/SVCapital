@@ -1306,7 +1306,7 @@ function navigate(view, btnEl) {
     documents: loadDocuments,
     policies: renderPoliciesView,
     gifts: loadGiftsView,
-    profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderKycStatusPanel(); },
+    profile: () => { renderRiskProfile(); _initPushNotifToggle(); _refreshInvestorThenKyc(); },
   };
   if (loaders[view]) loaders[view]();
 
@@ -9791,6 +9791,19 @@ async function submitKycDocument() {
     _kycFile = null;
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit for Review'; }
   }
+}
+
+// Refresh the investor record from the server so that admin-side KYC/FICA
+// status changes (approvals, rejections) are immediately visible on the portal
+// without requiring a full page reload. Called whenever the profile tab opens.
+async function _refreshInvestorThenKyc() {
+  try {
+    if (PORTAL.investor?.id) {
+      const fresh = await API.investors.get(PORTAL.investor.id).catch(() => null);
+      if (fresh && fresh.id) Object.assign(PORTAL.investor, fresh);
+    }
+  } catch (_) {}
+  _refreshKycPanels();
 }
 
 // Bug #7 fix: single fetch shared between both panel renderers to avoid two
