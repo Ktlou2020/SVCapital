@@ -225,16 +225,17 @@ router.post('/run',
           termMonths = Math.round((new Date(p.maturityDate) - new Date(p.launchDate)) / (1000*60*60*24*30));
         await pool.query(`
           INSERT INTO investment_pools
-            (id, name, product_type, status, target_amount, annual_rate,
-             term_months, start_date, end_date, description, updated_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+            (id, name, product_type, status, target_amount, actual_rate,
+             term_months, start_date, end_date, maturity_date, description, updated_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
           ON CONFLICT (id) DO UPDATE SET
-            name=EXCLUDED.name, status=EXCLUDED.status, annual_rate=EXCLUDED.annual_rate, updated_at=NOW()
+            name=EXCLUDED.name, status=EXCLUDED.status, actual_rate=EXCLUDED.actual_rate, updated_at=NOW()
         `, [
           pid, p.name, PRODUCT_TYPE_MAP[p.productName]||'other',
           POOL_STATUS_MAP[p.status]||'closed',
           parseFloat(p.maxTotal)||0, parseFloat(p.returnPercentage)||0, termMonths,
           p.launchDate   ? new Date(p.launchDate)   : null,
+          p.closingDate  ? new Date(p.closingDate)  : null,
           p.maturityDate ? new Date(p.maturityDate) : null,
           `Migrated from previous platform. Product: ${p.productName}`,
         ]);
