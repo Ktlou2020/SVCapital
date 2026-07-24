@@ -1352,9 +1352,6 @@ async function autoSetup() {
     }
 
     // 2. Ensure the COO account exists — upsert so existing users are never wiped
-    const cooPassword = process.env.COO_PASSWORD;
-    if (!cooPassword) throw new Error('[setup] COO_PASSWORD env var must be set before seeding the database');
-
     const { rows: existing } = await pool.query(
       "SELECT id FROM users WHERE email = 'coo@svcapital.co.za' LIMIT 1"
     );
@@ -1365,7 +1362,10 @@ async function autoSetup() {
       return;
     }
 
-    // First-time setup: COO account missing — create it without touching other users
+    // First-time setup: COO account missing — password required
+    const cooPassword = process.env.COO_PASSWORD;
+    if (!cooPassword) throw new Error('[setup] COO_PASSWORD env var must be set before seeding the database');
+
     console.log('🌱 Provisioning COO account…');
     const cooHash = await bcrypt.hash(cooPassword, 12);
 
