@@ -1,5 +1,5 @@
 'use strict';
-const CACHE   = 'svc-portal-v86';
+const CACHE   = 'svc-portal-v87';
 const PRECACHE = [
   './',
   './index.html',

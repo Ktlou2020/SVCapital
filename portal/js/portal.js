@@ -1854,8 +1854,8 @@ function renderOverview(skipCharts) {
   if (chipId) chipId.textContent = inv.id || '—';
 
   // Member since
-  if (inv.created_at || inv.registration_date) {
-    const since = new Date(inv.created_at || inv.registration_date);
+  if (inv.date_joined || inv.created_at || inv.registration_date) {
+    const since = new Date(inv.date_joined || inv.created_at || inv.registration_date);
     const sinceEl = document.getElementById('wchipSinceText');
     if (sinceEl) sinceEl.textContent = `Since ${since.toLocaleString('en-ZA', { month: 'short', year: 'numeric' })}`;
   }
