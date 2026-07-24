@@ -71,9 +71,30 @@ function _inferType(subject) {
   return 'general';
 }
 
+let _emailToggleCache = { enabled: true, ts: 0 };
+async function _isEmailEnabled() {
+  if (Date.now() - _emailToggleCache.ts < 30_000) return _emailToggleCache.enabled;
+  try {
+    const { rows } = await pool.query(`SELECT value FROM platform_settings WHERE key = 'resend_emails_enabled'`);
+    const enabled = !rows.length || rows[0].value !== 'false';
+    _emailToggleCache = { enabled, ts: Date.now() };
+  } catch (_) { _emailToggleCache = { enabled: true, ts: Date.now() }; }
+  return _emailToggleCache.enabled;
+}
+
 async function _send({ to, subject, html, text, type }) {
   const recipient = Array.isArray(to) ? to[0] : to;
   const emailType = type || _inferType(subject);
+
+  if (!(await _isEmailEnabled())) {
+    console.log(`[email] suppressed (emails disabled): "${subject}" → ${recipient}`);
+    pool.query(
+      'INSERT INTO email_logs (to_email, subject, type, status, error) VALUES ($1,$2,$3,$4,$5)',
+      [recipient, subject, emailType, 'failed', 'Emails disabled via platform settings']
+    ).catch(() => {});
+    return;
+  }
+
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     if (process.env.NODE_ENV === 'production') throw new Error('[email] RESEND_API_KEY is required in production');

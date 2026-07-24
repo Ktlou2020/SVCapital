@@ -1483,7 +1483,8 @@ Withdraw at maturity or roll over to a new cycle',
         ('kyc_required',        'true',                          'KYC required before investment'),
         ('maintenance_mode',    'false',                         'Maintenance mode'),
         ('currency',            'ZAR',                           'Platform currency'),
-        ('eva_rate',            '0.15',                          'EVA rate — % of net-VAT upfront fee allocated to the referring employee')
+        ('eva_rate',            '0.15',                          'EVA rate — % of net-VAT upfront fee allocated to the referring employee'),
+        ('resend_emails_enabled','true',                         'Set to false to suppress all outbound Resend emails (maintenance / testing)')
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
     `);
 
