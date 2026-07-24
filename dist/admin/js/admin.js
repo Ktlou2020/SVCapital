@@ -8173,6 +8173,35 @@ async function runMigration() {
   }
 }
 
+async function resendSetupEmails() {
+  const btn = document.getElementById('migResendBtn');
+  const resultEl = document.getElementById('migResendResult');
+  if (!confirm('This will send a password-setup email to every investor account. Continue?')) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending emails…';
+  resultEl.style.display = 'none';
+
+  try {
+    const data = await API._fetch('POST', 'migrate/resend-setup-emails');
+    const errHtml = data.errors?.length
+      ? `<div style="margin-top:8px;font-size:0.75rem;color:#ef4444"><strong>${data.errors.length} failed:</strong><br>${data.errors.map(e => `• ${e}`).join('<br>')}</div>`
+      : '';
+    resultEl.innerHTML = `
+      <div style="padding:10px 14px;background:rgba(34,197,94,0.08);border-radius:8px;font-size:0.85rem;color:#22c55e">
+        <i class="fa-solid fa-check-circle"></i>
+        Sent <strong>${data.sent}</strong> of <strong>${data.total}</strong> emails successfully.
+      </div>${errHtml}`;
+    resultEl.style.display = 'block';
+    Toast.success(`${data.sent} setup emails sent`);
+  } catch (e) {
+    Toast.error(e.message || 'Failed to send emails');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-envelope"></i> Resend Account Setup Emails to All Investors';
+  }
+}
+
 /* ═══════════════════════════════════════════════
    COMPLIANCE CALENDAR
    ═══════════════════════════════════════════════ */
