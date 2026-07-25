@@ -1536,6 +1536,12 @@ Withdraw at maturity or roll over to a new cycle',
       console.warn('⚠️  Cattle cycle start date backfill skipped:', bfErr.message);
     }
 
+    // App version tracking on push tokens
+    try {
+      await pool.query(`BEGIN ALTER TABLE push_tokens ADD COLUMN app_version TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;`);
+      await pool.query(`BEGIN ALTER TABLE push_tokens ADD COLUMN device_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;`);
+    } catch (_) {}
+
     console.log('✅ Provisioning complete — COO account ready.');
 
   } catch (err) {

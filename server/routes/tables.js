@@ -525,6 +525,52 @@ router.get('/investors/next-account', requireAuth, async (req, res) => {
   }
 });
 
+/* ─── GET /api/tables/investors/:id/activity ─── */
+/* Returns login/session/device activity for an investor (admin only) */
+router.get('/investors/:id/activity', requireAuth, async (req, res) => {
+  try {
+    if (!['admin','director','fund_manager'].includes(req.user.role))
+      return res.status(403).json({ error: 'Forbidden.' });
+
+    const investorId = req.params.id;
+
+    const [userRes, pushRes, sessionRes] = await Promise.all([
+      // Login account details
+      pool.query(`
+        SELECT id, email, role, created_at, last_login, totp_enabled, is_active
+        FROM users WHERE investor_id = $1 LIMIT 1
+      `, [investorId]),
+
+      // Mobile devices with app version
+      pool.query(`
+        SELECT platform, app_version, device_name, created_at, updated_at
+        FROM push_tokens WHERE investor_id = $1
+        ORDER BY updated_at DESC
+      `, [investorId]),
+
+      // Recent sessions (join via user_id)
+      pool.query(`
+        SELECT s.ip_address, s.user_agent, s.created_at, s.last_used_at, s.expires_at
+        FROM sessions s
+        JOIN users u ON u.id = s.user_id
+        WHERE u.investor_id = $1
+          AND s.expires_at > NOW()
+        ORDER BY s.last_used_at DESC
+        LIMIT 10
+      `, [investorId]),
+    ]);
+
+    res.json({
+      user:     userRes.rows[0]    || null,
+      devices:  pushRes.rows,
+      sessions: sessionRes.rows,
+    });
+  } catch (err) {
+    console.error('[tables] investor activity', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 /* ─── GET /api/tables/investment_pools/:id/investors ─── */
 /* Returns all investors + their investment details for a specific pool */
 router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
