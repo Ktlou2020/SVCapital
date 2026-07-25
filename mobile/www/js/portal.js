@@ -11320,7 +11320,6 @@ async function downloadSaStatement(saId, saName) {
     </tr>`;
   }).join('') : `<tr><td colspan="6" style="padding:20px;text-align:center;color:#9ca3af;font-size:11px">No transactions found for this account</td></tr>`;
 
-  const totalDeposits   = transactions.filter(t => t.type === 'deposit').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
   const totalTransferIn = transactions.filter(t => t.type === 'transfer_in').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
   const totalFees       = transactions.filter(t => t.type === 'fee').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
 
