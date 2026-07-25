@@ -3168,10 +3168,7 @@ let poolFilter = 'all';
 
 async function loadPools() {
   try {
-    const invPromise = STATE.investments.length
-      ? Promise.resolve()
-      : API.investments.list({ limit: 5000 }).then(r => { STATE.investments = r.data || []; }).catch(() => {});
-    const [res] = await Promise.all([API.pools.list({ limit: 100 }), invPromise]);
+    const res = await API.pools.list({ limit: 100 });
     STATE.pools = res.data || [];
     renderPoolsGrid();
     // Load products in the background so pool product-type dropdowns reflect them
@@ -3206,21 +3203,8 @@ function renderPoolsGrid() {
     });
   }
 
-  // Augment pools with live aggregates from STATE.investments
-  if (STATE.investments.length) {
-    const poolInvMap = {};
-    STATE.investments.forEach(i => {
-      if (!i.pool_id) return;
-      if (!poolInvMap[i.pool_id]) poolInvMap[i.pool_id] = [];
-      poolInvMap[i.pool_id].push(i);
-    });
-    pools.forEach(p => {
-      const invs = poolInvMap[p.id] || [];
-      const active = invs.filter(i => i.status !== 'cancelled');
-      p.live_raised = active.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-      p.live_investor_count = new Set(active.map(i => i.investor_id)).size;
-    });
-  }
+  // live_investor_count and live_raised are computed server-side in the pools query via SQL aggregation.
+  // No client-side override needed — doing so with STATE.investments causes stale/mismatched zeros.
 
   if (!pools.length) { grid.innerHTML = '<div class="text-center text-muted" style="grid-column:1/-1;padding:32px">No pools found</div>'; return; }
 
