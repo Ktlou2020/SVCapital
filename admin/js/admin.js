@@ -1624,8 +1624,10 @@ async function viewInvestor(id) {
   const bCls       = { none:'badge--grey', pending:'badge--yellow', approved:'badge--green', rejected:'badge--red' };
   const bLbl       = { none:'Not added', pending:'On file', approved:'Verified', rejected:'Rejected' };
   const avatarColor= _invAvatarColor(`${inv.first_name} ${inv.last_name}`);
-  const totalInvested = invsts.reduce((s,i) => s+(parseFloat(i.amount)||0), 0);
-  const activeInvCount= invsts.filter(i=>i.status==='active').length;
+  const totalInvested  = invsts.filter(i=>i.status==='active').reduce((s,i) => s+(parseFloat(i.amount)||0), 0);
+  const activeInvCount = invsts.filter(i=>i.status==='active').length;
+  const totalReturns   = txns.filter(t=>t.type==='return'  && t.status==='completed').reduce((s,t)=>s+(parseFloat(t.amount)||0), 0);
+  const totalDeposits  = txns.filter(t=>t.type==='deposit' && t.status==='completed').reduce((s,t)=>s+(parseFloat(t.amount)||0), 0);
 
   document.getElementById('invDetailBody').innerHTML = `
   <div class="tab-bar" style="display:flex;gap:4px;padding:4px;border-radius:10px;margin-bottom:16px;flex-wrap:wrap">
@@ -1650,18 +1652,22 @@ async function viewInvestor(id) {
         </div>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px">
       <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
         <div style="font-size:1.05rem;font-weight:800;color:#fec24f">${Utils.rand(inv.wallet_balance)}</div>
         <div style="font-size:0.72rem;color:var(--text-muted)">Wallet</div>
       </div>
       <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
-        <div style="font-size:1.05rem;font-weight:800;color:var(--text)">${Utils.rand(totalInvested||inv.total_invested)}</div>
-        <div style="font-size:0.72rem;color:var(--text-muted)">Total Invested</div>
+        <div style="font-size:1.05rem;font-weight:800;color:var(--text)">${Utils.rand(totalInvested)}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Active Invested</div>
       </div>
       <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
-        <div style="font-size:1.05rem;font-weight:800;color:#22c55e">${Utils.rand(inv.total_returns)}</div>
-        <div style="font-size:0.72rem;color:var(--text-muted)">Returns</div>
+        <div style="font-size:1.05rem;font-weight:800;color:#22c55e">${Utils.rand(totalReturns)}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Returns Earned</div>
+      </div>
+      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:1.05rem;font-weight:800;color:#eda5ff">${Utils.rand(totalDeposits)}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Deposits</div>
       </div>
       <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
         <div style="font-size:1.05rem;font-weight:800;color:#656565">${invsts.length}<span style="font-size:0.72rem;font-weight:400"> (${activeInvCount} active)</span></div>
