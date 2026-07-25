@@ -5202,17 +5202,58 @@ function renderProductVolChart() {
   });
 }
 
+const _PROVINCE_NORM = {
+  // Gauteng
+  'gp':'Gauteng','gauteng':'Gauteng','gauteng province':'Gauteng','guateng':'Gauteng','gaunteng':'Gauteng','gautrng':'Gauteng','gauteng province':'Gauteng',
+  // Western Cape
+  'wc':'Western Cape','western cape':'Western Cape','western cape province':'Western Cape','westerncape':'Western Cape','wetern cape':'Western Cape',
+  // Eastern Cape
+  'ec':'Eastern Cape','eastern cape':'Eastern Cape','eastern cape province':'Western Cape','easterncape':'Eastern Cape',
+  // KwaZulu-Natal
+  'kzn':'KwaZulu-Natal','kwazulu-natal':'KwaZulu-Natal','kwazulu natal':'KwaZulu-Natal','kwa-zulu natal':'KwaZulu-Natal','kwa zulu natal':'KwaZulu-Natal','kwazulunatal':'KwaZulu-Natal','natal':'KwaZulu-Natal','kwa-zulu nata':'KwaZulu-Natal',
+  // Limpopo
+  'lp':'Limpopo','limpopo':'Limpopo','limpopo province':'Limpopo',
+  // Mpumalanga
+  'mp':'Mpumalanga','mpumalanga':'Mpumalanga','mpumalanga province':'Mpumalanga',
+  // Northern Cape
+  'nc':'Northern Cape','northern cape':'Northern Cape','northern cape province':'Northern Cape','northerncape':'Northern Cape','nothern cape':'Northern Cape',
+  // North West
+  'nw':'North West','north west':'North West','north west province':'North West','northwest':'North West','north-west':'North West','north west':'North West','northwestprovince':'North West',
+  // Free State
+  'fs':'Free State','free state':'Free State','free state province':'Free State','freestate':'Free State',
+};
+function _normProvince(raw) {
+  if (!raw) return null;
+  return _PROVINCE_NORM[raw.trim().toLowerCase()] || raw.trim() || null;
+}
+
 function renderProvinceChart() {
   const ctx = document.getElementById('provinceChart');
   if (!ctx) return;
   const prov = {};
-  STATE.investors.forEach(i => { prov[i.province] = (prov[i.province] || 0) + 1; });
-  const colors = ['#fec24f', '#22c55e', '#656565', '#f97316', '#eda5ff', '#ef4444', '#656565', '#84cc16', '#fec24f'];
+  STATE.investors.forEach(i => {
+    const p = _normProvince(i.province);
+    if (!p) return;
+    prov[p] = (prov[p] || 0) + 1;
+  });
+  const PROVINCE_COLORS = {
+    'Gauteng':       '#fec24f',
+    'KwaZulu-Natal': '#22c55e',
+    'Western Cape':  '#eda5ff',
+    'Eastern Cape':  '#f97316',
+    'Limpopo':       '#84cc16',
+    'Mpumalanga':    '#38bdf8',
+    'North West':    '#a78bfa',
+    'Free State':    '#fb923c',
+    'Northern Cape': '#94a3b8',
+  };
+  const labels = Object.keys(prov);
+  const colors = labels.map(l => PROVINCE_COLORS[l] || '#656565');
 
   if (STATE.charts.province) STATE.charts.province.destroy();
   STATE.charts.province = new Chart(ctx, {
     type: 'pie',
-    data: { labels: Object.keys(prov), datasets: [{ data: Object.values(prov), backgroundColor: colors, borderColor: 'var(--dark-2)', borderWidth: 3 }] },
+    data: { labels, datasets: [{ data: labels.map(l => prov[l]), backgroundColor: colors, borderColor: 'var(--dark-2)', borderWidth: 3 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { position: 'right', labels: { color: '#7a92a8', font: { size: 10 }, boxWidth: 10, padding: 8 } } }
