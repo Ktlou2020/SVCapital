@@ -1278,8 +1278,14 @@ async function autoSetup() {
         BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_status TEXT DEFAULT 'none'; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_reference TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE products ADD COLUMN sector TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE push_tokens ADD COLUMN app_version TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE push_tokens ADD COLUMN device_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE gifts ADD COLUMN gift_card_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE gifts ADD COLUMN product_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE gifts ADD COLUMN firebase_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
       END $$
     `);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS gifts_firebase_id_idx ON gifts(firebase_id) WHERE firebase_id IS NOT NULL`).catch(() => {});
 
     // Backfill sa_reference for existing sub-accounts that don't have one
     await pool.query(`
@@ -1535,20 +1541,6 @@ Withdraw at maturity or roll over to a new cycle',
     } catch (bfErr) {
       console.warn('⚠️  Cattle cycle start date backfill skipped:', bfErr.message);
     }
-
-    // App version tracking on push tokens
-    try {
-      await pool.query(`BEGIN ALTER TABLE push_tokens ADD COLUMN app_version TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;`);
-      await pool.query(`BEGIN ALTER TABLE push_tokens ADD COLUMN device_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;`);
-    } catch (_) {}
-
-    // Firebase gift import columns
-    try {
-      await pool.query(`BEGIN ALTER TABLE gifts ADD COLUMN gift_card_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;`);
-      await pool.query(`BEGIN ALTER TABLE gifts ADD COLUMN product_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;`);
-      await pool.query(`BEGIN ALTER TABLE gifts ADD COLUMN firebase_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;`);
-      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS gifts_firebase_id_idx ON gifts(firebase_id) WHERE firebase_id IS NOT NULL`);
-    } catch (_) {}
 
     console.log('✅ Provisioning complete — COO account ready.');
 
