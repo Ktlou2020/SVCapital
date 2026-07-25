@@ -535,20 +535,22 @@ router.get('/investors/:id/activity', requireAuth, async (req, res) => {
     const investorId = req.params.id;
 
     const [userRes, pushRes, sessionRes] = await Promise.all([
-      // Login account details
       pool.query(`
         SELECT id, email, role, created_at, last_login, totp_enabled, is_active
         FROM users WHERE investor_id = $1 LIMIT 1
-      `, [investorId]),
+      `, [investorId]).catch(() => ({ rows: [] })),
 
-      // Mobile devices with app version
       pool.query(`
-        SELECT platform, app_version, device_name, created_at, updated_at
+        SELECT platform,
+               COALESCE(app_version, NULL) AS app_version,
+               COALESCE(device_name, NULL) AS device_name,
+               created_at, updated_at
         FROM push_tokens WHERE investor_id = $1
         ORDER BY updated_at DESC
-      `, [investorId]),
+      `, [investorId]).catch(() =>
+        pool.query(`SELECT platform, created_at, updated_at FROM push_tokens WHERE investor_id = $1 ORDER BY updated_at DESC`, [investorId]).catch(() => ({ rows: [] }))
+      ),
 
-      // Recent sessions (join via user_id)
       pool.query(`
         SELECT s.ip_address, s.user_agent, s.created_at, s.last_used_at, s.expires_at
         FROM sessions s
@@ -557,7 +559,7 @@ router.get('/investors/:id/activity', requireAuth, async (req, res) => {
           AND s.expires_at > NOW()
         ORDER BY s.last_used_at DESC
         LIMIT 10
-      `, [investorId]),
+      `, [investorId]).catch(() => ({ rows: [] })),
     ]);
 
     res.json({
