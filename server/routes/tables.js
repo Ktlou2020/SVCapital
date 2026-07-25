@@ -420,10 +420,10 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
       query = `
         SELECT
           ip.*,
-          COALESCE(agg.live_investor_count, 0)  AS live_investor_count,
-          COALESCE(agg.live_raised,         0)  AS live_raised,
-          COALESCE(agg.live_active_amount,  0)  AS live_active_amount,
-          COALESCE(agg.live_investment_count,0) AS live_investment_count
+          COALESCE(agg.live_investor_count,  name_agg.live_investor_count,  0) AS live_investor_count,
+          COALESCE(agg.live_raised,          name_agg.live_raised,          0) AS live_raised,
+          COALESCE(agg.live_active_amount,   name_agg.live_active_amount,   0) AS live_active_amount,
+          COALESCE(agg.live_investment_count,name_agg.live_investment_count, 0) AS live_investment_count
         FROM investment_pools ip
         LEFT JOIN (
           SELECT
@@ -436,6 +436,17 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
           WHERE pool_id IS NOT NULL
           GROUP BY pool_id
         ) agg ON agg.pool_id = ip.id
+        LEFT JOIN (
+          SELECT
+            pool_name,
+            COUNT(DISTINCT CASE WHEN sub_account_id IS NOT NULL THEN 'sa:' || sub_account_id ELSE 'inv:' || investor_id END) AS live_investor_count,
+            SUM(CASE WHEN status IN ('active','matured','paid_out') THEN amount ELSE 0 END) AS live_raised,
+            SUM(CASE WHEN status = 'active'  THEN amount ELSE 0 END)            AS live_active_amount,
+            COUNT(*)                                                             AS live_investment_count
+          FROM investments
+          WHERE pool_name IS NOT NULL
+          GROUP BY pool_name
+        ) name_agg ON name_agg.pool_name = ip.name AND agg.pool_id IS NULL
         ${whereClause}
         ${orderClause.replace(/\b(status|id|name|product_type|created_at)\b/g, 'ip.$1')}
         LIMIT $${params.length - 1} OFFSET $${params.length}
@@ -553,6 +564,10 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
       LEFT JOIN investors i ON i.id = inv.investor_id
       LEFT JOIN sub_accounts sa ON sa.id = inv.sub_account_id
       WHERE inv.pool_id = $1
+         OR (
+           inv.pool_name IS NOT NULL
+           AND inv.pool_name = (SELECT name FROM investment_pools WHERE id = $1 LIMIT 1)
+         )
       ORDER BY inv.start_date DESC NULLS LAST
     `, [req.params.id]);
 
