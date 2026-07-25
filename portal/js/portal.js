@@ -5254,25 +5254,28 @@ function generateStatement() {
   const effectivePerformance  = anyChecked ? incPerformance  : true;
 
   const investor    = PORTAL.investor || {};
-  // Use ALL investments (not date-filtered — investment dates may predate range)
-  const investments = PORTAL.investments || [];
+  const allInvestments = PORTAL.investments || [];
 
   // Filter transactions by date range
   const allTxns = PORTAL.transactions || [];
-  const transactions = allTxns.filter(t => {
-    const raw = t.transaction_date || t.created_at;
-    if (!raw) return true;
+  function _inPeriod(raw) {
+    if (!raw) return false;
     const d = (typeof raw === 'number') ? new Date(raw) : new Date(String(raw).length === 10 ? raw + 'T00:00:00' : raw);
-    if (isNaN(d.getTime())) return true;
+    if (isNaN(d.getTime())) return false;
     return d >= from && d <= to;
-  });
+  }
+  const transactions = allTxns.filter(t => _inPeriod(t.transaction_date || t.created_at));
 
-  // Compute stats — reinvestments excluded from Capital Deployed to avoid double-counting
-  const totalInvested = investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = investments.reduce((s, i) => s + (Number(i.amount) || 0) * (Number(i.pool_actual_rate) || 0), 0);
-  const activeInv     = investments.filter(i => i.status === 'active').length;
+  // Filter investments whose start date falls within the period for the ledger
+  const investments = allInvestments.filter(i => _inPeriod(i.start_date || i.investment_date || i.created_at));
+
+  // Compute stats
   const walletBal     = Number(investor.wallet_balance) || 0;
-  const totalValue    = totalInvested + walletBal + totalReturns;
+  const activeInvAmt  = allInvestments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const totalValue    = activeInvAmt + walletBal;                   // Portfolio Value = active inv + wallet
+  const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalReturns  = transactions.filter(t => t.type === 'return' || t.type === 'payout').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const activeInv     = allInvestments.filter(i => i.status === 'active').length;
 
   // Build preview quick stats
   const previewEl = document.getElementById('stmtQuickStats');
@@ -5282,8 +5285,8 @@ function generateStatement() {
         ${quickStatRow('Period', `${fmtDate(from)} — ${fmtDate(to)}`)}
         ${quickStatRow('Investments in Period', investments.length)}
         ${quickStatRow('Transactions in Period', transactions.length)}
-        ${quickStatRow('Total Capital', Utils.rand(totalInvested))}
-        ${quickStatRow('Returns Paid', Utils.rand(totalReturns))}
+        ${quickStatRow('Deposits', Utils.rand(totalDeposits))}
+        ${quickStatRow('Returns in Period', Utils.rand(totalReturns))}
         ${quickStatRow('Portfolio Value', Utils.rand(totalValue))}
       </div>
     `;
@@ -5298,7 +5301,7 @@ function generateStatement() {
 
   let html = buildStatementHTML({
     investor, investments, transactions,
-    from, to, totalInvested, totalReturns, walletBal, totalValue, activeInv,
+    from, to, totalDeposits, totalReturns, walletBal, totalValue, activeInv,
     statementNumber, generatedAt,
     incPortfolio:    effectivePortfolio,
     incInvestments:  effectiveInvestments,
@@ -5340,10 +5343,11 @@ function fmtNum(n) {
 function buildStatementHTML(opts) {
   const {
     investor, investments, transactions,
-    from, to, totalInvested, totalReturns, walletBal, totalValue, activeInv,
+    from, to, totalDeposits, totalReturns, walletBal, totalValue, activeInv,
     statementNumber, generatedAt,
     incPortfolio, incInvestments, incTransactions, incPerformance
   } = opts;
+  const totalInvested = totalDeposits; // alias for legacy references below
 
   const fullName = `${investor.first_name || 'Thabo'} ${investor.last_name || 'Khumalo'}`;
   const investorId = investor.id || 'INV-002';
@@ -5365,7 +5369,7 @@ function buildStatementHTML(opts) {
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px">
           ${stmtKPIBox('Total Portfolio Value', fmtNum(totalValue), '#fec24f')}
-          ${stmtKPIBox('Capital Deployed', fmtNum(totalInvested), '#656565')}
+          ${stmtKPIBox('Deposits', fmtNum(totalDeposits), '#656565')}
           ${stmtKPIBox('Returns Earned', fmtNum(totalReturns), '#22C55E')}
           ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#0096ff')}
         </div>
@@ -10827,10 +10831,12 @@ function downloadSaStatement(saId, saName) {
   const transactions = (PORTAL.transactions || []).filter(t => t.sub_account_id === saId);
   const investor     = PORTAL.investor || {};
 
-  const totalInvested = investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = investments.reduce((s, i) => s + (Number(i.amount) || 0) * (Number(i.pool_actual_rate) || 0), 0);
   const walletBal     = Number(sa.wallet_balance) || 0;
-  const totalValue    = totalInvested + walletBal + totalReturns;
+  const activeInvAmt  = investments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const totalValue    = activeInvAmt + walletBal;
+  const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalReturns  = transactions.filter(t => t.type === 'return' || t.type === 'payout').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalInvested = totalDeposits;
   const activeInv     = investments.filter(i => i.status === 'active').length;
 
   const now           = new Date();
@@ -10849,8 +10855,8 @@ function downloadSaStatement(saId, saName) {
         <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Portfolio Summary</h3>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px">
-        ${stmtKPIBox('Total Value', fmtNum(totalValue), '#fec24f')}
-        ${stmtKPIBox('Capital Deployed', fmtNum(totalInvested), '#656565')}
+        ${stmtKPIBox('Total Portfolio Value', fmtNum(totalValue), '#fec24f')}
+        ${stmtKPIBox('Deposits', fmtNum(totalDeposits), '#656565')}
         ${stmtKPIBox('Returns Earned', fmtNum(totalReturns), '#22C55E')}
         ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#0096ff')}
       </div>
