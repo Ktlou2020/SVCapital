@@ -537,24 +537,78 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
         console.warn(`[auth] forgot-password cooldown: skipped resend for ${emailAddr}`);
       }
     } else {
-      // No users row — check if this is an investor who has never logged in.
-      // Auto-create their account and send an account-setup email so the reset
-      // link actually arrives rather than silently dropping.
+      // No users row yet — search all profile tables so any registered person
+      // (investor, IFA, or employee) can set up their login via the reset flow.
+      let profile = null;
+      let setupRole = 'investor';
+      let extraCol = null;   // column name for the profile FK
+      let extraVal = null;   // FK value
+
+      // 1. Investors
       const { rows: invRows } = await pool.query(
-        `SELECT id, first_name, last_name, email FROM investors
+        `SELECT id, first_name, last_name FROM investors
          WHERE LOWER(email) = $1 AND status = 'active'`,
         [emailAddr]
       );
       if (invRows.length > 0) {
-        const inv = invRows[0];
-        const tempHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+        profile   = invRows[0];
+        setupRole = 'investor';
+        extraCol  = 'investor_id';
+        extraVal  = profile.id;
+      }
+
+      // 2. IFAs
+      if (!profile) {
+        const { rows: ifaRows } = await pool.query(
+          `SELECT id, first_name, last_name FROM ifas
+           WHERE LOWER(email) = $1 AND status = 'active'`,
+          [emailAddr]
+        );
+        if (ifaRows.length > 0) {
+          profile   = ifaRows[0];
+          setupRole = 'ifa';
+          extraCol  = 'ifa_id';
+          extraVal  = profile.id;
+        }
+      }
+
+      // 3. Employees (admins, fund managers, directors, support staff)
+      if (!profile) {
+        const { rows: empRows } = await pool.query(
+          `SELECT id, first_name, last_name, role FROM employees
+           WHERE LOWER(email) = $1 AND status IN ('active','onboarding')`,
+          [emailAddr]
+        );
+        if (empRows.length > 0) {
+          profile   = empRows[0];
+          const roleMap = { director:'director', admin:'admin', fund_manager:'fund_manager', ifa:'ifa' };
+          setupRole = roleMap[profile.role] || 'staff';
+          // No FK column — employees link via email
+        }
+      }
+
+      if (profile) {
+        const firstName = profile.first_name || '';
+        const lastName  = profile.last_name  || '';
+        const tempHash  = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+
+        // Build INSERT — conditionally include the profile FK column
+        const fkClause  = extraCol ? `, ${extraCol}` : '';
+        const fkParam   = extraCol ? ', $6' : '';
+        const onConflict = extraCol
+          ? `SET ${extraCol} = COALESCE(users.${extraCol}, EXCLUDED.${extraCol})`
+          : `SET updated_at = NOW()`;
+        const insertParams = extraCol
+          ? [emailAddr, tempHash, setupRole, firstName, lastName, extraVal]
+          : [emailAddr, tempHash, setupRole, firstName, lastName];
+
         const { rows: [newUser] } = await pool.query(`
-          INSERT INTO users (email, password_hash, role, first_name, last_name, investor_id)
-          VALUES ($1, $2, 'investor', $3, $4, $5)
-          ON CONFLICT (email) DO UPDATE
-            SET investor_id = COALESCE(users.investor_id, EXCLUDED.investor_id)
+          INSERT INTO users (email, password_hash, role, first_name, last_name${fkClause})
+          VALUES ($1, $2, $3, $4, $5${fkParam})
+          ON CONFLICT (email) DO UPDATE ${onConflict}
           RETURNING id, email, first_name
-        `, [emailAddr, tempHash, inv.first_name || '', inv.last_name || '', inv.id]);
+        `, insertParams);
+
         const jti       = crypto.randomBytes(16).toString('hex');
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7-day setup link
         const token     = jwt.sign(
@@ -568,9 +622,9 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
           [jti, newUser.id, expiresAt]
         );
         const setupLink = `${process.env.BASE_URL || 'https://platform.svcapital.co.za'}/reset-password.html?token=${token}`;
-        setImmediate(() => emailService.sendAccountSetup(newUser.email, inv.first_name || emailAddr, setupLink)
+        setImmediate(() => emailService.sendAccountSetup(newUser.email, firstName || emailAddr, setupLink)
           .catch(err => console.error('[email] first-time setup failed:', err.message)));
-        console.log(`[auth] forgot-password: created login + sent setup link to first-time investor ${emailAddr}`);
+        console.log(`[auth] forgot-password: created login (${setupRole}) + sent setup link to ${emailAddr}`);
       }
     }
     res.json({ success: true, message: 'If this email is registered, a reset link has been sent.' });
