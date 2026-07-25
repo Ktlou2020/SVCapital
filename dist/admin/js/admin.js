@@ -1266,9 +1266,11 @@ function renderInvestorsTable() {
   const liveActiveCountMap = {};
   const liveTotalCountMap = {};
   STATE.investments.forEach(i => {
-    liveInvestedMap[i.investor_id] = (liveInvestedMap[i.investor_id] || 0) + (parseFloat(i.amount) || 0);
     liveTotalCountMap[i.investor_id] = (liveTotalCountMap[i.investor_id] || 0) + 1;
-    if (i.status === 'active') liveActiveCountMap[i.investor_id] = (liveActiveCountMap[i.investor_id] || 0) + 1;
+    if (i.status === 'active') {
+      liveInvestedMap[i.investor_id]   = (liveInvestedMap[i.investor_id]   || 0) + (parseFloat(i.amount) || 0);
+      liveActiveCountMap[i.investor_id] = (liveActiveCountMap[i.investor_id] || 0) + 1;
+    }
   });
 
   // Sync select-all checkbox state
@@ -1629,7 +1631,7 @@ async function viewInvestor(id) {
   const avatarColor= _invAvatarColor(`${inv.first_name} ${inv.last_name}`);
   const totalInvested  = invsts.filter(i=>i.status==='active').reduce((s,i) => s+(parseFloat(i.amount)||0), 0);
   const activeInvCount = invsts.filter(i=>i.status==='active').length;
-  const totalReturns   = txns.filter(t=>t.type==='return'  && t.status==='completed').reduce((s,t)=>s+(parseFloat(t.amount)||0), 0);
+  const totalReturns   = invsts.filter(i=>['matured','paid_out'].includes(i.status)).reduce((s,i)=>s+(parseFloat(i.actual_return)||parseFloat(i.expected_return)||0), 0);
   const totalDeposits  = txns.filter(t=>t.type==='deposit' && t.status==='completed').reduce((s,t)=>s+(parseFloat(t.amount)||0), 0);
 
   document.getElementById('invDetailBody').innerHTML = `
