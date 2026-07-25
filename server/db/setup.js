@@ -1542,6 +1542,14 @@ Withdraw at maturity or roll over to a new cycle',
       await pool.query(`BEGIN ALTER TABLE push_tokens ADD COLUMN device_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;`);
     } catch (_) {}
 
+    // Firebase gift import columns
+    try {
+      await pool.query(`BEGIN ALTER TABLE gifts ADD COLUMN gift_card_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;`);
+      await pool.query(`BEGIN ALTER TABLE gifts ADD COLUMN product_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;`);
+      await pool.query(`BEGIN ALTER TABLE gifts ADD COLUMN firebase_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;`);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS gifts_firebase_id_idx ON gifts(firebase_id) WHERE firebase_id IS NOT NULL`);
+    } catch (_) {}
+
     console.log('✅ Provisioning complete — COO account ready.');
 
   } catch (err) {
