@@ -508,11 +508,14 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
     if (rows.length > 0) {
       const user = rows[0];
 
-      // Per-email cooldown: if a token with >20 min remaining exists, a reset email was
-      // sent within the last 10 minutes — silently skip to prevent inbox flooding.
+      // Per-email cooldown: only block if a SHORT-LIVED token (≤30 min) with >20 min
+      // remaining exists — meaning a reset email was sent in the last 10 minutes.
+      // 7-day first-time-setup tokens are excluded so users can always request a new link.
       const { rows: recent } = await pool.query(
         `SELECT jti FROM password_reset_tokens
-         WHERE user_id=$1 AND used=false AND expires_at > NOW() + INTERVAL '20 minutes'`,
+         WHERE user_id=$1 AND used=false
+           AND expires_at > NOW() + INTERVAL '20 minutes'
+           AND expires_at <= NOW() + INTERVAL '31 minutes'`,
         [user.id]
       );
       if (!recent.length) {
