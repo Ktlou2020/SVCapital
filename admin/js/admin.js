@@ -2832,7 +2832,7 @@ async function _recomputeInvestorFicaStatus(investorId) {
   if (verified) {
     await API._fetch('PATCH', `tables/investors/${investorId}`, { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
   } else {
-    await API._fetch('PATCH', `tables/investors/${investorId}`, { kyc_status: 'in_progress', fica_status: 'in_progress' });
+    await API._fetch('PATCH', `tables/investors/${investorId}`, { kyc_status: 'pending', fica_status: 'submitted' });
   }
   return { verified, missing: missing.map(t => FICA_DOC_LABELS[t] || t) };
 }
