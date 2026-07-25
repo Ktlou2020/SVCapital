@@ -1638,6 +1638,7 @@ async function viewInvestor(id) {
     <button class="tab-btn inv-tab-btn"        id="invTab-surveys"       onclick="_invTab('surveys')"><i class="fa-solid fa-clipboard-list" style="margin-right:5px"></i>Surveys</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-investments"   onclick="_invTab('investments')"><i class="fa-solid fa-chart-line" style="margin-right:5px"></i>Investments (${invsts.length})</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-transactions"  onclick="_invTab('transactions')"><i class="fa-solid fa-arrows-rotate" style="margin-right:5px"></i>Transactions</button>
+    <button class="tab-btn inv-tab-btn"        id="invTab-activity"      onclick="_invTab('activity');_loadInvestorActivity('${inv.id}')"><i class="fa-solid fa-mobile-screen" style="margin-right:5px"></i>Activity</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-admin"         onclick="_invTab('admin')"><i class="fa-solid fa-shield-halved" style="margin-right:5px"></i>Admin</button>
   </div>
 
@@ -1833,6 +1834,33 @@ async function viewInvestor(id) {
         <div id="investorTimeline" style="max-height:320px;overflow-y:auto;padding:4px 0">
           <div style="text-align:center;padding:16px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="invPanel-activity" style="display:none">
+    <div class="panel mb-16">
+      <div class="panel__header"><span class="panel__title">Account Access</span></div>
+      <div class="panel__body" id="invActivity-access">
+        <div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
+      </div>
+    </div>
+    <div class="panel mb-16">
+      <div class="panel__header">
+        <span class="panel__title">Mobile App &amp; Devices</span>
+        <span style="font-size:0.72rem;color:var(--text-dim)" id="invActivity-deviceCount"></span>
+      </div>
+      <div class="panel__body" id="invActivity-devices">
+        <div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
+      </div>
+    </div>
+    <div class="panel mb-16">
+      <div class="panel__header">
+        <span class="panel__title">Active Sessions</span>
+        <span style="font-size:0.72rem;color:var(--text-dim)" id="invActivity-sessionCount"></span>
+      </div>
+      <div class="panel__body" id="invActivity-sessions">
+        <div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
       </div>
     </div>
   </div>
@@ -7967,6 +7995,119 @@ function loadInvestorTimeline(inv, invsts, txns) {
       </div>
     </div>
   `).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   ACTIVITY TAB
+   ═══════════════════════════════════════════════ */
+
+async function _loadInvestorActivity(investorId) {
+  const accessEl  = document.getElementById('invActivity-access');
+  const devicesEl = document.getElementById('invActivity-devices');
+  const sessEl    = document.getElementById('invActivity-sessions');
+  const devCnt    = document.getElementById('invActivity-deviceCount');
+  const sesCnt    = document.getElementById('invActivity-sessionCount');
+
+  if (!accessEl) return;
+
+  const spin = '<div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+  [accessEl, devicesEl, sessEl].forEach(el => { if (el) el.innerHTML = spin; });
+
+  let data;
+  try {
+    const r = await fetch(`/api/tables/investors/${investorId}/activity`, { credentials: 'include' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    data = await r.json();
+  } catch (e) {
+    const err = `<div style="text-align:center;padding:16px;color:#ef4444;font-size:0.8rem">Failed to load activity</div>`;
+    [accessEl, devicesEl, sessEl].forEach(el => { if (el) el.innerHTML = err; });
+    return;
+  }
+
+  const { user, devices, sessions } = data;
+
+  // ── Account Access ──────────────────────────────────────
+  if (accessEl) {
+    const rows = [
+      ['Last Login',      user?.last_login  ? Utils.datetime(user.last_login) : '<span style="color:var(--text-dim)">Never</span>'],
+      ['Account Created', user?.created_at  ? Utils.datetime(user.created_at) : '—'],
+      ['2FA Enabled',     user?.totp_enabled
+        ? '<span style="color:#22c55e;font-weight:700"><i class="fa-solid fa-shield-check"></i> Yes</span>'
+        : '<span style="color:var(--text-dim)"><i class="fa-solid fa-shield-xmark"></i> No</span>'],
+      ['Account Status',  user?.is_active === false
+        ? '<span style="color:#ef4444;font-weight:700">Suspended</span>'
+        : '<span style="color:#22c55e;font-weight:700">Active</span>'],
+      ['Portal Role',     user?.role ? `<span style="text-transform:capitalize">${_esc(user.role)}</span>` : '—'],
+    ];
+    accessEl.innerHTML = rows.map(([label, val]) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:0.82rem">
+        <span style="color:var(--text-muted);min-width:120px">${label}</span>
+        <span style="font-weight:500;text-align:right">${val}</span>
+      </div>`).join('');
+  }
+
+  // ── Devices ─────────────────────────────────────────────
+  if (devicesEl) {
+    if (devCnt) devCnt.textContent = devices.length ? `${devices.length} device${devices.length > 1 ? 's' : ''}` : 'No devices';
+    if (!devices.length) {
+      devicesEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:0.82rem"><i class="fa-solid fa-mobile-screen" style="font-size:1.4rem;margin-bottom:8px;display:block;opacity:0.3"></i>App not yet downloaded</div>';
+    } else {
+      devicesEl.innerHTML = devices.map(d => {
+        const platIcon = d.platform === 'ios' ? 'fa-apple' : d.platform === 'android' ? 'fa-android' : 'fa-globe';
+        const platColor = d.platform === 'ios' ? '#888' : d.platform === 'android' ? '#22c55e' : '#eda5ff';
+        return `
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="width:36px;height:36px;border-radius:10px;background:${platColor}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="fa-brands ${platIcon}" style="color:${platColor};font-size:1.1rem"></i>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(d.device_name || (d.platform === 'ios' ? 'iPhone / iPad' : d.platform === 'android' ? 'Android Device' : 'Web Browser'))}</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Version: ${_esc(d.app_version || 'Unknown')} · ${(d.platform||'').toUpperCase()}</div>
+            <div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">First registered: ${Utils.date(d.created_at)} · Last active: ${Utils.date(d.updated_at)}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // ── Sessions ─────────────────────────────────────────────
+  if (sessEl) {
+    if (sesCnt) sesCnt.textContent = sessions.length ? `${sessions.length} active` : 'None';
+    if (!sessions.length) {
+      sessEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:0.82rem"><i class="fa-solid fa-circle-xmark" style="font-size:1.4rem;margin-bottom:8px;display:block;opacity:0.3"></i>No active sessions</div>';
+    } else {
+      sessEl.innerHTML = sessions.map(s => {
+        const ua = s.user_agent || '';
+        let browser = 'Unknown browser';
+        if (/Edg\//i.test(ua))         browser = 'Edge';
+        else if (/Chrome\//i.test(ua)) browser = 'Chrome';
+        else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+        else if (/Safari\//i.test(ua))  browser = 'Safari';
+        let os = '';
+        if (/iPhone|iPad/i.test(ua))    os = 'iOS';
+        else if (/Android/i.test(ua))   os = 'Android';
+        else if (/Windows/i.test(ua))   os = 'Windows';
+        else if (/Mac OS/i.test(ua))    os = 'macOS';
+        else if (/Linux/i.test(ua))     os = 'Linux';
+        const deviceLabel = os ? `${browser} · ${os}` : browser;
+        const isRecent = s.last_used_at && (Date.now() - new Date(s.last_used_at).getTime()) < 5 * 60 * 1000;
+        return `
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="width:36px;height:36px;border-radius:10px;background:var(--surface-2,#f3f4f6);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="fa-solid fa-computer" style="color:var(--text-muted);font-size:1rem"></i>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(deviceLabel)}</span>
+              ${isRecent ? '<span style="font-size:0.65rem;background:#22c55e22;color:#22c55e;padding:1px 6px;border-radius:20px;font-weight:700">ONLINE</span>' : ''}
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">IP: ${_esc(s.ip_address || 'Unknown')}</div>
+            <div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">Started: ${Utils.datetime(s.created_at)} · Last active: ${Utils.datetime(s.last_used_at)}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
 }
 
 /* ═══════════════════════════════════════════════
