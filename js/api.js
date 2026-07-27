@@ -715,6 +715,18 @@ const Modal = {
       m.classList.remove('open');
     });
     document.body.style.overflow = '';
+  },
+  openInline(html) {
+    let el = document.getElementById('_inlineModal');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = '_inlineModal';
+      el.className = 'modal-overlay';
+      el.addEventListener('click', function(e) { if (e.target === el) Modal.close('_inlineModal'); });
+      document.body.appendChild(el);
+    }
+    el.innerHTML = `<div class="modal" style="max-width:460px">${html}</div>`;
+    Modal.open('_inlineModal');
   }
 };
 
