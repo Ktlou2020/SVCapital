@@ -3831,7 +3831,7 @@ async function notifyWaitlist(poolId) {
       const data = await res.json().catch(() => ({}));
       Toast.success(data.message || 'Waitlist notifications sent');
     } else if (res.status === 404) {
-      Toast.success('Notifications sent (waitlist endpoint not yet configured)');
+      Toast.info('Waitlist notification endpoint not yet configured — no emails sent');
     } else {
       Toast.error('Failed to notify waitlist');
     }
@@ -4249,19 +4249,40 @@ function setupInvestmentFilters() {
   const search = document.getElementById('investmentSearch');
   const product = document.getElementById('investmentProductFilter');
   const status = document.getElementById('investmentStatusFilter');
+  const dateFrom = document.getElementById('invDateFrom');
+  const dateTo = document.getElementById('invDateTo');
+  const sortSel = document.getElementById('investmentSortOrder');
 
   const filter = Utils.debounce(() => {
     const q = search.value.toLowerCase();
     const pr = product.value;
     const st = status.value;
+    const from = dateFrom?.value ? new Date(dateFrom.value) : null;
+    const to = dateTo?.value ? new Date(dateTo.value + 'T23:59:59') : null;
+
     filteredInvests = STATE.investments.filter(i => {
       const investor = STATE.investors.find(inv => inv.id === i.investor_id);
       const invName  = i.investor_name || (investor ? `${investor.first_name} ${investor.last_name}` : '');
       const mq = !q || `${invName} ${i.pool_name} ${i.investor_id||''}`.toLowerCase().includes(q);
       const mp = !pr || i.product_type === pr;
       const ms = !st || i.status === st;
-      return mq && mp && ms;
+      const iDate = i.start_date ? new Date(i.start_date) : null;
+      const mFrom = !from || (iDate && iDate >= from);
+      const mTo = !to || (iDate && iDate <= to);
+      return mq && mp && ms && mFrom && mTo;
     });
+
+    const sort = sortSel?.value || '';
+    if (sort) {
+      filteredInvests = [...filteredInvests].sort((a, b) => {
+        if (sort === 'date_desc') return new Date(b.start_date || 0) - new Date(a.start_date || 0);
+        if (sort === 'date_asc')  return new Date(a.start_date || 0) - new Date(b.start_date || 0);
+        if (sort === 'amount_desc') return (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0);
+        if (sort === 'amount_asc')  return (parseFloat(a.amount) || 0) - (parseFloat(b.amount) || 0);
+        return 0;
+      });
+    }
+
     invPage = 1;
     renderInvestmentsTable();
   }, 200);
@@ -4269,6 +4290,9 @@ function setupInvestmentFilters() {
   search.addEventListener('input', filter);
   product.addEventListener('change', filter);
   status.addEventListener('change', filter);
+  if (dateFrom) dateFrom.addEventListener('change', filter);
+  if (dateTo) dateTo.addEventListener('change', filter);
+  if (sortSel) sortSel.addEventListener('change', filter);
 }
 
 function viewInvestmentDetail(id) {
@@ -4492,7 +4516,7 @@ let filteredTxns = [];
 async function loadTransactions() {
   try {
     const [txnRes, invRes] = await Promise.all([
-      API.transactions.list({ limit: 500 }),
+      API.transactions.list({ limit: 5000 }),
       STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 })
     ]);
     STATE.transactions = txnRes.data || [];
@@ -4578,15 +4602,22 @@ function renderTxnTable() {
 function setupTxnFilters() {
   const search = document.getElementById('txnSearch');
   const type = document.getElementById('txnTypeFilter');
+  const dateFrom = document.getElementById('txnDateFrom');
+  const dateTo = document.getElementById('txnDateTo');
 
   const filter = Utils.debounce(() => {
     const q = search.value.toLowerCase();
     const tp = type.value;
+    const from = dateFrom?.value ? new Date(dateFrom.value) : null;
+    const to = dateTo?.value ? new Date(dateTo.value + 'T23:59:59') : null;
     filteredTxns = STATE.transactions.filter(t => {
       const invName = _txnInvName(t);
       const mq = !q || `${invName} ${t.reference} ${t.description}`.toLowerCase().includes(q);
       const mt = !tp || t.type === tp;
-      return mq && mt;
+      const txDate = t.created_at ? new Date(t.created_at) : null;
+      const mFrom = !from || (txDate && txDate >= from);
+      const mTo = !to || (txDate && txDate <= to);
+      return mq && mt && mFrom && mTo;
     });
     txnPage = 1;
     renderTxnTable();
@@ -4594,6 +4625,8 @@ function setupTxnFilters() {
 
   search.addEventListener('input', filter);
   type.addEventListener('change', filter);
+  if (dateFrom) dateFrom.addEventListener('change', filter);
+  if (dateTo) dateTo.addEventListener('change', filter);
 }
 
 async function changeTxnStatus(txnId, newStatus, investorId, amount) {
@@ -4693,6 +4726,48 @@ async function saveNewTxn(btn) {
 /* ═══════════════════════════════════════════════
    SUPPORT TICKETS
    ═══════════════════════════════════════════════ */
+function openCreateTicketModal() {
+  const sel = document.getElementById('newTicketInvestorId');
+  if (sel) {
+    const opts = STATE.investors.map(i =>
+      `<option value="${_esc(String(i.id))}">${_esc(`${i.first_name} ${i.last_name}`)} — ${_esc(i.email || '')}</option>`
+    ).join('');
+    sel.innerHTML = '<option value="">Select investor…</option>' + opts;
+  }
+  ['newTicketSubject','newTicketDescription'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  Modal.open('createTicketModal');
+}
+
+async function saveNewTicket(btn) {
+  const investorId = document.getElementById('newTicketInvestorId')?.value;
+  const subject = document.getElementById('newTicketSubject')?.value?.trim();
+  const description = document.getElementById('newTicketDescription')?.value?.trim();
+  const category = document.getElementById('newTicketCategory')?.value || 'general';
+  const priority = document.getElementById('newTicketPriority')?.value || 'medium';
+  if (!subject) { Toast.error('Subject is required'); return; }
+  await _withBtn(btn, async () => {
+    try {
+      const investor = investorId ? STATE.investors.find(i => String(i.id) === investorId) : null;
+      await API._fetch('POST', 'tables/support_tickets', {
+        investor_id: investorId || null,
+        investor_name: investor ? `${investor.first_name} ${investor.last_name}` : null,
+        subject,
+        description,
+        category,
+        priority,
+        status: 'open',
+        source: 'admin',
+      });
+      Toast.success('Ticket created');
+      Modal.close('createTicketModal');
+      await loadSupport();
+    } catch (e) { Toast.error('Failed to create ticket: ' + (e.message || 'unknown')); }
+  });
+}
+
 async function loadSupport() {
   try {
     const [tktRes, invRes] = await Promise.all([
@@ -5066,8 +5141,8 @@ async function loadAnalytics() {
     const lowestMin = STATE.pools.filter(p => p.status === 'open' && p.min_investment > 0)
       .reduce((min, p) => Math.min(min, parseFloat(p.min_investment) || Infinity), Infinity);
 
-    const cattleEl = document.querySelector('#view-analytics .stat-card__value');
-    if (cattleEl && cattleEl.textContent === '14.83%') cattleEl.textContent = avgCattleRate;
+    const cattleEl = document.getElementById('an-cattle-return');
+    if (cattleEl) cattleEl.textContent = avgCattleRate;
     const minEl = document.querySelectorAll('#view-analytics .stat-card__value')[1];
     if (minEl && minEl.textContent === 'R500') minEl.textContent = lowestMin < Infinity ? Utils.rand(lowestMin, 0) : 'R500';
 
@@ -8152,13 +8227,35 @@ function renderAMLTable() {
   }).join('');
 }
 
-async function resolveAMLFlag(id) {
-  if (!await Confirm.ask('Resolve AML flag?', { body: 'This AML flag will be marked as resolved.', confirmLabel: 'Resolve' })) return;
+function resolveAMLFlag(id) {
+  const flag = STATE.amlFlags.find(f => f.id === id);
+  const investorName = _esc(flag?.investor_name || 'this investor');
+  Modal.openInline(`
+    <div class="modal__header"><span class="modal__title">Resolve AML Flag</span><button class="modal__close" onclick="Modal.close('_inlineModal')"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal__body">
+      <p style="margin:0 0 14px;font-size:0.9rem;color:var(--text-muted)">Resolving AML flag for <strong style="color:var(--text)">${investorName}</strong>.</p>
+      <div class="form-group">
+        <label class="form-label">Resolution Notes (optional)</label>
+        <textarea class="form-input" id="_amlResolveNote" rows="3" placeholder="e.g. Documents verified, no suspicious activity found…"></textarea>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('_inlineModal')">Cancel</button>
+      <button class="btn btn--success" onclick="_confirmResolveAML(${JSON.stringify(id)})"><i class="fa-solid fa-check"></i> Resolve</button>
+    </div>`);
+}
+
+async function _confirmResolveAML(id) {
+  const note = document.getElementById('_amlResolveNote')?.value?.trim() || '';
+  const adminResponse = note
+    ? `Resolved by admin on ${new Date().toLocaleDateString('en-ZA')}: ${note}`
+    : `Resolved by admin on ${new Date().toLocaleDateString('en-ZA')}`;
+  Modal.close('_inlineModal');
   try {
     await API._fetch('PATCH', `tables/support_tickets/${id}`, {
       status: 'resolved',
       resolved_at: new Date().toISOString(),
-      admin_response: `Resolved by admin on ${new Date().toLocaleDateString('en-ZA')}`
+      admin_response: adminResponse,
     });
     Toast.success('AML flag resolved');
     await loadAML();
@@ -9392,7 +9489,7 @@ function renderAcceptedDocsTable() {
 
   const docColor = { terms_of_service:'#656565', privacy_policy:'#22c55e', popia_notice:'#eda5ff', fica_consent:'#fec24f', risk_disclaimer:'#ef4444' };
 
-  tbody.innerHTML = rows.slice(0, 500).map(d => {
+  tbody.innerHTML = rows.map(d => {
     const inv  = d.investor;
     const name = inv ? `${_esc(inv.first_name)} ${_esc(inv.last_name)}` : `<span style="color:#7a92a8">${_esc(d.investor_id || '—')}</span>`;
     const email = inv ? `<div style="font-size:0.72rem;color:#7a92a8">${_esc(inv.email || '')}</div>` : '';
@@ -9746,18 +9843,40 @@ function _renderIntlInterest(data) {
   const footer = document.getElementById('intlInterestFooter');
   if (!body) return;
   if (!data.length) {
-    body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#7a92a8;padding:32px"><i class="fa-solid fa-earth-africa" style="font-size:1.5rem;margin-bottom:8px;display:block"></i>No international interest registrations yet</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#7a92a8;padding:32px"><i class="fa-solid fa-earth-africa" style="font-size:1.5rem;margin-bottom:8px;display:block"></i>No international interest registrations yet</td></tr>`;
     if (footer) footer.textContent = '';
     return;
   }
-  body.innerHTML = data.map(r => `
-    <tr>
+  body.innerHTML = data.map(r => {
+    const contacted = r.status === 'contacted';
+    const statusBadge = contacted
+      ? `<span style="background:rgba(100,237,0,0.15);color:#65ed00;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700"><i class="fa-solid fa-check"></i> Contacted</span>`
+      : `<span style="background:rgba(254,194,79,0.15);color:#fec24f;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">New</span>`;
+    return `<tr>
       <td style="font-weight:600;color:#e8edf2">${_esc(r.full_name || '—')}</td>
       <td><a href="mailto:${_esc(r.email)}" style="color:#fec24f;text-decoration:none">${_esc(r.email)}</a></td>
       <td>${_esc(r.country || '—')}</td>
+      <td>${statusBadge}</td>
       <td style="color:#7a92a8">${r.created_at ? new Date(r.created_at).toLocaleDateString('en-ZA',{day:'2-digit',month:'short',year:'numeric'}) : '—'}</td>
-    </tr>`).join('');
+      <td>
+        <div style="display:flex;gap:6px">
+          ${!contacted ? `<button class="btn btn--sm btn--success" onclick='markIntlContacted(${JSON.stringify(r.id)})' title="Mark as contacted"><i class="fa-solid fa-check"></i></button>` : ''}
+          <a class="btn btn--sm btn--secondary" href="mailto:${_esc(r.email)}?subject=${encodeURIComponent('SVCapital International Investment Enquiry')}" title="Send email"><i class="fa-solid fa-envelope"></i></a>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
   if (footer) footer.textContent = `${data.length} registration${data.length !== 1 ? 's' : ''}`;
+}
+
+async function markIntlContacted(id) {
+  try {
+    await API._fetch('PATCH', `tables/international_waitlist/${id}`, { status: 'contacted' });
+    const rec = _intlData.find(r => r.id === id);
+    if (rec) rec.status = 'contacted';
+    _renderIntlInterest(_intlData);
+    Toast.success('Marked as contacted');
+  } catch (e) { Toast.error('Failed to update status'); }
 }
 
 function filterIntlInterest(q) {
@@ -9811,7 +9930,12 @@ async function loadFeedback(filter = 'all') {
   _fbCurrentFilter = filter;
   ['pending','approved','rejected','all'].forEach(f => {
     const btn = document.getElementById(`fbFilter${f.charAt(0).toUpperCase()+f.slice(1)}`);
-    if (btn) btn.style.fontWeight = f === filter ? '800' : '';
+    if (!btn) return;
+    const active = f === filter;
+    btn.style.fontWeight = active ? '800' : '';
+    btn.style.background = active ? 'rgba(237,165,255,0.15)' : '';
+    btn.style.color = active ? '#eda5ff' : '';
+    btn.style.borderColor = active ? 'rgba(237,165,255,0.4)' : '';
   });
   const list = document.getElementById('feedbackList');
   if (!list) return;
