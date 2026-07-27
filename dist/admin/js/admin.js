@@ -9587,7 +9587,7 @@ async function loadEmailLogs(resetPage = true) {
         : '';
       return `<tr style="border-bottom:1px solid var(--border)">
         <td style="padding:10px 12px">${l.to_email}</td>
-        <td style="padding:10px 12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(l.subject||'').replace(/"/g,"'")}">${l.subject || ''}</td>
+        <td style="padding:10px 12px;max-width:320px;word-break:break-word">${l.subject || ''}</td>
         <td style="padding:10px 12px">${typePill}</td>
         <td style="padding:10px 12px">${statusPill}</td>
         <td style="padding:10px 12px;white-space:nowrap">${sent}</td>
@@ -9617,6 +9617,40 @@ async function loadEmailLogs(resetPage = true) {
 function _emailLogFilterStatus(status) {
   const sel = document.getElementById('emailLogStatus');
   if (sel) { sel.value = status; loadEmailLogs(); }
+}
+
+async function exportEmailLogsCSV() {
+  const search = (document.getElementById('emailLogSearch') || {}).value || '';
+  const type   = (document.getElementById('emailLogType')   || {}).value || '';
+  const status = (document.getElementById('emailLogStatus') || {}).value || '';
+  Toast.info('Preparing export…');
+  try {
+    const params = { limit: 5000, offset: 0 };
+    if (search) params.search = search;
+    if (type)   params.type   = type;
+    if (status) params.status = status;
+    const res = await API._fetch('GET', 'email-logs', null, params);
+    const rows = res.data || [];
+    if (!rows.length) { Toast.info('No records to export.'); return; }
+    const headers = ['Recipient', 'Subject', 'Type', 'Status', 'Sent At', 'Error'];
+    const escape  = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines   = [
+      headers.map(escape).join(','),
+      ...rows.map(l => [
+        l.to_email, l.subject, EMAIL_TYPE_LABELS[l.type] || l.type,
+        l.status, l.sent_at ? new Date(l.sent_at).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' }) : '',
+        l.error || '',
+      ].map(escape).join(',')),
+    ];
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), { href: url, download: `email-logs-${new Date().toISOString().slice(0,10)}.csv` });
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    Toast.success(`Exported ${rows.length} rows.`);
+  } catch (e) {
+    Toast.error('Export failed: ' + e.message);
+  }
 }
 
 async function retrySingleEmail(id, btn) {
