@@ -1581,12 +1581,9 @@ async function viewInvestor(id) {
   if (!inv) return;
 
   document.getElementById('invDetailTitle').textContent = `${inv.first_name} ${inv.last_name} — ${inv.id}`;
-  // Open modal immediately with a spinner so it feels responsive
   document.getElementById('invDetailBody').innerHTML = '<div style="text-align:center;padding:48px"><i class="fa-solid fa-spinner fa-spin fa-2x" style="color:var(--text-muted)"></i></div>';
   Modal.open('investorDetailModal');
 
-  // Fetch complete investments and transactions for this investor live from the server
-  // so we are never limited by the global STATE cache size.
   let invsts = STATE.investments.filter(i => i.investor_id === id);
   let txns   = STATE.transactions.filter(t => t.investor_id === id);
   try {
@@ -1641,8 +1638,8 @@ async function viewInvestor(id) {
     <button class="tab-btn inv-tab-btn"        id="invTab-surveys"       onclick="_invTab('surveys')"><i class="fa-solid fa-clipboard-list" style="margin-right:5px"></i>Surveys</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-investments"   onclick="_invTab('investments')"><i class="fa-solid fa-chart-line" style="margin-right:5px"></i>Investments (${invsts.length})</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-transactions"  onclick="_invTab('transactions')"><i class="fa-solid fa-arrows-rotate" style="margin-right:5px"></i>Transactions</button>
-    <button class="tab-btn inv-tab-btn"        id="invTab-admin"         onclick="_invTab('admin')"><i class="fa-solid fa-shield-halved" style="margin-right:5px"></i>Admin</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-activity"      onclick="_invTab('activity');_loadInvestorActivity('${inv.id}')"><i class="fa-solid fa-mobile-screen" style="margin-right:5px"></i>Activity</button>
+    <button class="tab-btn inv-tab-btn"        id="invTab-admin"         onclick="_invTab('admin')"><i class="fa-solid fa-shield-halved" style="margin-right:5px"></i>Admin</button>
   </div>
 
   <!-- ── Overview ── -->
@@ -1868,7 +1865,7 @@ async function viewInvestor(id) {
     </div>
   </div>
   `;
-  // Modal already opened above; just restore tab state and side effects
+  // Modal already opened above while data was loading
   const ta = document.getElementById('invNewNoteTA');
   if (ta) ta.value = inv.notes || '';
   loadInvestorNotes(inv.id);
@@ -2368,7 +2365,7 @@ async function saveNewInvestor(btn) {
         phone: document.getElementById('newInvPhone').value.trim(),
         id_number: document.getElementById('newInvIdNum').value.trim(),
         risk_profile: document.getElementById('newInvRisk').value,
-        city: document.getElementById('newInvCity').value.trim(),
+        address: document.getElementById('newInvCity').value.trim(),
         province: document.getElementById('newInvProvince').value,
         notes: document.getElementById('newInvNotes').value.trim(),
         status: 'pending', fica_status: 'pending',
@@ -3023,7 +3020,7 @@ function _viewProductFactsheet(id) {
 
 function openProductModal() {
   document.getElementById('productModalTitle').textContent = 'New Product';
-  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodRisk','prodIcon','prodColor','prodRiskColor'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodSector','prodRisk','prodIcon','prodColor','prodRiskColor'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('prodActive').value = 'true';
   document.getElementById('prodHomepage').value = 'true';
   document.getElementById('prodRisk').value = 'Medium';   // default risk profile for new products
@@ -3053,6 +3050,7 @@ function editProduct(id) {
   document.getElementById('prodBenchmark').value   = p.benchmark_rate || '';
   document.getElementById('prodPerfFee').value     = p.performance_fee_pct || '';
   document.getElementById('prodPartner').value     = p.partner_name || '';
+  document.getElementById('prodSector').value      = p.sector || '';
   document.getElementById('prodRisk').value        = p.risk_profile || '';
   document.getElementById('prodIcon').value        = p.icon || '';
   document.getElementById('prodColor').value       = p.color || '';
@@ -3125,6 +3123,7 @@ async function saveProduct(btn) {
     benchmark_rate:      num('prodBenchmark'),
     performance_fee_pct: num('prodPerfFee'),
     partner_name:        document.getElementById('prodPartner').value.trim() || null,
+    sector:              document.getElementById('prodSector').value || null,
     risk_profile:        document.getElementById('prodRisk').value.trim() || null,
     icon:                document.getElementById('prodIcon').value.trim() || null,
     color:               document.getElementById('prodColor').value.trim() || null,
@@ -5270,15 +5269,24 @@ function renderProductVolChart() {
 }
 
 const _PROVINCE_NORM = {
-  'gp':'Gauteng','gauteng':'Gauteng','gauteng province':'Gauteng','guateng':'Gauteng','gaunteng':'Gauteng','gautrng':'Gauteng',
+  // Gauteng
+  'gp':'Gauteng','gauteng':'Gauteng','gauteng province':'Gauteng','guateng':'Gauteng','gaunteng':'Gauteng','gautrng':'Gauteng','gauteng province':'Gauteng',
+  // Western Cape
   'wc':'Western Cape','western cape':'Western Cape','western cape province':'Western Cape','westerncape':'Western Cape','wetern cape':'Western Cape',
-  'ec':'Eastern Cape','eastern cape':'Eastern Cape','easterncape':'Eastern Cape',
+  // Eastern Cape
+  'ec':'Eastern Cape','eastern cape':'Eastern Cape','eastern cape province':'Western Cape','easterncape':'Eastern Cape',
+  // KwaZulu-Natal
   'kzn':'KwaZulu-Natal','kwazulu-natal':'KwaZulu-Natal','kwazulu natal':'KwaZulu-Natal','kwa-zulu natal':'KwaZulu-Natal','kwa zulu natal':'KwaZulu-Natal','kwazulunatal':'KwaZulu-Natal','natal':'KwaZulu-Natal','kwa-zulu nata':'KwaZulu-Natal',
+  // Limpopo
   'lp':'Limpopo','limpopo':'Limpopo','limpopo province':'Limpopo',
+  // Mpumalanga
   'mp':'Mpumalanga','mpumalanga':'Mpumalanga','mpumalanga province':'Mpumalanga',
-  'nc':'Northern Cape','northern cape':'Northern Cape','northerncape':'Northern Cape','nothern cape':'Northern Cape',
-  'nw':'North West','north west':'North West','northwest':'North West','north-west':'North West',
-  'fs':'Free State','free state':'Free State','freestate':'Free State',
+  // Northern Cape
+  'nc':'Northern Cape','northern cape':'Northern Cape','northern cape province':'Northern Cape','northerncape':'Northern Cape','nothern cape':'Northern Cape',
+  // North West
+  'nw':'North West','north west':'North West','north west province':'North West','northwest':'North West','north-west':'North West','north west':'North West','northwestprovince':'North West',
+  // Free State
+  'fs':'Free State','free state':'Free State','free state province':'Free State','freestate':'Free State',
 };
 function _normProvince(raw) {
   if (!raw) return null;
@@ -6729,7 +6737,6 @@ async function allocateInvestmentsToPools(btn) {
     if (data.unmatched?.length) {
       console.warn('[allocate-pools] unmatched pool names:', data.unmatched);
     }
-    // Reload investments so the Pool column updates immediately
     STATE.investments = (await API.investments.list({ limit: 5000 })).data || [];
     filterInvestments();
   } catch (e) {
@@ -7426,12 +7433,16 @@ async function opsExportSummary() {
    ═══════════════════════════════════════════════ */
 let _broadcastHistory = [];
 
-function loadComms() {
+let _broadcastLists = [];
+let _currentListId  = null;
+let _listSearchSelected = [];
+
+async function loadComms() {
   // Populate pool options in segment select from STATE.pools
   const seg = document.getElementById('broadcastSegment');
   if (seg) {
-    // Remove any old pool options first
-    Array.from(seg.querySelectorAll('option[data-pool]')).forEach(o => o.remove());
+    // Remove any old pool/list options first
+    Array.from(seg.querySelectorAll('option[data-pool],option[data-list]')).forEach(o => o.remove());
     STATE.pools.forEach(p => {
       const opt = document.createElement('option');
       opt.value = p.id;
@@ -7439,12 +7450,222 @@ function loadComms() {
       opt.textContent = `Pool: ${p.name}`;
       seg.appendChild(opt);
     });
+    // Load and inject custom lists
+    try {
+      const res = await API._fetch('GET', 'broadcast/lists');
+      _broadcastLists = res.data || [];
+      _broadcastLists.forEach(l => {
+        const opt = document.createElement('option');
+        opt.value = `list:${l.id}`;
+        opt.dataset.list = '1';
+        opt.textContent = `List: ${l.name} (${l.member_count})`;
+        seg.appendChild(opt);
+      });
+    } catch (_) {}
   }
 
   toggleBroadcastSubject();
   updateBroadcastPreview();
   _renderBroadcastHistory();
   loadPushAnalytics();
+}
+
+/* ── Custom broadcast lists ─────────────────────────────────── */
+
+async function openManageListsModal() {
+  Modal.open('broadcastListsModal');
+  await _renderBroadcastLists();
+}
+
+async function _renderBroadcastLists() {
+  const body = document.getElementById('broadcastListsBody');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+  try {
+    const res = await API._fetch('GET', 'broadcast/lists');
+    _broadcastLists = res.data || [];
+    if (!_broadcastLists.length) {
+      body.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim)">No custom lists yet. Create one above.</div>';
+      return;
+    }
+    body.innerHTML = _broadcastLists.map(l => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--card-bg)">
+        <div>
+          <div style="font-weight:600;font-size:0.9rem">${Utils.esc(l.name)}</div>
+          ${l.description ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px">${Utils.esc(l.description)}</div>` : ''}
+          <div style="font-size:0.75rem;color:var(--text-dim);margin-top:2px">${l.member_count} member${l.member_count !== 1 ? 's' : ''}</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn--secondary btn--sm" onclick="openListDetail(${l.id},${JSON.stringify(l.name)})"><i class="fa-solid fa-users"></i> Members</button>
+          <button class="btn btn--danger btn--sm" onclick="deleteBroadcastList(${l.id},${JSON.stringify(l.name)})"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    body.innerHTML = `<div style="color:var(--danger);padding:12px">Failed to load lists: ${err.message}</div>`;
+  }
+}
+
+async function createBroadcastList() {
+  const nameEl = document.getElementById('newListName');
+  const name = nameEl?.value?.trim();
+  if (!name) { Toast.error('Enter a list name'); return; }
+  try {
+    await API._fetch('POST', 'broadcast/lists', { name });
+    nameEl.value = '';
+    Toast.success(`List "${name}" created`);
+    await _renderBroadcastLists();
+    // Refresh dropdown
+    const seg = document.getElementById('broadcastSegment');
+    if (seg) {
+      const prev = seg.value;
+      Array.from(seg.querySelectorAll('option[data-list]')).forEach(o => o.remove());
+      _broadcastLists.forEach(l => {
+        const opt = document.createElement('option');
+        opt.value = `list:${l.id}`;
+        opt.dataset.list = '1';
+        opt.textContent = `List: ${l.name} (${l.member_count})`;
+        seg.appendChild(opt);
+      });
+      seg.value = prev;
+    }
+  } catch (err) {
+    Toast.error(err.message || 'Failed to create list');
+  }
+}
+
+async function deleteBroadcastList(listId, listName) {
+  if (!confirm(`Delete list "${listName}"? This cannot be undone.`)) return;
+  try {
+    await API._fetch('DELETE', `broadcast/lists/${listId}`);
+    Toast.success(`List deleted`);
+    await _renderBroadcastLists();
+    // Remove from dropdown
+    const seg = document.getElementById('broadcastSegment');
+    if (seg) {
+      const opt = seg.querySelector(`option[value="list:${listId}"]`);
+      if (opt) opt.remove();
+      if (seg.value === `list:${listId}`) {
+        seg.value = 'all';
+        updateBroadcastPreview();
+      }
+    }
+  } catch (err) {
+    Toast.error(err.message || 'Failed to delete list');
+  }
+}
+
+async function openListDetail(listId, listName) {
+  _currentListId = listId;
+  _listSearchSelected = [];
+  const title = document.getElementById('listMembersTitle');
+  if (title) title.innerHTML = `<i class="fa-solid fa-users" style="color:#eda5ff;margin-right:8px"></i>${Utils.esc(listName)}`;
+  const srEl = document.getElementById('listMemberSearch');
+  if (srEl) srEl.value = '';
+  const srRes = document.getElementById('listMemberSearchResults');
+  if (srRes) { srRes.innerHTML = ''; srRes.style.display = 'none'; }
+  Modal.open('broadcastListMembersModal');
+  await _renderListMembers();
+}
+
+async function _renderListMembers() {
+  const body = document.getElementById('listMembersBody');
+  if (!body || !_currentListId) return;
+  body.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+  try {
+    const res = await API._fetch('GET', `broadcast/lists/${_currentListId}/members`);
+    const members = res.data || [];
+    if (!members.length) {
+      body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)">No members yet. Search above to add investors.</div>';
+      return;
+    }
+    body.innerHTML = `
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px">${members.length} member${members.length !== 1 ? 's' : ''}</div>
+      ${members.map(m => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border);font-size:0.85rem">
+          <div>
+            <span style="font-weight:500">${Utils.esc(m.first_name)} ${Utils.esc(m.last_name)}</span>
+            <span style="color:var(--text-muted);margin-left:8px">${Utils.esc(m.email || '—')}</span>
+          </div>
+          <button class="btn btn--ghost btn--sm" onclick="removeFromList(${JSON.stringify(m.id)})" style="color:var(--danger);padding:2px 8px"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      `).join('')}
+    `;
+  } catch (err) {
+    body.innerHTML = `<div style="color:var(--danger);padding:12px">Failed to load members</div>`;
+  }
+}
+
+let _listSearchTimer = null;
+async function searchInvestorsForList() {
+  clearTimeout(_listSearchTimer);
+  _listSearchTimer = setTimeout(async () => {
+    const q = document.getElementById('listMemberSearch')?.value?.trim().toLowerCase();
+    const resEl = document.getElementById('listMemberSearchResults');
+    if (!resEl) return;
+    if (!q || q.length < 2) { resEl.style.display = 'none'; resEl.innerHTML = ''; return; }
+    const matches = (STATE.investors || []).filter(i =>
+      [`${i.first_name} ${i.last_name}`, i.email, i.id].some(v => String(v || '').toLowerCase().includes(q))
+    ).slice(0, 20);
+    if (!matches.length) {
+      resEl.innerHTML = '<div style="padding:10px;color:var(--text-dim);font-size:0.82rem">No investors found</div>';
+      resEl.style.display = 'block';
+      return;
+    }
+    resEl.style.display = 'block';
+    resEl.innerHTML = matches.map(i => {
+      const sel = _listSearchSelected.includes(i.id);
+      return `
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:0.83rem;background:${sel ? 'rgba(237,165,255,0.1)' : ''}"
+             onclick="toggleListSearchSelect(${JSON.stringify(i.id)},this)">
+          <input type="checkbox" ${sel ? 'checked' : ''} style="accent-color:#eda5ff;pointer-events:none">
+          <span>${Utils.esc(i.first_name)} ${Utils.esc(i.last_name)}</span>
+          <span style="color:var(--text-muted)">${Utils.esc(i.email || '')}</span>
+        </div>`;
+    }).join('');
+  }, 200);
+}
+
+function toggleListSearchSelect(investorId, row) {
+  const idx = _listSearchSelected.indexOf(investorId);
+  if (idx === -1) {
+    _listSearchSelected.push(investorId);
+    row.style.background = 'rgba(237,165,255,0.1)';
+    row.querySelector('input').checked = true;
+  } else {
+    _listSearchSelected.splice(idx, 1);
+    row.style.background = '';
+    row.querySelector('input').checked = false;
+  }
+}
+
+async function addSelectedToList() {
+  if (!_listSearchSelected.length) { Toast.error('Select at least one investor'); return; }
+  if (!_currentListId) return;
+  try {
+    await API._fetch('POST', `broadcast/lists/${_currentListId}/members`, { investor_ids: _listSearchSelected });
+    Toast.success(`Added ${_listSearchSelected.length} investor${_listSearchSelected.length !== 1 ? 's' : ''}`);
+    _listSearchSelected = [];
+    const srEl = document.getElementById('listMemberSearch');
+    if (srEl) srEl.value = '';
+    const srRes = document.getElementById('listMemberSearchResults');
+    if (srRes) { srRes.innerHTML = ''; srRes.style.display = 'none'; }
+    await _renderListMembers();
+    await _renderBroadcastLists();
+  } catch (err) {
+    Toast.error(err.message || 'Failed to add members');
+  }
+}
+
+async function removeFromList(investorId) {
+  if (!_currentListId) return;
+  try {
+    await API._fetch('DELETE', `broadcast/lists/${_currentListId}/members/${investorId}`);
+    await _renderListMembers();
+    await _renderBroadcastLists();
+  } catch (err) {
+    Toast.error(err.message || 'Failed to remove member');
+  }
 }
 
 function toggleBroadcastSubject() {
@@ -9635,7 +9856,7 @@ async function loadEmailLogs(resetPage = true) {
     const logs = logsRes.data || [];
     if (!tbody) return;
     if (!logs.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="padding:40px;text-align:center;color:var(--text-muted)">No emails found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="padding:40px;text-align:center;color:var(--text-muted)">No emails found.</td></tr>';
       if (pager) pager.innerHTML = '';
       return;
     }

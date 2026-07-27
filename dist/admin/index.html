@@ -913,7 +913,9 @@
       ══════════════════════════════════ -->
       <div class="view" id="view-opsconsole">
 
-        <!-- Email Controls card -->
+        <!-- Platform Health Strip -->
+        <div class="panel mb-16" id="opsHealthPanel">
+          <!-- Email Controls card -->
           <div class="panel mb-16" id="emailControlsPanel">
             <div class="panel__header" style="display:flex;align-items:center;justify-content:space-between">
               <span class="panel__title"><i class="fa-solid fa-envelope" style="color:#eda5ff;margin-right:8px"></i>Email Controls</span>
@@ -935,8 +937,6 @@
             </div>
           </div>
 
-        <!-- Platform Health Strip -->
-        <div class="panel mb-16" id="opsHealthPanel">
           <div class="panel__header" style="display:flex;align-items:center;justify-content:space-between">
             <span class="panel__title"><i class="fa-solid fa-satellite-dish" style="color:var(--orange);margin-right:8px"></i>Platform Health</span>
             <div style="display:flex;align-items:center;gap:10px">
@@ -1600,7 +1600,10 @@
 
                 <!-- Segment -->
                 <div class="form-group" style="margin-bottom:16px">
-                  <label class="form-label">Recipient Segment</label>
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                    <label class="form-label" style="margin:0">Recipient Segment</label>
+                    <button class="btn btn--secondary btn--sm" onclick="openManageListsModal()" style="font-size:0.75rem;padding:4px 10px"><i class="fa-solid fa-list-ul" style="margin-right:4px"></i>Manage Lists</button>
+                  </div>
                   <select class="form-select" id="broadcastSegment" onchange="updateBroadcastPreview()">
                     <option value="all">All Investors</option>
                     <option value="active">Active Investors (with active investments)</option>
@@ -1775,40 +1778,8 @@
               <div style="border-top:1px solid var(--border);margin-top:28px;padding-top:20px">
                 <p style="font-size:0.8rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px">Post-Migration Utilities</p>
 
-                <!-- Setup email sender -->
-                <div style="background:var(--bg-secondary);border-radius:10px;padding:16px">
-                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap">
-                    <span style="font-size:0.85rem;font-weight:600;color:var(--text)"><i class="fa-solid fa-envelope" style="color:#eda5ff;margin-right:6px"></i>Account Setup Emails</span>
-                    <button class="btn btn--sm btn--secondary" id="migLoadUsersBtn" onclick="loadInvestorUsersForEmail()">
-                      <i class="fa-solid fa-rotate"></i> Load Investors
-                    </button>
-                  </div>
-
-                  <!-- Search + select-all toolbar (hidden until loaded) -->
-                  <div id="migEmailToolbar" style="display:none;margin-bottom:10px">
-                    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
-                      <input type="text" id="migEmailSearch" placeholder="Search by name or email…"
-                        oninput="filterInvestorEmailList()"
-                        style="flex:1;min-width:160px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.8rem;color:var(--text);outline:none">
-                      <button class="btn btn--sm btn--ghost" onclick="toggleAllEmailInvestors(true)">All</button>
-                      <button class="btn btn--sm btn--ghost" onclick="toggleAllEmailInvestors(false)">None</button>
-                    </div>
-                    <div id="migEmailStats" style="font-size:0.75rem;color:var(--text-muted);margin-bottom:8px"></div>
-                  </div>
-
-                  <!-- Investor checklist -->
-                  <div id="migEmailList" style="max-height:260px;overflow-y:auto;display:none;border:1px solid var(--border);border-radius:6px;margin-bottom:12px"></div>
-
-                  <!-- Send button -->
-                  <button class="btn btn--primary btn--full" id="migResendBtn" onclick="resendSetupEmails()" style="display:none">
-                    <i class="fa-solid fa-paper-plane"></i> <span id="migResendLabel">Send Setup Emails</span>
-                  </button>
-                  <p style="font-size:0.72rem;color:var(--text-muted);margin-top:8px">Each recipient gets a 7-day link to set their password. Safe to resend — existing unused tokens are replaced.</p>
-                  <div id="migResendResult" style="display:none;margin-top:12px"></div>
-                </div>
-
                 <!-- Pool stats recalculator -->
-                <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
+                <div style="background:var(--bg-secondary);border-radius:10px;padding:16px">
                   <p style="font-weight:600;margin-bottom:6px">Recalculate Pool Statistics</p>
                   <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Recomputes <code>investor_count</code>, <code>raised_amount</code>, and <code>current_invested</code> for every pool from live investment data. Safe to run at any time.</p>
                   <button class="btn btn--secondary" onclick="recalculatePoolStats(this)">
@@ -2120,6 +2091,46 @@
   </div>
 </div>
 
+<!-- Manage Broadcast Lists Modal -->
+<div class="modal-overlay" id="broadcastListsModal" onclick="if(event.target===this)Modal.close('broadcastListsModal')">
+  <div class="modal" style="max-width:560px">
+    <div class="modal__header">
+      <h3 class="modal__title"><i class="fa-solid fa-list-ul" style="color:#eda5ff;margin-right:8px"></i>Custom Lists</h3>
+      <button class="modal__close" onclick="Modal.close('broadcastListsModal')">&times;</button>
+    </div>
+    <div class="modal__body">
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <input type="text" class="form-input" id="newListName" placeholder="List name…" style="flex:1" onkeydown="if(event.key==='Enter')createBroadcastList()">
+        <button class="btn btn--primary btn--sm" onclick="createBroadcastList()"><i class="fa-solid fa-plus"></i> Create</button>
+      </div>
+      <div id="broadcastListsBody" style="max-height:420px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- List Members Modal -->
+<div class="modal-overlay" id="broadcastListMembersModal" onclick="if(event.target===this)Modal.close('broadcastListMembersModal')">
+  <div class="modal" style="max-width:600px">
+    <div class="modal__header">
+      <h3 class="modal__title" id="listMembersTitle"><i class="fa-solid fa-users" style="color:#eda5ff;margin-right:8px"></i>List Members</h3>
+      <button class="modal__close" onclick="Modal.close('broadcastListMembersModal')">&times;</button>
+    </div>
+    <div class="modal__body">
+      <!-- Add investors -->
+      <div style="margin-bottom:14px">
+        <label class="form-label">Add investors to this list</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" class="form-input" id="listMemberSearch" placeholder="Search by name or email…" style="flex:1" oninput="searchInvestorsForList()" autocomplete="off">
+          <button class="btn btn--primary btn--sm" onclick="addSelectedToList()"><i class="fa-solid fa-plus"></i> Add Selected</button>
+        </div>
+        <div id="listMemberSearchResults" style="margin-top:6px;max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;display:none"></div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin-bottom:14px">
+      <div id="listMembersBody" style="max-height:300px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Merge Pool Modal -->
 <div class="modal-overlay" id="mergePoolModal" onclick="if(event.target===this)Modal.close('mergePoolModal')">
   <div class="modal" style="max-width:480px">
@@ -2259,6 +2270,17 @@
       </div>
       <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Partner Name</label><input type="text" class="form-input" id="prodPartner" placeholder="Beefcor" /></div>
+        <div class="form-group"><label class="form-label">Sector</label>
+          <select class="form-select" id="prodSector">
+            <option value="">— Select —</option>
+            <option value="Agriculture">Agriculture</option>
+            <option value="Energy">Energy</option>
+            <option value="Logistics">Logistics</option>
+            <option value="Credit">Credit</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row form-row--2">
         <div class="form-group"><label class="form-label">Risk Profile</label>
           <select class="form-select" id="prodRisk">
             <option value="Low">Low</option>
@@ -2793,7 +2815,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
-<script src="../js/api.js?v=3"></script>
+<script src="../js/api.js?v=2"></script>
 <script src="js/admin.js"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
