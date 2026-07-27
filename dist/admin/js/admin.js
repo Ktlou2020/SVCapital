@@ -3445,6 +3445,7 @@ function renderPoolsGrid() {
 }
 
 let _currentPoolId = null;
+let _poolInvestorsSnapshot = null; // cached for CSV export
 
 async function viewPoolInvestors(poolId) {
   _currentPoolId = poolId;
@@ -3466,6 +3467,7 @@ async function viewPoolInvestors(poolId) {
     });
     if (!res.ok) throw new Error('Failed to load');
     const { investors, summary } = await res.json();
+    _poolInvestorsSnapshot = { investors, summary, poolName: pool.name };
 
     const statusColor = { active:'badge--green', matured:'badge--purple', paid_out:'badge--blue', cancelled:'badge--red' };
 
@@ -3555,6 +3557,55 @@ async function viewPoolInvestors(poolId) {
   } catch (e) {
     body.innerHTML = `<div class="text-center text-muted" style="padding:32px">Failed to load pool investors</div>`;
   }
+}
+
+function downloadPoolCsv() {
+  if (!_poolInvestorsSnapshot || !_poolInvestorsSnapshot.investors.length) {
+    Toast.error('No data to export');
+    return;
+  }
+  const { investors, poolName } = _poolInvestorsSnapshot;
+  const PLATFORM_FEE_PCT = 0.01;
+
+  const headers = ['Investor','Email','Account ID','Sub Account','Gross Amount','Upfront Fee','Platform Fee','EVA','Net Amount','Annual Rate','Status','Start Date','Maturity Date','Maturity Instruction'];
+
+  const csvRows = [headers];
+  for (const r of investors) {
+    const name = `${r.first_name||''} ${r.last_name||''}`.trim();
+    const acct = r.sub_account_id ? (r.sub_account_name||r.sub_account_id) : r.investor_id;
+    const amt  = parseFloat(r.amount) || 0;
+    const platformFee = Math.round(amt * PLATFORM_FEE_PCT * 100) / 100;
+    csvRows.push([
+      name,
+      r.email || '',
+      r.sub_account_id ? r.sub_account_id : r.investor_id,
+      r.sub_account_id ? acct : '',
+      amt.toFixed(2),
+      (r.upfront_fee || 0).toFixed(2),
+      platformFee.toFixed(2),
+      (r.eva_contribution || 0).toFixed(2),
+      (r.net_amount || 0).toFixed(2),
+      r.annual_rate ? (parseFloat(r.annual_rate) * 100).toFixed(2) + '%' : '0.00%',
+      r.investment_status || '',
+      r.start_date ? r.start_date.slice(0, 10) : '',
+      r.end_date   ? r.end_date.slice(0, 10)   : '',
+      (r.maturity_instruction || '').replace(/_/g, ' '),
+    ]);
+  }
+
+  const csv = csvRows.map(row =>
+    row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+  ).join('\r\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `${(poolName||'pool').replace(/[^a-z0-9]+/gi,'-')}-investments.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function togglePoolManageMenu(evt, menuId) {
