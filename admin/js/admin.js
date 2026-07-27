@@ -7436,34 +7436,126 @@ let _broadcastHistory = [];
 let _broadcastLists = [];
 let _currentListId  = null;
 let _listSearchSelected = [];
+let _segPickerOpen  = false;
+
+/* ── Segment picker data ─────────────────────────────────────── */
+const _SEGMENT_BASE = [
+  { value: 'all',            label: 'All Investors',           icon: 'fa-users',            desc: 'Everyone with an email address' },
+  { value: 'active',         label: 'Active Investors',        icon: 'fa-circle-check',     desc: 'Currently have an active investment' },
+  { value: 'no_investments', label: 'No Investments Yet',      icon: 'fa-user-clock',       desc: 'Registered but never invested' },
+  { value: 'matured',        label: 'Matured Investors',       icon: 'fa-flag-checkered',   desc: 'Had at least one matured investment' },
+  { value: 'wallet_positive',label: 'Positive Wallet Balance', icon: 'fa-wallet',           desc: 'Wallet balance greater than R0' },
+  { value: 'pending_fica',   label: 'Pending FICA / KYC',      icon: 'fa-id-card',          desc: 'Documents awaiting verification' },
+];
+
+function _buildSegmentGroups() {
+  return [
+    { label: 'General', items: _SEGMENT_BASE },
+    {
+      label: 'By Pool',
+      items: (STATE.pools || []).map(p => ({
+        value: p.id,
+        label: p.name,
+        icon: 'fa-layer-group',
+        desc: p.product_type || 'Investment pool',
+      })),
+    },
+    {
+      label: 'Custom Lists',
+      items: _broadcastLists.map(l => ({
+        value: `list:${l.id}`,
+        label: l.name,
+        icon: 'fa-list-ul',
+        desc: `${l.member_count} member${l.member_count !== 1 ? 's' : ''}`,
+      })),
+    },
+  ];
+}
+
+function buildSegmentPicker() { _renderSegmentList(''); }
+
+function _renderSegmentList(q) {
+  const listEl = document.getElementById('segmentPickerList');
+  if (!listEl) return;
+  const ql = (q || '').toLowerCase();
+  const groups = _buildSegmentGroups();
+  const currentVal = document.getElementById('broadcastSegment')?.value || 'all';
+  let html = '';
+  for (const g of groups) {
+    const items = ql
+      ? g.items.filter(i => i.label.toLowerCase().includes(ql) || (i.desc || '').toLowerCase().includes(ql))
+      : g.items;
+    if (!items.length) continue;
+    html += `<div style="padding:7px 14px 3px;font-size:0.67rem;font-weight:700;letter-spacing:0.07em;color:var(--text-dim);text-transform:uppercase">${_esc(g.label)}</div>`;
+    for (const item of items) {
+      const sel = currentVal === item.value;
+      html += `<div onclick="selectSegment(${JSON.stringify(item.value)},${JSON.stringify(item.label)},${JSON.stringify(item.icon)})"
+        style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-radius:6px;margin:1px 4px;background:${sel ? 'rgba(237,165,255,0.12)' : ''}"
+        onmouseenter="this.style.background='${sel ? 'rgba(237,165,255,0.15)' : 'rgba(255,255,255,0.04)'}'"
+        onmouseleave="this.style.background='${sel ? 'rgba(237,165,255,0.12)' : ''}'">
+        <i class="fa-solid ${_esc(item.icon)}" style="width:15px;text-align:center;color:${sel ? '#eda5ff' : 'var(--text-dim)'};font-size:0.82rem;flex-shrink:0"></i>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.84rem;font-weight:${sel ? '600' : '400'};color:${sel ? 'var(--white)' : 'var(--text)'}">${_esc(item.label)}</div>
+          ${item.desc ? `<div style="font-size:0.71rem;color:var(--text-dim);margin-top:1px">${_esc(item.desc)}</div>` : ''}
+        </div>
+        ${sel ? '<i class="fa-solid fa-check" style="color:#eda5ff;font-size:0.72rem;flex-shrink:0"></i>' : ''}
+      </div>`;
+    }
+  }
+  listEl.innerHTML = html || '<div style="padding:18px;text-align:center;color:var(--text-dim);font-size:0.82rem">No segments match</div>';
+}
+
+function filterSegments(q) { _renderSegmentList(q); }
+
+function selectSegment(value, label, icon) {
+  const hidden = document.getElementById('broadcastSegment');
+  if (hidden) hidden.value = value;
+  const labelEl = document.getElementById('segmentPickerLabel');
+  if (labelEl) labelEl.textContent = label;
+  const iconEl = document.getElementById('segmentPickerIcon');
+  if (iconEl) { iconEl.className = `fa-solid ${icon}`; }
+  closeSegmentPicker();
+  updateBroadcastPreview();
+}
+
+function toggleSegmentPicker() { _segPickerOpen ? closeSegmentPicker() : openSegmentPicker(); }
+
+function openSegmentPicker() {
+  const dd = document.getElementById('segmentPickerDropdown');
+  const ch = document.getElementById('segmentPickerChevron');
+  const sr = document.getElementById('segmentPickerSearch');
+  if (dd) dd.style.display = 'block';
+  if (ch) ch.style.transform = 'rotate(180deg)';
+  if (sr) { sr.value = ''; sr.focus(); }
+  _segPickerOpen = true;
+  _renderSegmentList('');
+  setTimeout(() => document.addEventListener('click', _segPickerOutside, { once: true }), 0);
+}
+
+function closeSegmentPicker() {
+  const dd = document.getElementById('segmentPickerDropdown');
+  const ch = document.getElementById('segmentPickerChevron');
+  if (dd) dd.style.display = 'none';
+  if (ch) ch.style.transform = '';
+  _segPickerOpen = false;
+}
+
+function _segPickerOutside(e) {
+  const wrap = document.getElementById('segmentPickerWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    closeSegmentPicker();
+  } else if (_segPickerOpen) {
+    setTimeout(() => document.addEventListener('click', _segPickerOutside, { once: true }), 0);
+  }
+}
 
 async function loadComms() {
-  // Populate pool options in segment select from STATE.pools
-  const seg = document.getElementById('broadcastSegment');
-  if (seg) {
-    // Remove any old pool/list options first
-    Array.from(seg.querySelectorAll('option[data-pool],option[data-list]')).forEach(o => o.remove());
-    STATE.pools.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.dataset.pool = '1';
-      opt.textContent = `Pool: ${p.name}`;
-      seg.appendChild(opt);
-    });
-    // Load and inject custom lists
-    try {
-      const res = await API._fetch('GET', 'admin/broadcast/lists');
-      _broadcastLists = res.data || [];
-      _broadcastLists.forEach(l => {
-        const opt = document.createElement('option');
-        opt.value = `list:${l.id}`;
-        opt.dataset.list = '1';
-        opt.textContent = `List: ${l.name} (${l.member_count})`;
-        seg.appendChild(opt);
-      });
-    } catch (_) {}
-  }
+  try {
+    const res = await API._fetch('GET', 'admin/broadcast/lists');
+    _broadcastLists = res.data || [];
+  } catch (_) {}
 
+  buildSegmentPicker();
   toggleBroadcastSubject();
   updateBroadcastPreview();
   _renderBroadcastHistory();
@@ -7515,20 +7607,7 @@ async function createBroadcastList() {
     nameEl.value = '';
     Toast.success(`List "${name}" created`);
     await _renderBroadcastLists();
-    // Refresh dropdown
-    const seg = document.getElementById('broadcastSegment');
-    if (seg) {
-      const prev = seg.value;
-      Array.from(seg.querySelectorAll('option[data-list]')).forEach(o => o.remove());
-      _broadcastLists.forEach(l => {
-        const opt = document.createElement('option');
-        opt.value = `list:${l.id}`;
-        opt.dataset.list = '1';
-        opt.textContent = `List: ${l.name} (${l.member_count})`;
-        seg.appendChild(opt);
-      });
-      seg.value = prev;
-    }
+    buildSegmentPicker();
   } catch (err) {
     Toast.error(err.message || 'Failed to create list');
   }
@@ -7540,16 +7619,9 @@ async function deleteBroadcastList(listId, listName) {
     await API._fetch('DELETE', `admin/broadcast/lists/${listId}`);
     Toast.success(`List deleted`);
     await _renderBroadcastLists();
-    // Remove from dropdown
-    const seg = document.getElementById('broadcastSegment');
-    if (seg) {
-      const opt = seg.querySelector(`option[value="list:${listId}"]`);
-      if (opt) opt.remove();
-      if (seg.value === `list:${listId}`) {
-        seg.value = 'all';
-        updateBroadcastPreview();
-      }
-    }
+    const currentVal = document.getElementById('broadcastSegment')?.value;
+    if (currentVal === `list:${listId}`) selectSegment('all', 'All Investors', 'fa-users');
+    buildSegmentPicker();
   } catch (err) {
     Toast.error(err.message || 'Failed to delete list');
   }
@@ -7652,6 +7724,7 @@ async function addSelectedToList() {
     if (srRes) { srRes.innerHTML = ''; srRes.style.display = 'none'; }
     await _renderListMembers();
     await _renderBroadcastLists();
+    buildSegmentPicker();
   } catch (err) {
     Toast.error(err.message || 'Failed to add members');
   }
@@ -7663,6 +7736,7 @@ async function removeFromList(investorId) {
     await API._fetch('DELETE', `admin/broadcast/lists/${_currentListId}/members/${investorId}`);
     await _renderListMembers();
     await _renderBroadcastLists();
+    buildSegmentPicker();
   } catch (err) {
     Toast.error(err.message || 'Failed to remove member');
   }
