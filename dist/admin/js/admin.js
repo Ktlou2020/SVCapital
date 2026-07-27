@@ -2359,10 +2359,14 @@ async function _confirmMoveInvestment(investmentId) {
   const sel = document.getElementById('movePoolSelect');
   if (!sel || !sel.value) { Toast.error('Please select a destination pool'); return; }
   const newPoolId = sel.value;
+  const newPool = (STATE.pools || []).find(p => String(p.id) === String(newPoolId));
   const btn = document.getElementById('movePoolConfirmBtn');
   await _withBtn(btn, async () => {
     try {
-      await API._fetch('PATCH', `tables/investments/${investmentId}`, { pool_id: newPoolId });
+      await API._fetch('PATCH', `tables/investments/${investmentId}`, {
+        pool_id: newPoolId,
+        pool_name: newPool ? newPool.name : undefined,
+      });
       Toast.success('Investment moved successfully');
       Modal.closeAll();
       // Refresh the investor detail view if open
