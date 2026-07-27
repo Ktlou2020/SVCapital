@@ -573,6 +573,30 @@ router.get('/investors/:id/activity', requireAuth, async (req, res) => {
   }
 });
 
+/* ─── POST /api/tables/investment_pools/:id/merge ─── */
+/* Moves all investments from source pool into target pool, then deletes source */
+router.post('/investment_pools/:id/merge', requireAuth, async (req, res) => {
+  try {
+    if (!['admin','director'].includes(req.user.role))
+      return res.status(403).json({ error: 'Forbidden.' });
+
+    const sourceId = req.params.id;
+    const { target_pool_id } = req.body || {};
+    if (!target_pool_id)    return res.status(400).json({ error: 'target_pool_id required' });
+    if (target_pool_id === sourceId) return res.status(400).json({ error: 'Cannot merge a pool into itself' });
+
+    const { rowCount: merged } = await pool.query(
+      `UPDATE investments SET pool_id = $1 WHERE pool_id = $2`,
+      [target_pool_id, sourceId]
+    );
+    await pool.query(`DELETE FROM investment_pools WHERE id = $1`, [sourceId]);
+    res.json({ merged, deleted: sourceId });
+  } catch (err) {
+    console.error('[merge pool]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ─── GET /api/tables/investment_pools/:id/investors ─── */
 /* Returns all investors + their investment details for a specific pool */
 router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
