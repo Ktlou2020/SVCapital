@@ -61,9 +61,10 @@ const POOL_STATUS_MAP = {
 };
 
 const INVESTMENT_STATUS_MAP = {
-  MATURED:  'matured',
-  ACTIVE:   'active',
-  PAID_OUT: 'paid_out',
+  MATURED:   'matured',
+  ACTIVE:    'active',
+  PAID_OUT:  'paid_out',
+  CANCELLED: 'cancelled',
 };
 
 const TX_TYPE_MAP = {
