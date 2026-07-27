@@ -7896,6 +7896,51 @@ async function loadPushAnalytics() {
   }
 }
 
+async function openPushSubscribersModal() {
+  Modal.open('pushSubscribersModal');
+  const body = document.getElementById('pushSubscribersBody');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+  try {
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+    const res = await fetch('/api/push/subscribers', {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const { data = [] } = await res.json();
+    if (!data.length) {
+      body.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim)">No push subscribers yet.</div>';
+      return;
+    }
+    const dateStr = d => d ? new Date(d).toLocaleString('en-ZA', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+    body.innerHTML = `
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">${data.length} subscriber${data.length !== 1 ? 's' : ''}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:500">Name</th>
+            <th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:500">Email</th>
+            <th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:500">Channel</th>
+            <th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:500">Since</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(s => `
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:7px 8px;font-weight:500">${_esc(s.first_name)} ${_esc(s.last_name)}</td>
+              <td style="padding:7px 8px;color:var(--text-muted)">${_esc(s.email || '—')}</td>
+              <td style="padding:7px 8px"><span class="badge ${s.channel === 'mobile' ? 'badge--blue' : 'badge--green'}">${_esc(s.channel)}</span></td>
+              <td style="padding:7px 8px;color:var(--text-dim);white-space:nowrap">${dateStr(s.subscribed_at)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (err) {
+    body.innerHTML = `<div style="color:var(--danger);padding:12px">Failed to load subscribers: ${_esc(err.message)}</div>`;
+  }
+}
+
 /* ═══════════════════════════════════════════════
    NAV / AUM REPORT EXPORT (Feature 11)
    ═══════════════════════════════════════════════ */

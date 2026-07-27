@@ -192,4 +192,33 @@ router.get('/analytics', requireAuth, requireRole('admin', 'director'), async (r
   }
 });
 
+/* ══════════════════════════════════════════════════════════════
+   GET /api/push/subscribers
+   Returns list of investors with active push subscriptions / tokens
+══════════════════════════════════════════════════════════════ */
+router.get('/subscribers', requireAuth, requireRole('admin', 'director'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT DISTINCT i.id, i.first_name, i.last_name, i.email,
+             MAX(ps.created_at) AS subscribed_at,
+             'web' AS channel
+      FROM push_subscriptions ps
+      JOIN investors i ON i.id = ps.investor_id
+      GROUP BY i.id, i.first_name, i.last_name, i.email
+      UNION
+      SELECT DISTINCT i.id, i.first_name, i.last_name, i.email,
+             MAX(pt.updated_at) AS subscribed_at,
+             'mobile' AS channel
+      FROM push_tokens pt
+      JOIN investors i ON i.id = pt.investor_id
+      GROUP BY i.id, i.first_name, i.last_name, i.email
+      ORDER BY first_name, last_name
+    `);
+    res.json({ data: rows });
+  } catch (err) {
+    console.error('[push] subscribers error:', err.message);
+    res.status(500).json({ error: 'Failed to load subscribers' });
+  }
+});
+
 module.exports = router;
