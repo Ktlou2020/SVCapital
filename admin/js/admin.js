@@ -1226,15 +1226,16 @@ async function bulkSendLoginInvites() {
 
 function renderInvestorStats() {
   const d = STATE.investors;
+  const nonArchived = d.filter(i => i.status !== 'archived');
   // AUM from active investments (sub-account investments carry investor_id so are included)
   const liveAUM = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
   // Wallet tile includes both main investor wallets and sub-account wallets
   const saWallet = (STATE.subAccounts || []).reduce((s, sa) => s + (parseFloat(sa.wallet_balance) || 0), 0);
-  const totalWallet = d.reduce((s, i) => s + (parseFloat(i.wallet_balance) || 0), 0) + saWallet;
-  document.getElementById('is-total').textContent = d.length.toLocaleString();
-  document.getElementById('is-active').textContent = d.filter(i => i.status === 'active').length.toLocaleString();
-  document.getElementById('is-pending').textContent = d.filter(i => i.kyc_status === 'pending').length.toLocaleString();
-  document.getElementById('is-suspended').textContent = d.filter(i => i.status === 'suspended').length.toLocaleString();
+  const totalWallet = nonArchived.reduce((s, i) => s + (parseFloat(i.wallet_balance) || 0), 0) + saWallet;
+  document.getElementById('is-total').textContent = nonArchived.length.toLocaleString();
+  document.getElementById('is-active').textContent = nonArchived.filter(i => i.status === 'active').length.toLocaleString();
+  document.getElementById('is-pending').textContent = nonArchived.filter(i => i.kyc_status === 'pending').length.toLocaleString();
+  document.getElementById('is-suspended').textContent = nonArchived.filter(i => i.status === 'suspended').length.toLocaleString();
   document.getElementById('is-wallet').textContent = Utils.rand(totalWallet);
   document.getElementById('is-aum').textContent = Utils.rand(liveAUM);
 }
@@ -1295,7 +1296,9 @@ function renderInvestorsTable() {
       : inv.kyc_status === 'rejected'
       ? '<span class="badge badge--red" style="font-size:0.68rem;padding:2px 6px">KYC Fail</span>'
       : '<span class="badge badge--yellow" style="font-size:0.68rem;padding:2px 6px">KYC Pending</span>';
-    const stBadge   = Utils.statusBadge(inv.status);
+    const stBadge   = inv.status === 'archived'
+      ? '<span class="badge badge--grey" style="font-size:0.68rem;padding:2px 6px"><i class="fa-solid fa-box-archive"></i> Archived</span>'
+      : Utils.statusBadge(inv.status);
     const loginBadge = hasLogin
       ? ''
       : '<span class="badge badge--grey" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-user-slash"></i> No Login</span>';
@@ -1333,7 +1336,9 @@ function renderInvestorsTable() {
       <td style="overflow:hidden" onclick="event.stopPropagation()">
         <div class="flex-center gap-5">
           <button class="btn btn--secondary btn--sm" onclick='viewInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-eye"></i></button>
-          <button class="btn btn--danger btn--sm" onclick='confirmDeleteInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-trash"></i></button>
+          ${inv.status === 'archived'
+            ? `<button class="btn btn--sm" style="background:rgba(253,186,116,.15);color:#fb923c;border:1px solid rgba(253,186,116,.3)" onclick='unarchiveInvestor(${JSON.stringify(inv.id)}, this)' title="Unarchive investor"><i class="fa-solid fa-box-open"></i></button>`
+            : `<button class="btn btn--sm" style="background:rgba(156,163,175,.1);color:var(--text-muted);border:1px solid rgba(156,163,175,.2)" onclick='confirmArchiveInvestor(${JSON.stringify(inv.id)}, this)' title="Archive investor"><i class="fa-solid fa-box-archive"></i></button>`}
         </div>
       </td>
     </tr>`;
@@ -1447,7 +1452,9 @@ function setupInvestorFilters() {
                           || (inv.id||'').toLowerCase().includes(q)
                           || (inv.phone||'').includes(q)
                           || (inv.id_number||'').includes(q);
-      const matchSt = !st || inv.status === st;
+      const matchSt = st === 'archived' ? inv.status === 'archived'
+        : st ? inv.status === st
+        : inv.status !== 'archived';
       const matchKy = !ky || inv.kyc_status === ky;
       const matchPv = !pv || (inv.province||'').toLowerCase().includes(pv.toLowerCase());
       const matchLo = !lo
@@ -1702,7 +1709,9 @@ async function viewInvestor(id) {
         <button class="btn btn--secondary btn--sm" onclick='approveInvestorFica(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-id-card"></i> Approve FICA</button>
         ${hasLoginAccount === false ? `<button class="btn btn--secondary btn--sm" id="invInviteBtn" onclick='sendLoginInvite(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.email)}, this)'><i class="fa-solid fa-envelope"></i> Send Login Invite</button>` : hasLoginAccount === true ? `<span class="badge badge--green" style="padding:6px 10px"><i class="fa-solid fa-circle-check"></i> Has login account</span>` : ''}
         ${userRecord?.totp_enabled ? `<button class="btn btn--sm" style="background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3)" onclick='adminReset2FA(${JSON.stringify(userRecord.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, this)'><i class="fa-solid fa-shield-xmark"></i> Reset 2FA</button>` : ''}
-        <button class="btn btn--danger btn--sm" onclick='confirmDeleteInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-trash"></i> Delete</button>
+        ${inv.status === 'archived'
+          ? `<button class="btn btn--sm" style="background:rgba(253,186,116,.15);color:#fb923c;border:1px solid rgba(253,186,116,.3)" onclick='unarchiveInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-box-open"></i> Unarchive</button>`
+          : `<button class="btn btn--sm" style="background:rgba(156,163,175,.1);color:var(--text-muted);border:1px solid rgba(156,163,175,.2)" onclick='confirmArchiveInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-box-archive"></i> Archive</button>`}
       </div>
       <button class="btn btn--primary btn--sm" onclick='Modal.close("investorDetailModal")'><i class="fa-solid fa-check"></i> Done</button>
     </div>
@@ -2282,17 +2291,29 @@ async function _submitRejection() {
 async function processWithdrawal(txnId) { return approveWithdrawal(txnId); }
 async function rejectWithdrawal(txnId) { return rejectWithdrawalPrompt(txnId); }
 
-async function confirmDeleteInvestor(id, btn) {
-  if (!await Confirm.ask('Delete investor?', { body: 'This cannot be undone. All investor data will be permanently removed.', confirmLabel: 'Delete', danger: true })) return;
+async function confirmArchiveInvestor(id, btn) {
+  if (!await Confirm.ask('Archive investor?', { body: 'They can still log in but will be excluded from stats and broadcasts. They will be automatically restored when they make an investment.', confirmLabel: 'Archive' })) return;
   await _withBtn(btn, async () => {
     try {
-      await API.investors.delete(id);
-      Toast.success('Investor deleted');
+      await API._fetch('PATCH', `tables/investors/${id}`, { status: 'archived', archived_at: new Date().toISOString() });
+      Toast.success('Investor archived');
       Modal.closeAll();
       await loadInvestors();
     } catch (e) {
-      Toast.error('Failed to delete investor: ' + (e.message || 'unknown error'));
-      console.error('[confirmDeleteInvestor]', e);
+      Toast.error('Failed to archive investor: ' + (e.message || 'unknown error'));
+    }
+  });
+}
+
+async function unarchiveInvestor(id, btn) {
+  await _withBtn(btn, async () => {
+    try {
+      await API._fetch('PATCH', `tables/investors/${id}`, { status: 'active', archived_at: null });
+      Toast.success('Investor restored');
+      Modal.closeAll();
+      await loadInvestors();
+    } catch (e) {
+      Toast.error('Failed to unarchive investor: ' + (e.message || 'unknown error'));
     }
   });
 }
@@ -7489,7 +7510,7 @@ function _renderSegmentList(q) {
     html += `<div style="padding:7px 14px 3px;font-size:0.67rem;font-weight:700;letter-spacing:0.07em;color:var(--text-dim);text-transform:uppercase">${_esc(g.label)}</div>`;
     for (const item of items) {
       const sel = currentVal === item.value;
-      html += `<div onclick="selectSegment(${JSON.stringify(item.value)},${JSON.stringify(item.label)},${JSON.stringify(item.icon)})"
+      html += `<div onclick='selectSegment(${JSON.stringify(item.value)},${JSON.stringify(item.label)},${JSON.stringify(item.icon)})'
         style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-radius:6px;margin:1px 4px;background:${sel ? 'rgba(237,165,255,0.12)' : ''}"
         onmouseenter="this.style.background='${sel ? 'rgba(237,165,255,0.15)' : 'rgba(255,255,255,0.04)'}'"
         onmouseleave="this.style.background='${sel ? 'rgba(237,165,255,0.12)' : ''}'">
