@@ -613,7 +613,8 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
       LEFT JOIN sub_accounts sa ON sa.id = inv.sub_account_id
       WHERE inv.pool_id = $1
          OR (
-           inv.pool_name IS NOT NULL
+           inv.pool_id IS NULL
+           AND inv.pool_name IS NOT NULL
            AND inv.pool_name = (SELECT name FROM investment_pools WHERE id = $1 LIMIT 1)
          )
       ORDER BY inv.start_date DESC NULLS LAST
