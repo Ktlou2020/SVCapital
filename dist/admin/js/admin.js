@@ -1790,8 +1790,8 @@ async function viewInvestor(id) {
         <tbody>${invsts.length ? invsts.map(i => {
           const pi = Utils.productInfo(i.product_type);
           return `<tr>
-            <td class="td-strong">${_esc(i.pool_name)||'—'}</td>
-            <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
+            <td class="td-strong" title="${_esc(i.pool_name||'')}">${_esc(i.pool_name)||'—'}</td>
+            <td title="${_esc(pi.label)}"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
             <td class="td-muted">${Utils.date(i.start_date||i.created_at)}</td>
             <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
             <td class="td-green">${i.annual_rate?Utils.pct(i.annual_rate):'—'}</td>
@@ -4053,7 +4053,7 @@ function renderInvestmentsTable() {
       </td>
       <td class="td-muted clip">${Utils.date(investDate)}</td>
       <td>${i.pool_id
-        ? `<div class="td-strong clip" style="cursor:pointer;color:var(--gold)" onclick="viewPoolInvestors('${i.pool_id}')" title="View pool">${i.pool_name||i.pool_id}</div>`
+        ? `<div class="td-strong clip" style="cursor:pointer;color:var(--gold)" onclick="viewPoolInvestors('${i.pool_id}')" title="${_esc(i.pool_name||i.pool_id)}">${i.pool_name||i.pool_id}</div>`
         : `<div class="td-muted clip">—</div>`
       }</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
@@ -4301,7 +4301,7 @@ function renderMaturityTable() {
     return `
     <tr>
       <td><div class="td-strong clip">${mName}</div><div class="td-muted clip" style="font-size:0.7rem">${m.investor_id||''}</div></td>
-      <td class="td-muted clip">${m.pool_name || '—'}</td>
+      <td class="td-muted clip" title="${_esc(m.pool_name || '')}">${m.pool_name || '—'}</td>
       <td><span class="badge badge--blue">${instrLabel}</span></td>
       <td class="td-gold fw-700">${m.total_payout ? Utils.rand(m.total_payout) : '—'}</td>
       <td>${Utils.statusBadge(m.status)}</td>
