@@ -640,6 +640,9 @@
             <option value="maturity_asc">Maturity ↑ Soonest</option>
             <option value="maturity_desc">Maturity ↓ Latest</option>
           </select>
+          <select id="poolProductFilter" onchange="renderPoolsGrid()" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.82rem;background:var(--input-bg,#1e2330);color:var(--text-body);cursor:pointer">
+            <option value="">All Products</option>
+          </select>
           <div class="tbl-search" style="margin-left:auto"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search pools by name, product, ID…" id="poolSearch" oninput="renderPoolsGrid()" /></div>
         </div>
 

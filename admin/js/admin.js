@@ -3294,6 +3294,7 @@ async function loadPools() {
   try {
     const res = await API.pools.list({ limit: 1000 });
     STATE.pools = res.data || [];
+    _refreshPoolProductFilter();
     renderPoolsGrid();
     // Load products in the background so pool product-type dropdowns reflect them
     if (!STATE.products || !STATE.products.length) {
@@ -3311,11 +3312,29 @@ function filterPools(status, btn) {
   renderPoolsGrid();
 }
 
+function _refreshPoolProductFilter() {
+  const sel = document.getElementById('poolProductFilter');
+  if (!sel) return;
+  const types = [...new Set((STATE.pools || []).map(p => p.product_type).filter(Boolean))].sort();
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All Products</option>' +
+    types.map(t => {
+      const label = Utils.productInfo(t)?.label || t;
+      return `<option value="${_esc(t)}"${t === current ? ' selected' : ''}>${_esc(label)}</option>`;
+    }).join('');
+}
+
 function renderPoolsGrid() {
   const grid = document.getElementById('poolsGrid');
   let pools = poolFilter === 'all'
     ? STATE.pools
     : STATE.pools.filter(p => p.status === poolFilter || (poolFilter === 'active' && p.status === 'filling'));
+
+  // Product type filter
+  const productFilter = (document.getElementById('poolProductFilter')?.value || '').trim();
+  if (productFilter) {
+    pools = pools.filter(p => p.product_type === productFilter);
+  }
 
   // Free-text search across pool name, product and ID
   const q = (document.getElementById('poolSearch')?.value || '').trim().toLowerCase();
