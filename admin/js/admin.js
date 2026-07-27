@@ -7491,8 +7491,8 @@ async function _renderBroadcastLists() {
     body.innerHTML = _broadcastLists.map(l => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--card-bg)">
         <div>
-          <div style="font-weight:600;font-size:0.9rem">${Utils.esc(l.name)}</div>
-          ${l.description ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px">${Utils.esc(l.description)}</div>` : ''}
+          <div style="font-weight:600;font-size:0.9rem">${_esc(l.name)}</div>
+          ${l.description ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px">${_esc(l.description)}</div>` : ''}
           <div style="font-size:0.75rem;color:var(--text-dim);margin-top:2px">${l.member_count} member${l.member_count !== 1 ? 's' : ''}</div>
         </div>
         <div style="display:flex;gap:8px">
@@ -7559,7 +7559,7 @@ async function openListDetail(listId, listName) {
   _currentListId = listId;
   _listSearchSelected = [];
   const title = document.getElementById('listMembersTitle');
-  if (title) title.innerHTML = `<i class="fa-solid fa-users" style="color:#eda5ff;margin-right:8px"></i>${Utils.esc(listName)}`;
+  if (title) title.innerHTML = `<i class="fa-solid fa-users" style="color:#eda5ff;margin-right:8px"></i>${_esc(listName)}`;
   const srEl = document.getElementById('listMemberSearch');
   if (srEl) srEl.value = '';
   const srRes = document.getElementById('listMemberSearchResults');
@@ -7584,8 +7584,8 @@ async function _renderListMembers() {
       ${members.map(m => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border);font-size:0.85rem">
           <div>
-            <span style="font-weight:500">${Utils.esc(m.first_name)} ${Utils.esc(m.last_name)}</span>
-            <span style="color:var(--text-muted);margin-left:8px">${Utils.esc(m.email || '—')}</span>
+            <span style="font-weight:500">${_esc(m.first_name)} ${_esc(m.last_name)}</span>
+            <span style="color:var(--text-muted);margin-left:8px">${_esc(m.email || '—')}</span>
           </div>
           <button class="btn btn--ghost btn--sm" onclick="removeFromList(${JSON.stringify(m.id)})" style="color:var(--danger);padding:2px 8px"><i class="fa-solid fa-xmark"></i></button>
         </div>
@@ -7619,8 +7619,8 @@ async function searchInvestorsForList() {
         <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:0.83rem;background:${sel ? 'rgba(237,165,255,0.1)' : ''}"
              onclick="toggleListSearchSelect(${JSON.stringify(i.id)},this)">
           <input type="checkbox" ${sel ? 'checked' : ''} style="accent-color:#eda5ff;pointer-events:none">
-          <span>${Utils.esc(i.first_name)} ${Utils.esc(i.last_name)}</span>
-          <span style="color:var(--text-muted)">${Utils.esc(i.email || '')}</span>
+          <span>${_esc(i.first_name)} ${_esc(i.last_name)}</span>
+          <span style="color:var(--text-muted)">${_esc(i.email || '')}</span>
         </div>`;
     }).join('');
   }, 200);
