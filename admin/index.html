@@ -387,7 +387,7 @@
           <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="document.getElementById('investorStatusFilter').value='';document.getElementById('investorStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-users"></i></div></div><div class="stat-card__value" id="is-total">—</div><div class="stat-card__label">Total Investors</div></div>
           <div class="stat-card stat-card--green" style="cursor:pointer" onclick="document.getElementById('investorStatusFilter').value='active';document.getElementById('investorStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-check"></i></div></div><div class="stat-card__value" id="is-active">—</div><div class="stat-card__label">Active</div></div>
           <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('kyc', document.querySelector('[data-view=kyc]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-clock"></i></div></div><div class="stat-card__value" id="is-pending">—</div><div class="stat-card__label">Pending KYC</div></div>
-          <div class="stat-card stat-card--red" style="--red:#ef4444;cursor:pointer" onclick="document.getElementById('investorStatusFilter').value='suspended';document.getElementById('investorStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-user-slash"></i></div></div><div class="stat-card__value" id="is-suspended">—</div><div class="stat-card__label">Suspended</div></div>
+          <div class="stat-card stat-card--red" style="--red:#ef4444;cursor:pointer" onclick="document.getElementById('investorStatusFilter').value='archived';document.getElementById('investorStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-box-archive"></i></div></div><div class="stat-card__value" id="is-suspended">—</div><div class="stat-card__label">Archived</div></div>
           <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('transactions', document.querySelector('[data-view=transactions]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-wallet"></i></div></div><div class="stat-card__value" id="is-wallet">—</div><div class="stat-card__label">Total Wallets</div></div>
           <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('analytics', document.querySelector('[data-view=analytics]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="stat-card__value" id="is-aum">—</div><div class="stat-card__label">AUM</div></div>
         </div>
@@ -405,7 +405,7 @@
                 <option value="active">Active</option>
                 <option value="suspended">Suspended</option>
                 <option value="pending">Pending</option>
-                <option value="archived">Archived</option>
+                <option value="archived">Archived / Suspended</option>
               </select>
               <select class="tbl-filter" id="investorKycFilter">
                 <option value="">All KYC</option>
