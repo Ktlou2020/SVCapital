@@ -2150,7 +2150,10 @@
   <div class="modal modal--lg" style="max-width:900px">
     <div class="modal__header">
       <span class="modal__title" id="poolInvestorsTitle">Pool Investors</span>
-      <button class="modal__close" aria-label="Close" onclick="_currentPoolId=null;Modal.close('poolInvestorsModal')"><i class="fa-solid fa-xmark"></i></button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn btn--sm" id="poolInvestorsRecalcBtn" onclick="viewPoolInvestors(_currentPoolId)" title="Recalculate pool stats" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)"><i class="fa-solid fa-rotate"></i> Recalculate</button>
+        <button class="modal__close" aria-label="Close" onclick="_currentPoolId=null;Modal.close('poolInvestorsModal')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
     </div>
     <div class="modal__body" id="poolInvestorsBody">Loading...</div>
   </div>
