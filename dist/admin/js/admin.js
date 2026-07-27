@@ -2078,9 +2078,14 @@ function renderWithdrawalsTable() {
       ? `<td style="padding-left:14px;width:36px"><input type="checkbox" class="wd-check" data-id='${w.id}' onchange="_updateWithdrawalSelection()"></td>`
       : `<td></td>`;
 
+    const dateCreated = w.transaction_date || w.created_at;
+    const dateUpdated = w.date_updated || w.updated_at;
     return `<tr>
       ${checkCol}
-      <td class="td-muted clip">${Utils.date(w.created_at || w.transaction_date)}</td>
+      <td class="td-muted clip" style="font-size:0.78rem">
+        <div>${Utils.date(dateCreated)}</div>
+        ${dateUpdated ? `<div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">Upd: ${Utils.date(dateUpdated)}</div>` : ''}
+      </td>
       <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${w.investor_id||''}</div>${saBadge}</td>
       <td class="td-gold fw-700 clip">${Utils.rand(Math.abs(w.amount))}</td>
       <td>${bankDisplay}</td>
