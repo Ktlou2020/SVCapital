@@ -429,10 +429,11 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         LEFT JOIN (
           SELECT
             pool_id,
-            COUNT(DISTINCT CASE WHEN sub_account_id IS NOT NULL THEN 'sa:' || sub_account_id ELSE 'inv:' || investor_id END) AS live_investor_count,
+            COUNT(DISTINCT CASE WHEN status != 'cancelled' AND sub_account_id IS NOT NULL THEN 'sa:' || sub_account_id
+                                WHEN status != 'cancelled' THEN 'inv:' || investor_id END) AS live_investor_count,
             SUM(CASE WHEN status IN ('active','matured','paid_out') THEN amount ELSE 0 END) AS live_raised,
             SUM(CASE WHEN status = 'active'  THEN amount ELSE 0 END)            AS live_active_amount,
-            COUNT(*)                                                             AS live_investment_count
+            COUNT(CASE WHEN status != 'cancelled' THEN 1 END)                   AS live_investment_count
           FROM investments
           WHERE pool_id IS NOT NULL
           GROUP BY pool_id
@@ -440,10 +441,11 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
         LEFT JOIN (
           SELECT
             pool_name,
-            COUNT(DISTINCT CASE WHEN sub_account_id IS NOT NULL THEN 'sa:' || sub_account_id ELSE 'inv:' || investor_id END) AS live_investor_count,
+            COUNT(DISTINCT CASE WHEN status != 'cancelled' AND sub_account_id IS NOT NULL THEN 'sa:' || sub_account_id
+                                WHEN status != 'cancelled' THEN 'inv:' || investor_id END) AS live_investor_count,
             SUM(CASE WHEN status IN ('active','matured','paid_out') THEN amount ELSE 0 END) AS live_raised,
             SUM(CASE WHEN status = 'active'  THEN amount ELSE 0 END)            AS live_active_amount,
-            COUNT(*)                                                             AS live_investment_count
+            COUNT(CASE WHEN status != 'cancelled' THEN 1 END)                   AS live_investment_count
           FROM investments
           WHERE pool_name IS NOT NULL
           GROUP BY pool_name
@@ -662,16 +664,18 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
       r.net_amount      = netAmount;
     });
 
+    const activeRows = rows.filter(r => r.investment_status !== 'cancelled');
     const summary = {
-      total_invested:       rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0),
-      investor_count:       new Set(rows.map(r => r.sub_account_id ? `sa:${r.sub_account_id}` : `inv:${r.investor_id}`)).size,
+      total_invested:       activeRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0),
+      investor_count:       new Set(activeRows.map(r => r.sub_account_id ? `sa:${r.sub_account_id}` : `inv:${r.investor_id}`)).size,
       active_count:         rows.filter(r => r.investment_status === 'active').length,
       matured_count:        rows.filter(r => r.investment_status === 'matured').length,
-      total_platform_fees:  rows.reduce((s, r) => s + (r.platform_fee || 0), 0),
-      total_upfront_fees:   rows.reduce((s, r) => s + (r.upfront_fee || 0), 0),
-      total_eva:            rows.reduce((s, r) => s + (r.eva_contribution || 0), 0),
-      total_fees:           rows.reduce((s, r) => s + (r.total_fees || 0), 0),
-      total_net_invested:   rows.reduce((s, r) => s + (r.net_amount || 0), 0),
+      cancelled_count:      rows.filter(r => r.investment_status === 'cancelled').length,
+      total_platform_fees:  activeRows.reduce((s, r) => s + (r.platform_fee || 0), 0),
+      total_upfront_fees:   activeRows.reduce((s, r) => s + (r.upfront_fee || 0), 0),
+      total_eva:            activeRows.reduce((s, r) => s + (r.eva_contribution || 0), 0),
+      total_fees:           activeRows.reduce((s, r) => s + (r.total_fees || 0), 0),
+      total_net_invested:   activeRows.reduce((s, r) => s + (r.net_amount || 0), 0),
       mgmt_fee_pct:         mgmtFeePct,
     };
 

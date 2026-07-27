@@ -3475,12 +3475,13 @@ async function viewPoolInvestors(poolId) {
 
     body.innerHTML = `
       <!-- Pool stats -->
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
         ${[
           ['Total Raised',  Utils.rand(summary.total_invested), 'coins',         '#fec24f'],
           ['Investors',     summary.investor_count,             'users',          '#656565'],
           ['Active',        summary.active_count,               'chart-line',     '#22c55e'],
           ['Matured',       summary.matured_count,              'flag-checkered', '#eda5ff'],
+          ['Cancelled',     summary.cancelled_count,            'ban',            '#ef4444'],
         ].map(([label, val, icon, color]) => `
           <div style="background:var(--bg-secondary);border-radius:10px;padding:14px;text-align:center">
             <i class="fa-solid fa-${icon}" style="color:${color};font-size:1.1rem;display:block;margin-bottom:6px"></i>
@@ -3536,7 +3537,8 @@ async function viewPoolInvestors(poolId) {
               const acctCell = r.sub_account_id
                 ? `<div style="font-size:0.72rem;font-weight:700;color:#eda5ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${r.sub_account_id}">${r.sub_account_name||'Sub Account'}</div><div style="font-size:0.62rem;color:var(--text-muted);font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.sub_account_type||''}</div>`
                 : `<span style="font-family:monospace;font-size:0.75rem;color:var(--gold)">${r.investor_id}</span>`;
-              return `<tr style="cursor:pointer" onclick="viewInvestor('${r.investor_id}');Modal.close('poolInvestorsModal')">
+              const isCancelled = r.investment_status === 'cancelled';
+              return `<tr style="cursor:pointer;${isCancelled ? 'opacity:0.5;' : ''}" onclick="viewInvestor('${r.investor_id}');Modal.close('poolInvestorsModal')">
                 <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${r.email||''}</div></td>
                 <td class="clip">${acctCell}</td>
                 <td class="td-gold fw-700 clip">${Utils.rand(r.amount)}</td>
