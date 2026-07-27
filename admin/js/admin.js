@@ -1235,7 +1235,7 @@ function renderInvestorStats() {
   document.getElementById('is-total').textContent = nonArchived.length.toLocaleString();
   document.getElementById('is-active').textContent = nonArchived.filter(i => i.status === 'active').length.toLocaleString();
   document.getElementById('is-pending').textContent = nonArchived.filter(i => i.kyc_status === 'pending').length.toLocaleString();
-  document.getElementById('is-suspended').textContent = nonArchived.filter(i => i.status === 'suspended').length.toLocaleString();
+  document.getElementById('is-suspended').textContent = d.filter(i => i.status === 'suspended' || i.status === 'archived').length.toLocaleString();
   document.getElementById('is-wallet').textContent = Utils.rand(totalWallet);
   document.getElementById('is-aum').textContent = Utils.rand(liveAUM);
 }
@@ -1452,7 +1452,7 @@ function setupInvestorFilters() {
                           || (inv.id||'').toLowerCase().includes(q)
                           || (inv.phone||'').includes(q)
                           || (inv.id_number||'').includes(q);
-      const matchSt = st === 'archived' ? inv.status === 'archived'
+      const matchSt = st === 'archived' ? (inv.status === 'archived' || inv.status === 'suspended')
         : st ? inv.status === st
         : inv.status !== 'archived';
       const matchKy = !ky || inv.kyc_status === ky;
