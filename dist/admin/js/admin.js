@@ -3234,7 +3234,7 @@ function renderPoolsGrid() {
   if (q) {
     pools = pools.filter(p => {
       const label = (Utils.productInfo(p.product_type)?.label || '');
-      return [p.pool_name, p.product_type, label, p.id, p.partner_name]
+      return [p.name, p.pool_name, p.product_type, label, p.id, p.partner_name]
         .some(v => String(v || '').toLowerCase().includes(q));
     });
   }
