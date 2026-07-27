@@ -672,9 +672,19 @@
                 <option value="">All Products</option>
                 <option value="cattle">Cattle</option>
                 <option value="solar">Solar</option>
+                <option value="short_term">Short-Term / SMME</option>
                 <option value="smme">SMME / Short-Term</option>
-                <option value="delivery_bikes">Delivery Bikes</option>
+                <option value="delivery_bike">Delivery Bikes</option>
                 <option value="other">Other</option>
+              </select>
+              <input type="date" class="tbl-filter" id="invDateFrom" title="Start date from" style="font-size:0.8rem" />
+              <input type="date" class="tbl-filter" id="invDateTo" title="Start date to" style="font-size:0.8rem" />
+              <select class="tbl-filter" id="investmentSortOrder">
+                <option value="">Sort: Default</option>
+                <option value="date_desc">Date ↓ Newest</option>
+                <option value="date_asc">Date ↑ Oldest</option>
+                <option value="amount_desc">Amount ↓</option>
+                <option value="amount_asc">Amount ↑</option>
               </select>
               <select class="tbl-filter" id="investmentStatusFilter">
                 <option value="">All Status</option>
@@ -760,6 +770,8 @@
             <div><div class="table-card__title">Transaction Ledger</div></div>
             <div class="table-card__controls">
               <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search investor, reference..." id="txnSearch" /></div>
+              <input type="date" class="tbl-filter" id="txnDateFrom" title="From date" style="font-size:0.8rem" />
+              <input type="date" class="tbl-filter" id="txnDateTo" title="To date" style="font-size:0.8rem" />
               <select class="tbl-filter" id="txnTypeFilter">
                 <option value="">All Types</option>
                 <option value="deposit">Deposit</option>
@@ -883,6 +895,7 @@
           <div class="table-card__header">
             <div><div class="table-card__title">Support Tickets</div></div>
             <div class="table-card__controls">
+              <button class="btn btn--primary btn--sm" onclick="openCreateTicketModal()"><i class="fa-solid fa-plus"></i> New Ticket</button>
               <select class="tbl-filter" id="ticketStatusFilter">
                 <option value="">All Status</option>
                 <option value="open">Open</option>
@@ -1143,7 +1156,7 @@
         </div>
 
         <div class="stats-row">
-          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div><div class="stat-card__value">14.83%</div><div class="stat-card__label">Avg Cattle Return</div></div>
+          <div class="stat-card stat-card--gold" style="cursor:pointer" onclick="navigate('investments',document.querySelector('[data-view=investments]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-percent"></i></div></div><div class="stat-card__value" id="an-cattle-return">—</div><div class="stat-card__label">Avg Cattle Return</div></div>
           <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('products',document.querySelector('[data-view=products]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-bolt"></i></div></div><div class="stat-card__value">R500</div><div class="stat-card__label">Lowest Min. Investment</div></div>
           <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('investors',document.querySelector('[data-view=investors]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-plus"></i></div></div><div class="stat-card__value" id="an-monthlynew">—</div><div class="stat-card__label">New Investors (30d)</div></div>
           <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('investors',document.querySelector('[data-view=investors]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-handshake"></i></div></div><div class="stat-card__value" id="an-referrals">—</div><div class="stat-card__label">Referred Investors</div></div>
@@ -1263,6 +1276,10 @@
                 <option value="kyc">KYC Actions</option>
                 <option value="transaction">Transactions</option>
                 <option value="investment">Investments</option>
+                <option value="pool">Pool Events</option>
+                <option value="withdrawal">Withdrawals</option>
+                <option value="aml">AML Events</option>
+                <option value="support">Support Tickets</option>
               </select>
               <button class="btn btn--secondary btn--sm" onclick="loadAuditLog()"><i class="fa-solid fa-rotate"></i> Refresh</button>
             </div>
@@ -1990,9 +2007,9 @@
         </div>
 
         <div class="stats-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px" id="intlInterestStats">
-          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('international',document.querySelector('[data-view=international]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-earth-africa"></i></div></div><div class="stat-card__value" id="ii-total">—</div><div class="stat-card__label">Total Registrations</div></div>
-          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('international',document.querySelector('[data-view=international]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-globe"></i></div></div><div class="stat-card__value" id="ii-countries">—</div><div class="stat-card__label">Countries</div></div>
-          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('international',document.querySelector('[data-view=international]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-calendar-plus"></i></div></div><div class="stat-card__value" id="ii-this-month">—</div><div class="stat-card__label">This Month</div></div>
+          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('intlinterest',document.querySelector('[data-view=intlinterest]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-earth-africa"></i></div></div><div class="stat-card__value" id="ii-total">—</div><div class="stat-card__label">Total Registrations</div></div>
+          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('intlinterest',document.querySelector('[data-view=intlinterest]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-globe"></i></div></div><div class="stat-card__value" id="ii-countries">—</div><div class="stat-card__label">Countries</div></div>
+          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('intlinterest',document.querySelector('[data-view=intlinterest]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-calendar-plus"></i></div></div><div class="stat-card__value" id="ii-this-month">—</div><div class="stat-card__label">This Month</div></div>
         </div>
 
         <div class="table-card">
@@ -2011,10 +2028,12 @@
                 <th>Name</th>
                 <th>Email</th>
                 <th>Country</th>
+                <th>Status</th>
                 <th>Date</th>
+                <th style="width:120px">Actions</th>
               </tr></thead>
               <tbody id="intlInterestBody">
-                <tr><td colspan="4" style="text-align:center;color:#7a92a8;padding:32px">Loading…</td></tr>
+                <tr><td colspan="6" style="text-align:center;color:#7a92a8;padding:32px">Loading…</td></tr>
               </tbody>
             </table>
           </div>
@@ -2605,6 +2624,46 @@
   </div>
 </div>
 
+<!-- Create Support Ticket Modal -->
+<div class="modal-overlay" id="createTicketModal" onclick="if(event.target===this)Modal.close('createTicketModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title">New Support Ticket</span>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('createTicketModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <div class="form-group"><label class="form-label">Investor</label><select class="form-select" id="newTicketInvestorId"><option value="">Select investor…</option></select></div>
+      <div class="form-row form-row--2">
+        <div class="form-group"><label class="form-label">Category</label>
+          <select class="form-select" id="newTicketCategory">
+            <option value="general">General Enquiry</option>
+            <option value="withdrawal">Withdrawal Issue</option>
+            <option value="kyc">KYC / FICA</option>
+            <option value="investment">Investment Query</option>
+            <option value="technical">Technical Issue</option>
+            <option value="complaint">Complaint</option>
+            <option value="aml_review">AML Review</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Priority</label>
+          <select class="form-select" id="newTicketPriority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Subject *</label><input type="text" class="form-input" id="newTicketSubject" placeholder="Brief description of the issue…" /></div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-input" id="newTicketDescription" rows="4" placeholder="Full details of the issue or request…"></textarea></div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('createTicketModal')">Cancel</button>
+      <button class="btn btn--primary" onclick="saveNewTicket(this)"><i class="fa-solid fa-plus"></i> Create Ticket</button>
+    </div>
+  </div>
+</div>
+
 <!-- Add IFA Modal -->
 <div class="modal-overlay" id="addIFAModal" onclick="if(event.target===this)Modal.close('addIFAModal')">
   <div class="modal">
@@ -2626,7 +2685,7 @@
         <div class="form-group"><label class="form-label">Company / Firm Name</label><input type="text" class="form-input" id="newIFACompany" placeholder="Advisory Firm (Pty) Ltd" /></div>
       </div>
       <div class="form-row form-row--2">
-        <div class="form-group"><label class="form-label">Commission Rate (%)</label><input type="number" class="form-input" id="newIFACommission" placeholder="1.5" step="0.25" min="0" max="5" /></div>
+        <div class="form-group"><label class="form-label">Commission Rate (%)</label><input type="number" class="form-input" id="newIFACommission" placeholder="1.5" step="0.25" min="0" /></div>
         <div class="form-group"><label class="form-label">Status</label>
           <select class="form-select" id="newIFAStatus">
             <option value="active">Active</option>
