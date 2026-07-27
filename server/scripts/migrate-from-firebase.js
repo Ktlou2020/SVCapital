@@ -262,11 +262,15 @@ async function migrate() {
            term_months, start_date, end_date, maturity_date, description, updated_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
         ON CONFLICT (id) DO UPDATE SET
-          name         = EXCLUDED.name,
-          actual_rate  = EXCLUDED.actual_rate,
-          product_type = EXCLUDED.product_type,
-          source_id    = EXCLUDED.source_id,
-          updated_at   = NOW()
+          name          = EXCLUDED.name,
+          actual_rate   = EXCLUDED.actual_rate,
+          product_type  = EXCLUDED.product_type,
+          source_id     = EXCLUDED.source_id,
+          start_date    = EXCLUDED.start_date,
+          end_date      = EXCLUDED.end_date,
+          maturity_date = EXCLUDED.maturity_date,
+          term_months   = EXCLUDED.term_months,
+          updated_at    = NOW()
       `, [
         id,
         p._id,
