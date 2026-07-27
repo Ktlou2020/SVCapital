@@ -687,7 +687,7 @@ async function loadDashboard() {
       STATE.tickets = tickets;
       openTickets = tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
       const tktBadge = document.getElementById('ticketBadge');
-      if (tktBadge) tktBadge.textContent = openTickets;
+      if (tktBadge) { tktBadge.textContent = openTickets; tktBadge.style.display = openTickets > 0 ? '' : 'none'; }
     } catch (_) {}
 
     // Build dynamic notification panel
