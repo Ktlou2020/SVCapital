@@ -210,6 +210,7 @@ async function migrate() {
           notes          = EXCLUDED.notes,
           address        = EXCLUDED.address,
           province       = EXCLUDED.province,
+          date_joined    = COALESCE(EXCLUDED.date_joined, investors.date_joined),
           updated_at     = NOW()
       `, [
         id,

@@ -180,6 +180,7 @@ router.post('/run',
             wallet_balance=EXCLUDED.wallet_balance, total_invested=EXCLUDED.total_invested,
             risk_profile=EXCLUDED.risk_profile, occupation=EXCLUDED.occupation,
             notes=EXCLUDED.notes, address=EXCLUDED.address, province=EXCLUDED.province,
+            date_joined=COALESCE(EXCLUDED.date_joined, investors.date_joined),
             updated_at=NOW()
         `, [
           id, firstName, lastName, (u.email||'').toLowerCase().trim(), u.phone_number||'',
