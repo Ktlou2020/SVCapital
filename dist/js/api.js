@@ -234,7 +234,18 @@ const API = {
     };
     if (body && method !== 'GET') opts.body = JSON.stringify(body);
 
-    const r = await fetch(url, opts);
+    // Abort after 35 s so Railway cold-starts don't leave the UI hanging indefinitely
+    const _ctrl = new AbortController();
+    const _tid  = setTimeout(() => _ctrl.abort(), 35000);
+    let r;
+    try {
+      r = await fetch(url, { ...opts, signal: _ctrl.signal });
+    } catch (fetchErr) {
+      clearTimeout(_tid);
+      if (fetchErr.name === 'AbortError') throw new Error('Request timed out — server may be waking up, please try again');
+      throw fetchErr;
+    }
+    clearTimeout(_tid);
 
     // Handle 401 — try silent token refresh before giving up
     if (r.status === 401) {
@@ -704,6 +715,18 @@ const Modal = {
       m.classList.remove('open');
     });
     document.body.style.overflow = '';
+  },
+  openInline(html) {
+    let el = document.getElementById('_inlineModal');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = '_inlineModal';
+      el.className = 'modal-overlay';
+      el.addEventListener('click', function(e) { if (e.target === el) Modal.close('_inlineModal'); });
+      document.body.appendChild(el);
+    }
+    el.innerHTML = `<div class="modal" style="max-width:460px">${html}</div>`;
+    Modal.open('_inlineModal');
   }
 };
 

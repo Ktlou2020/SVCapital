@@ -1583,7 +1583,10 @@ function _invTab(name) {
   if (panel) panel.style.display = '';
 }
 
+let _currentInvestorId = null;
+
 async function viewInvestor(id) {
+  _currentInvestorId = id;
   const inv = STATE.investors.find(i => i.id === id);
   if (!inv) return;
 
@@ -1786,7 +1789,7 @@ async function viewInvestor(id) {
     <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px">${invsts.length} investment${invsts.length!==1?'s':''} · ${Utils.rand(invsts.filter(i=>i.status==='active').reduce((s,i)=>s+(parseFloat(i.amount)||0),0))} active capital</div>
     <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
       <table class="data-table mb-16">
-        <thead style="position:sticky;top:0;z-index:1"><tr><th>Pool</th><th>Product</th><th>Date Invested</th><th>Amount</th><th>Rate</th><th>Status</th><th>Maturity</th></tr></thead>
+        <thead style="position:sticky;top:0;z-index:1"><tr><th style="min-width:160px">Pool</th><th style="min-width:130px">Product</th><th>Date Invested</th><th>Amount</th><th>Rate</th><th>Status</th><th>Maturity</th><th></th></tr></thead>
         <tbody>${invsts.length ? invsts.map(i => {
           const pi = Utils.productInfo(i.product_type);
           return `<tr>
@@ -1797,8 +1800,9 @@ async function viewInvestor(id) {
             <td class="td-green">${i.annual_rate?Utils.pct(i.annual_rate):'—'}</td>
             <td>${Utils.statusBadge(i.status)}</td>
             <td class="td-muted">${Utils.date(i.end_date)}</td>
+            <td><button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='openMoveInvestment(${JSON.stringify(i.id)},${JSON.stringify(i.pool_id)})' title="Move to different pool"><i class="fa-solid fa-right-left"></i></button></td>
           </tr>`;
-        }).join(''):'<tr><td colspan="7" class="text-center text-muted" style="padding:16px">No investments on record</td></tr>'}</tbody>
+        }).join(''):'<tr><td colspan="8" class="text-center text-muted" style="padding:16px">No investments on record</td></tr>'}</tbody>
       </table>
     </div>
   </div>
@@ -2314,6 +2318,58 @@ async function unarchiveInvestor(id, btn) {
       await loadInvestors();
     } catch (e) {
       Toast.error('Failed to unarchive investor: ' + (e.message || 'unknown error'));
+    }
+  });
+}
+
+async function openMoveInvestment(investmentId, currentPoolId) {
+  // Build pool options from STATE, excluding current pool
+  const pools = (STATE.pools || []).filter(p => p.id !== currentPoolId && ['open','filling','active'].includes(p.status));
+  if (!pools.length) {
+    // Fetch fresh if STATE empty
+    try {
+      const res = await API.pools.list({ limit: 1000 });
+      STATE.pools = res.data || [];
+    } catch (e) { /* ignore */ }
+  }
+  const eligible = (STATE.pools || []).filter(p => p.id !== currentPoolId && ['open','filling','active'].includes(p.status));
+
+  const opts = eligible.map(p =>
+    `<option value="${_esc(String(p.id))}">${_esc(p.name||p.id)}</option>`
+  ).join('');
+
+  const body = `
+    <div style="padding:24px;min-width:340px">
+      <h3 style="margin:0 0 16px;font-size:1rem">Move Investment to Pool</h3>
+      <label style="font-size:0.78rem;color:var(--text-muted);display:block;margin-bottom:6px">Select destination pool</label>
+      <select id="movePoolSelect" class="form-control" style="width:100%;margin-bottom:20px">
+        <option value="">— choose a pool —</option>
+        ${opts}
+      </select>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn" onclick="Modal.closeAll()">Cancel</button>
+        <button class="btn btn--primary" id="movePoolConfirmBtn" onclick='_confirmMoveInvestment(${JSON.stringify(investmentId)})'>Move</button>
+      </div>
+    </div>`;
+
+  Modal.openInline(body);
+}
+
+async function _confirmMoveInvestment(investmentId) {
+  const sel = document.getElementById('movePoolSelect');
+  if (!sel || !sel.value) { Toast.error('Please select a destination pool'); return; }
+  const newPoolId = sel.value;
+  const btn = document.getElementById('movePoolConfirmBtn');
+  await _withBtn(btn, async () => {
+    try {
+      await API._fetch('PATCH', `tables/investments/${investmentId}`, { pool_id: newPoolId });
+      Toast.success('Investment moved successfully');
+      Modal.closeAll();
+      // Refresh the investor detail view if open
+      const detailId = _currentInvestorId;
+      if (detailId) await viewInvestor(detailId);
+    } catch (e) {
+      Toast.error('Failed to move investment: ' + (e.message || 'unknown error'));
     }
   });
 }
