@@ -3292,7 +3292,7 @@ let poolFilter = 'all';
 
 async function loadPools() {
   try {
-    const res = await API.pools.list({ limit: 100 });
+    const res = await API.pools.list({ limit: 1000 });
     STATE.pools = res.data || [];
     renderPoolsGrid();
     // Load products in the background so pool product-type dropdowns reflect them
