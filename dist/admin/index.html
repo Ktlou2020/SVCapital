@@ -1603,7 +1603,6 @@
                 <div class="form-group" style="margin-bottom:16px">
                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
                     <label class="form-label" style="margin:0">Recipient Segment</label>
-                    <button class="btn btn--secondary btn--sm" onclick="openManageListsModal()" style="font-size:0.75rem;padding:4px 10px"><i class="fa-solid fa-list-ul" style="margin-right:4px"></i>Manage Lists</button>
                   </div>
                   <!-- Custom searchable segment picker -->
                   <div id="segmentPickerWrap" style="position:relative">
@@ -2121,45 +2120,6 @@
 </div>
 
 <!-- Manage Broadcast Lists Modal -->
-<div class="modal-overlay" id="broadcastListsModal" onclick="if(event.target===this)Modal.close('broadcastListsModal')">
-  <div class="modal" style="max-width:560px">
-    <div class="modal__header">
-      <h3 class="modal__title"><i class="fa-solid fa-list-ul" style="color:#eda5ff;margin-right:8px"></i>Custom Lists</h3>
-      <button class="modal__close" onclick="Modal.close('broadcastListsModal')">&times;</button>
-    </div>
-    <div class="modal__body">
-      <div style="display:flex;gap:8px;margin-bottom:16px">
-        <input type="text" class="form-input" id="newListName" placeholder="List name…" style="flex:1" onkeydown="if(event.key==='Enter')createBroadcastList()">
-        <button class="btn btn--primary btn--sm" onclick="createBroadcastList()"><i class="fa-solid fa-plus"></i> Create</button>
-      </div>
-      <div id="broadcastListsBody" style="max-height:420px;overflow-y:auto"></div>
-    </div>
-  </div>
-</div>
-
-<!-- List Members Modal -->
-<div class="modal-overlay" id="broadcastListMembersModal" onclick="if(event.target===this)Modal.close('broadcastListMembersModal')">
-  <div class="modal" style="max-width:600px">
-    <div class="modal__header">
-      <h3 class="modal__title" id="listMembersTitle"><i class="fa-solid fa-users" style="color:#eda5ff;margin-right:8px"></i>List Members</h3>
-      <button class="modal__close" onclick="Modal.close('broadcastListMembersModal')">&times;</button>
-    </div>
-    <div class="modal__body">
-      <!-- Add investors -->
-      <div style="margin-bottom:14px">
-        <label class="form-label">Add investors to this list</label>
-        <div style="display:flex;gap:8px">
-          <input type="text" class="form-input" id="listMemberSearch" placeholder="Search by name or email…" style="flex:1" oninput="searchInvestorsForList()" autocomplete="off">
-          <button class="btn btn--primary btn--sm" onclick="addSelectedToList()"><i class="fa-solid fa-plus"></i> Add Selected</button>
-        </div>
-        <div id="listMemberSearchResults" style="margin-top:6px;max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;display:none"></div>
-      </div>
-      <hr style="border:none;border-top:1px solid var(--border);margin-bottom:14px">
-      <div id="listMembersBody" style="max-height:300px;overflow-y:auto"></div>
-    </div>
-  </div>
-</div>
-
 <!-- Merge Pool Modal -->
 <div class="modal-overlay" id="mergePoolModal" onclick="if(event.target===this)Modal.close('mergePoolModal')">
   <div class="modal" style="max-width:480px">

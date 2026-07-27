@@ -7454,9 +7454,6 @@ async function opsExportSummary() {
    ═══════════════════════════════════════════════ */
 let _broadcastHistory = [];
 
-let _broadcastLists = [];
-let _currentListId  = null;
-let _listSearchSelected = [];
 let _segPickerOpen  = false;
 
 /* ── Segment picker data ─────────────────────────────────────── */
@@ -7479,15 +7476,6 @@ function _buildSegmentGroups() {
         label: p.name,
         icon: 'fa-layer-group',
         desc: p.product_type || 'Investment pool',
-      })),
-    },
-    {
-      label: 'Custom Lists',
-      items: _broadcastLists.map(l => ({
-        value: `list:${l.id}`,
-        label: l.name,
-        icon: 'fa-list-ul',
-        desc: `${l.member_count} member${l.member_count !== 1 ? 's' : ''}`,
       })),
     },
   ];
@@ -7571,196 +7559,11 @@ function _segPickerOutside(e) {
 }
 
 async function loadComms() {
-  try {
-    const res = await API._fetch('GET', 'admin/broadcast/lists');
-    _broadcastLists = res.data || [];
-  } catch (_) {}
-
   buildSegmentPicker();
   toggleBroadcastSubject();
   updateBroadcastPreview();
   _renderBroadcastHistory();
   loadPushAnalytics();
-}
-
-/* ── Custom broadcast lists ─────────────────────────────────── */
-
-async function openManageListsModal() {
-  Modal.open('broadcastListsModal');
-  await _renderBroadcastLists();
-}
-
-async function _renderBroadcastLists() {
-  const body = document.getElementById('broadcastListsBody');
-  if (!body) return;
-  body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
-  try {
-    const res = await API._fetch('GET', 'admin/broadcast/lists');
-    _broadcastLists = res.data || [];
-    if (!_broadcastLists.length) {
-      body.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim)">No custom lists yet. Create one above.</div>';
-      return;
-    }
-    body.innerHTML = _broadcastLists.map(l => `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--card-bg)">
-        <div>
-          <div style="font-weight:600;font-size:0.9rem">${_esc(l.name)}</div>
-          ${l.description ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px">${_esc(l.description)}</div>` : ''}
-          <div style="font-size:0.75rem;color:var(--text-dim);margin-top:2px">${l.member_count} member${l.member_count !== 1 ? 's' : ''}</div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn--secondary btn--sm" onclick="openListDetail(${l.id},${JSON.stringify(l.name)})"><i class="fa-solid fa-users"></i> Members</button>
-          <button class="btn btn--danger btn--sm" onclick="deleteBroadcastList(${l.id},${JSON.stringify(l.name)})"><i class="fa-solid fa-trash"></i></button>
-        </div>
-      </div>
-    `).join('');
-  } catch (err) {
-    body.innerHTML = `<div style="color:var(--danger);padding:12px">Failed to load lists: ${err.message}</div>`;
-  }
-}
-
-async function createBroadcastList() {
-  const nameEl = document.getElementById('newListName');
-  const name = nameEl?.value?.trim();
-  if (!name) { Toast.error('Enter a list name'); return; }
-  try {
-    await API._fetch('POST', 'admin/broadcast/lists', { name });
-    nameEl.value = '';
-    Toast.success(`List "${name}" created`);
-    await _renderBroadcastLists();
-    buildSegmentPicker();
-  } catch (err) {
-    Toast.error(err.message || 'Failed to create list');
-  }
-}
-
-async function deleteBroadcastList(listId, listName) {
-  if (!confirm(`Delete list "${listName}"? This cannot be undone.`)) return;
-  try {
-    await API._fetch('DELETE', `admin/broadcast/lists/${listId}`);
-    Toast.success(`List deleted`);
-    await _renderBroadcastLists();
-    const currentVal = document.getElementById('broadcastSegment')?.value;
-    if (currentVal === `list:${listId}`) selectSegment('all', 'All Investors', 'fa-users');
-    buildSegmentPicker();
-  } catch (err) {
-    Toast.error(err.message || 'Failed to delete list');
-  }
-}
-
-async function openListDetail(listId, listName) {
-  _currentListId = listId;
-  _listSearchSelected = [];
-  const title = document.getElementById('listMembersTitle');
-  if (title) title.innerHTML = `<i class="fa-solid fa-users" style="color:#eda5ff;margin-right:8px"></i>${_esc(listName)}`;
-  const srEl = document.getElementById('listMemberSearch');
-  if (srEl) srEl.value = '';
-  const srRes = document.getElementById('listMemberSearchResults');
-  if (srRes) { srRes.innerHTML = ''; srRes.style.display = 'none'; }
-  Modal.open('broadcastListMembersModal');
-  await _renderListMembers();
-}
-
-async function _renderListMembers() {
-  const body = document.getElementById('listMembersBody');
-  if (!body || !_currentListId) return;
-  body.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
-  try {
-    const res = await API._fetch('GET', `admin/broadcast/lists/${_currentListId}/members`);
-    const members = res.data || [];
-    if (!members.length) {
-      body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)">No members yet. Search above to add investors.</div>';
-      return;
-    }
-    body.innerHTML = `
-      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px">${members.length} member${members.length !== 1 ? 's' : ''}</div>
-      ${members.map(m => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border);font-size:0.85rem">
-          <div>
-            <span style="font-weight:500">${_esc(m.first_name)} ${_esc(m.last_name)}</span>
-            <span style="color:var(--text-muted);margin-left:8px">${_esc(m.email || '—')}</span>
-          </div>
-          <button class="btn btn--ghost btn--sm" onclick="removeFromList(${JSON.stringify(m.id)})" style="color:var(--danger);padding:2px 8px"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-      `).join('')}
-    `;
-  } catch (err) {
-    body.innerHTML = `<div style="color:var(--danger);padding:12px">Failed to load members</div>`;
-  }
-}
-
-let _listSearchTimer = null;
-async function searchInvestorsForList() {
-  clearTimeout(_listSearchTimer);
-  _listSearchTimer = setTimeout(async () => {
-    const q = document.getElementById('listMemberSearch')?.value?.trim().toLowerCase();
-    const resEl = document.getElementById('listMemberSearchResults');
-    if (!resEl) return;
-    if (!q || q.length < 2) { resEl.style.display = 'none'; resEl.innerHTML = ''; return; }
-    const matches = (STATE.investors || []).filter(i =>
-      [`${i.first_name} ${i.last_name}`, i.email, i.id].some(v => String(v || '').toLowerCase().includes(q))
-    ).slice(0, 20);
-    if (!matches.length) {
-      resEl.innerHTML = '<div style="padding:10px;color:var(--text-dim);font-size:0.82rem">No investors found</div>';
-      resEl.style.display = 'block';
-      return;
-    }
-    resEl.style.display = 'block';
-    resEl.innerHTML = matches.map(i => {
-      const sel = _listSearchSelected.includes(i.id);
-      return `
-        <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:0.83rem;background:${sel ? 'rgba(237,165,255,0.1)' : ''}"
-             onclick="toggleListSearchSelect(${JSON.stringify(i.id)},this)">
-          <input type="checkbox" ${sel ? 'checked' : ''} style="accent-color:#eda5ff;pointer-events:none">
-          <span>${_esc(i.first_name)} ${_esc(i.last_name)}</span>
-          <span style="color:var(--text-muted)">${_esc(i.email || '')}</span>
-        </div>`;
-    }).join('');
-  }, 200);
-}
-
-function toggleListSearchSelect(investorId, row) {
-  const idx = _listSearchSelected.indexOf(investorId);
-  if (idx === -1) {
-    _listSearchSelected.push(investorId);
-    row.style.background = 'rgba(237,165,255,0.1)';
-    row.querySelector('input').checked = true;
-  } else {
-    _listSearchSelected.splice(idx, 1);
-    row.style.background = '';
-    row.querySelector('input').checked = false;
-  }
-}
-
-async function addSelectedToList() {
-  if (!_listSearchSelected.length) { Toast.error('Select at least one investor'); return; }
-  if (!_currentListId) return;
-  try {
-    await API._fetch('POST', `admin/broadcast/lists/${_currentListId}/members`, { investor_ids: _listSearchSelected });
-    Toast.success(`Added ${_listSearchSelected.length} investor${_listSearchSelected.length !== 1 ? 's' : ''}`);
-    _listSearchSelected = [];
-    const srEl = document.getElementById('listMemberSearch');
-    if (srEl) srEl.value = '';
-    const srRes = document.getElementById('listMemberSearchResults');
-    if (srRes) { srRes.innerHTML = ''; srRes.style.display = 'none'; }
-    await _renderListMembers();
-    await _renderBroadcastLists();
-    buildSegmentPicker();
-  } catch (err) {
-    Toast.error(err.message || 'Failed to add members');
-  }
-}
-
-async function removeFromList(investorId) {
-  if (!_currentListId) return;
-  try {
-    await API._fetch('DELETE', `admin/broadcast/lists/${_currentListId}/members/${investorId}`);
-    await _renderListMembers();
-    await _renderBroadcastLists();
-    buildSegmentPicker();
-  } catch (err) {
-    Toast.error(err.message || 'Failed to remove member');
-  }
 }
 
 function toggleBroadcastSubject() {
