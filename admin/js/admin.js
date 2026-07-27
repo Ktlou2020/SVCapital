@@ -3238,6 +3238,17 @@ function renderPoolsGrid() {
     });
   }
 
+  // Sort by maturity date
+  const sort = document.getElementById('poolSort')?.value || '';
+  if (sort === 'maturity_asc' || sort === 'maturity_desc') {
+    const dir = sort === 'maturity_asc' ? 1 : -1;
+    pools = [...pools].sort((a, b) => {
+      const da = a.maturity_date || a.end_date || '9999-12-31';
+      const db = b.maturity_date || b.end_date || '9999-12-31';
+      return da < db ? -dir : da > db ? dir : 0;
+    });
+  }
+
   // live_investor_count and live_raised are computed server-side in the pools query via SQL aggregation.
   // No client-side override needed — doing so with STATE.investments causes stale/mismatched zeros.
 
