@@ -398,6 +398,7 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
 
     // Sort — use the original date column for tables that have one
     const defaultSort = {
+      investors:                 'date_joined',
       transactions:              'COALESCE(transaction_date, created_at)',
       investments:               'COALESCE(start_date, created_at)',
       cattle_animals:            'tag_number',
