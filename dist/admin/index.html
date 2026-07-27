@@ -2120,6 +2120,31 @@
   </div>
 </div>
 
+<!-- Merge Pool Modal -->
+<div class="modal-overlay" id="mergePoolModal" onclick="if(event.target===this)Modal.close('mergePoolModal')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal__header">
+      <h3 class="modal__title"><i class="fa-solid fa-code-merge" style="color:#eda5ff;margin-right:8px"></i>Merge Pool</h3>
+      <button class="modal__close" onclick="Modal.close('mergePoolModal')">&times;</button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="mergeSourcePoolId">
+      <p style="margin-bottom:14px">Move all investments from <strong id="mergeSourceName" style="color:var(--gold)"></strong> into:</p>
+      <select id="mergeTargetPool" class="form-input" style="width:100%;margin-bottom:14px">
+        <option value="">— Select target pool —</option>
+      </select>
+      <p style="font-size:0.82rem;color:var(--text-muted);background:rgba(239,68,68,0.08);border-radius:8px;padding:10px 12px;border-left:3px solid #ef4444">
+        <i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;margin-right:6px"></i>
+        All investments will be relinked to the target pool and the source pool will be permanently deleted.
+      </p>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--ghost" onclick="Modal.close('mergePoolModal')">Cancel</button>
+      <button class="btn btn--danger" onclick="confirmMergePool()"><i class="fa-solid fa-code-merge"></i> Merge &amp; Delete</button>
+    </div>
+  </div>
+</div>
+
 <!-- Pool Investors Modal -->
 <div class="modal-overlay" id="poolInvestorsModal" onclick="if(event.target===this)Modal.close('poolInvestorsModal')">
   <div class="modal modal--lg" style="max-width:900px">

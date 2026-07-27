@@ -3345,6 +3345,8 @@ function renderPoolsGrid() {
         <div class="pool-card__actions">
           <button class="btn btn--secondary btn--sm flex-1" onclick='editPool(${JSON.stringify(p.id)})'><i class="fa-solid fa-pen"></i> Edit</button>
           <button class="btn btn--secondary btn--sm" onclick='openFactsheetManager(${JSON.stringify(p.id)},${JSON.stringify(p.name)})' title="Manage factsheets"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>
+          <button class="btn btn--secondary btn--sm" onclick='openMergePoolModal(${JSON.stringify(p.id)})' title="Merge into another pool"><i class="fa-solid fa-code-merge"></i> Merge</button>
+          <button class="btn btn--danger btn--sm" onclick='deletePool(${JSON.stringify(p.id)})'><i class="fa-solid fa-trash"></i></button>
           ${manageDropdown}
         </div>
       </div>
@@ -3805,6 +3807,54 @@ async function markPaidOut(id) {
     Toast.success('Pool finalised (matured)');
     await loadPools();
   } catch (e) { Toast.error('Failed to update pool'); }
+}
+
+function openMergePoolModal(sourceId) {
+  const source = STATE.pools.find(p => p.id === sourceId);
+  if (!source) return;
+
+  document.getElementById('mergeSourcePoolId').value = sourceId;
+  document.getElementById('mergeSourceName').textContent = source.name;
+
+  const sel = document.getElementById('mergeTargetPool');
+  sel.innerHTML = '<option value="">— Select target pool —</option>' +
+    STATE.pools
+      .filter(p => p.id !== sourceId)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+      .map(p => `<option value="${_esc(p.id)}">${_esc(p.name)} (${p.status})</option>`)
+      .join('');
+  sel.value = '';
+  Modal.open('mergePoolModal');
+}
+
+async function confirmMergePool() {
+  const sourceId = document.getElementById('mergeSourcePoolId').value;
+  const targetId = document.getElementById('mergeTargetPool').value;
+  if (!targetId) { Toast.error('Please select a target pool.'); return; }
+
+  const source = STATE.pools.find(p => p.id === sourceId);
+  const target = STATE.pools.find(p => p.id === targetId);
+  if (!await Confirm.ask(`Merge "${source?.name}" into "${target?.name}"?`, {
+    body: 'All investments will be moved to the target pool and the source pool will be deleted. This cannot be undone.',
+    confirmLabel: 'Merge & Delete',
+    danger: true,
+  })) return;
+
+  try {
+    const token = localStorage.getItem('svc_token');
+    const res = await fetch(`/api/tables/investment_pools/${encodeURIComponent(sourceId)}/merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ target_pool_id: targetId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Merge failed');
+    Modal.close('mergePoolModal');
+    Toast.success(`Merged ${data.merged} investment(s) into "${target?.name}" — source pool deleted.`);
+    await loadPools();
+  } catch (e) {
+    Toast.error('Merge failed: ' + e.message);
+  }
 }
 
 async function deletePool(id) {
