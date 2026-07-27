@@ -1730,7 +1730,7 @@ async function viewInvestor(id) {
       <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
       <div class="info-row"><span class="info-row__label">Kin Contact</span><span class="info-row__value">${_esc(invProfile.kin_contact||'')||'—'}</span></div>
       <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${_esc(inv.risk_profile)||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Date Joined</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
+      <div class="info-row"><span class="info-row__label">Account Created</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
     </div>
   </div>
 
