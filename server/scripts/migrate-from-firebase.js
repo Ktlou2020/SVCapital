@@ -366,8 +366,8 @@ async function migrate() {
     try {
       await pool.query(`
         INSERT INTO transactions
-          (id, investor_id, type, amount, status, reference, description, transaction_date)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+          (id, investor_id, type, amount, status, reference, description, transaction_date, date_updated)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
         ON CONFLICT (id) DO NOTHING
       `, [
         `TXN-MIGR-${tx._id}`,
@@ -378,6 +378,7 @@ async function migrate() {
         tx.txRef || tx._id,
         `${tx.investment?.name || tx.type || ''}`.trim() || 'Migrated transaction',
         tx.dateCreated ? new Date(tx.dateCreated) : new Date(),
+        tx.dateUpdated ? new Date(tx.dateUpdated) : null,
       ]);
       txOk++;
     } catch (err) {
