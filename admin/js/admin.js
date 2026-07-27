@@ -351,8 +351,55 @@ function loadAdminNotifications(investors, transactions, tickets) {
   _syncAdminNotifDot();
 }
 
+/* ─── View-level tab system ─── */
+const _MERGED_VIEW_MAP = {
+  'fica-pipeline': { parent: 'kyc',        pane: 'fica-pipeline' },
+  'intlinterest':  { parent: 'investors',   pane: 'intlinterest'  },
+  'aml':           { parent: 'support',     pane: 'aml'           },
+  'emaillogs':     { parent: 'comms',       pane: 'emaillogs'     },
+  'auditlog':      { parent: 'compliance',  pane: 'auditlog'      },
+  'accepted-docs': { parent: 'compliance',  pane: 'accepted-docs' },
+  'privacy':       { parent: 'terms',       pane: 'privacy'       },
+  'migrate':       { parent: 'settings',    pane: 'migrate'       },
+};
+
+function switchViewTab(parentView, paneId, btn) {
+  const container = document.getElementById('view-' + parentView);
+  if (!container) return;
+  container.querySelectorAll('.vtab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) {
+    btn.classList.add('active');
+  } else {
+    const b = container.querySelector(`.vtab-btn[data-pane="${paneId}"]`);
+    if (b) b.classList.add('active');
+  }
+  container.querySelectorAll('.vtab-pane').forEach(p => {
+    p.classList.toggle('active', p.dataset.pane === paneId);
+  });
+  // Lazy-load secondary tab content
+  const secondaryLoaders = {
+    'fica-pipeline': () => typeof loadFicaPipeline !== 'undefined' && loadFicaPipeline(),
+    'intlinterest':  () => typeof loadIntlInterest !== 'undefined' && loadIntlInterest(),
+    'aml':           () => typeof loadAML !== 'undefined' && loadAML(),
+    'emaillogs':     () => typeof loadEmailLogs !== 'undefined' && loadEmailLogs(),
+    'auditlog':      () => typeof loadAuditLog !== 'undefined' && loadAuditLog(),
+    'accepted-docs': () => typeof loadAcceptedDocuments !== 'undefined' && loadAcceptedDocuments(),
+    'privacy':       () => typeof loadPrivacyEditor !== 'undefined' && loadPrivacyEditor(),
+    'migrate':       () => typeof loadMigration !== 'undefined' && loadMigration(),
+  };
+  if (secondaryLoaders[paneId]) secondaryLoaders[paneId]();
+}
+
 /* ─── Navigation ─── */
 function navigate(view, btnEl) {
+  // Redirect merged secondary views to their parent + tab
+  if (_MERGED_VIEW_MAP[view]) {
+    const { parent, pane } = _MERGED_VIEW_MAP[view];
+    const parentBtn = document.querySelector(`[data-view="${parent}"]`);
+    navigate(parent, parentBtn);
+    setTimeout(() => switchViewTab(parent, pane, null), 50);
+    return;
+  }
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
@@ -365,8 +412,7 @@ function navigate(view, btnEl) {
     products: 'Products', pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
     transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
     auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications', aml: 'AML Compliance Review',
-    migrate: 'Data Migration', compliance: 'Compliance Calendar', reconciliation: 'Financial Reconciliation',
-    terms: 'Terms of Use', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest',
+    terms: 'Legal Documents', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest',
     opsconsole: 'Operations Console', feedback: 'Client Feedback', emaillogs: 'Email Logs',
     'fica-pipeline': 'FICA Pipeline',
   };
@@ -386,21 +432,14 @@ function navigate(view, btnEl) {
     transactions: loadTransactions,
     support: loadSupport,
     analytics: loadAnalytics,
-    auditlog: loadAuditLog,
     settings: loadSettings,
     withdrawals: loadWithdrawals,
     comms: loadComms,
-    aml: loadAML,
     compliance: loadCompliance,
     reconciliation: loadReconciliation,
     terms: loadTermsEditor,
-    privacy: loadPrivacyEditor,
-    'accepted-docs': loadAcceptedDocuments,
-    intlinterest: loadIntlInterest,
-    'fica-pipeline': loadFicaPipeline,
     opsconsole: loadOpsConsole,
     feedback: () => loadFeedback('pending'),
-    emaillogs: loadEmailLogs,
   };
   if (loaders[view]) loaders[view]();
   // Close mobile sidebar after navigation
