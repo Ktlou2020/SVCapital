@@ -8810,6 +8810,26 @@ async function runMigration() {
   }
 }
 
+async function backfillOrphanPools(btn) {
+  await _withBtn(btn, async () => {
+    try {
+      const data = await API._fetch('POST', 'migrate/backfill-orphan-pools');
+      if (data.created === 0) {
+        Toast.success(data.message || 'No orphan pools found');
+        return;
+      }
+      const list = data.pools.map(p =>
+        `<li style="font-size:0.8rem;margin:4px 0"><span style="color:var(--gold);font-family:monospace">${_esc(p.pool_id)}</span> — ${_esc(p.name)} (${p.investments} investment${p.investments !== 1 ? 's' : ''})</li>`
+      ).join('');
+      Toast.success(`${data.created} orphan pool${data.created !== 1 ? 's' : ''} created`);
+      const el = document.getElementById('orphanPoolsResult');
+      if (el) el.innerHTML = `<ul style="margin:8px 0 0;padding-left:18px">${list}</ul>`;
+    } catch (e) {
+      Toast.error('Backfill failed: ' + (e.message || 'unknown error'));
+    }
+  });
+}
+
 let _emailInvestors = [];
 
 async function loadInvestorUsersForEmail() {

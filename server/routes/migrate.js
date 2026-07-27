@@ -439,4 +439,74 @@ router.post('/resend-setup-emails',
   }
 );
 
+/* ── POST /api/migrate/backfill-orphan-pools ──────────────────────────────
+   Creates stub investment_pool records for any pool_id values referenced
+   by investments that have no matching row in investment_pools.
+   Pool name, product_type, dates and rate are inferred from the investments.
+   Safe to re-run (ON CONFLICT DO NOTHING).
+   ──────────────────────────────────────────────────────────────────────── */
+router.post('/backfill-orphan-pools',
+  requireAuth,
+  requireRole('admin', 'director'),
+  async (req, res) => {
+    try {
+      /* Find all pool_ids referenced by investments that have no pool record */
+      const { rows: orphans } = await pool.query(`
+        SELECT
+          i.pool_id,
+          -- infer source Firebase ID from the POOL-MIGR- prefix
+          REPLACE(i.pool_id, 'POOL-MIGR-', '') AS source_id,
+          -- best available name from the investments themselves
+          MAX(i.pool_name) FILTER (WHERE i.pool_name IS NOT NULL AND i.pool_name != '') AS inferred_name,
+          MAX(i.product_type) AS inferred_product_type,
+          MIN(i.start_date)   AS earliest_start,
+          MAX(i.end_date)     AS latest_end,
+          MAX(i.annual_rate)  AS inferred_rate,
+          COUNT(*)            AS investment_count,
+          SUM(i.amount)       AS total_amount
+        FROM investments i
+        WHERE i.pool_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM investment_pools ip WHERE ip.id = i.pool_id
+          )
+        GROUP BY i.pool_id
+      `);
+
+      if (!orphans.length) {
+        return res.json({ ok: true, created: 0, message: 'No orphan pools found — all pool references are accounted for.' });
+      }
+
+      let created = 0;
+      const details = [];
+
+      for (const o of orphans) {
+        const name = o.inferred_name || `Migrated Pool (${o.source_id})`;
+        await pool.query(`
+          INSERT INTO investment_pools
+            (id, source_id, name, product_type, status, actual_rate,
+             start_date, maturity_date, description, updated_at)
+          VALUES ($1, $2, $3, $4, 'closed', $5, $6, $7, $8, NOW())
+          ON CONFLICT (id) DO NOTHING
+        `, [
+          o.pool_id,
+          o.source_id,
+          name,
+          o.inferred_product_type || 'other',
+          parseFloat(o.inferred_rate) || 0,
+          o.earliest_start || null,
+          o.latest_end     || null,
+          `Auto-created stub for orphan pool ${o.source_id}. ${o.investment_count} investment(s) totalling R${parseFloat(o.total_amount||0).toFixed(2)}.`,
+        ]);
+        created++;
+        details.push({ pool_id: o.pool_id, name, investments: parseInt(o.investment_count) });
+      }
+
+      res.json({ ok: true, created, pools: details });
+    } catch (err) {
+      console.error('[migrate/backfill-orphan-pools]', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
 module.exports = router;
