@@ -50,7 +50,6 @@
     </div>
 
     <nav class="sidebar__nav">
-      <div class="nav-section-label">Overview</div>
       <button class="nav-item active" data-view="dashboard" onclick="navigate('dashboard', this)">
         <i class="fa-solid fa-border-all"></i> Dashboard
       </button>
@@ -66,13 +65,6 @@
       <button class="nav-item" data-view="kyc" onclick="navigate('kyc', this)">
         <i class="fa-solid fa-id-card"></i> KYC / FICA
         <span class="nav-badge" id="kycBadge">0</span>
-      </button>
-      <button class="nav-item" data-view="intlinterest" onclick="navigate('intlinterest', this)">
-        <i class="fa-solid fa-earth-africa"></i> International Interest
-        <span class="nav-badge" id="intlInterestBadge" style="display:none">0</span>
-      </button>
-      <button class="nav-item" data-view="fica-pipeline" onclick="navigate('fica-pipeline', this)">
-        <i class="fa-solid fa-filter"></i> FICA Pipeline
       </button>
 
       <div class="nav-section-label">Investments</div>
@@ -97,24 +89,22 @@
         <i class="fa-solid fa-arrow-up-from-bracket"></i> Withdrawals
         <span class="nav-badge" id="withdrawalBadge" style="display:none">0</span>
       </button>
+      <button class="nav-item" data-view="reconciliation" onclick="navigate('reconciliation', this)">
+        <i class="fa-solid fa-scale-balanced"></i> Reconciliation
+        <span class="nav-badge" id="reconcBadge" style="display:none;background:#f97316">!</span>
+      </button>
 
       <div class="nav-section-label">Operations</div>
       <button class="nav-item" data-view="opsconsole" onclick="navigate('opsconsole', this)">
         <i class="fa-solid fa-terminal"></i><span>Ops Console</span>
       </button>
       <button class="nav-item" data-view="support" onclick="navigate('support', this)">
-        <i class="fa-solid fa-headset"></i> Support Tickets
+        <i class="fa-solid fa-headset"></i> Support &amp; AML
         <span class="nav-badge" id="ticketBadge" style="display:none">0</span>
-      </button>
-      <button class="nav-item" data-view="aml" onclick="navigate('aml', this)">
-        <i class="fa-solid fa-shield-halved"></i><span>AML Review</span>
         <span class="nav-badge" id="amlBadge" style="display:none">0</span>
       </button>
       <button class="nav-item" data-view="comms" onclick="navigate('comms', this)">
         <i class="fa-solid fa-paper-plane"></i><span>Communications</span>
-      </button>
-      <button class="nav-item" data-view="emaillogs" onclick="navigate('emaillogs', this)">
-        <i class="fa-solid fa-envelope-open-text"></i><span>Email Logs</span>
       </button>
       <button class="nav-item" data-view="feedback" onclick="navigate('feedback', this)">
         <i class="fa-solid fa-star"></i><span>Feedback</span>
@@ -124,30 +114,16 @@
         <i class="fa-solid fa-chart-pie"></i> Analytics
       </button>
       <button class="nav-item" data-view="compliance" onclick="navigate('compliance', this)">
-        <i class="fa-solid fa-calendar-check"></i> Compliance Calendar
-      </button>
-      <button class="nav-item" data-view="auditlog" onclick="navigate('auditlog', this)">
-        <i class="fa-solid fa-scroll"></i> Audit Log
-      </button>
-      <button class="nav-item" data-view="terms" onclick="navigate('terms', this)">
-        <i class="fa-solid fa-file-contract"></i> Terms of Use
-      </button>
-      <button class="nav-item" data-view="privacy" onclick="navigate('privacy', this)">
-        <i class="fa-solid fa-shield-halved"></i> Privacy Policy
-      </button>
-      <button class="nav-item" data-view="accepted-docs" onclick="navigate('accepted-docs', this)">
-        <i class="fa-solid fa-file-circle-check"></i> Accepted Client Docs
+        <i class="fa-solid fa-calendar-check"></i> Compliance &amp; Audit
         <span class="nav-badge" id="acceptedDocsBadge" style="display:none">0</span>
+      </button>
+
+      <div class="nav-section-label">System</div>
+      <button class="nav-item" data-view="terms" onclick="navigate('terms', this)">
+        <i class="fa-solid fa-scale-balanced"></i> Legal Documents
       </button>
       <button class="nav-item" data-view="settings" onclick="navigate('settings', this)">
         <i class="fa-solid fa-gear"></i> Settings
-      </button>
-      <button class="nav-item" data-view="migrate" onclick="navigate('migrate', this)">
-        <i class="fa-solid fa-database"></i> Data Migration
-      </button>
-      <button class="nav-item" data-view="reconciliation" onclick="navigate('reconciliation', this)">
-        <i class="fa-solid fa-scale-balanced"></i> Reconciliation
-        <span class="nav-badge" id="reconcBadge" style="display:none;background:#f97316">!</span>
       </button>
     </nav>
 
@@ -383,6 +359,11 @@
            VIEW: INVESTORS
       ══════════════════════════════════ -->
       <div class="view" id="view-investors">
+        <div class="vtab-bar">
+          <button class="vtab-btn active" data-pane="investors" onclick="switchViewTab('investors','investors',this)"><i class="fa-solid fa-users"></i> Investors</button>
+          <button class="vtab-btn" data-pane="intlinterest" onclick="switchViewTab('investors','intlinterest',this)"><i class="fa-solid fa-earth-africa"></i> International Interest <span class="nav-badge" id="intlInterestBadge" style="display:none">0</span></button>
+        </div>
+        <div class="vtab-pane active" data-pane="investors">
         <div class="stats-row" style="grid-template-columns:repeat(6,1fr)" id="investorStats">
           <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="document.getElementById('investorStatusFilter').value='';document.getElementById('investorStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-users"></i></div></div><div class="stat-card__value" id="is-total">—</div><div class="stat-card__label">Total Investors</div></div>
           <div class="stat-card stat-card--green" style="cursor:pointer" onclick="document.getElementById('investorStatusFilter').value='active';document.getElementById('investorStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-user-check"></i></div></div><div class="stat-card__value" id="is-active">—</div><div class="stat-card__label">Active</div></div>
@@ -469,6 +450,52 @@
             <div class="pagination" id="investorsPagination"></div>
           </div>
         </div>
+        </div><!-- end vtab-pane investors -->
+        <div class="vtab-pane" data-pane="intlinterest">
+          <div class="flex-between mb-16" style="flex-wrap:wrap;gap:10px">
+                    <div>
+                      <h2 style="color:#e8edf2;font-size:1.05rem;font-weight:700;margin:0">International Interest</h2>
+                      <p style="color:#7a92a8;font-size:0.8rem;margin:4px 0 0">Prospects from outside South Africa who have expressed interest in investing.</p>
+                    </div>
+                    <button class="btn btn--secondary btn--sm" onclick="exportIntlInterestCSV()">
+                      <i class="fa-solid fa-file-csv"></i> Export CSV
+                    </button>
+                  </div>
+          
+                  <div class="stats-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px" id="intlInterestStats">
+                    <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('intlinterest',document.querySelector('[data-view=intlinterest]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-earth-africa"></i></div></div><div class="stat-card__value" id="ii-total">—</div><div class="stat-card__label">Total Registrations</div></div>
+                    <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('intlinterest',document.querySelector('[data-view=intlinterest]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-globe"></i></div></div><div class="stat-card__value" id="ii-countries">—</div><div class="stat-card__label">Countries</div></div>
+                    <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('intlinterest',document.querySelector('[data-view=intlinterest]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-calendar-plus"></i></div></div><div class="stat-card__value" id="ii-this-month">—</div><div class="stat-card__label">This Month</div></div>
+                  </div>
+          
+                  <div class="table-card">
+                    <div class="table-card__header" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                      <div class="search-bar" style="flex:1;max-width:320px">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" placeholder="Search name, email or country…" oninput="filterIntlInterest(this.value)" />
+                      </div>
+                      <select class="form-select" style="max-width:180px;background:#1a2540;border-color:rgba(255,255,255,.1);color:#e8edf2" onchange="filterIntlInterestCountry(this.value)" id="intlCountryFilter">
+                        <option value="">All countries</option>
+                      </select>
+                    </div>
+                    <div class="table-wrap">
+                      <table class="data-table" id="intlInterestTable">
+                        <thead><tr>
+                          <th>Name</th>
+                          <th>Email</th>
+                          <th>Country</th>
+                          <th>Status</th>
+                          <th>Date</th>
+                          <th style="width:120px">Actions</th>
+                        </tr></thead>
+                        <tbody id="intlInterestBody">
+                          <tr><td colspan="6" style="text-align:center;color:#7a92a8;padding:32px">Loading…</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="table-card__footer" id="intlInterestFooter" style="padding:10px 18px;font-size:12px;color:#7a92a8"></div>
+                  </div>
+        </div><!-- end vtab-pane intlinterest -->
       </div>
 
       <!-- ══════════════════════════════════
@@ -539,6 +566,11 @@
            VIEW: KYC / FICA
       ══════════════════════════════════ -->
       <div class="view" id="view-kyc">
+        <div class="vtab-bar">
+          <button class="vtab-btn active" data-pane="kyc" onclick="switchViewTab('kyc','kyc',this)"><i class="fa-solid fa-id-card"></i> KYC / FICA</button>
+          <button class="vtab-btn" data-pane="fica-pipeline" onclick="switchViewTab('kyc','fica-pipeline',this)"><i class="fa-solid fa-filter"></i> FICA Pipeline</button>
+        </div>
+        <div class="vtab-pane active" data-pane="kyc">
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
           <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="document.getElementById('kycStatusFilter').value='pending';document.getElementById('kycStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-hourglass-half"></i></div></div><div class="stat-card__value" id="kyc-pending">—</div><div class="stat-card__label">Pending Review</div></div>
           <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="document.getElementById('kycStatusFilter').value='under_review';document.getElementById('kycStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-magnifying-glass"></i></div></div><div class="stat-card__value" id="kyc-review">—</div><div class="stat-card__label">Under Review</div></div>
@@ -594,6 +626,44 @@
             </table>
           </div>
         </div>
+        </div><!-- end vtab-pane kyc -->
+        <div class="vtab-pane" data-pane="fica-pipeline">
+          <!-- Stage tiles -->
+                  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px" id="ficaPipelineTiles"></div>
+          
+                  <!-- Filter bar -->
+                  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+                    <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;flex:1;min-width:200px">
+                      <i class="fa-solid fa-magnifying-glass" style="color:#7a92a8;font-size:12px"></i>
+                      <input type="text" id="ficaPipelineSearch" placeholder="Search investor name or email…" style="background:none;border:none;outline:none;color:#e8edf2;font-size:13px;width:100%" oninput="_renderFicaPipeline()">
+                    </div>
+                    <button class="btn btn--secondary btn--sm" onclick="loadFicaPipeline()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                  </div>
+          
+                  <!-- Table -->
+                  <div class="table-card">
+                    <div class="table-card__header">
+                      <div>
+                        <div class="table-card__title">FICA / KYC Pipeline</div>
+                        <div class="table-card__sub" id="ficaPipelineSubtitle">Investors by FICA stage</div>
+                      </div>
+                    </div>
+                    <div style="overflow-x:auto">
+                      <table class="data-table">
+                        <thead><tr>
+                          <th style="width:28%">Investor</th>
+                          <th style="width:15%">Registered</th>
+                          <th style="width:18%">FICA Stage</th>
+                          <th style="width:15%">Documents</th>
+                          <th style="width:14%">Actions</th>
+                        </tr></thead>
+                        <tbody id="ficaPipelineBody">
+                          <tr><td colspan="5" style="text-align:center;padding:40px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+        </div><!-- end vtab-pane fica-pipeline -->
       </div>
 
       <!-- ══════════════════════════════════
@@ -884,6 +954,11 @@
            VIEW: SUPPORT TICKETS
       ══════════════════════════════════ -->
       <div class="view" id="view-support">
+        <div class="vtab-bar">
+          <button class="vtab-btn active" data-pane="support" onclick="switchViewTab('support','support',this)"><i class="fa-solid fa-headset"></i> Support Tickets</button>
+          <button class="vtab-btn" data-pane="aml" onclick="switchViewTab('support','aml',this)"><i class="fa-solid fa-shield-halved"></i> AML Review</button>
+        </div>
+        <div class="vtab-pane active" data-pane="support">
         <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
           <div class="stat-card stat-card--red" style="--red:#ef4444;cursor:pointer" onclick="document.getElementById('ticketStatusFilter').value='open';document.getElementById('ticketStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-ticket"></i></div></div><div class="stat-card__value" id="tkt-open">—</div><div class="stat-card__label">Open Tickets</div></div>
           <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="document.getElementById('ticketStatusFilter').value='in_progress';document.getElementById('ticketStatusFilter').dispatchEvent(new Event('change'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-spinner"></i></div></div><div class="stat-card__value" id="tkt-inprogress">—</div><div class="stat-card__label">In Progress</div></div>
@@ -923,6 +998,35 @@
             </table>
           </div>
         </div>
+        </div><!-- end vtab-pane support -->
+        <div class="vtab-pane" data-pane="aml">
+          <div class="stats-row" style="grid-template-columns:repeat(4,1fr)" id="amlStats">
+                    <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-flag"></i></div></div><div class="stat-card__value" id="aml-total">—</div><div class="stat-card__label">Total Flags</div></div>
+                    <div class="stat-card stat-card--red" style="--red:#ef4444;cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i></div></div><div class="stat-card__value" id="aml-open">—</div><div class="stat-card__label">Open</div></div>
+                    <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-triangle-exclamation"></i></div></div><div class="stat-card__value" id="aml-high">—</div><div class="stat-card__label">High Priority</div></div>
+                    <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-circle"></i></div></div><div class="stat-card__value" id="aml-resolved">—</div><div class="stat-card__label">Resolved This Month</div></div>
+                  </div>
+          
+                  <div class="table-card">
+                    <div class="table-card__header">
+                      <div>
+                        <div class="table-card__title">AML Compliance Review</div>
+                        <div class="table-card__sub">Flagged transactions and investor activity requiring AML review</div>
+                      </div>
+                      <button class="btn btn--secondary btn--sm" onclick="loadAML()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                    </div>
+                    <div style="overflow-x:auto">
+                      <table class="data-table">
+                        <thead><tr>
+                          <th style="width:11%">Date</th><th style="width:20%">Investor</th><th style="width:10%">Amount</th><th style="width:23%">Reason</th><th style="width:10%">Priority</th><th style="width:11%">Status</th><th style="width:15%">Actions</th>
+                        </tr></thead>
+                        <tbody id="amlTableBody">
+                          <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+        </div><!-- end vtab-pane aml -->
       </div>
 
       <!-- ══════════════════════════════════
@@ -1095,38 +1199,6 @@
       </div>
 
       <!-- ══════════════════════════════════
-           VIEW: AML COMPLIANCE
-      ══════════════════════════════════ -->
-      <div class="view" id="view-aml">
-        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)" id="amlStats">
-          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-flag"></i></div></div><div class="stat-card__value" id="aml-total">—</div><div class="stat-card__label">Total Flags</div></div>
-          <div class="stat-card stat-card--red" style="--red:#ef4444;cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444"><i class="fa-solid fa-circle-exclamation"></i></div></div><div class="stat-card__value" id="aml-open">—</div><div class="stat-card__label">Open</div></div>
-          <div class="stat-card stat-card--purple" style="cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-triangle-exclamation"></i></div></div><div class="stat-card__value" id="aml-high">—</div><div class="stat-card__label">High Priority</div></div>
-          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('aml',document.querySelector('[data-view=aml]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-check-circle"></i></div></div><div class="stat-card__value" id="aml-resolved">—</div><div class="stat-card__label">Resolved This Month</div></div>
-        </div>
-
-        <div class="table-card">
-          <div class="table-card__header">
-            <div>
-              <div class="table-card__title">AML Compliance Review</div>
-              <div class="table-card__sub">Flagged transactions and investor activity requiring AML review</div>
-            </div>
-            <button class="btn btn--secondary btn--sm" onclick="loadAML()"><i class="fa-solid fa-rotate"></i> Refresh</button>
-          </div>
-          <div style="overflow-x:auto">
-            <table class="data-table">
-              <thead><tr>
-                <th style="width:11%">Date</th><th style="width:20%">Investor</th><th style="width:10%">Amount</th><th style="width:23%">Reason</th><th style="width:10%">Priority</th><th style="width:11%">Status</th><th style="width:15%">Actions</th>
-              </tr></thead>
-              <tbody id="amlTableBody">
-                <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ══════════════════════════════════
            VIEW: ANALYTICS
       ══════════════════════════════════ -->
       <div class="view" id="view-analytics">
@@ -1257,54 +1329,14 @@
       </div>
 
       <!-- ══════════════════════════════════
-           VIEW: AUDIT LOG
-      ══════════════════════════════════ -->
-      <div class="view" id="view-auditlog">
-        <div class="table-card">
-          <div class="table-card__header">
-            <div>
-              <div class="table-card__title">Audit Log</div>
-              <div class="table-card__sub">Immutable record of all significant actions</div>
-            </div>
-            <div class="table-card__controls">
-              <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search action, actor…" id="auditSearchInput" /></div>
-              <input type="date" class="tbl-filter" id="auditDateFrom" title="From date" />
-              <input type="date" class="tbl-filter" id="auditDateTo" title="To date" />
-              <select class="tbl-filter" id="auditTypeFilter">
-                <option value="">All Events</option>
-                <option value="user.login">Logins</option>
-                <option value="kyc">KYC Actions</option>
-                <option value="transaction">Transactions</option>
-                <option value="investment">Investments</option>
-                <option value="pool">Pool Events</option>
-                <option value="withdrawal">Withdrawals</option>
-                <option value="aml">AML Events</option>
-                <option value="support">Support Tickets</option>
-              </select>
-              <button class="btn btn--secondary btn--sm" onclick="loadAuditLog()"><i class="fa-solid fa-rotate"></i> Refresh</button>
-            </div>
-          </div>
-          <div style="overflow-x:auto">
-            <table class="data-table">
-              <thead><tr>
-                <th style="width:14%">Timestamp</th><th style="width:18%">Actor</th><th style="width:15%">Action</th><th style="width:14%">Target</th><th style="width:25%">Description</th><th style="width:14%">IP</th>
-              </tr></thead>
-              <tbody id="auditBody">
-                <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="table-card__footer">
-            <span id="auditFooter">—</span>
-            <div class="pagination" id="auditPagination"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ══════════════════════════════════
            VIEW: TERMS OF USE
       ══════════════════════════════════ -->
       <div class="view" id="view-terms">
+        <div class="vtab-bar">
+          <button class="vtab-btn active" data-pane="terms" onclick="switchViewTab('terms','terms',this)"><i class="fa-solid fa-file-contract"></i> Terms of Use</button>
+          <button class="vtab-btn" data-pane="privacy" onclick="switchViewTab('terms','privacy',this)"><i class="fa-solid fa-shield-halved"></i> Privacy Policy</button>
+        </div>
+        <div class="vtab-pane active" data-pane="terms">
         <div class="grid-layout grid-layout--sidebar">
           <div>
             <div class="panel">
@@ -1345,66 +1377,68 @@
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- ══════════════════════════════════
-           VIEW: PRIVACY POLICY
-      ══════════════════════════════════ -->
-      <div class="view" id="view-privacy">
-        <div class="grid-layout grid-layout--sidebar">
-          <div>
-            <div class="panel">
-              <div class="panel__header">
-                <span class="panel__title"><i class="fa-solid fa-shield-halved" style="color:var(--orange);margin-right:8px"></i>Privacy Policy &amp; POPIA Notice</span>
-                <div style="display:flex;gap:8px">
-                  <button class="btn btn--secondary btn--sm" onclick="window.open('/popia.html','_blank')"><i class="fa-solid fa-eye"></i> Preview</button>
-                  <button class="btn btn--primary btn--sm" onclick="savePrivacyContent()"><i class="fa-solid fa-save"></i> Save Changes</button>
-                </div>
-              </div>
-              <div class="panel__body">
-                <p style="font-size:0.82rem;color:#6b7280;margin-bottom:12px">Edit the Privacy Policy &amp; POPIA Notice HTML content below. Changes are reflected immediately on the public <a href="/popia.html" target="_blank" style="color:var(--orange)">Privacy Policy</a> page and the sign-up flow.</p>
-                <textarea id="privacyEditor" style="width:100%;min-height:600px;font-family:monospace;font-size:0.82rem;padding:14px;border:1.5px solid #e5e7eb;border-radius:8px;resize:vertical;background:#0f1117;color:#e2e8f0;line-height:1.6" placeholder="Loading privacy policy content…"></textarea>
-              </div>
-            </div>
-          </div>
-          <div>
-            <div class="panel mb-20">
-              <div class="panel__header"><span class="panel__title">Formatting Guide</span></div>
-              <div class="panel__body" style="font-size:0.82rem;color:#6b7280;line-height:1.8">
-                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;h2&gt;</code> — Section heading<br>
-                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;p&gt;</code> — Paragraph<br>
-                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;ul&gt;&lt;li&gt;</code> — Bullet list<br>
-                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;strong&gt;</code> — Bold text<br>
-                <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;a href=""&gt;</code> — Link
-              </div>
-            </div>
-            <div class="panel mb-20">
-              <div class="panel__header"><span class="panel__title">Linked From</span></div>
-              <div class="panel__body" style="font-size:0.82rem;color:#6b7280;line-height:2">
-                ✓ Sign-up consent checkbox<br>
-                ✓ Sign-up POPIA consent checkbox<br>
-                ✓ Homepage footer<br>
-                ✓ Terms of Use footer<br>
-                ✓ PAIA Manual footer
-              </div>
-            </div>
-            <div class="panel">
-              <div class="panel__header"><span class="panel__title">Last Updated</span></div>
-              <div class="panel__body">
-                <div id="privacyLastUpdated" style="font-size:0.85rem;color:#6b7280">—</div>
-                <div style="margin-top:12px">
-                  <button class="btn btn--secondary btn--sm btn--full" onclick="resetPrivacyToDefault()"><i class="fa-solid fa-rotate-left"></i> Reset to Default</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        </div><!-- end vtab-pane terms -->
+        <div class="vtab-pane" data-pane="privacy">
+          <div class="grid-layout grid-layout--sidebar">
+                    <div>
+                      <div class="panel">
+                        <div class="panel__header">
+                          <span class="panel__title"><i class="fa-solid fa-shield-halved" style="color:var(--orange);margin-right:8px"></i>Privacy Policy &amp; POPIA Notice</span>
+                          <div style="display:flex;gap:8px">
+                            <button class="btn btn--secondary btn--sm" onclick="window.open('/popia.html','_blank')"><i class="fa-solid fa-eye"></i> Preview</button>
+                            <button class="btn btn--primary btn--sm" onclick="savePrivacyContent()"><i class="fa-solid fa-save"></i> Save Changes</button>
+                          </div>
+                        </div>
+                        <div class="panel__body">
+                          <p style="font-size:0.82rem;color:#6b7280;margin-bottom:12px">Edit the Privacy Policy &amp; POPIA Notice HTML content below. Changes are reflected immediately on the public <a href="/popia.html" target="_blank" style="color:var(--orange)">Privacy Policy</a> page and the sign-up flow.</p>
+                          <textarea id="privacyEditor" style="width:100%;min-height:600px;font-family:monospace;font-size:0.82rem;padding:14px;border:1.5px solid #e5e7eb;border-radius:8px;resize:vertical;background:#0f1117;color:#e2e8f0;line-height:1.6" placeholder="Loading privacy policy content…"></textarea>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <div class="panel mb-20">
+                        <div class="panel__header"><span class="panel__title">Formatting Guide</span></div>
+                        <div class="panel__body" style="font-size:0.82rem;color:#6b7280;line-height:1.8">
+                          <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;h2&gt;</code> — Section heading<br>
+                          <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;p&gt;</code> — Paragraph<br>
+                          <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;ul&gt;&lt;li&gt;</code> — Bullet list<br>
+                          <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;strong&gt;</code> — Bold text<br>
+                          <code style="background:#1a1a2e;color:#FF8215;padding:2px 6px;border-radius:4px">&lt;a href=""&gt;</code> — Link
+                        </div>
+                      </div>
+                      <div class="panel mb-20">
+                        <div class="panel__header"><span class="panel__title">Linked From</span></div>
+                        <div class="panel__body" style="font-size:0.82rem;color:#6b7280;line-height:2">
+                          ✓ Sign-up consent checkbox<br>
+                          ✓ Sign-up POPIA consent checkbox<br>
+                          ✓ Homepage footer<br>
+                          ✓ Terms of Use footer<br>
+                          ✓ PAIA Manual footer
+                        </div>
+                      </div>
+                      <div class="panel">
+                        <div class="panel__header"><span class="panel__title">Last Updated</span></div>
+                        <div class="panel__body">
+                          <div id="privacyLastUpdated" style="font-size:0.85rem;color:#6b7280">—</div>
+                          <div style="margin-top:12px">
+                            <button class="btn btn--secondary btn--sm btn--full" onclick="resetPrivacyToDefault()"><i class="fa-solid fa-rotate-left"></i> Reset to Default</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+        </div><!-- end vtab-pane privacy -->
       </div>
 
       <!-- ══════════════════════════════════
            VIEW: SETTINGS
       ══════════════════════════════════ -->
       <div class="view" id="view-settings">
+        <div class="vtab-bar">
+          <button class="vtab-btn active" data-pane="settings" onclick="switchViewTab('settings','settings',this)"><i class="fa-solid fa-gear"></i> Settings</button>
+          <button class="vtab-btn" data-pane="migrate" onclick="switchViewTab('settings','migrate',this)"><i class="fa-solid fa-database"></i> Data Migration</button>
+        </div>
+        <div class="vtab-pane active" data-pane="settings">
         <div class="grid-layout grid-layout--sidebar">
           <div>
             <div class="panel">
@@ -1493,73 +1527,76 @@
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- ══════════════════════════════════
-           VIEW: EMAIL LOGS
-      ══════════════════════════════════ -->
-      <div class="view" id="view-emaillogs">
-        <!-- Stats row -->
-        <div id="emailLogStats" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px"></div>
-        <!-- Filters -->
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
-          <input id="emailLogSearch" type="text" placeholder="Search by email…"
-            style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:0.85rem;background:var(--input-bg,#fff);color:var(--text-body);width:220px"
-            oninput="loadEmailLogs()" />
-          <select id="emailLogType" onchange="loadEmailLogs()"
-            style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:0.85rem;background:var(--input-bg,#fff);color:var(--text-body)">
-            <option value="">All types</option>
-            <option value="welcome">Welcome</option>
-            <option value="account_setup">Account Setup</option>
-            <option value="password_reset">Password Reset</option>
-            <option value="deposit_confirmed">Deposit Confirmed</option>
-            <option value="investment_created">Investment Created</option>
-            <option value="maturity_alert">Maturity Alert</option>
-            <option value="withdrawal">Withdrawal</option>
-            <option value="bank_approved">Bank Approved</option>
-            <option value="monthly_statement">Monthly Statement</option>
-            <option value="director_report">Director Report</option>
-            <option value="kyc">KYC / FICA</option>
-            <option value="support">Support</option>
-            <option value="login_alert">Login Alert</option>
-            <option value="gift">Gift</option>
-            <option value="waitlist">Waitlist</option>
-            <option value="staff_leave">Staff Leave</option>
-            <option value="general">General</option>
-          </select>
-          <select id="emailLogStatus" onchange="loadEmailLogs()"
-            style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:0.85rem;background:var(--input-bg,#fff);color:var(--text-body)">
-            <option value="">All statuses</option>
-            <option value="sent">Sent</option>
-            <option value="failed">Failed</option>
-          </select>
-          <button class="btn btn--sm btn--ghost" onclick="loadEmailLogs()">
-            <i class="fa-solid fa-rotate-right"></i> Refresh
-          </button>
-          <button class="btn btn--sm btn--ghost" onclick="exportEmailLogsCSV()">
-            <i class="fa-solid fa-file-csv"></i> Export CSV
-          </button>
-          <button class="btn btn--sm btn--primary" style="margin-left:auto" onclick="retryAllFailedEmails()">
-            <i class="fa-solid fa-paper-plane"></i> Resend All Failed
-          </button>
-        </div>
-        <!-- Table -->
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:0.85rem" id="emailLogsTable">
-            <thead>
-              <tr style="border-bottom:2px solid var(--border);text-align:left">
-                <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Recipient</th>
-                <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Subject</th>
-                <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Type</th>
-                <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Status</th>
-                <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Sent At</th>
-                <th style="padding:10px 12px;color:var(--text-muted);font-weight:600"></th>
-              </tr>
-            </thead>
-            <tbody id="emailLogsList"><tr><td colspan="6" style="padding:40px;text-align:center;color:var(--text-muted)">Loading…</td></tr></tbody>
-          </table>
-        </div>
-        <div id="emailLogsPager" style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:0.82rem;color:var(--text-muted)"></div>
+        </div><!-- end vtab-pane settings -->
+        <div class="vtab-pane" data-pane="migrate">
+          <div style="max-width:680px;margin:0 auto">
+                    <div class="panel mb-20">
+                      <div class="panel__header">
+                        <span class="panel__title"><i class="fa-solid fa-database" style="color:var(--orange);margin-right:8px"></i>Firebase Data Migration</span>
+                      </div>
+                      <div class="panel__body">
+                        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:24px;line-height:1.6">
+                          Upload any combination of the JSON export files from the previous platform. All files are optional — only the data you provide will be imported. Safe to run multiple times — existing records are updated, not duplicated. <code>userAccountNumber</code> is always the unique identifier.
+                        </p>
+          
+                        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px" id="migFileList">
+                          <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-users" style="color:var(--orange);width:16px"></i> users.json</label><input class="mig-input" type="file" accept=".json" id="mig-users"></div>
+                          <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-layer-group" style="color:var(--orange);width:16px"></i> investmentPools.json</label><input class="mig-input" type="file" accept=".json" id="mig-pools"></div>
+                          <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-chart-line" style="color:var(--orange);width:16px"></i> investments.json</label><input class="mig-input" type="file" accept=".json" id="mig-investments"></div>
+                          <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-arrows-rotate" style="color:var(--orange);width:16px"></i> transactions.json</label><input class="mig-input" type="file" accept=".json" id="mig-transactions"></div>
+                          <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-building-columns" style="color:var(--orange);width:16px"></i> bankAccounts.json</label><input class="mig-input" type="file" accept=".json" id="mig-bankAccounts"></div>
+                          <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-location-dot" style="color:var(--orange);width:16px"></i> addressDetails.json</label><input class="mig-input" type="file" accept=".json" id="mig-addressDetails"></div>
+                        </div>
+          
+                        <button class="btn btn--primary btn--full" id="migRunBtn" onclick="runMigration()">
+                          <i class="fa-solid fa-play"></i> Run Migration
+                        </button>
+          
+                        <!-- Results -->
+                        <div id="migResults" style="display:none;margin-top:24px">
+                          <div style="border-top:1px solid var(--border);padding-top:20px">
+                            <div id="migResultsContent"></div>
+                          </div>
+                        </div>
+          
+                        <!-- Utilities -->
+                        <div style="border-top:1px solid var(--border);margin-top:28px;padding-top:20px">
+                          <p style="font-size:0.8rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px">Post-Migration Utilities</p>
+          
+                          <!-- Pool stats recalculator -->
+                          <div style="background:var(--bg-secondary);border-radius:10px;padding:16px">
+                            <p style="font-weight:600;margin-bottom:6px">Recalculate Pool Statistics</p>
+                            <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Recomputes <code>investor_count</code>, <code>raised_amount</code>, and <code>current_invested</code> for every pool from live investment data. Safe to run at any time.</p>
+                            <button class="btn btn--secondary" onclick="recalculatePoolStats(this)">
+                              <i class="fa-solid fa-calculator"></i> Recalculate Pool Stats
+                            </button>
+                            <div id="poolRecalcResult" style="margin-top:10px;font-size:0.82rem"></div>
+                          </div>
+          
+                          <!-- Backfill orphan pools -->
+                          <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
+                            <p style="font-weight:600;margin-bottom:6px">Backfill Orphan Pool Records</p>
+                            <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Finds any investments that reference a <code>pool_id</code> with no matching pool record (e.g. pools that were in Firebase but missing from the JSON export) and automatically creates stub pool records from the investment data. Safe to run multiple times.</p>
+                            <button class="btn btn--secondary" onclick="backfillOrphanPools(this)">
+                              <i class="fa-solid fa-sitemap"></i> Backfill Orphan Pools
+                            </button>
+                            <div id="orphanPoolsResult" style="margin-top:10px;font-size:0.82rem;color:var(--green)"></div>
+                          </div>
+          
+                          <!-- FICA backfill from KYC status -->
+                          <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
+                            <p style="font-weight:600;margin-bottom:6px">Backfill FICA Approval from KYC Status</p>
+                            <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Finds every investor whose <code>kyc_status</code> is already <strong>approved</strong> and sets their <code>fica_status</code> to <strong>approved</strong> and account to <strong>active</strong>. Also syncs the reverse direction. Safe to run multiple times.</p>
+                            <button class="btn btn--secondary" onclick="backfillFicaFromKyc(this)">
+                              <i class="fa-solid fa-shield-check"></i> Approve FICA for all KYC-approved clients
+                            </button>
+                            <div id="ficaBackfillResult" style="margin-top:10px;font-size:0.82rem"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+        </div><!-- end vtab-pane migrate -->
       </div>
 
       <!-- ══════════════════════════════════
@@ -1587,6 +1624,11 @@
            VIEW: COMMUNICATIONS
       ══════════════════════════════════ -->
       <div class="view" id="view-comms">
+        <div class="vtab-bar">
+          <button class="vtab-btn active" data-pane="comms" onclick="switchViewTab('comms','comms',this)"><i class="fa-solid fa-paper-plane"></i> Broadcast</button>
+          <button class="vtab-btn" data-pane="emaillogs" onclick="switchViewTab('comms','emaillogs',this)"><i class="fa-solid fa-envelope-open-text"></i> Email Logs</button>
+        </div>
+        <div class="vtab-pane active" data-pane="comms">
         <div class="grid-layout grid-layout--sidebar">
 
           <!-- LEFT: Compose -->
@@ -1711,12 +1753,82 @@
             </div>
           </div>
         </div>
+        </div><!-- end vtab-pane comms -->
+        <div class="vtab-pane" data-pane="emaillogs">
+          <!-- Stats row -->
+                  <div id="emailLogStats" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px"></div>
+                  <!-- Filters -->
+                  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+                    <input id="emailLogSearch" type="text" placeholder="Search by email…"
+                      style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:0.85rem;background:var(--input-bg,#fff);color:var(--text-body);width:220px"
+                      oninput="loadEmailLogs()" />
+                    <select id="emailLogType" onchange="loadEmailLogs()"
+                      style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:0.85rem;background:var(--input-bg,#fff);color:var(--text-body)">
+                      <option value="">All types</option>
+                      <option value="welcome">Welcome</option>
+                      <option value="account_setup">Account Setup</option>
+                      <option value="password_reset">Password Reset</option>
+                      <option value="deposit_confirmed">Deposit Confirmed</option>
+                      <option value="investment_created">Investment Created</option>
+                      <option value="maturity_alert">Maturity Alert</option>
+                      <option value="withdrawal">Withdrawal</option>
+                      <option value="bank_approved">Bank Approved</option>
+                      <option value="monthly_statement">Monthly Statement</option>
+                      <option value="director_report">Director Report</option>
+                      <option value="kyc">KYC / FICA</option>
+                      <option value="support">Support</option>
+                      <option value="login_alert">Login Alert</option>
+                      <option value="gift">Gift</option>
+                      <option value="waitlist">Waitlist</option>
+                      <option value="staff_leave">Staff Leave</option>
+                      <option value="general">General</option>
+                    </select>
+                    <select id="emailLogStatus" onchange="loadEmailLogs()"
+                      style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:0.85rem;background:var(--input-bg,#fff);color:var(--text-body)">
+                      <option value="">All statuses</option>
+                      <option value="sent">Sent</option>
+                      <option value="failed">Failed</option>
+                    </select>
+                    <button class="btn btn--sm btn--ghost" onclick="loadEmailLogs()">
+                      <i class="fa-solid fa-rotate-right"></i> Refresh
+                    </button>
+                    <button class="btn btn--sm btn--ghost" onclick="exportEmailLogsCSV()">
+                      <i class="fa-solid fa-file-csv"></i> Export CSV
+                    </button>
+                    <button class="btn btn--sm btn--primary" style="margin-left:auto" onclick="retryAllFailedEmails()">
+                      <i class="fa-solid fa-paper-plane"></i> Resend All Failed
+                    </button>
+                  </div>
+                  <!-- Table -->
+                  <div style="overflow-x:auto">
+                    <table style="width:100%;border-collapse:collapse;font-size:0.85rem" id="emailLogsTable">
+                      <thead>
+                        <tr style="border-bottom:2px solid var(--border);text-align:left">
+                          <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Recipient</th>
+                          <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Subject</th>
+                          <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Type</th>
+                          <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Status</th>
+                          <th style="padding:10px 12px;color:var(--text-muted);font-weight:600">Sent At</th>
+                          <th style="padding:10px 12px;color:var(--text-muted);font-weight:600"></th>
+                        </tr>
+                      </thead>
+                      <tbody id="emailLogsList"><tr><td colspan="6" style="padding:40px;text-align:center;color:var(--text-muted)">Loading…</td></tr></tbody>
+                    </table>
+                  </div>
+                  <div id="emailLogsPager" style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:0.82rem;color:var(--text-muted)"></div>
+        </div><!-- end vtab-pane emaillogs -->
       </div>
 
       <!-- ══════════════════════════════════
            VIEW: COMPLIANCE CALENDAR
       ══════════════════════════════════ -->
       <div class="view" id="view-compliance">
+        <div class="vtab-bar">
+          <button class="vtab-btn active" data-pane="compliance" onclick="switchViewTab('compliance','compliance',this)"><i class="fa-solid fa-calendar-check"></i> Calendar</button>
+          <button class="vtab-btn" data-pane="auditlog" onclick="switchViewTab('compliance','auditlog',this)"><i class="fa-solid fa-scroll"></i> Audit Log</button>
+          <button class="vtab-btn" data-pane="accepted-docs" onclick="switchViewTab('compliance','accepted-docs',this)"><i class="fa-solid fa-file-circle-check"></i> Accepted Docs <span class="nav-badge" id="acceptedDocsBadgeVtab" style="display:none">0</span></button>
+        </div>
+        <div class="vtab-pane active" data-pane="compliance">
         <div class="grid-layout grid-layout--sidebar">
           <div>
             <div class="panel mb-20">
@@ -1773,79 +1885,98 @@
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- ══════════════════════════════════
-           VIEW: DATA MIGRATION
-      ══════════════════════════════════ -->
-      <div class="view" id="view-migrate">
-        <div style="max-width:680px;margin:0 auto">
-          <div class="panel mb-20">
-            <div class="panel__header">
-              <span class="panel__title"><i class="fa-solid fa-database" style="color:var(--orange);margin-right:8px"></i>Firebase Data Migration</span>
-            </div>
-            <div class="panel__body">
-              <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:24px;line-height:1.6">
-                Upload any combination of the JSON export files from the previous platform. All files are optional — only the data you provide will be imported. Safe to run multiple times — existing records are updated, not duplicated. <code>userAccountNumber</code> is always the unique identifier.
-              </p>
-
-              <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px" id="migFileList">
-                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-users" style="color:var(--orange);width:16px"></i> users.json</label><input class="mig-input" type="file" accept=".json" id="mig-users"></div>
-                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-layer-group" style="color:var(--orange);width:16px"></i> investmentPools.json</label><input class="mig-input" type="file" accept=".json" id="mig-pools"></div>
-                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-chart-line" style="color:var(--orange);width:16px"></i> investments.json</label><input class="mig-input" type="file" accept=".json" id="mig-investments"></div>
-                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-arrows-rotate" style="color:var(--orange);width:16px"></i> transactions.json</label><input class="mig-input" type="file" accept=".json" id="mig-transactions"></div>
-                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-building-columns" style="color:var(--orange);width:16px"></i> bankAccounts.json</label><input class="mig-input" type="file" accept=".json" id="mig-bankAccounts"></div>
-                <div class="mig-row"><label class="mig-label"><i class="fa-solid fa-location-dot" style="color:var(--orange);width:16px"></i> addressDetails.json</label><input class="mig-input" type="file" accept=".json" id="mig-addressDetails"></div>
-              </div>
-
-              <button class="btn btn--primary btn--full" id="migRunBtn" onclick="runMigration()">
-                <i class="fa-solid fa-play"></i> Run Migration
-              </button>
-
-              <!-- Results -->
-              <div id="migResults" style="display:none;margin-top:24px">
-                <div style="border-top:1px solid var(--border);padding-top:20px">
-                  <div id="migResultsContent"></div>
-                </div>
-              </div>
-
-              <!-- Utilities -->
-              <div style="border-top:1px solid var(--border);margin-top:28px;padding-top:20px">
-                <p style="font-size:0.8rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px">Post-Migration Utilities</p>
-
-                <!-- Pool stats recalculator -->
-                <div style="background:var(--bg-secondary);border-radius:10px;padding:16px">
-                  <p style="font-weight:600;margin-bottom:6px">Recalculate Pool Statistics</p>
-                  <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Recomputes <code>investor_count</code>, <code>raised_amount</code>, and <code>current_invested</code> for every pool from live investment data. Safe to run at any time.</p>
-                  <button class="btn btn--secondary" onclick="recalculatePoolStats(this)">
-                    <i class="fa-solid fa-calculator"></i> Recalculate Pool Stats
-                  </button>
-                  <div id="poolRecalcResult" style="margin-top:10px;font-size:0.82rem"></div>
-                </div>
-
-                <!-- Backfill orphan pools -->
-                <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
-                  <p style="font-weight:600;margin-bottom:6px">Backfill Orphan Pool Records</p>
-                  <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Finds any investments that reference a <code>pool_id</code> with no matching pool record (e.g. pools that were in Firebase but missing from the JSON export) and automatically creates stub pool records from the investment data. Safe to run multiple times.</p>
-                  <button class="btn btn--secondary" onclick="backfillOrphanPools(this)">
-                    <i class="fa-solid fa-sitemap"></i> Backfill Orphan Pools
-                  </button>
-                  <div id="orphanPoolsResult" style="margin-top:10px;font-size:0.82rem;color:var(--green)"></div>
-                </div>
-
-                <!-- FICA backfill from KYC status -->
-                <div style="background:var(--bg-secondary);border-radius:10px;padding:16px;margin-top:14px">
-                  <p style="font-weight:600;margin-bottom:6px">Backfill FICA Approval from KYC Status</p>
-                  <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Finds every investor whose <code>kyc_status</code> is already <strong>approved</strong> and sets their <code>fica_status</code> to <strong>approved</strong> and account to <strong>active</strong>. Also syncs the reverse direction. Safe to run multiple times.</p>
-                  <button class="btn btn--secondary" onclick="backfillFicaFromKyc(this)">
-                    <i class="fa-solid fa-shield-check"></i> Approve FICA for all KYC-approved clients
-                  </button>
-                  <div id="ficaBackfillResult" style="margin-top:10px;font-size:0.82rem"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        </div><!-- end vtab-pane compliance -->
+        <div class="vtab-pane" data-pane="auditlog">
+          <div class="table-card">
+                    <div class="table-card__header">
+                      <div>
+                        <div class="table-card__title">Audit Log</div>
+                        <div class="table-card__sub">Immutable record of all significant actions</div>
+                      </div>
+                      <div class="table-card__controls">
+                        <div class="tbl-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search action, actor…" id="auditSearchInput" /></div>
+                        <input type="date" class="tbl-filter" id="auditDateFrom" title="From date" />
+                        <input type="date" class="tbl-filter" id="auditDateTo" title="To date" />
+                        <select class="tbl-filter" id="auditTypeFilter">
+                          <option value="">All Events</option>
+                          <option value="user.login">Logins</option>
+                          <option value="kyc">KYC Actions</option>
+                          <option value="transaction">Transactions</option>
+                          <option value="investment">Investments</option>
+                          <option value="pool">Pool Events</option>
+                          <option value="withdrawal">Withdrawals</option>
+                          <option value="aml">AML Events</option>
+                          <option value="support">Support Tickets</option>
+                        </select>
+                        <button class="btn btn--secondary btn--sm" onclick="loadAuditLog()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                      </div>
+                    </div>
+                    <div style="overflow-x:auto">
+                      <table class="data-table">
+                        <thead><tr>
+                          <th style="width:14%">Timestamp</th><th style="width:18%">Actor</th><th style="width:15%">Action</th><th style="width:14%">Target</th><th style="width:25%">Description</th><th style="width:14%">IP</th>
+                        </tr></thead>
+                        <tbody id="auditBody">
+                          <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="table-card__footer">
+                      <span id="auditFooter">—</span>
+                      <div class="pagination" id="auditPagination"></div>
+                    </div>
+                  </div>
+        </div><!-- end vtab-pane auditlog -->
+        <div class="vtab-pane" data-pane="accepted-docs">
+          <!-- Filter bar -->
+                  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px">
+                    <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;flex:1;min-width:200px">
+                      <i class="fa-solid fa-magnifying-glass" style="color:#7a92a8;font-size:12px"></i>
+                      <input type="text" id="acdSearch" placeholder="Search investor name or document type…" style="background:none;border:none;outline:none;color:#e8edf2;font-size:13px;width:100%" oninput="renderAcceptedDocsTable()">
+                    </div>
+                    <select id="acdTypeFilter" onchange="renderAcceptedDocsTable()" style="background:var(--dark-3);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;color:#e8edf2;font-size:13px;outline:none">
+                      <option value="">All document types</option>
+                      <option value="terms_of_service">Terms of Service</option>
+                      <option value="privacy_policy">Privacy Policy</option>
+                      <option value="popia_notice">POPIA Notice</option>
+                      <option value="fica_consent">FICA Consent</option>
+                      <option value="risk_disclaimer">Risk Disclaimer</option>
+                    </select>
+                    <button class="btn btn--secondary btn--sm" onclick="exportAcceptedDocsCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+                    <button class="btn btn--secondary btn--sm" onclick="loadAcceptedDocuments()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                  </div>
+          
+                  <!-- Stats strip -->
+                  <div class="stats-grid stats-grid--4" style="margin-bottom:18px" id="acdStats"></div>
+          
+                  <!-- Table -->
+                  <div class="table-card">
+                    <div class="table-card__header">
+                      <div>
+                        <div class="table-card__title">Accepted Client Documents</div>
+                        <div class="table-card__sub" id="acdSubtitle">Policy acceptance audit trail — timestamped at signup</div>
+                      </div>
+                    </div>
+                    <div class="table-card__body" style="overflow-x:auto">
+                      <table class="data-table" style="table-layout:fixed;width:100%">
+                        <thead>
+                          <tr>
+                            <th style="width:22%">Investor</th>
+                            <th style="width:20%">Document</th>
+                            <th style="width:10%">Version</th>
+                            <th style="width:20%">Accepted At</th>
+                            <th style="width:18%">IP Address</th>
+                            <th style="width:10%">Browser</th>
+                          </tr>
+                        </thead>
+                        <tbody id="acdBody">
+                          <tr><td colspan="6" style="text-align:center;padding:40px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="table-card__footer" id="acdFooter" style="padding:10px 18px;font-size:12px;color:#7a92a8"></div>
+                  </div>
+        </div><!-- end vtab-pane accepted-docs -->
       </div>
 
       <!-- ────────────────────────── RECONCILIATION ───────────────────────── -->
@@ -1898,149 +2029,6 @@
         </div>
       </div>
 
-      <!-- ══════════════════════════════════
-           VIEW: FICA PIPELINE
-      ══════════════════════════════════ -->
-      <div class="view" id="view-fica-pipeline">
-        <!-- Stage tiles -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px" id="ficaPipelineTiles"></div>
-
-        <!-- Filter bar -->
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
-          <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;flex:1;min-width:200px">
-            <i class="fa-solid fa-magnifying-glass" style="color:#7a92a8;font-size:12px"></i>
-            <input type="text" id="ficaPipelineSearch" placeholder="Search investor name or email…" style="background:none;border:none;outline:none;color:#e8edf2;font-size:13px;width:100%" oninput="_renderFicaPipeline()">
-          </div>
-          <button class="btn btn--secondary btn--sm" onclick="loadFicaPipeline()"><i class="fa-solid fa-rotate"></i> Refresh</button>
-        </div>
-
-        <!-- Table -->
-        <div class="table-card">
-          <div class="table-card__header">
-            <div>
-              <div class="table-card__title">FICA / KYC Pipeline</div>
-              <div class="table-card__sub" id="ficaPipelineSubtitle">Investors by FICA stage</div>
-            </div>
-          </div>
-          <div style="overflow-x:auto">
-            <table class="data-table">
-              <thead><tr>
-                <th style="width:28%">Investor</th>
-                <th style="width:15%">Registered</th>
-                <th style="width:18%">FICA Stage</th>
-                <th style="width:15%">Documents</th>
-                <th style="width:14%">Actions</th>
-              </tr></thead>
-              <tbody id="ficaPipelineBody">
-                <tr><td colspan="5" style="text-align:center;padding:40px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ══════════════════════════════════
-           VIEW: ACCEPTED CLIENT DOCUMENTS
-      ══════════════════════════════════ -->
-      <div class="view" id="view-accepted-docs">
-
-        <!-- Filter bar -->
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px">
-          <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;flex:1;min-width:200px">
-            <i class="fa-solid fa-magnifying-glass" style="color:#7a92a8;font-size:12px"></i>
-            <input type="text" id="acdSearch" placeholder="Search investor name or document type…" style="background:none;border:none;outline:none;color:#e8edf2;font-size:13px;width:100%" oninput="renderAcceptedDocsTable()">
-          </div>
-          <select id="acdTypeFilter" onchange="renderAcceptedDocsTable()" style="background:var(--dark-3);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;color:#e8edf2;font-size:13px;outline:none">
-            <option value="">All document types</option>
-            <option value="terms_of_service">Terms of Service</option>
-            <option value="privacy_policy">Privacy Policy</option>
-            <option value="popia_notice">POPIA Notice</option>
-            <option value="fica_consent">FICA Consent</option>
-            <option value="risk_disclaimer">Risk Disclaimer</option>
-          </select>
-          <button class="btn btn--secondary btn--sm" onclick="exportAcceptedDocsCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
-          <button class="btn btn--secondary btn--sm" onclick="loadAcceptedDocuments()"><i class="fa-solid fa-rotate"></i> Refresh</button>
-        </div>
-
-        <!-- Stats strip -->
-        <div class="stats-grid stats-grid--4" style="margin-bottom:18px" id="acdStats"></div>
-
-        <!-- Table -->
-        <div class="table-card">
-          <div class="table-card__header">
-            <div>
-              <div class="table-card__title">Accepted Client Documents</div>
-              <div class="table-card__sub" id="acdSubtitle">Policy acceptance audit trail — timestamped at signup</div>
-            </div>
-          </div>
-          <div class="table-card__body" style="overflow-x:auto">
-            <table class="data-table" style="table-layout:fixed;width:100%">
-              <thead>
-                <tr>
-                  <th style="width:22%">Investor</th>
-                  <th style="width:20%">Document</th>
-                  <th style="width:10%">Version</th>
-                  <th style="width:20%">Accepted At</th>
-                  <th style="width:18%">IP Address</th>
-                  <th style="width:10%">Browser</th>
-                </tr>
-              </thead>
-              <tbody id="acdBody">
-                <tr><td colspan="6" style="text-align:center;padding:40px;color:#7a92a8"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="table-card__footer" id="acdFooter" style="padding:10px 18px;font-size:12px;color:#7a92a8"></div>
-        </div>
-      </div>
-
-      <!-- ───────────────────── VIEW: INTERNATIONAL INTEREST ────────────────────── -->
-      <div class="view" id="view-intlinterest">
-        <div class="flex-between mb-16" style="flex-wrap:wrap;gap:10px">
-          <div>
-            <h2 style="color:#e8edf2;font-size:1.05rem;font-weight:700;margin:0">International Interest</h2>
-            <p style="color:#7a92a8;font-size:0.8rem;margin:4px 0 0">Prospects from outside South Africa who have expressed interest in investing.</p>
-          </div>
-          <button class="btn btn--secondary btn--sm" onclick="exportIntlInterestCSV()">
-            <i class="fa-solid fa-file-csv"></i> Export CSV
-          </button>
-        </div>
-
-        <div class="stats-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px" id="intlInterestStats">
-          <div class="stat-card stat-card--blue" style="cursor:pointer" onclick="navigate('intlinterest',document.querySelector('[data-view=intlinterest]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-earth-africa"></i></div></div><div class="stat-card__value" id="ii-total">—</div><div class="stat-card__label">Total Registrations</div></div>
-          <div class="stat-card stat-card--orange" style="cursor:pointer" onclick="navigate('intlinterest',document.querySelector('[data-view=intlinterest]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-globe"></i></div></div><div class="stat-card__value" id="ii-countries">—</div><div class="stat-card__label">Countries</div></div>
-          <div class="stat-card stat-card--green" style="cursor:pointer" onclick="navigate('intlinterest',document.querySelector('[data-view=intlinterest]'))"><div class="stat-card__header"><div class="stat-card__icon"><i class="fa-solid fa-calendar-plus"></i></div></div><div class="stat-card__value" id="ii-this-month">—</div><div class="stat-card__label">This Month</div></div>
-        </div>
-
-        <div class="table-card">
-          <div class="table-card__header" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-            <div class="search-bar" style="flex:1;max-width:320px">
-              <i class="fa-solid fa-magnifying-glass"></i>
-              <input type="text" placeholder="Search name, email or country…" oninput="filterIntlInterest(this.value)" />
-            </div>
-            <select class="form-select" style="max-width:180px;background:#1a2540;border-color:rgba(255,255,255,.1);color:#e8edf2" onchange="filterIntlInterestCountry(this.value)" id="intlCountryFilter">
-              <option value="">All countries</option>
-            </select>
-          </div>
-          <div class="table-wrap">
-            <table class="data-table" id="intlInterestTable">
-              <thead><tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Country</th>
-                <th>Status</th>
-                <th>Date</th>
-                <th style="width:120px">Actions</th>
-              </tr></thead>
-              <tbody id="intlInterestBody">
-                <tr><td colspan="6" style="text-align:center;color:#7a92a8;padding:32px">Loading…</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="table-card__footer" id="intlInterestFooter" style="padding:10px 18px;font-size:12px;color:#7a92a8"></div>
-        </div>
-      </div>
-
     </main>
   </div>
 </div>
@@ -2069,6 +2057,25 @@
 /* Tighten up th/td padding globally */
 .data-table th { padding: 8px 10px; }
 .data-table td { padding: 10px 10px; }
+
+/* View-level tab bar */
+.vtab-bar { display:flex; gap:4px; margin-bottom:20px; }
+.vtab-btn {
+  padding:8px 18px; border-radius:8px; border:none; font-size:0.82rem; font-weight:600;
+  cursor:pointer; background:rgba(255,255,255,0.04); color:var(--text-muted);
+  transition:all 0.15s; border:1px solid transparent;
+}
+.vtab-btn.active {
+  background:rgba(237,165,255,0.12); color:#eda5ff; border-color:rgba(237,165,255,0.25);
+}
+.vtab-btn .nav-badge {
+  display:inline-flex; align-items:center; justify-content:center;
+  background:#ef4444; color:#fff; font-size:0.6rem; font-weight:700;
+  min-width:16px; height:16px; border-radius:8px; padding:0 4px; margin-left:6px;
+}
+.vtab-pane { display:none; }
+.vtab-pane.active { display:block; }
+
 </style>
 
 <!-- Mobile sidebar toggle -->
