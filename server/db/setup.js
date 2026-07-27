@@ -1288,6 +1288,26 @@ async function autoSetup() {
     `);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS gifts_firebase_id_idx ON gifts(firebase_id) WHERE firebase_id IS NOT NULL`).catch(() => {});
 
+    // Custom broadcast lists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS broadcast_lists (
+        id          SERIAL PRIMARY KEY,
+        name        TEXT NOT NULL,
+        description TEXT,
+        created_by  TEXT,
+        created_at  TIMESTAMPTZ DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS broadcast_list_members (
+        list_id     INTEGER NOT NULL REFERENCES broadcast_lists(id) ON DELETE CASCADE,
+        investor_id TEXT    NOT NULL,
+        added_at    TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (list_id, investor_id)
+      )
+    `);
+
     // Backfill sa_reference for existing sub-accounts that don't have one
     await pool.query(`
       UPDATE sub_accounts
