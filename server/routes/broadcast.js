@@ -112,16 +112,6 @@ async function _getInvestors(segment) {
       ORDER BY first_name
     `);
     rows = res.rows;
-  } else if (segment.startsWith('list:')) {
-    const listId = parseInt(segment.slice(5), 10);
-    const res = await pool.query(`
-      SELECT DISTINCT i.id, i.first_name, i.last_name, i.email, i.phone
-      FROM investors i
-      INNER JOIN broadcast_list_members m ON m.investor_id = i.id AND m.list_id = $1
-      WHERE i.email IS NOT NULL AND i.email <> '' AND ${_notArchived}
-      ORDER BY i.first_name
-    `, [listId]);
-    rows = res.rows;
   } else {
     // Treat as pool_id
     const res = await pool.query(`
@@ -135,119 +125,6 @@ async function _getInvestors(segment) {
   }
   return rows;
 }
-
-/* ══════════════════════════════════════════════════════════════
-   Custom broadcast lists CRUD
-══════════════════════════════════════════════════════════════ */
-
-// GET /broadcast/lists
-router.get('/broadcast/lists', async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT bl.id, bl.name, bl.description, bl.created_by, bl.created_at,
-             COUNT(m.investor_id)::int AS member_count
-      FROM broadcast_lists bl
-      LEFT JOIN broadcast_list_members m ON m.list_id = bl.id
-      GROUP BY bl.id ORDER BY bl.name
-    `);
-    res.json({ data: rows });
-  } catch (err) {
-    console.error('[broadcast lists] GET error:', err.message);
-    res.status(500).json({ error: 'Failed to load lists' });
-  }
-});
-
-// POST /broadcast/lists  { name, description }
-router.post('/broadcast/lists', async (req, res) => {
-  const { name, description } = req.body || {};
-  if (!name || !name.trim()) return res.status(400).json({ error: 'name is required' });
-  try {
-    const { rows } = await pool.query(
-      `INSERT INTO broadcast_lists (name, description, created_by) VALUES ($1, $2, $3) RETURNING *`,
-      [name.trim(), description || null, req.user?.email || null]
-    );
-    res.json({ data: rows[0] });
-  } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'A list with that name already exists' });
-    console.error('[broadcast lists] POST error:', err.message);
-    res.status(500).json({ error: 'Failed to create list' });
-  }
-});
-
-// PATCH /broadcast/lists/:id  { name, description }
-router.patch('/broadcast/lists/:id', async (req, res) => {
-  const { name, description } = req.body || {};
-  try {
-    const { rows } = await pool.query(
-      `UPDATE broadcast_lists SET name = COALESCE($1, name), description = COALESCE($2, description), updated_at = NOW()
-       WHERE id = $3 RETURNING *`,
-      [name?.trim() || null, description ?? null, req.params.id]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'List not found' });
-    res.json({ data: rows[0] });
-  } catch (err) {
-    console.error('[broadcast lists] PATCH error:', err.message);
-    res.status(500).json({ error: 'Failed to update list' });
-  }
-});
-
-// DELETE /broadcast/lists/:id
-router.delete('/broadcast/lists/:id', async (req, res) => {
-  try {
-    const { rowCount } = await pool.query(`DELETE FROM broadcast_lists WHERE id = $1`, [req.params.id]);
-    if (!rowCount) return res.status(404).json({ error: 'List not found' });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('[broadcast lists] DELETE error:', err.message);
-    res.status(500).json({ error: 'Failed to delete list' });
-  }
-});
-
-// GET /broadcast/lists/:id/members
-router.get('/broadcast/lists/:id/members', async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT i.id, i.first_name, i.last_name, i.email, m.added_at
-      FROM broadcast_list_members m
-      JOIN investors i ON i.id = m.investor_id
-      WHERE m.list_id = $1
-      ORDER BY i.first_name, i.last_name
-    `, [req.params.id]);
-    res.json({ data: rows });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to load members' });
-  }
-});
-
-// POST /broadcast/lists/:id/members  { investor_ids: [...] }
-router.post('/broadcast/lists/:id/members', async (req, res) => {
-  const ids = req.body?.investor_ids || [];
-  if (!ids.length) return res.status(400).json({ error: 'investor_ids required' });
-  try {
-    const values = ids.map((_, i) => `($1, $${i + 2})`).join(',');
-    await pool.query(
-      `INSERT INTO broadcast_list_members (list_id, investor_id) VALUES ${values} ON CONFLICT DO NOTHING`,
-      [req.params.id, ...ids]
-    );
-    res.json({ ok: true, added: ids.length });
-  } catch (err) {
-    console.error('[broadcast lists] add members error:', err.message);
-    res.status(500).json({ error: 'Failed to add members' });
-  }
-});
-
-// DELETE /broadcast/lists/:id/members/:investorId
-router.delete('/broadcast/lists/:id/members/:investorId', async (req, res) => {
-  try {
-    await pool.query(
-      `DELETE FROM broadcast_list_members WHERE list_id = $1 AND investor_id = $2`,
-      [req.params.id, req.params.investorId]
-    );
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to remove member' });
-  }
-});
 
 /* ══════════════════════════════════════════════════════════════
    GET /broadcast/preview?segment=X
