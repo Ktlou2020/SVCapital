@@ -2146,11 +2146,11 @@
 </div>
 
 <!-- Pool Investors Modal -->
-<div class="modal-overlay" id="poolInvestorsModal" onclick="if(event.target===this)Modal.close('poolInvestorsModal')">
+<div class="modal-overlay" id="poolInvestorsModal" onclick="if(event.target===this){_currentPoolId=null;Modal.close('poolInvestorsModal')}">
   <div class="modal modal--lg" style="max-width:900px">
     <div class="modal__header">
       <span class="modal__title" id="poolInvestorsTitle">Pool Investors</span>
-      <button class="modal__close" aria-label="Close" onclick="Modal.close('poolInvestorsModal')"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" aria-label="Close" onclick="_currentPoolId=null;Modal.close('poolInvestorsModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal__body" id="poolInvestorsBody">Loading...</div>
   </div>

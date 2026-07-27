@@ -2369,9 +2369,12 @@ async function _confirmMoveInvestment(investmentId) {
       });
       Toast.success('Investment moved successfully');
       Modal.closeAll();
-      // Refresh the investor detail view if open
-      const detailId = _currentInvestorId;
-      if (detailId) await viewInvestor(detailId);
+      // If we were in a pool investors view, refresh it so stats update
+      if (_currentPoolId) {
+        await viewPoolInvestors(_currentPoolId);
+      } else if (_currentInvestorId) {
+        await viewInvestor(_currentInvestorId);
+      }
     } catch (e) {
       Toast.error('Failed to move investment: ' + (e.message || 'unknown error'));
     }
@@ -3441,7 +3444,10 @@ function renderPoolsGrid() {
   });
 }
 
+let _currentPoolId = null;
+
 async function viewPoolInvestors(poolId) {
+  _currentPoolId = poolId;
   const pool = STATE.pools.find(p => p.id === poolId);
   if (!pool) return;
 
