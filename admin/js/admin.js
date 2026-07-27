@@ -7452,7 +7452,7 @@ async function loadComms() {
     });
     // Load and inject custom lists
     try {
-      const res = await API._fetch('GET', 'broadcast/lists');
+      const res = await API._fetch('GET', 'admin/broadcast/lists');
       _broadcastLists = res.data || [];
       _broadcastLists.forEach(l => {
         const opt = document.createElement('option');
@@ -7482,7 +7482,7 @@ async function _renderBroadcastLists() {
   if (!body) return;
   body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
   try {
-    const res = await API._fetch('GET', 'broadcast/lists');
+    const res = await API._fetch('GET', 'admin/broadcast/lists');
     _broadcastLists = res.data || [];
     if (!_broadcastLists.length) {
       body.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim)">No custom lists yet. Create one above.</div>';
@@ -7511,7 +7511,7 @@ async function createBroadcastList() {
   const name = nameEl?.value?.trim();
   if (!name) { Toast.error('Enter a list name'); return; }
   try {
-    await API._fetch('POST', 'broadcast/lists', { name });
+    await API._fetch('POST', 'admin/broadcast/lists', { name });
     nameEl.value = '';
     Toast.success(`List "${name}" created`);
     await _renderBroadcastLists();
@@ -7537,7 +7537,7 @@ async function createBroadcastList() {
 async function deleteBroadcastList(listId, listName) {
   if (!confirm(`Delete list "${listName}"? This cannot be undone.`)) return;
   try {
-    await API._fetch('DELETE', `broadcast/lists/${listId}`);
+    await API._fetch('DELETE', `admin/broadcast/lists/${listId}`);
     Toast.success(`List deleted`);
     await _renderBroadcastLists();
     // Remove from dropdown
@@ -7573,7 +7573,7 @@ async function _renderListMembers() {
   if (!body || !_currentListId) return;
   body.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
   try {
-    const res = await API._fetch('GET', `broadcast/lists/${_currentListId}/members`);
+    const res = await API._fetch('GET', `admin/broadcast/lists/${_currentListId}/members`);
     const members = res.data || [];
     if (!members.length) {
       body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)">No members yet. Search above to add investors.</div>';
@@ -7643,7 +7643,7 @@ async function addSelectedToList() {
   if (!_listSearchSelected.length) { Toast.error('Select at least one investor'); return; }
   if (!_currentListId) return;
   try {
-    await API._fetch('POST', `broadcast/lists/${_currentListId}/members`, { investor_ids: _listSearchSelected });
+    await API._fetch('POST', `admin/broadcast/lists/${_currentListId}/members`, { investor_ids: _listSearchSelected });
     Toast.success(`Added ${_listSearchSelected.length} investor${_listSearchSelected.length !== 1 ? 's' : ''}`);
     _listSearchSelected = [];
     const srEl = document.getElementById('listMemberSearch');
@@ -7660,7 +7660,7 @@ async function addSelectedToList() {
 async function removeFromList(investorId) {
   if (!_currentListId) return;
   try {
-    await API._fetch('DELETE', `broadcast/lists/${_currentListId}/members/${investorId}`);
+    await API._fetch('DELETE', `admin/broadcast/lists/${_currentListId}/members/${investorId}`);
     await _renderListMembers();
     await _renderBroadcastLists();
   } catch (err) {
