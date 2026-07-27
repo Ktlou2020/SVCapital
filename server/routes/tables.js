@@ -1189,6 +1189,13 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
             );
           }
 
+          // Auto-unarchive investor when they make their first investment
+          await pool.query(
+            `UPDATE investors SET status = 'active', archived_at = NULL, updated_at = NOW()
+             WHERE id = $1 AND status = 'archived'`,
+            [clean.investor_id]
+          );
+
           console.log(`[investment hook] R${platformFee} fee + R${investAmt} deducted from wallet for investment ${clean.id}`);
         } catch (err) {
           console.error('[investment hook] error:', err.message);

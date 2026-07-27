@@ -336,6 +336,10 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startPoolCyclerCron } = require('./jobs/poolCyclerCron');
   startPoolCyclerCron();
 
+  // Archive dormant investors (no investments after 6 months) — daily 00:00 UTC
+  const { startArchiveCron } = require('./jobs/archiveCron');
+  startArchiveCron();
+
   // Email queue processor — runs every 2 minutes
   const emailQueueCron = require('node-cron');
   const { processQueue } = require('./services/emailQueue');

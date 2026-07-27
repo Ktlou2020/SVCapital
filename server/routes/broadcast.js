@@ -63,15 +63,16 @@ async function _sendEmail(to, subject, message) {
 /* ── Helper: query investors by segment ─────────────────────── */
 async function _getInvestors(segment) {
   let rows;
+  const _notArchived = `i.status != 'archived'`;
   if (segment === 'all') {
-    const res = await pool.query(`SELECT id, first_name, last_name, email, phone FROM investors WHERE email IS NOT NULL AND email <> '' ORDER BY first_name`);
+    const res = await pool.query(`SELECT id, first_name, last_name, email, phone FROM investors WHERE email IS NOT NULL AND email <> '' AND status != 'archived' ORDER BY first_name`);
     rows = res.rows;
   } else if (segment === 'active') {
     const res = await pool.query(`
       SELECT DISTINCT i.id, i.first_name, i.last_name, i.email, i.phone
       FROM investors i
       INNER JOIN investments inv ON inv.investor_id = i.id AND inv.status = 'active'
-      WHERE i.email IS NOT NULL AND i.email <> ''
+      WHERE i.email IS NOT NULL AND i.email <> '' AND ${_notArchived}
       ORDER BY i.first_name
     `);
     rows = res.rows;
@@ -80,7 +81,7 @@ async function _getInvestors(segment) {
       SELECT id, first_name, last_name, email, phone
       FROM investors
       WHERE (fica_status = 'pending' OR kyc_status = 'pending')
-        AND email IS NOT NULL AND email <> ''
+        AND email IS NOT NULL AND email <> '' AND status != 'archived'
       ORDER BY first_name
     `);
     rows = res.rows;
@@ -89,6 +90,7 @@ async function _getInvestors(segment) {
       SELECT i.id, i.first_name, i.last_name, i.email, i.phone
       FROM investors i
       WHERE i.email IS NOT NULL AND i.email <> ''
+        AND ${_notArchived}
         AND NOT EXISTS (SELECT 1 FROM investments inv WHERE inv.investor_id = i.id)
       ORDER BY i.first_name
     `);
@@ -98,7 +100,7 @@ async function _getInvestors(segment) {
       SELECT DISTINCT i.id, i.first_name, i.last_name, i.email, i.phone
       FROM investors i
       INNER JOIN investments inv ON inv.investor_id = i.id AND inv.status = 'matured'
-      WHERE i.email IS NOT NULL AND i.email <> ''
+      WHERE i.email IS NOT NULL AND i.email <> '' AND ${_notArchived}
       ORDER BY i.first_name
     `);
     rows = res.rows;
@@ -106,7 +108,7 @@ async function _getInvestors(segment) {
     const res = await pool.query(`
       SELECT id, first_name, last_name, email, phone
       FROM investors
-      WHERE wallet_balance > 0 AND email IS NOT NULL AND email <> ''
+      WHERE wallet_balance > 0 AND email IS NOT NULL AND email <> '' AND status != 'archived'
       ORDER BY first_name
     `);
     rows = res.rows;
@@ -116,7 +118,7 @@ async function _getInvestors(segment) {
       SELECT DISTINCT i.id, i.first_name, i.last_name, i.email, i.phone
       FROM investors i
       INNER JOIN broadcast_list_members m ON m.investor_id = i.id AND m.list_id = $1
-      WHERE i.email IS NOT NULL AND i.email <> ''
+      WHERE i.email IS NOT NULL AND i.email <> '' AND ${_notArchived}
       ORDER BY i.first_name
     `, [listId]);
     rows = res.rows;
@@ -126,7 +128,7 @@ async function _getInvestors(segment) {
       SELECT DISTINCT i.id, i.first_name, i.last_name, i.email, i.phone
       FROM investors i
       INNER JOIN investments inv ON inv.investor_id = i.id AND inv.pool_id = $1
-      WHERE i.email IS NOT NULL AND i.email <> ''
+      WHERE i.email IS NOT NULL AND i.email <> '' AND ${_notArchived}
       ORDER BY i.first_name
     `, [segment]);
     rows = res.rows;
