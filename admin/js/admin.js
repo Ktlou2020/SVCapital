@@ -2140,6 +2140,20 @@ async function viewInvestor(id) {
 
   <!-- ── Admin ── -->
   <div id="invPanel-admin" style="display:none">
+    <div class="panel mb-16" style="border-color:rgba(254,194,79,0.25)">
+      <div class="panel__header" style="background:rgba(254,194,79,0.06)">
+        <span class="panel__title"><i class="fa-solid fa-wallet" style="color:#fec24f;margin-right:6px"></i>Wallet Maintenance</span>
+      </div>
+      <div class="panel__body" style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px">
+          <div style="font-size:0.83rem;font-weight:600;color:var(--text);margin-bottom:4px">Recalculate Wallet from Transactions</div>
+          <div style="font-size:0.77rem;color:var(--text-muted)">Recomputes wallet_balance from all completed deposits, returns, payouts minus withdrawals and fees. Use this if a data migration or import overrode the live balance.</div>
+        </div>
+        <button class="btn btn--warning btn--sm" style="flex-shrink:0" onclick='_recalcInvestorWallet(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name + " " + inv.last_name)},this)'>
+          <i class="fa-solid fa-calculator"></i> Recalculate Wallet
+        </button>
+      </div>
+    </div>
     <div class="panel mb-16">
       <div class="panel__header">
         <span class="panel__title">Notes History</span>
@@ -2242,6 +2256,24 @@ async function depositToInvestor(investorId, investorName, currentBalance) {
     Modal.close('investorDetailModal');
     await loadInvestors();
   } catch (e) { Toast.error('Failed to add funds'); }
+}
+
+async function _recalcInvestorWallet(investorId, investorName, btn) {
+  if (!await Confirm.ask('Recalculate Wallet Balance?', {
+    body: `This will recompute ${investorName}'s wallet balance from all completed transactions (deposits, returns, payouts minus withdrawals and fees). The current balance will be overwritten. This cannot be undone.`,
+    confirmLabel: 'Recalculate',
+  })) return;
+  await _withBtn(btn, async () => {
+    try {
+      const res = await API._fetch('POST', `admin/recalculate-wallet/${investorId}`);
+      const newBal = Utils.rand(res.new_balance);
+      Toast.success(`Wallet recalculated — new balance: ${newBal}`);
+      const inv = STATE.investors.find(i => i.id === investorId);
+      if (inv) inv.wallet_balance = res.new_balance;
+      Modal.close('investorDetailModal');
+      await loadInvestors();
+    } catch (e) { Toast.error('Recalculation failed: ' + (e.message || 'unknown error')); }
+  });
 }
 
 async function approveInvestorFica(investorId, btn) {
