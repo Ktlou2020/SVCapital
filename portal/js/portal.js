@@ -9716,12 +9716,21 @@ function _kycClearFile() {
   if (zone) { zone.style.borderColor = 'rgba(254,194,79,0.35)'; zone.style.background = 'rgba(254,194,79,0.03)'; }
 }
 
-function openKycUploadModal() {
+function _kycDocTypeChanged(val) {
+  const grp = document.getElementById('kycDocSubtypeGroup');
+  if (grp) grp.style.display = val === 'id_document' ? '' : 'none';
+}
+
+function openKycUploadModal(docType) {
   _kycClearFile();
-  const typeEl  = document.getElementById('kycDocType');
-  const notesEl = document.getElementById('kycNotes');
-  if (typeEl)  typeEl.value  = '';
-  if (notesEl) notesEl.value = '';
+  const typeEl     = document.getElementById('kycDocType');
+  const notesEl    = document.getElementById('kycNotes');
+  const subtypeEl  = document.getElementById('kycDocSubtype');
+  const subtypeGrp = document.getElementById('kycDocSubtypeGroup');
+  if (typeEl)     typeEl.value     = docType || '';
+  if (notesEl)    notesEl.value    = '';
+  if (subtypeEl)  subtypeEl.value  = '';
+  if (subtypeGrp) subtypeGrp.style.display = docType === 'id_document' ? '' : 'none';
   Modal.open('kycUploadModal');
 }
 
@@ -9743,15 +9752,29 @@ async function submitKycDocument() {
     });
 
     const inv = PORTAL.investor;
-    const notes = (document.getElementById('kycNotes')?.value || '').trim();
+    const notes      = (document.getElementById('kycNotes')?.value || '').trim();
+    const docSubtype = document.getElementById('kycDocSubtype')?.value || '';
+
+    if (docType === 'id_document' && !docSubtype) {
+      Toast.error('Please select the ID document type (SA ID, Passport, or Asylum Permit)');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit for Review'; }
+      return;
+    }
+
+    const subtypeLabels = { rsa_id: 'SA ID', passport: 'Passport', asylum_permit: 'Asylum Permit' };
+    const noteParts = [notes];
+    if (docSubtype) noteParts.push(`DocType: ${subtypeLabels[docSubtype] || docSubtype}`);
+    noteParts.push(`File: ${_kycFile.name} (${(_kycFile.size / 1024).toFixed(1)} KB)`);
+
     await API.kyc.create({
       investor_id:   inv?.id || DEMO_INVESTOR_ID,
       investor_name: inv ? `${inv.first_name} ${inv.last_name}`.trim() : undefined,
       doc_type:      docType,
+      doc_subtype:   docSubtype || undefined,
       status:        'pending',
       file_name:     _kycFile.name,
       file_data:     fileData,
-      notes:         [notes, `File: ${_kycFile.name} (${(_kycFile.size / 1024).toFixed(1)} KB)`].filter(Boolean).join(' — '),
+      notes:         noteParts.filter(Boolean).join(' — '),
     });
     // Reflect that documents are now being checked (unless already fully verified)
     if (inv && inv.kyc_status !== 'approved' && inv.fica_status !== 'approved') {
@@ -9845,11 +9868,12 @@ async function _renderKycStatusPanel(preloadedDocs) {
     ${docs.length ? `
       <div style="display:flex;flex-direction:column;gap:8px">
         ${docs.map(d => `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,0,0,0.03);border-radius:8px">
-            <i class="fa-solid fa-file-lines" style="color:#fec24f;font-size:0.9rem;flex-shrink:0"></i>
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:${d.status === 'rejected' ? 'rgba(239,68,68,0.05)' : 'rgba(0,0,0,0.03)'};border:${d.status === 'rejected' ? '1px solid rgba(239,68,68,0.2)' : '1px solid transparent'};border-radius:8px">
+            <i class="fa-solid fa-file-lines" style="color:${d.status === 'rejected' ? '#ef4444' : '#fec24f'};font-size:0.9rem;flex-shrink:0;margin-top:2px"></i>
             <div style="flex:1;min-width:0">
               <div style="font-size:0.82rem;font-weight:600;color:#1a1a1a">${typeLabel[d.doc_type] || _esc(d.doc_type)}</div>
               <div style="font-size:0.72rem;color:#9ca3af">${_esc(d.file_name)} · ${Utils.date(d.created_at)}</div>
+              ${d.status === 'rejected' ? `<button class="btn btn--secondary btn--sm" style="margin-top:6px;font-size:0.72rem" onclick="openKycUploadModal('${d.doc_type}')"><i class="fa-solid fa-rotate-right"></i> Replace &amp; Resubmit</button>` : ''}
             </div>
             ${Utils.statusBadge(d.status)}
           </div>
@@ -9900,18 +9924,20 @@ async function _renderKycDocsList(preloadedDocs) {
         <table class="data-table">
           <thead><tr><th>Document Type</th><th>File</th><th>Submitted</th><th>Status</th><th>Notes</th><th></th></tr></thead>
           <tbody>
-            ${docs.map(d => `<tr>
+            ${docs.map(d => `<tr${d.status === 'rejected' ? ' style="background:rgba(239,68,68,0.03)"' : ''}>
               <td class="td-strong">${typeLabel[d.doc_type] || _esc(d.doc_type)}</td>
               <td class="td-muted" style="font-size:0.78rem">${_esc(d.file_name)}</td>
               <td class="td-muted">${Utils.date(d.created_at)}</td>
               <td>${Utils.statusBadge(d.status)}</td>
               <td class="td-muted" style="font-size:0.72rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(d.notes)}</td>
-              <td>${
-                d.file_url
-                  ? `<a href="${_safeUrl(d.file_url)}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-download"></i> View</a>`
-                  : d.file_data
-                    ? `<button class="btn btn--secondary btn--sm" onclick="_viewKycDoc('${d.id}')"><i class="fa-solid fa-eye"></i> View</button>`
-                    : '—'
+              <td style="white-space:nowrap">${
+                d.status === 'rejected'
+                  ? `<button class="btn btn--secondary btn--sm" onclick="openKycUploadModal('${d.doc_type}')"><i class="fa-solid fa-rotate-right"></i> Resubmit</button>`
+                  : d.file_url
+                    ? `<a href="${_safeUrl(d.file_url)}" target="_blank" rel="noopener" class="btn btn--secondary btn--sm"><i class="fa-solid fa-download"></i> View</a>`
+                    : d.file_data
+                      ? `<button class="btn btn--secondary btn--sm" onclick="_viewKycDoc('${d.id}')"><i class="fa-solid fa-eye"></i> View</button>`
+                      : '—'
               }</td>
             </tr>`).join('')}
           </tbody>

@@ -626,7 +626,7 @@
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>
-                <th style="width:4%"><input type="checkbox" id="kycSelectAll" onchange="toggleAllKyc(this.checked)" style="cursor:pointer;width:16px;height:16px;accent-color:#FF9B0C" title="Select all actionable"></th><th style="width:22%">Investor</th><th style="width:15%">Document Type</th><th style="width:12%">File</th><th style="width:10%">Status</th><th style="width:10%">Submitted</th><th style="width:10%">Document</th><th style="width:17%">Actions</th>
+                <th style="width:4%"><input type="checkbox" id="kycSelectAll" onchange="toggleAllKyc(this.checked)" style="cursor:pointer;width:16px;height:16px;accent-color:#FF9B0C" title="Select all actionable"></th><th style="width:20%">Investor</th><th style="width:14%">Document Type</th><th style="width:11%">File</th><th style="width:9%">Status</th><th style="width:10%">Submitted / Expiry</th><th style="width:9%">Document</th><th style="width:23%">Actions</th>
               </tr></thead>
               <tbody id="kycBody">
                 <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr>
@@ -2486,13 +2486,25 @@
           </div>
           <div class="form-group">
             <label class="form-label">Document Type *</label>
-            <select class="form-select" id="kycUploadDocType">
+            <select class="form-select" id="kycUploadDocType" onchange="document.getElementById('adminKycSubtypeGroup').style.display=this.value==='id_document'?'':'none'">
               <option value="">— Select type —</option>
               <option value="id_document">ID Document (RSA ID / Passport)</option>
               <option value="proof_of_address">Proof of Address</option>
+              <option value="proof_of_bank">Proof of Bank Account</option>
               <option value="bank_statement">Bank Statement</option>
               <option value="selfie">Selfie / Liveness</option>
+              <option value="tax_certificate">Tax Certificate (IT3b)</option>
               <option value="tax_number">Tax Number (IT150)</option>
+              <option value="other">Other Document</option>
+            </select>
+          </div>
+          <div class="form-group" id="adminKycSubtypeGroup" style="display:none">
+            <label class="form-label">ID Subtype</label>
+            <select class="form-select" id="kycUploadDocSubtype">
+              <option value="">— Select —</option>
+              <option value="rsa_id">SA ID (Green Book / Smart Card)</option>
+              <option value="passport">Passport</option>
+              <option value="asylum_permit">Asylum Seeker / Refugee Permit</option>
             </select>
           </div>
           <div class="form-group">

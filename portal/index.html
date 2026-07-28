@@ -2878,7 +2878,7 @@
       </p>
       <div class="form-group">
         <label class="form-label">Document Type <span style="color:#ef4444">*</span></label>
-        <select class="form-select" id="kycDocType">
+        <select class="form-select" id="kycDocType" onchange="_kycDocTypeChanged(this.value)">
           <option value="">— Select document type —</option>
           <option value="id_document">South African ID / Passport</option>
           <option value="proof_of_address">Proof of Address (bank statement, utility bill)</option>
@@ -2886,6 +2886,15 @@
           <option value="selfie">Selfie / Liveness Photo</option>
           <option value="tax_certificate">Tax Certificate (IT3b)</option>
           <option value="other">Other Supporting Document</option>
+        </select>
+      </div>
+      <div class="form-group" id="kycDocSubtypeGroup" style="display:none">
+        <label class="form-label">ID Document Type <span style="color:#ef4444">*</span></label>
+        <select class="form-select" id="kycDocSubtype">
+          <option value="">— Select —</option>
+          <option value="rsa_id">South African ID (Green Book / Smart Card)</option>
+          <option value="passport">Passport</option>
+          <option value="asylum_permit">Asylum Seeker / Refugee Permit</option>
         </select>
       </div>
       <div class="form-group">
@@ -2967,7 +2976,7 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="js/portal.js?v=51"></script>
+<script src="js/portal.js?v=52"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 // Service worker: web browsers only (not Capacitor). Handles web push notifications.
