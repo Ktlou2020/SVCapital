@@ -132,12 +132,24 @@ router.post('/login', loginLimiter, async (req, res) => {
              login_locked_until = NOW() + INTERVAL '${LOCKOUT_MINUTES} minutes'
            WHERE id = $1`, [user.id]
         );
+        // Audit account lock
+        pool.query(
+          `INSERT INTO audit_events (id, event_type, actor_id, user_email, description, ip_address, metadata)
+           VALUES (gen_random_uuid()::TEXT, 'user.login_locked', $1, $2, $3, $4, $5)`,
+          [user.id, user.email, 'Account locked after too many failed login attempts', req.ip || null, JSON.stringify({ attempts: newAttempts })]
+        ).catch(() => {});
         return res.status(429).json({
           error: `Too many failed attempts. Account locked for ${LOCKOUT_MINUTES} minutes.`,
           lockedSecsRemaining: LOCKOUT_MINUTES * 60,
         });
       }
       await pool.query('UPDATE users SET login_attempts = $1 WHERE id = $2', [newAttempts, user.id]);
+      // Audit failed login
+      pool.query(
+        `INSERT INTO audit_events (id, event_type, actor_id, user_email, description, ip_address, metadata)
+         VALUES (gen_random_uuid()::TEXT, 'user.login_failed', $1, $2, $3, $4, $5)`,
+        [user.id, user.email, 'Failed login attempt', req.ip || null, JSON.stringify({ attempts: newAttempts })]
+      ).catch(() => {});
       const left = MAX_LOGIN_ATTEMPTS - newAttempts;
       return res.status(401).json({
         error: `Incorrect email or password. ${left} attempt${left !== 1 ? 's' : ''} remaining.`,
@@ -1189,6 +1201,30 @@ router.post('/invite-investor', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[invite-investor] error:', err.message);
     res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// POST /api/auth/investor-magic-link  (admin only — generate a short-lived portal login link)
+router.post('/investor-magic-link', requireAuth, async (req, res) => {
+  if (!['admin', 'director'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Forbidden.' });
+  }
+  const { investor_id } = req.body;
+  if (!investor_id) return res.status(400).json({ error: 'investor_id required' });
+  try {
+    const r = await pool.query('SELECT id, email, first_name, last_name, status FROM investors WHERE id = $1', [investor_id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Investor not found' });
+    const inv = r.rows[0];
+    const token = jwt.sign(
+      { sub: inv.id, email: inv.email, role: 'investor', purpose: 'admin_view_as' },
+      JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+    const baseUrl = process.env.BASE_URL || 'https://platform.svcapital.co.za';
+    res.json({ ok: true, url: `${baseUrl}/portal/?viewas=${token}`, expires_in: 900 });
+  } catch (e) {
+    console.error('[investor-magic-link]', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 

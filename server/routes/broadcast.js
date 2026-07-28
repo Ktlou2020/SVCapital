@@ -332,4 +332,21 @@ router.post('/run-pool-cycler', async (req, res) => {
   }
 });
 
+// POST /api/admin/send-investor-email
+router.post('/send-investor-email', async (req, res) => {
+  const { investor_id, subject, message, template } = req.body;
+  if (!investor_id || !subject || !message) return res.status(400).json({ error: 'investor_id, subject and message are required' });
+  try {
+    const invRes = await pool.query('SELECT * FROM investors WHERE id = $1', [investor_id]);
+    if (!invRes.rows.length) return res.status(404).json({ error: 'Investor not found' });
+    const investor = invRes.rows[0];
+    const { sendAlert } = require('../services/email');
+    await sendAlert(investor, { subject, message });
+    res.json({ ok: true, sent_to: investor.email });
+  } catch (e) {
+    console.error('[send-investor-email]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
