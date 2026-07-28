@@ -656,12 +656,10 @@ const Toast = {
     this.container.className = 'toast-container';
     document.body.appendChild(this.container);
   },
-  show(message, type = 'info', duration) {
-    // Durations per type — success/error/warning stay longer so users can read confirmations
+  show(message, type = 'info', duration, opts = {}) {
     const defaults = { success: 6500, error: 6000, warning: 6000, info: 4000 };
     const ms = duration ?? defaults[type] ?? 4000;
     if (!this.container) this.init();
-    // Cap at 4 visible toasts — remove oldest when exceeded
     const existing = this.container.querySelectorAll('.toast');
     if (existing.length >= 4) existing[0].remove();
     const icons = { success: 'fa-check-circle', error: 'fa-circle-xmark', info: 'fa-circle-info', warning: 'fa-triangle-exclamation' };
@@ -672,26 +670,41 @@ const Toast = {
     const msg = document.createElement('span');
     msg.className = 'toast__msg';
     msg.textContent = message;
+    toast.append(icon, msg);
+    let timer;
+    const startTimer = () => {
+      timer = setTimeout(() => {
+        toast.style.animation = 'none';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        toast.style.transition = '0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, ms);
+    };
+    if (opts.action) {
+      const actionBtn = document.createElement('button');
+      actionBtn.style.cssText = 'background:none;border:1px solid currentColor;cursor:pointer;color:inherit;opacity:0.9;margin-left:10px;padding:2px 10px;font-size:0.76rem;border-radius:4px;line-height:1.5;font-weight:700;white-space:nowrap;flex-shrink:0';
+      actionBtn.textContent = opts.action.label;
+      actionBtn.addEventListener('click', () => { clearTimeout(timer); toast.remove(); opts.action.callback(); });
+      toast.appendChild(actionBtn);
+    }
     const dismiss = document.createElement('button');
-    dismiss.setAttribute('style', 'background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;margin-left:4px;padding:0 2px;font-size:0.9rem;line-height:1');
+    dismiss.setAttribute('style', 'background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;margin-left:6px;padding:0 2px;font-size:0.9rem;line-height:1;flex-shrink:0');
     dismiss.title = 'Dismiss';
     dismiss.textContent = '×';
-    dismiss.addEventListener('click', () => toast.remove());
-    toast.append(icon, msg, dismiss);
+    dismiss.addEventListener('click', () => { clearTimeout(timer); toast.remove(); });
+    toast.appendChild(dismiss);
+    toast.addEventListener('mouseenter', () => clearTimeout(timer));
+    toast.addEventListener('mouseleave', () => startTimer());
     this.container.appendChild(toast);
-    setTimeout(() => {
-      toast.style.animation = 'none';
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateX(100%)';
-      toast.style.transition = '0.3s ease';
-      setTimeout(() => toast.remove(), 300);
-    }, ms);
+    startTimer();
   },
-  success: (msg, ms) => Toast.show(msg, 'success', ms),
-  error:   (msg, ms) => Toast.show(msg, 'error',   ms),
-  info:    (msg, ms) => Toast.show(msg, 'info',     ms),
-  warning: (msg, ms) => Toast.show(msg, 'warning',  ms),
-  warn:    (msg, ms) => Toast.show(msg, 'warning',  ms),
+  success: (msg, ms, opts) => Toast.show(msg, 'success', ms, opts),
+  error:   (msg, ms, opts) => Toast.show(msg, 'error',   ms, opts),
+  info:    (msg, ms, opts) => Toast.show(msg, 'info',     ms, opts),
+  warning: (msg, ms, opts) => Toast.show(msg, 'warning',  ms, opts),
+  warn:    (msg, ms, opts) => Toast.show(msg, 'warning',  ms, opts),
+  action:  (msg, label, callback, type = 'success') => Toast.show(msg, type, 8000, { action: { label, callback } }),
 };
 
 /* ═══════════════════════════════════════════════

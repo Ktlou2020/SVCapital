@@ -13,7 +13,12 @@ const emailService = require('../services/email');
 const smsService   = require('../services/sms');
 const audit        = require('../services/audit');
 
-/* Lazy-load push service */
+/* Lazy-load push service and SSE broadcast */
+let _broadcast = null;
+function getBroadcast() {
+  if (!_broadcast) { try { _broadcast = require('./events').broadcast; } catch (_) {} }
+  return _broadcast;
+}
 let _push = null;
 function getPush() {
   if (!_push) { try { _push = require('../services/pushService'); } catch (_) {} }
@@ -139,9 +144,19 @@ router.post('/request', requireAuth, async (req, res) => {
       client.release();
     }
 
-    // Fire-and-forget email
-    setImmediate(() => emailService.sendWithdrawalRequested(investor, { amount: numAmount, reference })
-      .catch(err => console.error('[email] sendWithdrawalRequested failed:', err.message)));
+    // Fire-and-forget email + SSE broadcast
+    setImmediate(() => {
+      emailService.sendWithdrawalRequested(investor, { amount: numAmount, reference })
+        .catch(err => console.error('[email] sendWithdrawalRequested failed:', err.message));
+      try {
+        const bcast = getBroadcast();
+        if (bcast) bcast('withdrawal_requested', {
+          investor_name: `${investor.first_name || ''} ${investor.last_name || ''}`.trim(),
+          amount: numAmount,
+          reference,
+        });
+      } catch (_) {}
+    });
 
     res.json({ success: true, reference });
   } catch (err) {

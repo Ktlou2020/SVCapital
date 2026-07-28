@@ -26,6 +26,13 @@ function _getPush() {
   return _pushSvc;
 }
 
+/* ─── Lazy-load SSE broadcast ─── */
+let _sseBroadcast = null;
+function _getBroadcast() {
+  if (!_sseBroadcast) { try { _sseBroadcast = require('./events').broadcast; } catch (_) {} }
+  return _sseBroadcast;
+}
+
 /* ─── Fire-and-forget push helper ─── */
 async function _sendPush(investorId, payload) {
   const ps = _getPush();
@@ -1081,7 +1088,7 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
           );
         }
 
-        // New KYC document → notify all admins/directors
+        // New KYC document → notify all admins/directors + SSE broadcast
         if (table === 'kyc_documents' && created.investor_id) {
           const investorName = created.investor_name || created.investor_id;
           const { rows: kycAdmins } = await pool.query(
@@ -1094,6 +1101,10 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
               investorId: created.investor_id,
             });
           }
+          try {
+            const bcast = _getBroadcast();
+            if (bcast) bcast('kyc_submitted', { investor_name: investorName, doc_type: created.doc_type, investor_id: created.investor_id });
+          } catch (_) {}
         }
       } catch (hookErr) {
         console.error('[email hook POST] error:', hookErr.message);
