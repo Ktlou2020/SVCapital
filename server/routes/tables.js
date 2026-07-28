@@ -854,6 +854,26 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
       }
     }
 
+    // ── Withdrawal FICA gate ──────────────────────────────────────────────────
+    // Investors must have approved/verified FICA before they can withdraw funds.
+    if (table === 'transactions' && body.type === 'withdrawal' && req.user.role === 'investor') {
+      const investorIdToCheck = body.investor_id || req.user.investorId;
+      const { rows: ficaRows } = await pool.query(
+        'SELECT fica_status, kyc_status FROM investors WHERE id = $1',
+        [investorIdToCheck]
+      );
+      const ficaInv = ficaRows[0];
+      const ficaOk = ficaInv && (
+        ficaInv.fica_status === 'approved' || ficaInv.fica_status === 'verified' ||
+        ficaInv.kyc_status  === 'approved' || ficaInv.kyc_status  === 'verified'
+      );
+      if (!ficaOk) {
+        return res.status(403).json({
+          error: 'Withdrawals are not available until your FICA / KYC verification is complete. Please ensure all required documents have been submitted and approved by the compliance team.',
+        });
+      }
+    }
+
     // Auto-generate ID if missing
     if (!body.id) {
       const prefixMap = {
@@ -1052,6 +1072,21 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
               `${created.days_requested || ''} day(s) · awaiting director approval`,
             ]
           );
+        }
+
+        // New KYC document → notify all admins/directors
+        if (table === 'kyc_documents' && created.investor_id) {
+          const investorName = created.investor_name || created.investor_id;
+          const { rows: kycAdmins } = await pool.query(
+            "SELECT email, first_name, last_name FROM users WHERE role IN ('director','admin') AND email IS NOT NULL AND is_active = true"
+          );
+          for (const kycAdmin of kycAdmins) {
+            await emailService.sendKycDocumentReceived(kycAdmin, {
+              investorName,
+              docType:    created.doc_type,
+              investorId: created.investor_id,
+            });
+          }
         }
       } catch (hookErr) {
         console.error('[email hook POST] error:', hookErr.message);

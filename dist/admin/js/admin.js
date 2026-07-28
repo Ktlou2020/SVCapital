@@ -1998,7 +1998,7 @@ async function depositToInvestor(investorId, investorName, currentBalance) {
 }
 
 async function approveInvestorFica(investorId, btn) {
-  if (!await Confirm.ask('Approve FICA?', { body: 'This investor will be marked as KYC-verified and their account activated.', confirmLabel: 'Approve FICA' })) return;
+  if (!await Confirm.ask('Approve FICA?', { body: 'All three required documents (ID, Proof of Address, Proof of Bank) must be individually approved before FICA can be granted. The investor will be marked as verified and their account activated.', confirmLabel: 'Approve FICA' })) return;
   await _withBtn(btn, async () => {
     try {
       await API.investors.update(investorId, { fica_status: 'approved', kyc_status: 'approved', status: 'active' });
@@ -2696,7 +2696,11 @@ function renderKYCTable() {
       : '';
 
     // For proof_of_bank rows, surface the bank details the investor submitted
-    let docTypeCell = `${_subAcctBadge}${k.doc_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—'}`;
+    const _subtypeLabels = { rsa_id: 'SA ID', passport: 'Passport', asylum_permit: 'Asylum Permit' };
+    const _subtypeBadge = k.doc_subtype
+      ? `<span style="display:inline-block;margin-top:2px;font-size:0.63rem;font-weight:700;color:#9ca3af;background:rgba(0,0,0,0.07);border-radius:4px;padding:1px 5px">${_subtypeLabels[k.doc_subtype] || k.doc_subtype}</span><br>`
+      : '';
+    let docTypeCell = `${_subAcctBadge}${k.doc_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—'}<br>${_subtypeBadge}`;
     if (isBankDoc && kInv) {
       const bankName    = _esc(kInv.bank_name || '—');
       const bankHolder  = _esc(kInv.bank_account_holder || '—');
@@ -2726,7 +2730,7 @@ function renderKYCTable() {
       <td>${docTypeCell}</td>
       <td class="td-muted clip">${k.file_name || 'Not uploaded'}</td>
       <td>${Utils.statusBadge(k.status)}</td>
-      <td class="td-muted">${Utils.date(k.submitted_at || k.submitted_date || k.created_at)}</td>
+      <td class="td-muted">${Utils.date(k.submitted_at || k.submitted_date || k.created_at)}${k.expiry_date ? `<div style="font-size:0.68rem;margin-top:2px;color:${new Date(k.expiry_date) <= new Date() ? '#ef4444' : '#9ca3af'}"><i class="fa-solid fa-calendar-xmark" style="margin-right:2px"></i>Exp: ${Utils.date(k.expiry_date)}</div>` : ''}</td>
       <td>
         ${k.file_data || k.file_url || k.attachment_data
           ? `<button class="btn btn--secondary btn--sm" title="Open document in new tab" onclick='viewFicaDocument(${JSON.stringify(k.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</button>`
@@ -6851,6 +6855,7 @@ async function saveKycUpload() {
   const mimeType    = form.dataset.mimeType  || '';
   const statusVal   = document.getElementById('kycUploadStatusField').value || 'pending';
   const expiryDate  = document.getElementById('kycExpiryDate')?.value || null;
+  const docSubtype  = document.getElementById('kycUploadDocSubtype')?.value || null;
   const statusEl    = document.getElementById('kycUploadStatus');
 
   if (!investorId) { statusEl.textContent = 'Please select an investor'; statusEl.style.color='#ef4444'; return; }
@@ -6868,6 +6873,7 @@ async function saveKycUpload() {
       investor_id:   investorId,
       investor_name: invName || undefined,
       doc_type:      docType,
+      doc_subtype:   docSubtype || undefined,
       file_name:     fileName,
       file_data:     fileData,
       status:        statusVal,

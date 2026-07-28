@@ -950,6 +950,34 @@ function sendLeaveOutcome(employee, { status, leaveType, startDate, endDate, day
   });
 }
 
+/* ── Admin alert: new KYC document submitted ─────────────── */
+function sendKycDocumentReceived(admin, { investorName, docType, investorId }) {
+  const { email, first_name } = admin;
+  if (!email) return Promise.resolve();
+  const typeLabels = {
+    id_document: 'ID Document', proof_of_address: 'Proof of Address',
+    proof_of_bank: 'Proof of Bank Account', selfie: 'Selfie / Liveness',
+    tax_certificate: 'Tax Certificate', bank_statement: 'Bank Statement', other: 'Other Document',
+  };
+  const docLabel = typeLabels[docType] || docType || 'Document';
+  return _send({
+    to: email,
+    subject: `New KYC document submitted — ${investorName}`,
+    html: _wrap(`
+      <h2>New KYC Document Received</h2>
+      <p>Hi ${first_name || 'there'},</p>
+      <p>An investor has submitted a new KYC document that requires your review.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Investor</span><span class="val">${escHtml(String(investorName || ''))}</span></div>
+        <div class="row"><span class="lbl">Document Type</span><span class="val">${escHtml(docLabel)}</span></div>
+        <div class="row"><span class="lbl">Investor ID</span><span class="val" style="font-family:monospace">${escHtml(String(investorId || ''))}</span></div>
+      </div>
+      <a href="${BASE_URL}/admin/?view=compliance" class="btn">Review in Admin →</a>
+    `),
+    text: `Hi ${first_name || 'there'},\n\n${investorName} has submitted a ${docLabel} for KYC review.\n\nReview: ${BASE_URL}/admin/?view=compliance`,
+  });
+}
+
 /* ── Generic alert (used by cron jobs) ───────────────────── */
 function sendAlert(investor, { subject, message }) {
   const { email, first_name, id } = investor;
@@ -1023,6 +1051,7 @@ module.exports = {
   sendFicaResubmitReminder,
   sendGiftReceived,
   sendGiftInvite,
+  sendKycDocumentReceived,
   sendAlert,
   sendInternationalWaitlistConfirmation,
 };
