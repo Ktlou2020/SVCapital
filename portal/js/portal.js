@@ -8533,7 +8533,13 @@ function saFicaFileChange(input) {
 }
 
 async function submitSaFica() {
-  if (!_saFicaSaId || !_saFicaFile || !_saFicaB64) { Toast.error('Please select a document to upload'); return; }
+  if (!_saFicaSaId) { Toast.error('No sub-account selected'); return; }
+  if (!_saFicaFile || !_saFicaB64) {
+    Toast.error('An attachment is required — please select a file to upload');
+    const inp = document.getElementById('saFicaFileInput');
+    if (inp) { inp.style.outline = '2px solid #ef4444'; setTimeout(() => { inp.style.outline = ''; }, 2500); }
+    return;
+  }
   const docType = document.getElementById('saFicaDocType').value;
   if (!docType) { Toast.error('Please select a document type'); return; }
   const sa = PORTAL.subAccounts.find(a => a.id === _saFicaSaId);
@@ -9752,7 +9758,12 @@ function openKycUploadModal(docType) {
 async function submitKycDocument() {
   const docType = document.getElementById('kycDocType')?.value;
   if (!docType) { Toast.error('Please select a document type'); return; }
-  if (!_kycFile) { Toast.error('Please select a file to upload'); return; }
+  if (!_kycFile) {
+    Toast.error('An attachment is required — please select a file to upload');
+    const dz = document.getElementById('kycDropZone');
+    if (dz) { dz.style.borderColor = '#ef4444'; setTimeout(() => { dz.style.borderColor = 'rgba(255,155,12,0.35)'; }, 2500); }
+    return;
+  }
 
   const btn = document.getElementById('kycSubmitBtn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting…'; }
