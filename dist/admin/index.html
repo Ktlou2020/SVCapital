@@ -1437,6 +1437,7 @@
         <div class="vtab-bar">
           <button class="vtab-btn active" data-pane="settings" onclick="switchViewTab('settings','settings',this)"><i class="fa-solid fa-gear"></i> Settings</button>
           <button class="vtab-btn" data-pane="migrate" onclick="switchViewTab('settings','migrate',this)"><i class="fa-solid fa-database"></i> Data Migration</button>
+          <button class="vtab-btn" data-pane="staff" onclick="switchViewTab('settings','staff',this)"><i class="fa-solid fa-users-gear"></i> Staff &amp; Roles</button>
         </div>
         <div class="vtab-pane active" data-pane="settings">
         <div class="grid-layout grid-layout--sidebar">
@@ -1597,6 +1598,20 @@
                     </div>
                   </div>
         </div><!-- end vtab-pane migrate -->
+        <div class="vtab-pane" data-pane="staff">
+          <div class="table-card">
+            <div class="table-card__header">
+              <div>
+                <div class="table-card__title">Staff &amp; Role Management</div>
+                <div class="table-card__sub">Admin, director, and staff accounts with their assigned roles</div>
+              </div>
+              <button class="btn btn--secondary btn--sm" onclick="loadStaffPermissions()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+            <div id="staffPermissionsBody" style="padding:8px 0">
+              <div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>
+            </div>
+          </div>
+        </div><!-- end vtab-pane staff -->
       </div>
 
       <!-- ══════════════════════════════════
@@ -1826,6 +1841,8 @@
         <div class="vtab-bar">
           <button class="vtab-btn active" data-pane="compliance" onclick="switchViewTab('compliance','compliance',this)"><i class="fa-solid fa-calendar-check"></i> Calendar</button>
           <button class="vtab-btn" data-pane="auditlog" onclick="switchViewTab('compliance','auditlog',this)"><i class="fa-solid fa-scroll"></i> Audit Log</button>
+          <button class="vtab-btn" data-pane="maturities" onclick="switchViewTab('compliance','maturities',this)"><i class="fa-solid fa-hourglass-half"></i> Upcoming Maturities</button>
+          <button class="vtab-btn" data-pane="failed-logins" onclick="switchViewTab('compliance','failed-logins',this)"><i class="fa-solid fa-user-lock"></i> Failed Logins</button>
           <button class="vtab-btn" data-pane="accepted-docs" onclick="switchViewTab('compliance','accepted-docs',this)"><i class="fa-solid fa-file-circle-check"></i> Accepted Docs <span class="nav-badge" id="acceptedDocsBadgeVtab" style="display:none">0</span></button>
         </div>
         <div class="vtab-pane active" data-pane="compliance">
@@ -1927,6 +1944,34 @@
                     </div>
                   </div>
         </div><!-- end vtab-pane auditlog -->
+        <div class="vtab-pane" data-pane="maturities">
+          <div class="table-card">
+            <div class="table-card__header">
+              <div>
+                <div class="table-card__title">Upcoming Maturities</div>
+                <div class="table-card__sub">Investment pools maturing within the next 90 days</div>
+              </div>
+              <button class="btn btn--secondary btn--sm" onclick="loadUpcomingMaturities()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+            <div id="upcomingMaturitiesBody" style="padding:8px 0">
+              <div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>
+            </div>
+          </div>
+        </div><!-- end vtab-pane maturities -->
+        <div class="vtab-pane" data-pane="failed-logins">
+          <div class="table-card">
+            <div class="table-card__header">
+              <div>
+                <div class="table-card__title">Failed Login Attempts</div>
+                <div class="table-card__sub">Suspicious or failed authentication events</div>
+              </div>
+              <button class="btn btn--secondary btn--sm" onclick="loadFailedLogins()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+            <div id="failedLoginsBody" style="padding:8px 0">
+              <div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>
+            </div>
+          </div>
+        </div><!-- end vtab-pane failed-logins -->
         <div class="vtab-pane" data-pane="accepted-docs">
           <!-- Filter bar -->
                   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px">
@@ -2449,6 +2494,10 @@
               <option value="under_review">Under Review</option>
             </select>
           </div>
+          <div class="form-group">
+            <label class="form-label">Document Expiry Date</label>
+            <input type="date" class="form-input" id="kycExpiryDate" title="e.g. passport or ID expiry date (optional)">
+          </div>
         </div>
         <!-- Drop zone -->
         <div id="kycDropZone"
@@ -2609,6 +2658,10 @@
           </select>
         </div>
       </div>
+      <div class="form-group mt-12">
+        <label class="form-label">Admin Notes (internal)</label>
+        <textarea class="form-input" id="editPoolAdminNotes" rows="3" placeholder="Internal notes about this pool — not visible to investors…" style="resize:vertical"></textarea>
+      </div>
     </div>
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('editPoolModal')">Cancel</button>
@@ -2667,6 +2720,42 @@
     <div class="modal__footer">
       <button class="btn btn--secondary" onclick="Modal.close('createTicketModal')">Cancel</button>
       <button class="btn btn--primary" onclick="saveNewTicket(this)"><i class="fa-solid fa-plus"></i> Create Ticket</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pool Close-out Wizard Modal -->
+<div class="modal-overlay" id="poolCloseoutModal" onclick="if(event.target===this)Modal.close('poolCloseoutModal')">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title"><i class="fa-solid fa-circle-check" style="color:#22c55e;margin-right:8px"></i>Pool Close-out</span>
+      <button class="modal__close" aria-label="Close" onclick="Modal.close('poolCloseoutModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body">
+      <input type="hidden" id="closeoutPoolId">
+      <div class="panel mb-16">
+        <div class="panel__body">
+          <div class="info-list">
+            <div class="info-row"><span class="info-row__label">Pool</span><span class="info-row__value td-strong" id="closeoutPoolName">—</span></div>
+            <div class="info-row"><span class="info-row__label">Investors</span><span class="info-row__value td-gold" id="closeoutInvCount">—</span></div>
+            <div class="info-row"><span class="info-row__label">Total Invested</span><span class="info-row__value fw-700" id="closeoutTotalAmt">—</span></div>
+            <div class="info-row"><span class="info-row__label">Maturity Date</span><span class="info-row__value td-muted" id="closeoutMaturityDate">—</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-group mb-12">
+        <label class="form-label">Actual Achieved Rate (%) *</label>
+        <input type="number" class="form-input" id="closeoutActualRate" step="0.01" min="0" placeholder="e.g. 15.61" style="font-size:1.05rem">
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">Enter as a percentage — e.g. for 15.61% type 15.61</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(34,197,94,0.08);border-radius:8px;border:1px solid rgba(34,197,94,0.2)">
+        <input type="checkbox" id="closeoutNotify" style="width:16px;height:16px;cursor:pointer">
+        <label for="closeoutNotify" style="font-size:0.85rem;color:var(--text);cursor:pointer"><i class="fa-solid fa-bell" style="color:#22c55e;margin-right:6px"></i>Notify investors via email</label>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('poolCloseoutModal')">Cancel</button>
+      <button class="btn btn--success" onclick="savePoolCloseout(this)"><i class="fa-solid fa-circle-check"></i> Finalise Pool</button>
     </div>
   </div>
 </div>
