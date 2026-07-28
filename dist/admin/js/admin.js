@@ -1471,6 +1471,7 @@ function setupInvestorFilters() {
   const kycF    = document.getElementById('investorKycFilter');
   const provF   = document.getElementById('investorProvinceFilter');
   const loginF  = document.getElementById('investorLoginFilter');
+  const sortSel = document.getElementById('investorSortOrder');
 
   // Restore saved filter state
   const saved = STATE.filters.investors;
@@ -1480,6 +1481,7 @@ function setupInvestorFilters() {
     if (saved.ky) kycF.value    = saved.ky;
     if (saved.pv) provF.value   = saved.pv;
     if (saved.lo && loginF) loginF.value = saved.lo;
+    if (saved.so && sortSel) sortSel.value = saved.so;
   }
 
   const filter = Utils.debounce(() => {
@@ -1488,8 +1490,9 @@ function setupInvestorFilters() {
     const ky = kycF.value;
     const pv = provF.value;
     const lo = loginF ? loginF.value : '';
+    const so = sortSel ? sortSel.value : 'date_desc';
     const loginSet = STATE.investorLoginSet || new Set();
-    STATE.filters.investors = { q, st, ky, pv, lo };
+    STATE.filters.investors = { q, st, ky, pv, lo, so };
     filteredInvestors = STATE.investors.filter(inv => {
       const name = `${inv.first_name||''} ${inv.last_name||''}`.toLowerCase();
       const matchQ  = !q  || name.includes(q)
@@ -1507,6 +1510,18 @@ function setupInvestorFilters() {
         || (lo === 'has_login' &&  loginSet.has(inv.id));
       return matchQ && matchSt && matchKy && matchPv && matchLo;
     });
+
+    // Sort
+    filteredInvestors = [...filteredInvestors].sort((a, b) => {
+      if (so === 'date_asc')      return new Date(a.date_joined || 0) - new Date(b.date_joined || 0);
+      if (so === 'name_asc')      return `${a.first_name||''} ${a.last_name||''}`.localeCompare(`${b.first_name||''} ${b.last_name||''}`);
+      if (so === 'name_desc')     return `${b.first_name||''} ${b.last_name||''}`.localeCompare(`${a.first_name||''} ${a.last_name||''}`);
+      if (so === 'wallet_desc')   return (parseFloat(b.wallet_balance) || 0) - (parseFloat(a.wallet_balance) || 0);
+      if (so === 'invested_desc') return (parseFloat(b.total_invested) || 0) - (parseFloat(a.total_invested) || 0);
+      // date_desc (default)
+      return new Date(b.date_joined || 0) - new Date(a.date_joined || 0);
+    });
+
     // Filter sub-accounts by name or SA reference (ignore status/kyc/province filters)
     const _pmap = {};
     STATE.investors.forEach(inv => { _pmap[inv.id] = inv; });
@@ -1528,10 +1543,11 @@ function setupInvestorFilters() {
   statusF.addEventListener('change', filter);
   kycF.addEventListener('change', filter);
   provF.addEventListener('change', filter);
-  if (loginF) loginF.addEventListener('change', filter);
+  if (loginF)  loginF.addEventListener('change', filter);
+  if (sortSel) sortSel.addEventListener('change', filter);
 
   // Apply saved filters immediately if any
-  if (saved && (saved.q || saved.st || saved.ky || saved.pv || saved.lo)) filter();
+  if (saved && (saved.q || saved.st || saved.ky || saved.pv || saved.lo || saved.so)) filter();
 }
 
 function viewSubAccount(saId) {
