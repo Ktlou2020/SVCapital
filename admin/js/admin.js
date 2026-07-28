@@ -1410,10 +1410,17 @@ function renderInvestorsTable() {
     STATE.investors.forEach(inv => { parentMap[inv.id] = inv; });
     const _trunc = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block';
     const _ficaBadge = (status) => {
-      if (status === 'approved') return '<span class="badge badge--green" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-shield-check"></i> FICA</span>';
-      if (status === 'rejected') return '<span class="badge badge--red" style="font-size:0.65rem;padding:2px 6px">FICA Fail</span>';
-      if (status === 'flagged')  return '<span class="badge badge--red" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-flag"></i> Flagged</span>';
-      return '<span class="badge badge--yellow" style="font-size:0.65rem;padding:2px 6px">FICA Pending</span>';
+      const s = String(status || '').trim();
+      if (s === 'approved' || s === 'verified' || s === 'Approved' || s === 'Verified')
+        return '<span class="badge badge--green" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>';
+      if (s === 'rejected' || s === 'Declined')
+        return '<span class="badge badge--red" style="font-size:0.65rem;padding:2px 6px">Rejected</span>';
+      if (s === 'flagged')
+        return '<span class="badge badge--red" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-flag"></i> Flagged</span>';
+      if (!s || s === 'not_started' || s === 'Unverified')
+        return '<span class="badge badge--grey" style="font-size:0.65rem;padding:2px 6px">No FICA Uploaded</span>';
+      // pending, submitted, in_progress, Outstanding, Pending, Outstanding → Pending Review
+      return '<span class="badge badge--yellow" style="font-size:0.65rem;padding:2px 6px">Pending Review</span>';
     };
     const saRows = _visibleSa.map(sa => {
       const parent = parentMap[sa.parent_investor_id] || {};
@@ -1562,9 +1569,12 @@ function viewSubAccount(saId) {
   const activeInv  = (STATE.investments || []).filter(i => i.sub_account_id === sa.id && i.status === 'active').length;
   const totalInvested = (STATE.investments || []).filter(i => i.sub_account_id === sa.id)
     .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-  const ficaStatus = parent.fica_status || 'pending';
-  const ficaColor  = ficaStatus === 'approved' ? '#22c55e' : ficaStatus === 'rejected' || ficaStatus === 'flagged' ? '#ef4444' : '#f59e0b';
-  const ficaIcon   = ficaStatus === 'approved' ? 'fa-shield-check' : ficaStatus === 'flagged' ? 'fa-flag' : 'fa-clock';
+  const ficaStatus = parent.fica_status || '';
+  const _ficaNorm  = s => { const m = { Approved:'approved',Verified:'approved',Declined:'rejected',Unverified:'not_started',Outstanding:'pending',Pending:'pending' }; return m[s] || s; };
+  const ficaNorm   = _ficaNorm(ficaStatus);
+  const ficaColor  = ficaNorm === 'approved' || ficaNorm === 'verified' ? '#22c55e' : ficaNorm === 'rejected' || ficaNorm === 'flagged' ? '#ef4444' : ficaNorm === 'not_started' ? '#9ca3af' : '#f59e0b';
+  const ficaIcon   = ficaNorm === 'approved' || ficaNorm === 'verified' ? 'fa-shield-check' : ficaNorm === 'flagged' ? 'fa-flag' : ficaNorm === 'not_started' ? 'fa-circle-xmark' : 'fa-clock';
+  const _ficaDisplayLabel = s => ({ approved:'KYC Verified', verified:'KYC Verified', rejected:'Rejected', Declined:'Rejected', not_started:'No FICA Uploaded', Unverified:'No FICA Uploaded' })[s] || 'Pending Review';
   const bankStatus = sa.sa_bank_status || 'none';
   const bankColor  = bankStatus === 'approved' ? '#22c55e' : bankStatus === 'rejected' ? '#ef4444' : '#9ca3af';
   const bankLabel  = bankStatus === 'approved' ? 'Approved' : bankStatus === 'rejected' ? 'Rejected' : bankStatus === 'pending' ? 'Pending Review' : 'Not submitted';
@@ -1584,7 +1594,7 @@ function viewSubAccount(saId) {
       <div class="info-row"><span class="info-row__label">Account Number</span><span class="info-row__value" style="font-family:monospace;color:#ffe86a;font-weight:700">${saRef}</span></div>
       <div class="info-row"><span class="info-row__label">Account Type</span><span class="info-row__value">${typeCap}</span></div>
       <div class="info-row"><span class="info-row__label">Sub-Account FICA</span><span class="info-row__value" style="color:${saKycColor};font-weight:700"><i class="fa-solid ${saKycIcon}" style="margin-right:5px"></i>${saKycStatus.charAt(0).toUpperCase()+saKycStatus.slice(1)}</span></div>
-      <div class="info-row"><span class="info-row__label">Parent FICA</span><span class="info-row__value" style="color:${ficaColor};font-weight:700"><i class="fa-solid ${ficaIcon}" style="margin-right:5px"></i>${ficaStatus.charAt(0).toUpperCase()+ficaStatus.slice(1)}</span></div>
+      <div class="info-row"><span class="info-row__label">Parent FICA</span><span class="info-row__value" style="color:${ficaColor};font-weight:700"><i class="fa-solid ${ficaIcon}" style="margin-right:5px"></i>${_ficaDisplayLabel(ficaNorm)}</span></div>
       <div class="info-row"><span class="info-row__label">Bank Documents</span><span class="info-row__value" style="color:${bankColor};font-weight:700">${bankLabel}</span></div>
       <div class="info-row"><span class="info-row__label">Wallet Balance</span><span class="info-row__value td-gold fw-700">${Utils.rand(parseFloat(sa.wallet_balance)||0)}</span></div>
       <div class="info-row"><span class="info-row__label">Total Invested</span><span class="info-row__value fw-700">${Utils.rand(totalInvested)}</span></div>

@@ -84,9 +84,10 @@ const TX_STATUS_MAP = {
 
 const KYC_STATUS_MAP = {
   Approved:    'approved',
-  Unverified:  'pending',
+  Unverified:  'not_started',
   Outstanding: 'pending',
   Pending:     'pending',
+  Declined:    'rejected',
 };
 
 function extractPoolId(p) {

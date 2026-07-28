@@ -49,7 +49,7 @@ const TX_TYPE_MAP = {
   'DEPOSIT':'deposit', 'WITHDRAWAL':'withdrawal', 'RETURN':'return',
 };
 const TX_STATUS_MAP  = { SUCCESSFUL:'completed', PENDING:'pending', FAILED:'failed' };
-const KYC_STATUS_MAP = { Approved:'approved', Unverified:'pending', Outstanding:'pending', Pending:'pending' };
+const KYC_STATUS_MAP = { Approved:'approved', Unverified:'not_started', Outstanding:'pending', Pending:'pending', Declined:'rejected' };
 const KYC_DOC_TYPE_MAP = {
   'ID Document':       'id_document',
   'Banking Details':   'bank_statement',

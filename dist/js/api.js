@@ -551,6 +551,29 @@ const Utils = {
     return `<span class="badge ${cls}" style="text-transform:uppercase;letter-spacing:0.04em">${label}</span>`;
   },
 
+  /* FICA/KYC status badge — handles both internal values and external provider values */
+  ficaBadge(status) {
+    const FICA_LABEL = {
+      // Internal canonical values
+      approved:    ['badge--green',  '<i class="fa-solid fa-shield-check" style="margin-right:4px"></i>KYC Verified'],
+      verified:    ['badge--green',  '<i class="fa-solid fa-shield-check" style="margin-right:4px"></i>KYC Verified'],
+      rejected:    ['badge--red',    'Rejected'],
+      submitted:   ['badge--blue',   'Pending Review'],
+      in_progress: ['badge--blue',   'Pending Review'],
+      pending:     ['badge--orange', 'Pending Review'],
+      not_started: ['badge--gray',   'No FICA Uploaded'],
+      // External / Firebase-imported capitalised values
+      Approved:    ['badge--green',  '<i class="fa-solid fa-shield-check" style="margin-right:4px"></i>KYC Verified'],
+      Verified:    ['badge--green',  '<i class="fa-solid fa-shield-check" style="margin-right:4px"></i>KYC Verified'],
+      Unverified:  ['badge--gray',   'No FICA Uploaded'],
+      Outstanding: ['badge--orange', 'Pending Review'],
+      Pending:     ['badge--orange', 'Pending Review'],
+      Declined:    ['badge--red',    'Rejected'],
+    };
+    const [cls, label] = FICA_LABEL[String(status || '').trim()] || ['badge--gray', 'No FICA Uploaded'];
+    return `<span class="badge ${cls}" style="text-transform:uppercase;letter-spacing:0.04em">${label}</span>`;
+  },
+
   /* Priority badge */
   priorityBadge(priority) {
     const map = {
