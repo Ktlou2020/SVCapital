@@ -8598,6 +8598,7 @@ async function submitSaFica() {
       doc_type:       docType,
       status:         'pending',
       file_name:      _saFicaFile.name,
+      file_data:      _saFicaB64,
       notes:          `FICA document for sub-account: ${sa?.name || _saFicaSaId}. File: ${_saFicaFile.name} (${((_saFicaFile.size)/1024).toFixed(1)} KB)`,
     });
     Toast.success('FICA document submitted! The admin team will review it within 1-2 business days.');

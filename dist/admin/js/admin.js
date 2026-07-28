@@ -3011,7 +3011,7 @@ function renderKYCTable() {
       <td>${Utils.statusBadge(k.status)}</td>
       <td class="td-muted">${Utils.date(k.submitted_at || k.submitted_date || k.created_at)}${k.expiry_date ? `<div style="font-size:0.68rem;margin-top:2px;color:${new Date(k.expiry_date) <= new Date() ? '#ef4444' : '#9ca3af'}"><i class="fa-solid fa-calendar-xmark" style="margin-right:2px"></i>Exp: ${Utils.date(k.expiry_date)}</div>` : ''}</td>
       <td>
-        ${k.file_data || k.file_url || k.attachment_data
+        ${k.file_data || k.file_url || k.attachment_data || k.file_name
           ? `<button class="btn btn--secondary btn--sm" title="Open document in new tab" onclick='viewFicaDocument(${JSON.stringify(k.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</button>`
           : `<span class="td-muted" style="font-size:0.72rem">No file</span>`}
       </td>
@@ -3152,10 +3152,17 @@ async function _runBankAutoVerify(investorId) {
   }
 }
 
-function viewFicaDocument(kycId) {
+async function viewFicaDocument(kycId) {
   const doc = STATE.kyc.find(k => k.id === kycId);
   if (!doc) return;
-  _openDocumentData(doc.file_data || doc.attachment_data || doc.file_url || '', doc.file_name || 'Document');
+  let fileData = doc.file_data || doc.attachment_data || doc.file_url || '';
+  if (!fileData && doc.file_name) {
+    try {
+      const full = await API.kyc.get(kycId);
+      fileData = full?.file_data || full?.attachment_data || full?.file_url || '';
+    } catch (_) {}
+  }
+  _openDocumentData(fileData, doc.file_name || 'Document');
 }
 
 /** Convert a data: URL to a Blob, returns null on failure. */
@@ -5512,6 +5519,8 @@ async function viewTicket(id) {
             const isImg = src && (src.startsWith('data:image/') || /\.(png|jpg|jpeg|gif|webp)$/i.test(src));
             const djson = JSON.stringify(dkey);
             const fjson = JSON.stringify(fname);
+            const idjson = JSON.stringify(doc.id);
+            const hasFile = !!(src || doc.file_name);
             return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                 <i class="fa-solid fa-file-${isImg ? 'image' : 'lines'}" style="color:#eda5ff;font-size:1.05rem;flex-shrink:0"></i>
@@ -5522,7 +5531,9 @@ async function viewTicket(id) {
                 ${src
                   ? `<button class="btn btn--secondary btn--sm" onclick="_openTicketDoc(${djson},${fjson})"><i class="fa-solid fa-eye"></i> View</button>
                      <button class="btn btn--ghost btn--sm" onclick="_downloadTicketDoc(${djson},${fjson})"><i class="fa-solid fa-download"></i> Download</button>`
-                  : `<span style="font-size:0.75rem;color:var(--text-muted);font-style:italic">No file data</span>`}
+                  : hasFile
+                    ? `<button class="btn btn--secondary btn--sm" onclick="viewFicaDocument(${idjson})"><i class="fa-solid fa-eye"></i> View</button>`
+                    : `<span style="font-size:0.75rem;color:var(--text-muted);font-style:italic">No file</span>`}
               </div>
               ${src && isImg ? `<div style="margin-top:8px"><img src="${src}" alt="${_esc(fname)}" style="max-width:100%;max-height:220px;object-fit:contain;border-radius:4px;display:block"></div>` : ''}
             </div>`;
