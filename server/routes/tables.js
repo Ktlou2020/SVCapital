@@ -47,7 +47,10 @@ async function _sendPush(investorId, payload) {
 
 /* ─── Input Validation ─── */
 const NUMERIC_FIELDS = new Set(['amount','wallet_balance','total_invested','total_returns','annual_rate','max_capacity','current_invested','recurring_amount','xp_points']);
-const STATUS_FIELDS  = { status: ['active','inactive','suspended','pending','pending_fica','fica_submitted','matured','paid_out','cancelled','rejected','open','filling','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor','submitted','approved','expired','archived'], fica_status: ['pending','approved','rejected','not_started','submitted'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','payout_custom','reinvest','switch_product','custom_switch','pending'] };
+const STATUS_FIELDS  = { status: ['active','inactive','suspended','pending','pending_fica','fica_submitted','matured','paid_out','cancelled','rejected','open','filling','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor','submitted','approved','expired','archived'], fica_status: ['pending','approved','rejected','not_started','submitted','in_progress'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','payout_custom','reinvest','switch_product','custom_switch','pending'] };
+
+/* Normalise external fica_status values (e.g. from Firebase import / KYC provider) to internal ones */
+const _FICA_NORM_MAP = { Approved:'approved', Verified:'approved', Declined:'rejected', Unverified:'not_started', Outstanding:'pending', Pending:'pending' };
 
 function validateBody(table, body, isCreate) {
   const errors = [];
@@ -777,6 +780,10 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
     if (!isPrivileged) INVESTOR_PROTECTED_COLS.forEach(c => delete body[c]);
 
+    // Normalise external FICA status values before validation
+    if (body.fica_status && _FICA_NORM_MAP[body.fica_status]) body.fica_status = _FICA_NORM_MAP[body.fica_status];
+    if (body.kyc_status  && _FICA_NORM_MAP[body.kyc_status])  body.kyc_status  = _FICA_NORM_MAP[body.kyc_status];
+
     const validationErrors = validateBody(table, body, true);
     if (validationErrors.length) return res.status(400).json({ error: validationErrors.join('; ') });
 
@@ -1358,6 +1365,9 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
     ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
     if (!isPrivileged) INVESTOR_PROTECTED_COLS.forEach(c => delete body[c]);
+
+    if (body.fica_status && _FICA_NORM_MAP[body.fica_status]) body.fica_status = _FICA_NORM_MAP[body.fica_status];
+    if (body.kyc_status  && _FICA_NORM_MAP[body.kyc_status])  body.kyc_status  = _FICA_NORM_MAP[body.kyc_status];
 
     const _badKey = Object.keys(body).find(k => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k));
     if (_badKey) return res.status(400).json({ error: 'Invalid field name: ' + _badKey });

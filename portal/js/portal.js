@@ -446,11 +446,17 @@ function renderTaskCompletionPanel() {
 }
 
 
+/* Normalise a raw fica/kyc status value (handles capitalised external provider values) */
+function _normFicaStatus(s) {
+  const MAP = { Approved:'approved', Verified:'approved', Declined:'rejected', Unverified:'not_started', Outstanding:'pending', Pending:'pending' };
+  return MAP[String(s || '').trim()] || String(s || '').trim().toLowerCase();
+}
+
 function _isInvestorFicaApproved(inv = PORTAL.investor) {
-  const OK = ['approved', 'verified', 'active'];
-  return OK.includes(String(inv?.fica_status || '').toLowerCase())
-      || OK.includes(String(inv?.kyc_status  || '').toLowerCase())
-      || OK.includes(String(inv?.status      || '').toLowerCase());
+  const ficaN = _normFicaStatus(inv?.fica_status);
+  const kycN  = _normFicaStatus(inv?.kyc_status);
+  const OK    = ['approved', 'verified', 'active'];
+  return OK.includes(ficaN) || OK.includes(kycN) || OK.includes(String(inv?.status || '').toLowerCase());
 }
 
 function _poolEndMs(dateStr) {
@@ -1033,7 +1039,9 @@ function loadNotifications() {
 
   // 3. FICA / KYC status notifications
   if (inv) {
-    if (inv.fica_status === 'rejected' || inv.kyc_status === 'rejected') {
+    const _fN = _normFicaStatus(inv.fica_status);
+    const _kN = _normFicaStatus(inv.kyc_status);
+    if (_fN === 'rejected' || _kN === 'rejected') {
       notifs.push(_notif({
         nid: 'fica-rej',
         icon: 'fa-triangle-exclamation', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#ef4444',
@@ -1043,31 +1051,33 @@ function loadNotifications() {
         action: "navigate('fica',document.querySelector('[data-view=fica]'))",
         unread: true,
       }));
-    } else if (inv.fica_status === 'in_progress' || inv.kyc_status === 'in_progress') {
+    } else if (_fN === 'approved' || _kN === 'approved' || _kN === 'verified') {
+      notifs.push({
+        icon: 'fa-shield-halved', iconBg: 'rgba(237,165,255,0.1)', iconColor: '#eda5ff',
+        title: 'Identity verified',
+        sub: 'Your FICA/KYC verification is complete. You can invest in all available pools.',
+        time: inv.fica_verified_at ? Utils.timeAgo(inv.fica_verified_at) : 'KYC Verified',
+        action: null,
+        unread: false,
+      });
+    } else if (_fN === 'in_progress' || _kN === 'in_progress' || _fN === 'submitted' || _kN === 'submitted') {
       notifs.push(_notif({
         nid: 'fica-submitted',
         icon: 'fa-file-circle-check', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
         title: 'FICA documents submitted',
         sub: 'Your documents have been received and will be reviewed within 1–2 business days. We\'ll notify you once verified.',
-        time: 'Under review',
+        time: 'Pending Review',
         action: "navigate('fica',document.querySelector('[data-view=fica]'))",
         unread: true,
       }));
-    } else if (inv.fica_status === 'pending' || inv.kyc_status === 'pending' || inv.status === 'fica_submitted') {
+    } else if (_fN === 'not_started' || (!inv.fica_status && !inv.kyc_status)) {
+      // No FICA uploaded — prompt to get started
+    } else if (_fN === 'pending' || _kN === 'pending' || inv.status === 'fica_submitted') {
       notifs.push({
         icon: 'fa-clock', iconBg: 'rgba(254,194,79,0.12)', iconColor: '#fec24f',
         title: 'FICA/KYC verification in progress',
         sub: 'Your documents are under review — typically 1–2 business days.',
-        time: 'Pending',
-        action: null,
-        unread: false,
-      });
-    } else if (inv.fica_status === 'approved') {
-      notifs.push({
-        icon: 'fa-shield-halved', iconBg: 'rgba(237,165,255,0.1)', iconColor: '#eda5ff',
-        title: 'Identity verified',
-        sub: 'Your FICA/KYC verification is complete. You can invest in all available pools.',
-        time: inv.fica_verified_at ? Utils.timeAgo(inv.fica_verified_at) : 'Approved',
+        time: 'Pending Review',
         action: null,
         unread: false,
       });
@@ -1874,7 +1884,8 @@ function renderOverview(skipCharts) {
   if (sRole)   sRole.textContent   = `${inv.id || 'INV'} · ${inv.status === 'active' ? 'Active' : (inv.status || 'Investor')}`;
 
   // ── FICA pending alert ───────────────────────────────────────
-  const ficaPending = inv.fica_status === 'pending' || inv.status === 'pending_fica' || inv.fica_status === 'submitted';
+  const _ficaNP = _normFicaStatus(inv.fica_status);
+  const ficaPending = _ficaNP === 'pending' || _ficaNP === 'not_started' || _ficaNP === 'submitted' || _ficaNP === 'in_progress' || inv.status === 'pending_fica';
   let ficaBanner = document.getElementById('ficaAlertBanner');
   if (ficaPending && !ficaBanner) {
     ficaBanner = document.createElement('div');
@@ -9849,8 +9860,9 @@ async function _renderKycStatusPanel(preloadedDocs) {
 
   const inv = PORTAL.investor;
   const overallStatus = inv.fica_status || inv.kyc_status || 'pending';
-  const statusColor = { approved: '#22c55e', rejected: '#ef4444', pending: '#fec24f', in_progress: '#656565', submitted: '#656565', not_started: '#9ca3af' };
-  const color = statusColor[overallStatus] || '#9ca3af';
+  const overallNorm   = _normFicaStatus(overallStatus);
+  const statusColor   = { approved: '#22c55e', verified: '#22c55e', rejected: '#ef4444', pending: '#fec24f', in_progress: '#fec24f', submitted: '#fec24f', not_started: '#9ca3af' };
+  const color = statusColor[overallNorm] || '#9ca3af';
 
   // Bug #13 fix: shared label map — 'other' is 'Other Document' in both panels
   const typeLabel = {
@@ -9862,11 +9874,11 @@ async function _renderKycStatusPanel(preloadedDocs) {
   body.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(0,0,0,0.07);margin-bottom:12px">
       <div style="width:40px;height:40px;border-radius:50%;background:${color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-        <i class="fa-solid fa-${overallStatus === 'approved' ? 'shield-check' : overallStatus === 'rejected' ? 'shield-xmark' : 'clock'}" style="color:${color};font-size:1.1rem"></i>
+        <i class="fa-solid fa-${overallNorm === 'approved' || overallNorm === 'verified' ? 'shield-check' : overallNorm === 'rejected' ? 'shield-xmark' : overallNorm === 'not_started' ? 'circle-xmark' : 'clock'}" style="color:${color};font-size:1.1rem"></i>
       </div>
       <div>
         <div style="font-size:0.88rem;font-weight:700;color:#1a1a1a">FICA / KYC Verification</div>
-        <div style="font-size:0.78rem;color:#6b7280;margin-top:1px">${Utils.statusBadge(overallStatus)}</div>
+        <div style="font-size:0.78rem;color:#6b7280;margin-top:1px">${Utils.ficaBadge(overallStatus)}</div>
       </div>
     </div>
     ${docs.length ? `
@@ -10611,7 +10623,8 @@ function downloadCertificate(investmentId) {
   infoL('Investor Name', `${investor.first_name} ${investor.last_name}`);
   infoL('Investor ID', investor.id);
   infoL('Email', investor.email || '—');
-  infoL('FICA Status', (investor.fica_status || 'approved').toUpperCase());
+  const _ficaPdfLabels = { approved:'KYC VERIFIED', verified:'KYC VERIFIED', rejected:'REJECTED', Declined:'REJECTED', not_started:'NO FICA UPLOADED', Unverified:'NO FICA UPLOADED', submitted:'PENDING REVIEW', in_progress:'PENDING REVIEW', pending:'PENDING REVIEW', Pending:'PENDING REVIEW', Outstanding:'PENDING REVIEW', Approved:'KYC VERIFIED' };
+  infoL('FICA Status', _ficaPdfLabels[investor.fica_status] || _ficaPdfLabels[_normFicaStatus(investor.fica_status)] || 'PENDING REVIEW');
 
   infoR('Investment ID', inv.id);
   infoR('Pool Name', inv.pool_name || pool.name || '—');
