@@ -15,6 +15,9 @@ Bump `mobile/www/sw.js` CACHE version (svc-portal-vN) with every JS/CSS change t
 ## Web Portal Versioning
 Bump `portal/index.html` query string (`js/portal.js?v=N`) with every web portal JS change.
 
+## Admin Console Versioning
+Bump `admin/index.html` query string (`js/admin.js?v=N`) with every admin JS change (currently at v1).
+
 ## Purple / Brand Colour
 The single canonical purple across the entire platform is `#eda5ff`. No other purple values are permitted.
 
