@@ -819,6 +819,29 @@
               </button>
             </div>
           </div>
+          <!-- Maturity Filters -->
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)">
+            <input type="search" id="maturitySearch" placeholder="Search investor or pool…" class="form-input" style="width:220px;height:34px;font-size:0.82rem" oninput="_applyMaturityFilters()">
+            <select id="maturityStatusFilter" class="form-select" style="width:150px;height:34px;font-size:0.82rem" onchange="_applyMaturityFilters()">
+              <option value="">All Statuses</option>
+              <option value="submitted">Submitted</option>
+              <option value="processing">Processing</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+            <select id="maturityInstrFilter" class="form-select" style="width:165px;height:34px;font-size:0.82rem" onchange="_applyMaturityFilters()">
+              <option value="">All Instructions</option>
+              <option value="reinvest">Reinvest</option>
+              <option value="payout_all">Payout All</option>
+              <option value="payout_return">Payout Returns</option>
+              <option value="switch_product">Switch Product</option>
+              <option value="payout_custom">Custom Payout</option>
+            </select>
+            <input type="date" id="maturityDateFrom" class="form-input" style="width:140px;height:34px;font-size:0.82rem" onchange="_applyMaturityFilters()" title="Submitted from">
+            <input type="date" id="maturityDateTo" class="form-input" style="width:140px;height:34px;font-size:0.82rem" onchange="_applyMaturityFilters()" title="Submitted to">
+            <button class="btn btn--ghost btn--sm" onclick="_clearMaturityFilters()" style="height:34px;white-space:nowrap"><i class="fa-solid fa-xmark"></i> Clear</button>
+            <span id="maturityCount" style="margin-left:auto;font-size:0.78rem;color:var(--text-muted)"></span>
+          </div>
           <div style="overflow-x:auto">
             <table class="data-table">
               <thead><tr>

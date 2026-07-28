@@ -4505,7 +4505,8 @@ async function payoutInvestment(id) {
 /* ═══════════════════════════════════════════════
    MATURITY
    ═══════════════════════════════════════════════ */
-const _matInstrLabel = { payout_all: 'Payout All', payout_return: 'Payout Returns', reinvest: 'Reinvest', pending: 'Pending' };
+const _matInstrLabel = { payout_all: 'Payout All', payout_return: 'Payout Returns', reinvest: 'Reinvest', payout_custom: 'Custom Payout', switch_product: 'Switch Product', pending: 'Pending' };
+let filteredMaturity = [];
 
 async function loadMaturity() {
   try {
@@ -4545,17 +4546,21 @@ async function loadMaturity() {
     STATE.maturity = [...matRecords, ...fromInvestments]
       .sort((a, b) => new Date(b.submitted_date || b.created_at || 0) - new Date(a.submitted_date || a.created_at || 0));
 
-    renderMaturityTable();
+    filteredMaturity = [...STATE.maturity];
+    _applyMaturityFilters();
   } catch (e) { Toast.error('Failed to load maturity instructions'); }
 }
 
 function renderMaturityTable() {
   const body = document.getElementById('maturityBody');
-  if (!STATE.maturity.length) {
-    body.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-inbox" style="font-size:1.5rem;color:var(--text-dim);display:block;margin-bottom:8px"></i>No maturity instructions found</td></tr>';
+  const countEl = document.getElementById('maturityCount');
+  const rows = filteredMaturity;
+  if (countEl) countEl.textContent = `${rows.length.toLocaleString()} of ${(STATE.maturity || []).length.toLocaleString()} instructions`;
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-inbox" style="font-size:1.5rem;color:var(--text-dim);display:block;margin-bottom:8px"></i>No maturity instructions match the current filters</td></tr>';
     return;
   }
-  body.innerHTML = STATE.maturity.map(m => {
+  body.innerHTML = rows.map(m => {
     const mInv = STATE.investors.find(i => i.id === m.investor_id);
     const mName = m.investor_name || (mInv ? `${mInv.first_name} ${mInv.last_name}`.trim() : m.investor_id || '—');
     const instrLabel = _matInstrLabel[m.instruction_type] || (m.instruction_type?.replace(/_/g, ' ') || '—');
@@ -4572,6 +4577,35 @@ function renderMaturityTable() {
       </td>
     </tr>`;
   }).join('');
+}
+
+function _applyMaturityFilters() {
+  const q      = (document.getElementById('maturitySearch')?.value || '').toLowerCase().trim();
+  const st     = document.getElementById('maturityStatusFilter')?.value || '';
+  const instr  = document.getElementById('maturityInstrFilter')?.value || '';
+  const dFrom  = document.getElementById('maturityDateFrom')?.value || '';
+  const dTo    = document.getElementById('maturityDateTo')?.value || '';
+
+  filteredMaturity = STATE.maturity.filter(m => {
+    const mInv  = STATE.investors.find(i => i.id === m.investor_id);
+    const name  = (m.investor_name || (mInv ? `${mInv.first_name} ${mInv.last_name}` : '') || '').toLowerCase();
+    const pool  = (m.pool_name || '').toLowerCase();
+    const matchQ     = !q     || name.includes(q) || pool.includes(q) || (m.investor_id || '').toLowerCase().includes(q);
+    const matchSt    = !st    || m.status === st;
+    const matchInstr = !instr || m.instruction_type === instr;
+    const mDate = m.submitted_date || m.created_at || '';
+    const matchFrom  = !dFrom || mDate.slice(0, 10) >= dFrom;
+    const matchTo    = !dTo   || mDate.slice(0, 10) <= dTo;
+    return matchQ && matchSt && matchInstr && matchFrom && matchTo;
+  });
+
+  renderMaturityTable();
+}
+
+function _clearMaturityFilters() {
+  ['maturitySearch','maturityDateFrom','maturityDateTo'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['maturityStatusFilter','maturityInstrFilter'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  _applyMaturityFilters();
 }
 
 async function processMaturity(id) {
