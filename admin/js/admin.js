@@ -5241,7 +5241,7 @@ async function viewTicket(id) {
 
   const _cat = (tkt.category || '').replace(/ /g, '_').toLowerCase();
   const isBankVerification = _cat === 'bank_verification';
-  const isFicaSubmission   = _cat === 'fica_submission' || _cat === 'fica';
+  const isFicaSubmission   = _cat === 'fica_submission' || _cat === 'fica' || _cat === 'kyc';
 
   // Extract base64 data URL embedded in message.
   // EFT format:     "\nData URL: data:..."
@@ -5304,6 +5304,12 @@ async function viewTicket(id) {
       </div>
       <div id="bankProofPreview" style="padding:12px 16px;font-size:0.82rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading document…</div>
       <div id="bankVerifyResult" style="padding:0 16px 12px;font-size:0.82rem;color:var(--text-muted)"></div>
+    </div>` : ''}
+    ${isFicaSubmission && tkt.investor_id ? `<div class="panel mb-12" style="border:1.5px solid rgba(237,165,255,0.25)">
+      <div class="panel__header" style="background:rgba(237,165,255,0.07)">
+        <span class="panel__title"><i class="fa-solid fa-id-card-clip" style="color:#eda5ff;margin-right:6px"></i>Submitted FICA Documents</span>
+      </div>
+      <div id="kycDocsPreviewBody" style="padding:12px 16px;font-size:0.82rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading documents…</div>
     </div>` : ''}
     ${showActionBtns ? `<div style="display:flex;gap:10px;margin-bottom:16px;padding:12px;background:${isPaymentProof ? 'rgba(34,197,94,0.06)' : 'rgba(237,165,255,0.06)'};border-radius:8px;border:1px solid ${isPaymentProof ? 'rgba(34,197,94,0.2)' : 'rgba(237,165,255,0.15)'}">
       <div style="flex:1">
@@ -5408,7 +5414,9 @@ async function viewTicket(id) {
       try {
         invUpdate = isBankVerification
           ? (approve ? { bank_account_status: 'approved' } : { bank_account_status: 'rejected' })
-          : (approve ? { kyc_status: 'approved', status: 'active' } : { kyc_status: 'rejected' });
+          : (approve
+              ? { kyc_status: 'approved', fica_status: 'approved', status: 'active' }
+              : { kyc_status: 'rejected', fica_status: 'rejected' });
         await API.investors.update(tkt.investor_id, invUpdate);
         await API.tickets.update(id, {
           status:         'resolved',
@@ -5445,6 +5453,55 @@ async function viewTicket(id) {
   };
 
   Modal.open('ticketModal');
+
+  // Inline FICA/KYC documents preview
+  if (isFicaSubmission && tkt.investor_id) {
+    const docsEl = document.getElementById('kycDocsPreviewBody');
+    if (docsEl) {
+      try {
+        const res = await API.kyc.list({ investor_id: tkt.investor_id, limit: 100 });
+        const docs = (res.data || []).sort((a, b) =>
+          new Date(b.submitted_at || b.created_at || 0) - new Date(a.submitted_at || a.created_at || 0));
+        if (!docs.length) {
+          docsEl.innerHTML = '<span style="color:var(--text-muted)"><i class="fa-solid fa-file-slash" style="margin-right:6px"></i>No KYC documents found for this investor.</span>';
+        } else {
+          const DOC_LABELS = {
+            id: 'ID Document', id_document: 'ID Document', passport: 'Passport',
+            proof_of_address: 'Proof of Address', address: 'Proof of Address',
+            selfie: 'Selfie / Live Photo', tax: 'Tax Certificate (SARS)',
+            proof_of_bank: 'Proof of Bank Account', other: 'Other Document',
+          };
+          docsEl.innerHTML = `<div style="display:grid;gap:10px;padding-bottom:4px">${docs.map((doc, idx) => {
+            const src   = doc.file_data || doc.attachment_data || doc.file_url || '';
+            const label = DOC_LABELS[doc.doc_type] || (doc.doc_type || 'Document').replace(/_/g, ' ');
+            const fname = doc.file_name || label;
+            const dkey  = `tkc_${tkt.id}_${idx}`;
+            _ticketDocCache[dkey] = src || null;
+            const isImg = src && (src.startsWith('data:image/') || /\.(png|jpg|jpeg|gif|webp)$/i.test(src));
+            const djson = JSON.stringify(dkey);
+            const fjson = JSON.stringify(fname);
+            return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <i class="fa-solid fa-file-${isImg ? 'image' : 'lines'}" style="color:#eda5ff;font-size:1.05rem;flex-shrink:0"></i>
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:700;font-size:0.84rem;color:var(--text)">${_esc(label)}</div>
+                  ${doc.submitted_at || doc.created_at ? `<div style="font-size:0.72rem;color:var(--text-muted)">${Utils.date(doc.submitted_at || doc.created_at)}</div>` : ''}
+                </div>
+                ${src
+                  ? `<button class="btn btn--secondary btn--sm" onclick="_openTicketDoc(${djson},${fjson})"><i class="fa-solid fa-eye"></i> View</button>
+                     <button class="btn btn--ghost btn--sm" onclick="_downloadTicketDoc(${djson},${fjson})"><i class="fa-solid fa-download"></i> Download</button>`
+                  : `<span style="font-size:0.75rem;color:var(--text-muted);font-style:italic">No file data</span>`}
+              </div>
+              ${src && isImg ? `<div style="margin-top:8px"><img src="${src}" alt="${_esc(fname)}" style="max-width:100%;max-height:220px;object-fit:contain;border-radius:4px;display:block"></div>` : ''}
+            </div>`;
+          }).join('')}</div>`;
+        }
+      } catch (e) {
+        const el2 = document.getElementById('kycDocsPreviewBody');
+        if (el2) el2.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>Could not load documents: ${_esc(e.message || 'unknown error')}</span>`;
+      }
+    }
+  }
 
   // Inline proof-of-bank preview
   if (isBankVerification && tkt.investor_id) {
