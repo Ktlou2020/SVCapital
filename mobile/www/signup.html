@@ -2608,13 +2608,31 @@ async function _doSubmit(skippedFica) {
     const assignedId = regData.user.investorId;
 
     if (!skippedFica && uploadedDocs.length > 0) {
-      await API.kyc.create({
-        investor_id: assignedId,
-        doc_type: 'id_document',
-        status: 'pending',
-        file_name: uploadedDocs.join(', '),
-        notes: `Submitted at registration. Files: ${uploadedDocs.join(', ')}.`,
-      }).catch(() => {});
+      const DOC_TYPE_MAP = {
+        id: 'id_document', address: 'proof_of_address',
+        selfie: 'selfie', bank: 'proof_of_bank', tax: 'tax',
+      };
+      const readFile = file => new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload  = e => res(e.target.result);
+        r.onerror = () => rej(new Error('Could not read file'));
+        r.readAsDataURL(file);
+      });
+      await Promise.allSettled(
+        Object.entries(ficaFiles)
+          .filter(([, f]) => f !== null)
+          .map(async ([key, file]) => {
+            const fileData = await readFile(file);
+            return API.kyc.create({
+              investor_id: assignedId,
+              doc_type:    DOC_TYPE_MAP[key] || 'other',
+              status:      'pending',
+              file_name:   file.name,
+              file_data:   fileData,
+              notes:       `Submitted at registration.`,
+            });
+          })
+      );
     }
 
     if (!skippedFica) {
