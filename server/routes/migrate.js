@@ -165,18 +165,19 @@ router.post('/run',
           account_number: bank.accountNumber, branch_code: bank.branchNumber,
           bank_proof_url: bank.proof || null,
         }) : null;
-        const status = u.status === 'ACTIVE' ? 'active' : 'suspended';
+        const kycMapped  = KYC_STATUS_MAP[u.kycStatus] || 'pending';
+        const status     = u.status === 'ACTIVE' ? 'active' : u.status === 'ARCHIVED' ? 'archived' : 'suspended';
 
         await pool.query(`
           INSERT INTO investors
             (id, first_name, last_name, email, phone, id_number, date_of_birth,
-             kyc_status, status, wallet_balance, total_invested, risk_profile,
+             kyc_status, fica_status, status, wallet_balance, total_invested, risk_profile,
              occupation, notes, address, province, date_joined, updated_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW())
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
           ON CONFLICT (id) DO UPDATE SET
             first_name=EXCLUDED.first_name, last_name=EXCLUDED.last_name, email=EXCLUDED.email,
             phone=EXCLUDED.phone, id_number=EXCLUDED.id_number, date_of_birth=EXCLUDED.date_of_birth,
-            kyc_status=EXCLUDED.kyc_status, status=EXCLUDED.status,
+            kyc_status=EXCLUDED.kyc_status, fica_status=EXCLUDED.fica_status, status=EXCLUDED.status,
             wallet_balance=EXCLUDED.wallet_balance, total_invested=EXCLUDED.total_invested,
             risk_profile=EXCLUDED.risk_profile, occupation=EXCLUDED.occupation,
             notes=EXCLUDED.notes, address=EXCLUDED.address, province=EXCLUDED.province,
@@ -186,7 +187,7 @@ router.post('/run',
           id, firstName, lastName, (u.email||'').toLowerCase().trim(), u.phone_number||'',
           u.identityNumber||'',
           u.dateOfBirth ? new Date(u.dateOfBirth).toISOString().split('T')[0] : null,
-          KYC_STATUS_MAP[u.kycStatus] || 'pending', status,
+          kycMapped, kycMapped, status,
           parseFloat(u.wallet) || 0, totalInvested,
           (u.riskTolerence || 'Moderate').toLowerCase(),
           u.employmentStatus || null, notes,
@@ -196,7 +197,7 @@ router.post('/run',
       }
     );
     counts.investors = investorResult.ok;
-    allErrors.push(...investorResult.errors.slice(0, 10).map(e => `investor: ${e}`));
+    allErrors.push(...investorResult.errors.map(e => `investor: ${e}`));
 
     /* ── 1b. Users (login accounts) for migrated investors ── */
     const JWT_SECRET  = process.env.JWT_SECRET;
@@ -240,7 +241,7 @@ router.post('/run',
       }
     );
     counts.users = userResult.ok;
-    allErrors.push(...userResult.errors.slice(0, 10).map(e => `user: ${e}`));
+    allErrors.push(...userResult.errors.map(e => `user: ${e}`));
 
     /* ── 2. Pools ── */
     const poolResult = await inBatches(
@@ -271,7 +272,7 @@ router.post('/run',
       }
     );
     counts.pools = poolResult.ok;
-    allErrors.push(...poolResult.errors.slice(0, 10).map(e => `pool: ${e}`));
+    allErrors.push(...poolResult.errors.map(e => `pool: ${e}`));
 
     /* ── 3. Investments ── */
     const invResult = await inBatches(
@@ -310,7 +311,7 @@ router.post('/run',
       }
     );
     counts.investments = invResult.ok;
-    allErrors.push(...invResult.errors.slice(0, 10).map(e => `investment: ${e}`));
+    allErrors.push(...invResult.errors.map(e => `investment: ${e}`));
 
     /* ── 4. Transactions ── */
     const txResult = await inBatches(
@@ -331,7 +332,7 @@ router.post('/run',
       }
     );
     counts.transactions = txResult.ok;
-    allErrors.push(...txResult.errors.slice(0, 10).map(e => `transaction: ${e}`));
+    allErrors.push(...txResult.errors.map(e => `transaction: ${e}`));
 
     /* ── 5. KYC documents ── */
     const kycItems = [];
@@ -359,9 +360,9 @@ router.post('/run',
       }
     );
     counts.kyc = kycResult.ok;
-    allErrors.push(...kycResult.errors.slice(0, 10).map(e => `kyc: ${e}`));
+    allErrors.push(...kycResult.errors.map(e => `kyc: ${e}`));
 
-    res.json({ ok: true, counts, errors: allErrors });
+    res.json({ ok: true, counts, errors: allErrors.slice(0, 100), errorCount: allErrors.length });
   }
 );
 
