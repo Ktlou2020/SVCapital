@@ -391,27 +391,28 @@ router.post('/recalculate-wallet/:investorId', requireAuth, requireRole('admin',
   try {
     const { investorId } = req.params;
 
-    // Compute wallet from completed transactions
+    // Only sum admin-created manual deposits (ADMIN-DEP-* references).
+    // Historical Firebase transactions are already baked into the imported
+    // wallet_balance and must not be double-counted.
     const { rows: [calc] } = await pool.query(`
-      SELECT
-        COALESCE(SUM(CASE WHEN type IN ('deposit','return','payout','referral_bonus') AND status = 'completed' THEN amount ELSE 0 END), 0)
-        - COALESCE(SUM(CASE WHEN type = 'withdrawal' AND status = 'completed' THEN amount ELSE 0 END), 0)
-        - COALESCE(SUM(CASE WHEN type = 'platform_fee' AND status = 'completed' THEN ABS(amount) ELSE 0 END), 0)
-        AS computed_balance
+      SELECT COALESCE(SUM(amount), 0) AS admin_deposits
       FROM transactions
       WHERE investor_id = $1
+        AND type = 'deposit'
+        AND status = 'completed'
+        AND reference LIKE 'ADMIN-DEP-%'
     `, [investorId]);
 
-    const newBalance = Math.max(0, parseFloat(calc.computed_balance) || 0);
+    const adminDeposits = Math.max(0, parseFloat(calc.admin_deposits) || 0);
 
     const { rows: [inv] } = await pool.query(
       'UPDATE investors SET wallet_balance = $1, updated_at = NOW() WHERE id = $2 RETURNING id, first_name, last_name, wallet_balance',
-      [newBalance, investorId]
+      [adminDeposits, investorId]
     );
 
     if (!inv) return res.status(404).json({ error: 'Investor not found' });
 
-    res.json({ ok: true, investor_id: investorId, new_balance: newBalance });
+    res.json({ ok: true, investor_id: investorId, new_balance: adminDeposits });
   } catch (e) {
     console.error('[recalculate-wallet]', e.message);
     res.status(500).json({ error: e.message });

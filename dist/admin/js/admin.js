@@ -2146,8 +2146,8 @@ async function viewInvestor(id) {
       </div>
       <div class="panel__body" style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
         <div style="flex:1;min-width:220px">
-          <div style="font-size:0.83rem;font-weight:600;color:var(--text);margin-bottom:4px">Recalculate Wallet from Transactions</div>
-          <div style="font-size:0.77rem;color:var(--text-muted)">Recomputes wallet_balance from all completed deposits, returns, payouts minus withdrawals and fees. Use this if a data migration or import overrode the live balance.</div>
+          <div style="font-size:0.83rem;font-weight:600;color:var(--text);margin-bottom:4px">Restore Wallet After Re-import</div>
+          <div style="font-size:0.77rem;color:var(--text-muted)">Sets wallet balance to the sum of admin-created manual deposits (ADMIN-DEP-* transactions only). Use this if a data migration overwrote the live balance — historical Firebase transactions are intentionally excluded to avoid double-counting.</div>
         </div>
         <button class="btn btn--warning btn--sm" style="flex-shrink:0" onclick='_recalcInvestorWallet(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name + " " + inv.last_name)},this)'>
           <i class="fa-solid fa-calculator"></i> Recalculate Wallet
