@@ -3079,10 +3079,17 @@ async function viewBankProof(investorId) {
   try {
     const res = await API.kyc.list({ investor_id: investorId, limit: 200 });
     const proofs = (res.data || [])
-      .filter(d => d.doc_type === 'proof_of_bank')
+      .filter(d => d.doc_type === 'proof_of_bank' && (d.file_data || d.attachment_data || d.file_url || d.file_name))
       .sort((a, b) => new Date(b.submitted_at || b.created_at || 0) - new Date(a.submitted_at || a.created_at || 0));
     if (!proofs.length) { Toast.error('No proof of bank account uploaded for this investor.'); return; }
-    _openDocumentData(proofs[0].file_data || proofs[0].attachment_data || proofs[0].file_url || '', proofs[0].file_name || 'Proof of Bank');
+    const proof = proofs[0];
+    let fileData = proof.file_data || proof.attachment_data || proof.file_url || '';
+    if (!fileData) {
+      const full = await API.kyc.get(proof.id).catch(() => null);
+      fileData = full?.file_data || full?.attachment_data || full?.file_url || '';
+    }
+    if (!fileData) { Toast.error('File data not stored — please ask the investor to re-upload their proof of bank.'); return; }
+    _openDocumentData(fileData, proof.file_name || 'Proof of Bank');
   } catch (e) {
     Toast.error('Could not load proof of bank: ' + (e.message || 'unknown error'));
   }
