@@ -75,7 +75,10 @@ async function runMaturityProcessing() {
       const principal    = parseFloat(inv.amount) || 0;
       const actualReturn = parseFloat(inv.actual_return) || parseFloat(inv.expected_return) || 0;
       const gross        = round2(principal + actualReturn);
-      const instruction  = inv.maturity_instruction || 'reinvest';
+      const rawInstruction = inv.maturity_instruction || 'reinvest';
+      // Delivery bike investments without an explicit non-reinvest instruction pay out to wallet
+      const instruction  = (rawInstruction === 'reinvest' && (inv.product_type || '').includes('delivery_bike'))
+        ? 'payout_all' : rawInstruction;
       const poolName     = inv.pool_name || inv.pool_id || 'your investment';
       const custom       = Math.max(0, Math.min(gross, round2(parseFloat(inv.custom_payout_amount) || 0)));
       const switchType   = inv.switch_product_type || inv.product_type;
