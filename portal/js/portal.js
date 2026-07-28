@@ -8686,13 +8686,13 @@ async function saveSaBankDetails() {
     const investorId   = PORTAL.investor?.id;
     const investorName = `${PORTAL.investor?.first_name || ''} ${PORTAL.investor?.last_name || ''}`.trim();
 
-    await API.kyc.create({
+    if (proofData) await API.kyc.create({
       investor_id:    investorId,
       investor_name:  investorName || undefined,
       doc_type:       'proof_of_bank',
       status:         'pending',
-      file_name:      proofFile ? proofFile.name : undefined,
-      file_data:      proofData || undefined,
+      file_name:      proofFile.name,
+      file_data:      proofData,
       notes:          `Sub-account banking: ${sa?.name || _saBankSaId} — ${name} ${maskedNum}`,
     }).catch(e => console.warn('[saBankDetails] KYC doc failed:', e.message));
 
@@ -8814,15 +8814,15 @@ async function saveBankDetails() {
     const updated = await API._fetch('PATCH', `tables/investors/${investorId}`, bankPatch);
     if (PORTAL.investor) Object.assign(PORTAL.investor, updated);
 
-    // Always create a KYC document entry so it appears in the FICA/KYC section
+    // Create a KYC document entry only when the investor attached a proof file
     const maskedAccNum = bank_account_number.slice(-4).padStart(bank_account_number.length, '•');
-    await API.kyc.create({
+    if (proofData) await API.kyc.create({
       investor_id:   investorId,
       investor_name: investorName || undefined,
       doc_type:      'proof_of_bank',
       status:        'pending',
-      file_name:     proofFile ? proofFile.name : undefined,
-      file_data:     proofData || undefined,
+      file_name:     proofFile.name,
+      file_data:     proofData,
       notes:         `Bank account submitted: ${bank_name} — ${maskedAccNum}`,
     }).catch(e => console.warn('[bank details] KYC doc failed:', e.message));
 
