@@ -9029,10 +9029,11 @@ async function runMigration() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Migration failed');
 
-    const { counts, errors } = data;
+    const { counts, errors, errorCount } = data;
+    const totalErrors = errorCount ?? errors.length;
     const errHtml = errors.length
       ? `<div style="margin-top:12px;padding:10px 12px;background:rgba(239,68,68,0.08);border-radius:8px;font-size:0.78rem;color:#ef4444">
-           <strong>${errors.length} error(s):</strong><br>${errors.map(e => `• ${e}`).join('<br>')}
+           <strong>${totalErrors} error(s)${totalErrors > errors.length ? ` (showing first ${errors.length})` : ''}:</strong><br>${errors.map(e => `• ${e}`).join('<br>')}
          </div>`
       : '';
 

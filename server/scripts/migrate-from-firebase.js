@@ -189,13 +189,16 @@ async function migrate() {
     const fullAddress = addr?.fullAddress || null;
     const province    = addr?.province?.trim() || null;
 
+    const kycMapped = KYC_STATUS_MAP[u.kycStatus] || 'pending';
+    const status    = u.status === 'ACTIVE' ? 'active' : u.status === 'ARCHIVED' ? 'archived' : 'suspended';
+
     try {
       await pool.query(`
         INSERT INTO investors
           (id, first_name, last_name, email, phone, id_number, date_of_birth,
-           kyc_status, status, wallet_balance, total_invested, risk_profile,
+           kyc_status, fica_status, status, wallet_balance, total_invested, risk_profile,
            occupation, notes, address, province, date_joined, updated_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW())
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
         ON CONFLICT (id) DO UPDATE SET
           first_name     = EXCLUDED.first_name,
           last_name      = EXCLUDED.last_name,
@@ -204,6 +207,7 @@ async function migrate() {
           id_number      = EXCLUDED.id_number,
           date_of_birth  = EXCLUDED.date_of_birth,
           kyc_status     = EXCLUDED.kyc_status,
+          fica_status    = EXCLUDED.fica_status,
           status         = EXCLUDED.status,
           wallet_balance = EXCLUDED.wallet_balance,
           total_invested = EXCLUDED.total_invested,
@@ -222,8 +226,9 @@ async function migrate() {
         u.phone_number || '',
         u.identityNumber || '',
         u.dateOfBirth ? new Date(u.dateOfBirth).toISOString().split('T')[0] : null,
-        KYC_STATUS_MAP[u.kycStatus] || 'pending',
-        u.status === 'ACTIVE' ? 'active' : 'inactive',
+        kycMapped,
+        kycMapped,
+        status,
         parseFloat(u.wallet) || 0,
         Math.round(totalInvested * 100) / 100,
         (u.riskTolerence || 'Moderate').toLowerCase(),
