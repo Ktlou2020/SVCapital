@@ -10,6 +10,8 @@ const _esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').r
 const _ticketDocCache = {};
 
 /* ─── State ─── */
+let _gChordPending = false;
+
 let STATE = {
   investors: [],
   subAccounts: [],
@@ -610,23 +612,65 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupGlobalSearch();
   _syncAdminNotifDot();
 
-  // Keyboard shortcut: / focuses global search
+  // Keyboard shortcuts
   document.addEventListener('keydown', e => {
-    if (e.key === '/' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+    const inField = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
+
+    if (e.key === '/' && !inField) {
       e.preventDefault();
       const gs = document.getElementById('globalSearch');
       if (gs) { gs.focus(); gs.select(); }
     }
 
-    // Arrow-key table navigation
-    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+    // Arrow-key + J/K table row navigation
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'j' || e.key === 'k') && !inField) {
       const row = document.activeElement.closest('tr[tabindex]');
       if (!row) return;
       e.preventDefault();
       const rows = [...row.closest('tbody').querySelectorAll('tr[tabindex="0"]')];
       const idx  = rows.indexOf(row);
-      const next = e.key === 'ArrowDown' ? rows[idx + 1] : rows[idx - 1];
+      const next = (e.key === 'ArrowDown' || e.key === 'j') ? rows[idx + 1] : rows[idx - 1];
       if (next) { next.focus(); next.scrollIntoView({ block: 'nearest' }); }
+    }
+
+    // ? = keyboard shortcuts help overlay
+    if (e.key === '?' && !inField) {
+      e.preventDefault();
+      Modal.open('kbShortcutsModal');
+    }
+
+    // g+letter navigation chords
+    if (e.key === 'g' && !inField && !(e.ctrlKey || e.metaKey || e.altKey)) {
+      _gChordPending = true;
+      setTimeout(() => { _gChordPending = false; }, 1500);
+      return;
+    }
+    if (_gChordPending && !inField) {
+      const NAV_MAP = { d: 'dashboard', i: 'investors', t: 'transactions', k: 'kyc', m: 'maturity' };
+      const view = NAV_MAP[e.key];
+      if (view) {
+        e.preventDefault();
+        _gChordPending = false;
+        const btn = document.querySelector(`[data-view="${view}"]`);
+        if (btn) navigate(view, btn);
+      }
+    }
+
+    // r = refresh current view
+    if (e.key === 'r' && !inField && !(e.ctrlKey || e.metaKey || e.altKey)) {
+      e.preventDefault();
+      const REFRESH_FNS = {
+        dashboard: () => loadDashboard(),
+        investors: () => loadInvestors(),
+        transactions: () => loadTransactions(),
+        kyc: () => loadKyc(),
+        maturity: () => loadMaturityInstructions(),
+        pools: () => loadPools(),
+        investments: () => loadInvestments(),
+        withdrawals: () => loadWithdrawals(),
+      };
+      const fn = REFRESH_FNS[STATE.currentView];
+      if (fn) { fn(); Toast.info('Refreshing…', 1500); }
     }
 
     // Escape closes open modals
@@ -635,6 +679,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (open) { const id = open.id; if (id) Modal.close(id); }
     }
   });
+
+  _initSSE();
 
   // Restore last active view from session (deep-link fix)
   const savedView = sessionStorage.getItem('svc_admin_view');
@@ -651,7 +697,7 @@ async function loadDashboard() {
   _showLoadingBar();
   try {
     const [invRes, poolRes, invstRes, txnRes] = await Promise.all([
-      API.investors.list({ limit: 5000 }),
+      API.investors.list({ limit: 10000 }),
       API.pools.list({ limit: 1000 }),
       API.investments.list({ limit: 5000 }),
       API.transactions.list({ limit: 500 })
@@ -671,6 +717,34 @@ async function loadDashboard() {
     document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
     document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
     document.getElementById('ds-pools').textContent = activePools;
+
+    // Second KPI row
+    const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
+    const ficaApproved = nonArchived.filter(i => i.fica_status === 'approved' || i.kyc_status === 'approved').length;
+    const ficaRate = nonArchived.length ? Math.round((ficaApproved / nonArchived.length) * 100) : 0;
+    const dsRate = document.getElementById('ds-fica-rate');
+    if (dsRate) dsRate.textContent = `${ficaRate}%`;
+
+    const pendingKycCount = nonArchived.filter(i => {
+      const fs = i.fica_status; const ks = i.kyc_status;
+      return fs === 'pending' || fs === 'in_progress' || fs === 'submitted' || ks === 'pending';
+    }).length;
+    const dsPendKyc = document.getElementById('ds-pending-kyc');
+    if (dsPendKyc) dsPendKyc.textContent = pendingKycCount;
+
+    const in90Days = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    const now90 = new Date();
+    const upcomingMaturities = STATE.investments.filter(i => {
+      if (i.status !== 'active' || !i.maturity_date) return false;
+      const md = new Date(i.maturity_date);
+      return md >= now90 && md <= in90Days;
+    }).length;
+    const dsUpcoming = document.getElementById('ds-upcoming-maturities');
+    if (dsUpcoming) dsUpcoming.textContent = upcomingMaturities;
+
+    const pendingWithdrawals = (STATE.transactions || []).filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
+    const dsPendWd = document.getElementById('ds-pending-withdrawals');
+    if (dsPendWd) dsPendWd.textContent = pendingWithdrawals;
 
     // Real month-over-month trend calculations
     (() => {
@@ -1267,6 +1341,169 @@ async function bulkSendLoginInvites() {
     renderInvestorsTable();
     updateBulkBar();
   } catch (e) { Toast.error('Bulk invite failed: ' + (e.message || 'unknown error')); }
+}
+
+async function bulkArchiveInvestors() {
+  const ids = [...selectedInvestors];
+  if (!ids.length) return;
+  const names = STATE.investors.filter(i => ids.includes(i.id))
+    .map(i => `${i.first_name || ''} ${i.last_name || ''}`.trim()).filter(Boolean);
+  const preview = names.slice(0, 3).join(', ') + (names.length > 3 ? ` and ${names.length - 3} more` : '');
+  if (!await Confirm.ask(`Archive ${ids.length} investor${ids.length !== 1 ? 's' : ''}?`, {
+    body: `This will set status to "archived" for: ${preview}. You can undo immediately.`,
+    confirmLabel: 'Archive',
+    confirmClass: 'btn--danger',
+  })) return;
+  const snapshot = ids.map(id => {
+    const inv = STATE.investors.find(i => i.id === id);
+    return inv ? { id: inv.id, status: inv.status } : null;
+  }).filter(Boolean);
+  try {
+    await Promise.all(ids.map(id => API.investors.update(id, { status: 'archived' })));
+    ids.forEach(id => { const inv = STATE.investors.find(i => i.id === id); if (inv) inv.status = 'archived'; });
+    selectedInvestors.clear();
+    renderInvestorsTable();
+    renderInvestorStats();
+    updateBulkBar();
+    Toast.action(`${ids.length} investor${ids.length !== 1 ? 's' : ''} archived`, 'Undo', async () => {
+      try {
+        await Promise.all(snapshot.map(s => API.investors.update(s.id, { status: s.status || 'active' })));
+        snapshot.forEach(s => { const inv = STATE.investors.find(i => i.id === s.id); if (inv) inv.status = s.status || 'active'; });
+        renderInvestorsTable();
+        renderInvestorStats();
+        Toast.success('Archive undone');
+      } catch (ue) { Toast.error('Undo failed: ' + ue.message); }
+    });
+  } catch (e) { Toast.error('Archive failed: ' + (e.message || 'unknown error')); }
+}
+
+async function bulkApproveFica() {
+  const ids = [...selectedInvestors];
+  if (!ids.length) return;
+  const names = STATE.investors.filter(i => ids.includes(i.id))
+    .map(i => `${i.first_name || ''} ${i.last_name || ''}`.trim()).filter(Boolean);
+  const preview = names.slice(0, 3).join(', ') + (names.length > 3 ? ` and ${names.length - 3} more` : '');
+  if (!await Confirm.ask(`Approve FICA for ${ids.length} investor${ids.length !== 1 ? 's' : ''}?`, {
+    body: `Sets FICA/KYC status to "approved" for: ${preview}.`,
+    confirmLabel: 'Approve FICA',
+    confirmClass: 'btn--success',
+  })) return;
+  try {
+    await Promise.all(ids.map(id => API.investors.update(id, { fica_status: 'approved', kyc_status: 'approved' })));
+    ids.forEach(id => {
+      const inv = STATE.investors.find(i => i.id === id);
+      if (inv) { inv.fica_status = 'approved'; inv.kyc_status = 'approved'; }
+    });
+    selectedInvestors.clear();
+    renderInvestorsTable();
+    updateBulkBar();
+    Toast.success(`FICA approved for ${ids.length} investor${ids.length !== 1 ? 's' : ''}`);
+  } catch (e) { Toast.error('Bulk FICA approval failed: ' + (e.message || 'unknown error')); }
+}
+
+function bulkExportSelected() {
+  const ids = [...selectedInvestors];
+  if (!ids.length) return;
+  const rows = STATE.investors.filter(i => ids.includes(i.id));
+  const headers = ['ID','First Name','Last Name','Email','Phone','Status','FICA Status','KYC Status','Wallet Balance','Created'];
+  const csv = [
+    headers.join(','),
+    ...rows.map(r => [
+      r.id,
+      `"${(r.first_name || '').replace(/"/g, '""')}"`,
+      `"${(r.last_name  || '').replace(/"/g, '""')}"`,
+      `"${(r.email      || '').replace(/"/g, '""')}"`,
+      `"${(r.phone      || '').replace(/"/g, '""')}"`,
+      r.status        || '',
+      r.fica_status   || '',
+      r.kyc_status    || '',
+      r.wallet_balance || '0',
+      r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : '',
+    ].join(','))
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `investors-selected-${Date.now()}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  Toast.success(`${rows.length} investor${rows.length !== 1 ? 's' : ''} exported`);
+}
+
+/* ── Investor filter presets ─────────────────────────────── */
+function _togglePresetDropdown(e) {
+  if (e) e.stopPropagation();
+  const drop = document.getElementById('filterPresetDrop');
+  if (!drop) return;
+  if (drop.style.display !== 'none') { drop.style.display = 'none'; return; }
+  _renderPresetDropdown();
+  drop.style.display = 'block';
+  setTimeout(() => {
+    document.addEventListener('click', function _closePreset(ev) {
+      if (!drop.contains(ev.target)) { drop.style.display = 'none'; document.removeEventListener('click', _closePreset); }
+    });
+  }, 50);
+}
+
+function _renderPresetDropdown() {
+  const list = document.getElementById('filterPresetList');
+  if (!list) return;
+  const presets = _getPresets();
+  if (!presets.length) {
+    list.innerHTML = '<div style="padding:8px 12px;font-size:0.78rem;color:var(--text-muted)">No saved presets yet</div>';
+    return;
+  }
+  list.innerHTML = presets.map((p, i) => `
+    <div style="display:flex;align-items:center;padding:3px 8px 3px 12px;gap:6px">
+      <button onclick="_loadInvestorPreset(${i})" style="flex:1;text-align:left;background:none;border:none;cursor:pointer;font-size:0.8rem;color:var(--text);padding:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(p.name)}</button>
+      <button onclick="_deleteInvestorPreset(${i});event.stopPropagation()" style="background:none;border:none;cursor:pointer;font-size:0.78rem;color:var(--text-muted);padding:2px 4px;flex-shrink:0" title="Delete">×</button>
+    </div>`).join('');
+}
+
+function _getPresets() {
+  try { return JSON.parse(localStorage.getItem('svc_inv_presets') || '[]'); } catch { return []; }
+}
+
+function _saveCurrentPreset() {
+  const name = prompt('Preset name:');
+  if (!name || !name.trim()) return;
+  const filters = {
+    status:   document.getElementById('investorStatusFilter')?.value  || '',
+    kyc:      document.getElementById('investorKycFilter')?.value     || '',
+    province: document.getElementById('investorProvinceFilter')?.value || '',
+    login:    document.getElementById('investorLoginFilter')?.value   || '',
+    sort:     document.getElementById('investorSortOrder')?.value     || '',
+    search:   document.getElementById('globalSearch')?.value          || '',
+  };
+  const presets = _getPresets();
+  presets.push({ name: name.trim(), filters });
+  localStorage.setItem('svc_inv_presets', JSON.stringify(presets));
+  Toast.success(`Preset "${name.trim()}" saved`);
+  const drop = document.getElementById('filterPresetDrop');
+  if (drop) drop.style.display = 'none';
+}
+
+function _loadInvestorPreset(idx) {
+  const p = _getPresets()[idx];
+  if (!p) return;
+  if (p.filters.status   !== undefined) { const el = document.getElementById('investorStatusFilter');   if (el) el.value = p.filters.status; }
+  if (p.filters.kyc      !== undefined) { const el = document.getElementById('investorKycFilter');      if (el) el.value = p.filters.kyc; }
+  if (p.filters.province !== undefined) { const el = document.getElementById('investorProvinceFilter'); if (el) el.value = p.filters.province; }
+  if (p.filters.login    !== undefined) { const el = document.getElementById('investorLoginFilter');    if (el) el.value = p.filters.login; }
+  if (p.filters.sort     !== undefined) { const el = document.getElementById('investorSortOrder');      if (el) el.value = p.filters.sort; }
+  if (p.filters.search   !== undefined) { const el = document.getElementById('globalSearch');           if (el) el.value = p.filters.search; }
+  applyInvestorFilters();
+  const drop = document.getElementById('filterPresetDrop');
+  if (drop) drop.style.display = 'none';
+  Toast.success(`Preset "${p.name}" loaded`);
+}
+
+function _deleteInvestorPreset(idx) {
+  const presets = _getPresets();
+  const name = presets[idx]?.name || 'preset';
+  presets.splice(idx, 1);
+  localStorage.setItem('svc_inv_presets', JSON.stringify(presets));
+  _renderPresetDropdown();
+  Toast.info(`"${name}" deleted`);
 }
 
 function renderInvestorStats() {
@@ -10647,4 +10884,55 @@ async function loadStaffPermissions() {
     </div>
     <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted)">${staff.length} staff account${staff.length!==1?'s':''}</div>`;
   } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load staff: ${e.message}</div>`; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SSE — Real-time Admin Notifications
+══════════════════════════════════════════════════════════════ */
+function _initSSE() {
+  if (!window.EventSource) return;
+  const raw = localStorage.getItem('staffSession');
+  let token = '';
+  try { const s = JSON.parse(raw || '{}'); if (s.token) token = s.token; } catch (_) {}
+  if (!token) { try { token = localStorage.getItem('svc_staff_token') || ''; } catch (_) {} }
+
+  const url = `/api/events/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  let delay = 3000;
+
+  function connect() {
+    const src = new EventSource(url);
+
+    src.addEventListener('kyc_submitted', e => {
+      try {
+        const d = JSON.parse(e.data);
+        Toast.info(`KYC uploaded: ${d.investor_name || 'An investor'} submitted documents`, 9000, {
+          action: { label: 'Review', callback: () => { const btn = document.querySelector('[data-view=kyc]'); if (btn) navigate('kyc', btn); } }
+        });
+        const badge = document.getElementById('kycBadge');
+        if (badge) badge.textContent = (parseInt(badge.textContent, 10) || 0) + 1;
+      } catch (_) {}
+    });
+
+    src.addEventListener('withdrawal_requested', e => {
+      try {
+        const d = JSON.parse(e.data);
+        const amt = d.amount ? ` — R${parseFloat(d.amount).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}` : '';
+        Toast.info(`Withdrawal request: ${d.investor_name || 'Investor'}${amt}`, 9000, {
+          action: { label: 'Review', callback: () => { const btn = document.querySelector('[data-view=withdrawals]'); if (btn) navigate('withdrawals', btn); } }
+        });
+      } catch (_) {}
+    });
+
+    src.addEventListener('investor_registered', e => {
+      try {
+        const d = JSON.parse(e.data);
+        Toast.info(`New investor: ${d.investor_name || 'Investor'} registered`, 6000);
+      } catch (_) {}
+    });
+
+    src.onerror = () => { src.close(); delay = Math.min(delay * 2, 30000); setTimeout(connect, delay); };
+    src.onopen  = () => { delay = 3000; };
+  }
+
+  connect();
 }

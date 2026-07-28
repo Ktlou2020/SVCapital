@@ -268,6 +268,37 @@
           </div>
         </div>
 
+        <div class="stats-row" id="dashStats2" style="margin-top:10px">
+          <div class="stat-card" style="cursor:pointer" onclick="navigate('kyc', document.querySelector('[data-view=kyc]'))">
+            <div class="stat-card__header">
+              <div class="stat-card__icon"><i class="fa-solid fa-id-card-clip"></i></div>
+            </div>
+            <div class="stat-card__value" id="ds-fica-rate">—</div>
+            <div class="stat-card__label">FICA Completion Rate</div>
+          </div>
+          <div class="stat-card" style="cursor:pointer" onclick="navigate('kyc', document.querySelector('[data-view=kyc]'))">
+            <div class="stat-card__header">
+              <div class="stat-card__icon"><i class="fa-solid fa-clock"></i></div>
+            </div>
+            <div class="stat-card__value" id="ds-pending-kyc">—</div>
+            <div class="stat-card__label">Pending KYC Reviews</div>
+          </div>
+          <div class="stat-card" style="cursor:pointer" onclick="navigate('maturity', document.querySelector('[data-view=maturity]'))">
+            <div class="stat-card__header">
+              <div class="stat-card__icon"><i class="fa-solid fa-calendar-check"></i></div>
+            </div>
+            <div class="stat-card__value" id="ds-upcoming-maturities">—</div>
+            <div class="stat-card__label">Maturities (90 days)</div>
+          </div>
+          <div class="stat-card" style="cursor:pointer" onclick="navigate('withdrawals', document.querySelector('[data-view=withdrawals]'))">
+            <div class="stat-card__header">
+              <div class="stat-card__icon"><i class="fa-solid fa-money-bill-wave"></i></div>
+            </div>
+            <div class="stat-card__value" id="ds-pending-withdrawals">—</div>
+            <div class="stat-card__label">Pending Withdrawals</div>
+          </div>
+        </div>
+
         <div class="grid-layout grid-layout--sidebar">
           <!-- Left column -->
           <div>
@@ -419,6 +450,16 @@
                 <option value="wallet_desc">Wallet (High–Low)</option>
                 <option value="invested_desc">Invested (High–Low)</option>
               </select>
+              <div style="position:relative;display:inline-block">
+                <button class="btn btn--ghost btn--sm" id="filterPresetBtn" onclick="_togglePresetDropdown(event)" title="Saved filter presets"><i class="fa-solid fa-bookmark"></i></button>
+                <div id="filterPresetDrop" style="display:none;position:absolute;right:0;top:calc(100% + 4px);min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.18);z-index:999;padding:8px 0">
+                  <div style="padding:6px 12px;font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Saved Presets</div>
+                  <div id="filterPresetList"></div>
+                  <div style="border-top:1px solid var(--border);margin:4px 0;padding-top:4px">
+                    <button onclick="_saveCurrentPreset()" style="display:block;width:100%;text-align:left;padding:7px 12px;background:none;border:none;cursor:pointer;font-size:0.8rem;color:var(--text)"><i class="fa-solid fa-plus" style="margin-right:6px;color:#eda5ff"></i>Save current filters</button>
+                  </div>
+                </div>
+              </div>
               <button class="btn btn--primary btn--sm" onclick="openAddInvestorModal()">
                 <i class="fa-solid fa-plus"></i> Add Investor
               </button>
@@ -439,6 +480,9 @@
               <span id="invBulkCount" style="font-weight:700;font-size:0.82rem;color:var(--text)">0 selected</span>
               <button class="btn btn--primary btn--sm" onclick="bulkSendLoginInvites()"><i class="fa-solid fa-paper-plane"></i> Send Login Invite</button>
               <button class="btn btn--ghost btn--sm" onclick="clearInvestorSelection()"><i class="fa-solid fa-xmark"></i> Clear</button>
+              <button class="btn btn--danger btn--sm" onclick="bulkArchiveInvestors()"><i class="fa-solid fa-box-archive"></i> Archive</button>
+              <button class="btn btn--success btn--sm" onclick="bulkApproveFica()"><i class="fa-solid fa-id-card-clip"></i> Approve FICA</button>
+              <button class="btn btn--secondary btn--sm" onclick="bulkExportSelected()"><i class="fa-solid fa-file-csv"></i> Export</button>
             </div>
             <div id="invSelectAllBanner" style="display:none;font-size:0.78rem;color:var(--text-muted)"></div>
           </div>
@@ -3012,6 +3056,35 @@
       <div style="display:flex;gap:10px;justify-content:flex-end">
         <button class="btn btn--secondary" onclick="Modal.close('manualCreditModal')">Cancel</button>
         <button class="btn btn--success" onclick="submitManualCredit()"><i class="fa-solid fa-plus"></i> Credit Wallet</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Keyboard Shortcuts Help Overlay -->
+<div class="modal-overlay" id="kbShortcutsModal" style="display:none;align-items:center;justify-content:center">
+  <div class="modal" style="max-width:480px;width:92%">
+    <div class="modal__header">
+      <div class="modal__title"><i class="fa-solid fa-keyboard"></i> Keyboard Shortcuts</div>
+      <button class="modal__close" onclick="Modal.close('kbShortcutsModal')">×</button>
+    </div>
+    <div class="modal__body" style="padding:16px 20px">
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:7px 20px;font-size:0.82rem;align-items:center">
+        <div style="font-weight:700;color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;grid-column:1/-1;padding-top:4px">Navigation</div>
+        <div><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">g</kbd> <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">d</kbd></div><div style="color:var(--text-muted)">Dashboard</div>
+        <div><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">g</kbd> <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">i</kbd></div><div style="color:var(--text-muted)">Investors</div>
+        <div><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">g</kbd> <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">t</kbd></div><div style="color:var(--text-muted)">Transactions</div>
+        <div><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">g</kbd> <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">k</kbd></div><div style="color:var(--text-muted)">KYC</div>
+        <div><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">g</kbd> <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">m</kbd></div><div style="color:var(--text-muted)">Maturity Instructions</div>
+        <div style="font-weight:700;color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;grid-column:1/-1;padding-top:8px">Table Navigation</div>
+        <div><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">j</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">k</kbd></div><div style="color:var(--text-muted)">Next / previous row</div>
+        <div><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">↑</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">↓</kbd></div><div style="color:var(--text-muted)">Navigate rows</div>
+        <div style="font-weight:700;color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;grid-column:1/-1;padding-top:8px">General</div>
+        <div><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">/</kbd></div><div style="color:var(--text-muted)">Focus search</div>
+        <div><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">Ctrl</kbd> <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">K</kbd></div><div style="color:var(--text-muted)">Command palette</div>
+        <div><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">r</kbd></div><div style="color:var(--text-muted)">Refresh current view</div>
+        <div><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">Esc</kbd></div><div style="color:var(--text-muted)">Close modal / clear</div>
+        <div><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:0.75rem">?</kbd></div><div style="color:var(--text-muted)">This help overlay</div>
       </div>
     </div>
   </div>
