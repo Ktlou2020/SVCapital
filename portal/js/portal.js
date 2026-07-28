@@ -3,6 +3,41 @@
    ═══════════════════════════════════════════════ */
 'use strict';
 
+/* ─── Admin "View as Investor" — consume ?viewas=<jwt> before any auth check ─── */
+(() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const viewasToken = params.get('viewas');
+    if (!viewasToken) return;
+
+    // Decode JWT payload (no crypto verification — server already signed it)
+    const parts = viewasToken.split('.');
+    if (parts.length !== 3) return;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (!payload.sub || payload.purpose !== 'admin_view_as') return;
+
+    // Inject token so Auth.isLoggedIn() and all API calls work as the investor
+    localStorage.setItem('svc_token', viewasToken);
+    localStorage.setItem('svc_user', JSON.stringify({
+      investorId: payload.sub,
+      email:      payload.email || '',
+      firstName:  payload.firstName || '',
+      lastName:   payload.lastName  || '',
+      role:       'investor',
+      _viewas:    true,
+    }));
+    // Clear stale cache so fresh investor data loads
+    localStorage.removeItem('svc_portal_cache');
+    // Flag for the banner (sessionStorage so it clears when the tab closes)
+    sessionStorage.setItem('svc_viewas_active', '1');
+    sessionStorage.setItem('svc_viewas_name', `${payload.firstName || ''} ${payload.lastName || ''}`.trim() || payload.email || payload.sub);
+
+    // Remove token from URL so it isn't visible or re-processed on refresh
+    const clean = window.location.pathname + window.location.hash;
+    history.replaceState(null, '', clean);
+  } catch (_) {}
+})();
+
 /* ─── Resolve investor ID from JWT session or fall back to demo ─── */
 const DEMO_INVESTOR_ID = (() => {
   // Check JWT-based auth first
@@ -1584,6 +1619,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   _checkAutoStartTour();
   load2FAStatus();
   _startPolling();
+
+  // Admin "View as Investor" banner
+  if (sessionStorage.getItem('svc_viewas_active') === '1') {
+    const invName = sessionStorage.getItem('svc_viewas_name') || 'investor';
+    const banner = document.createElement('div');
+    banner.id = 'viewasBanner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fec24f;color:#1a1a1a;padding:8px 16px;display:flex;align-items:center;gap:10px;font-size:0.82rem;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.25)';
+    banner.innerHTML = `<i class="fa-solid fa-eye"></i> Admin View — viewing as <strong>${_esc(invName)}</strong> &nbsp;·&nbsp; <span style="font-weight:400">Read-only. Changes made here affect the real account.</span><button onclick="sessionStorage.removeItem('svc_viewas_active');sessionStorage.removeItem('svc_viewas_name');localStorage.removeItem('svc_token');localStorage.removeItem('svc_user');window.close()" style="margin-left:auto;background:rgba(0,0,0,0.15);border:none;cursor:pointer;font-weight:700;padding:4px 12px;border-radius:4px;font-size:0.78rem;color:#1a1a1a">✕ Exit</button>`;
+    document.body.prepend(banner);
+    // Push page content down so the banner doesn't overlap it
+    document.body.style.paddingTop = '38px';
+  }
   _initPullToRefresh();
 
   // Watchdog: runs at 100ms, 600ms, and 1500ms to ensure the active view is visible.

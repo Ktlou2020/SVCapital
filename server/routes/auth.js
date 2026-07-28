@@ -1216,7 +1216,8 @@ router.post('/investor-magic-link', requireAuth, async (req, res) => {
     if (!r.rows.length) return res.status(404).json({ error: 'Investor not found' });
     const inv = r.rows[0];
     const token = jwt.sign(
-      { sub: inv.id, email: inv.email, role: 'investor', purpose: 'admin_view_as' },
+      { sub: inv.id, email: inv.email, role: 'investor', purpose: 'admin_view_as',
+        firstName: inv.first_name || '', lastName: inv.last_name || '' },
       JWT_SECRET,
       { expiresIn: '15m' }
     );

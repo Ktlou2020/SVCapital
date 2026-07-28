@@ -18,20 +18,26 @@
   <script src="https://js.paystack.co/v2/inline.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
-  <link rel="stylesheet" href="../css/admin.css" />
-  <link rel="stylesheet" href="css/portal.css" />
+  <link rel="stylesheet" href="../css/admin.css?v=4" />
+  <link rel="stylesheet" href="css/portal.css?v=3" />
   <link rel="stylesheet" href="../css/ci-theme.css" />
   <!-- sv-intelligence hidden -->
-  <link rel="stylesheet" href="css/portal-premium.css" />
+  <link rel="stylesheet" href="css/portal-premium.css?v=3" />
   <!-- Payment modal must retain dark theme — isolate from ci-theme overrides -->
   <style>
     #topUpModal.modal-overlay { background: rgba(0,0,0,0.82) !important; }
     #paymentModalBox {
-      background: #303030 !important;
+      background: #0f1117 !important;
       border: 1px solid rgba(255,155,12,0.25) !important;
-      box-shadow: 0 24px 64px rgba(0,0,0,0.55) !important;
-      color: var(--white, #f0f4ff) !important;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.65) !important;
+      color: #f0f4ff !important;
     }
+    #paymentModalBox [style*="background:#1a1d23"],
+    #paymentModalBox [style*="background: #1a1d23"] { background: #0f1117 !important; }
+    #paymentModalBox [style*="background:#141720"],
+    #paymentModalBox [style*="background: #141720"] { background: #0a0d13 !important; }
+    #paymentModalBox [style*="background:#252933"],
+    #paymentModalBox [style*="background: #252933"] { background: #161920 !important; }
     #paymentModalBox * { box-sizing: border-box; }
   </style>
   <!-- Google Analytics 4 -->
@@ -176,9 +182,6 @@
         <button class="topbar-btn" title="Take a tour" onclick="startTour()" id="tourBtn" style="position:relative">
           <i class="fa-solid fa-map"></i>
           <span class="tour-btn-pulse"></span>
-        </button>
-        <button class="topbar-btn dark-mode-toggle" title="Toggle dark mode" onclick="toggleDarkMode()" id="darkModeBtn" aria-label="Toggle dark mode">
-          <i class="fa-solid fa-moon" id="darkModeIcon"></i>
         </button>
         <div style="position:relative">
           <button class="topbar-btn" title="Notifications" onclick="toggleNotifPanel()" id="notifBtn" aria-label="Open notifications">
@@ -707,7 +710,7 @@
             <h2 class="section-banner__title">Investment Products</h2>
             <p class="section-banner__sub">Choose a product to see its details, factsheets and open pools — then invest. All investments are FSCA-regulated via SmartVest Financial Services (FSP 52449).</p>
           </div>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:nowrap">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
             <div class="tab-bar" id="marketRiskTabBar" style="align-self:center">
               <span style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-right:4px;align-self:center">Risk</span>
               <button class="tab-btn active" onclick="filterMarket('all', this)">All</button>
@@ -722,33 +725,6 @@
             <button class="btn btn--sm" onclick="openInvestNowPicker()" style="white-space:nowrap;background:linear-gradient(135deg,#ff9b0c,#ff5229);color:#fff;border:none;font-weight:700">
               <i class="fa-solid fa-bolt"></i> Invest Now
             </button>
-          </div>
-        </div>
-
-        <!-- How to Invest steps -->
-        <div class="invest-guide-strip mb-16">
-          <div class="igs-step">
-            <div class="igs-num">1</div>
-            <i class="fa-solid fa-wallet igs-icon"></i>
-            <div class="igs-text"><b>Fund Wallet</b><span>Top up via Paystack or EFT</span></div>
-          </div>
-          <i class="fa-solid fa-chevron-right igs-arrow"></i>
-          <div class="igs-step igs-step--active">
-            <div class="igs-num">2</div>
-            <i class="fa-solid fa-layer-group igs-icon"></i>
-            <div class="igs-text"><b>Choose a Pool</b><span>Browse open opportunities below</span></div>
-          </div>
-          <i class="fa-solid fa-chevron-right igs-arrow"></i>
-          <div class="igs-step">
-            <div class="igs-num">3</div>
-            <i class="fa-solid fa-coins igs-icon"></i>
-            <div class="igs-text"><b>Confirm Amount</b><span>Set your investment size</span></div>
-          </div>
-          <i class="fa-solid fa-chevron-right igs-arrow"></i>
-          <div class="igs-step">
-            <div class="igs-num">4</div>
-            <i class="fa-solid fa-chart-line igs-icon"></i>
-            <div class="igs-text"><b>Earn Returns</b><span>Track in My Investments</span></div>
           </div>
         </div>
 
@@ -1344,11 +1320,11 @@
                     <option value="2023">March 2022 – February 2023</option>
                   </select>
                 </div>
-                <div style="display:flex;gap:10px">
-                  <button class="btn btn--success" style="flex:1" onclick="generateTaxCertificate()">
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                  <button class="btn btn--success" style="flex:1;min-width:160px" onclick="generateTaxCertificate()">
                     <i class="fa-solid fa-file-arrow-down"></i> Preview / Print Certificate
                   </button>
-                  <button class="btn btn--secondary" style="flex:1" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(_lastTaxCertHTML),200)">
+                  <button class="btn btn--secondary" style="flex:1;min-width:130px" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(_lastTaxCertHTML),200)">
                     <i class="fa-solid fa-file-pdf"></i> Download PDF
                   </button>
                 </div>
@@ -2264,8 +2240,8 @@
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Upload File (PDF, JPG, PNG — max 5 MB)</label>
-        <input type="file" class="form-input" id="saFicaFileInput" accept=".pdf,.jpg,.jpeg,.png" onchange="saFicaFileChange(this)" />
+        <label class="form-label">Upload File (PDF, JPG, PNG — max 5 MB) <span style="color:#ef4444">*</span></label>
+        <input type="file" class="form-input" id="saFicaFileInput" accept=".pdf,.jpg,.jpeg,.png" required onchange="saFicaFileChange(this)" />
         <div id="saFicaFilePreview" style="display:none;margin-top:8px;font-size:0.82rem;color:#22c55e;font-weight:600"></div>
       </div>
     </div>
@@ -2902,7 +2878,7 @@
       </p>
       <div class="form-group">
         <label class="form-label">Document Type <span style="color:#ef4444">*</span></label>
-        <select class="form-select" id="kycDocType">
+        <select class="form-select" id="kycDocType" onchange="_kycDocTypeChanged(this.value)">
           <option value="">— Select document type —</option>
           <option value="id_document">South African ID / Passport</option>
           <option value="proof_of_address">Proof of Address (bank statement, utility bill)</option>
@@ -2912,6 +2888,15 @@
           <option value="other">Other Supporting Document</option>
         </select>
       </div>
+      <div class="form-group" id="kycDocSubtypeGroup" style="display:none">
+        <label class="form-label">ID Document Type <span style="color:#ef4444">*</span></label>
+        <select class="form-select" id="kycDocSubtype">
+          <option value="">— Select —</option>
+          <option value="rsa_id">South African ID (Green Book / Smart Card)</option>
+          <option value="passport">Passport</option>
+          <option value="asylum_permit">Asylum Seeker / Refugee Permit</option>
+        </select>
+      </div>
       <div class="form-group">
         <label class="form-label">Select File <span style="color:#ef4444">*</span></label>
         <div id="kycDropZone" style="border:2px dashed rgba(255,155,12,0.35);border-radius:10px;padding:24px 16px;text-align:center;cursor:pointer;transition:all 0.2s;background:rgba(255,155,12,0.03)" onclick="document.getElementById('kycFileInput').click()" ondragover="event.preventDefault();this.style.borderColor='#FF9B0C'" ondragleave="this.style.borderColor='rgba(255,155,12,0.35)'" ondrop="_kycHandleDrop(event)">
@@ -2919,7 +2904,7 @@
           <div style="font-size:0.85rem;font-weight:600;color:#1a1a1a">Click to browse or drag & drop</div>
           <div style="font-size:0.72rem;color:#9ca3af;margin-top:4px">JPG, PNG or PDF · Max 10 MB</div>
         </div>
-        <input type="file" id="kycFileInput" accept="image/*,.pdf" style="display:none" onchange="_kycFileSelected(this.files[0])">
+        <input type="file" id="kycFileInput" accept="image/*,.pdf" style="display:none" required onchange="_kycFileSelected(this.files[0])">
         <div id="kycFileStatus" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.25);border-radius:8px;display:flex;align-items:center;gap:10px">
           <i class="fa-solid fa-file-check" style="color:#22c55e;font-size:1rem"></i>
           <span id="kycFileName" style="font-size:0.82rem;color:#1a1a1a;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
@@ -2981,7 +2966,7 @@
   </div>
 </nav>
 
-<script src="../js/api.js?v=3"></script>
+<script src="../js/api.js?v=7"></script>
 <!-- Capacitor native bridge — detects Capacitor WebView and activates native features
      (push notifications, haptics, status bar, back button, network monitoring) -->
 <script>
@@ -2991,7 +2976,7 @@ if (window.Capacitor) {
 }
 </script>
 <script src="/js/native.js"></script>
-<script src="js/portal.js?v=22"></script>
+<script src="js/portal.js?v=56"></script>
 <!-- sv-intelligence.js hidden -->
 <script>
 // Service worker: web browsers only (not Capacitor). Handles web push notifications.
