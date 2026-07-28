@@ -359,8 +359,11 @@ const _MERGED_VIEW_MAP = {
   'emaillogs':     { parent: 'comms',       pane: 'emaillogs'     },
   'auditlog':      { parent: 'compliance',  pane: 'auditlog'      },
   'accepted-docs': { parent: 'compliance',  pane: 'accepted-docs' },
+  'maturities':    { parent: 'compliance',  pane: 'maturities'    },
+  'failed-logins': { parent: 'compliance',  pane: 'failed-logins' },
   'privacy':       { parent: 'terms',       pane: 'privacy'       },
   'migrate':       { parent: 'settings',    pane: 'migrate'       },
+  'staff':         { parent: 'settings',    pane: 'staff'         },
 };
 
 function switchViewTab(parentView, paneId, btn) {
@@ -384,8 +387,11 @@ function switchViewTab(parentView, paneId, btn) {
     'emaillogs':     () => typeof loadEmailLogs !== 'undefined' && loadEmailLogs(),
     'auditlog':      () => typeof loadAuditLog !== 'undefined' && loadAuditLog(),
     'accepted-docs': () => typeof loadAcceptedDocuments !== 'undefined' && loadAcceptedDocuments(),
+    'maturities':    () => typeof loadUpcomingMaturities !== 'undefined' && loadUpcomingMaturities(),
+    'failed-logins': () => typeof loadFailedLogins !== 'undefined' && loadFailedLogins(),
     'privacy':       () => typeof loadPrivacyEditor !== 'undefined' && loadPrivacyEditor(),
     'migrate':       () => typeof loadMigration !== 'undefined' && loadMigration(),
+    'staff':         () => typeof loadStaffPermissions !== 'undefined' && loadStaffPermissions(),
   };
   if (secondaryLoaders[paneId]) secondaryLoaders[paneId]();
 }
@@ -1689,6 +1695,8 @@ async function viewInvestor(id) {
     <button class="tab-btn inv-tab-btn"        id="invTab-transactions"  onclick="_invTab('transactions')"><i class="fa-solid fa-arrows-rotate" style="margin-right:5px"></i>Transactions</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-activity"      onclick="_invTab('activity');_loadInvestorActivity('${inv.id}')"><i class="fa-solid fa-mobile-screen" style="margin-right:5px"></i>Activity</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-admin"         onclick="_invTab('admin')"><i class="fa-solid fa-shield-halved" style="margin-right:5px"></i>Admin</button>
+    <button class="tab-btn inv-tab-btn"        id="invTab-statements"    onclick="_invTab('statements');_loadInvestorStatements('${inv.id}')"><i class="fa-solid fa-file-lines" style="margin-right:5px"></i>Statements</button>
+    <button class="tab-btn inv-tab-btn"        id="invTab-comms"         onclick="_invTab('comms')"><i class="fa-solid fa-envelope" style="margin-right:5px"></i>Comms</button>
   </div>
 
   <!-- ── Overview ── -->
@@ -1754,6 +1762,8 @@ async function viewInvestor(id) {
         ${inv.status === 'archived'
           ? `<button class="btn btn--sm" style="background:rgba(253,186,116,.15);color:#fb923c;border:1px solid rgba(253,186,116,.3)" onclick='unarchiveInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-box-open"></i> Unarchive</button>`
           : `<button class="btn btn--sm" style="background:rgba(156,163,175,.1);color:var(--text-muted);border:1px solid rgba(156,163,175,.2)" onclick='confirmArchiveInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-box-archive"></i> Archive</button>`}
+        <button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='viewAsInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-eye"></i> View as Investor</button>
+        <button class="btn btn--sm" style="background:rgba(59,130,246,.1);color:#60a5fa;border:1px solid rgba(59,130,246,.25)" onclick='_invTab("comms")'><i class="fa-solid fa-envelope"></i> Send Email</button>
       </div>
       <button class="btn btn--primary btn--sm" onclick='Modal.close("investorDetailModal")'><i class="fa-solid fa-check"></i> Done</button>
     </div>
@@ -1913,6 +1923,29 @@ async function viewInvestor(id) {
       </div>
       <div class="panel__body" id="invActivity-sessions">
         <div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Statements ── -->
+  <div id="invPanel-statements" style="display:none">
+    <div id="invStatementsList"><div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div></div>
+  </div>
+
+  <!-- ── Comms ── -->
+  <div id="invPanel-comms" style="display:none">
+    <div class="panel mb-16">
+      <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-paper-plane" style="color:#60a5fa;margin-right:6px"></i>Send Email to Investor</span></div>
+      <div class="panel__body">
+        <div class="form-group mb-10">
+          <label class="form-label">Subject *</label>
+          <input type="text" class="form-input" id="invEmailSubject" placeholder="e.g. Your investment update">
+        </div>
+        <div class="form-group mb-12">
+          <label class="form-label">Message *</label>
+          <textarea class="form-input" id="invEmailMessage" style="min-height:140px;resize:vertical" placeholder="Type your message to ${_esc(inv.first_name)}…"></textarea>
+        </div>
+        <button class="btn btn--primary" onclick='sendInvestorEmail(${JSON.stringify(inv.id)},${JSON.stringify(inv.email)},this)'><i class="fa-solid fa-paper-plane"></i> Send Email</button>
       </div>
     </div>
   </div>
@@ -3423,7 +3456,7 @@ function renderPoolsGrid() {
           ${isWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="reopenPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-door-open" style="color:#22c55e;width:16px"></i> Reopen Pool</button>` : ''}
           <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="editPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-pen" style="width:16px"></i> Edit Pool</button>
           ${p.status === 'open' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="closePool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-lock" style="color:#ef4444;width:16px"></i> Close Pool</button>` : ''}
-          ${p.status === 'matured' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="markPaidOut('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-check" style="color:#22c55e;width:16px"></i> Record Final Rate</button>` : ''}
+          ${p.status === 'matured' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="openPoolCloseoutWizard('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-circle-check" style="color:#22c55e;width:16px"></i> Close-out Wizard</button>` : ''}
           <div style="height:1px;background:var(--border);margin:4px 0"></div>
           <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem;color:#ef4444" onclick="deletePool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-trash" style="width:16px"></i> Delete Pool</button>
         </div>
@@ -3997,13 +4030,7 @@ async function closePool(id) {
 }
 
 async function markPaidOut(id) {
-  const rate = prompt('Enter actual achieved rate (e.g. 0.1561):');
-  if (!rate) return;
-  try {
-    await API.pools.update(id, { status: 'matured', actual_rate: parseFloat(rate) });
-    Toast.success('Pool finalised (matured)');
-    await loadPools();
-  } catch (e) { Toast.error('Failed to update pool'); }
+  openPoolCloseoutWizard(id);
 }
 
 function openMergePoolModal(sourceId) {
@@ -4121,6 +4148,8 @@ function editPool(id) {
   if (opFeeEl) opFeeEl.value = pool.operational_fee_pct ? (Number(pool.operational_fee_pct) * 100).toFixed(4).replace(/\.?0+$/, '') : 0;
   const opFeeFreqEl = document.getElementById('editPoolOpFeeFreq');
   if (opFeeFreqEl) opFeeFreqEl.value = pool.operational_fee_frequency || 'annual';
+  const notesEl = document.getElementById('editPoolAdminNotes');
+  if (notesEl) notesEl.value = pool.admin_notes || '';
 
   Modal.open('editPoolModal');
 }
@@ -4154,6 +4183,7 @@ async function saveEditPool(btn) {
     management_fee_frequency:  document.getElementById('editPoolMgtFeeFreq')?.value || 'once',
     operational_fee_pct:       (parseFloat(document.getElementById('editPoolOpFeePct')?.value) || 0) / 100,
     operational_fee_frequency: document.getElementById('editPoolOpFeeFreq')?.value || 'annual',
+    admin_notes:    document.getElementById('editPoolAdminNotes')?.value.trim() || null,
   };
 
   if (!updates.name) { Toast.error('Pool name is required'); return; }
@@ -6533,6 +6563,37 @@ function viewIFA(ifaId) {
         </div>`
     }
 
+    ${clients.length ? (() => {
+      const rate = ifa.commission_rate || 0;
+      const rows = clients.map(c => {
+        const invested = c.total_invested || 0;
+        const comm = invested * (rate / 100);
+        return `<tr>
+          <td class="td-strong">${_esc(c.first_name)} ${_esc(c.last_name)}</td>
+          <td class="td-muted" style="font-size:0.78rem">${_esc(c.id)}</td>
+          <td class="td-gold fw-700">${Utils.rand(invested)}</td>
+          <td class="td-green fw-700">${Utils.rand(comm)}</td>
+        </tr>`;
+      });
+      const totalComm = clients.reduce((s,c) => s + (c.total_invested||0) * (rate/100), 0);
+      return `
+    <div class="panel mt-16 mb-16">
+      <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-coins" style="color:var(--gold);margin-right:6px"></i>Commission Report</span><span style="font-size:0.75rem;color:var(--text-muted)">${rate}% rate</span></div>
+      <div class="panel__body" style="padding:0">
+        <div style="overflow-x:auto">
+          <table class="data-table">
+            <thead><tr><th>Client</th><th>ID</th><th>Total Invested</th><th>Commission</th></tr></thead>
+            <tbody>${rows.join('')}</tbody>
+          </table>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:12px 16px;background:rgba(254,194,79,0.07);border-top:1px solid var(--border)">
+          <span style="font-size:0.85rem;font-weight:700;color:var(--text)">Total Commission Owed</span>
+          <span style="font-size:1.05rem;font-weight:800;color:var(--gold)">${Utils.rand(totalComm)}</span>
+        </div>
+      </div>
+    </div>`;
+    })() : ''}
+
     <div class="flex-between mt-16" style="flex-wrap:wrap;gap:8px">
       <div style="display:flex;gap:8px">
         <button class="btn btn--success btn--sm" onclick="toggleIFAStatus('${ifa.id}','${ifa.status}')">
@@ -6773,6 +6834,7 @@ async function saveKycUpload() {
   const fileSize    = parseInt(form.dataset.fileSize)||0;
   const mimeType    = form.dataset.mimeType  || '';
   const statusVal   = document.getElementById('kycUploadStatusField').value || 'pending';
+  const expiryDate  = document.getElementById('kycExpiryDate')?.value || null;
   const statusEl    = document.getElementById('kycUploadStatus');
 
   if (!investorId) { statusEl.textContent = 'Please select an investor'; statusEl.style.color='#ef4444'; return; }
@@ -6793,6 +6855,7 @@ async function saveKycUpload() {
       file_name:     fileName,
       file_data:     fileData,
       status:        statusVal,
+      expiry_date:   expiryDate || null,
       notes:         `Uploaded via admin: ${invName}. Size: ${fileSize}. MIME: ${mimeType}.`
     });
     Toast.success('Document uploaded successfully');
@@ -6963,14 +7026,16 @@ function _downloadCSV(rows, filename) {
 
 function exportInvestorsCSV() {
   if (!STATE.investors.length) { Toast.error('Load investors first'); return; }
+  const data = (filteredInvestors && filteredInvestors.length && filteredInvestors.length < STATE.investors.length)
+    ? filteredInvestors : STATE.investors;
   const headers = ['ID','First Name','Last Name','Email','Phone','FICA Status','Wallet Balance','Total Invested','Total Returns','Date Joined'];
-  const rows = [headers, ...STATE.investors.map(i => [
+  const rows = [headers, ...data.map(i => [
     i.id, i.first_name, i.last_name, i.email, i.phone || '',
     i.fica_status, i.wallet_balance || 0, i.total_invested || 0, i.total_returns || 0,
     i.date_joined ? new Date(i.date_joined).toLocaleDateString('en-ZA') : '',
   ])];
   _downloadCSV(rows, `investors-${new Date().toISOString().slice(0,10)}.csv`);
-  Toast.success(`Exported ${STATE.investors.length} investors`);
+  Toast.success(`Exported ${data.length} investors${data.length < STATE.investors.length ? ' (filtered)' : ''}`);
 }
 
 function exportTransactionsCSV() {
@@ -9195,16 +9260,34 @@ async function loadCompliance() {
     }).join('');
   }
 
-  // KYC expiry — investors with pending KYC older than 90 days
+  // KYC expiry — documents with expiry_date within 60 days, plus stale pending KYC
   const kycEl = document.getElementById('kycExpiryBody');
   if (kycEl) {
+    const in60 = new Date(now.getTime() + 60 * 86400000);
+    const expiring = STATE.kyc.filter(k => k.expiry_date && new Date(k.expiry_date) <= in60);
     const stale = STATE.investors.filter(i => i.kyc_status === 'pending' && i.date_joined && (now - new Date(i.date_joined)) > 90 * 86400000).slice(0, 10);
-    kycEl.innerHTML = stale.length
-      ? stale.map(i => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-          <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${i.first_name} ${i.last_name}</div><div style="font-size:0.7rem;color:var(--text-muted)">${i.id}</div></div>
+    const alerts = [
+      ...expiring.map(k => {
+        const inv = STATE.investors.find(i => i.id === k.investor_id);
+        const name = k.investor_name || (inv ? `${inv.first_name} ${inv.last_name}` : k.investor_id);
+        const daysLeft = Math.ceil((new Date(k.expiry_date) - now) / 86400000);
+        const isPast = daysLeft < 0;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(name)}</div>
+            <div style="font-size:0.7rem;color:var(--text-muted)">${_esc(k.doc_type || k.document_type || 'Document')} · expires ${Utils.date(k.expiry_date)}</div>
+          </div>
+          <span class="badge ${isPast ? 'badge--red' : 'badge--yellow'}" style="font-size:0.68rem">${isPast ? 'Expired' : `${daysLeft}d left`}</span>
+        </div>`;
+      }),
+      ...stale.map(i => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${i.first_name} ${i.last_name}</div><div style="font-size:0.7rem;color:var(--text-muted)">${i.id} · pending &gt;90 days</div></div>
           <span class="badge badge--red" style="font-size:0.68rem">KYC Stale</span>
-        </div>`).join('')
-      : '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:0.82rem"><i class="fa-solid fa-circle-check" style="color:#22c55e;margin-right:6px"></i>No stale KYC records</div>';
+        </div>`),
+    ];
+    kycEl.innerHTML = alerts.length
+      ? alerts.join('')
+      : '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:0.82rem"><i class="fa-solid fa-circle-check" style="color:#22c55e;margin-right:6px"></i>No KYC expiry alerts</div>';
   }
 
   // Maturity instructions outstanding
@@ -10236,4 +10319,259 @@ async function retryAllFailedEmails() {
   } catch (e) {
     Toast.error(e.message || 'Bulk resend failed.');
   }
+}
+
+/* ═══════════════════════════════════════════════
+   SEND EMAIL TO SINGLE INVESTOR
+   ═══════════════════════════════════════════════ */
+async function sendInvestorEmail(investorId, email, btn) {
+  const subject = document.getElementById('invEmailSubject')?.value.trim();
+  const message = document.getElementById('invEmailMessage')?.value.trim();
+  if (!subject) { Toast.error('Subject is required'); return; }
+  if (!message) { Toast.error('Message is required'); return; }
+  await _withBtn(btn, async () => {
+    try {
+      await API._fetch('POST', 'admin/send-investor-email', { investor_id: investorId, subject, message });
+      Toast.success(`Email sent to ${email}`);
+      const subEl = document.getElementById('invEmailSubject');
+      const msgEl = document.getElementById('invEmailMessage');
+      if (subEl) subEl.value = '';
+      if (msgEl) msgEl.value = '';
+    } catch (e) { Toast.error('Failed to send email: ' + (e.message || 'error')); }
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   VIEW AS INVESTOR (MAGIC LINK)
+   ═══════════════════════════════════════════════ */
+async function viewAsInvestor(investorId) {
+  try {
+    const res = await API._fetch('POST', 'auth/investor-magic-link', { investor_id: investorId });
+    if (!res.ok || !res.url) throw new Error(res.error || 'No URL returned');
+    window.open(res.url, '_blank', 'noopener,noreferrer');
+    Toast.info('Portal opened in a new tab — link expires in 15 minutes');
+  } catch (e) { Toast.error('Failed to generate magic link: ' + (e.message || 'error')); }
+}
+
+/* ═══════════════════════════════════════════════
+   INVESTOR STATEMENTS
+   ═══════════════════════════════════════════════ */
+async function _loadInvestorStatements(investorId) {
+  const el = document.getElementById('invStatementsList');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>';
+  try {
+    const res = await API._fetch('GET', 'admin/investor-statements', null, { investor_id: investorId });
+    const stmts = res.statements || [];
+    if (!stmts.length) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-file-circle-xmark" style="font-size:2rem;display:block;margin-bottom:10px;opacity:0.3"></i>No statements generated yet</div>';
+      return;
+    }
+    const monthNames = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    el.innerHTML = `<div style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr><th>Period</th><th>Generated</th><th></th></tr></thead>
+        <tbody>${stmts.map(s => `<tr>
+          <td class="td-strong">${monthNames[s.period_month] || s.period_month} ${s.period_year}</td>
+          <td class="td-muted">${Utils.date(s.created_at)}</td>
+          <td><button class="btn btn--secondary btn--sm" onclick='downloadInvestorStatement(${JSON.stringify(s.id)},${JSON.stringify(investorId)},${s.period_year},${s.period_month},this)'><i class="fa-solid fa-download"></i> PDF</button></td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  } catch (e) {
+    el.innerHTML = '<div style="text-align:center;padding:32px;color:#ef4444;font-size:0.82rem"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load statements</div>';
+  }
+}
+
+async function downloadInvestorStatement(stmtId, investorId, year, month, btn) {
+  await _withBtn(btn, async () => {
+    try {
+      const token = localStorage.getItem('svc_token');
+      const r = await fetch(`/api/admin/investor-statements/${encodeURIComponent(stmtId)}/pdf?investor_id=${encodeURIComponent(investorId)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `SVC-Statement-${year}-${String(month).padStart(2,'0')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { Toast.error('Failed to download: ' + e.message); }
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   POOL CLOSE-OUT WIZARD
+   ═══════════════════════════════════════════════ */
+function openPoolCloseoutWizard(poolId) {
+  const pool = STATE.pools.find(p => p.id === poolId);
+  if (!pool) return;
+  const investors = (STATE.investments || []).filter(i => i.pool_id === poolId && i.status === 'active');
+  const totalAmt  = investors.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const modal = document.getElementById('poolCloseoutModal');
+  if (!modal) { Toast.error('Close-out modal not found — refresh the page'); return; }
+  document.getElementById('closeoutPoolId').value   = poolId;
+  document.getElementById('closeoutPoolName').textContent = pool.name;
+  document.getElementById('closeoutInvCount').textContent = `${investors.length} investor${investors.length !== 1 ? 's' : ''}`;
+  document.getElementById('closeoutTotalAmt').textContent = Utils.rand(totalAmt);
+  document.getElementById('closeoutMaturityDate').textContent = Utils.date(pool.maturity_date || pool.end_date);
+  document.getElementById('closeoutActualRate').value = pool.actual_rate ? (pool.actual_rate * 100).toFixed(4) : '';
+  document.getElementById('closeoutNotify').checked = true;
+  Modal.open('poolCloseoutModal');
+}
+
+async function savePoolCloseout(btn) {
+  const poolId    = document.getElementById('closeoutPoolId').value;
+  const rateInput = document.getElementById('closeoutActualRate').value.trim();
+  const notify    = document.getElementById('closeoutNotify')?.checked;
+  if (!rateInput) { Toast.error('Actual rate is required'); return; }
+  const rate = parseFloat(rateInput) / 100;
+  if (isNaN(rate) || rate < 0 || rate > 2) { Toast.error('Enter rate as a percentage (e.g. 15.61)'); return; }
+
+  await _withBtn(btn, async () => {
+    try {
+      await API.pools.update(poolId, { status: 'matured', actual_rate: rate });
+      if (notify) {
+        try {
+          await API._fetch('POST', 'admin/broadcast', {
+            target: 'pool',
+            pool_id: poolId,
+            template: 'maturity_notification',
+            subject: 'Your investment has matured',
+            message: `Your investment has matured at an actual return rate of ${(rate * 100).toFixed(2)}%. Please log in to your portal to view your maturity instruction options.`,
+          });
+        } catch (_) {}
+      }
+      Toast.success('Pool finalised — status set to matured');
+      Modal.close('poolCloseoutModal');
+      await loadPools();
+    } catch (e) { Toast.error('Failed to finalise pool: ' + (e.message || 'error')); }
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   UPCOMING MATURITIES
+   ═══════════════════════════════════════════════ */
+async function loadUpcomingMaturities() {
+  const el = document.getElementById('upcomingMaturitiesBody');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+  try {
+    if (!STATE.pools.length) STATE.pools = (await API.pools.list({ limit: 5000 })).data || [];
+    const now = new Date();
+    const in90 = new Date(now.getTime() + 90 * 86400000);
+    const upcoming = STATE.pools
+      .filter(p => {
+        const mat = p.maturity_date || p.end_date;
+        if (!mat || p.status === 'paid_out') return false;
+        const d = new Date(mat);
+        return d >= now && d <= in90;
+      })
+      .sort((a, b) => new Date(a.maturity_date || a.end_date) - new Date(b.maturity_date || b.end_date));
+
+    if (!upcoming.length) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-circle-check" style="color:#22c55e;margin-right:6px"></i>No pools maturing in the next 90 days</div>';
+      return;
+    }
+    el.innerHTML = `<div style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr><th>Pool</th><th>Partner</th><th>Investors</th><th>Maturity Date</th><th>Days Left</th><th>Status</th><th></th></tr></thead>
+        <tbody>${upcoming.map(p => {
+          const mat = new Date(p.maturity_date || p.end_date);
+          const daysLeft = Math.ceil((mat - now) / 86400000);
+          const urgency  = daysLeft <= 7 ? '#ef4444' : daysLeft <= 30 ? '#fec24f' : '#22c55e';
+          const pi = Utils.productInfo(p.product_type);
+          return `<tr>
+            <td class="td-strong">${_esc(p.name)}</td>
+            <td class="td-muted">${_esc(p.partner_name||'—')}</td>
+            <td style="font-weight:700;color:var(--gold)">${p.live_investor_count ?? p.investor_count ?? 0}</td>
+            <td class="td-muted">${Utils.date(p.maturity_date || p.end_date)}</td>
+            <td><span style="font-weight:800;color:${urgency}">${daysLeft}d</span></td>
+            <td>${Utils.statusBadge(p.status)}</td>
+            <td>
+              ${p.status === 'matured' ? `<button class="btn btn--success btn--sm" onclick="openPoolCloseoutWizard('${p.id}')"><i class="fa-solid fa-check-circle"></i> Close Out</button>` : ''}
+            </td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted);text-align:right">${upcoming.length} pool${upcoming.length!==1?'s':''} maturing within 90 days</div>`;
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${e.message}</div>`; }
+}
+
+/* ═══════════════════════════════════════════════
+   FAILED LOGINS VIEW
+   ═══════════════════════════════════════════════ */
+async function loadFailedLogins() {
+  const el = document.getElementById('failedLoginsBody');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+  try {
+    const res = await API.list('audit_events', {
+      limit: 200,
+      order: 'created_at.desc',
+    });
+    const events = (res.data || []).filter(e => e.event_type === 'user.login_failed' || e.event_type === 'user.login_locked');
+    if (!events.length) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-shield-check" style="color:#22c55e;font-size:2rem;display:block;margin-bottom:10px"></i>No failed login events recorded</div>';
+      return;
+    }
+    el.innerHTML = `<div style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr><th>Time</th><th>Email</th><th>Event</th><th>IP</th><th>Attempts</th></tr></thead>
+        <tbody>${events.map(e => {
+          const meta = (() => { try { return typeof e.metadata === 'string' ? JSON.parse(e.metadata) : (e.metadata || {}); } catch (_) { return {}; } })();
+          const isLock = e.event_type === 'user.login_locked';
+          return `<tr>
+            <td class="td-muted" style="font-size:0.78rem">${Utils.date(e.created_at)}</td>
+            <td class="td-strong" style="font-size:0.82rem">${_esc(e.user_email || e.actor_id || '—')}</td>
+            <td><span class="badge ${isLock ? 'badge--red' : 'badge--yellow'}">${isLock ? 'Account Locked' : 'Failed Login'}</span></td>
+            <td class="td-muted" style="font-family:monospace;font-size:0.78rem">${_esc(e.ip_address || '—')}</td>
+            <td style="font-weight:700;color:${isLock?'#ef4444':'#fec24f'}">${meta.attempts || '—'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted)">${events.length} event${events.length!==1?'s':''} · Showing most recent 200 audit records filtered for login failures</div>`;
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${e.message}</div>`; }
+}
+
+/* ═══════════════════════════════════════════════
+   STAFF PERMISSIONS (RBAC)
+   ═══════════════════════════════════════════════ */
+async function loadStaffPermissions() {
+  const el = document.getElementById('staffPermissionsBody');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+  try {
+    const res = await API.list('users', { limit: 200 });
+    const staff = (res.data || []).filter(u => ['admin','director','fund_manager','ifa','staff'].includes(u.role));
+    if (!staff.length) {
+      el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted);font-size:0.85rem">No staff accounts found</div>';
+      return;
+    }
+    const roleColor = { admin:'#eda5ff', director:'#ef4444', fund_manager:'#fec24f', ifa:'#22c55e', staff:'#60a5fa', investor:'#7a92a8' };
+    el.innerHTML = `<div style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr><th>Name / Email</th><th>Role</th><th>Status</th><th>2FA</th><th>Last Login</th></tr></thead>
+        <tbody>${staff.map(u => {
+          const color = roleColor[u.role] || '#7a92a8';
+          const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email;
+          return `<tr>
+            <td>
+              <div class="td-strong">${_esc(name)}</div>
+              <div class="td-muted" style="font-size:0.72rem">${_esc(u.email)}</div>
+            </td>
+            <td><span class="badge" style="background:${color}22;color:${color};border:1px solid ${color}44">${_esc(u.role)}</span></td>
+            <td>${Utils.statusBadge(u.status || 'active')}</td>
+            <td>${u.totp_enabled ? '<span class="badge badge--green" style="font-size:0.68rem"><i class="fa-solid fa-shield-check"></i> On</span>' : '<span class="badge badge--grey" style="font-size:0.68rem">Off</span>'}</td>
+            <td class="td-muted" style="font-size:0.78rem">${u.last_login ? Utils.date(u.last_login) : '—'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted)">${staff.length} staff account${staff.length!==1?'s':''}</div>`;
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load staff: ${e.message}</div>`; }
 }

@@ -332,4 +332,58 @@ router.post('/run-pool-cycler', async (req, res) => {
   }
 });
 
+// POST /api/admin/send-investor-email
+router.post('/send-investor-email', async (req, res) => {
+  const { investor_id, subject, message, template } = req.body;
+  if (!investor_id || !subject || !message) return res.status(400).json({ error: 'investor_id, subject and message are required' });
+  try {
+    const invRes = await pool.query('SELECT * FROM investors WHERE id = $1', [investor_id]);
+    if (!invRes.rows.length) return res.status(404).json({ error: 'Investor not found' });
+    const investor = invRes.rows[0];
+    const { sendAlert } = require('../services/email');
+    await sendAlert(investor, { subject, message });
+    res.json({ ok: true, sent_to: investor.email });
+  } catch (e) {
+    console.error('[send-investor-email]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/investor-statements?investor_id=xxx
+router.get('/investor-statements', async (req, res) => {
+  const { investor_id } = req.query;
+  if (!investor_id) return res.status(400).json({ error: 'investor_id required' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, investor_id, period_year, period_month, created_at FROM investor_statements WHERE investor_id=$1 ORDER BY period_year DESC, period_month DESC LIMIT 24`,
+      [investor_id]
+    );
+    res.json({ statements: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/investor-statements/:id/pdf?investor_id=xxx
+router.get('/investor-statements/:id/pdf', async (req, res) => {
+  const { investor_id } = req.query;
+  if (!investor_id) return res.status(400).json({ error: 'investor_id required' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM investor_statements WHERE id=$1 AND investor_id=$2',
+      [req.params.id, investor_id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Statement not found' });
+    const buf = Buffer.from(rows[0].pdf_data, 'base64');
+    const mm  = String(rows[0].period_month).padStart(2, '0');
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="SVC-Statement-${rows[0].period_year}-${mm}.pdf"`,
+    });
+    res.send(buf);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
