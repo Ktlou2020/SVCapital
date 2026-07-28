@@ -6870,7 +6870,13 @@ async function saveKycUpload() {
 
   if (!investorId) { statusEl.textContent = 'Please select an investor'; statusEl.style.color='#ef4444'; return; }
   if (!docType)    { statusEl.textContent = 'Please select a document type'; statusEl.style.color='#ef4444'; return; }
-  if (!fileData)   { statusEl.textContent = 'Please select a file to upload'; statusEl.style.color='#ef4444'; return; }
+  if (!fileData) {
+    statusEl.textContent = 'An attachment is required — please select a file to upload';
+    statusEl.style.color = '#ef4444';
+    const dz = document.getElementById('kycDropZone');
+    if (dz) { dz.style.borderColor = '#ef4444'; setTimeout(() => { dz.style.borderColor = 'rgba(255,130,21,0.4)'; }, 2500); }
+    return;
+  }
 
   const saveBtn = document.getElementById('kycUploadSaveBtn');
   saveBtn.disabled = true;

@@ -2520,6 +2520,9 @@
           </div>
         </div>
         <!-- Drop zone -->
+        <div class="form-group" style="margin-bottom:6px">
+          <label class="form-label">Attachment <span style="color:#ef4444">*</span></label>
+        </div>
         <div id="kycDropZone"
              style="border:2px dashed rgba(255,130,21,0.4);border-radius:12px;padding:28px;text-align:center;cursor:pointer;background:rgba(255,130,21,0.03);transition:border-color .2s"
              ondragover="event.preventDefault();this.style.borderColor='var(--orange)'"
@@ -2529,7 +2532,7 @@
           <i class="fa-solid fa-cloud-arrow-up" style="font-size:2rem;color:var(--orange);margin-bottom:10px;display:block"></i>
           <div id="kycUploadDropLabel" style="font-size:0.85rem;color:var(--text-muted)">Click or drag a file here</div>
           <div style="font-size:0.72rem;color:var(--text-dim);margin-top:6px">PDF, JPG, PNG, WEBP · Max 10 MB</div>
-          <input type="file" id="kycFileInput" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none" onchange="kycUploadHandleFile(this)">
+          <input type="file" id="kycFileInput" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none" required onchange="kycUploadHandleFile(this)">
         </div>
         <div id="kycUploadPreview"></div>
         <div id="kycUploadStatus" style="margin-top:10px;font-size:0.8rem"></div>
