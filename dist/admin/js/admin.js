@@ -3011,9 +3011,11 @@ function renderKYCTable() {
       <td>${Utils.statusBadge(k.status)}</td>
       <td class="td-muted">${Utils.date(k.submitted_at || k.submitted_date || k.created_at)}${k.expiry_date ? `<div style="font-size:0.68rem;margin-top:2px;color:${new Date(k.expiry_date) <= new Date() ? '#ef4444' : '#9ca3af'}"><i class="fa-solid fa-calendar-xmark" style="margin-right:2px"></i>Exp: ${Utils.date(k.expiry_date)}</div>` : ''}</td>
       <td>
-        ${k.file_data || k.file_url || k.attachment_data || k.file_name
+        ${k.file_data || k.file_url || k.attachment_data
           ? `<button class="btn btn--secondary btn--sm" title="Open document in new tab" onclick='viewFicaDocument(${JSON.stringify(k.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</button>`
-          : `<span class="td-muted" style="font-size:0.72rem">No file</span>`}
+          : k.file_name
+            ? `<span class="td-muted" style="font-size:0.72rem;line-height:1.4">No file data<br><span style="font-size:0.65rem;color:var(--text-dim)">Investor must re-upload</span></span>`
+            : `<span class="td-muted" style="font-size:0.72rem">No file</span>`}
       </td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:nowrap;align-items:center">
@@ -3156,11 +3158,15 @@ async function viewFicaDocument(kycId) {
   const doc = STATE.kyc.find(k => k.id === kycId);
   if (!doc) return;
   let fileData = doc.file_data || doc.attachment_data || doc.file_url || '';
-  if (!fileData && doc.file_name) {
+  if (!fileData) {
     try {
       const full = await API.kyc.get(kycId);
       fileData = full?.file_data || full?.attachment_data || full?.file_url || '';
     } catch (_) {}
+  }
+  if (!fileData) {
+    Toast.error('File data not stored — please ask the investor to re-upload their document.');
+    return;
   }
   _openDocumentData(fileData, doc.file_name || 'Document');
 }
