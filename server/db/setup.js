@@ -357,6 +357,7 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investors ADD COLUMN totp_enabled BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN last_login_ip TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN last_login_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investors ADD COLUMN last_login TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Recurring investment columns for investors
   BEGIN ALTER TABLE investors ADD COLUMN recurring_amount NUMERIC(12,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN recurring_pool_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;

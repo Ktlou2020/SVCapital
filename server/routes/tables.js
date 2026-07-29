@@ -548,7 +548,7 @@ router.get('/investors/:id/activity', requireAuth, async (req, res) => {
 
     const investorId = req.params.id;
 
-    const [userRes, pushRes, sessionRes] = await Promise.all([
+    const [userRes, pushRes, sessionRes, invRes] = await Promise.all([
       pool.query(`
         SELECT id, email, role, created_at, last_login, totp_enabled, is_active
         FROM users WHERE investor_id = $1 LIMIT 1
@@ -574,10 +574,21 @@ router.get('/investors/:id/activity', requireAuth, async (req, res) => {
         ORDER BY s.last_used_at DESC
         LIMIT 10
       `, [investorId]).catch(() => ({ rows: [] })),
+
+      pool.query(`
+        SELECT last_login_at FROM investors WHERE id = $1 LIMIT 1
+      `, [investorId]).catch(() => ({ rows: [] })),
     ]);
 
+    // Merge investor.last_login_at as fallback when users.last_login is null
+    const userRow = userRes.rows[0] || null;
+    const invLastLogin = invRes.rows[0]?.last_login_at || null;
+    if (userRow && !userRow.last_login && invLastLogin) {
+      userRow.last_login = invLastLogin;
+    }
+
     res.json({
-      user:     userRes.rows[0]    || null,
+      user:     userRow,
       devices:  pushRes.rows,
       sessions: sessionRes.rows,
     });
