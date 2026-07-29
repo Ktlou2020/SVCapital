@@ -700,7 +700,7 @@ async function loadDashboard() {
       API.investors.list({ limit: 10000 }),
       API.pools.list({ limit: 1000 }),
       API.investments.list({ limit: 5000 }),
-      API.transactions.list({ limit: 500 })
+      API.transactions.list({ limit: 5000 })
     ]);
 
     STATE.investors = invRes.data || [];
@@ -713,7 +713,7 @@ async function loadDashboard() {
     const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
     const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
 
-    document.getElementById('ds-investors').textContent = STATE.investors.length;
+    document.getElementById('ds-investors').textContent = nonArchived.length;
     document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
     document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
     document.getElementById('ds-pools').textContent = activePools;
@@ -775,9 +775,10 @@ async function loadDashboard() {
       }).length;
       _setTrend('ds-trend-investors', _trendPct(invThis, invLast));
 
-      // AUM: new investments this month vs last month
-      const aumThis = STATE.investments.filter(i => new Date(i.created_at || 0) >= thisMonthStart).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+      // AUM: new investments this month vs last month (exclude cancelled/withdrawn)
+      const aumThis = STATE.investments.filter(i => ['active', 'matured'].includes(i.status) && new Date(i.created_at || 0) >= thisMonthStart).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
       const aumLast = STATE.investments.filter(i => {
+        if (!['active', 'matured'].includes(i.status)) return false;
         const d = new Date(i.created_at || 0);
         return d >= lastMonthStart && d <= lastMonthEnd;
       }).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
@@ -793,9 +794,8 @@ async function loadDashboard() {
       _setTrend('ds-trend-returns', _trendPct(retThis, retLast));
     })();
 
-    // Badge counts
-    const pendingKyc = STATE.investors.filter(i => ['pending_fica', 'fica_submitted'].includes(i.status)).length;
-    document.getElementById('kycBadge').textContent = pendingKyc;
+    // Badge counts (reuse pendingKycCount computed above for consistency)
+    document.getElementById('kycBadge').textContent = pendingKycCount;
 
     // Fetch ticket count for welcome strip
     let openTickets = 0;
@@ -829,7 +829,7 @@ async function loadDashboard() {
       wIdent.name = `${jwtUser.firstName || ''} ${jwtUser.lastName || ''}`.trim() || jwtUser.email || null;
       wIdent.role = jwtUser.role;
     }
-    _populateAdminWelcomeStrip(wIdent, pendingKyc, openTickets);
+    _populateAdminWelcomeStrip(wIdent, pendingKycCount, openTickets);
 
     renderRecentInvestments();
     renderOpenPoolsWidget();
@@ -845,18 +845,21 @@ async function loadDashboard() {
       window._dashRefreshTimer = setInterval(async () => {
         if (STATE.currentView !== 'dashboard') return;
         try {
-          const [invRes, poolRes, invstRes] = await Promise.all([
+          const [invRes, poolRes, invstRes, txnRes] = await Promise.all([
             API.investors.list({ limit: 5000 }),
             API.pools.list({ limit: 1000 }),
-            API.investments.list({ limit: 5000 })
+            API.investments.list({ limit: 5000 }),
+            API.transactions.list({ limit: 5000 })
           ]);
           STATE.investors = invRes.data || [];
           STATE.pools = poolRes.data || [];
           STATE.investments = invstRes.data || [];
+          STATE.transactions = txnRes.data || [];
+          const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
           const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
           const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
           const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
-          document.getElementById('ds-investors').textContent = STATE.investors.length;
+          document.getElementById('ds-investors').textContent = nonArchived.length;
           document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
           document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
           document.getElementById('ds-pools').textContent = activePools;
@@ -875,7 +878,11 @@ async function loadDashboard() {
 }
 
 function updateSidebarBadges() {
-  const pendingKyc = STATE.investors.filter(i => i.kyc_status === 'pending').length;
+  const _nonArchived = STATE.investors.filter(i => i.status !== 'archived');
+  const pendingKyc = _nonArchived.filter(i => {
+    const fs = i.fica_status; const ks = i.kyc_status;
+    return fs === 'pending' || fs === 'in_progress' || fs === 'submitted' || ks === 'pending';
+  }).length;
   const kycBadge = document.getElementById('kycBadge');
   if (kycBadge) kycBadge.textContent = pendingKyc;
 
