@@ -3927,10 +3927,6 @@ async function _renderProductTrackRecord(type, color) {
           <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Returned to investors</div>
         </div>
       </div>
-      <div style="flex:1;min-width:130px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:16px">
-        <div style="font-size:1.6rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${Utils.rand(paidBack)}</div>
-        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">invested to date</div>
-      </div>
 
       <p style="font-size:0.65rem;color:var(--text-muted);margin-top:10px;line-height:1.5;opacity:0.7">
         <i class="fa-solid fa-circle-info" style="margin-right:4px"></i>Past performance is not a guarantee of future returns. Investment returns may vary.
