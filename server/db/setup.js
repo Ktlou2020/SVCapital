@@ -763,6 +763,7 @@ CREATE TABLE IF NOT EXISTS solar_projects (
   annual_rate NUMERIC(8,6) DEFAULT 0,
   contracted_return NUMERIC(18,2), actual_return NUMERIC(18,2) DEFAULT 0,
   start_date TIMESTAMPTZ, maturity_date TIMESTAMPTZ, notes TEXT,
+  documents_url TEXT, foxess_device_sn TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS solar_projects_status_idx ON solar_projects(status);
@@ -1292,6 +1293,8 @@ async function autoSetup() {
         BEGIN ALTER TABLE investment_pools ADD COLUMN admin_notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE kyc_documents ADD COLUMN expiry_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE kyc_documents ADD COLUMN doc_subtype TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE solar_projects ADD COLUMN documents_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE solar_projects ADD COLUMN foxess_device_sn TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
       END $$
     `);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS gifts_firebase_id_idx ON gifts(firebase_id) WHERE firebase_id IS NOT NULL`).catch(() => {});
