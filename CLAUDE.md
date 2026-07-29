@@ -1,7 +1,14 @@
 # SVCapital — Claude Code Instructions
 
-## Branch
-All development goes on `claude/exciting-volta-CxUp1`. Push to that branch after every change.
+## Branch Strategy
+Changes are routed to two tracks depending on what is being modified:
+
+| Files changed | Work branch | PR target |
+|---|---|---|
+| `portal/**`, `mobile/**` | `claude/staging-develop` | `develop` (staging) |
+| Everything else (`admin/**`, `server/**`, `team/**`, `dist/**`, etc.) | `claude/exciting-volta-CxUp1` | `main` (production) |
+
+Always switch to the correct branch **before** making changes. If a single task touches both tracks, split it into two commits on the respective branches.
 
 ## Pull Requests
 - Always create a PR (not draft) after pushing, if one doesn't already exist for the branch.
@@ -16,7 +23,7 @@ Bump `mobile/www/sw.js` CACHE version (svc-portal-vN) with every JS/CSS change t
 Bump `portal/index.html` query string (`js/portal.js?v=N`) with every web portal JS change.
 
 ## Admin Console Versioning
-Bump `admin/index.html` query string (`js/admin.js?v=N`) with every admin JS change (currently at v1).
+Bump `admin/index.html` query string (`js/admin.js?v=N`) with every admin JS change. Check the current version number in `admin/index.html` before bumping.
 
 ## Purple / Brand Colour
 The single canonical purple across the entire platform is `#eda5ff`. No other purple values are permitted.
