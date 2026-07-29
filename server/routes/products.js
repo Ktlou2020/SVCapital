@@ -144,6 +144,21 @@ router.get('/solar-stats', async (req, res) => {
   }
 });
 
+/* GET /api/products/solar-device — ADMIN. Live stats for a single FoxESS
+   device identified by ?sn=<deviceSN>. Used by per-project dashboards. */
+router.get('/solar-device', async (req, res) => {
+  const { sn } = req.query;
+  if (!sn) return res.status(400).json({ error: 'sn query param required' });
+  try {
+    const data = await foxess.getSolarStatsBySN(sn);
+    res.set('Cache-Control', 'no-store');
+    res.json(data);
+  } catch (err) {
+    console.error('[solar-device] error:', err.message);
+    res.json({ unavailable: true, error: err.message });
+  }
+});
+
 /* GET /api/products/solar-history — PUBLIC. Daily solar generation for the
    current month (last ~30 days) for the 30-day chart. */
 router.get('/solar-history', async (req, res) => {

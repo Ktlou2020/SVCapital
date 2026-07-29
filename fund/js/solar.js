@@ -482,13 +482,24 @@ function renderProjectCards(projects) {
           </div>
         </div>
 
+        ${p.foxess_device_sn ? `
+        <!-- FoxESS live data panel -->
+        <div class="sol-foxess-panel" id="foxess-${p.id}">
+          <div class="sol-foxess-loading"><i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Loading live data…</div>
+        </div>` : ''}
+
         <!-- Actions -->
         <div class="sol-proj-actions">
           <button class="sol-btn sol-btn-secondary sol-btn-sm" style="flex:1" onclick="openEditProjectModal('${p.id}')">
             <i class="fa-solid fa-pen"></i> Edit
           </button>
+          ${p.documents_url ? `
+          <a class="sol-btn sol-btn-sm" href="${p.documents_url}" target="_blank" rel="noopener"
+             style="background:rgba(237,165,255,.12);border:1px solid rgba(237,165,255,.25);color:#eda5ff;text-decoration:none;display:inline-flex;align-items:center;gap:6px">
+            <i class="fa-brands fa-google-drive"></i> Docs
+          </a>` : ''}
           <button class="sol-doc-btn sol-btn sol-btn-sm" onclick="openSolarDocs('${p.id}')" title="Supporting Documents">
-            <i class="fa-solid fa-paperclip"></i> Docs
+            <i class="fa-solid fa-paperclip"></i> Files
           </button>
           <button class="sol-btn sol-btn-danger sol-btn-sm" onclick="deleteProject('${p.id}')">
             <i class="fa-solid fa-trash"></i>
@@ -497,6 +508,43 @@ function renderProjectCards(projects) {
       </div>
     </div>`;
   }).join('')}</div>`;
+
+  // Load FoxESS live data for any project that has a device SN
+  SOL.projects.filter(p => p.foxess_device_sn).forEach(p => _loadFoxESSPanel(p));
+}
+
+async function _loadFoxESSPanel(p) {
+  const panel = document.getElementById(`foxess-${p.id}`);
+  if (!panel) return;
+  try {
+    const d = await solGet(`products/solar-device?sn=${encodeURIComponent(p.foxess_device_sn)}`);
+    if (d.unavailable) {
+      panel.innerHTML = `<div class="sol-foxess-unavail"><i class="fa-solid fa-plug-circle-xmark"></i> FoxESS data unavailable</div>`;
+      return;
+    }
+    panel.innerHTML = `
+      <div class="sol-foxess-hd"><i class="fa-solid fa-sun" style="color:var(--sol-gold)"></i> Live Generation · <span style="opacity:.5;font-size:10px">${new Date(d.updated_at).toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'})}</span></div>
+      <div class="sol-foxess-grid">
+        <div class="sol-foxess-stat">
+          <div class="sol-foxess-val">${d.current_power_kw} kW</div>
+          <div class="sol-foxess-lbl">Now</div>
+        </div>
+        <div class="sol-foxess-stat">
+          <div class="sol-foxess-val">${d.today_kwh} kWh</div>
+          <div class="sol-foxess-lbl">Today</div>
+        </div>
+        <div class="sol-foxess-stat">
+          <div class="sol-foxess-val">${d.month_kwh} kWh</div>
+          <div class="sol-foxess-lbl">This month</div>
+        </div>
+        <div class="sol-foxess-stat">
+          <div class="sol-foxess-val">${d.total_kwh.toLocaleString()} kWh</div>
+          <div class="sol-foxess-lbl">Total lifetime</div>
+        </div>
+      </div>`;
+  } catch (e) {
+    panel.innerHTML = `<div class="sol-foxess-unavail"><i class="fa-solid fa-triangle-exclamation"></i> ${e.message}</div>`;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -634,6 +682,8 @@ function openEditProjectModal(id) {
   setVal('sp_maturity_date',     p.maturity_date ? p.maturity_date.split('T')[0] : '');
   setVal('sp_actual_return',     p.actual_return);
   setVal('sp_notes',             p.notes);
+  setVal('sp_docs_url',          p.documents_url);
+  setVal('sp_foxess_sn',         p.foxess_device_sn);
 
   document.getElementById('solProjectModal').classList.add('open');
 }
@@ -666,6 +716,8 @@ async function saveProjectForm() {
     maturity_date:      getVal('sp_maturity_date') ? new Date(getVal('sp_maturity_date')).toISOString() : null,
     actual_return:      parseFloat(getVal('sp_actual_return'))     || 0,
     notes:              getVal('sp_notes') || null,
+    documents_url:      getVal('sp_docs_url') || null,
+    foxess_device_sn:   getVal('sp_foxess_sn') || null,
   };
 
   const btn = document.getElementById('solSaveBtn');

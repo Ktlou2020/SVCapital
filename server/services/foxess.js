@@ -142,4 +142,49 @@ async function getSolarHistory() {
   return data;
 }
 
-module.exports = { getSolarStats, getSolarHistory };
+/* ─── Per-device stats (for individual project dashboards) ─── */
+async function getSolarStatsBySN(sn) {
+  if (!API_KEY) throw new Error('FOXESS_API_KEY not configured');
+  if (!sn) throw new Error('Device SN required');
+
+  let today = 0, month = 0, cumulative = 0, power = 0;
+
+  const gen = await _get('/op/v0/device/generation', `sn=${encodeURIComponent(sn)}`);
+  if (gen) {
+    today      = parseFloat(gen.today)      || 0;
+    month      = parseFloat(gen.month)      || 0;
+    cumulative = parseFloat(gen.cumulative) || 0;
+  }
+
+  try {
+    const real = await _post('/op/v0/device/real/query', { sn, variables: ['generationPower', 'gridConsumptionPower', 'pvPower', 'SoC'] });
+    const datas = (Array.isArray(real) ? (real[0] && real[0].datas) : (real && real.datas)) || [];
+    const gp = datas.find(d => d.variable === 'generationPower');
+    if (gp) power = parseFloat(gp.value) || 0;
+  } catch (_) { /* non-fatal */ }
+
+  const now = new Date();
+  const year  = now.getUTCFullYear();
+  const monthNum = now.getUTCMonth() + 1;
+  let series = [];
+  try {
+    const rep = await _post('/op/v0/device/report', { sn, year, month: monthNum, dimension: 'day', variables: ['generation'] });
+    const arr = Array.isArray(rep) ? rep : (rep && rep.datas) || [];
+    const genVar = arr.find(x => x.variable === 'generation') || arr[0];
+    const values = (genVar && (genVar.values || genVar.data)) || [];
+    series = values.map((v, i) => ({ day: i + 1, kwh: Math.round((typeof v === 'object' ? parseFloat(v.value) : parseFloat(v)) * 10) / 10 || 0 })).filter(x => x.kwh > 0);
+  } catch (_) { /* non-fatal */ }
+
+  return {
+    device_sn:        sn,
+    current_power_kw: Math.round(power * 100) / 100,
+    today_kwh:        Math.round(today * 10) / 10,
+    month_kwh:        Math.round(month * 10) / 10,
+    total_kwh:        Math.round(cumulative * 10) / 10,
+    co2_avoided_kg:   Math.round(cumulative * 0.9),
+    month_series:     series,
+    updated_at:       new Date().toISOString(),
+  };
+}
+
+module.exports = { getSolarStats, getSolarHistory, getSolarStatsBySN };

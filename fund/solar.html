@@ -152,6 +152,16 @@
     .sol-proj-nav-val   { font-size: 18px; font-weight: 800; }
     .sol-proj-actions   { display: flex; gap: 8px; margin-top: 12px; }
 
+    /* FoxESS live panel */
+    .sol-foxess-panel   { background: rgba(237,165,255,.06); border: 1px solid rgba(237,165,255,.15); border-radius: 10px; padding: 12px 14px; margin: 10px 0 4px; }
+    .sol-foxess-hd      { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: rgba(255,255,255,.5); margin-bottom: 10px; }
+    .sol-foxess-grid    { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
+    .sol-foxess-stat    { text-align: center; }
+    .sol-foxess-val     { font-size: 15px; font-weight: 800; color: var(--sol-gold); }
+    .sol-foxess-lbl     { font-size: 10px; color: rgba(255,255,255,.35); margin-top: 2px; }
+    .sol-foxess-loading { font-size: 12px; color: rgba(255,255,255,.35); text-align: center; padding: 6px 0; }
+    .sol-foxess-unavail { font-size: 12px; color: rgba(248,113,113,.7); text-align: center; padding: 4px 0; }
+
     /* Progress bar */
     .sol-progress-wrap { background: rgba(255,255,255,.08); border-radius: 6px; height: 6px; margin: 8px 0 4px; }
     .sol-progress-fill { height: 100%; border-radius: 6px; background: var(--sol-gold); transition: width .4s; }
@@ -591,6 +601,21 @@
         <div class="sol-form-group">
           <label>Notes</label>
           <textarea id="sp_notes" rows="3" style="resize:vertical" placeholder="PPA details, off-taker, project notes…"></textarea>
+        </div>
+
+        <hr class="sol-divider">
+        <div class="sol-section-label"><i class="fa-solid fa-link"></i> Documents &amp; Integration</div>
+        <div class="sol-form-grid" style="margin-bottom:18px">
+          <div class="sol-form-group">
+            <label>Documents Link</label>
+            <input type="url" id="sp_docs_url" placeholder="https://docs.google.com/…">
+            <span class="hint">Google Docs folder or shared drive link for this project</span>
+          </div>
+          <div class="sol-form-group">
+            <label>FoxESS Device SN</label>
+            <input type="text" id="sp_foxess_sn" placeholder="e.g. H1-1234567890">
+            <span class="hint">Inverter serial number — enables live generation dashboard</span>
+          </div>
         </div>
       </form>
     </div>
