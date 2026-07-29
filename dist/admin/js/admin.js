@@ -1753,7 +1753,7 @@ function setupInvestorFilters() {
                           || (inv.id_number||'').includes(q);
       const matchSt = st === 'archived' ? (inv.status === 'archived' || inv.status === 'suspended')
         : st ? inv.status === st
-        : inv.status !== 'archived';
+        : true;
       const matchKy = !ky || inv.kyc_status === ky;
       const matchPv = !pv || (inv.province||'').toLowerCase().includes(pv.toLowerCase());
       const matchLo = !lo
