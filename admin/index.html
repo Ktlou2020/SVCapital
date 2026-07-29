@@ -631,7 +631,10 @@
         </div>
 
         <!-- Doc-type breakdown stats -->
-        <div id="kycDocTypeStats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px"></div>
+        <div id="kycDocTypeStats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:10px"></div>
+
+        <!-- FICA compliance breakdown (0/3, 1/3, 2/3, 3/3) -->
+        <div id="ficaComplianceBreakdown" style="margin-bottom:16px"></div>
 
         <div class="table-card">
           <div class="table-card__header" style="flex-wrap:wrap;gap:8px">
@@ -2960,19 +2963,76 @@
   </div>
 </div>
 
-<!-- Withdrawal Rejection Modal -->
-<div class="modal-overlay" id="rejectModal" style="z-index:10001" onclick="if(event.target===this){this.style.display='none';this.classList.remove('open')}">
-  <div class="modal" style="max-width:440px">
+<!-- Withdrawal / KYC Rejection Modal -->
+<div class="modal-overlay" id="rejectModal" style="z-index:10001" onclick="if(event.target===this){this.style.display='none';this.classList.remove('open');document.body.style.overflow=''}">
+  <div class="modal" style="max-width:480px">
     <div class="modal__header">
       <span class="modal__title"><i class="fa-solid fa-xmark" style="color:var(--red,#ef4444);margin-right:8px"></i><span id="rejectModalTitle">Reject</span></span>
     </div>
     <div class="modal__body">
       <p id="rejectModalBody" style="color:var(--text-muted);font-size:0.88rem;margin:0 0 12px">Provide a reason below (optional).</p>
+      <!-- KYC rejection reason templates (hidden for withdrawal rejections) -->
+      <div id="kycRejectTemplates" style="display:none;margin-bottom:12px">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:7px">Quick templates</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <button type="button" onclick="_setRejectTemplate('The document is unclear or blurry. Please upload a sharper image.')" style="font-size:0.72rem;padding:4px 10px;border-radius:20px;border:1px solid rgba(237,165,255,0.3);background:rgba(237,165,255,0.07);color:#eda5ff;cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(237,165,255,0.15)'" onmouseout="this.style.background='rgba(237,165,255,0.07)'">Unclear / blurry</button>
+          <button type="button" onclick="_setRejectTemplate('The name on the document does not match the name on your account.')" style="font-size:0.72rem;padding:4px 10px;border-radius:20px;border:1px solid rgba(237,165,255,0.3);background:rgba(237,165,255,0.07);color:#eda5ff;cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(237,165,255,0.15)'" onmouseout="this.style.background='rgba(237,165,255,0.07)'">Name mismatch</button>
+          <button type="button" onclick="_setRejectTemplate('This document has expired. Please upload a current, valid document.')" style="font-size:0.72rem;padding:4px 10px;border-radius:20px;border:1px solid rgba(237,165,255,0.3);background:rgba(237,165,255,0.07);color:#eda5ff;cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(237,165,255,0.15)'" onmouseout="this.style.background='rgba(237,165,255,0.07)'">Document expired</button>
+          <button type="button" onclick="_setRejectTemplate('The document is incomplete or partially visible. Please ensure the full document is captured.')" style="font-size:0.72rem;padding:4px 10px;border-radius:20px;border:1px solid rgba(237,165,255,0.3);background:rgba(237,165,255,0.07);color:#eda5ff;cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(237,165,255,0.15)'" onmouseout="this.style.background='rgba(237,165,255,0.07)'">Incomplete / cut off</button>
+          <button type="button" onclick="_setRejectTemplate('Incorrect document type uploaded. Please upload the correct document for this field.')" style="font-size:0.72rem;padding:4px 10px;border-radius:20px;border:1px solid rgba(237,165,255,0.3);background:rgba(237,165,255,0.07);color:#eda5ff;cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(237,165,255,0.15)'" onmouseout="this.style.background='rgba(237,165,255,0.07)'">Wrong doc type</button>
+          <button type="button" onclick="_setRejectTemplate('Photocopies are not accepted. Please upload a certified original or a clear photograph of the original.')" style="font-size:0.72rem;padding:4px 10px;border-radius:20px;border:1px solid rgba(237,165,255,0.3);background:rgba(237,165,255,0.07);color:#eda5ff;cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(237,165,255,0.15)'" onmouseout="this.style.background='rgba(237,165,255,0.07)'">Photocopy not accepted</button>
+        </div>
+      </div>
       <textarea id="rejectReasonInput" class="form-input" rows="3" placeholder="Reason for rejection…" style="width:100%;resize:vertical;font-size:0.88rem"></textarea>
+      <!-- Email investor toggle (KYC mode only) -->
+      <div id="kycRejectEmailRow" style="display:none;margin-top:10px;padding:8px 12px;background:rgba(237,165,255,0.06);border:1px solid rgba(237,165,255,0.15);border-radius:8px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.82rem;color:var(--text-muted)">
+          <input type="checkbox" id="kycRejectEmailInvestor" checked style="accent-color:#eda5ff;width:15px;height:15px">
+          <span>Send rejection reason to investor by email</span>
+        </label>
+      </div>
     </div>
     <div class="modal__footer">
-      <button class="btn btn--secondary" onclick="document.getElementById('rejectModal').style.display='none';document.getElementById('rejectModal').classList.remove('open')">Cancel</button>
+      <button class="btn btn--secondary" onclick="document.getElementById('rejectModal').style.display='none';document.getElementById('rejectModal').classList.remove('open');document.body.style.overflow=''">Cancel</button>
       <button class="btn btn--danger" onclick="_submitRejection()"><i class="fa-solid fa-xmark"></i> Confirm Reject</button>
+    </div>
+  </div>
+</div>
+
+<!-- KYC Side-by-Side Review Modal -->
+<div class="modal-overlay" id="kycReviewModal" style="z-index:10002;display:none" onclick="if(event.target===this)closeKycReview()">
+  <div class="modal" style="max-width:1100px;width:95vw;height:88vh;overflow:hidden;display:flex;flex-direction:column;padding:0">
+    <div class="modal__header" style="flex-shrink:0">
+      <span class="modal__title"><i class="fa-solid fa-magnifying-glass" style="color:#eda5ff;margin-right:8px"></i>Document Review</span>
+      <button onclick="closeKycReview()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1.1rem;padding:4px 8px;border-radius:6px" title="Close"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div style="display:flex;flex:1;overflow:hidden">
+      <!-- Document viewer (left) -->
+      <div style="flex:1;background:rgba(0,0,0,0.3);display:flex;flex-direction:column;overflow:hidden;border-right:1px solid rgba(255,255,255,0.06)">
+        <div style="padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Document</div>
+        <div id="kycReviewDocContent" style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:16px"></div>
+      </div>
+      <!-- Investor details + actions (right) -->
+      <div style="width:320px;flex-shrink:0;display:flex;flex-direction:column;overflow:hidden">
+        <div id="kycReviewDetails" style="flex:1;overflow-y:auto;padding:16px"></div>
+        <div id="kycReviewActions" style="padding:12px 16px;border-top:1px solid rgba(255,255,255,0.06);flex-shrink:0"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- KYC Timeline Modal -->
+<div class="modal-overlay" id="kycTimelineModal" style="z-index:10002;display:none" onclick="if(event.target===this)closeKycTimeline()">
+  <div class="modal" style="max-width:560px">
+    <div class="modal__header">
+      <span class="modal__title"><i class="fa-solid fa-timeline" style="color:#eda5ff;margin-right:8px"></i><span id="kycTimelineTitle">KYC Status Timeline</span></span>
+      <button onclick="closeKycTimeline()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1.1rem;padding:4px 8px;border-radius:6px"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal__body" style="max-height:60vh;overflow-y:auto">
+      <div id="kycTimelineContent"><div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i></div></div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="closeKycTimeline()">Close</button>
     </div>
   </div>
 </div>
@@ -3098,7 +3158,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="../js/api.js?v=2"></script>
-<script src="js/admin.js?v=9"></script>
+<script src="js/admin.js?v=10"></script>
 <!-- sv-intelligence.js hidden -->
 </body>
 </html>
