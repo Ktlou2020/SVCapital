@@ -712,6 +712,7 @@ async function loadDashboard() {
     const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
     const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
     const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
+    const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
 
     document.getElementById('ds-investors').textContent = nonArchived.length;
     document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
@@ -719,7 +720,6 @@ async function loadDashboard() {
     document.getElementById('ds-pools').textContent = activePools;
 
     // Second KPI row
-    const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
     const ficaApproved = nonArchived.filter(i => i.fica_status === 'approved' || i.kyc_status === 'approved').length;
     const ficaRate = nonArchived.length ? Math.round((ficaApproved / nonArchived.length) * 100) : 0;
     const dsRate = document.getElementById('ds-fica-rate');
