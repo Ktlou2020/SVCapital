@@ -3694,6 +3694,13 @@ async function loadPools() {
     STATE.pools = res.data || [];
     _refreshPoolProductFilter();
     renderPoolsGrid();
+    // Load investments in the background if not already loaded (needed for maturing alert)
+    if (!STATE.investments || !STATE.investments.length) {
+      API.investments.list({ limit: 5000 }).then(r => {
+        STATE.investments = r.data || [];
+        renderMaturingPoolsAlert();
+      }).catch(() => {});
+    }
     // Load products in the background so pool product-type dropdowns reflect them
     if (!STATE.products || !STATE.products.length) {
       API.products.list({ limit: 200 }).then(r => {
@@ -3735,12 +3742,19 @@ function renderMaturingPoolsAlert() {
     })
     .sort((a, b) => new Date(a.maturity_date || a.end_date) - new Date(b.maturity_date || b.end_date));
   if (!maturing.length) { el.innerHTML = ''; return; }
+  const allInvts = STATE.investments || [];
   const rows = maturing.map(p => {
     const matDate = new Date(p.maturity_date || p.end_date);
     const days    = Math.max(0, Math.ceil((matDate - now) / (1000 * 60 * 60 * 24)));
     const urgency = days <= 30 ? '#ef4444' : days <= 60 ? '#f97316' : '#fec24f';
     const pi = Utils.productInfo(p.product_type);
-    return `<tr style="cursor:pointer" onclick="viewPoolInvestors(${JSON.stringify(p.id)})">
+    const poolInvts      = allInvts.filter(i => i.pool_id === p.id && i.status === 'active');
+    const projReturn     = poolInvts.reduce((s, i) => s + (parseFloat(i.expected_return) || 0), 0);
+    const instrTotal     = poolInvts.length;
+    const instrSubmitted = poolInvts.filter(i => i.maturity_instruction && i.maturity_instruction !== 'pending').length;
+    const instrPct       = instrTotal ? Math.round((instrSubmitted / instrTotal) * 100) : 0;
+    const instrColor     = instrPct >= 80 ? '#22c55e' : instrPct >= 50 ? '#fec24f' : '#ef4444';
+    return `<tr style="cursor:pointer" onclick='viewPoolInvestors(${JSON.stringify(p.id)})'>
       <td><span class="fw-700">${_esc(p.name)}</span>${p.partner_name ? `<br><span style="font-size:0.7rem;color:var(--text-muted)">${_esc(p.partner_name)}</span>` : ''}</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td>${Utils.statusBadge(p.status)}</td>
@@ -3748,6 +3762,11 @@ function renderMaturingPoolsAlert() {
       <td><span style="font-weight:700;color:${urgency}">${days} day${days !== 1 ? 's' : ''}</span></td>
       <td>${p.live_investor_count ?? p.investor_count ?? 0}</td>
       <td style="font-variant-numeric:tabular-nums">${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)}</td>
+      <td style="font-variant-numeric:tabular-nums;color:#22c55e">${projReturn > 0 ? Utils.rand(projReturn) : '—'}</td>
+      <td>
+        <span style="font-weight:700;color:${instrColor}">${instrPct}%</span>
+        <span style="font-size:0.7rem;color:var(--text-muted);margin-left:4px">${instrSubmitted}/${instrTotal}</span>
+      </td>
     </tr>`;
   }).join('');
   el.innerHTML = `
@@ -3760,7 +3779,7 @@ function renderMaturingPoolsAlert() {
       <div style="overflow-x:auto">
         <table class="data-table" style="width:100%">
           <thead><tr>
-            <th>Pool</th><th>Type</th><th>Status</th><th>Maturity Date</th><th>Days Left</th><th>Investors</th><th>Raised</th>
+            <th>Pool</th><th>Type</th><th>Status</th><th>Maturity Date</th><th>Days Left</th><th>Investors</th><th>Raised</th><th>Proj. Return</th><th>Instructions</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
