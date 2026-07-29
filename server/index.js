@@ -66,12 +66,13 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
 // Native-app origins are always allowed regardless of ALLOWED_ORIGINS env var.
 // Capacitor iOS uses capacitor://localhost; Capacitor Android uses http://localhost.
 // These must never be dropped when ALLOWED_ORIGINS overrides the web origins.
-const NATIVE_ORIGINS = ['capacitor://localhost', 'ionic://localhost', 'http://localhost', 'https://localhost'];
-const DEFAULT_PROD_ORIGINS = ['https://platform.svcapital.co.za', 'https://svcapital.co.za', 'https://www.svcapital.co.za', 'https://svcapital-staging.up.railway.app', ...NATIVE_ORIGINS];
+const NATIVE_ORIGINS  = ['capacitor://localhost', 'ionic://localhost', 'http://localhost', 'https://localhost'];
+const STAGING_ORIGINS = ['https://svcapital-staging.up.railway.app'];
+const DEFAULT_PROD_ORIGINS = ['https://platform.svcapital.co.za', 'https://svcapital.co.za', 'https://www.svcapital.co.za', ...STAGING_ORIGINS, ...NATIVE_ORIGINS];
 const DEFAULT_DEV_ORIGINS  = ['http://localhost:3000', 'http://localhost:8080', 'http://localhost:5173', 'http://127.0.0.1:3000', 'http://127.0.0.1:8080', ...NATIVE_ORIGINS];
-// Merge env-var list with native origins so ALLOWED_ORIGINS only needs to list web domains.
+// Merge env-var list with native + staging origins so ALLOWED_ORIGINS only needs to list production web domains.
 const EFFECTIVE_ORIGINS = ALLOWED_ORIGINS.length > 0
-  ? [...new Set([...ALLOWED_ORIGINS, ...NATIVE_ORIGINS])]
+  ? [...new Set([...ALLOWED_ORIGINS, ...NATIVE_ORIGINS, ...STAGING_ORIGINS])]
   : (IS_PROD ? DEFAULT_PROD_ORIGINS : DEFAULT_DEV_ORIGINS);
 if (IS_PROD && ALLOWED_ORIGINS.length === 0) {
   console.info(`[cors] ALLOWED_ORIGINS env var not set — defaulting to: ${DEFAULT_PROD_ORIGINS.join(', ')}. Set ALLOWED_ORIGINS to override.`);
