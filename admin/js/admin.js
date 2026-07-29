@@ -4204,6 +4204,7 @@ async function uploadFactsheet() {
 
   if (!fileName) { Toast.error('Enter a factsheet name'); return; }
   if (!file) { Toast.error('Select a PDF file to upload'); return; }
+  if (file.type && file.type !== 'application/pdf') { Toast.error('Only PDF files are allowed'); return; }
 
   // Read file as base64 data URL and use it directly as the file_url
   const reader = new FileReader();
