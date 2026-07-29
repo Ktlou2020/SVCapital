@@ -159,6 +159,41 @@ router.get('/solar-device', async (req, res) => {
   }
 });
 
+/* GET /api/products/foxess-ping — Diagnostic. Tests FoxESS connectivity and
+   returns the raw device list so admin can verify the API key and SN. */
+router.get('/foxess-ping', async (req, res) => {
+  const crypto = require('crypto');
+  const BASE    = (process.env.FOXESS_API_BASE || 'https://www.foxesscloud.com').replace(/\/$/, '');
+  const API_KEY = (process.env.FOXESS_API_KEY || '').trim();
+  if (!API_KEY) return res.json({ ok: false, error: 'FOXESS_API_KEY environment variable is not set on this server.' });
+
+  const path = '/op/v0/device/list';
+  const timestamp = Date.now().toString();
+  const signature = crypto.createHash('md5')
+    .update(`${path}\\r\\n${API_KEY}\\r\\n${timestamp}`)
+    .digest('hex');
+  const headers = { token: API_KEY, timestamp, signature, lang: 'en', 'Content-Type': 'application/json', 'User-Agent': 'SVCapital/1.0' };
+
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    const r = await fetch(BASE + path, { method: 'POST', headers, body: JSON.stringify({ currentPage: 1, pageSize: 10 }), signal: ctrl.signal }).finally(() => clearTimeout(timer));
+    const d = await r.json();
+    const devices = (d.result && (d.result.data || d.result.devices)) || [];
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      ok: d.errno === 0 || !d.errno,
+      errno: d.errno,
+      msg: d.msg,
+      device_count: devices.length,
+      devices: devices.map(dev => ({ sn: dev.deviceSN || dev.sn, name: dev.stationName || dev.plantName || dev.deviceType, status: dev.online ?? dev.status })),
+      key_prefix: API_KEY.slice(0, 4) + '…',
+    });
+  } catch (err) {
+    res.json({ ok: false, error: err.name === 'AbortError' ? 'FoxESS API timed out (12s). Check network connectivity from the server.' : err.message });
+  }
+});
+
 /* GET /api/products/solar-history — PUBLIC. Daily solar generation for the
    current month (last ~30 days) for the 30-day chart. */
 router.get('/solar-history', async (req, res) => {

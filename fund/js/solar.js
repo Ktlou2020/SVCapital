@@ -562,7 +562,10 @@ function renderProjectCards(projects) {
         ${p.foxess_device_sn ? `
         <!-- FoxESS live data panel -->
         <div class="sol-foxess-panel" id="foxess-${p.id}">
-          <div class="sol-foxess-loading"><i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Loading live data…</div>
+          <div class="sol-foxess-loading">
+            <i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Loading live data…
+            <button onclick="event.stopPropagation();_retryFoxESSPanel(${JSON.stringify(p)})" title="Retry" style="margin-left:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#9ca3af;cursor:pointer;font-size:11px;padding:2px 8px">Retry</button>
+          </div>
         </div>` : ''}
 
         <!-- Actions -->
@@ -625,6 +628,53 @@ async function _loadFoxESSPanel(p) {
       </div>`;
   } catch (e) {
     panel.innerHTML = `<div class="sol-foxess-unavail"><i class="fa-solid fa-triangle-exclamation"></i> ${e.message}</div>`;
+  }
+}
+
+function _retryFoxESSPanel(p) {
+  const panel = document.getElementById(`foxess-${p.id}`);
+  if (panel) panel.innerHTML = `<div class="sol-foxess-loading"><i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i>Retrying…</div>`;
+  _loadFoxESSPanel(p);
+}
+
+/* Test FoxESS connectivity — called from the admin UI to diagnose issues */
+async function runFoxESSPing() {
+  const btn = document.getElementById('foxessPingBtn');
+  const out = document.getElementById('foxessPingResult');
+  if (!btn || !out) return;
+  btn.disabled = true;
+  btn.textContent = 'Testing…';
+  out.style.display = 'none';
+  try {
+    const d = await solGet('products/foxess-ping');
+    const color = d.ok ? '#22c55e' : '#ef4444';
+    const icon  = d.ok ? 'fa-circle-check' : 'fa-triangle-exclamation';
+    let html = `<div style="display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:8px;background:${d.ok ? 'rgba(34,197,94,.08)' : 'rgba(239,68,68,.08)'};border:1px solid ${color}33">
+      <i class="fa-solid ${icon}" style="color:${color};margin-top:2px"></i>
+      <div style="font-size:0.82rem;color:var(--sol-text)">`;
+    if (d.error) {
+      html += `<strong style="color:${color}">Connection failed</strong><br>${d.error}`;
+    } else if (!d.ok) {
+      html += `<strong style="color:${color}">API error</strong> (errno ${d.errno}): ${d.msg || 'Unknown error'}`;
+    } else {
+      html += `<strong style="color:${color}">Connected</strong> — API key ${d.key_prefix} is valid<br>`;
+      if (d.device_count === 0) {
+        html += `<span style="color:#fec24f">No devices found on this account. Check that the API key belongs to the correct FoxESS account.</span>`;
+      } else {
+        html += `${d.device_count} device(s) found:<ul style="margin:6px 0 0 16px;padding:0">` +
+          d.devices.map(dv => `<li><strong>${dv.sn}</strong> — ${dv.name || 'unnamed'} (${dv.status === true || dv.status === 'online' ? '🟢 online' : '🔴 offline'})</li>`).join('') +
+          `</ul>`;
+      }
+    }
+    html += `</div></div>`;
+    out.innerHTML = html;
+    out.style.display = 'block';
+  } catch (e) {
+    out.innerHTML = `<div style="padding:10px;border-radius:8px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);font-size:0.82rem;color:#ef4444"><i class="fa-solid fa-triangle-exclamation"></i> ${e.message}</div>`;
+    out.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Test Connection';
   }
 }
 
