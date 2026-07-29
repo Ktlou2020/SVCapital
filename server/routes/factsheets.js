@@ -24,8 +24,10 @@ router.post('/upload', requireAuth, requireRole('admin', 'director'), async (req
     if (!pool_id || !file_name || !file_url) {
       return res.status(400).json({ error: 'pool_id, file_name and file_url are required' });
     }
-    if (!req.body.file_name || !/^[\w\-. ]{1,200}\.(pdf|PDF)$/.test(req.body.file_name)) {
-      return res.status(400).json({ error: 'Invalid file name. Must be a PDF filename.' });
+    // Validate by mime_type or data-URL prefix — file_name is a display label, not a filename
+    const effectiveMime = mime_type || (typeof file_url === 'string' && file_url.startsWith('data:') ? file_url.split(';')[0].slice(5) : '');
+    if (effectiveMime && !['application/pdf', 'application/x-pdf'].includes(effectiveMime)) {
+      return res.status(400).json({ error: 'Only PDF files are allowed.' });
     }
     const id = `FS-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
     // Mark all previous factsheets for this pool as not current
