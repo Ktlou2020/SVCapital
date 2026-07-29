@@ -768,6 +768,25 @@ CREATE TABLE IF NOT EXISTS solar_projects (
 );
 CREATE INDEX IF NOT EXISTS solar_projects_status_idx ON solar_projects(status);
 
+CREATE TABLE IF NOT EXISTS solar_investment_periods (
+  id TEXT PRIMARY KEY,
+  project_id TEXT REFERENCES solar_projects(id) ON DELETE CASCADE,
+  product_type TEXT DEFAULT '7yr',
+  term_years INT,
+  capital_deployed NUMERIC(18,2) DEFAULT 0,
+  annual_rate NUMERIC(8,6) DEFAULT 0,
+  contracted_return NUMERIC(18,2),
+  start_date TIMESTAMPTZ,
+  maturity_date TIMESTAMPTZ,
+  actual_return NUMERIC(18,2) DEFAULT 0,
+  status TEXT DEFAULT 'active',
+  notes TEXT,
+  sort_order INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS solar_periods_project_idx ON solar_investment_periods(project_id);
+
 CREATE TABLE IF NOT EXISTS solar_documents (
   id TEXT PRIMARY KEY,
   project_id TEXT REFERENCES solar_projects(id) ON DELETE CASCADE,

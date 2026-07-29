@@ -121,6 +121,7 @@ const ALLOWED_TABLES = {
   shortterm_loans:       'id',
   loan_documents:        'id',
   solar_projects:        'id',
+  solar_investment_periods: 'id',
   solar_documents:       'id',
   fica_checks:           'id',   // read-only via generic API; writes via /api/fica/*
   quest_completions:     'id',   // read via generic API; writes via /api/quests/*
