@@ -3722,7 +3722,54 @@ function _refreshPoolProductFilter() {
     }).join('');
 }
 
+function renderMaturingPoolsAlert() {
+  const el = document.getElementById('poolsMaturingSoon');
+  if (!el) return;
+  const now   = new Date();
+  const in90  = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+  const maturing = (STATE.pools || [])
+    .filter(p => {
+      if (['matured', 'closed', 'cancelled'].includes(p.status)) return false;
+      const d = new Date(p.maturity_date || p.end_date || '');
+      return !isNaN(d) && d >= now && d <= in90;
+    })
+    .sort((a, b) => new Date(a.maturity_date || a.end_date) - new Date(b.maturity_date || b.end_date));
+  if (!maturing.length) { el.innerHTML = ''; return; }
+  const rows = maturing.map(p => {
+    const matDate = new Date(p.maturity_date || p.end_date);
+    const days    = Math.max(0, Math.ceil((matDate - now) / (1000 * 60 * 60 * 24)));
+    const urgency = days <= 30 ? '#ef4444' : days <= 60 ? '#f97316' : '#fec24f';
+    const pi = Utils.productInfo(p.product_type);
+    return `<tr style="cursor:pointer" onclick="editPool(${JSON.stringify(p.id)})">
+      <td><span class="fw-700">${_esc(p.name)}</span>${p.partner_name ? `<br><span style="font-size:0.7rem;color:var(--text-muted)">${_esc(p.partner_name)}</span>` : ''}</td>
+      <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
+      <td>${Utils.statusBadge(p.status)}</td>
+      <td style="font-variant-numeric:tabular-nums">${Utils.date(p.maturity_date || p.end_date)}</td>
+      <td><span style="font-weight:700;color:${urgency}">${days} day${days !== 1 ? 's' : ''}</span></td>
+      <td>${p.live_investor_count ?? p.investor_count ?? 0}</td>
+      <td style="font-variant-numeric:tabular-nums">${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `
+    <div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.28);border-radius:12px;padding:16px 18px;margin:14px 0 10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <i class="fa-solid fa-hourglass-half" style="color:#ef4444;font-size:1rem"></i>
+        <span style="font-weight:700;color:var(--text);font-size:0.9rem">Maturing within 90 days</span>
+        <span style="background:rgba(239,68,68,0.18);color:#ef4444;border-radius:20px;padding:2px 10px;font-size:0.73rem;font-weight:700">${maturing.length} pool${maturing.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table" style="width:100%">
+          <thead><tr>
+            <th>Pool</th><th>Type</th><th>Status</th><th>Maturity Date</th><th>Days Left</th><th>Investors</th><th>Raised</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
 function renderPoolsGrid() {
+  renderMaturingPoolsAlert();
   const grid = document.getElementById('poolsGrid');
   let pools = poolFilter === 'all'
     ? STATE.pools
