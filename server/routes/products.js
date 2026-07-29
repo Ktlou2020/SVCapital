@@ -162,36 +162,50 @@ router.get('/solar-history', async (req, res) => {
 router.get('/track-record', async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT name, product_type, end_date, term_months,
-             COALESCE(actual_rate, 0)  AS actual_rate,
-             COALESCE(annual_rate, 0)  AS annual_rate,
-             COALESCE(raised_amount, 0) AS raised_amount
+      SELECT name, product_type, status, end_date, maturity_date, term_months,
+             COALESCE(actual_rate, 0)   AS actual_rate,
+             COALESCE(annual_rate, 0)   AS annual_rate,
+             COALESCE(raised_amount, 0) AS raised_amount,
+             COALESCE(live_investor_count, investor_count, 0) AS investor_count
       FROM investment_pools
-      WHERE status IN ('matured','paid_out') AND COALESCE(actual_rate, 0) > 0
-      ORDER BY end_date ASC
+      WHERE status IN ('matured','paid_out')
+      ORDER BY COALESCE(maturity_date, end_date) ASC
     `);
 
     const byType = {};
     for (const p of rows) {
       const t = p.product_type;
-      if (!byType[t]) byType[t] = { pools: [], total_paid_back: 0, sum_actual: 0, sum_benchmark: 0 };
+      if (!byType[t]) byType[t] = { pools: [], total_paid_back: 0, sum_actual: 0, sum_benchmark: 0, n_with_rate: 0 };
       const actual    = parseFloat(p.actual_rate) || 0;
       const benchmark = parseFloat(p.annual_rate) || 0;
       const raised    = parseFloat(p.raised_amount) || 0;
       const term      = parseInt(p.term_months) || 12;
-      byType[t].pools.push({ name: p.name, ended: p.end_date, actual_rate: actual, benchmark_rate: benchmark });
+      byType[t].pools.push({
+        name:           p.name,
+        status:         p.status,
+        ended:          p.maturity_date || p.end_date,
+        actual_rate:    actual,
+        benchmark_rate: benchmark,
+        raised_amount:  raised,
+        term_months:    term,
+        investor_count: parseInt(p.investor_count) || 0,
+      });
       byType[t].total_paid_back += raised * (1 + actual * (term / 12));
-      byType[t].sum_actual      += actual;
-      byType[t].sum_benchmark   += benchmark;
+      if (actual > 0) {
+        byType[t].sum_actual    += actual;
+        byType[t].sum_benchmark += benchmark;
+        byType[t].n_with_rate   += 1;
+      }
     }
 
     const data = {};
     for (const [t, v] of Object.entries(byType)) {
       const n = v.pools.length;
+      const nr = v.n_with_rate;
       data[t] = {
         matured_count:      n,
-        avg_actual_rate:    n ? v.sum_actual / n : 0,
-        avg_benchmark_rate: n ? v.sum_benchmark / n : 0,
+        avg_actual_rate:    nr ? v.sum_actual / nr : 0,
+        avg_benchmark_rate: nr ? v.sum_benchmark / nr : 0,
         total_paid_back:    Math.round(v.total_paid_back),
         pools:              v.pools,
       };
