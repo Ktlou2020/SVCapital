@@ -1287,7 +1287,19 @@
       <div class="form-grid">
         <div class="form-group">
           <label class="form-label" for="city">City <span>*</span></label>
-          <input type="text" class="form-input" id="city" placeholder="Johannesburg" autocomplete="address-level2" />
+          <input type="text" class="form-input" id="city" placeholder="Search your city…" autocomplete="off" list="sa-cities-list" />
+          <datalist id="sa-cities-list">
+            <option value="Johannesburg"><option value="Cape Town"><option value="Durban"><option value="Pretoria"><option value="Gqeberha (Port Elizabeth)"><option value="Bloemfontein"><option value="East London"><option value="Polokwane"><option value="Mbombela (Nelspruit)"><option value="Kimberley">
+            <option value="Sandton"><option value="Randburg"><option value="Roodepoort"><option value="Soweto"><option value="Centurion"><option value="Midrand"><option value="Boksburg"><option value="Benoni"><option value="Springs"><option value="Germiston"><option value="Alberton"><option value="Edenvale"><option value="Kempton Park"><option value="Krugersdorp"><option value="Vanderbijlpark"><option value="Vereeniging"><option value="Tembisa"><option value="Brakpan"><option value="Randfontein"><option value="Westonaria"><option value="Ekurhuleni">
+            <option value="Stellenbosch"><option value="Paarl"><option value="Worcester"><option value="Somerset West"><option value="Strand"><option value="Bellville"><option value="Brackenfell"><option value="George"><option value="Mossel Bay"><option value="Knysna"><option value="Oudtshoorn"><option value="Hermanus"><option value="Robertson"><option value="Swellendam"><option value="Beaufort West"><option value="Atlantis"><option value="Mitchells Plain"><option value="Khayelitsha"><option value="Jeffreys Bay"><option value="Langebaan"><option value="Saldanha">
+            <option value="Pietermaritzburg"><option value="Richards Bay"><option value="Empangeni"><option value="Newcastle"><option value="Ladysmith"><option value="Pinetown"><option value="Umhlanga"><option value="Ballito"><option value="Margate"><option value="Port Shepstone"><option value="Tongaat">
+            <option value="Makhanda (Grahamstown)"><option value="Komani (Queenstown)"><option value="Bhisho"><option value="Uitenhage"><option value="Graaff-Reinet"><option value="Aliwal North"><option value="Port Alfred"><option value="Butterworth"><option value="Mthatha">
+            <option value="Welkom"><option value="Bethlehem"><option value="Kroonstad"><option value="Sasolburg"><option value="Parys"><option value="Harrismith"><option value="Phuthaditjhaba">
+            <option value="Tzaneen"><option value="Phalaborwa"><option value="Makhado (Louis Trichardt)"><option value="Musina"><option value="Thohoyandou"><option value="Mokopane"><option value="Lephalale"><option value="Lebowakgomo"><option value="Bela-Bela">
+            <option value="eMalahleni (Witbank)"><option value="Middelburg"><option value="Secunda"><option value="Standerton"><option value="Ermelo"><option value="Piet Retief">
+            <option value="Rustenburg"><option value="Potchefstroom"><option value="Klerksdorp"><option value="Mahikeng (Mafikeng)"><option value="Brits"><option value="Lichtenburg">
+            <option value="Upington"><option value="De Aar"><option value="Springbok"><option value="Alexander Bay"><option value="Kuruman"><option value="Colesberg">
+          </datalist>
         </div>
         <div class="form-group" id="saProvinceGroup">
           <label class="form-label" for="province">Province <span>*</span></label>
@@ -1457,27 +1469,6 @@
         <input type="text" class="form-input" id="hearAboutOther" placeholder="How did you find out about SV Capital?" maxlength="200" autocomplete="off" />
       </div>
 
-      <!-- Return estimate widget -->
-      <div class="return-estimate">
-        <div class="return-estimate__header">
-          <i class="fa-solid fa-calculator"></i> Your Potential Returns
-        </div>
-        <div class="return-estimate__row">
-          <span class="return-estimate__label">Initial Amount</span>
-          <input type="range" class="return-estimate__slider" id="reSlider" min="500" max="500000" step="500" value="10000" />
-          <span class="return-estimate__val" id="reAmount">R10 000</span>
-        </div>
-        <div class="return-estimate__row">
-          <span class="return-estimate__label">Annual Return</span>
-          <input type="range" class="return-estimate__slider" id="reRateSlider" min="14" max="21" step="1" value="17" />
-          <span class="return-estimate__val" id="reRate">17% p.a.</span>
-        </div>
-        <div class="return-estimate__result">
-          <div class="return-estimate__result-label">Estimated return<br>after 12 months</div>
-          <div class="return-estimate__result-val" id="reResult">+R1 700</div>
-        </div>
-        <div class="return-estimate__disclaimer">* Illustrative only. Past performance is not a guarantee of future returns.</div>
-      </div>
 
       <div class="btn-row">
         <button type="button" class="btn-secondary" id="btnStep3Back" style="max-width:110px">
@@ -1958,10 +1949,11 @@ function validateSAID(id) {
 /* ── Hear about us — Other field ── */
 function toggleHearAboutOther(val) {
   const grp = document.getElementById('hearAboutOtherGroup');
+  const inp = document.getElementById('hearAboutOther');
   if (grp) grp.style.display = val === 'other' ? '' : 'none';
-  if (val !== 'other') {
-    const inp = document.getElementById('hearAboutOther');
-    if (inp) inp.value = '';
+  if (inp) {
+    inp.required = val === 'other';
+    if (val !== 'other') inp.value = '';
   }
 }
 
@@ -2181,7 +2173,6 @@ function updateStepIndicators(n) {
     if (!ind) return;
     ind.classList.toggle('done',   i < n);
     ind.classList.toggle('active', i === n);
-    ind.classList.toggle('',      i > n);
     const num = ind.querySelector('.step-num');
     if (i < n) {
       num.innerHTML = '<i class="fa-solid fa-check" style="font-size:0.6rem"></i>';
@@ -2596,13 +2587,31 @@ async function _doSubmit(skippedFica) {
     const assignedId = regData.user.investorId;
 
     if (!skippedFica && uploadedDocs.length > 0) {
-      await API.kyc.create({
-        investor_id: assignedId,
-        doc_type: 'id_document',
-        status: 'pending',
-        file_name: uploadedDocs.join(', '),
-        notes: `Submitted at registration. Files: ${uploadedDocs.join(', ')}.`,
-      }).catch(() => {});
+      const DOC_TYPE_MAP = {
+        id: 'id_document', address: 'proof_of_address',
+        selfie: 'selfie', bank: 'proof_of_bank', tax: 'tax',
+      };
+      const readFile = file => new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload  = e => res(e.target.result);
+        r.onerror = () => rej(new Error('Could not read file'));
+        r.readAsDataURL(file);
+      });
+      await Promise.allSettled(
+        Object.entries(ficaFiles)
+          .filter(([, f]) => f !== null)
+          .map(async ([key, file]) => {
+            const fileData = await readFile(file);
+            return API.kyc.create({
+              investor_id: assignedId,
+              doc_type:    DOC_TYPE_MAP[key] || 'other',
+              status:      'pending',
+              file_name:   file.name,
+              file_data:   fileData,
+              notes:       `Submitted at registration.`,
+            });
+          })
+      );
     }
 
     if (!skippedFica) {

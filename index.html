@@ -25,9 +25,9 @@
   <!-- CountUp.js -->
   <script defer src="https://cdn.jsdelivr.net/npm/countup.js@2.8.0/dist/countUp.umd.js"></script>
 
-  <link rel="stylesheet" href="css/style.css?v=11" />
-  <link rel="stylesheet" href="css/home-ci.css" />
-  <link rel="stylesheet" href="css/premium.css" />
+  <link rel="stylesheet" href="css/style.css?v=12" />
+  <link rel="stylesheet" href="css/home-ci.css?v=2" />
+  <link rel="stylesheet" href="css/premium.css?v=6" />
   <!-- Google Analytics 4 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-5LEPWC7EFP"></script>
   <script>
@@ -44,17 +44,18 @@
   <style>
     /* Hero social proof */
     .hero-social-proof { display:flex;align-items:center;gap:12px;margin-top:28px; }
+    @media (max-width:1024px) { .hero-social-proof { justify-content:center; } }
     .investor-avatars { display:flex; }
-    .inv-av { width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;color:#fff;border:2px solid #0d1117;margin-left:-8px;letter-spacing:0; }
+    .inv-av { width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;color:#fff;border:2px solid #1a1a1a;margin-left:-8px;letter-spacing:0; }
     .inv-av:first-child { margin-left:0; }
     .hero-social-text { font-size:0.82rem;color:rgba(255,255,255,0.75);line-height:1.4; }
     .hero-social-text strong { color:#fff;font-size:0.9rem; }
-    .live-dot-wrap { display:inline-flex;align-items:center;gap:5px;margin-top:3px;font-size:0.72rem;color:#22c55e; }
+    .live-dot-wrap { display:inline-flex;align-items:center;gap:5px;margin-top:3px;font-size:0.75rem;color:#22c55e; }
     .live-dot-pulse { width:7px;height:7px;background:#22c55e;border-radius:50%;animation:pulse-dot 2s infinite; }
     @keyframes pulse-dot { 0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.6)} 50%{box-shadow:0 0 0 6px rgba(34,197,94,0)} }
 
     /* Why section */
-    .why-section { padding: 80px 0; background: var(--bg, #0d1117); }
+    .why-section { padding: 80px 0; background: #1a1a1a; }
     .why-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:48px; }
     @media(max-width:900px){ .why-grid{grid-template-columns:repeat(2,1fr);} }
     @media(max-width:600px){ .why-grid{grid-template-columns:1fr;} }
@@ -72,7 +73,7 @@
     .partner-chip:hover { background:rgba(255,255,255,0.07);border-color:rgba(212,175,55,0.25); }
     .partner-chip i { font-size:1.4rem; }
     .partner-chip strong { display:block;font-size:0.88rem;font-weight:700;color:#e2e8f0;line-height:1.2; }
-    .partner-chip span { font-size:0.72rem;color:#656565; }
+    .partner-chip span { font-size:0.72rem;color:#e2e8f0; }
 
     /* Dark-background contrast overrides — home-ci.css forces #1a1a1a on .section-title; these dark sections need light text */
     .why-section .section-eyebrow { color: var(--ci-orange, #FF8215) !important; }
@@ -82,7 +83,31 @@
     .why-section .section-sub { color: rgba(255,255,255,0.62) !important; }
     .why-card p { color: #656565 !important; }
     .partners-label { color: #656565 !important; }
-    .partner-chip span { color: #656565 !important; }
+    .partner-chip span { color: #e2e8f0 !important; }
+    .partner-chip__info { background:none;border:none;cursor:pointer;padding:0;min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;color:#e2e8f0;opacity:.55;font-size:.85rem;line-height:1;transition:color .15s,opacity .15s;flex-shrink:0; }
+    .partner-chip__info:hover { color:#eda5ff;opacity:1; }
+
+    /* Partner strip inside product cards */
+    .product-card__partner {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; background: rgba(0,0,0,0.04);
+      border: 1px solid rgba(0,0,0,0.1); border-radius: 10px;
+      padding: 10px 14px; margin-bottom: 14px;
+      cursor: pointer; text-align: left; transition: all 0.2s;
+      color: inherit; font-family: inherit; font-size: 0.82rem;
+    }
+    .product-card__partner:hover {
+      background: rgba(237,165,255,0.12);
+      border-color: rgba(237,165,255,0.4);
+    }
+    .product-card__partner .pcp-label {
+      font-size: 0.75rem; text-transform: uppercase;
+      letter-spacing: 0.08em; color: #666; flex-shrink: 0;
+    }
+    .product-card__partner .pcp-name {
+      font-weight: 700; color: #111; flex: 1;
+    }
+    .product-card__partner .fa-circle-info { color: #eda5ff; font-size: 0.85rem; flex-shrink: 0; }
 
   </style>
 </head>
@@ -352,15 +377,25 @@
       </div>
 
       <div class="product-risk-filter" data-reveal="up">
-        <span class="prf-label">Filter by risk</span>
-        <div class="prf-pills">
-          <button class="prf-pill active" data-risk="all" onclick="filterProductsByRisk('all', this)">All</button>
-          <button class="prf-pill" data-risk="conservative" onclick="filterProductsByRisk('conservative', this)">Conservative</button>
-          <button class="prf-pill" data-risk="moderate" onclick="filterProductsByRisk('moderate', this)">Moderate</button>
-          <button class="prf-pill" data-risk="aggressive" onclick="filterProductsByRisk('aggressive', this)">Aggressive</button>
+        <div class="prf-left">
+          <span class="prf-label">Risk</span>
+          <div class="prf-pills">
+            <button class="prf-pill active" data-risk="all" onclick="filterProductsByRisk('all', this)">All</button>
+            <button class="prf-pill" data-risk="conservative" onclick="filterProductsByRisk('conservative', this)">Low</button>
+            <button class="prf-pill" data-risk="moderate" onclick="filterProductsByRisk('moderate', this)">Medium</button>
+            <button class="prf-pill" data-risk="aggressive" onclick="filterProductsByRisk('aggressive', this)">High</button>
+          </div>
         </div>
-        <div class="prf-empty" id="prfEmpty" style="display:none">No products in this risk band right now.</div>
+        <div class="prf-actions">
+          <a href="#calculator" class="btn btn--sm btn--outline-dark">
+            <i class="fa-solid fa-calculator"></i> Calculate Returns
+          </a>
+          <a href="signup.html" class="btn btn--sm btn--gold">
+            <i class="fa-solid fa-bolt"></i> Invest Now
+          </a>
+        </div>
       </div>
+      <div class="prf-empty" id="prfEmpty" style="display:none">No products in this risk band right now.</div>
 
       <div class="products-grid">
 
@@ -401,6 +436,11 @@
               <span>Grow with the herd — one investment, one herd</span>
             </div>
           </div>
+          <button type="button" class="product-card__partner" onclick="_showPartnerModal('Beefcor')">
+            <span class="pcp-label">Partner</span>
+            <span class="pcp-name">Beefcor</span>
+            <i class="fa-solid fa-circle-info"></i>
+          </button>
           <div class="product-card__actions">
             <a href="signup.html" class="btn btn--gold btn--full">Invest Now</a>
             <button class="btn btn--ghost btn--full" onclick="openModal('cattle')">View Details</button>
@@ -421,7 +461,7 @@
           <p class="product-card__desc">Power South Africa's energy future. Your capital funds solar panel installations — generating clean electricity, long-term contracts, and growing returns.</p>
           <div class="product-card__stats">
             <div class="stat">
-              <span class="stat__label">Best Return</span>
+              <span class="stat__label">Avg. Return</span>
               <span class="stat__value stat__value--gold">21.40%</span>
               <span class="stat__unit">p.a. (7yr)</span>
             </div>
@@ -448,6 +488,11 @@
               <span class="tier__return">21.40% p.a.</span>
             </div>
           </div>
+          <button type="button" class="product-card__partner" onclick="_showPartnerModal('The Solar Experts')">
+            <span class="pcp-label">Partner</span>
+            <span class="pcp-name">The Solar Experts</span>
+            <i class="fa-solid fa-circle-info"></i>
+          </button>
           <div class="product-card__actions">
             <a href="signup.html" class="btn btn--gold btn--full">Invest Now</a>
             <button class="btn btn--ghost btn--full" onclick="openModal('solar')">View Details</button>
@@ -491,6 +536,11 @@
               <span>Supports SA SMMEs</span>
             </div>
           </div>
+          <button type="button" class="product-card__partner" onclick="_showPartnerModal('MoolaLend')">
+            <span class="pcp-label">Partner</span>
+            <span class="pcp-name">MoolaLend</span>
+            <i class="fa-solid fa-circle-info"></i>
+          </button>
           <div class="product-card__actions">
             <a href="signup.html" class="btn btn--gold btn--full">Invest Now</a>
             <button class="btn btn--ghost btn--full" onclick="openModal('short')">View Details</button>
@@ -538,6 +588,11 @@
               <span>Weekly rental payments</span>
             </div>
           </div>
+          <button type="button" class="product-card__partner" onclick="_showPartnerModal('OnFleet')">
+            <span class="pcp-label">Partner</span>
+            <span class="pcp-name">OnFleet</span>
+            <i class="fa-solid fa-circle-info"></i>
+          </button>
           <div class="product-card__actions">
             <a href="signup.html" class="btn btn--gold btn--full">Invest Now</a>
             <button class="btn btn--ghost btn--full" onclick="openModal('delivery')">View Details</button>
@@ -698,7 +753,7 @@
     <div class="container">
       <div class="section-header section-header--light" data-reveal="up">
         <div class="section-eyebrow section-eyebrow--light">Investment Calculator</div>
-        <h2 class="section-title section-title--light">See your money grow</h2>
+        <h2 class="section-title section-title--light">See your money grow.</h2>
         <p class="section-sub section-sub--light">Adjust the sliders and watch your wealth build in real time. No sign-up required.</p>
       </div>
 
@@ -842,7 +897,7 @@
             <div class="step__number">02</div>
             <div class="step__content">
               <h3>Choose Your Investment</h3>
-              <p>Browse live investment pools. Each listing shows real-time pool progress, target returns, term length, and full product details. Select the product that fits your goals.</p>
+              <p>Browse live investment pools. Each listing shows real-time pool progress, target returns, investment term, and full product details. Select the product that fits your goals.</p>
               <div class="step__time">📊 Real-time pool tracking</div>
             </div>
           </div>
@@ -852,7 +907,7 @@
             <div class="step__number">03</div>
             <div class="step__content">
               <h3>We Manage Everything</h3>
-              <p>Once invested, our partners (Beefcor, The Solar Experts, MoolaLend, OnFleet) professionally manage the underlying assets. You track progress on your dashboard.</p>
+              <p>Once invested, our partners professionally manage the underlying assets. You track progress on your dashboard.</p>
               <div class="step__time">🛡 Professionally managed assets</div>
             </div>
           </div>
@@ -875,11 +930,11 @@
           <h3>Manage your investments on the go</h3>
           <p>The SV Capital app gives you real-time visibility into your portfolio, pool progress, and returns — right from your phone.</p>
           <div class="app-btns">
-            <a href="#" class="app-store-btn">
+            <a href="https://svcapital.us18.list-manage.com/track/click?u=53868c358b33059a4d8b35b2c&id=f80d18b326&e=279d39ce84" target="_blank" rel="noopener" class="app-store-btn">
               <i class="fa-brands fa-apple"></i>
               <div><span>Download on the</span><strong>App Store</strong></div>
             </a>
-            <a href="#" class="app-store-btn">
+            <a href="https://play.google.com/store/apps/details?id=co.za.svcapital.app&goal=0_e3a27915f2-3f4e0a623d-291092733" target="_blank" rel="noopener" class="app-store-btn">
               <i class="fa-brands fa-google-play"></i>
               <div><span>Get it on</span><strong>Google Play</strong></div>
             </a>
@@ -898,29 +953,33 @@
           <i class="fa-solid fa-cow" style="color:#D4AF37"></i>
           <div>
             <strong>Beefcor</strong>
-            <span>Cattle Feedlot</span>
+            <span>Agriculture</span>
           </div>
+          <button type="button" class="partner-chip__info" onclick="_showPartnerModal('Beefcor')" aria-label="About Beefcor"><i class="fa-solid fa-circle-info"></i></button>
         </div>
         <div class="partner-chip">
           <i class="fa-solid fa-solar-panel" style="color:#4CAF50"></i>
           <div>
             <strong>The Solar Experts</strong>
-            <span>Clean Energy</span>
+            <span>Energy</span>
           </div>
+          <button type="button" class="partner-chip__info" onclick="_showPartnerModal('The Solar Experts')" aria-label="About The Solar Experts"><i class="fa-solid fa-circle-info"></i></button>
         </div>
         <div class="partner-chip">
           <i class="fa-solid fa-building-columns" style="color:#656565"></i>
           <div>
             <strong>MoolaLend</strong>
-            <span>SMME Finance</span>
+            <span>Credit</span>
           </div>
+          <button type="button" class="partner-chip__info" onclick="_showPartnerModal('MoolaLend')" aria-label="About MoolaLend"><i class="fa-solid fa-circle-info"></i></button>
         </div>
         <div class="partner-chip">
           <i class="fa-solid fa-motorcycle" style="color:#fb923c"></i>
           <div>
             <strong>OnFleet</strong>
-            <span>Last-Mile Delivery</span>
+            <span>Logistics</span>
           </div>
+          <button type="button" class="partner-chip__info" onclick="_showPartnerModal('OnFleet')" aria-label="About OnFleet"><i class="fa-solid fa-circle-info"></i></button>
         </div>
       </div>
     </div>
@@ -1012,7 +1071,7 @@
       <div class="trust-grid">
         <div class="trust-main">
           <div class="section-eyebrow">Regulatory Compliance</div>
-          <h2 class="section-title" style="font-size:2rem;">Your money is in safe hands.</h2>
+          <h2 class="section-title">Your money is in safe hands.</h2>
           <p style="color:var(--text-muted); margin-bottom:1.5rem; line-height:1.7;">All fund collections and disbursements are managed by <strong style="color:#fff">SmartVest Financial Services</strong>, a licensed Financial Services Provider authorised by the <strong>Financial Sector Conduct Authority (FSCA)</strong>.</p>
           <div class="compliance-items">
             <div class="compliance-item">

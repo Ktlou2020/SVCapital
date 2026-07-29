@@ -116,4 +116,156 @@ router.post('/reset-2fa', async (req, res) => {
   }
 });
 
+/* ─── POST /api/admin/investments/allocate-pools ──────────────────────────
+   Matches investments to pools by name (case-insensitive, trimmed).
+   Updates pool_id (and pool_name to the canonical pool name) on any
+   investment whose pool_id is NULL but whose pool_name matches a known pool.
+   Also updates investments that have a mismatched/stale pool_id.
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/investments/allocate-pools', async (req, res) => {
+  try {
+    const { rows: pools } = await pool.query(
+      `SELECT id, name FROM investment_pools WHERE name IS NOT NULL`
+    );
+
+    // Build a case-insensitive name → pool map
+    const poolByName = new Map();
+    for (const p of pools) {
+      if (p.name) poolByName.set(p.name.trim().toLowerCase(), p);
+    }
+
+    // Fetch investments that are unallocated (pool_id IS NULL) and have a pool_name
+    const { rows: investments } = await pool.query(
+      `SELECT id, pool_name, pool_id
+         FROM investments
+        WHERE pool_name IS NOT NULL AND pool_name <> ''`
+    );
+
+    let matched = 0;
+    const unmatched = [];
+
+    for (const inv of investments) {
+      const key = (inv.pool_name || '').trim().toLowerCase();
+      const matchedPool = poolByName.get(key);
+      if (matchedPool && inv.pool_id !== matchedPool.id) {
+        await pool.query(
+          `UPDATE investments SET pool_id = $1, pool_name = $2, updated_at = NOW() WHERE id = $3`,
+          [matchedPool.id, matchedPool.name, inv.id]
+        );
+        matched++;
+      } else if (!matchedPool) {
+        unmatched.push(inv.pool_name);
+      }
+    }
+
+    const uniqueUnmatched = [...new Set(unmatched)].slice(0, 20);
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'investments.allocate_pools',
+      entityType: 'investments',
+      description: `Allocated ${matched} investments to pools by name matching. ${uniqueUnmatched.length} pool names had no match.`,
+      ip:         req.ip,
+    }).catch(() => {}));
+
+    res.json({ success: true, matched, unmatched: uniqueUnmatched });
+  } catch (err) {
+    console.error('/admin/investments/allocate-pools error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+/* ─── POST /api/admin/pools/recalculate ───────────────────────────────────
+   Recomputes investor_count, raised_amount, and current_invested for every
+   pool from the live investments table.  Safe to run at any time.
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/pools/recalculate', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`
+      UPDATE investment_pools ip
+         SET investor_count   = sub.cnt,
+             raised_amount    = sub.raised,
+             current_invested = sub.active_amt,
+             updated_at       = NOW()
+        FROM (
+          SELECT
+            pool_id,
+            COUNT(DISTINCT CASE WHEN sub_account_id IS NOT NULL
+                                THEN 'sa:' || sub_account_id
+                                ELSE 'inv:' || investor_id END) AS cnt,
+            SUM(CASE WHEN status IN ('active','matured','paid_out') THEN amount ELSE 0 END) AS raised,
+            SUM(CASE WHEN status = 'active' THEN amount ELSE 0 END)                        AS active_amt
+          FROM investments
+          WHERE pool_id IS NOT NULL
+          GROUP BY pool_id
+        ) sub
+       WHERE ip.id = sub.pool_id
+    `);
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'pools.recalculate',
+      entityType: 'investment_pools',
+      description: `Recalculated stats for ${rowCount} pools`,
+      ip:         req.ip,
+    }).catch(() => {}));
+
+    res.json({ success: true, poolsUpdated: rowCount });
+  } catch (err) {
+    console.error('/admin/pools/recalculate error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+/* ─── POST /api/admin/backfill/fica-from-kyc ──────────────────────────────
+   One-shot backfill: any investor whose kyc_status is already 'approved'
+   gets fica_status set to 'approved', fica_approved_at stamped (if not
+   already set), and their account status promoted to 'active'.
+   Also syncs the reverse: fica_status='approved' → kyc_status='approved'.
+   Safe to run multiple times — the WHERE guards prevent double-writes.
+   ─────────────────────────────────────────────────────────────────────── */
+router.post('/backfill/fica-from-kyc', async (req, res) => {
+  try {
+    // kyc_status approved → set fica_status approved + activate
+    const { rowCount: fromKyc } = await pool.query(`
+      UPDATE investors
+         SET fica_status      = 'approved',
+             kyc_status       = 'approved',
+             fica_approved_at = COALESCE(fica_approved_at, NOW()),
+             status           = CASE WHEN status IN ('pending','pending_fica','fica_submitted','inactive') THEN 'active' ELSE status END,
+             updated_at       = NOW()
+       WHERE kyc_status = 'approved'
+         AND fica_status <> 'approved'
+    `);
+
+    // fica_status approved → ensure kyc_status is also approved
+    const { rowCount: fromFica } = await pool.query(`
+      UPDATE investors
+         SET kyc_status  = 'approved',
+             status      = CASE WHEN status IN ('pending','pending_fica','fica_submitted','inactive') THEN 'active' ELSE status END,
+             updated_at  = NOW()
+       WHERE fica_status = 'approved'
+         AND kyc_status <> 'approved'
+    `);
+
+    const total = fromKyc + fromFica;
+
+    setImmediate(() => audit.log({
+      actorId:    req.user.id,
+      actorEmail: req.user.email,
+      action:     'investors.backfill_fica_from_kyc',
+      entityType: 'investors',
+      description: `Backfilled FICA approval for ${total} investors (${fromKyc} from KYC, ${fromFica} from FICA sync)`,
+      ip:         req.ip,
+    }).catch(() => {}));
+
+    res.json({ success: true, updated: total, fromKyc, fromFica });
+  } catch (err) {
+    console.error('/admin/backfill/fica-from-kyc error:', err.message);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 module.exports = router;

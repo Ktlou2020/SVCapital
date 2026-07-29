@@ -420,24 +420,8 @@ function renderTaskCompletionPanel() {
   const doneCount = tasks.filter(t => t.done).length;
   const pending = tasks.filter(t => !t.done);
   meta.textContent = `${doneCount}/${tasks.length} complete`;
+  if (!pending.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
-  if (!pending.length) {
-    body.innerHTML = `
-      <div class="action-centre-done">
-        <div class="acd-headline">
-          <div class="acd-check"><i class="fa-solid fa-circle-check"></i></div>
-          <div>
-            <div class="acd-title">You're set up and ready to invest confidently.</div>
-            <div class="acd-sub">Top up, browse new pools, or generate your latest statement.</div>
-          </div>
-        </div>
-        <div class="acd-actions">
-          <button class="acd-btn acd-btn--ghost" onclick="navigate('statement', document.querySelector('[data-view=statement]'))"><i class="fa-solid fa-file-invoice"></i><span>Statement</span></button>
-          <button class="acd-btn acd-btn--primary" onclick="navigate('marketplace', document.querySelector('[data-view=marketplace]'))"><i class="fa-solid fa-plus"></i><span>Invest more</span></button>
-        </div>
-      </div>`;
-    return;
-  }
   body.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:14px">
       ${tasks.map(task => `
@@ -1325,7 +1309,7 @@ function navigate(view, btnEl) {
     documents: loadDocuments,
     policies: renderPoliciesView,
     gifts: loadGiftsView,
-    profile: () => { renderRiskProfile(); _initPushNotifToggle(); _renderKycStatusPanel(); },
+    profile: () => { renderRiskProfile(); _initPushNotifToggle(); _refreshInvestorThenKyc(); },
   };
   if (loaders[view]) {
     const _res = loaders[view]();
@@ -1679,7 +1663,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadPortalData(_attempt = 0, _opts = {}) {
-  const MAX_ATTEMPTS = 3;
+  const MAX_ATTEMPTS = 4;
   try {
     // allSettled so a single failing endpoint never kills the whole portal load.
     const [invResult, invstResult, txnResult, poolResult, payResult, prodResult] = await Promise.allSettled([
@@ -1861,7 +1845,7 @@ async function loadPortalData(_attempt = 0, _opts = {}) {
 
     // Network / timeout errors: retry with backoff (handles Railway cold-start)
     if (_attempt < MAX_ATTEMPTS - 1) {
-      const delay = (_attempt + 1) * 3000; // 3 s, 6 s
+      const delay = (_attempt + 1) * 5000; // 5 s, 10 s, 15 s
       console.log(`[portal] Retrying data load in ${delay}ms…`);
       await new Promise(r => setTimeout(r, delay));
       return loadPortalData(_attempt + 1, _opts);
@@ -1883,9 +1867,11 @@ function renderOverview(skipCharts) {
   if (!inv) return;
 
   const totalInvested = PORTAL.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-  const totalRet      = PORTAL.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
-  const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0) + totalRet;
-  const returnPct     = totalInvested > 0 ? (totalRet / totalInvested * 100).toFixed(1) : '0';
+  const maturedInvs   = PORTAL.investments.filter(i => i.status === 'matured');
+  const totalMatured  = maturedInvs.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const totalRet      = maturedInvs.reduce((s, i) => s + (parseFloat(i.expected_return) || (parseFloat(i.amount) || 0) * (parseFloat(i.annual_rate) || 0)), 0);
+  const totalValue    = totalInvested + (parseFloat(inv.wallet_balance) || 0);
+  const returnPct     = totalMatured > 0 ? (totalRet / totalMatured * 100).toFixed(1) : '0';
   const activeCount = PORTAL.investments.filter(i => i.status === 'active').length;
   const firstName   = inv.first_name || '';
 
@@ -1940,8 +1926,8 @@ function renderOverview(skipCharts) {
   if (chipId) chipId.textContent = inv.id || '—';
 
   // Member since
-  if (inv.created_at || inv.registration_date) {
-    const since = new Date(inv.created_at || inv.registration_date);
+  if (inv.date_joined || inv.created_at || inv.registration_date) {
+    const since = new Date(inv.date_joined || inv.created_at || inv.registration_date);
     const sinceEl = document.getElementById('wchipSinceText');
     if (sinceEl) sinceEl.textContent = `Since ${since.toLocaleString('en-ZA', { month: 'short', year: 'numeric' })}`;
   }
@@ -2239,9 +2225,10 @@ function renderPortfolioTrendChart() {
   }
 
   // ── Backward-reconstruct: start from today's actual value ───
+  // Anchor matches the hero KPI: active investments + wallet balance.
   const currentValue = Math.max(0,
     (parseFloat(PORTAL.investor?.wallet_balance) || 0) +
-    (parseFloat(PORTAL.investor?.total_invested)  || 0)
+    (PORTAL.investments || []).filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)
   );
   const dataRev = []; let val = currentValue;
   // Buckets are ordered oldest→newest; iterate newest→oldest
@@ -2398,9 +2385,9 @@ async function loadMyInvestments() {
 function renderMyInvestmentStats() {
   const d = PORTAL.investments || [];
   const _s = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  _s('mi-capital',  Utils.rand(d.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)));
+  _s('mi-capital',  Utils.rand(d.filter(i => !i.is_reinvestment).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0)));
   _s('mi-expected', Utils.rand(d.reduce((s, i) => s + (parseFloat(i.expected_return_amount) || 0), 0)));
-  _s('mi-earned',   Utils.rand(d.reduce((s, i) => s + (parseFloat(i.actual_return_amount) || 0), 0)));
+  _s('mi-earned',   Utils.rand(d.reduce((s, i) => s + (parseFloat(i.amount) || 0) * (parseFloat(i.pool_actual_rate) || 0), 0)));
   _s('mi-count',    d.length);
 }
 
@@ -3822,8 +3809,10 @@ function renderProductsGrid() {
     const color = Utils.productColor(p);
     const icon = p.icon || pi.icon;
     const avg = p.avg_actual_rate != null ? parseFloat(p.avg_actual_rate) : _computeAvgActualRate(p.product_type);
-    const rateLabel = avg != null ? `${(avg * 100).toFixed(1)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : '—');
+    const poolRate = open[0] ? parseFloat(open[0].annual_rate) : null;
+    const rateLabel = avg != null ? `${(avg * 100).toFixed(1)}%` : (p.benchmark_rate ? `${(parseFloat(p.benchmark_rate) * 100).toFixed(1)}%` : (poolRate != null ? `${(poolRate * 100).toFixed(1)}%` : '—'));
     const rateSub = avg != null ? 'AVG RETURN' : 'TARGET RETURN';
+    const termMonths = p.term_months || (open[0] && open[0].term_months) || null;
     // soonest closing among the open pools
     const days = open.map(o => Utils.daysRemaining(o.end_date)).filter(d => d !== null);
     const soonest = days.length ? Math.min(...days) : null;
@@ -3852,7 +3841,7 @@ function renderProductsGrid() {
           </div>
           <div class="mpc2-metric-sep"></div>
           <div class="mpc2-metric">
-            <div class="mpc2-metric__val">${p.term_months || '—'}<span style="font-size:1rem;opacity:0.7">mo</span></div>
+            <div class="mpc2-metric__val">${termMonths || '—'}<span style="font-size:1rem;opacity:0.7">mo</span></div>
             <div class="mpc2-metric__lbl">term</div>
           </div>
         </div>
@@ -3905,12 +3894,12 @@ async function renderProductDetailView(type) {
     : (isSolar ? '<div id="prodSolarStatus" style="margin-top:20px;margin-bottom:16px"></div>' : '');
 
   grid.innerHTML = `
-    <div style="grid-column:1/-1">
+    <div style="grid-column:1/-1;padding:0 12px">
       <button class="btn btn--ghost btn--sm" onclick="backToProducts()" style="margin-bottom:14px"><i class="fa-solid fa-arrow-left"></i> All products</button>
 
       <div class="market-pool-card mpc-v2" style="cursor:default">
         <div class="mpc2-accent" style="background:linear-gradient(90deg,${color},${color}88)"></div>
-        <div style="padding:16px 16px 8px">
+        <div style="padding:16px 20px 8px">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
             <div class="mpc2-icon" style="background:${color}18;color:${color}"><i class="fa-solid ${icon}"></i></div>
             <div>
@@ -3922,24 +3911,27 @@ async function renderProductDetailView(type) {
 
           <div class="mpc2-metrics" style="margin-bottom:16px">
             <div class="mpc2-metric">
-              <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(1) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : '—')}</div>
+              <div class="mpc2-metric__val" style="background:linear-gradient(135deg,${color},${color}bb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avg != null ? (avg * 100).toFixed(1) + '%' : (product.benchmark_rate ? (parseFloat(product.benchmark_rate) * 100).toFixed(1) + '%' : (open[0] ? (parseFloat(open[0].annual_rate) * 100).toFixed(1) + '%' : '—'))}</div>
               <div class="mpc2-metric__lbl">${avg != null ? 'AVG RETURN' : 'TARGET RETURN'}</div>
             </div>
             <div class="mpc2-metric-sep"></div>
             <div class="mpc2-metric"><div class="mpc2-metric__val" style="font-size:1.25rem">${Utils.rand(product.min_investment || 0)}</div><div class="mpc2-metric__lbl">minimum</div></div>
             <div class="mpc2-metric-sep"></div>
-            <div class="mpc2-metric"><div class="mpc2-metric__val">${product.term_months || '—'}<span style="font-size:1rem;opacity:0.7">mo</span></div><div class="mpc2-metric__lbl">term</div></div>
+            <div class="mpc2-metric"><div class="mpc2-metric__val">${product.term_months || (open[0] && open[0].term_months) || '—'}<span style="font-size:1rem;opacity:0.7">mo</span></div><div class="mpc2-metric__lbl">term</div></div>
             ${product.performance_fee_pct ? `<div class="mpc2-metric-sep"></div><div class="mpc2-metric"><div class="mpc2-metric__val" style="font-size:1.2rem">${(parseFloat(product.performance_fee_pct) * 100).toFixed(0)}%</div><div class="mpc2-metric__lbl">perf. fee</div></div>` : ''}
           </div>
 
-          ${herdSlot}
-
-          ${keyDetails.length ? `<div style="margin-bottom:16px">
-            <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px">Key Details</div>
-            <div style="display:flex;flex-direction:column;gap:7px">
-              ${keyDetails.map(d => `<div style="display:flex;gap:9px;font-size:0.86rem;color:var(--text)"><i class="fa-solid fa-arrow-right" style="color:${color};margin-top:3px;font-size:0.75rem"></i><span>${_esc(d)}</span></div>`).join('')}
-            </div>
-          </div>` : ''}
+          ${type === 'cattle' && keyDetails.length
+            ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;margin-bottom:16px;margin-top:20px">
+                <div id="prodHerdStatus"></div>
+                <div style="background:rgba(254,194,79,0.06);border:1px solid rgba(254,194,79,0.22);border-radius:12px;padding:14px 16px">
+                  <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#b8860b;margin-bottom:10px"><i class="fa-solid fa-list" style="margin-right:5px"></i>Key Details</div>
+                  <div style="display:flex;flex-direction:column;gap:7px">
+                    ${keyDetails.map(d => `<div style="display:flex;gap:9px;font-size:0.86rem;color:var(--text)"><i class="fa-solid fa-arrow-right" style="color:${color};margin-top:3px;font-size:0.75rem"></i><span>${_esc(d)}</span></div>`).join('')}
+                  </div>
+                </div>
+              </div>`
+            : `${herdSlot}${keyDetails.length ? `<div style="margin-bottom:16px"><div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:8px">Key Details</div><div style="display:flex;flex-direction:column;gap:7px">${keyDetails.map(d => `<div style="display:flex;gap:9px;font-size:0.86rem;color:var(--text)"><i class="fa-solid fa-arrow-right" style="color:${color};margin-top:3px;font-size:0.75rem"></i><span>${_esc(d)}</span></div>`).join('')}</div></div>` : ''}`}
 
           ${isSolar ? '<div id="prodSolarHistory" style="margin-top:16px"></div>' : ''}
           <div id="prodTrackRecord" style="margin-top:16px"></div>
@@ -4117,7 +4109,7 @@ async function _renderProductTrackRecord(type, color) {
       </div>
       <div style="flex:1;min-width:110px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px">
         <div style="font-size:1.5rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${Utils.rand(paidBack)}</div>
-        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">paid back to investors</div>
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px">invested to date</div>
       </div>
     </div>`;
 }
@@ -4280,7 +4272,7 @@ function _marketPoolCardHtml(pool, idx, walletBal, waitlist, investorId) {
           <!-- Title + blurb -->
           <div style="margin-top:14px">
             <div class="mpc2-title">${_esc(pool.name)}</div>
-            <div class="mpc2-blurb">${_esc(meta.blurb)}</div>
+            <div class="mpc2-blurb">${meta.blurb}</div>
           </div>
         </div>
 
@@ -4410,11 +4402,10 @@ function _cattleHerdStatusHtml(s) {
   const mortBlock = `<div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px"><i class="fa-solid fa-heart-pulse" style="color:#22c55e"></i> Survival rate <strong style="color:var(--text)">${(100 - mortRate).toFixed(1)}%</strong></div>`;
 
   return `
-    <div style="background:rgba(254,194,79,0.07);border:1px solid rgba(254,194,79,0.25);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+    <div style="background:rgba(254,194,79,0.07);border:1px solid rgba(254,194,79,0.25);border-radius:12px;padding:14px 16px;margin-top:16px;margin-bottom:14px">
       <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#fec24f;margin-bottom:10px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px">
         <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.total_purchased.toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">purchased to date</div></div>
-        <div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.live_count || 0).toLocaleString('en-ZA')}</div><div style="font-size:0.7rem;color:var(--text-muted)">currently live</div></div>
         ${weight ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${weight}<span style="font-size:0.78rem"> kg</span></div><div style="font-size:0.7rem;color:var(--text-muted)">average weight</div></div>` : ''}
       </div>
 
@@ -4462,7 +4453,6 @@ function _solarStatusHtml(s) {
         ${s.co2_avoided_kg ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${(s.co2_avoided_kg / 1000).toFixed(1)}<span style="font-size:0.78rem"> t</span></div><div style="font-size:0.7rem;color:var(--text-muted)">CO₂ avoided</div></div>` : ''}
         ${s.device_count ? `<div><div style="font-size:1.15rem;font-weight:800;color:var(--text)">${s.device_count}</div><div style="font-size:0.7rem;color:var(--text-muted)">inverter${s.device_count === 1 ? '' : 's'}</div></div>` : ''}
       </div>
-      <div style="font-size:0.68rem;color:var(--text-muted);margin-top:9px">Live data from FoxCloud${s.station_name ? ` · ${_esc(s.station_name)}` : ''}</div>
     </div>`;
 }
 
@@ -5305,8 +5295,8 @@ function updateStmtQuickStats() {
   const investments  = PORTAL.investments  || [];
   const transactions = PORTAL.transactions || [];
   const investor     = PORTAL.investor     || {};
-  const totalInvested = investments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = investments.reduce((s, i) => s + (Number(i.actual_return_amount) || 0), 0);
+  const totalInvested = investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const totalReturns  = investments.reduce((s, i) => s + (Number(i.amount) || 0) * (Number(i.pool_actual_rate) || 0), 0);
   const walletBal     = Number(investor.wallet_balance) || 0;
   const totalValue    = totalInvested + walletBal + totalReturns;
 
@@ -5367,25 +5357,26 @@ function generateStatement() {
   const effectivePerformance  = anyChecked ? incPerformance  : true;
 
   const investor    = PORTAL.investor || {};
-  // Use ALL investments (not date-filtered — investment dates may predate range)
-  const investments = PORTAL.investments || [];
+  const allInvestments = PORTAL.investments || [];
 
   // Filter transactions by date range
   const allTxns = PORTAL.transactions || [];
-  const transactions = allTxns.filter(t => {
-    const raw = t.transaction_date || t.created_at;
-    if (!raw) return true;
+  function _inPeriod(raw) {
+    if (!raw) return false;
     const d = (typeof raw === 'number') ? new Date(raw) : new Date(String(raw).length === 10 ? raw + 'T00:00:00' : raw);
-    if (isNaN(d.getTime())) return true;
+    if (isNaN(d.getTime())) return false;
     return d >= from && d <= to;
-  });
+  }
+  const transactions = allTxns.filter(t => _inPeriod(t.transaction_date || t.created_at));
+  const investments  = allInvestments.filter(i => _inPeriod(i.start_date || i.investment_date || i.created_at));
 
   // Compute stats
-  const totalInvested = investments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = investments.reduce((s, i) => s + (Number(i.actual_return_amount) || 0), 0);
-  const activeInv     = investments.filter(i => i.status === 'active').length;
   const walletBal     = Number(investor.wallet_balance) || 0;
-  const totalValue    = totalInvested + walletBal + totalReturns;
+  const activeInvAmt  = allInvestments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const totalValue    = activeInvAmt + walletBal;
+  const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalReturns  = transactions.filter(t => t.type === 'return' || t.type === 'payout').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const activeInv     = allInvestments.filter(i => i.status === 'active').length;
 
   // Build preview quick stats
   const previewEl = document.getElementById('stmtQuickStats');
@@ -5395,8 +5386,8 @@ function generateStatement() {
         ${quickStatRow('Period', `${fmtDate(from)} — ${fmtDate(to)}`)}
         ${quickStatRow('Investments in Period', investments.length)}
         ${quickStatRow('Transactions in Period', transactions.length)}
-        ${quickStatRow('Total Capital', Utils.rand(totalInvested))}
-        ${quickStatRow('Returns Paid', Utils.rand(totalReturns))}
+        ${quickStatRow('Deposits', Utils.rand(totalDeposits))}
+        ${quickStatRow('Returns in Period', Utils.rand(totalReturns))}
         ${quickStatRow('Portfolio Value', Utils.rand(totalValue))}
       </div>
     `;
@@ -5411,7 +5402,7 @@ function generateStatement() {
 
   let html = buildStatementHTML({
     investor, investments, transactions,
-    from, to, totalInvested, totalReturns, walletBal, totalValue, activeInv,
+    from, to, totalDeposits, totalReturns, walletBal, totalValue, activeInv,
     statementNumber, generatedAt,
     incPortfolio:    effectivePortfolio,
     incInvestments:  effectiveInvestments,
@@ -5453,10 +5444,11 @@ function fmtNum(n) {
 function buildStatementHTML(opts) {
   const {
     investor, investments, transactions,
-    from, to, totalInvested, totalReturns, walletBal, totalValue, activeInv,
+    from, to, totalDeposits, totalReturns, walletBal, totalValue, activeInv,
     statementNumber, generatedAt,
     incPortfolio, incInvestments, incTransactions, incPerformance
   } = opts;
+  const totalInvested = totalDeposits;
 
   const fullName = `${investor.first_name || 'Thabo'} ${investor.last_name || 'Khumalo'}`;
   const investorId = investor.id || 'INV-002';
@@ -5478,7 +5470,7 @@ function buildStatementHTML(opts) {
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px">
           ${stmtKPIBox('Total Portfolio Value', fmtNum(totalValue), '#fec24f')}
-          ${stmtKPIBox('Capital Deployed', fmtNum(totalInvested), '#656565')}
+          ${stmtKPIBox('Deposits', fmtNum(totalDeposits), '#656565')}
           ${stmtKPIBox('Returns Earned', fmtNum(totalReturns), '#22C55E')}
           ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#0096ff')}
         </div>
@@ -5512,8 +5504,8 @@ function buildStatementHTML(opts) {
       const p = inv.product_type || 'unknown';
       if (!byProduct[p]) byProduct[p] = { count: 0, capital: 0, returns: 0 };
       byProduct[p].count++;
-      byProduct[p].capital += Number(inv.amount) || 0;
-      byProduct[p].returns += Number(inv.actual_return_amount) || 0;
+      if (!inv.is_reinvestment) byProduct[p].capital += Number(inv.amount) || 0;
+      byProduct[p].returns += (Number(inv.amount) || 0) * (Number(inv.pool_actual_rate) || 0);
     });
 
     const perfRows = Object.entries(byProduct).map(([prod, d]) => {
@@ -5561,13 +5553,8 @@ function buildStatementHTML(opts) {
   if (incInvestments && investments.length > 0) {
     const invRows = investments.map(inv => {
       const info = getProductInfo(inv.product_type);
-      // Actual rate ACHIEVED: only meaningful once matured. While active, show "—".
-      const isMatured = inv.status === 'matured' || inv.status === 'paid_out';
-      const baseRate = (Number(inv.expected_return_rate) || 0) * 100;
-      const expRet = Number(inv.expected_return) || 0;
-      const actRet = Number(inv.actual_return) || 0;
-      const achievedRate = expRet > 0 ? baseRate * (actRet / expRet) : baseRate;
-      const rateCell = isMatured ? `${achievedRate.toFixed(2)}%` : '—';
+      const poolRate = (Number(inv.pool_actual_rate) || 0) * 100;
+      const rateCell = poolRate > 0 ? `${poolRate.toFixed(2)}%` : '—';
       const maturity = inv.maturity_date ? fmtDate(inv.maturity_date) : '—';
       const statusColor = inv.status === 'active' ? '#656565' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
       return `<tr style="border-bottom:1px solid #f0f0f0">
@@ -7646,32 +7633,11 @@ function shareReferral(method) {
    DARK MODE
    ═══════════════════════════════════════════════════════════════ */
 function initDarkMode() {
-  // Dark mode is disabled on the native app — always force light mode and
-  // clear any previously-saved dark preference.
-  if (window.__SVC_NATIVE__) {
-    _applyDark(false);
-    return;
-  }
-  const saved = localStorage.getItem('svc_dark_mode');
-  if (saved === 'dark') _applyDark(true);
+  document.body.classList.remove('dark-mode');
+  localStorage.removeItem('svc_dark_mode');
 }
-
-function toggleDarkMode() {
-  // No-op on native — dark mode is disabled there.
-  if (window.__SVC_NATIVE__) return;
-  const isDark = document.body.classList.contains('dark-mode');
-  _applyDark(!isDark);
-  SVC.track('svc_dark_mode_toggle', { dark_mode: !isDark });
-}
-
-function _applyDark(on) {
-  document.body.classList.toggle('dark-mode', on);
-  localStorage.setItem('svc_dark_mode', on ? 'dark' : 'light');
-  const icon = document.getElementById('darkModeIcon');
-  if (icon) {
-    icon.className = on ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
-  }
-}
+function toggleDarkMode() {}
+function _applyDark() { document.body.classList.remove('dark-mode'); }
 
 /* ═══════════════════════════════════════════════════════════════
    GUIDED TOUR
@@ -7681,7 +7647,7 @@ const TOUR_STEPS = [
   {
     id: 'welcome',
     type: 'center',
-    icon: 'fa-hand-wave',
+    icon: 'fa-door-open',
     title: 'Welcome to your Investor Portal!',
     body: 'Let us give you a quick tour of everything available to you. It takes about 2 minutes and you\'ll earn <strong>100 XP</strong> when you\'re done.',
   },
@@ -7740,14 +7706,6 @@ const TOUR_STEPS = [
     icon: 'fa-graduation-cap',
     title: 'Learning Hub',
     body: 'Educational modules tailored to your investment level. Complete them to earn XP and become a more confident investor.',
-  },
-  {
-    id: 'nav_referral',
-    target: '[data-view="referral"]',
-    position: 'right',
-    icon: 'fa-share-nodes',
-    title: 'Refer & Earn',
-    body: 'Share your unique referral link. When a friend joins and invests, you both benefit.',
   },
   {
     id: 'complete',
@@ -10173,6 +10131,16 @@ async function submitKycDocument() {
   }
 }
 
+async function _refreshInvestorThenKyc() {
+  try {
+    if (PORTAL.investor?.id) {
+      const fresh = await API.investors.get(PORTAL.investor.id).catch(() => null);
+      if (fresh && fresh.id) Object.assign(PORTAL.investor, fresh);
+    }
+  } catch (_) {}
+  _refreshKycPanels();
+}
+
 async function _refreshKycPanels() {
   if (!PORTAL.investor) return;
   let docs = [];
@@ -11087,8 +11055,8 @@ function downloadStatement() {
     })
     .sort((a, b) => new Date(b.transaction_date || b.created_at) - new Date(a.transaction_date || a.created_at));
 
-  const totalInvested = PORTAL.investments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = PORTAL.investments.reduce((s, i) => s + (Number(i.actual_return_amount) || 0), 0);
+  const totalInvested = PORTAL.investments.filter(i => !i.is_reinvestment).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const totalReturns  = PORTAL.investments.reduce((s, i) => s + (Number(i.amount) || 0) * (Number(i.pool_actual_rate) || 0), 0);
   const walletBal     = Number(investor.wallet_balance) || 0;
   const portfolioVal  = totalInvested + walletBal + totalReturns;
 
@@ -11195,10 +11163,12 @@ async function downloadSaStatement(saId, saName) {
   const transactions = (PORTAL.transactions || []).filter(t => t.sub_account_id === saId);
   const investor     = PORTAL.investor || {};
 
-  const totalInvested = investments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const totalReturns  = investments.reduce((s, i) => s + (Number(i.actual_return_amount) || 0), 0);
   const walletBal     = Number(sa.wallet_balance) || 0;
-  const totalValue    = totalInvested + walletBal + totalReturns;
+  const activeInvAmt  = investments.filter(i => i.status === 'active').reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const totalValue    = activeInvAmt + walletBal;
+  const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status !== 'cancelled').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalReturns  = transactions.filter(t => t.type === 'return' || t.type === 'payout').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const totalInvested = totalDeposits;
   const activeInv     = investments.filter(i => i.status === 'active').length;
 
   const now             = new Date();
@@ -11216,8 +11186,8 @@ async function downloadSaStatement(saId, saName) {
         <h3 style="font-size:13px;font-weight:800;color:#1a1a1a;letter-spacing:0.06em;text-transform:uppercase;margin:0">Portfolio Summary</h3>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px">
-        ${stmtKPIBox('Total Value', fmtNum(totalValue), '#fec24f')}
-        ${stmtKPIBox('Capital Deployed', fmtNum(totalInvested), '#656565')}
+        ${stmtKPIBox('Total Portfolio Value', fmtNum(totalValue), '#fec24f')}
+        ${stmtKPIBox('Deposits', fmtNum(totalDeposits), '#656565')}
         ${stmtKPIBox('Returns Earned', fmtNum(totalReturns), '#22C55E')}
         ${stmtKPIBox('Wallet Balance', fmtNum(walletBal), '#0096ff')}
       </div>
@@ -11250,8 +11220,8 @@ async function downloadSaStatement(saId, saName) {
       const p = inv.product_type || 'unknown';
       if (!byProduct[p]) byProduct[p] = { count: 0, capital: 0, returns: 0 };
       byProduct[p].count++;
-      byProduct[p].capital += Number(inv.amount) || 0;
-      byProduct[p].returns += Number(inv.actual_return_amount) || 0;
+      if (!inv.is_reinvestment) byProduct[p].capital += Number(inv.amount) || 0;
+      byProduct[p].returns += (Number(inv.amount) || 0) * (Number(inv.pool_actual_rate) || 0);
     });
     const perfRows = Object.entries(byProduct).map(([prod, d]) => {
       const pct  = d.capital > 0 ? ((d.returns / d.capital) * 100).toFixed(2) : '0.00';
@@ -11293,12 +11263,8 @@ async function downloadSaStatement(saId, saName) {
   if (investments.length > 0) {
     const invRows = investments.map(inv => {
       const info       = getProductInfo(inv.product_type);
-      const isMatured  = inv.status === 'matured' || inv.status === 'paid_out';
-      const baseRate   = (Number(inv.expected_return_rate) || 0) * 100;
-      const expRet     = Number(inv.expected_return) || 0;
-      const actRet     = Number(inv.actual_return) || 0;
-      const achieved   = expRet > 0 ? baseRate * (actRet / expRet) : baseRate;
-      const rateCell   = isMatured ? `${achieved.toFixed(2)}%` : '—';
+      const poolRate2  = (Number(inv.pool_actual_rate) || 0) * 100;
+      const rateCell   = poolRate2 > 0 ? `${poolRate2.toFixed(2)}%` : '—';
       const statusColor = inv.status === 'active' ? '#656565' : inv.status === 'paid_out' ? '#22C55E' : '#9ca3af';
       return `<tr style="border-bottom:1px solid #f0f0f0">
         <td style="padding:8px 10px;font-size:10px;color:#9ca3af;font-family:monospace">${inv.id}</td>
@@ -11354,7 +11320,6 @@ async function downloadSaStatement(saId, saName) {
     </tr>`;
   }).join('') : `<tr><td colspan="6" style="padding:20px;text-align:center;color:#9ca3af;font-size:11px">No transactions found for this account</td></tr>`;
 
-  const totalDeposits   = transactions.filter(t => t.type === 'deposit').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
   const totalTransferIn = transactions.filter(t => t.type === 'transfer_in').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
   const totalFees       = transactions.filter(t => t.type === 'fee').reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
 
@@ -12464,6 +12429,11 @@ function _renderAnalyticsTimeline() {
     const days    = (!isNaN(start) && !isNaN(end)) ? Math.max(0, Math.round((end - start) / 86400000)) : (i.term_days || '—');
     const status  = (pool.status === 'matured' || pool.status === 'paid_out') ? 'matured' : (i.status || pool.status);
     const sc      = statusMeta(status);
+    const isMatured   = status === 'matured' || status === 'paid_out';
+    const actualRate  = parseFloat(pool.actual_rate || i.pool_actual_rate || 0);
+    const targetRate  = parseFloat(pool.annual_rate || i.annual_rate || i.expected_return_rate || 0);
+    const rateVal     = isMatured && actualRate > 0 ? actualRate : targetRate;
+    const rateLbl     = isMatured && actualRate > 0 ? 'Return Achieved' : 'Target Return';
     return `
       <div class="atl-card">
         <div class="atl-card__head">
@@ -12472,7 +12442,7 @@ function _renderAnalyticsTimeline() {
         </div>
         <div class="atl-card__figures">
           <div><span class="atl-card__k">Invested</span><span class="atl-card__v">R ${capital.toLocaleString('en-ZA')}</span></div>
-          <div><span class="atl-card__k">Target Return</span><span class="atl-card__v" style="color:#16a34a">${Utils.pct(pool.annual_rate || i.annual_rate || i.expected_return_rate || 0)}</span></div>
+          <div><span class="atl-card__k">${rateLbl}</span><span class="atl-card__v" style="color:${isMatured && actualRate > 0 ? '#eda5ff' : '#16a34a'}">${Utils.pct(rateVal)}</span></div>
           <div><span class="atl-card__k">Duration</span><span class="atl-card__v">${typeof days === 'number' ? days + ' d' : days}</span></div>
         </div>
         <div class="atl-card__dates">

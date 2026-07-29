@@ -71,9 +71,30 @@ function _inferType(subject) {
   return 'general';
 }
 
+let _emailToggleCache = { enabled: true, ts: 0 };
+async function _isEmailEnabled() {
+  if (Date.now() - _emailToggleCache.ts < 30_000) return _emailToggleCache.enabled;
+  try {
+    const { rows } = await pool.query(`SELECT value FROM platform_settings WHERE key = 'resend_emails_enabled'`);
+    const enabled = !rows.length || rows[0].value !== 'false';
+    _emailToggleCache = { enabled, ts: Date.now() };
+  } catch (_) { _emailToggleCache = { enabled: true, ts: Date.now() }; }
+  return _emailToggleCache.enabled;
+}
+
 async function _send({ to, subject, html, text, type }) {
   const recipient = Array.isArray(to) ? to[0] : to;
   const emailType = type || _inferType(subject);
+
+  if (!(await _isEmailEnabled())) {
+    console.log(`[email] suppressed (emails disabled): "${subject}" → ${recipient}`);
+    pool.query(
+      'INSERT INTO email_logs (to_email, subject, type, status, error) VALUES ($1,$2,$3,$4,$5)',
+      [recipient, subject, emailType, 'failed', 'Emails disabled via platform settings']
+    ).catch(() => {});
+    return;
+  }
+
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     if (process.env.NODE_ENV === 'production') throw new Error('[email] RESEND_API_KEY is required in production');
@@ -229,6 +250,87 @@ function sendMaturityAlert(investor, { poolName, amount, expectedReturn, endDate
       <a href="${BASE_URL}/portal/" class="btn">Submit Instruction →</a>
     `),
     text: `Hi ${first_name}, your ${poolName} investment matures in ${daysLeft} days (${_date(endDate)}). Log in to submit your maturity instruction: ${BASE_URL}/portal/`,
+  });
+}
+
+/* ── 4b. 3-day maturity reminder ────────────────────────── */
+function sendMaturity3DayAlert(investor, { poolName, amount, expectedReturn, endDate }) {
+  const { email, first_name, id } = investor;
+  if (id) setImmediate(() => push.sendPushToInvestor(id, {
+    title: 'Investment Matures in 3 Days ⚠️',
+    body: `${poolName} matures on ${_date(endDate)}. Submit your maturity instruction now to avoid delays.`,
+    url: `${BASE_URL}/portal/`,
+  }).catch(() => {}));
+  return _send({
+    to: email,
+    subject: `Urgent: ${poolName} matures in 3 days — action required`,
+    html: _wrap(`
+      <h2>3-Day Maturity Reminder ⚠️</h2>
+      <p>Hi ${first_name}, this is a final reminder that your investment in <strong>${poolName}</strong>
+         matures in <strong class="gold">3 days</strong> on <strong>${_date(endDate)}</strong>.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Pool</span><span class="val">${poolName}</span></div>
+        <div class="row"><span class="lbl">Principal</span><span class="val">${_fmt(amount)}</span></div>
+        <div class="row"><span class="lbl">Target Return</span><span class="val green">${_fmt(expectedReturn)}</span></div>
+        <div class="row"><span class="lbl">Maturity Date</span><span class="val gold">${_date(endDate)}</span></div>
+      </div>
+      <p>If you haven't already, please log in and submit your <strong>maturity instruction</strong>
+         (reinvest or pay out) before the maturity date to ensure your funds are processed without delay.</p>
+      <a href="${BASE_URL}/portal/" class="btn">Submit Instruction Now →</a>
+    `),
+    text: `Hi ${first_name}, final reminder: your ${poolName} investment matures in 3 days on ${_date(endDate)}. Log in to submit your maturity instruction: ${BASE_URL}/portal/`,
+  });
+}
+
+/* ── 4c. Monthly maturity summary (1st of month) ─────────── */
+function sendMonthlyMaturitySummary(investor, investments) {
+  const { email, first_name, id } = investor;
+  const rows = investments.map(inv => `
+    <div class="row">
+      <span class="lbl">${inv.pool_name || inv.pool_id}</span>
+      <span class="val gold">${_date(inv.end_date)}</span>
+    </div>
+    <div class="row">
+      <span class="lbl" style="padding-left:16px;font-size:0.82em">Principal</span>
+      <span class="val">${_fmt(inv.amount)}</span>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <span class="lbl" style="padding-left:16px;font-size:0.82em">Target Return</span>
+      <span class="val green">${_fmt(inv.expected_return || 0)}</span>
+    </div>`).join('');
+
+  const count = investments.length;
+  const totalPrincipal = investments.reduce((s, i) => s + parseFloat(i.amount || 0), 0);
+  const totalReturn    = investments.reduce((s, i) => s + parseFloat(i.expected_return || 0), 0);
+
+  if (id) setImmediate(() => push.sendPushToInvestor(id, {
+    title: 'Monthly Investment Update 📋',
+    body: `You have ${count} investment${count === 1 ? '' : 's'} maturing this month. Log in to review.`,
+    url: `${BASE_URL}/portal/`,
+  }).catch(() => {}));
+
+  return _send({
+    to: email,
+    subject: `Your SV Capital monthly update — ${count} investment${count === 1 ? '' : 's'} maturing`,
+    html: _wrap(`
+      <h2>Monthly Investment Update 📋</h2>
+      <p>Hi ${first_name}, here is a summary of your investments maturing over the next 30 days.</p>
+      <div class="box">
+        ${rows}
+        <div class="row" style="border-top:1px solid rgba(0,0,0,0.1);margin-top:10px;padding-top:10px">
+          <span class="lbl"><strong>Total Principal</strong></span>
+          <span class="val"><strong>${_fmt(totalPrincipal)}</strong></span>
+        </div>
+        <div class="row">
+          <span class="lbl"><strong>Total Target Return</strong></span>
+          <span class="val green"><strong>${_fmt(totalReturn)}</strong></span>
+        </div>
+      </div>
+      <p>Please ensure you have submitted a <strong>maturity instruction</strong> for each investment
+         before its maturity date to avoid any delays in processing.</p>
+      <a href="${BASE_URL}/portal/" class="btn">Review My Investments →</a>
+    `),
+    text: `Hi ${first_name}, you have ${count} investment${count === 1 ? '' : 's'} maturing in the next 30 days. Total principal: ${_fmt(totalPrincipal)}. Log in to review: ${BASE_URL}/portal/`,
   });
 }
 
@@ -453,7 +555,7 @@ function sendMonthlyStatement(investor, { investments, recentTransactions }) {
       <tr>
         <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#e5e7eb">${i.pool_name}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#fec24f;font-weight:600">${rand(i.amount)}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#10b981">${pct(i.annual_rate)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#10b981">${pct(i.pool_actual_rate || i.annual_rate)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a;color:#9ca3af">${fmtDate(i.end_date)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #2a2a2a"><span style="background:${statusColor(i.status)}22;color:${statusColor(i.status)};padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600">${i.status}</span></td>
       </tr>`).join('')
@@ -848,6 +950,34 @@ function sendLeaveOutcome(employee, { status, leaveType, startDate, endDate, day
   });
 }
 
+/* ── Admin alert: new KYC document submitted ─────────────── */
+function sendKycDocumentReceived(admin, { investorName, docType, investorId }) {
+  const { email, first_name } = admin;
+  if (!email) return Promise.resolve();
+  const typeLabels = {
+    id_document: 'ID Document', proof_of_address: 'Proof of Address',
+    proof_of_bank: 'Proof of Bank Account', selfie: 'Selfie / Liveness',
+    tax_certificate: 'Tax Certificate', bank_statement: 'Bank Statement', other: 'Other Document',
+  };
+  const docLabel = typeLabels[docType] || docType || 'Document';
+  return _send({
+    to: email,
+    subject: `New KYC document submitted — ${investorName}`,
+    html: _wrap(`
+      <h2>New KYC Document Received</h2>
+      <p>Hi ${first_name || 'there'},</p>
+      <p>An investor has submitted a new KYC document that requires your review.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Investor</span><span class="val">${escHtml(String(investorName || ''))}</span></div>
+        <div class="row"><span class="lbl">Document Type</span><span class="val">${escHtml(docLabel)}</span></div>
+        <div class="row"><span class="lbl">Investor ID</span><span class="val" style="font-family:monospace">${escHtml(String(investorId || ''))}</span></div>
+      </div>
+      <a href="${BASE_URL}/admin/?view=compliance" class="btn">Review in Admin →</a>
+    `),
+    text: `Hi ${first_name || 'there'},\n\n${investorName} has submitted a ${docLabel} for KYC review.\n\nReview: ${BASE_URL}/admin/?view=compliance`,
+  });
+}
+
 /* ── Generic alert (used by cron jobs) ───────────────────── */
 function sendAlert(investor, { subject, message }) {
   const { email, first_name, id } = investor;
@@ -900,6 +1030,8 @@ module.exports = {
   sendDepositConfirmed,
   sendInvestmentCreated,
   sendMaturityAlert,
+  sendMaturity3DayAlert,
+  sendMonthlyMaturitySummary,
   sendInvestmentMatured,
   sendTicketResponse,
   sendTicketAssigned,
@@ -919,6 +1051,7 @@ module.exports = {
   sendFicaResubmitReminder,
   sendGiftReceived,
   sendGiftInvite,
+  sendKycDocumentReceived,
   sendAlert,
   sendInternationalWaitlistConfirmation,
 };

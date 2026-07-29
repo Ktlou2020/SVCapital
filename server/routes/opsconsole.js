@@ -204,7 +204,7 @@ router.get('/comms', requireAuth, requireRole(...ADMIN_OR_DIRECTOR), async (req,
 router.get('/activity', requireAuth, requireRole(...ADMIN_OR_DIRECTOR), async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, action, entity_type, actor_email, description, ip_address, created_at
+      `SELECT id, event_type AS action, entity_type, user_email AS actor_email, description, ip_address, created_at
        FROM audit_events ORDER BY created_at DESC LIMIT 30`
     );
     res.json({ events: rows });

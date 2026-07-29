@@ -18,6 +18,7 @@ const PRODUCTS = {
     partner: 'Beefcor',
     infoItems: [
       { label: 'Partner', value: 'Beefcor Feedlot' },
+      { label: 'Sector', value: 'Agriculture' },
       { label: 'Benchmark', value: '13.00% p.a.' },
       { label: 'Perf. Fee', value: '20% above benchmark' },
       { label: 'Pool Type', value: 'Time-based pool' },
@@ -35,6 +36,7 @@ const PRODUCTS = {
     partner: 'The Solar Experts',
     infoItems: [
       { label: 'Partner', value: 'The Solar Experts' },
+      { label: 'Sector', value: 'Energy' },
       { label: 'Location', value: 'Cape Town, SA' },
       { label: 'Returns', value: 'Annual payouts' },
       { label: 'Capital', value: 'End of term' },
@@ -52,6 +54,7 @@ const PRODUCTS = {
     partner: 'The Solar Experts',
     infoItems: [
       { label: 'Partner', value: 'The Solar Experts' },
+      { label: 'Sector', value: 'Energy' },
       { label: 'Location', value: 'Cape Town, SA' },
       { label: 'Returns', value: 'Annual payouts' },
       { label: 'Capital', value: 'End of term' },
@@ -69,6 +72,7 @@ const PRODUCTS = {
     partner: 'The Solar Experts',
     infoItems: [
       { label: 'Partner', value: 'The Solar Experts' },
+      { label: 'Sector', value: 'Energy' },
       { label: 'Location', value: 'Cape Town, SA' },
       { label: 'Returns', value: 'Annual payouts' },
       { label: 'Capital', value: 'End of term' },
@@ -86,6 +90,7 @@ const PRODUCTS = {
     partner: 'MoolaLend',
     infoItems: [
       { label: 'Partner', value: 'MoolaLend Pty Ltd' },
+      { label: 'Sector', value: 'Credit' },
       { label: 'Focus', value: 'SMME Finance' },
       { label: 'Benchmark', value: '12.00% p.a.' },
       { label: 'Pool Type', value: 'Time-based pool' },
@@ -103,6 +108,7 @@ const PRODUCTS = {
     partner: 'OnFleet',
     infoItems: [
       { label: 'Partner', value: 'OnFleet Pty Ltd' },
+      { label: 'Sector', value: 'Logistics' },
       { label: 'Platforms', value: 'Mr D, Takealot, UberEats' },
       { label: 'Min. Fleet', value: '5 bikes per pool' },
       { label: 'Pool Type', value: 'Targeted amount' },
@@ -121,8 +127,8 @@ const PARTNER_PROFILES = {
     youtubeId: 'mTIcSDeggtQ',
   },
   'MoolaLend': {
-    tagline: 'Your chomie in funding — SA\'s PO finance specialist',
-    profile: 'MoolaLend is a Bryanston-based boutique lender that specialises in Purchase Order (PO) finance for South African SMEs. They fund government tenders and private-sector purchase orders from R50,000, enabling businesses to fulfil contracts without upfront capital. Incorporated in 2021 and listed in FundingHub\'s Top 10 PO Funding Lenders in SA, MoolaLend takes a partner-first approach to SME lending.',
+    tagline: "SA's receivables finance platform for registered businesses",
+    profile: 'MoolaLend is a South African receivables finance platform for registered businesses. Apply online and our automated risk engine vets your invoice instantly — strong applications are pre-approved on the spot, our team confirms funding shortly after, and the balance is released once your customer settles the invoice.',
     website: 'https://moolalend-production.up.railway.app/',
   },
   'The Solar Experts': {
@@ -262,7 +268,7 @@ const MODAL_DATA = {
     title: 'Power the future. Earn from it.',
     desc: 'Your capital funds solar panel installations across Cape Town, generating clean electricity sold through long-term contracts. Annual returns are distributed throughout the term, with your full capital returned at the end.',
     stats: [
-      { label: 'Best Return', val: '21.40% p.a.' },
+      { label: 'Avg. Return', val: '21.40% p.a.' },
       { label: 'Minimum', val: 'R10,000' },
       { label: 'Terms', val: '5 / 6 / 7 yrs' }
     ],
@@ -578,7 +584,7 @@ function updateCalculator() {
     infoGrid.innerHTML = product.infoItems.map(item => `
       <div class="calc-info-item">
         <span class="calc-info-item__label">${item.label}</span>
-        <span class="calc-info-item__val">${item.value}</span>
+        <span class="calc-info-item__val">${item.value}${item.label === 'Partner' ? _partnerInfoBtn(product.partner) : ''}</span>
       </div>
     `).join('');
   }
@@ -1242,9 +1248,8 @@ async function _applyCattleHerdStatus() {
     MODAL_DATA.cattle.herdHtml = `
       <div style="background:rgba(254,194,79,0.08);border:1px solid rgba(254,194,79,0.28);border-radius:14px;padding:16px 18px;margin:6px 0 18px">
         <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#fec24f;margin-bottom:12px"><i class="fa-solid fa-cow"></i> Live Herd Status</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
+        <div style="display:flex;flex-wrap:wrap;gap:24px;margin-bottom:14px">
           <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.total_purchased)}</div><div style="font-size:0.72rem;color:var(--text-dim)">purchased to date</div></div>
-          <div><div style="font-size:1.3rem;font-weight:800;color:#fff">${num(s.live_count)}</div><div style="font-size:0.72rem;color:var(--text-dim)">currently live</div></div>
           ${weight ? `<div><div style="font-size:1.3rem;font-weight:800;color:#fff">${weight}<span style="font-size:0.85rem"> kg</span></div><div style="font-size:0.72rem;color:var(--text-dim)">average weight</div></div>` : ''}
         </div>
         ${genders.length ? `<div style="margin-bottom:${breeds.length ? '12px' : '0'}"><div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:6px">Gender</div>
@@ -1342,7 +1347,6 @@ async function _applySolarTelemetry() {
           ${s.co2_avoided_kg ? stat(`${(s.co2_avoided_kg / 1000).toFixed(1)}<span style="font-size:0.85rem"> t</span>`, 'CO₂ avoided') : ''}
           ${s.device_count ? stat(s.device_count, `inverter${s.device_count === 1 ? '' : 's'}`) : ''}
         </div>
-        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:10px">Live data from FoxCloud${s.station_name ? ` · ${String(s.station_name).replace(/[<>&]/g, '')}` : ''}</div>
       </div>`;
   }
 

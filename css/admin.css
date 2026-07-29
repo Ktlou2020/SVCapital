@@ -47,15 +47,18 @@
 /* ─── Reset ─── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 14px; scroll-behavior: smooth; }
-body { background: var(--black); color: var(--text); font-family: var(--font); line-height: 1.5; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
-a { color: inherit; text-decoration: none; transition: var(--transition); }
-button { cursor: pointer; border: none; background: none; font-family: inherit; font-size: inherit; color: inherit; }
+body { background: var(--black); color: var(--text); font-family: var(--font); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; transition: var(--transition); touch-action: manipulation; }
+button { cursor: pointer; border: none; background: none; font-family: inherit; font-size: inherit; color: inherit; touch-action: manipulation; }
+[role="button"] { touch-action: manipulation; }
 input, select, textarea { font-family: inherit; font-size: inherit; }
 ul { list-style: none; }
 img { max-width: 100%; display: block; }
 
 /* ─── Layout ─── */
 .app-layout { display: flex; min-height: 100vh; }
+/* min-width:0 lets the flex item shrink below its content min-width,
+   preventing any wide child from inflating the main column beyond 100vw */
 
 /* ─── SIDEBAR ─── */
 .sidebar {
@@ -93,7 +96,7 @@ img { max-width: 100%; display: block; }
 .sidebar__nav { padding: 16px 0; flex: 1; }
 
 .nav-section-label {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--text-dim);
@@ -132,7 +135,7 @@ img { max-width: 100%; display: block; }
   margin-left: auto;
   background: var(--red);
   color: white;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 10px;
@@ -161,12 +164,13 @@ img { max-width: 100%; display: block; }
 }
 
 .sidebar-user__info .user-name { font-size: 0.8rem; font-weight: 700; color: var(--white); display: block; }
-.sidebar-user__info .user-role { font-size: 0.68rem; color: var(--text-dim); }
+.sidebar-user__info .user-role { font-size: 0.75rem; color: var(--text-dim); }
 
 /* ─── MAIN CONTENT ─── */
 .main-content {
   margin-left: var(--sidebar-w);
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 100vh;

@@ -58,6 +58,7 @@ async function cycleExpiredPools() {
     FROM investment_pools
     WHERE end_date IS NOT NULL
       AND end_date < CURRENT_DATE
+      AND end_date >= CURRENT_DATE - INTERVAL '60 days'
       AND cycled_at IS NULL
       AND product_type IN ('cattle','short_term')
       AND status NOT IN ('closed')

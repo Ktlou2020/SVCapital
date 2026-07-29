@@ -622,7 +622,7 @@
   letter-spacing: 0.1em; color: #3d8a00; white-space: nowrap;
 }
 
-@media (max-width: 500px) {
+@media (max-width: 640px) {
   .mc2__stats { grid-template-columns: repeat(2,1fr); gap: 8px; }
   .mc2__stat:not(:last-child) { border-right: none; }
   .mc2__stat { padding: 0; }
@@ -773,12 +773,12 @@
 }
 .faq-quick-q:hover { color: var(--ci-orange, #fec24f); }
 .faq-quick-q i { transition: transform 0.25s ease; color: #9ca3af; font-size: 0.72rem; }
-.faq-quick-q.open i { transform: rotate(180deg); color: var(--ci-orange, #fec24f); }
+.faq-quick-item.open .faq-quick-q i { transform: rotate(180deg); color: var(--ci-orange, #fec24f); }
 .faq-quick-a {
   font-size: 0.79rem; color: #6b7280; line-height: 1.65;
   padding: 0 0 12px; display: none;
 }
-.faq-quick-a.open { display: block; animation: viewFadeIn 0.2s ease; }
+.faq-quick-item.open .faq-quick-a { display: block; animation: viewFadeIn 0.2s ease; }
 
 /* ─── 35. Pool closed / full badge ─────────────────────────── */
 .market-pool-card.pool-full {
@@ -868,8 +868,9 @@
 .xp-hero {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 24px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: linear-gradient(135deg, #111317 0%, #1a1d23 100%);
   border-radius: 18px;
   padding: 24px 28px;
   margin-bottom: 20px;
@@ -953,7 +954,7 @@
 .level-step.current .level-step__icon { transform: scale(1.12); }
 .level-step__name { font-size: 0.65rem; font-weight: 700; color: #6b7280; text-align: center; }
 .level-step.done .level-step__name, .level-step.current .level-step__name { color: #1a1a1a; }
-.level-step__reward { font-size: 0.6rem; font-weight: 800; }
+.level-step__reward { font-size: 0.72rem; font-weight: 800; }
 
 /* ── Quest Categories ───────────────────────────────────────── */
 .quest-category { }
@@ -1214,7 +1215,7 @@
 .learn-tab-sub  { font-size: 0.7rem; color: #9ca3af; margin-top: 2px; }
 .learn-tab-recommended {
   display: inline-block;
-  font-size: 0.6rem; font-weight: 800;
+  font-size: 0.72rem; font-weight: 800;
   text-transform: uppercase; letter-spacing: 0.06em;
   background: var(--ci-orange, #fec24f); color: #fff;
   padding: 2px 7px; border-radius: 100px;
@@ -1315,157 +1316,6 @@
   padding-top: 16px;
   border-top: 1px solid rgba(0,0,0,0.06);
 }
-
-/* ═══════════════════════════════════════════════════════════════
-   38. DARK MODE
-   ═══════════════════════════════════════════════════════════════ */
-
-/* ── Base ────────────────────────────────────────────────────── */
-body.dark-mode { background: #0d1117 !important; color: #e2e8f0; }
-body.dark-mode .main-content { background: #0d1117 !important; }
-body.dark-mode .page-content  { background: #0d1117 !important; }
-
-/* ── Topbar ──────────────────────────────────────────────────── */
-body.dark-mode .topbar {
-  background: #161b27 !important;
-  border-bottom: 1px solid rgba(255,255,255,0.06) !important;
-}
-body.dark-mode .topbar__title    { color: #e2e8f0 !important; }
-body.dark-mode .topbar__breadcrumb { color: #6b7280 !important; }
-body.dark-mode .topbar-btn       { color: #9ca3af !important; border-color: rgba(255,255,255,0.08) !important; }
-body.dark-mode .topbar-btn:hover { color: #fff !important; border-color: var(--ci-orange, #fec24f) !important; }
-body.dark-mode .btn--secondary   { background: rgba(255,255,255,0.06) !important; color: #9ca3af !important; border-color: rgba(255,255,255,0.1) !important; }
-
-/* ── Cards & Panels ──────────────────────────────────────────── */
-body.dark-mode .panel,
-body.dark-mode .table-card,
-body.dark-mode .perf-panel,
-body.dark-mode .welcome-banner,
-body.dark-mode .xp-progress-bar-wrap,
-body.dark-mode .level-track,
-body.dark-mode .learn-track-tab,
-body.dark-mode .quest-card,
-body.dark-mode .learn-module-card {
-  background: #161b27 !important;
-  border-color: rgba(255,255,255,0.07) !important;
-}
-body.dark-mode .panel__header,
-body.dark-mode .table-card__header { border-color: rgba(255,255,255,0.06) !important; }
-body.dark-mode .panel__title,
-body.dark-mode .table-card__title  { color: #e2e8f0 !important; }
-
-/* ── Portfolio hero ──────────────────────────────────────────── */
-body.dark-mode .portfolio-hero__stats,
-body.dark-mode .ph-stat { background: rgba(255,255,255,0.04) !important; border-color: rgba(255,255,255,0.06) !important; }
-body.dark-mode .ph-stat__label { color: #6b7280 !important; }
-body.dark-mode .ph-stat__value { color: #e2e8f0 !important; }
-body.dark-mode .portfolio-hero__label { color: rgba(255,255,255,0.5) !important; }
-body.dark-mode .portfolio-hero__value { color: #fff !important; }
-
-/* ── Performance panel ───────────────────────────────────────── */
-body.dark-mode .perf-row { border-color: rgba(255,255,255,0.05) !important; }
-body.dark-mode .perf-row__label { color: #9ca3af !important; }
-body.dark-mode .perf-row__value { color: #e2e8f0 !important; }
-
-/* ── Tables ──────────────────────────────────────────────────── */
-body.dark-mode .data-table th {
-  background: rgba(255,255,255,0.04) !important;
-  color: #6b7280 !important;
-  border-color: rgba(255,255,255,0.06) !important;
-}
-body.dark-mode .data-table td { border-color: rgba(255,255,255,0.05) !important; color: #c8d0dc !important; }
-body.dark-mode .data-table tbody tr:hover { background: rgba(255,255,255,0.04) !important; }
-body.dark-mode .text-muted { color: #6b7280 !important; }
-
-/* ── Quick-action / welcome chip buttons ─────────────────────── */
-body.dark-mode .welcome-greeting { color: var(--ci-orange, #fec24f) !important; }
-body.dark-mode .welcome-name     { color: #e2e8f0 !important; }
-body.dark-mode .welcome-chip     { border-color: rgba(255,255,255,0.12) !important; }
-body.dark-mode .welcome-chip--teal  { background: rgba(47,140,155,0.15) !important; color: #5BBFCE !important; }
-body.dark-mode .welcome-chip--orange { background: rgba(254,194,79,0.12) !important; color: #FF9B3A !important; }
-body.dark-mode .welcome-chip--gray  { background: rgba(255,255,255,0.06) !important; color: #9ca3af !important; }
-
-/* ── Forms & Inputs ──────────────────────────────────────────── */
-body.dark-mode input,
-body.dark-mode select,
-body.dark-mode textarea,
-body.dark-mode .form-input {
-  background: rgba(255,255,255,0.06) !important;
-  border-color: rgba(255,255,255,0.12) !important;
-  color: #e2e8f0 !important;
-}
-body.dark-mode input::placeholder,
-body.dark-mode .form-input::placeholder { color: #4b5563 !important; }
-body.dark-mode label { color: #9ca3af !important; }
-body.dark-mode .form-group label { color: #9ca3af !important; }
-
-/* ── Modals ──────────────────────────────────────────────────── */
-body.dark-mode .modal-box,
-body.dark-mode .survey-modal-box,
-body.dark-mode .levelup-modal-box {
-  background: #161b27 !important;
-  border-color: rgba(255,255,255,0.08) !important;
-}
-body.dark-mode .modal-box h3,
-body.dark-mode .modal-box h2 { color: #e2e8f0 !important; }
-body.dark-mode .survey-modal-title { color: #e2e8f0 !important; }
-body.dark-mode .survey-modal-sub   { color: #6b7280 !important; }
-body.dark-mode .survey-q__label    { color: #e2e8f0 !important; }
-body.dark-mode .survey-opt {
-  border-color: rgba(255,255,255,0.1) !important;
-  color: #c8d0dc !important;
-}
-body.dark-mode .survey-opt:hover { border-color: var(--ci-orange, #fec24f) !important; background: rgba(254,194,79,0.08) !important; }
-body.dark-mode .levelup-level  { color: #e2e8f0 !important; }
-body.dark-mode .levelup-xp     { color: #6b7280 !important; }
-
-/* ── Quest + Learn UI ────────────────────────────────────────── */
-body.dark-mode .quest-category__title { color: #e2e8f0 !important; }
-body.dark-mode .quest-category__sub   { color: #6b7280 !important; }
-body.dark-mode .quest-category__count { color: #e2e8f0 !important; }
-body.dark-mode .quest-card__title     { color: #e2e8f0 !important; }
-body.dark-mode .quest-card__desc      { color: #6b7280 !important; }
-body.dark-mode .level-step__name      { color: #6b7280 !important; }
-body.dark-mode .level-step.done .level-step__name,
-body.dark-mode .level-step.current .level-step__name { color: #e2e8f0 !important; }
-
-body.dark-mode .learn-track-tab       { background: #161b27 !important; border-color: rgba(255,255,255,0.08) !important; }
-body.dark-mode .learn-track-tab.active { box-shadow: 0 4px 16px rgba(0,0,0,0.4) !important; }
-body.dark-mode .learn-tab-name        { color: #e2e8f0 !important; }
-body.dark-mode .learn-tab-sub         { color: #6b7280 !important; }
-body.dark-mode .learn-module-card__title { color: #e2e8f0 !important; }
-body.dark-mode .learn-module-body     { background: rgba(255,255,255,0.02) !important; border-color: rgba(255,255,255,0.06) !important; }
-body.dark-mode .learn-key-points      { background: rgba(47,140,155,0.08) !important; border-color: rgba(47,140,155,0.2) !important; }
-body.dark-mode .learn-key-points li   { color: #c8d0dc !important; }
-body.dark-mode .learn-content-text p  { color: #9ca3af !important; }
-body.dark-mode .learn-expand-btn      { background: rgba(255,255,255,0.06) !important; color: #9ca3af !important; }
-
-/* ── Misc ─────────────────────────────────────────────────────── */
-body.dark-mode .notif-item { border-color: rgba(255,255,255,0.06) !important; color: #c8d0dc !important; }
-body.dark-mode .notif-title { color: #e2e8f0 !important; }
-body.dark-mode .notif-sub   { color: #6b7280 !important; }
-body.dark-mode #notifPanel {
-  background: rgba(16,21,31,0.98) !important;
-  border-color: rgba(255,255,255,0.08) !important;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(254,194,79,0.06) !important;
-  backdrop-filter: blur(20px) !important;
-}
-body.dark-mode #notifPanelHeader {
-  border-bottom-color: rgba(255,255,255,0.07) !important;
-}
-body.dark-mode #notifPanelTitle { color: #e2e8f0 !important; }
-body.dark-mode #notifPanelFooter {
-  border-top-color: rgba(255,255,255,0.07) !important;
-}
-body.dark-mode #notifEmpty { color: #6b7280 !important; }
-body.dark-mode .notif-item:hover { background: rgba(254,194,79,0.05) !important; }
-body.dark-mode .notif-item.unread { border-left: 2px solid #fec24f; }
-body.dark-mode .notif-dot { border-color: rgba(16,21,31,0.8) !important; }
-body.dark-mode .xp-progress-next { color: #6b7280 !important; }
-body.dark-mode .xp-progress-right { color: #e2e8f0 !important; }
-body.dark-mode .learn-header__title { color: #e2e8f0 !important; }
-body.dark-mode .learn-header__sub   { color: #6b7280 !important; }
-body.dark-mode .market-pool-card    { background: #161b27 !important; border-color: rgba(255,255,255,0.07) !important; }
 
 /* ═══════════════════════════════════════════════════════════════
    39. GUIDED TOUR
@@ -1588,7 +1438,7 @@ body.dark-mode .tour-body { color: #9ca3af !important; }
 }
 .tour-skip-btn:hover { color: #6b7280; }
 .tour-prev-btn {
-  width: 34px; height: 34px;
+  width: 44px; height: 44px;
   border-radius: 10px;
   background: rgba(0,0,0,0.06);
   border: none;
@@ -1900,7 +1750,7 @@ body.dark-mode .deposit-prompt-products span {
   display: flex; align-items: center; gap: 8px; justify-content: center; text-align: center;
   flex-wrap: wrap;
 }
-.invest-calc-caption { font-size: 0.6rem; color: #9ca3af; }
+.invest-calc-caption { font-size: 0.72rem; color: #9ca3af; }
 .invest-calc-val { font-size: 1rem; font-weight: 800; color: #1a1a1a; }
 .invest-calc-total { color: var(--gold, #fec24f) !important; font-size: 1.15rem !important; }
 .invest-calc-plus, .invest-calc-equals { font-size: 1rem; font-weight: 700; color: #9ca3af; }
@@ -2104,7 +1954,7 @@ body {
   border: 1px solid rgba(0,0,0,0.08) !important;
   color: #6b7280 !important;
   border-radius: 9px !important;
-  width: 36px !important; height: 36px !important;
+  width: 44px !important; height: 44px !important;
   font-size: 0.82rem !important;
   transition: all 0.18s ease !important;
 }
@@ -2383,7 +2233,7 @@ body {
   letter-spacing: 0.02em !important;
 }
 .mps { background: #F7F8FA !important; border-radius: 10px !important; padding: 10px !important; }
-.mps__label { font-size: 0.6rem !important; letter-spacing: 0.08em !important; color: #9ca3af !important; font-weight: 700 !important; }
+.mps__label { font-size: 0.72rem !important; letter-spacing: 0.08em !important; color: #9ca3af !important; font-weight: 700 !important; }
 .mps__value { font-size: 0.88rem !important; font-weight: 800 !important; color: #111827 !important; }
 
 /* ─── MY INVESTMENT CARDS ─── */
@@ -2447,7 +2297,7 @@ body {
 }
 .modal__close {
   color: #9ca3af !important;
-  width: 30px !important; height: 30px !important;
+  width: 44px !important; height: 44px !important;
   border-radius: 8px !important;
   display: flex !important; align-items: center !important; justify-content: center !important;
   transition: all 0.15s !important;
@@ -2913,6 +2763,10 @@ body.dark-mode .tab-btn.active { color: #fec24f !important; }
   display:grid;grid-template-columns:repeat(3,1fr);gap:0;
   border-bottom:1px solid rgba(255,255,255,0.07);
 }
+@media (max-width: 480px) {
+  .minor-stats { grid-template-columns: 1fr 1fr; }
+  .minor-stat:nth-child(2) { border-right: none; }
+}
 .minor-stat {
   text-align:center;padding:16px 8px;
   border-right:1px solid rgba(255,255,255,0.07);
@@ -3066,7 +2920,7 @@ body.dark-mode .tab-btn.active { color: #fec24f !important; }
   border: none;
   cursor: pointer;
   color: #9ca3af;
-  font-size: 0.6rem;
+  font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -3243,7 +3097,7 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
   font-size:1.35rem;flex-shrink:0;
 }
 .mpc2-badge {
-  font-size:0.62rem;font-weight:800;padding:3px 9px;border-radius:999px;
+  font-size:0.72rem;font-weight:800;padding:3px 9px;border-radius:999px;
   border:1px solid transparent;letter-spacing:0.03em;white-space:nowrap;
 }
 .mpc2-badge--featured { background:rgba(254,194,79,0.12);color:#d97706;border-color:rgba(254,194,79,0.28); }
@@ -3262,7 +3116,7 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
   font-family:'Poppins','Poppins',Georgia,serif;
   font-size:1.55rem;font-weight:800;line-height:1;letter-spacing:-0.03em;color:#111827;
 }
-.mpc2-metric__lbl { font-size:0.62rem;color:#9ca3af;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-top:4px; }
+.mpc2-metric__lbl { font-size:0.72rem;color:#9ca3af;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-top:4px; }
 
 .mpc2-pills { display:flex;flex-wrap:wrap;gap:6px;padding:12px 20px 0; }
 .mpc2-pill {
@@ -3276,13 +3130,13 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
 .mpc2-pill--urgent i { color:#dc2626; }
 
 .mpc2-progress { padding:12px 20px 0; }
-.mpc2-progress__labels { display:flex;justify-content:space-between;font-size:0.68rem;color:#9ca3af;margin-bottom:6px; }
+.mpc2-progress__labels { display:flex;justify-content:space-between;font-size:0.75rem;color:#9ca3af;margin-bottom:6px; }
 .mpc2-progress__track  { height:6px;border-radius:3px;background:rgba(0,0,0,0.07);overflow:hidden; }
 .mpc2-progress__fill   { height:100%;border-radius:3px;transition:width 0.5s cubic-bezier(0.22,1,0.36,1); }
 
 .mpc2-footer { display:flex;align-items:center;gap:8px;padding:14px 20px 20px; }
 .mpc2-fs-btn {
-  flex-shrink:0;width:40px;height:40px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);
+  flex-shrink:0;width:44px;height:44px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);
   background:#f8f9fb;color:#6b7280;cursor:pointer;display:flex;align-items:center;justify-content:center;
   font-size:1rem;transition:all 0.2s;
 }
@@ -3301,7 +3155,7 @@ body.dark-mode input::placeholder { color: #4b5563 !important; }
 .fs-row__name { font-size:0.83rem;font-weight:700;color:#111827;display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
 .fs-row__meta { font-size:0.68rem;color:#9ca3af;margin-top:2px; }
 .fs-row__arrow { font-size:0.8rem;color:#d1d5db;flex-shrink:0; }
-.fs-current-tag { font-size:0.6rem;font-weight:800;background:rgba(34,197,94,0.15);color:#16a34a;padding:1px 6px;border-radius:99px;border:1px solid rgba(34,197,94,0.25); }
+.fs-current-tag { font-size:0.72rem;font-weight:800;background:rgba(34,197,94,0.15);color:#16a34a;padding:1px 6px;border-radius:99px;border:1px solid rgba(34,197,94,0.25); }
 
 /* ─── Dark mode overrides for v2 cards ── */
 body.dark-mode .mpc-v2 { background:#303030 !important;border-color:rgba(255,255,255,0.07) !important; }
@@ -3427,7 +3281,7 @@ body.dark-mode #feedbackCard .card__header { border-color: rgba(255,255,255,0.06
   margin-top: 8px;
 }
 .rewards-stat__label {
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: #9ca3af;
   text-transform: uppercase;
@@ -3458,7 +3312,7 @@ body.dark-mode .rewards-stat__label { color: #6b7280 !important; }
   gap: 16px;
   margin-bottom: 24px;
   padding: 22px 22px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: linear-gradient(135deg, #111317 0%, #1a1d23 100%);
   border-radius: 20px;
   color: #fff;
   position: relative;
@@ -3596,7 +3450,7 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
    ═══════════════════════════════════════════════════════════════ */
 #myInvestmentsGrid {
   display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)) !important;
   gap: 16px !important;
 }
 
@@ -3663,6 +3517,9 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   position: relative;
   z-index: 1;
 }
+@media (max-width: 480px) {
+  .atl-card__figures { grid-template-columns: 1fr 1fr; }
+}
 .atl-card__figures > div {
   display: flex;
   flex-direction: column;
@@ -3675,7 +3532,7 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
 }
 .atl-card__k {
   display: block;
-  font-size: 0.58rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: rgba(255,255,255,0.38);
@@ -3802,8 +3659,8 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
   /* ── Tap targets: larger hits for thumbs ── */
   .btn { min-height: 42px; }
   .btn--sm { min-height: 36px; padding: 7px 12px; }
-  .topbar-btn { width: 40px !important; height: 40px !important; }
-  .modal__close { width: 36px !important; height: 36px !important; }
+  .topbar-btn { width: 44px !important; height: 44px !important; }
+  .modal__close { width: 44px !important; height: 44px !important; }
   .tab-btn { min-height: 40px; padding: 9px 14px; }
   .nav-item { padding: 11px 20px !important; min-height: 44px; }
 
@@ -3840,6 +3697,37 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
 
   /* ── Sub-account card stacking ── */
   .sa-showcase-grid { grid-template-columns: 1fr !important; }
+
+  /* ── Topbar: reduce padding on mobile (overrides the 26px !important base rule) ── */
+  .topbar { padding: 0 12px !important; }
+
+  /* ── Marketplace risk filter: scroll horizontally instead of overflowing ──
+     6 nowrap buttons sum to ~394px min-width; viewport inner is ~315px at 375px.
+     Allow the bar to scroll so no button is clipped. ── */
+  #marketRiskTabBar {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    max-width: 100%;
+  }
+  #marketRiskTabBar::-webkit-scrollbar { display: none; }
+
+  /* ── XP progress bar: prevent horizontal page overflow ──
+     The bar has 4 white-space:nowrap children whose combined
+     min-content width (~430px) exceeds the mobile viewport.
+     Hide the non-essential "next level" label and shrink the
+     track floor so the bar fits within the viewport. ── */
+  .xp-progress-next { display: none !important; }
+  .xp-progress-track { min-width: 40px !important; }
+  .xp-progress-bar-wrap { max-width: 100%; overflow: hidden; }
+
+  /* ── Portfolio hero: single-column, no chart on mobile ── */
+  .portfolio-hero {
+    grid-template-columns: 1fr !important;
+  }
+  .portfolio-hero__right { display: none !important; }
+  .portfolio-hero__left  { grid-column: 1 !important; }
+  .portfolio-hero__stats { grid-column: 1 !important; }
 }
 
 /* ── Very small screens (< 390px / iPhone SE) ─────────────────── */
@@ -3861,4 +3749,62 @@ body.dark-mode .policy-accordion__header:hover { background: rgba(255,255,255,0.
     .main-content { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important; }
     .toast-container { bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important; }
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Mobile-web polish — world-class at every phone width
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Hide desktop-only topbar buttons on mobile */
+@media (max-width: 768px) {
+  /* Website link + Sign Out — shown on desktop, redundant on mobile (bottom nav handles nav) */
+  .topbar__actions .btn--secondary.btn--sm,
+  .topbar__actions a.btn--secondary.btn--sm {
+    display: none !important;
+  }
+
+  /* Account switcher: let it shrink to content, don't overflow */
+  .account-switcher {
+    width: auto !important;
+    max-width: 140px !important;
+    font-size: 0.75rem !important;
+  }
+
+  /* Payment modal: amount input fills width instead of fixed 180px */
+  #pmAmount {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Payment quick-amount chips: 2×4 grid instead of 4×2 */
+  .pm-chip-grid,
+  div:has(> .pm-chip) {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Minimum touch-target & readable font floors */
+  .pm-chip { min-height: 44px !important; font-size: 0.85rem !important; }
+
+  /* Stat labels — bump sub-11px labels up to readable floor */
+  .mic-stat__label,
+  .stat-label,
+  .metric-label { font-size: max(0.65rem, 10px) !important; }
+
+  /* Modal content doesn't overflow viewport on narrow screens */
+  .modal-content,
+  .modal-body {
+    width: 100% !important;
+    max-width: 100vw !important;
+    margin: 0 !important;
+    border-radius: 20px 20px 0 0 !important;
+  }
+}
+
+/* FAB sits between 769px and 900px where the hamburger topbar is also shown — hide it */
+@media (min-width: 769px) and (max-width: 900px) {
+  .fab,
+  #mobileFab,
+  [id*="Fab"],
+  [class*="fab"] { display: none !important; }
 }

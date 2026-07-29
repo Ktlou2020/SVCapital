@@ -258,15 +258,18 @@ const API = {
     };
     if (body && method !== 'GET') opts.body = JSON.stringify(body);
 
-    // 12-second timeout — prevents hangs when Railway server is cold-starting
+    // 35-second timeout — covers Railway cold-start (~30 s)
     const controller = new AbortController();
-    const tId = setTimeout(() => controller.abort(), 18000);
+    const tId = setTimeout(() => controller.abort(), 35000);
     let r;
     try {
       r = await fetch(url, { ...opts, signal: controller.signal });
-    } finally {
+    } catch (fetchErr) {
       clearTimeout(tId);
+      if (fetchErr.name === 'AbortError') throw new Error('Request timed out — server may be waking up, please try again');
+      throw fetchErr;
     }
+    clearTimeout(tId);
 
     // Handle 401 — try silent token refresh before giving up
     if (r.status === 401) {
@@ -440,9 +443,9 @@ const API = {
 
 const Utils = {
   /* Format South African Rand */
-  rand(amount, decimals = 0) {
+  rand(amount, decimals = 2) {
     if (amount == null || isNaN(amount)) return 'R0';
-    return 'R' + Number(amount).toLocaleString('en-ZA', {
+    return 'R' + Number(amount).toLocaleString('en-US', {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals
     });

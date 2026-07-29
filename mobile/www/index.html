@@ -197,9 +197,6 @@
           <i class="fa-solid fa-map"></i>
           <span class="tour-btn-pulse"></span>
         </button>
-        <button class="topbar-btn dark-mode-toggle" title="Toggle dark mode" onclick="toggleDarkMode()" id="darkModeBtn" aria-label="Toggle dark mode">
-          <i class="fa-solid fa-moon" id="darkModeIcon"></i>
-        </button>
         <div style="position:relative">
           <button class="topbar-btn" title="Notifications" onclick="toggleNotifPanel()" id="notifBtn" aria-label="Open notifications">
             <i class="fa-solid fa-bell"></i>
@@ -735,33 +732,6 @@
           <select id="marketRiskSelect" style="display:none">
             <option value="all"></option><option value="risk_conservative"></option><option value="risk_moderate"></option><option value="risk_aggressive"></option>
           </select>
-        </div>
-
-        <!-- How to Invest steps -->
-        <div class="invest-guide-strip mb-16">
-          <div class="igs-step">
-            <div class="igs-num">1</div>
-            <i class="fa-solid fa-wallet igs-icon"></i>
-            <div class="igs-text"><b>Fund Wallet</b><span>Top up via Paystack or EFT</span></div>
-          </div>
-          <i class="fa-solid fa-chevron-right igs-arrow"></i>
-          <div class="igs-step igs-step--active">
-            <div class="igs-num">2</div>
-            <i class="fa-solid fa-layer-group igs-icon"></i>
-            <div class="igs-text"><b>Choose a Pool</b><span>Browse open opportunities below</span></div>
-          </div>
-          <i class="fa-solid fa-chevron-right igs-arrow"></i>
-          <div class="igs-step">
-            <div class="igs-num">3</div>
-            <i class="fa-solid fa-coins igs-icon"></i>
-            <div class="igs-text"><b>Confirm Amount</b><span>Set your investment size</span></div>
-          </div>
-          <i class="fa-solid fa-chevron-right igs-arrow"></i>
-          <div class="igs-step">
-            <div class="igs-num">4</div>
-            <i class="fa-solid fa-chart-line igs-icon"></i>
-            <div class="igs-text"><b>Earn Returns</b><span>Track in My Investments</span></div>
-          </div>
         </div>
 
         <!-- Wallet balance strip -->
@@ -1387,11 +1357,11 @@
                     <option value="2023">March 2022 – February 2023</option>
                   </select>
                 </div>
-                <div style="display:flex;gap:10px">
-                  <button class="btn btn--success" style="flex:1" onclick="generateTaxCertificate()">
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                  <button class="btn btn--success" style="flex:1;min-width:160px" onclick="generateTaxCertificate()">
                     <i class="fa-solid fa-file-arrow-down"></i> Preview / Print Certificate
                   </button>
-                  <button class="btn btn--secondary" style="flex:1" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(_lastTaxCertHTML),200)">
+                  <button class="btn btn--secondary" style="flex:1;min-width:130px" onclick="generateTaxCertificate();setTimeout(()=>downloadTaxCertPDF(_lastTaxCertHTML),200)">
                     <i class="fa-solid fa-file-pdf"></i> Download PDF
                   </button>
                 </div>
@@ -1779,8 +1749,8 @@
 
       <div style="text-align:center;margin-bottom:24px">
         <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:8px">Amount to deposit</div>
-        <div style="display:flex;align-items:baseline;justify-content:center;gap:6px">
-          <span style="font-size:2.8rem;font-weight:900;color:#f0f4ff;line-height:1">R</span>
+        <div style="display:flex;align-items:center;justify-content:center;gap:0">
+          <span style="font-size:2.8rem;font-weight:900;color:#f0f4ff;line-height:1;margin-right:4px">R</span>
           <input type="number" id="pmAmount" min="100" step="100" placeholder="0"
             style="font-size:2.8rem;font-weight:900;color:#f0f4ff;background:transparent;border:none;outline:none;width:180px;text-align:left;font-family:inherit;line-height:1"
             oninput="updateAmountPreview()" />

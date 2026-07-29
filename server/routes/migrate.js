@@ -18,8 +18,30 @@ const PRODUCT_TYPE_MAP = {
   'Cattle Investment':          'cattle',
   'Solar Investment - 5 Years': 'solar',
   'Solar Investment - 6 Years': 'solar',
-  '12J Investment':             'cattle',
+  'Solar Investment - 7 Years': 'solar',
+  '12J Investment':             'cattle_12j',
+  '12J Cattle Investment':      'cattle_12j',
+  'iLobola':                    'ilobola',
+  'iLobola Investment':         'ilobola',
 };
+/* Maps the productId field (Firestore document reference) to our product_type.
+   Pools export uses productId, not productName, so this is the primary resolver. */
+const PRODUCT_ID_MAP = {
+  '0J1g67Ln99nMOct6vnqS': 'delivery_bikes',
+  '8r3TlnGkizidu1JCgbDp': 'smme',
+  'BjrELvLGvQzTSDt9ztGK': 'solar',
+  'Q3R5RN21GWJ4lGCtI72R': 'cattle_12j',
+  'SfpCxgJjP6i5GUz1JWYp': 'solar',
+  'gSjiuqRg3E8IEO2hwfmu': 'cattle',
+  'lwKM2GFyCXNd88l1nCAK': 'ilobola',
+  'xKQkwQMa0Hnj0dAmGsWH': 'solar',
+};
+function resolveProductType(p) {
+  return PRODUCT_TYPE_MAP[p.productName]
+      || PRODUCT_ID_MAP[p.productId]
+      || PRODUCT_TYPE_MAP[p.name]
+      || 'other';
+}
 const POOL_STATUS_MAP       = { MATURED:'matured', ACTIVE:'active', OPEN:'open', CLOSED:'closed' };
 const INVESTMENT_STATUS_MAP = { MATURED:'matured', ACTIVE:'active', PAID_OUT:'matured', COMPLETE:'matured', CANCELLED:'cancelled' };
 const TX_TYPE_MAP = {
@@ -27,7 +49,7 @@ const TX_TYPE_MAP = {
   'DEPOSIT':'deposit', 'WITHDRAWAL':'withdrawal', 'RETURN':'return',
 };
 const TX_STATUS_MAP  = { SUCCESSFUL:'completed', PENDING:'pending', FAILED:'failed' };
-const KYC_STATUS_MAP = { Approved:'approved', Unverified:'pending', Outstanding:'pending', Pending:'pending' };
+const KYC_STATUS_MAP = { Approved:'approved', Unverified:'not_started', Outstanding:'pending', Pending:'pending', Declined:'rejected' };
 const KYC_DOC_TYPE_MAP = {
   'ID Document':       'id_document',
   'Banking Details':   'bank_statement',
@@ -36,8 +58,10 @@ const KYC_DOC_TYPE_MAP = {
 
 function extractPoolId(p) {
   if (!p) return null;
-  const parts = p.split('/');
-  return parts[parts.length - 1];
+  // p may be a plain path string "investmentPools/ID" or an object { path: "investmentPools/ID" }
+  const str = (typeof p === 'object' && p !== null) ? (p.path || p.id || '') : String(p);
+  const parts = str.split('/');
+  return parts[parts.length - 1] || null;
 }
 
 /* Run items through fn in parallel batches to avoid DB connection exhaustion */
@@ -111,6 +135,8 @@ router.post('/run',
 
     const poolById = {};
     pools.forEach(p => { if (p._id) poolById[p._id] = p; });
+    // Maps original _id → DB pool id (built during pool insert step)
+    const sourceIdToPoolId = {};
 
     /* Pre-aggregate invested amounts per user — avoids O(n²) scan */
     const investedByUser = {};
@@ -139,27 +165,29 @@ router.post('/run',
           account_number: bank.accountNumber, branch_code: bank.branchNumber,
           bank_proof_url: bank.proof || null,
         }) : null;
-        const status = u.status === 'ACTIVE' ? 'active' : 'suspended';
+        const kycMapped  = KYC_STATUS_MAP[u.kycStatus] || 'pending';
+        const status     = u.status === 'ACTIVE' ? 'active' : u.status === 'ARCHIVED' ? 'archived' : 'suspended';
 
         await pool.query(`
           INSERT INTO investors
             (id, first_name, last_name, email, phone, id_number, date_of_birth,
-             kyc_status, status, wallet_balance, total_invested, risk_profile,
+             kyc_status, fica_status, status, wallet_balance, total_invested, risk_profile,
              occupation, notes, address, province, date_joined, updated_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW())
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
           ON CONFLICT (id) DO UPDATE SET
             first_name=EXCLUDED.first_name, last_name=EXCLUDED.last_name, email=EXCLUDED.email,
             phone=EXCLUDED.phone, id_number=EXCLUDED.id_number, date_of_birth=EXCLUDED.date_of_birth,
-            kyc_status=EXCLUDED.kyc_status, status=EXCLUDED.status,
-            wallet_balance=EXCLUDED.wallet_balance, total_invested=EXCLUDED.total_invested,
+            kyc_status=EXCLUDED.kyc_status, fica_status=EXCLUDED.fica_status, status=EXCLUDED.status,
+            wallet_balance=investors.wallet_balance, total_invested=investors.total_invested,
             risk_profile=EXCLUDED.risk_profile, occupation=EXCLUDED.occupation,
             notes=EXCLUDED.notes, address=EXCLUDED.address, province=EXCLUDED.province,
+            date_joined=COALESCE(EXCLUDED.date_joined, investors.date_joined),
             updated_at=NOW()
         `, [
           id, firstName, lastName, (u.email||'').toLowerCase().trim(), u.phone_number||'',
           u.identityNumber||'',
           u.dateOfBirth ? new Date(u.dateOfBirth).toISOString().split('T')[0] : null,
-          KYC_STATUS_MAP[u.kycStatus] || 'pending', status,
+          kycMapped, kycMapped, status,
           parseFloat(u.wallet) || 0, totalInvested,
           (u.riskTolerence || 'Moderate').toLowerCase(),
           u.employmentStatus || null, notes,
@@ -169,7 +197,7 @@ router.post('/run',
       }
     );
     counts.investors = investorResult.ok;
-    allErrors.push(...investorResult.errors.slice(0, 10).map(e => `investor: ${e}`));
+    allErrors.push(...investorResult.errors.map(e => `investor: ${e}`));
 
     /* ── 1b. Users (login accounts) for migrated investors ── */
     const JWT_SECRET  = process.env.JWT_SECRET;
@@ -213,7 +241,7 @@ router.post('/run',
       }
     );
     counts.users = userResult.ok;
-    allErrors.push(...userResult.errors.slice(0, 10).map(e => `user: ${e}`));
+    allErrors.push(...userResult.errors.map(e => `user: ${e}`));
 
     /* ── 2. Pools ── */
     const poolResult = await inBatches(
@@ -225,32 +253,39 @@ router.post('/run',
           termMonths = Math.round((new Date(p.maturityDate) - new Date(p.launchDate)) / (1000*60*60*24*30));
         await pool.query(`
           INSERT INTO investment_pools
-            (id, name, product_type, status, target_amount, annual_rate,
-             term_months, start_date, end_date, description, updated_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+            (id, source_id, name, product_type, status, target_amount, actual_rate,
+             term_months, start_date, end_date, maturity_date, description, updated_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
           ON CONFLICT (id) DO UPDATE SET
-            name=EXCLUDED.name, status=EXCLUDED.status, annual_rate=EXCLUDED.annual_rate, updated_at=NOW()
+            name=EXCLUDED.name, actual_rate=EXCLUDED.actual_rate,
+            product_type=EXCLUDED.product_type, source_id=EXCLUDED.source_id, updated_at=NOW()
         `, [
-          pid, p.name, PRODUCT_TYPE_MAP[p.productName]||'other',
+          pid, p._id, p.name, resolveProductType(p),
           POOL_STATUS_MAP[p.status]||'closed',
           parseFloat(p.maxTotal)||0, parseFloat(p.returnPercentage)||0, termMonths,
           p.launchDate   ? new Date(p.launchDate)   : null,
+          p.closingDate  ? new Date(p.closingDate)  : null,
           p.maturityDate ? new Date(p.maturityDate) : null,
-          `Migrated from previous platform. Product: ${p.productName}`,
+          `Migrated from previous platform. Product: ${p.productId || p.productName || p.name}`,
         ]);
+        sourceIdToPoolId[p._id] = pid;
       }
     );
     counts.pools = poolResult.ok;
-    allErrors.push(...poolResult.errors.slice(0, 10).map(e => `pool: ${e}`));
+    allErrors.push(...poolResult.errors.map(e => `pool: ${e}`));
 
     /* ── 3. Investments ── */
     const invResult = await inBatches(
       investments.filter(inv => inv._id && inv.userAccountNumber),
       async inv => {
-        const origPoolId = extractPoolId(inv.pool?.path);
+        // Pool ref: try inv.pool.path (object), inv.pool (string path), or inv.investmentPool
+        const poolRef    = inv.pool?.path || inv.pool || inv.investmentPool || null;
+        const origPoolId = extractPoolId(poolRef);
+        const dbPoolId   = origPoolId ? (sourceIdToPoolId[origPoolId] || `POOL-MIGR-${origPoolId}`) : null;
         const srcPool    = origPoolId ? poolById[origPoolId] : null;
         const amount     = parseFloat(inv.investedAmount) || 0;
         const rate       = parseFloat(srcPool?.returnPercentage) || 0;
+        const poolName   = (typeof inv.pool === 'object' ? inv.pool?.name : null) || srcPool?.name || '';
         let matInstr = null;
         if (inv.maturityInstruction?.instruction) {
           matInstr = inv.maturityInstruction.instruction.toLowerCase()
@@ -266,8 +301,8 @@ router.post('/run',
             status=EXCLUDED.status, maturity_instruction=EXCLUDED.maturity_instruction, updated_at=NOW()
         `, [
           `INV-MIGR-${inv._id}`, inv.userAccountNumber,
-          origPoolId ? `POOL-MIGR-${origPoolId}` : null,
-          inv.pool?.name||'', PRODUCT_TYPE_MAP[inv.product?.name]||'other', amount,
+          dbPoolId,
+          poolName, PRODUCT_TYPE_MAP[inv.product?.name]||'other', amount,
           INVESTMENT_STATUS_MAP[inv.status]||'active',
           inv.dateInvested  ? new Date(inv.dateInvested)         : new Date(),
           srcPool?.maturityDate ? new Date(srcPool.maturityDate) : null,
@@ -276,7 +311,7 @@ router.post('/run',
       }
     );
     counts.investments = invResult.ok;
-    allErrors.push(...invResult.errors.slice(0, 10).map(e => `investment: ${e}`));
+    allErrors.push(...invResult.errors.map(e => `investment: ${e}`));
 
     /* ── 4. Transactions ── */
     const txResult = await inBatches(
@@ -297,7 +332,7 @@ router.post('/run',
       }
     );
     counts.transactions = txResult.ok;
-    allErrors.push(...txResult.errors.slice(0, 10).map(e => `transaction: ${e}`));
+    allErrors.push(...txResult.errors.map(e => `transaction: ${e}`));
 
     /* ── 5. KYC documents ── */
     const kycItems = [];
@@ -325,9 +360,153 @@ router.post('/run',
       }
     );
     counts.kyc = kycResult.ok;
-    allErrors.push(...kycResult.errors.slice(0, 10).map(e => `kyc: ${e}`));
+    allErrors.push(...kycResult.errors.map(e => `kyc: ${e}`));
 
-    res.json({ ok: true, counts, errors: allErrors });
+    res.json({ ok: true, counts, errors: allErrors.slice(0, 100), errorCount: allErrors.length });
+  }
+);
+
+/* ── GET /api/migrate/investor-users ── list all investor login accounts */
+router.get('/investor-users',
+  requireAuth,
+  requireRole('admin', 'director'),
+  async (req, res) => {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.email, u.first_name, u.last_name, u.created_at,
+              EXISTS(
+                SELECT 1 FROM password_reset_tokens t
+                WHERE t.user_id = u.id AND t.used_at IS NOT NULL
+              ) AS has_logged_in
+       FROM users u
+       WHERE u.role = 'investor'
+       ORDER BY u.first_name, u.last_name`
+    );
+    res.json({ ok: true, users: rows });
+  }
+);
+
+/* ── POST /api/migrate/resend-setup-emails ── */
+router.post('/resend-setup-emails',
+  requireAuth,
+  requireRole('admin', 'director'),
+  async (req, res) => {
+    const JWT_SECRET = process.env.JWT_SECRET;
+    const BASE_URL   = process.env.BASE_URL || 'https://platform.svcapital.co.za';
+
+    if (!JWT_SECRET) return res.status(500).json({ error: 'JWT_SECRET not configured.' });
+
+    /* Optional: restrict to a specific subset of user IDs */
+    const { userIds } = req.body || {};
+    let queryText = `SELECT id, email, first_name FROM users WHERE role = 'investor' ORDER BY created_at`;
+    let queryParams = [];
+    if (Array.isArray(userIds) && userIds.length) {
+      queryText  = `SELECT id, email, first_name FROM users WHERE role = 'investor' AND id = ANY($1) ORDER BY created_at`;
+      queryParams = [userIds];
+    }
+
+    const { rows: users } = await pool.query(queryText, queryParams);
+
+    let sent = 0;
+    const errors = [];
+
+    for (const user of users) {
+      try {
+        const jti       = crypto.randomBytes(16).toString('hex');
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        const token     = jwt.sign(
+          { sub: user.id, purpose: 'password_reset', jti },
+          JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+
+        await pool.query(
+          `DELETE FROM password_reset_tokens WHERE user_id = $1 AND used_at IS NULL`,
+          [user.id]
+        );
+        await pool.query(
+          `INSERT INTO password_reset_tokens (jti, user_id, expires_at) VALUES ($1, $2, $3)`,
+          [jti, user.id, expiresAt]
+        );
+
+        const resetLink = `${BASE_URL}/reset-password?token=${token}`;
+        await emailService.sendAccountSetup(user.email, user.first_name || user.email, resetLink);
+        sent++;
+      } catch (err) {
+        errors.push(`${user.email}: ${err.message}`);
+      }
+    }
+
+    res.json({ ok: true, total: users.length, sent, errors: errors.slice(0, 20) });
+  }
+);
+
+/* ── POST /api/migrate/backfill-orphan-pools ──────────────────────────────
+   Creates stub investment_pool records for any pool_id values referenced
+   by investments that have no matching row in investment_pools.
+   Pool name, product_type, dates and rate are inferred from the investments.
+   Safe to re-run (ON CONFLICT DO NOTHING).
+   ──────────────────────────────────────────────────────────────────────── */
+router.post('/backfill-orphan-pools',
+  requireAuth,
+  requireRole('admin', 'director'),
+  async (req, res) => {
+    try {
+      /* Find all pool_ids referenced by investments that have no pool record */
+      const { rows: orphans } = await pool.query(`
+        SELECT
+          i.pool_id,
+          -- infer source Firebase ID from the POOL-MIGR- prefix
+          REPLACE(i.pool_id, 'POOL-MIGR-', '') AS source_id,
+          -- best available name from the investments themselves
+          MAX(i.pool_name) FILTER (WHERE i.pool_name IS NOT NULL AND i.pool_name != '') AS inferred_name,
+          MAX(i.product_type) AS inferred_product_type,
+          MIN(i.start_date)   AS earliest_start,
+          MAX(i.end_date)     AS latest_end,
+          MAX(i.annual_rate)  AS inferred_rate,
+          COUNT(*)            AS investment_count,
+          SUM(i.amount)       AS total_amount
+        FROM investments i
+        WHERE i.pool_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM investment_pools ip WHERE ip.id = i.pool_id
+          )
+        GROUP BY i.pool_id
+      `);
+
+      if (!orphans.length) {
+        return res.json({ ok: true, created: 0, message: 'No orphan pools found — all pool references are accounted for.' });
+      }
+
+      let created = 0;
+      const details = [];
+
+      for (const o of orphans) {
+        const name = o.inferred_name || `Migrated Pool (${o.source_id})`;
+        await pool.query(`
+          INSERT INTO investment_pools
+            (id, source_id, name, product_type, status, actual_rate,
+             start_date, maturity_date, description, updated_at)
+          VALUES ($1, $2, $3, $4, 'closed', $5, $6, $7, $8, NOW())
+          ON CONFLICT (id) DO NOTHING
+        `, [
+          o.pool_id,
+          o.source_id,
+          name,
+          o.inferred_product_type || 'other',
+          parseFloat(o.inferred_rate) || 0,
+          o.earliest_start || null,
+          o.latest_end     || null,
+          `Auto-created stub for orphan pool ${o.source_id}. ${o.investment_count} investment(s) totalling R${parseFloat(o.total_amount||0).toFixed(2)}.`,
+        ]);
+        created++;
+        details.push({ pool_id: o.pool_id, name, investments: parseInt(o.investment_count) });
+      }
+
+      res.json({ ok: true, created, pools: details });
+    } catch (err) {
+      console.error('[migrate/backfill-orphan-pools]', err);
+      res.status(500).json({ error: err.message });
+    }
   }
 );
 

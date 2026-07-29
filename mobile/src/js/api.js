@@ -440,9 +440,9 @@ const API = {
 
 const Utils = {
   /* Format South African Rand */
-  rand(amount, decimals = 0) {
+  rand(amount, decimals = 2) {
     if (amount == null || isNaN(amount)) return 'R0';
-    return 'R' + Number(amount).toLocaleString('en-ZA', {
+    return 'R' + Number(amount).toLocaleString('en-US', {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals
     });

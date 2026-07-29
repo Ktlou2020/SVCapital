@@ -10,6 +10,8 @@ const _esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').r
 const _ticketDocCache = {};
 
 /* ─── State ─── */
+let _gChordPending = false;
+
 let STATE = {
   investors: [],
   subAccounts: [],
@@ -351,8 +353,61 @@ function loadAdminNotifications(investors, transactions, tickets) {
   _syncAdminNotifDot();
 }
 
+/* ─── View-level tab system ─── */
+const _MERGED_VIEW_MAP = {
+  'fica-pipeline': { parent: 'kyc',        pane: 'fica-pipeline' },
+  'intlinterest':  { parent: 'investors',   pane: 'intlinterest'  },
+  'aml':           { parent: 'support',     pane: 'aml'           },
+  'emaillogs':     { parent: 'comms',       pane: 'emaillogs'     },
+  'auditlog':      { parent: 'compliance',  pane: 'auditlog'      },
+  'accepted-docs': { parent: 'compliance',  pane: 'accepted-docs' },
+  'maturities':    { parent: 'compliance',  pane: 'maturities'    },
+  'failed-logins': { parent: 'compliance',  pane: 'failed-logins' },
+  'privacy':       { parent: 'terms',       pane: 'privacy'       },
+  'migrate':       { parent: 'settings',    pane: 'migrate'       },
+  'staff':         { parent: 'settings',    pane: 'staff'         },
+};
+
+function switchViewTab(parentView, paneId, btn) {
+  const container = document.getElementById('view-' + parentView);
+  if (!container) return;
+  container.querySelectorAll('.vtab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) {
+    btn.classList.add('active');
+  } else {
+    const b = container.querySelector(`.vtab-btn[data-pane="${paneId}"]`);
+    if (b) b.classList.add('active');
+  }
+  container.querySelectorAll('.vtab-pane').forEach(p => {
+    p.classList.toggle('active', p.dataset.pane === paneId);
+  });
+  // Lazy-load secondary tab content
+  const secondaryLoaders = {
+    'fica-pipeline': () => typeof loadFicaPipeline !== 'undefined' && loadFicaPipeline(),
+    'intlinterest':  () => typeof loadIntlInterest !== 'undefined' && loadIntlInterest(),
+    'aml':           () => typeof loadAML !== 'undefined' && loadAML(),
+    'emaillogs':     () => typeof loadEmailLogs !== 'undefined' && loadEmailLogs(),
+    'auditlog':      () => typeof loadAuditLog !== 'undefined' && loadAuditLog(),
+    'accepted-docs': () => typeof loadAcceptedDocuments !== 'undefined' && loadAcceptedDocuments(),
+    'maturities':    () => typeof loadUpcomingMaturities !== 'undefined' && loadUpcomingMaturities(),
+    'failed-logins': () => typeof loadFailedLogins !== 'undefined' && loadFailedLogins(),
+    'privacy':       () => typeof loadPrivacyEditor !== 'undefined' && loadPrivacyEditor(),
+    'migrate':       () => typeof loadMigration !== 'undefined' && loadMigration(),
+    'staff':         () => typeof loadStaffPermissions !== 'undefined' && loadStaffPermissions(),
+  };
+  if (secondaryLoaders[paneId]) secondaryLoaders[paneId]();
+}
+
 /* ─── Navigation ─── */
 function navigate(view, btnEl) {
+  // Redirect merged secondary views to their parent + tab
+  if (_MERGED_VIEW_MAP[view]) {
+    const { parent, pane } = _MERGED_VIEW_MAP[view];
+    const parentBtn = document.querySelector(`[data-view="${parent}"]`);
+    navigate(parent, parentBtn);
+    setTimeout(() => switchViewTab(parent, pane, null), 50);
+    return;
+  }
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
@@ -365,8 +420,7 @@ function navigate(view, btnEl) {
     products: 'Products', pools: 'Investment Pools', investments: 'Investments', maturity: 'Maturity Instructions',
     transactions: 'Transactions', withdrawals: 'Withdrawals', support: 'Support Tickets', analytics: 'Analytics',
     auditlog: 'Audit Log', settings: 'Settings', comms: 'Broadcast Communications', aml: 'AML Compliance Review',
-    migrate: 'Data Migration', compliance: 'Compliance Calendar', reconciliation: 'Financial Reconciliation',
-    terms: 'Terms of Use', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest',
+    terms: 'Legal Documents', privacy: 'Privacy Policy &amp; POPIA Notice', intlinterest: 'International Interest',
     opsconsole: 'Operations Console', feedback: 'Client Feedback', emaillogs: 'Email Logs',
     'fica-pipeline': 'FICA Pipeline',
   };
@@ -386,21 +440,14 @@ function navigate(view, btnEl) {
     transactions: loadTransactions,
     support: loadSupport,
     analytics: loadAnalytics,
-    auditlog: loadAuditLog,
     settings: loadSettings,
     withdrawals: loadWithdrawals,
     comms: loadComms,
-    aml: loadAML,
     compliance: loadCompliance,
     reconciliation: loadReconciliation,
     terms: loadTermsEditor,
-    privacy: loadPrivacyEditor,
-    'accepted-docs': loadAcceptedDocuments,
-    intlinterest: loadIntlInterest,
-    'fica-pipeline': loadFicaPipeline,
     opsconsole: loadOpsConsole,
     feedback: () => loadFeedback('pending'),
-    emaillogs: loadEmailLogs,
   };
   if (loaders[view]) loaders[view]();
   // Close mobile sidebar after navigation
@@ -565,23 +612,65 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupGlobalSearch();
   _syncAdminNotifDot();
 
-  // Keyboard shortcut: / focuses global search
+  // Keyboard shortcuts
   document.addEventListener('keydown', e => {
-    if (e.key === '/' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+    const inField = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
+
+    if (e.key === '/' && !inField) {
       e.preventDefault();
       const gs = document.getElementById('globalSearch');
       if (gs) { gs.focus(); gs.select(); }
     }
 
-    // Arrow-key table navigation
-    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+    // Arrow-key + J/K table row navigation
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'j' || e.key === 'k') && !inField) {
       const row = document.activeElement.closest('tr[tabindex]');
       if (!row) return;
       e.preventDefault();
       const rows = [...row.closest('tbody').querySelectorAll('tr[tabindex="0"]')];
       const idx  = rows.indexOf(row);
-      const next = e.key === 'ArrowDown' ? rows[idx + 1] : rows[idx - 1];
+      const next = (e.key === 'ArrowDown' || e.key === 'j') ? rows[idx + 1] : rows[idx - 1];
       if (next) { next.focus(); next.scrollIntoView({ block: 'nearest' }); }
+    }
+
+    // ? = keyboard shortcuts help overlay
+    if (e.key === '?' && !inField) {
+      e.preventDefault();
+      Modal.open('kbShortcutsModal');
+    }
+
+    // g+letter navigation chords
+    if (e.key === 'g' && !inField && !(e.ctrlKey || e.metaKey || e.altKey)) {
+      _gChordPending = true;
+      setTimeout(() => { _gChordPending = false; }, 1500);
+      return;
+    }
+    if (_gChordPending && !inField) {
+      const NAV_MAP = { d: 'dashboard', i: 'investors', t: 'transactions', k: 'kyc', m: 'maturity' };
+      const view = NAV_MAP[e.key];
+      if (view) {
+        e.preventDefault();
+        _gChordPending = false;
+        const btn = document.querySelector(`[data-view="${view}"]`);
+        if (btn) navigate(view, btn);
+      }
+    }
+
+    // r = refresh current view
+    if (e.key === 'r' && !inField && !(e.ctrlKey || e.metaKey || e.altKey)) {
+      e.preventDefault();
+      const REFRESH_FNS = {
+        dashboard: () => loadDashboard(),
+        investors: () => loadInvestors(),
+        transactions: () => loadTransactions(),
+        kyc: () => loadKyc(),
+        maturity: () => loadMaturityInstructions(),
+        pools: () => loadPools(),
+        investments: () => loadInvestments(),
+        withdrawals: () => loadWithdrawals(),
+      };
+      const fn = REFRESH_FNS[STATE.currentView];
+      if (fn) { fn(); Toast.info('Refreshing…', 1500); }
     }
 
     // Escape closes open modals
@@ -590,6 +679,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (open) { const id = open.id; if (id) Modal.close(id); }
     }
   });
+
+  _initSSE();
 
   // Restore last active view from session (deep-link fix)
   const savedView = sessionStorage.getItem('svc_admin_view');
@@ -606,10 +697,10 @@ async function loadDashboard() {
   _showLoadingBar();
   try {
     const [invRes, poolRes, invstRes, txnRes] = await Promise.all([
-      API.investors.list({ limit: 5000 }),
+      API.investors.list({ limit: 10000 }),
       API.pools.list({ limit: 1000 }),
       API.investments.list({ limit: 5000 }),
-      API.transactions.list({ limit: 500 })
+      API.transactions.list({ limit: 5000 })
     ]);
 
     STATE.investors = invRes.data || [];
@@ -621,11 +712,39 @@ async function loadDashboard() {
     const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
     const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
     const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
+    const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
 
-    document.getElementById('ds-investors').textContent = STATE.investors.length;
+    document.getElementById('ds-investors').textContent = nonArchived.length;
     document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
     document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
     document.getElementById('ds-pools').textContent = activePools;
+
+    // Second KPI row
+    const ficaApproved = nonArchived.filter(i => i.fica_status === 'approved' || i.kyc_status === 'approved').length;
+    const ficaRate = nonArchived.length ? Math.round((ficaApproved / nonArchived.length) * 100) : 0;
+    const dsRate = document.getElementById('ds-fica-rate');
+    if (dsRate) dsRate.textContent = `${ficaRate}%`;
+
+    const pendingKycCount = nonArchived.filter(i => {
+      const fs = i.fica_status; const ks = i.kyc_status;
+      return fs === 'pending' || fs === 'in_progress' || fs === 'submitted' || ks === 'pending';
+    }).length;
+    const dsPendKyc = document.getElementById('ds-pending-kyc');
+    if (dsPendKyc) dsPendKyc.textContent = pendingKycCount;
+
+    const in90Days = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    const now90 = new Date();
+    const upcomingMaturities = STATE.investments.filter(i => {
+      if (i.status !== 'active' || !i.maturity_date) return false;
+      const md = new Date(i.maturity_date);
+      return md >= now90 && md <= in90Days;
+    }).length;
+    const dsUpcoming = document.getElementById('ds-upcoming-maturities');
+    if (dsUpcoming) dsUpcoming.textContent = upcomingMaturities;
+
+    const pendingWithdrawals = (STATE.transactions || []).filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
+    const dsPendWd = document.getElementById('ds-pending-withdrawals');
+    if (dsPendWd) dsPendWd.textContent = pendingWithdrawals;
 
     // Real month-over-month trend calculations
     (() => {
@@ -656,9 +775,10 @@ async function loadDashboard() {
       }).length;
       _setTrend('ds-trend-investors', _trendPct(invThis, invLast));
 
-      // AUM: new investments this month vs last month
-      const aumThis = STATE.investments.filter(i => new Date(i.created_at || 0) >= thisMonthStart).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+      // AUM: new investments this month vs last month (exclude cancelled/withdrawn)
+      const aumThis = STATE.investments.filter(i => ['active', 'matured'].includes(i.status) && new Date(i.created_at || 0) >= thisMonthStart).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
       const aumLast = STATE.investments.filter(i => {
+        if (!['active', 'matured'].includes(i.status)) return false;
         const d = new Date(i.created_at || 0);
         return d >= lastMonthStart && d <= lastMonthEnd;
       }).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
@@ -674,9 +794,8 @@ async function loadDashboard() {
       _setTrend('ds-trend-returns', _trendPct(retThis, retLast));
     })();
 
-    // Badge counts
-    const pendingKyc = STATE.investors.filter(i => ['pending_fica', 'fica_submitted'].includes(i.status)).length;
-    document.getElementById('kycBadge').textContent = pendingKyc;
+    // Badge counts (reuse pendingKycCount computed above for consistency)
+    document.getElementById('kycBadge').textContent = pendingKycCount;
 
     // Fetch ticket count for welcome strip
     let openTickets = 0;
@@ -687,7 +806,7 @@ async function loadDashboard() {
       STATE.tickets = tickets;
       openTickets = tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
       const tktBadge = document.getElementById('ticketBadge');
-      if (tktBadge) tktBadge.textContent = openTickets;
+      if (tktBadge) { tktBadge.textContent = openTickets; tktBadge.style.display = openTickets > 0 ? '' : 'none'; }
     } catch (_) {}
 
     // Build dynamic notification panel
@@ -710,7 +829,7 @@ async function loadDashboard() {
       wIdent.name = `${jwtUser.firstName || ''} ${jwtUser.lastName || ''}`.trim() || jwtUser.email || null;
       wIdent.role = jwtUser.role;
     }
-    _populateAdminWelcomeStrip(wIdent, pendingKyc, openTickets);
+    _populateAdminWelcomeStrip(wIdent, pendingKycCount, openTickets);
 
     renderRecentInvestments();
     renderOpenPoolsWidget();
@@ -726,18 +845,21 @@ async function loadDashboard() {
       window._dashRefreshTimer = setInterval(async () => {
         if (STATE.currentView !== 'dashboard') return;
         try {
-          const [invRes, poolRes, invstRes] = await Promise.all([
+          const [invRes, poolRes, invstRes, txnRes] = await Promise.all([
             API.investors.list({ limit: 5000 }),
             API.pools.list({ limit: 1000 }),
-            API.investments.list({ limit: 5000 })
+            API.investments.list({ limit: 5000 }),
+            API.transactions.list({ limit: 5000 })
           ]);
           STATE.investors = invRes.data || [];
           STATE.pools = poolRes.data || [];
           STATE.investments = invstRes.data || [];
+          STATE.transactions = txnRes.data || [];
+          const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
           const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
           const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
           const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
-          document.getElementById('ds-investors').textContent = STATE.investors.length;
+          document.getElementById('ds-investors').textContent = nonArchived.length;
           document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
           document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
           document.getElementById('ds-pools').textContent = activePools;
@@ -756,7 +878,11 @@ async function loadDashboard() {
 }
 
 function updateSidebarBadges() {
-  const pendingKyc = STATE.investors.filter(i => i.kyc_status === 'pending').length;
+  const _nonArchived = STATE.investors.filter(i => i.status !== 'archived');
+  const pendingKyc = _nonArchived.filter(i => {
+    const fs = i.fica_status; const ks = i.kyc_status;
+    return fs === 'pending' || fs === 'in_progress' || fs === 'submitted' || ks === 'pending';
+  }).length;
   const kycBadge = document.getElementById('kycBadge');
   if (kycBadge) kycBadge.textContent = pendingKyc;
 
@@ -1142,6 +1268,33 @@ function updateBulkBar() {
   const cnt = document.getElementById('invBulkCount');
   if (bar) bar.style.display = selectedInvestors.size ? 'flex' : 'none';
   if (cnt) cnt.textContent = `${selectedInvestors.size} investor${selectedInvestors.size !== 1 ? 's' : ''} selected`;
+  _updateSelectAllBanner();
+}
+
+function _updateSelectAllBanner() {
+  const banner = document.getElementById('invSelectAllBanner');
+  if (!banner) return;
+  const total = filteredInvestors.length;
+  const allSelected = selectedInvestors.size === total && total > 0;
+  const start = (investorPage - 1) * INV_PAGE_SIZE;
+  const pageIds = filteredInvestors.slice(start, start + INV_PAGE_SIZE).map(i => i.id);
+  const pageAllSelected = pageIds.length > 0 && pageIds.every(id => selectedInvestors.has(id));
+  if (allSelected) {
+    banner.style.display = 'block';
+    banner.innerHTML = `All <strong>${total}</strong> investors are selected. <a href="#" style="color:var(--orange);font-weight:700;text-decoration:underline" onclick="clearInvestorSelection();return false">Clear selection</a>`;
+  } else if (pageAllSelected && total > pageIds.length) {
+    banner.style.display = 'block';
+    banner.innerHTML = `All <strong>${pageIds.length}</strong> investors on this page are selected. <a href="#" style="color:var(--orange);font-weight:700;text-decoration:underline" onclick="selectAllAcrossPages();return false">Select all ${total} investors</a>`;
+  } else {
+    banner.style.display = 'none';
+    banner.innerHTML = '';
+  }
+}
+
+function selectAllAcrossPages() {
+  filteredInvestors.forEach(inv => selectedInvestors.add(inv.id));
+  renderInvestorsTable();
+  updateBulkBar();
 }
 
 function toggleInvestorSelect(id, checked) {
@@ -1167,6 +1320,8 @@ function toggleAllInvestors(cb) {
 
 function clearInvestorSelection() {
   selectedInvestors.clear();
+  const banner = document.getElementById('invSelectAllBanner');
+  if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; }
   renderInvestorsTable();
   updateBulkBar();
 }
@@ -1195,17 +1350,181 @@ async function bulkSendLoginInvites() {
   } catch (e) { Toast.error('Bulk invite failed: ' + (e.message || 'unknown error')); }
 }
 
+async function bulkArchiveInvestors() {
+  const ids = [...selectedInvestors];
+  if (!ids.length) return;
+  const names = STATE.investors.filter(i => ids.includes(i.id))
+    .map(i => `${i.first_name || ''} ${i.last_name || ''}`.trim()).filter(Boolean);
+  const preview = names.slice(0, 3).join(', ') + (names.length > 3 ? ` and ${names.length - 3} more` : '');
+  if (!await Confirm.ask(`Archive ${ids.length} investor${ids.length !== 1 ? 's' : ''}?`, {
+    body: `This will set status to "archived" for: ${preview}. You can undo immediately.`,
+    confirmLabel: 'Archive',
+    confirmClass: 'btn--danger',
+  })) return;
+  const snapshot = ids.map(id => {
+    const inv = STATE.investors.find(i => i.id === id);
+    return inv ? { id: inv.id, status: inv.status } : null;
+  }).filter(Boolean);
+  try {
+    await Promise.all(ids.map(id => API.investors.update(id, { status: 'archived' })));
+    ids.forEach(id => { const inv = STATE.investors.find(i => i.id === id); if (inv) inv.status = 'archived'; });
+    selectedInvestors.clear();
+    renderInvestorsTable();
+    renderInvestorStats();
+    updateBulkBar();
+    Toast.action(`${ids.length} investor${ids.length !== 1 ? 's' : ''} archived`, 'Undo', async () => {
+      try {
+        await Promise.all(snapshot.map(s => API.investors.update(s.id, { status: s.status || 'active' })));
+        snapshot.forEach(s => { const inv = STATE.investors.find(i => i.id === s.id); if (inv) inv.status = s.status || 'active'; });
+        renderInvestorsTable();
+        renderInvestorStats();
+        Toast.success('Archive undone');
+      } catch (ue) { Toast.error('Undo failed: ' + ue.message); }
+    });
+  } catch (e) { Toast.error('Archive failed: ' + (e.message || 'unknown error')); }
+}
+
+async function bulkApproveFica() {
+  const ids = [...selectedInvestors];
+  if (!ids.length) return;
+  const names = STATE.investors.filter(i => ids.includes(i.id))
+    .map(i => `${i.first_name || ''} ${i.last_name || ''}`.trim()).filter(Boolean);
+  const preview = names.slice(0, 3).join(', ') + (names.length > 3 ? ` and ${names.length - 3} more` : '');
+  if (!await Confirm.ask(`Approve FICA for ${ids.length} investor${ids.length !== 1 ? 's' : ''}?`, {
+    body: `Sets FICA/KYC status to "approved" for: ${preview}.`,
+    confirmLabel: 'Approve FICA',
+    confirmClass: 'btn--success',
+  })) return;
+  try {
+    await Promise.all(ids.map(id => API.investors.update(id, { fica_status: 'approved', kyc_status: 'approved' })));
+    ids.forEach(id => {
+      const inv = STATE.investors.find(i => i.id === id);
+      if (inv) { inv.fica_status = 'approved'; inv.kyc_status = 'approved'; }
+    });
+    selectedInvestors.clear();
+    renderInvestorsTable();
+    updateBulkBar();
+    Toast.success(`FICA approved for ${ids.length} investor${ids.length !== 1 ? 's' : ''}`);
+  } catch (e) { Toast.error('Bulk FICA approval failed: ' + (e.message || 'unknown error')); }
+}
+
+function bulkExportSelected() {
+  const ids = [...selectedInvestors];
+  if (!ids.length) return;
+  const rows = STATE.investors.filter(i => ids.includes(i.id));
+  const headers = ['ID','First Name','Last Name','Email','Phone','Status','FICA Status','KYC Status','Wallet Balance','Created'];
+  const csv = [
+    headers.join(','),
+    ...rows.map(r => [
+      r.id,
+      `"${(r.first_name || '').replace(/"/g, '""')}"`,
+      `"${(r.last_name  || '').replace(/"/g, '""')}"`,
+      `"${(r.email      || '').replace(/"/g, '""')}"`,
+      `"${(r.phone      || '').replace(/"/g, '""')}"`,
+      r.status        || '',
+      r.fica_status   || '',
+      r.kyc_status    || '',
+      r.wallet_balance || '0',
+      r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : '',
+    ].join(','))
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `investors-selected-${Date.now()}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  Toast.success(`${rows.length} investor${rows.length !== 1 ? 's' : ''} exported`);
+}
+
+/* ── Investor filter presets ─────────────────────────────── */
+function _togglePresetDropdown(e) {
+  if (e) e.stopPropagation();
+  const drop = document.getElementById('filterPresetDrop');
+  if (!drop) return;
+  if (drop.style.display !== 'none') { drop.style.display = 'none'; return; }
+  _renderPresetDropdown();
+  drop.style.display = 'block';
+  setTimeout(() => {
+    document.addEventListener('click', function _closePreset(ev) {
+      if (!drop.contains(ev.target)) { drop.style.display = 'none'; document.removeEventListener('click', _closePreset); }
+    });
+  }, 50);
+}
+
+function _renderPresetDropdown() {
+  const list = document.getElementById('filterPresetList');
+  if (!list) return;
+  const presets = _getPresets();
+  if (!presets.length) {
+    list.innerHTML = '<div style="padding:8px 12px;font-size:0.78rem;color:var(--text-muted)">No saved presets yet</div>';
+    return;
+  }
+  list.innerHTML = presets.map((p, i) => `
+    <div style="display:flex;align-items:center;padding:3px 8px 3px 12px;gap:6px">
+      <button onclick="_loadInvestorPreset(${i})" style="flex:1;text-align:left;background:none;border:none;cursor:pointer;font-size:0.8rem;color:var(--text);padding:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(p.name)}</button>
+      <button onclick="_deleteInvestorPreset(${i});event.stopPropagation()" style="background:none;border:none;cursor:pointer;font-size:0.78rem;color:var(--text-muted);padding:2px 4px;flex-shrink:0" title="Delete">×</button>
+    </div>`).join('');
+}
+
+function _getPresets() {
+  try { return JSON.parse(localStorage.getItem('svc_inv_presets') || '[]'); } catch { return []; }
+}
+
+function _saveCurrentPreset() {
+  const name = prompt('Preset name:');
+  if (!name || !name.trim()) return;
+  const filters = {
+    status:   document.getElementById('investorStatusFilter')?.value  || '',
+    kyc:      document.getElementById('investorKycFilter')?.value     || '',
+    province: document.getElementById('investorProvinceFilter')?.value || '',
+    login:    document.getElementById('investorLoginFilter')?.value   || '',
+    sort:     document.getElementById('investorSortOrder')?.value     || '',
+    search:   document.getElementById('globalSearch')?.value          || '',
+  };
+  const presets = _getPresets();
+  presets.push({ name: name.trim(), filters });
+  localStorage.setItem('svc_inv_presets', JSON.stringify(presets));
+  Toast.success(`Preset "${name.trim()}" saved`);
+  const drop = document.getElementById('filterPresetDrop');
+  if (drop) drop.style.display = 'none';
+}
+
+function _loadInvestorPreset(idx) {
+  const p = _getPresets()[idx];
+  if (!p) return;
+  if (p.filters.status   !== undefined) { const el = document.getElementById('investorStatusFilter');   if (el) el.value = p.filters.status; }
+  if (p.filters.kyc      !== undefined) { const el = document.getElementById('investorKycFilter');      if (el) el.value = p.filters.kyc; }
+  if (p.filters.province !== undefined) { const el = document.getElementById('investorProvinceFilter'); if (el) el.value = p.filters.province; }
+  if (p.filters.login    !== undefined) { const el = document.getElementById('investorLoginFilter');    if (el) el.value = p.filters.login; }
+  if (p.filters.sort     !== undefined) { const el = document.getElementById('investorSortOrder');      if (el) el.value = p.filters.sort; }
+  if (p.filters.search   !== undefined) { const el = document.getElementById('globalSearch');           if (el) el.value = p.filters.search; }
+  applyInvestorFilters();
+  const drop = document.getElementById('filterPresetDrop');
+  if (drop) drop.style.display = 'none';
+  Toast.success(`Preset "${p.name}" loaded`);
+}
+
+function _deleteInvestorPreset(idx) {
+  const presets = _getPresets();
+  const name = presets[idx]?.name || 'preset';
+  presets.splice(idx, 1);
+  localStorage.setItem('svc_inv_presets', JSON.stringify(presets));
+  _renderPresetDropdown();
+  Toast.info(`"${name}" deleted`);
+}
+
 function renderInvestorStats() {
   const d = STATE.investors;
+  const nonArchived = d.filter(i => i.status !== 'archived');
   // AUM from active investments (sub-account investments carry investor_id so are included)
   const liveAUM = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
   // Wallet tile includes both main investor wallets and sub-account wallets
   const saWallet = (STATE.subAccounts || []).reduce((s, sa) => s + (parseFloat(sa.wallet_balance) || 0), 0);
-  const totalWallet = d.reduce((s, i) => s + (parseFloat(i.wallet_balance) || 0), 0) + saWallet;
-  document.getElementById('is-total').textContent = d.length.toLocaleString();
-  document.getElementById('is-active').textContent = d.filter(i => i.status === 'active').length.toLocaleString();
-  document.getElementById('is-pending').textContent = d.filter(i => i.kyc_status === 'pending').length.toLocaleString();
-  document.getElementById('is-suspended').textContent = d.filter(i => i.status === 'suspended').length.toLocaleString();
+  const totalWallet = nonArchived.reduce((s, i) => s + (parseFloat(i.wallet_balance) || 0), 0) + saWallet;
+  document.getElementById('is-total').textContent = nonArchived.length.toLocaleString();
+  document.getElementById('is-active').textContent = nonArchived.filter(i => i.status === 'active').length.toLocaleString();
+  document.getElementById('is-pending').textContent = nonArchived.filter(i => i.kyc_status === 'pending').length.toLocaleString();
+  document.getElementById('is-suspended').textContent = d.filter(i => i.status === 'suspended' || i.status === 'archived').length.toLocaleString();
   document.getElementById('is-wallet').textContent = Utils.rand(totalWallet);
   document.getElementById('is-aum').textContent = Utils.rand(liveAUM);
 }
@@ -1237,9 +1556,11 @@ function renderInvestorsTable() {
   const liveActiveCountMap = {};
   const liveTotalCountMap = {};
   STATE.investments.forEach(i => {
-    liveInvestedMap[i.investor_id] = (liveInvestedMap[i.investor_id] || 0) + (parseFloat(i.amount) || 0);
     liveTotalCountMap[i.investor_id] = (liveTotalCountMap[i.investor_id] || 0) + 1;
-    if (i.status === 'active') liveActiveCountMap[i.investor_id] = (liveActiveCountMap[i.investor_id] || 0) + 1;
+    if (i.status === 'active') {
+      liveInvestedMap[i.investor_id]   = (liveInvestedMap[i.investor_id]   || 0) + (parseFloat(i.amount) || 0);
+      liveActiveCountMap[i.investor_id] = (liveActiveCountMap[i.investor_id] || 0) + 1;
+    }
   });
 
   // Sync select-all checkbox state
@@ -1264,7 +1585,9 @@ function renderInvestorsTable() {
       : inv.kyc_status === 'rejected'
       ? '<span class="badge badge--red" style="font-size:0.68rem;padding:2px 6px">KYC Fail</span>'
       : '<span class="badge badge--yellow" style="font-size:0.68rem;padding:2px 6px">KYC Pending</span>';
-    const stBadge   = Utils.statusBadge(inv.status);
+    const stBadge   = inv.status === 'archived'
+      ? '<span class="badge badge--grey" style="font-size:0.68rem;padding:2px 6px"><i class="fa-solid fa-box-archive"></i> Archived</span>'
+      : Utils.statusBadge(inv.status);
     const loginBadge = hasLogin
       ? ''
       : '<span class="badge badge--grey" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-user-slash"></i> No Login</span>';
@@ -1302,7 +1625,9 @@ function renderInvestorsTable() {
       <td style="overflow:hidden" onclick="event.stopPropagation()">
         <div class="flex-center gap-5">
           <button class="btn btn--secondary btn--sm" onclick='viewInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-eye"></i></button>
-          <button class="btn btn--danger btn--sm" onclick='confirmDeleteInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-trash"></i></button>
+          ${inv.status === 'archived'
+            ? `<button class="btn btn--sm" style="background:rgba(253,186,116,.15);color:#fb923c;border:1px solid rgba(253,186,116,.3)" onclick='unarchiveInvestor(${JSON.stringify(inv.id)}, this)' title="Unarchive investor"><i class="fa-solid fa-box-open"></i></button>`
+            : `<button class="btn btn--sm" style="background:rgba(156,163,175,.1);color:var(--text-muted);border:1px solid rgba(156,163,175,.2)" onclick='confirmArchiveInvestor(${JSON.stringify(inv.id)}, this)' title="Archive investor"><i class="fa-solid fa-box-archive"></i></button>`}
         </div>
       </td>
     </tr>`;
@@ -1329,10 +1654,17 @@ function renderInvestorsTable() {
     STATE.investors.forEach(inv => { parentMap[inv.id] = inv; });
     const _trunc = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block';
     const _ficaBadge = (status) => {
-      if (status === 'approved') return '<span class="badge badge--green" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-shield-check"></i> FICA</span>';
-      if (status === 'rejected') return '<span class="badge badge--red" style="font-size:0.65rem;padding:2px 6px">FICA Fail</span>';
-      if (status === 'flagged')  return '<span class="badge badge--red" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-flag"></i> Flagged</span>';
-      return '<span class="badge badge--yellow" style="font-size:0.65rem;padding:2px 6px">FICA Pending</span>';
+      const s = String(status || '').trim();
+      if (s === 'approved' || s === 'verified' || s === 'Approved' || s === 'Verified')
+        return '<span class="badge badge--green" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-shield-check"></i> KYC Verified</span>';
+      if (s === 'rejected' || s === 'Declined')
+        return '<span class="badge badge--red" style="font-size:0.65rem;padding:2px 6px">Rejected</span>';
+      if (s === 'flagged')
+        return '<span class="badge badge--red" style="font-size:0.65rem;padding:2px 6px"><i class="fa-solid fa-flag"></i> Flagged</span>';
+      if (!s || s === 'not_started' || s === 'Unverified')
+        return '<span class="badge badge--grey" style="font-size:0.65rem;padding:2px 6px">No FICA Uploaded</span>';
+      // pending, submitted, in_progress, Outstanding, Pending, Outstanding → Pending Review
+      return '<span class="badge badge--yellow" style="font-size:0.65rem;padding:2px 6px">Pending Review</span>';
     };
     const saRows = _visibleSa.map(sa => {
       const parent = parentMap[sa.parent_investor_id] || {};
@@ -1390,6 +1722,7 @@ function setupInvestorFilters() {
   const kycF    = document.getElementById('investorKycFilter');
   const provF   = document.getElementById('investorProvinceFilter');
   const loginF  = document.getElementById('investorLoginFilter');
+  const sortSel = document.getElementById('investorSortOrder');
 
   // Restore saved filter state
   const saved = STATE.filters.investors;
@@ -1399,6 +1732,7 @@ function setupInvestorFilters() {
     if (saved.ky) kycF.value    = saved.ky;
     if (saved.pv) provF.value   = saved.pv;
     if (saved.lo && loginF) loginF.value = saved.lo;
+    if (saved.so && sortSel) sortSel.value = saved.so;
   }
 
   const filter = Utils.debounce(() => {
@@ -1407,8 +1741,9 @@ function setupInvestorFilters() {
     const ky = kycF.value;
     const pv = provF.value;
     const lo = loginF ? loginF.value : '';
+    const so = sortSel ? sortSel.value : 'date_desc';
     const loginSet = STATE.investorLoginSet || new Set();
-    STATE.filters.investors = { q, st, ky, pv, lo };
+    STATE.filters.investors = { q, st, ky, pv, lo, so };
     filteredInvestors = STATE.investors.filter(inv => {
       const name = `${inv.first_name||''} ${inv.last_name||''}`.toLowerCase();
       const matchQ  = !q  || name.includes(q)
@@ -1416,7 +1751,9 @@ function setupInvestorFilters() {
                           || (inv.id||'').toLowerCase().includes(q)
                           || (inv.phone||'').includes(q)
                           || (inv.id_number||'').includes(q);
-      const matchSt = !st || inv.status === st;
+      const matchSt = st === 'archived' ? (inv.status === 'archived' || inv.status === 'suspended')
+        : st ? inv.status === st
+        : true;
       const matchKy = !ky || inv.kyc_status === ky;
       const matchPv = !pv || (inv.province||'').toLowerCase().includes(pv.toLowerCase());
       const matchLo = !lo
@@ -1424,6 +1761,18 @@ function setupInvestorFilters() {
         || (lo === 'has_login' &&  loginSet.has(inv.id));
       return matchQ && matchSt && matchKy && matchPv && matchLo;
     });
+
+    // Sort
+    filteredInvestors = [...filteredInvestors].sort((a, b) => {
+      if (so === 'date_asc')      return new Date(a.date_joined || 0) - new Date(b.date_joined || 0);
+      if (so === 'name_asc')      return `${a.first_name||''} ${a.last_name||''}`.localeCompare(`${b.first_name||''} ${b.last_name||''}`);
+      if (so === 'name_desc')     return `${b.first_name||''} ${b.last_name||''}`.localeCompare(`${a.first_name||''} ${a.last_name||''}`);
+      if (so === 'wallet_desc')   return (parseFloat(b.wallet_balance) || 0) - (parseFloat(a.wallet_balance) || 0);
+      if (so === 'invested_desc') return (parseFloat(b.total_invested) || 0) - (parseFloat(a.total_invested) || 0);
+      // date_desc (default)
+      return new Date(b.date_joined || 0) - new Date(a.date_joined || 0);
+    });
+
     // Filter sub-accounts by name or SA reference (ignore status/kyc/province filters)
     const _pmap = {};
     STATE.investors.forEach(inv => { _pmap[inv.id] = inv; });
@@ -1445,10 +1794,11 @@ function setupInvestorFilters() {
   statusF.addEventListener('change', filter);
   kycF.addEventListener('change', filter);
   provF.addEventListener('change', filter);
-  if (loginF) loginF.addEventListener('change', filter);
+  if (loginF)  loginF.addEventListener('change', filter);
+  if (sortSel) sortSel.addEventListener('change', filter);
 
   // Apply saved filters immediately if any
-  if (saved && (saved.q || saved.st || saved.ky || saved.pv || saved.lo)) filter();
+  if (saved && (saved.q || saved.st || saved.ky || saved.pv || saved.lo || saved.so)) filter();
 }
 
 function viewSubAccount(saId) {
@@ -1463,9 +1813,12 @@ function viewSubAccount(saId) {
   const activeInv  = (STATE.investments || []).filter(i => i.sub_account_id === sa.id && i.status === 'active').length;
   const totalInvested = (STATE.investments || []).filter(i => i.sub_account_id === sa.id)
     .reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-  const ficaStatus = parent.fica_status || 'pending';
-  const ficaColor  = ficaStatus === 'approved' ? '#22c55e' : ficaStatus === 'rejected' || ficaStatus === 'flagged' ? '#ef4444' : '#f59e0b';
-  const ficaIcon   = ficaStatus === 'approved' ? 'fa-shield-check' : ficaStatus === 'flagged' ? 'fa-flag' : 'fa-clock';
+  const ficaStatus = parent.fica_status || '';
+  const _ficaNorm  = s => { const m = { Approved:'approved',Verified:'approved',Declined:'rejected',Unverified:'not_started',Outstanding:'pending',Pending:'pending' }; return m[s] || s; };
+  const ficaNorm   = _ficaNorm(ficaStatus);
+  const ficaColor  = ficaNorm === 'approved' || ficaNorm === 'verified' ? '#22c55e' : ficaNorm === 'rejected' || ficaNorm === 'flagged' ? '#ef4444' : ficaNorm === 'not_started' ? '#9ca3af' : '#f59e0b';
+  const ficaIcon   = ficaNorm === 'approved' || ficaNorm === 'verified' ? 'fa-shield-check' : ficaNorm === 'flagged' ? 'fa-flag' : ficaNorm === 'not_started' ? 'fa-circle-xmark' : 'fa-clock';
+  const _ficaDisplayLabel = s => ({ approved:'KYC Verified', verified:'KYC Verified', rejected:'Rejected', Declined:'Rejected', not_started:'No FICA Uploaded', Unverified:'No FICA Uploaded' })[s] || 'Pending Review';
   const bankStatus = sa.sa_bank_status || 'none';
   const bankColor  = bankStatus === 'approved' ? '#22c55e' : bankStatus === 'rejected' ? '#ef4444' : '#9ca3af';
   const bankLabel  = bankStatus === 'approved' ? 'Approved' : bankStatus === 'rejected' ? 'Rejected' : bankStatus === 'pending' ? 'Pending Review' : 'Not submitted';
@@ -1485,7 +1838,7 @@ function viewSubAccount(saId) {
       <div class="info-row"><span class="info-row__label">Account Number</span><span class="info-row__value" style="font-family:monospace;color:#ffe86a;font-weight:700">${saRef}</span></div>
       <div class="info-row"><span class="info-row__label">Account Type</span><span class="info-row__value">${typeCap}</span></div>
       <div class="info-row"><span class="info-row__label">Sub-Account FICA</span><span class="info-row__value" style="color:${saKycColor};font-weight:700"><i class="fa-solid ${saKycIcon}" style="margin-right:5px"></i>${saKycStatus.charAt(0).toUpperCase()+saKycStatus.slice(1)}</span></div>
-      <div class="info-row"><span class="info-row__label">Parent FICA</span><span class="info-row__value" style="color:${ficaColor};font-weight:700"><i class="fa-solid ${ficaIcon}" style="margin-right:5px"></i>${ficaStatus.charAt(0).toUpperCase()+ficaStatus.slice(1)}</span></div>
+      <div class="info-row"><span class="info-row__label">Parent FICA</span><span class="info-row__value" style="color:${ficaColor};font-weight:700"><i class="fa-solid ${ficaIcon}" style="margin-right:5px"></i>${_ficaDisplayLabel(ficaNorm)}</span></div>
       <div class="info-row"><span class="info-row__label">Bank Documents</span><span class="info-row__value" style="color:${bankColor};font-weight:700">${bankLabel}</span></div>
       <div class="info-row"><span class="info-row__label">Wallet Balance</span><span class="info-row__value td-gold fw-700">${Utils.rand(parseFloat(sa.wallet_balance)||0)}</span></div>
       <div class="info-row"><span class="info-row__label">Total Invested</span><span class="info-row__value fw-700">${Utils.rand(totalInvested)}</span></div>
@@ -1545,14 +1898,27 @@ function _invTab(name) {
   if (panel) panel.style.display = '';
 }
 
+let _currentInvestorId = null;
+
 async function viewInvestor(id) {
+  _currentInvestorId = id;
   const inv = STATE.investors.find(i => i.id === id);
   if (!inv) return;
 
-  const invsts = STATE.investments.filter(i => i.investor_id === id);
-  const txns = STATE.transactions.filter(t => t.investor_id === id);
-
   document.getElementById('invDetailTitle').textContent = `${inv.first_name} ${inv.last_name} — ${inv.id}`;
+  document.getElementById('invDetailBody').innerHTML = '<div style="text-align:center;padding:48px"><i class="fa-solid fa-spinner fa-spin fa-2x" style="color:var(--text-muted)"></i></div>';
+  Modal.open('investorDetailModal');
+
+  let invsts = STATE.investments.filter(i => i.investor_id === id);
+  let txns   = STATE.transactions.filter(t => t.investor_id === id);
+  try {
+    const [invstRes, txnRes] = await Promise.all([
+      API._fetch('GET', 'tables/investments',  null, { investor_id: id, limit: 2000 }),
+      API._fetch('GET', 'tables/transactions', null, { investor_id: id, limit: 2000 }),
+    ]);
+    if (invstRes?.data?.length) invsts = invstRes.data;
+    if (txnRes?.data?.length)  txns   = txnRes.data;
+  } catch (_) { /* fall back to STATE data already set above */ }
 
   // Check whether this investor has a login account (users row) and 2FA status
   let hasLoginAccount = null;
@@ -1585,8 +1951,10 @@ async function viewInvestor(id) {
   const bCls       = { none:'badge--grey', pending:'badge--yellow', approved:'badge--green', rejected:'badge--red' };
   const bLbl       = { none:'Not added', pending:'On file', approved:'Verified', rejected:'Rejected' };
   const avatarColor= _invAvatarColor(`${inv.first_name} ${inv.last_name}`);
-  const totalInvested = invsts.reduce((s,i) => s+(parseFloat(i.amount)||0), 0);
-  const activeInvCount= invsts.filter(i=>i.status==='active').length;
+  const totalInvested  = invsts.filter(i=>i.status==='active').reduce((s,i) => s+(parseFloat(i.amount)||0), 0);
+  const activeInvCount = invsts.filter(i=>i.status==='active').length;
+  const totalReturns   = invsts.filter(i=>['matured','paid_out'].includes(i.status)).reduce((s,i)=>s+(parseFloat(i.actual_return)||parseFloat(i.expected_return)||0), 0);
+  const totalDeposits  = txns.filter(t=>t.type==='deposit' && t.status==='completed').reduce((s,t)=>s+(parseFloat(t.amount)||0), 0);
 
   document.getElementById('invDetailBody').innerHTML = `
   <div class="tab-bar" style="display:flex;gap:4px;padding:4px;border-radius:10px;margin-bottom:16px;flex-wrap:wrap">
@@ -1595,7 +1963,10 @@ async function viewInvestor(id) {
     <button class="tab-btn inv-tab-btn"        id="invTab-surveys"       onclick="_invTab('surveys')"><i class="fa-solid fa-clipboard-list" style="margin-right:5px"></i>Surveys</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-investments"   onclick="_invTab('investments')"><i class="fa-solid fa-chart-line" style="margin-right:5px"></i>Investments (${invsts.length})</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-transactions"  onclick="_invTab('transactions')"><i class="fa-solid fa-arrows-rotate" style="margin-right:5px"></i>Transactions</button>
+    <button class="tab-btn inv-tab-btn"        id="invTab-activity"      onclick="_invTab('activity');_loadInvestorActivity('${inv.id}')"><i class="fa-solid fa-mobile-screen" style="margin-right:5px"></i>Activity</button>
     <button class="tab-btn inv-tab-btn"        id="invTab-admin"         onclick="_invTab('admin')"><i class="fa-solid fa-shield-halved" style="margin-right:5px"></i>Admin</button>
+    <button class="tab-btn inv-tab-btn"        id="invTab-statements"    onclick="_invTab('statements');_loadInvestorStatements('${inv.id}')"><i class="fa-solid fa-file-lines" style="margin-right:5px"></i>Statements</button>
+    <button class="tab-btn inv-tab-btn"        id="invTab-comms"         onclick="_invTab('comms')"><i class="fa-solid fa-envelope" style="margin-right:5px"></i>Comms</button>
   </div>
 
   <!-- ── Overview ── -->
@@ -1611,18 +1982,22 @@ async function viewInvestor(id) {
         </div>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px">
       <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
         <div style="font-size:1.05rem;font-weight:800;color:#fec24f">${Utils.rand(inv.wallet_balance)}</div>
         <div style="font-size:0.72rem;color:var(--text-muted)">Wallet</div>
       </div>
       <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
-        <div style="font-size:1.05rem;font-weight:800;color:var(--text)">${Utils.rand(totalInvested||inv.total_invested)}</div>
-        <div style="font-size:0.72rem;color:var(--text-muted)">Total Invested</div>
+        <div style="font-size:1.05rem;font-weight:800;color:var(--text)">${Utils.rand(totalInvested)}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Active Invested</div>
       </div>
       <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
-        <div style="font-size:1.05rem;font-weight:800;color:#22c55e">${Utils.rand(inv.total_returns)}</div>
-        <div style="font-size:0.72rem;color:var(--text-muted)">Returns</div>
+        <div style="font-size:1.05rem;font-weight:800;color:#22c55e">${Utils.rand(totalReturns)}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Returns Earned</div>
+      </div>
+      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:1.05rem;font-weight:800;color:#eda5ff">${Utils.rand(totalDeposits)}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Deposits</div>
       </div>
       <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;text-align:center">
         <div style="font-size:1.05rem;font-weight:800;color:#656565">${invsts.length}<span style="font-size:0.72rem;font-weight:400"> (${activeInvCount} active)</span></div>
@@ -1654,7 +2029,11 @@ async function viewInvestor(id) {
         <button class="btn btn--secondary btn--sm" onclick='approveInvestorFica(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-id-card"></i> Approve FICA</button>
         ${hasLoginAccount === false ? `<button class="btn btn--secondary btn--sm" id="invInviteBtn" onclick='sendLoginInvite(${JSON.stringify(inv.id)}, ${JSON.stringify(inv.email)}, this)'><i class="fa-solid fa-envelope"></i> Send Login Invite</button>` : hasLoginAccount === true ? `<span class="badge badge--green" style="padding:6px 10px"><i class="fa-solid fa-circle-check"></i> Has login account</span>` : ''}
         ${userRecord?.totp_enabled ? `<button class="btn btn--sm" style="background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3)" onclick='adminReset2FA(${JSON.stringify(userRecord.id)}, ${JSON.stringify(inv.first_name + " " + inv.last_name)}, this)'><i class="fa-solid fa-shield-xmark"></i> Reset 2FA</button>` : ''}
-        <button class="btn btn--danger btn--sm" onclick='confirmDeleteInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-trash"></i> Delete</button>
+        ${inv.status === 'archived'
+          ? `<button class="btn btn--sm" style="background:rgba(253,186,116,.15);color:#fb923c;border:1px solid rgba(253,186,116,.3)" onclick='unarchiveInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-box-open"></i> Unarchive</button>`
+          : `<button class="btn btn--sm" style="background:rgba(156,163,175,.1);color:var(--text-muted);border:1px solid rgba(156,163,175,.2)" onclick='confirmArchiveInvestor(${JSON.stringify(inv.id)}, this)'><i class="fa-solid fa-box-archive"></i> Archive</button>`}
+        <button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='viewAsInvestor(${JSON.stringify(inv.id)})'><i class="fa-solid fa-eye"></i> View as Investor</button>
+        <button class="btn btn--sm" style="background:rgba(59,130,246,.1);color:#60a5fa;border:1px solid rgba(59,130,246,.25)" onclick='_invTab("comms")'><i class="fa-solid fa-envelope"></i> Send Email</button>
       </div>
       <button class="btn btn--primary btn--sm" onclick='Modal.close("investorDetailModal")'><i class="fa-solid fa-check"></i> Done</button>
     </div>
@@ -1673,7 +2052,7 @@ async function viewInvestor(id) {
       <div class="info-row"><span class="info-row__label">Next of Kin</span><span class="info-row__value">${_esc(invProfile.next_of_kin||'')||'—'}</span></div>
       <div class="info-row"><span class="info-row__label">Kin Contact</span><span class="info-row__value">${_esc(invProfile.kin_contact||'')||'—'}</span></div>
       <div class="info-row"><span class="info-row__label">Risk Profile</span><span class="info-row__value" style="text-transform:capitalize">${_esc(inv.risk_profile)||'—'}</span></div>
-      <div class="info-row"><span class="info-row__label">Date Joined</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
+      <div class="info-row"><span class="info-row__label">Account Created</span><span class="info-row__value">${Utils.date(inv.date_joined)}</span></div>
     </div>
   </div>
 
@@ -1726,40 +2105,62 @@ async function viewInvestor(id) {
 
   <!-- ── Investments ── -->
   <div id="invPanel-investments" style="display:none">
-    <table class="data-table mb-16">
-      <thead><tr><th>Pool</th><th>Product</th><th>Date Invested</th><th>Amount</th><th>Rate</th><th>Status</th><th>Maturity</th></tr></thead>
-      <tbody>${invsts.length ? invsts.map(i => {
-        const pi = Utils.productInfo(i.product_type);
-        return `<tr>
-          <td class="td-strong">${i.pool_name||'—'}</td>
-          <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
-          <td class="td-muted">${Utils.date(i.start_date||i.created_at)}</td>
-          <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
-          <td class="td-green">${i.annual_rate?Utils.pct(i.annual_rate):'—'}</td>
-          <td>${Utils.statusBadge(i.status)}</td>
-          <td class="td-muted">${Utils.date(i.end_date)}</td>
-        </tr>`;
-      }).join(''):'<tr><td colspan="7" class="text-center text-muted" style="padding:16px">No investments on record</td></tr>'}</tbody>
-    </table>
+    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px">${invsts.length} investment${invsts.length!==1?'s':''} · ${Utils.rand(invsts.filter(i=>i.status==='active').reduce((s,i)=>s+(parseFloat(i.amount)||0),0))} active capital</div>
+    <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
+      <table class="data-table mb-16">
+        <thead style="position:sticky;top:0;z-index:1"><tr><th style="min-width:160px">Pool</th><th style="min-width:130px">Product</th><th>Date Invested</th><th>Amount</th><th>Rate</th><th>Status</th><th>Maturity</th><th></th></tr></thead>
+        <tbody>${invsts.length ? invsts.map(i => {
+          const pi = Utils.productInfo(i.product_type);
+          return `<tr>
+            <td class="td-strong" title="${_esc(i.pool_name||'')}">${_esc(i.pool_name)||'—'}</td>
+            <td title="${_esc(pi.label)}"><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
+            <td class="td-muted">${Utils.date(i.start_date||i.created_at)}</td>
+            <td class="td-gold fw-700">${Utils.rand(i.amount)}</td>
+            <td class="td-green">${i.annual_rate?Utils.pct(i.annual_rate):'—'}</td>
+            <td>${Utils.statusBadge(i.status)}</td>
+            <td class="td-muted">${Utils.date(i.end_date)}</td>
+            <td><button class="btn btn--sm" style="background:rgba(237,165,255,.1);color:#eda5ff;border:1px solid rgba(237,165,255,.25)" onclick='openMoveInvestment(${JSON.stringify(i.id)},${JSON.stringify(i.pool_id)})' title="Move to different pool"><i class="fa-solid fa-right-left"></i></button></td>
+          </tr>`;
+        }).join(''):'<tr><td colspan="8" class="text-center text-muted" style="padding:16px">No investments on record</td></tr>'}</tbody>
+      </table>
+    </div>
   </div>
 
   <!-- ── Transactions ── -->
   <div id="invPanel-transactions" style="display:none">
-    <table class="data-table mb-16">
-      <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Reference</th><th>Date</th></tr></thead>
-      <tbody>${txns.length ? txns.slice(0,10).map(t => `
-        <tr>
-          <td>${Utils.statusBadge(t.type)}</td>
-          <td class="${(t.amount||0)>=0?'td-green':'td-red'} fw-700">${(t.amount||0)>=0?'+':''}${Utils.rand(Math.abs(t.amount||0))}</td>
-          <td>${Utils.statusBadge(t.status)}</td>
-          <td class="td-muted" style="font-size:0.78rem">${t.reference||'—'}</td>
-          <td class="td-muted">${Utils.date(t.transaction_date||t.created_at)}</td>
-        </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted" style="padding:16px">No transactions on record</td></tr>'}</tbody>
-    </table>
+    <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px">${txns.length} transaction${txns.length!==1?'s':''}</div>
+    <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
+      <table class="data-table mb-16">
+        <thead style="position:sticky;top:0;z-index:1"><tr><th>Type</th><th>Amount</th><th>Status</th><th>Reference</th><th>Description</th><th>Date</th></tr></thead>
+        <tbody>${txns.length ? txns.map(t => `
+          <tr>
+            <td>${Utils.statusBadge(t.type)}</td>
+            <td class="${(parseFloat(t.amount)||0)<0?'td-red':'td-green'} fw-700">${(parseFloat(t.amount)||0)<0?'':'+'}${Utils.rand(t.amount)}</td>
+            <td>${Utils.statusBadge(t.status)}</td>
+            <td class="td-muted" style="font-size:0.78rem;font-family:monospace">${_esc(t.reference)||'—'}</td>
+            <td class="td-muted" style="font-size:0.78rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(t.description||t.notes)||'—'}</td>
+            <td class="td-muted">${Utils.date(t.transaction_date||t.created_at)}</td>
+          </tr>`).join('') : '<tr><td colspan="6" class="text-center text-muted" style="padding:16px">No transactions on record</td></tr>'}</tbody>
+      </table>
+    </div>
   </div>
 
   <!-- ── Admin ── -->
   <div id="invPanel-admin" style="display:none">
+    <div class="panel mb-16" style="border-color:rgba(254,194,79,0.25)">
+      <div class="panel__header" style="background:rgba(254,194,79,0.06)">
+        <span class="panel__title"><i class="fa-solid fa-wallet" style="color:#fec24f;margin-right:6px"></i>Wallet Maintenance</span>
+      </div>
+      <div class="panel__body" style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px">
+          <div style="font-size:0.83rem;font-weight:600;color:var(--text);margin-bottom:4px">Restore Wallet After Re-import</div>
+          <div style="font-size:0.77rem;color:var(--text-muted)">Sets wallet balance to the sum of admin-created manual deposits (ADMIN-DEP-* transactions only). Use this if a data migration overwrote the live balance — historical Firebase transactions are intentionally excluded to avoid double-counting.</div>
+        </div>
+        <button class="btn btn--warning btn--sm" style="flex-shrink:0" onclick='_recalcInvestorWallet(${JSON.stringify(inv.id)},${JSON.stringify(inv.first_name + " " + inv.last_name)},this)'>
+          <i class="fa-solid fa-calculator"></i> Recalculate Wallet
+        </button>
+      </div>
+    </div>
     <div class="panel mb-16">
       <div class="panel__header">
         <span class="panel__title">Notes History</span>
@@ -1782,8 +2183,58 @@ async function viewInvestor(id) {
       </div>
     </div>
   </div>
+
+  <div id="invPanel-activity" style="display:none">
+    <div class="panel mb-16">
+      <div class="panel__header"><span class="panel__title">Account Access</span></div>
+      <div class="panel__body" id="invActivity-access">
+        <div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
+      </div>
+    </div>
+    <div class="panel mb-16">
+      <div class="panel__header">
+        <span class="panel__title">Mobile App &amp; Devices</span>
+        <span style="font-size:0.72rem;color:var(--text-dim)" id="invActivity-deviceCount"></span>
+      </div>
+      <div class="panel__body" id="invActivity-devices">
+        <div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
+      </div>
+    </div>
+    <div class="panel mb-16">
+      <div class="panel__header">
+        <span class="panel__title">Active Sessions</span>
+        <span style="font-size:0.72rem;color:var(--text-dim)" id="invActivity-sessionCount"></span>
+      </div>
+      <div class="panel__body" id="invActivity-sessions">
+        <div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Statements ── -->
+  <div id="invPanel-statements" style="display:none">
+    <div id="invStatementsList"><div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div></div>
+  </div>
+
+  <!-- ── Comms ── -->
+  <div id="invPanel-comms" style="display:none">
+    <div class="panel mb-16">
+      <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-paper-plane" style="color:#60a5fa;margin-right:6px"></i>Send Email to Investor</span></div>
+      <div class="panel__body">
+        <div class="form-group mb-10">
+          <label class="form-label">Subject *</label>
+          <input type="text" class="form-input" id="invEmailSubject" placeholder="e.g. Your investment update">
+        </div>
+        <div class="form-group mb-12">
+          <label class="form-label">Message *</label>
+          <textarea class="form-input" id="invEmailMessage" style="min-height:140px;resize:vertical" placeholder="Type your message to ${_esc(inv.first_name)}…"></textarea>
+        </div>
+        <button class="btn btn--primary" onclick='sendInvestorEmail(${JSON.stringify(inv.id)},${JSON.stringify(inv.email)},this)'><i class="fa-solid fa-paper-plane"></i> Send Email</button>
+      </div>
+    </div>
+  </div>
   `;
-  Modal.open('investorDetailModal');
+  // Modal already opened above while data was loading
   const ta = document.getElementById('invNewNoteTA');
   if (ta) ta.value = inv.notes || '';
   loadInvestorNotes(inv.id);
@@ -1814,8 +2265,26 @@ async function depositToInvestor(investorId, investorName, currentBalance) {
   } catch (e) { Toast.error('Failed to add funds'); }
 }
 
+async function _recalcInvestorWallet(investorId, investorName, btn) {
+  if (!await Confirm.ask('Recalculate Wallet Balance?', {
+    body: `This will recompute ${investorName}'s wallet balance from all completed transactions (deposits, returns, payouts minus withdrawals and fees). The current balance will be overwritten. This cannot be undone.`,
+    confirmLabel: 'Recalculate',
+  })) return;
+  await _withBtn(btn, async () => {
+    try {
+      const res = await API._fetch('POST', `admin/recalculate-wallet/${investorId}`);
+      const newBal = Utils.rand(res.new_balance);
+      Toast.success(`Wallet recalculated — new balance: ${newBal}`);
+      const inv = STATE.investors.find(i => i.id === investorId);
+      if (inv) inv.wallet_balance = res.new_balance;
+      Modal.close('investorDetailModal');
+      await loadInvestors();
+    } catch (e) { Toast.error('Recalculation failed: ' + (e.message || 'unknown error')); }
+  });
+}
+
 async function approveInvestorFica(investorId, btn) {
-  if (!await Confirm.ask('Approve FICA?', { body: 'This investor will be marked as KYC-verified and their account activated.', confirmLabel: 'Approve FICA' })) return;
+  if (!await Confirm.ask('Approve FICA?', { body: 'All three required documents (ID, Proof of Address, Proof of Bank) must be individually approved before FICA can be granted. The investor will be marked as verified and their account activated.', confirmLabel: 'Approve FICA' })) return;
   await _withBtn(btn, async () => {
     try {
       await API.investors.update(investorId, { fica_status: 'approved', kyc_status: 'approved', status: 'active' });
@@ -1993,9 +2462,14 @@ function renderWithdrawalsTable() {
       ? `<td style="padding-left:14px;width:36px"><input type="checkbox" class="wd-check" data-id='${w.id}' onchange="_updateWithdrawalSelection()"></td>`
       : `<td></td>`;
 
+    const dateCreated = w.transaction_date || w.created_at;
+    const dateUpdated = w.date_updated || w.updated_at;
     return `<tr>
       ${checkCol}
-      <td class="td-muted clip">${Utils.date(w.created_at || w.transaction_date)}</td>
+      <td class="td-muted clip" style="font-size:0.78rem">
+        <div>${Utils.date(dateCreated)}</div>
+        ${dateUpdated ? `<div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">Upd: ${Utils.date(dateUpdated)}</div>` : ''}
+      </td>
       <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${w.investor_id||''}</div>${saBadge}</td>
       <td class="td-gold fw-700 clip">${Utils.rand(Math.abs(w.amount))}</td>
       <td>${bankDisplay}</td>
@@ -2195,17 +2669,88 @@ async function _submitRejection() {
 async function processWithdrawal(txnId) { return approveWithdrawal(txnId); }
 async function rejectWithdrawal(txnId) { return rejectWithdrawalPrompt(txnId); }
 
-async function confirmDeleteInvestor(id, btn) {
-  if (!await Confirm.ask('Delete investor?', { body: 'This cannot be undone. All investor data will be permanently removed.', confirmLabel: 'Delete', danger: true })) return;
+async function confirmArchiveInvestor(id, btn) {
+  if (!await Confirm.ask('Archive investor?', { body: 'They can still log in but will be excluded from stats and broadcasts. They will be automatically restored when they make an investment.', confirmLabel: 'Archive' })) return;
   await _withBtn(btn, async () => {
     try {
-      await API.investors.delete(id);
-      Toast.success('Investor deleted');
+      await API._fetch('PATCH', `tables/investors/${id}`, { status: 'archived', archived_at: new Date().toISOString() });
+      Toast.success('Investor archived');
       Modal.closeAll();
       await loadInvestors();
     } catch (e) {
-      Toast.error('Failed to delete investor: ' + (e.message || 'unknown error'));
-      console.error('[confirmDeleteInvestor]', e);
+      Toast.error('Failed to archive investor: ' + (e.message || 'unknown error'));
+    }
+  });
+}
+
+async function unarchiveInvestor(id, btn) {
+  await _withBtn(btn, async () => {
+    try {
+      await API._fetch('PATCH', `tables/investors/${id}`, { status: 'active', archived_at: null });
+      Toast.success('Investor restored');
+      Modal.closeAll();
+      await loadInvestors();
+    } catch (e) {
+      Toast.error('Failed to unarchive investor: ' + (e.message || 'unknown error'));
+    }
+  });
+}
+
+async function openMoveInvestment(investmentId, currentPoolId) {
+  // Build pool options from STATE, excluding current pool
+  const pools = (STATE.pools || []).filter(p => p.id !== currentPoolId && ['open','filling','active'].includes(p.status));
+  if (!pools.length) {
+    // Fetch fresh if STATE empty
+    try {
+      const res = await API.pools.list({ limit: 1000 });
+      STATE.pools = res.data || [];
+    } catch (e) { /* ignore */ }
+  }
+  const eligible = (STATE.pools || []).filter(p => p.id !== currentPoolId && ['open','filling','active'].includes(p.status));
+
+  const opts = eligible.map(p =>
+    `<option value="${_esc(String(p.id))}">${_esc(p.name||p.id)}</option>`
+  ).join('');
+
+  const body = `
+    <div style="padding:24px;min-width:340px">
+      <h3 style="margin:0 0 16px;font-size:1rem">Move Investment to Pool</h3>
+      <label style="font-size:0.78rem;color:var(--text-muted);display:block;margin-bottom:6px">Select destination pool</label>
+      <select id="movePoolSelect" class="form-control" style="width:100%;margin-bottom:20px">
+        <option value="">— choose a pool —</option>
+        ${opts}
+      </select>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn" onclick="Modal.closeAll()">Cancel</button>
+        <button class="btn btn--primary" id="movePoolConfirmBtn" onclick='_confirmMoveInvestment(${JSON.stringify(investmentId)})'>Move</button>
+      </div>
+    </div>`;
+
+  Modal.openInline(body);
+}
+
+async function _confirmMoveInvestment(investmentId) {
+  const sel = document.getElementById('movePoolSelect');
+  if (!sel || !sel.value) { Toast.error('Please select a destination pool'); return; }
+  const newPoolId = sel.value;
+  const newPool = (STATE.pools || []).find(p => String(p.id) === String(newPoolId));
+  const btn = document.getElementById('movePoolConfirmBtn');
+  await _withBtn(btn, async () => {
+    try {
+      await API._fetch('PATCH', `tables/investments/${investmentId}`, {
+        pool_id: newPoolId,
+        pool_name: newPool ? newPool.name : undefined,
+      });
+      Toast.success('Investment moved successfully');
+      Modal.closeAll();
+      // If we were in a pool investors view, refresh it so stats update
+      if (_currentPoolId) {
+        await viewPoolInvestors(_currentPoolId);
+      } else if (_currentInvestorId) {
+        await viewInvestor(_currentInvestorId);
+      }
+    } catch (e) {
+      Toast.error('Failed to move investment: ' + (e.message || 'unknown error'));
     }
   });
 }
@@ -2278,7 +2823,7 @@ async function saveNewInvestor(btn) {
         phone: document.getElementById('newInvPhone').value.trim(),
         id_number: document.getElementById('newInvIdNum').value.trim(),
         risk_profile: document.getElementById('newInvRisk').value,
-        city: document.getElementById('newInvCity').value.trim(),
+        address: document.getElementById('newInvCity').value.trim(),
         province: document.getElementById('newInvProvince').value,
         notes: document.getElementById('newInvNotes').value.trim(),
         status: 'pending', fica_status: 'pending',
@@ -2437,7 +2982,11 @@ function renderKYCTable() {
       : '';
 
     // For proof_of_bank rows, surface the bank details the investor submitted
-    let docTypeCell = `${_subAcctBadge}${k.doc_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—'}`;
+    const _subtypeLabels = { rsa_id: 'SA ID', passport: 'Passport', asylum_permit: 'Asylum Permit' };
+    const _subtypeBadge = k.doc_subtype
+      ? `<span style="display:inline-block;margin-top:2px;font-size:0.63rem;font-weight:700;color:#9ca3af;background:rgba(0,0,0,0.07);border-radius:4px;padding:1px 5px">${_subtypeLabels[k.doc_subtype] || k.doc_subtype}</span><br>`
+      : '';
+    let docTypeCell = `${_subAcctBadge}${k.doc_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—'}<br>${_subtypeBadge}`;
     if (isBankDoc && kInv) {
       const bankName    = _esc(kInv.bank_name || '—');
       const bankHolder  = _esc(kInv.bank_account_holder || '—');
@@ -2467,11 +3016,13 @@ function renderKYCTable() {
       <td>${docTypeCell}</td>
       <td class="td-muted clip">${k.file_name || 'Not uploaded'}</td>
       <td>${Utils.statusBadge(k.status)}</td>
-      <td class="td-muted">${Utils.date(k.submitted_at || k.submitted_date || k.created_at)}</td>
+      <td class="td-muted">${Utils.date(k.submitted_at || k.submitted_date || k.created_at)}${k.expiry_date ? `<div style="font-size:0.68rem;margin-top:2px;color:${new Date(k.expiry_date) <= new Date() ? '#ef4444' : '#9ca3af'}"><i class="fa-solid fa-calendar-xmark" style="margin-right:2px"></i>Exp: ${Utils.date(k.expiry_date)}</div>` : ''}</td>
       <td>
         ${k.file_data || k.file_url || k.attachment_data
           ? `<button class="btn btn--secondary btn--sm" title="Open document in new tab" onclick='viewFicaDocument(${JSON.stringify(k.id)})'><i class="fa-solid fa-arrow-up-right-from-square"></i> Open</button>`
-          : `<span class="td-muted" style="font-size:0.72rem">No file</span>`}
+          : k.file_name
+            ? `<span class="td-muted" style="font-size:0.72rem;line-height:1.4">No file data<br><span style="font-size:0.65rem;color:var(--text-dim)">Investor must re-upload</span></span>`
+            : `<span class="td-muted" style="font-size:0.72rem">No file</span>`}
       </td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:nowrap;align-items:center">
@@ -2535,10 +3086,17 @@ async function viewBankProof(investorId) {
   try {
     const res = await API.kyc.list({ investor_id: investorId, limit: 200 });
     const proofs = (res.data || [])
-      .filter(d => d.doc_type === 'proof_of_bank')
+      .filter(d => d.doc_type === 'proof_of_bank' && (d.file_data || d.attachment_data || d.file_url || d.file_name))
       .sort((a, b) => new Date(b.submitted_at || b.created_at || 0) - new Date(a.submitted_at || a.created_at || 0));
     if (!proofs.length) { Toast.error('No proof of bank account uploaded for this investor.'); return; }
-    _openDocumentData(proofs[0].file_data || proofs[0].attachment_data || proofs[0].file_url || '', proofs[0].file_name || 'Proof of Bank');
+    const proof = proofs[0];
+    let fileData = proof.file_data || proof.attachment_data || proof.file_url || '';
+    if (!fileData) {
+      const full = await API.kyc.get(proof.id).catch(() => null);
+      fileData = full?.file_data || full?.attachment_data || full?.file_url || '';
+    }
+    if (!fileData) { Toast.error('File data not stored — please ask the investor to re-upload their proof of bank.'); return; }
+    _openDocumentData(fileData, proof.file_name || 'Proof of Bank');
   } catch (e) {
     Toast.error('Could not load proof of bank: ' + (e.message || 'unknown error'));
   }
@@ -2610,10 +3168,21 @@ async function _runBankAutoVerify(investorId) {
   }
 }
 
-function viewFicaDocument(kycId) {
+async function viewFicaDocument(kycId) {
   const doc = STATE.kyc.find(k => k.id === kycId);
   if (!doc) return;
-  _openDocumentData(doc.file_data || doc.attachment_data || doc.file_url || '', doc.file_name || 'Document');
+  let fileData = doc.file_data || doc.attachment_data || doc.file_url || '';
+  if (!fileData) {
+    try {
+      const full = await API.kyc.get(kycId);
+      fileData = full?.file_data || full?.attachment_data || full?.file_url || '';
+    } catch (_) {}
+  }
+  if (!fileData) {
+    Toast.error('File data not stored — please ask the investor to re-upload their document.');
+    return;
+  }
+  _openDocumentData(fileData, doc.file_name || 'Document');
 }
 
 /** Convert a data: URL to a Blob, returns null on failure. */
@@ -2750,7 +3319,7 @@ async function _recomputeInvestorFicaStatus(investorId) {
   if (verified) {
     await API._fetch('PATCH', `tables/investors/${investorId}`, { kyc_status: 'approved', fica_status: 'approved', status: 'active' });
   } else {
-    await API._fetch('PATCH', `tables/investors/${investorId}`, { kyc_status: 'in_progress', fica_status: 'in_progress' });
+    await API._fetch('PATCH', `tables/investors/${investorId}`, { kyc_status: 'pending', fica_status: 'submitted' });
   }
   return { verified, missing: missing.map(t => FICA_DOC_LABELS[t] || t) };
 }
@@ -2933,7 +3502,7 @@ function _viewProductFactsheet(id) {
 
 function openProductModal() {
   document.getElementById('productModalTitle').textContent = 'New Product';
-  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodRisk','prodIcon','prodColor','prodRiskColor'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['productId','prodType','prodLabel','prodHeadline','prodDescription','prodKeyDetails','prodMin','prodTerm','prodSort','prodBenchmark','prodPerfFee','prodPartner','prodSector','prodRisk','prodIcon','prodColor','prodRiskColor'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('prodActive').value = 'true';
   document.getElementById('prodHomepage').value = 'true';
   document.getElementById('prodRisk').value = 'Medium';   // default risk profile for new products
@@ -2963,6 +3532,7 @@ function editProduct(id) {
   document.getElementById('prodBenchmark').value   = p.benchmark_rate || '';
   document.getElementById('prodPerfFee').value     = p.performance_fee_pct || '';
   document.getElementById('prodPartner').value     = p.partner_name || '';
+  document.getElementById('prodSector').value      = p.sector || '';
   document.getElementById('prodRisk').value        = p.risk_profile || '';
   document.getElementById('prodIcon').value        = p.icon || '';
   document.getElementById('prodColor').value       = p.color || '';
@@ -3035,6 +3605,7 @@ async function saveProduct(btn) {
     benchmark_rate:      num('prodBenchmark'),
     performance_fee_pct: num('prodPerfFee'),
     partner_name:        document.getElementById('prodPartner').value.trim() || null,
+    sector:              document.getElementById('prodSector').value || null,
     risk_profile:        document.getElementById('prodRisk').value.trim() || null,
     icon:                document.getElementById('prodIcon').value.trim() || null,
     color:               document.getElementById('prodColor').value.trim() || null,
@@ -3119,9 +3690,17 @@ let poolFilter = 'all';
 
 async function loadPools() {
   try {
-    const res = await API.pools.list({ limit: 100 });
+    const res = await API.pools.list({ limit: 1000 });
     STATE.pools = res.data || [];
+    _refreshPoolProductFilter();
     renderPoolsGrid();
+    // Load investments in the background if not already loaded (needed for maturing alert)
+    if (!STATE.investments || !STATE.investments.length) {
+      API.investments.list({ limit: 5000 }).then(r => {
+        STATE.investments = r.data || [];
+        renderMaturingPoolsAlert();
+      }).catch(() => {});
+    }
     // Load products in the background so pool product-type dropdowns reflect them
     if (!STATE.products || !STATE.products.length) {
       API.products.list({ limit: 200 }).then(r => {
@@ -3138,37 +3717,112 @@ function filterPools(status, btn) {
   renderPoolsGrid();
 }
 
+function _refreshPoolProductFilter() {
+  const sel = document.getElementById('poolProductFilter');
+  if (!sel) return;
+  const types = [...new Set((STATE.pools || []).map(p => p.product_type).filter(Boolean))].sort();
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All Products</option>' +
+    types.map(t => {
+      const label = Utils.productInfo(t)?.label || t;
+      return `<option value="${_esc(t)}"${t === current ? ' selected' : ''}>${_esc(label)}</option>`;
+    }).join('');
+}
+
+function renderMaturingPoolsAlert() {
+  const el = document.getElementById('poolsMaturingSoon');
+  if (!el) return;
+  const now   = new Date();
+  const in90  = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+  const maturing = (STATE.pools || [])
+    .filter(p => {
+      if (['matured', 'closed', 'cancelled'].includes(p.status)) return false;
+      const d = new Date(p.maturity_date || p.end_date || '');
+      return !isNaN(d) && d >= now && d <= in90;
+    })
+    .sort((a, b) => new Date(a.maturity_date || a.end_date) - new Date(b.maturity_date || b.end_date));
+  if (!maturing.length) { el.innerHTML = ''; return; }
+  const allInvts = STATE.investments || [];
+  const rows = maturing.map(p => {
+    const matDate = new Date(p.maturity_date || p.end_date);
+    const days    = Math.max(0, Math.ceil((matDate - now) / (1000 * 60 * 60 * 24)));
+    const urgency = days <= 30 ? '#ef4444' : days <= 60 ? '#f97316' : '#fec24f';
+    const pi = Utils.productInfo(p.product_type);
+    const poolInvts      = allInvts.filter(i => i.pool_id === p.id && i.status === 'active');
+    const projReturn     = poolInvts.reduce((s, i) => s + (parseFloat(i.expected_return) || 0), 0);
+    const instrTotal     = poolInvts.length;
+    const instrSubmitted = poolInvts.filter(i => i.maturity_instruction && i.maturity_instruction !== 'pending').length;
+    const instrPct       = instrTotal ? Math.round((instrSubmitted / instrTotal) * 100) : 0;
+    const instrColor     = instrPct >= 80 ? '#22c55e' : instrPct >= 50 ? '#fec24f' : '#ef4444';
+    return `<tr style="cursor:pointer" onclick='viewPoolInvestors(${JSON.stringify(p.id)})'>
+      <td><span class="fw-700">${_esc(p.name)}</span>${p.partner_name ? `<br><span style="font-size:0.7rem;color:var(--text-muted)">${_esc(p.partner_name)}</span>` : ''}</td>
+      <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
+      <td>${Utils.statusBadge(p.status)}</td>
+      <td style="font-variant-numeric:tabular-nums">${Utils.date(p.maturity_date || p.end_date)}</td>
+      <td><span style="font-weight:700;color:${urgency}">${days} day${days !== 1 ? 's' : ''}</span></td>
+      <td>${p.live_investor_count ?? p.investor_count ?? 0}</td>
+      <td style="font-variant-numeric:tabular-nums">${Utils.rand(p.live_raised ?? p.raised_amount ?? 0)}</td>
+      <td style="font-variant-numeric:tabular-nums;color:#22c55e">${projReturn > 0 ? Utils.rand(projReturn) : '—'}</td>
+      <td>
+        <span style="font-weight:700;color:${instrColor}">${instrPct}%</span>
+        <span style="font-size:0.7rem;color:var(--text-muted);margin-left:4px">${instrSubmitted}/${instrTotal}</span>
+      </td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `
+    <div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.28);border-radius:12px;padding:16px 18px;margin:14px 0 10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <i class="fa-solid fa-hourglass-half" style="color:#ef4444;font-size:1rem"></i>
+        <span style="font-weight:700;color:var(--text);font-size:0.9rem">Maturing within 90 days</span>
+        <span style="background:rgba(239,68,68,0.18);color:#ef4444;border-radius:20px;padding:2px 10px;font-size:0.73rem;font-weight:700">${maturing.length} pool${maturing.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table" style="width:100%">
+          <thead><tr>
+            <th>Pool</th><th>Type</th><th>Status</th><th>Maturity Date</th><th>Days Left</th><th>Investors</th><th>Raised</th><th>Proj. Return</th><th>Instructions</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
 function renderPoolsGrid() {
+  renderMaturingPoolsAlert();
   const grid = document.getElementById('poolsGrid');
   let pools = poolFilter === 'all'
     ? STATE.pools
     : STATE.pools.filter(p => p.status === poolFilter || (poolFilter === 'active' && p.status === 'filling'));
+
+  // Product type filter
+  const productFilter = (document.getElementById('poolProductFilter')?.value || '').trim();
+  if (productFilter) {
+    pools = pools.filter(p => p.product_type === productFilter);
+  }
 
   // Free-text search across pool name, product and ID
   const q = (document.getElementById('poolSearch')?.value || '').trim().toLowerCase();
   if (q) {
     pools = pools.filter(p => {
       const label = (Utils.productInfo(p.product_type)?.label || '');
-      return [p.pool_name, p.product_type, label, p.id, p.partner_name]
+      return [p.name, p.pool_name, p.product_type, label, p.id, p.partner_name]
         .some(v => String(v || '').toLowerCase().includes(q));
     });
   }
 
-  // Augment pools with live aggregates from STATE.investments
-  if (STATE.investments.length) {
-    const poolInvMap = {};
-    STATE.investments.forEach(i => {
-      if (!i.pool_id) return;
-      if (!poolInvMap[i.pool_id]) poolInvMap[i.pool_id] = [];
-      poolInvMap[i.pool_id].push(i);
-    });
-    pools.forEach(p => {
-      const invs = poolInvMap[p.id] || [];
-      const active = invs.filter(i => i.status !== 'cancelled');
-      p.live_raised = active.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-      p.live_investor_count = new Set(active.map(i => i.investor_id)).size;
+  // Sort by maturity date
+  const sort = document.getElementById('poolSort')?.value || '';
+  if (sort === 'maturity_asc' || sort === 'maturity_desc') {
+    const dir = sort === 'maturity_asc' ? 1 : -1;
+    pools = [...pools].sort((a, b) => {
+      const da = a.maturity_date || a.end_date || '9999-12-31';
+      const db = b.maturity_date || b.end_date || '9999-12-31';
+      return da < db ? -dir : da > db ? dir : 0;
     });
   }
+
+  // live_investor_count and live_raised are computed server-side in the pools query via SQL aggregation.
+  // No client-side override needed — doing so with STATE.investments causes stale/mismatched zeros.
 
   if (!pools.length) { grid.innerHTML = '<div class="text-center text-muted" style="grid-column:1/-1;padding:32px">No pools found</div>'; return; }
 
@@ -3194,7 +3848,7 @@ function renderPoolsGrid() {
           ${isWaitlist ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="reopenPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-door-open" style="color:#22c55e;width:16px"></i> Reopen Pool</button>` : ''}
           <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="editPool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-pen" style="width:16px"></i> Edit Pool</button>
           ${p.status === 'open' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="closePool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-lock" style="color:#ef4444;width:16px"></i> Close Pool</button>` : ''}
-          ${p.status === 'matured' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="markPaidOut('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-check" style="color:#22c55e;width:16px"></i> Record Final Rate</button>` : ''}
+          ${p.status === 'matured' ? `<button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem" onclick="openPoolCloseoutWizard('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-circle-check" style="color:#22c55e;width:16px"></i> Close-out Wizard</button>` : ''}
           <div style="height:1px;background:var(--border);margin:4px 0"></div>
           <button class="btn btn--secondary" style="width:100%;text-align:left;padding:9px 14px;border-radius:0;border:none;font-size:0.8rem;color:#ef4444" onclick="deletePool('${pid}');document.getElementById('pool-menu-${pid}').style.display='none'"><i class="fa-solid fa-trash" style="width:16px"></i> Delete Pool</button>
         </div>
@@ -3257,6 +3911,8 @@ function renderPoolsGrid() {
         <div class="pool-card__actions">
           <button class="btn btn--secondary btn--sm flex-1" onclick='editPool(${JSON.stringify(p.id)})'><i class="fa-solid fa-pen"></i> Edit</button>
           <button class="btn btn--secondary btn--sm" onclick='openFactsheetManager(${JSON.stringify(p.id)},${JSON.stringify(p.name)})' title="Manage factsheets"><i class="fa-solid fa-file-pdf" style="color:#ef4444"></i></button>
+          <button class="btn btn--secondary btn--sm" onclick='openMergePoolModal(${JSON.stringify(p.id)})' title="Merge into another pool"><i class="fa-solid fa-code-merge"></i> Merge</button>
+          <button class="btn btn--danger btn--sm" onclick='deletePool(${JSON.stringify(p.id)})'><i class="fa-solid fa-trash"></i></button>
           ${manageDropdown}
         </div>
       </div>
@@ -3271,7 +3927,11 @@ function renderPoolsGrid() {
   });
 }
 
+let _currentPoolId = null;
+let _poolInvestorsSnapshot = null; // cached for CSV export
+
 async function viewPoolInvestors(poolId) {
+  _currentPoolId = poolId;
   const pool = STATE.pools.find(p => p.id === poolId);
   if (!pool) return;
 
@@ -3290,6 +3950,7 @@ async function viewPoolInvestors(poolId) {
     });
     if (!res.ok) throw new Error('Failed to load');
     const { investors, summary } = await res.json();
+    _poolInvestorsSnapshot = { investors, summary, poolName: pool.name };
 
     const statusColor = { active:'badge--green', matured:'badge--purple', paid_out:'badge--blue', cancelled:'badge--red' };
 
@@ -3297,12 +3958,13 @@ async function viewPoolInvestors(poolId) {
 
     body.innerHTML = `
       <!-- Pool stats -->
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
         ${[
           ['Total Raised',  Utils.rand(summary.total_invested), 'coins',         '#fec24f'],
           ['Investors',     summary.investor_count,             'users',          '#656565'],
           ['Active',        summary.active_count,               'chart-line',     '#22c55e'],
           ['Matured',       summary.matured_count,              'flag-checkered', '#eda5ff'],
+          ['Cancelled',     summary.cancelled_count,            'ban',            '#ef4444'],
         ].map(([label, val, icon, color]) => `
           <div style="background:var(--bg-secondary);border-radius:10px;padding:14px;text-align:center">
             <i class="fa-solid fa-${icon}" style="color:${color};font-size:1.1rem;display:block;margin-bottom:6px"></i>
@@ -3358,7 +4020,8 @@ async function viewPoolInvestors(poolId) {
               const acctCell = r.sub_account_id
                 ? `<div style="font-size:0.72rem;font-weight:700;color:#eda5ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${r.sub_account_id}">${r.sub_account_name||'Sub Account'}</div><div style="font-size:0.62rem;color:var(--text-muted);font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.sub_account_type||''}</div>`
                 : `<span style="font-family:monospace;font-size:0.75rem;color:var(--gold)">${r.investor_id}</span>`;
-              return `<tr style="cursor:pointer" onclick="viewInvestor('${r.investor_id}');Modal.close('poolInvestorsModal')">
+              const isCancelled = r.investment_status === 'cancelled';
+              return `<tr style="cursor:pointer;${isCancelled ? 'opacity:0.5;' : ''}" onclick="viewInvestor('${r.investor_id}');Modal.close('poolInvestorsModal')">
                 <td><div class="td-strong clip">${name}</div><div class="td-muted clip" style="font-size:0.7rem">${r.email||''}</div></td>
                 <td class="clip">${acctCell}</td>
                 <td class="td-gold fw-700 clip">${Utils.rand(r.amount)}</td>
@@ -3379,6 +4042,55 @@ async function viewPoolInvestors(poolId) {
   } catch (e) {
     body.innerHTML = `<div class="text-center text-muted" style="padding:32px">Failed to load pool investors</div>`;
   }
+}
+
+function downloadPoolCsv() {
+  if (!_poolInvestorsSnapshot || !_poolInvestorsSnapshot.investors.length) {
+    Toast.error('No data to export');
+    return;
+  }
+  const { investors, poolName } = _poolInvestorsSnapshot;
+  const PLATFORM_FEE_PCT = 0.01;
+
+  const headers = ['Investor','Email','Account ID','Sub Account','Gross Amount','Upfront Fee','Platform Fee','EVA','Net Amount','Annual Rate','Status','Start Date','Maturity Date','Maturity Instruction'];
+
+  const csvRows = [headers];
+  for (const r of investors) {
+    const name = `${r.first_name||''} ${r.last_name||''}`.trim();
+    const acct = r.sub_account_id ? (r.sub_account_name||r.sub_account_id) : r.investor_id;
+    const amt  = parseFloat(r.amount) || 0;
+    const platformFee = Math.round(amt * PLATFORM_FEE_PCT * 100) / 100;
+    csvRows.push([
+      name,
+      r.email || '',
+      r.sub_account_id ? r.sub_account_id : r.investor_id,
+      r.sub_account_id ? acct : '',
+      amt.toFixed(2),
+      (r.upfront_fee || 0).toFixed(2),
+      platformFee.toFixed(2),
+      (r.eva_contribution || 0).toFixed(2),
+      (r.net_amount || 0).toFixed(2),
+      r.annual_rate ? (parseFloat(r.annual_rate) * 100).toFixed(2) + '%' : '0.00%',
+      r.investment_status || '',
+      r.start_date ? r.start_date.slice(0, 10) : '',
+      r.end_date   ? r.end_date.slice(0, 10)   : '',
+      (r.maturity_instruction || '').replace(/_/g, ' '),
+    ]);
+  }
+
+  const csv = csvRows.map(row =>
+    row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+  ).join('\r\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `${(poolName||'pool').replace(/[^a-z0-9]+/gi,'-')}-investments.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function togglePoolManageMenu(evt, menuId) {
@@ -3492,6 +4204,7 @@ async function uploadFactsheet() {
 
   if (!fileName) { Toast.error('Enter a factsheet name'); return; }
   if (!file) { Toast.error('Select a PDF file to upload'); return; }
+  if (file.type && file.type !== 'application/pdf') { Toast.error('Only PDF files are allowed'); return; }
 
   // Read file as base64 data URL and use it directly as the file_url
   const reader = new FileReader();
@@ -3583,7 +4296,7 @@ async function notifyWaitlist(poolId) {
       const data = await res.json().catch(() => ({}));
       Toast.success(data.message || 'Waitlist notifications sent');
     } else if (res.status === 404) {
-      Toast.success('Notifications sent (waitlist endpoint not yet configured)');
+      Toast.info('Waitlist notification endpoint not yet configured — no emails sent');
     } else {
       Toast.error('Failed to notify waitlist');
     }
@@ -3683,9 +4396,9 @@ async function saveNewPool(btn) {
         annual_rate: parseFloat(document.getElementById('newPoolRate').value) || 0.13,
         partner_name: document.getElementById('newPoolPartner').value.trim(),
         start_date: document.getElementById('newPoolOpenDate').value ? new Date(document.getElementById('newPoolOpenDate').value).toISOString() : new Date().toISOString(),
-        end_date: document.getElementById('newPoolCloseDate').value ? new Date(document.getElementById('newPoolCloseDate').value).toISOString() : '',
+        end_date: document.getElementById('newPoolCloseDate').value ? new Date(document.getElementById('newPoolCloseDate').value).toISOString() : null,
         investment_start_date: document.getElementById('newPoolInvStartDate').value ? new Date(document.getElementById('newPoolInvStartDate').value).toISOString() : null,
-        maturity_date: document.getElementById('newPoolMaturityDate').value ? new Date(document.getElementById('newPoolMaturityDate').value).toISOString() : '',
+        maturity_date: document.getElementById('newPoolMaturityDate').value ? new Date(document.getElementById('newPoolMaturityDate').value).toISOString() : null,
         status: 'open', investor_count: 0,
         max_capacity,
         management_fee_pct:       (parseFloat(document.getElementById('newPoolMgtFeePct')?.value) || 0) / 100,
@@ -3710,13 +4423,55 @@ async function closePool(id) {
 }
 
 async function markPaidOut(id) {
-  const rate = prompt('Enter actual achieved rate (e.g. 0.1561):');
-  if (!rate) return;
+  openPoolCloseoutWizard(id);
+}
+
+function openMergePoolModal(sourceId) {
+  const source = STATE.pools.find(p => p.id === sourceId);
+  if (!source) return;
+
+  document.getElementById('mergeSourcePoolId').value = sourceId;
+  document.getElementById('mergeSourceName').textContent = source.name;
+
+  const sel = document.getElementById('mergeTargetPool');
+  sel.innerHTML = '<option value="">— Select target pool —</option>' +
+    STATE.pools
+      .filter(p => p.id !== sourceId)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+      .map(p => `<option value="${_esc(p.id)}">${_esc(p.name)} (${p.status})</option>`)
+      .join('');
+  sel.value = '';
+  Modal.open('mergePoolModal');
+}
+
+async function confirmMergePool() {
+  const sourceId = document.getElementById('mergeSourcePoolId').value;
+  const targetId = document.getElementById('mergeTargetPool').value;
+  if (!targetId) { Toast.error('Please select a target pool.'); return; }
+
+  const source = STATE.pools.find(p => p.id === sourceId);
+  const target = STATE.pools.find(p => p.id === targetId);
+  if (!await Confirm.ask(`Merge "${source?.name}" into "${target?.name}"?`, {
+    body: 'All investments will be moved to the target pool and the source pool will be deleted. This cannot be undone.',
+    confirmLabel: 'Merge & Delete',
+    danger: true,
+  })) return;
+
   try {
-    await API.pools.update(id, { status: 'matured', actual_rate: parseFloat(rate) });
-    Toast.success('Pool finalised (matured)');
+    const token = localStorage.getItem('svc_token');
+    const res = await fetch(`/api/tables/investment_pools/${encodeURIComponent(sourceId)}/merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ target_pool_id: targetId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Merge failed');
+    Modal.close('mergePoolModal');
+    Toast.success(`Merged ${data.merged} investment(s) into "${target?.name}" — source pool deleted.`);
     await loadPools();
-  } catch (e) { Toast.error('Failed to update pool'); }
+  } catch (e) {
+    Toast.error('Merge failed: ' + e.message);
+  }
 }
 
 async function deletePool(id) {
@@ -3786,6 +4541,8 @@ function editPool(id) {
   if (opFeeEl) opFeeEl.value = pool.operational_fee_pct ? (Number(pool.operational_fee_pct) * 100).toFixed(4).replace(/\.?0+$/, '') : 0;
   const opFeeFreqEl = document.getElementById('editPoolOpFeeFreq');
   if (opFeeFreqEl) opFeeFreqEl.value = pool.operational_fee_frequency || 'annual';
+  const notesEl = document.getElementById('editPoolAdminNotes');
+  if (notesEl) notesEl.value = pool.admin_notes || '';
 
   Modal.open('editPoolModal');
 }
@@ -3810,15 +4567,16 @@ async function saveEditPool(btn) {
     actual_rate:    parseFloat(document.getElementById('editPoolActualRate').value) || 0,
     partner_name:   document.getElementById('editPoolPartner').value.trim(),
     investor_count: parseInt(document.getElementById('editPoolInvCount').value) || 0,
-    start_date:            toISO(document.getElementById('editPoolOpenDate').value),
-    end_date:              toISO(document.getElementById('editPoolCloseDate').value),
+    start_date:            toISO(document.getElementById('editPoolOpenDate').value) || null,
+    end_date:              toISO(document.getElementById('editPoolCloseDate').value) || null,
     investment_start_date: toISO(document.getElementById('editPoolInvStartDate').value) || null,
-    maturity_date:         toISO(document.getElementById('editPoolMaturityDate').value),
+    maturity_date:         toISO(document.getElementById('editPoolMaturityDate').value) || null,
     max_capacity:   maxCapVal2 ? (parseFloat(maxCapVal2) || null) : null,
     management_fee_pct:        (parseFloat(document.getElementById('editPoolMgtFeePct')?.value) || 0) / 100,
     management_fee_frequency:  document.getElementById('editPoolMgtFeeFreq')?.value || 'once',
     operational_fee_pct:       (parseFloat(document.getElementById('editPoolOpFeePct')?.value) || 0) / 100,
     operational_fee_frequency: document.getElementById('editPoolOpFeeFreq')?.value || 'annual',
+    admin_notes:    document.getElementById('editPoolAdminNotes')?.value.trim() || null,
   };
 
   if (!updates.name) { Toast.error('Pool name is required'); return; }
@@ -3895,7 +4653,7 @@ function renderInvestmentsTable() {
       </td>
       <td class="td-muted clip">${Utils.date(investDate)}</td>
       <td>${i.pool_id
-        ? `<div class="td-strong clip" style="cursor:pointer;color:var(--gold)" onclick="viewPoolInvestors('${i.pool_id}')" title="View pool">${i.pool_name||i.pool_id}</div>`
+        ? `<div class="td-strong clip" style="cursor:pointer;color:var(--gold)" onclick="viewPoolInvestors('${i.pool_id}')" title="${_esc(i.pool_name||i.pool_id)}">${i.pool_name||i.pool_id}</div>`
         : `<div class="td-muted clip">—</div>`
       }</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
@@ -3953,19 +4711,40 @@ function setupInvestmentFilters() {
   const search = document.getElementById('investmentSearch');
   const product = document.getElementById('investmentProductFilter');
   const status = document.getElementById('investmentStatusFilter');
+  const dateFrom = document.getElementById('invDateFrom');
+  const dateTo = document.getElementById('invDateTo');
+  const sortSel = document.getElementById('investmentSortOrder');
 
   const filter = Utils.debounce(() => {
     const q = search.value.toLowerCase();
     const pr = product.value;
     const st = status.value;
+    const from = dateFrom?.value ? new Date(dateFrom.value) : null;
+    const to = dateTo?.value ? new Date(dateTo.value + 'T23:59:59') : null;
+
     filteredInvests = STATE.investments.filter(i => {
       const investor = STATE.investors.find(inv => inv.id === i.investor_id);
       const invName  = i.investor_name || (investor ? `${investor.first_name} ${investor.last_name}` : '');
       const mq = !q || `${invName} ${i.pool_name} ${i.investor_id||''}`.toLowerCase().includes(q);
       const mp = !pr || i.product_type === pr;
       const ms = !st || i.status === st;
-      return mq && mp && ms;
+      const iDate = i.start_date ? new Date(i.start_date) : null;
+      const mFrom = !from || (iDate && iDate >= from);
+      const mTo = !to || (iDate && iDate <= to);
+      return mq && mp && ms && mFrom && mTo;
     });
+
+    const sort = sortSel?.value || '';
+    if (sort) {
+      filteredInvests = [...filteredInvests].sort((a, b) => {
+        if (sort === 'date_desc') return new Date(b.start_date || 0) - new Date(a.start_date || 0);
+        if (sort === 'date_asc')  return new Date(a.start_date || 0) - new Date(b.start_date || 0);
+        if (sort === 'amount_desc') return (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0);
+        if (sort === 'amount_asc')  return (parseFloat(a.amount) || 0) - (parseFloat(b.amount) || 0);
+        return 0;
+      });
+    }
+
     invPage = 1;
     renderInvestmentsTable();
   }, 200);
@@ -3973,6 +4752,9 @@ function setupInvestmentFilters() {
   search.addEventListener('input', filter);
   product.addEventListener('change', filter);
   status.addEventListener('change', filter);
+  if (dateFrom) dateFrom.addEventListener('change', filter);
+  if (dateTo) dateTo.addEventListener('change', filter);
+  if (sortSel) sortSel.addEventListener('change', filter);
 }
 
 function viewInvestmentDetail(id) {
@@ -4086,7 +4868,8 @@ async function payoutInvestment(id) {
 /* ═══════════════════════════════════════════════
    MATURITY
    ═══════════════════════════════════════════════ */
-const _matInstrLabel = { payout_all: 'Payout All', payout_return: 'Payout Returns', reinvest: 'Reinvest', pending: 'Pending' };
+const _matInstrLabel = { payout_all: 'Payout All', payout_return: 'Payout Returns', reinvest: 'Reinvest', payout_custom: 'Custom Payout', switch_product: 'Switch Product', pending: 'Pending' };
+let filteredMaturity = [];
 
 async function loadMaturity() {
   try {
@@ -4126,24 +4909,28 @@ async function loadMaturity() {
     STATE.maturity = [...matRecords, ...fromInvestments]
       .sort((a, b) => new Date(b.submitted_date || b.created_at || 0) - new Date(a.submitted_date || a.created_at || 0));
 
-    renderMaturityTable();
+    filteredMaturity = [...STATE.maturity];
+    _applyMaturityFilters();
   } catch (e) { Toast.error('Failed to load maturity instructions'); }
 }
 
 function renderMaturityTable() {
   const body = document.getElementById('maturityBody');
-  if (!STATE.maturity.length) {
-    body.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-inbox" style="font-size:1.5rem;color:var(--text-dim);display:block;margin-bottom:8px"></i>No maturity instructions found</td></tr>';
+  const countEl = document.getElementById('maturityCount');
+  const rows = filteredMaturity;
+  if (countEl) countEl.textContent = `${rows.length.toLocaleString()} of ${(STATE.maturity || []).length.toLocaleString()} instructions`;
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px"><i class="fa-solid fa-inbox" style="font-size:1.5rem;color:var(--text-dim);display:block;margin-bottom:8px"></i>No maturity instructions match the current filters</td></tr>';
     return;
   }
-  body.innerHTML = STATE.maturity.map(m => {
+  body.innerHTML = rows.map(m => {
     const mInv = STATE.investors.find(i => i.id === m.investor_id);
     const mName = m.investor_name || (mInv ? `${mInv.first_name} ${mInv.last_name}`.trim() : m.investor_id || '—');
     const instrLabel = _matInstrLabel[m.instruction_type] || (m.instruction_type?.replace(/_/g, ' ') || '—');
     return `
     <tr>
       <td><div class="td-strong clip">${mName}</div><div class="td-muted clip" style="font-size:0.7rem">${m.investor_id||''}</div></td>
-      <td class="td-muted clip">${m.pool_name || '—'}</td>
+      <td class="td-muted clip" title="${_esc(m.pool_name || '')}">${m.pool_name || '—'}</td>
       <td><span class="badge badge--blue">${instrLabel}</span></td>
       <td class="td-gold fw-700">${m.total_payout ? Utils.rand(m.total_payout) : '—'}</td>
       <td>${Utils.statusBadge(m.status)}</td>
@@ -4153,6 +4940,35 @@ function renderMaturityTable() {
       </td>
     </tr>`;
   }).join('');
+}
+
+function _applyMaturityFilters() {
+  const q      = (document.getElementById('maturitySearch')?.value || '').toLowerCase().trim();
+  const st     = document.getElementById('maturityStatusFilter')?.value || '';
+  const instr  = document.getElementById('maturityInstrFilter')?.value || '';
+  const dFrom  = document.getElementById('maturityDateFrom')?.value || '';
+  const dTo    = document.getElementById('maturityDateTo')?.value || '';
+
+  filteredMaturity = STATE.maturity.filter(m => {
+    const mInv  = STATE.investors.find(i => i.id === m.investor_id);
+    const name  = (m.investor_name || (mInv ? `${mInv.first_name} ${mInv.last_name}` : '') || '').toLowerCase();
+    const pool  = (m.pool_name || '').toLowerCase();
+    const matchQ     = !q     || name.includes(q) || pool.includes(q) || (m.investor_id || '').toLowerCase().includes(q);
+    const matchSt    = !st    || m.status === st;
+    const matchInstr = !instr || m.instruction_type === instr;
+    const mDate = m.submitted_date || m.created_at || '';
+    const matchFrom  = !dFrom || mDate.slice(0, 10) >= dFrom;
+    const matchTo    = !dTo   || mDate.slice(0, 10) <= dTo;
+    return matchQ && matchSt && matchInstr && matchFrom && matchTo;
+  });
+
+  renderMaturityTable();
+}
+
+function _clearMaturityFilters() {
+  ['maturitySearch','maturityDateFrom','maturityDateTo'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['maturityStatusFilter','maturityInstrFilter'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  _applyMaturityFilters();
 }
 
 async function processMaturity(id) {
@@ -4196,7 +5012,7 @@ let filteredTxns = [];
 async function loadTransactions() {
   try {
     const [txnRes, invRes] = await Promise.all([
-      API.transactions.list({ limit: 500 }),
+      API.transactions.list({ limit: 5000 }),
       STATE.investors.length ? Promise.resolve({ data: STATE.investors }) : API.investors.list({ limit: 5000 })
     ]);
     STATE.transactions = txnRes.data || [];
@@ -4282,15 +5098,22 @@ function renderTxnTable() {
 function setupTxnFilters() {
   const search = document.getElementById('txnSearch');
   const type = document.getElementById('txnTypeFilter');
+  const dateFrom = document.getElementById('txnDateFrom');
+  const dateTo = document.getElementById('txnDateTo');
 
   const filter = Utils.debounce(() => {
     const q = search.value.toLowerCase();
     const tp = type.value;
+    const from = dateFrom?.value ? new Date(dateFrom.value) : null;
+    const to = dateTo?.value ? new Date(dateTo.value + 'T23:59:59') : null;
     filteredTxns = STATE.transactions.filter(t => {
       const invName = _txnInvName(t);
       const mq = !q || `${invName} ${t.reference} ${t.description}`.toLowerCase().includes(q);
       const mt = !tp || t.type === tp;
-      return mq && mt;
+      const txDate = t.created_at ? new Date(t.created_at) : null;
+      const mFrom = !from || (txDate && txDate >= from);
+      const mTo = !to || (txDate && txDate <= to);
+      return mq && mt && mFrom && mTo;
     });
     txnPage = 1;
     renderTxnTable();
@@ -4298,6 +5121,8 @@ function setupTxnFilters() {
 
   search.addEventListener('input', filter);
   type.addEventListener('change', filter);
+  if (dateFrom) dateFrom.addEventListener('change', filter);
+  if (dateTo) dateTo.addEventListener('change', filter);
 }
 
 async function changeTxnStatus(txnId, newStatus, investorId, amount) {
@@ -4397,6 +5222,48 @@ async function saveNewTxn(btn) {
 /* ═══════════════════════════════════════════════
    SUPPORT TICKETS
    ═══════════════════════════════════════════════ */
+function openCreateTicketModal() {
+  const sel = document.getElementById('newTicketInvestorId');
+  if (sel) {
+    const opts = STATE.investors.map(i =>
+      `<option value="${_esc(String(i.id))}">${_esc(`${i.first_name} ${i.last_name}`)} — ${_esc(i.email || '')}</option>`
+    ).join('');
+    sel.innerHTML = '<option value="">Select investor…</option>' + opts;
+  }
+  ['newTicketSubject','newTicketDescription'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  Modal.open('createTicketModal');
+}
+
+async function saveNewTicket(btn) {
+  const investorId = document.getElementById('newTicketInvestorId')?.value;
+  const subject = document.getElementById('newTicketSubject')?.value?.trim();
+  const description = document.getElementById('newTicketDescription')?.value?.trim();
+  const category = document.getElementById('newTicketCategory')?.value || 'general';
+  const priority = document.getElementById('newTicketPriority')?.value || 'medium';
+  if (!subject) { Toast.error('Subject is required'); return; }
+  await _withBtn(btn, async () => {
+    try {
+      const investor = investorId ? STATE.investors.find(i => String(i.id) === investorId) : null;
+      await API._fetch('POST', 'tables/support_tickets', {
+        investor_id: investorId || null,
+        investor_name: investor ? `${investor.first_name} ${investor.last_name}` : null,
+        subject,
+        description,
+        category,
+        priority,
+        status: 'open',
+        source: 'admin',
+      });
+      Toast.success('Ticket created');
+      Modal.close('createTicketModal');
+      await loadSupport();
+    } catch (e) { Toast.error('Failed to create ticket: ' + (e.message || 'unknown')); }
+  });
+}
+
 async function loadSupport() {
   try {
     const [tktRes, invRes] = await Promise.all([
@@ -4500,7 +5367,7 @@ async function viewTicket(id) {
 
   const _cat = (tkt.category || '').replace(/ /g, '_').toLowerCase();
   const isBankVerification = _cat === 'bank_verification';
-  const isFicaSubmission   = _cat === 'fica_submission' || _cat === 'fica';
+  const isFicaSubmission   = _cat === 'fica_submission' || _cat === 'fica' || _cat === 'kyc';
 
   // Extract base64 data URL embedded in message.
   // EFT format:     "\nData URL: data:..."
@@ -4563,6 +5430,12 @@ async function viewTicket(id) {
       </div>
       <div id="bankProofPreview" style="padding:12px 16px;font-size:0.82rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading document…</div>
       <div id="bankVerifyResult" style="padding:0 16px 12px;font-size:0.82rem;color:var(--text-muted)"></div>
+    </div>` : ''}
+    ${isFicaSubmission && tkt.investor_id ? `<div class="panel mb-12" style="border:1.5px solid rgba(237,165,255,0.25)">
+      <div class="panel__header" style="background:rgba(237,165,255,0.07)">
+        <span class="panel__title"><i class="fa-solid fa-id-card-clip" style="color:#eda5ff;margin-right:6px"></i>Submitted FICA Documents</span>
+      </div>
+      <div id="kycDocsPreviewBody" style="padding:12px 16px;font-size:0.82rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading documents…</div>
     </div>` : ''}
     ${showActionBtns ? `<div style="display:flex;gap:10px;margin-bottom:16px;padding:12px;background:${isPaymentProof ? 'rgba(34,197,94,0.06)' : 'rgba(237,165,255,0.06)'};border-radius:8px;border:1px solid ${isPaymentProof ? 'rgba(34,197,94,0.2)' : 'rgba(237,165,255,0.15)'}">
       <div style="flex:1">
@@ -4667,7 +5540,9 @@ async function viewTicket(id) {
       try {
         invUpdate = isBankVerification
           ? (approve ? { bank_account_status: 'approved' } : { bank_account_status: 'rejected' })
-          : (approve ? { kyc_status: 'approved', status: 'active' } : { kyc_status: 'rejected' });
+          : (approve
+              ? { kyc_status: 'approved', fica_status: 'approved', status: 'active' }
+              : { kyc_status: 'rejected', fica_status: 'rejected' });
         await API.investors.update(tkt.investor_id, invUpdate);
         await API.tickets.update(id, {
           status:         'resolved',
@@ -4704,6 +5579,59 @@ async function viewTicket(id) {
   };
 
   Modal.open('ticketModal');
+
+  // Inline FICA/KYC documents preview
+  if (isFicaSubmission && tkt.investor_id) {
+    const docsEl = document.getElementById('kycDocsPreviewBody');
+    if (docsEl) {
+      try {
+        const res = await API.kyc.list({ investor_id: tkt.investor_id, limit: 100 });
+        const docs = (res.data || []).sort((a, b) =>
+          new Date(b.submitted_at || b.created_at || 0) - new Date(a.submitted_at || a.created_at || 0));
+        if (!docs.length) {
+          docsEl.innerHTML = '<span style="color:var(--text-muted)"><i class="fa-solid fa-file-slash" style="margin-right:6px"></i>No KYC documents found for this investor.</span>';
+        } else {
+          const DOC_LABELS = {
+            id: 'ID Document', id_document: 'ID Document', passport: 'Passport',
+            proof_of_address: 'Proof of Address', address: 'Proof of Address',
+            selfie: 'Selfie / Live Photo', tax: 'Tax Certificate (SARS)',
+            proof_of_bank: 'Proof of Bank Account', other: 'Other Document',
+          };
+          docsEl.innerHTML = `<div style="display:grid;gap:10px;padding-bottom:4px">${docs.map((doc, idx) => {
+            const src   = doc.file_data || doc.attachment_data || doc.file_url || '';
+            const label = DOC_LABELS[doc.doc_type] || (doc.doc_type || 'Document').replace(/_/g, ' ');
+            const fname = doc.file_name || label;
+            const dkey  = `tkc_${tkt.id}_${idx}`;
+            _ticketDocCache[dkey] = src || null;
+            const isImg = src && (src.startsWith('data:image/') || /\.(png|jpg|jpeg|gif|webp)$/i.test(src));
+            const djson = JSON.stringify(dkey);
+            const fjson = JSON.stringify(fname);
+            const idjson = JSON.stringify(doc.id);
+            const hasFile = !!(src || doc.file_name);
+            return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <i class="fa-solid fa-file-${isImg ? 'image' : 'lines'}" style="color:#eda5ff;font-size:1.05rem;flex-shrink:0"></i>
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:700;font-size:0.84rem;color:var(--text)">${_esc(label)}</div>
+                  ${doc.submitted_at || doc.created_at ? `<div style="font-size:0.72rem;color:var(--text-muted)">${Utils.date(doc.submitted_at || doc.created_at)}</div>` : ''}
+                </div>
+                ${src
+                  ? `<button class="btn btn--secondary btn--sm" onclick="_openTicketDoc(${djson},${fjson})"><i class="fa-solid fa-eye"></i> View</button>
+                     <button class="btn btn--ghost btn--sm" onclick="_downloadTicketDoc(${djson},${fjson})"><i class="fa-solid fa-download"></i> Download</button>`
+                  : hasFile
+                    ? `<button class="btn btn--secondary btn--sm" onclick="viewFicaDocument(${idjson})"><i class="fa-solid fa-eye"></i> View</button>`
+                    : `<span style="font-size:0.75rem;color:var(--text-muted);font-style:italic">No file</span>`}
+              </div>
+              ${src && isImg ? `<div style="margin-top:8px"><img src="${src}" alt="${_esc(fname)}" style="max-width:100%;max-height:220px;object-fit:contain;border-radius:4px;display:block"></div>` : ''}
+            </div>`;
+          }).join('')}</div>`;
+        }
+      } catch (e) {
+        const el2 = document.getElementById('kycDocsPreviewBody');
+        if (el2) el2.innerHTML = `<span style="color:#ef4444"><i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>Could not load documents: ${_esc(e.message || 'unknown error')}</span>`;
+      }
+    }
+  }
 
   // Inline proof-of-bank preview
   if (isBankVerification && tkt.investor_id) {
@@ -4770,8 +5698,8 @@ async function loadAnalytics() {
     const lowestMin = STATE.pools.filter(p => p.status === 'open' && p.min_investment > 0)
       .reduce((min, p) => Math.min(min, parseFloat(p.min_investment) || Infinity), Infinity);
 
-    const cattleEl = document.querySelector('#view-analytics .stat-card__value');
-    if (cattleEl && cattleEl.textContent === '14.83%') cattleEl.textContent = avgCattleRate;
+    const cattleEl = document.getElementById('an-cattle-return');
+    if (cattleEl) cattleEl.textContent = avgCattleRate;
     const minEl = document.querySelectorAll('#view-analytics .stat-card__value')[1];
     if (minEl && minEl.textContent === 'R500') minEl.textContent = lowestMin < Infinity ? Utils.rand(lowestMin, 0) : 'R500';
 
@@ -5131,17 +6059,58 @@ function renderProductVolChart() {
   });
 }
 
+const _PROVINCE_NORM = {
+  // Gauteng
+  'gp':'Gauteng','gauteng':'Gauteng','gauteng province':'Gauteng','guateng':'Gauteng','gaunteng':'Gauteng','gautrng':'Gauteng','gauteng province':'Gauteng',
+  // Western Cape
+  'wc':'Western Cape','western cape':'Western Cape','western cape province':'Western Cape','westerncape':'Western Cape','wetern cape':'Western Cape',
+  // Eastern Cape
+  'ec':'Eastern Cape','eastern cape':'Eastern Cape','eastern cape province':'Western Cape','easterncape':'Eastern Cape',
+  // KwaZulu-Natal
+  'kzn':'KwaZulu-Natal','kwazulu-natal':'KwaZulu-Natal','kwazulu natal':'KwaZulu-Natal','kwa-zulu natal':'KwaZulu-Natal','kwa zulu natal':'KwaZulu-Natal','kwazulunatal':'KwaZulu-Natal','natal':'KwaZulu-Natal','kwa-zulu nata':'KwaZulu-Natal',
+  // Limpopo
+  'lp':'Limpopo','limpopo':'Limpopo','limpopo province':'Limpopo',
+  // Mpumalanga
+  'mp':'Mpumalanga','mpumalanga':'Mpumalanga','mpumalanga province':'Mpumalanga',
+  // Northern Cape
+  'nc':'Northern Cape','northern cape':'Northern Cape','northern cape province':'Northern Cape','northerncape':'Northern Cape','nothern cape':'Northern Cape',
+  // North West
+  'nw':'North West','north west':'North West','north west province':'North West','northwest':'North West','north-west':'North West','north west':'North West','northwestprovince':'North West',
+  // Free State
+  'fs':'Free State','free state':'Free State','free state province':'Free State','freestate':'Free State',
+};
+function _normProvince(raw) {
+  if (!raw) return null;
+  return _PROVINCE_NORM[raw.trim().toLowerCase()] || raw.trim() || null;
+}
+
 function renderProvinceChart() {
   const ctx = document.getElementById('provinceChart');
   if (!ctx) return;
   const prov = {};
-  STATE.investors.forEach(i => { prov[i.province] = (prov[i.province] || 0) + 1; });
-  const colors = ['#fec24f', '#22c55e', '#656565', '#f97316', '#eda5ff', '#ef4444', '#656565', '#84cc16', '#fec24f'];
+  STATE.investors.forEach(i => {
+    const p = _normProvince(i.province);
+    if (!p) return;
+    prov[p] = (prov[p] || 0) + 1;
+  });
+  const PROVINCE_COLORS = {
+    'Gauteng':       '#fec24f',
+    'KwaZulu-Natal': '#22c55e',
+    'Western Cape':  '#eda5ff',
+    'Eastern Cape':  '#f97316',
+    'Limpopo':       '#84cc16',
+    'Mpumalanga':    '#38bdf8',
+    'North West':    '#a78bfa',
+    'Free State':    '#fb923c',
+    'Northern Cape': '#94a3b8',
+  };
+  const labels = Object.keys(prov);
+  const colors = labels.map(l => PROVINCE_COLORS[l] || '#656565');
 
   if (STATE.charts.province) STATE.charts.province.destroy();
   STATE.charts.province = new Chart(ctx, {
     type: 'pie',
-    data: { labels: Object.keys(prov), datasets: [{ data: Object.values(prov), backgroundColor: colors, borderColor: 'var(--dark-2)', borderWidth: 3 }] },
+    data: { labels, datasets: [{ data: labels.map(l => prov[l]), backgroundColor: colors, borderColor: 'var(--dark-2)', borderWidth: 3 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { position: 'right', labels: { color: '#7a92a8', font: { size: 10 }, boxWidth: 10, padding: 8 } } }
@@ -6082,6 +7051,37 @@ function viewIFA(ifaId) {
         </div>`
     }
 
+    ${clients.length ? (() => {
+      const rate = ifa.commission_rate || 0;
+      const rows = clients.map(c => {
+        const invested = c.total_invested || 0;
+        const comm = invested * (rate / 100);
+        return `<tr>
+          <td class="td-strong">${_esc(c.first_name)} ${_esc(c.last_name)}</td>
+          <td class="td-muted" style="font-size:0.78rem">${_esc(c.id)}</td>
+          <td class="td-gold fw-700">${Utils.rand(invested)}</td>
+          <td class="td-green fw-700">${Utils.rand(comm)}</td>
+        </tr>`;
+      });
+      const totalComm = clients.reduce((s,c) => s + (c.total_invested||0) * (rate/100), 0);
+      return `
+    <div class="panel mt-16 mb-16">
+      <div class="panel__header"><span class="panel__title"><i class="fa-solid fa-coins" style="color:var(--gold);margin-right:6px"></i>Commission Report</span><span style="font-size:0.75rem;color:var(--text-muted)">${rate}% rate</span></div>
+      <div class="panel__body" style="padding:0">
+        <div style="overflow-x:auto">
+          <table class="data-table">
+            <thead><tr><th>Client</th><th>ID</th><th>Total Invested</th><th>Commission</th></tr></thead>
+            <tbody>${rows.join('')}</tbody>
+          </table>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:12px 16px;background:rgba(254,194,79,0.07);border-top:1px solid var(--border)">
+          <span style="font-size:0.85rem;font-weight:700;color:var(--text)">Total Commission Owed</span>
+          <span style="font-size:1.05rem;font-weight:800;color:var(--gold)">${Utils.rand(totalComm)}</span>
+        </div>
+      </div>
+    </div>`;
+    })() : ''}
+
     <div class="flex-between mt-16" style="flex-wrap:wrap;gap:8px">
       <div style="display:flex;gap:8px">
         <button class="btn btn--success btn--sm" onclick="toggleIFAStatus('${ifa.id}','${ifa.status}')">
@@ -6322,11 +7322,19 @@ async function saveKycUpload() {
   const fileSize    = parseInt(form.dataset.fileSize)||0;
   const mimeType    = form.dataset.mimeType  || '';
   const statusVal   = document.getElementById('kycUploadStatusField').value || 'pending';
+  const expiryDate  = document.getElementById('kycExpiryDate')?.value || null;
+  const docSubtype  = document.getElementById('kycUploadDocSubtype')?.value || null;
   const statusEl    = document.getElementById('kycUploadStatus');
 
   if (!investorId) { statusEl.textContent = 'Please select an investor'; statusEl.style.color='#ef4444'; return; }
   if (!docType)    { statusEl.textContent = 'Please select a document type'; statusEl.style.color='#ef4444'; return; }
-  if (!fileData)   { statusEl.textContent = 'Please select a file to upload'; statusEl.style.color='#ef4444'; return; }
+  if (!fileData) {
+    statusEl.textContent = 'An attachment is required — please select a file to upload';
+    statusEl.style.color = '#ef4444';
+    const dz = document.getElementById('kycDropZone');
+    if (dz) { dz.style.borderColor = '#ef4444'; setTimeout(() => { dz.style.borderColor = 'rgba(255,130,21,0.4)'; }, 2500); }
+    return;
+  }
 
   const saveBtn = document.getElementById('kycUploadSaveBtn');
   saveBtn.disabled = true;
@@ -6339,9 +7347,11 @@ async function saveKycUpload() {
       investor_id:   investorId,
       investor_name: invName || undefined,
       doc_type:      docType,
+      doc_subtype:   docSubtype || undefined,
       file_name:     fileName,
       file_data:     fileData,
       status:        statusVal,
+      expiry_date:   expiryDate || null,
       notes:         `Uploaded via admin: ${invName}. Size: ${fileSize}. MIME: ${mimeType}.`
     });
     Toast.success('Document uploaded successfully');
@@ -6512,14 +7522,16 @@ function _downloadCSV(rows, filename) {
 
 function exportInvestorsCSV() {
   if (!STATE.investors.length) { Toast.error('Load investors first'); return; }
+  const data = (filteredInvestors && filteredInvestors.length && filteredInvestors.length < STATE.investors.length)
+    ? filteredInvestors : STATE.investors;
   const headers = ['ID','First Name','Last Name','Email','Phone','FICA Status','Wallet Balance','Total Invested','Total Returns','Date Joined'];
-  const rows = [headers, ...STATE.investors.map(i => [
+  const rows = [headers, ...data.map(i => [
     i.id, i.first_name, i.last_name, i.email, i.phone || '',
     i.fica_status, i.wallet_balance || 0, i.total_invested || 0, i.total_returns || 0,
     i.date_joined ? new Date(i.date_joined).toLocaleDateString('en-ZA') : '',
   ])];
   _downloadCSV(rows, `investors-${new Date().toISOString().slice(0,10)}.csv`);
-  Toast.success(`Exported ${STATE.investors.length} investors`);
+  Toast.success(`Exported ${data.length} investors${data.length < STATE.investors.length ? ' (filtered)' : ''}`);
 }
 
 function exportTransactionsCSV() {
@@ -6545,6 +7557,28 @@ function exportKYCCSV() {
   })];
   _downloadCSV(rows, `kyc-${new Date().toISOString().slice(0,10)}.csv`);
   Toast.success(`Exported ${STATE.kyc.length} KYC records`);
+}
+
+async function allocateInvestmentsToPools(btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Allocating…';
+  try {
+    const data = await API._fetch('POST', 'admin/investments/allocate-pools');
+    const unmatchedNote = data.unmatched?.length
+      ? ` (${data.unmatched.length} pool name${data.unmatched.length !== 1 ? 's' : ''} unmatched)`
+      : '';
+    Toast.success(`Allocated ${data.matched} investment${data.matched !== 1 ? 's' : ''} to pools${unmatchedNote}`);
+    if (data.unmatched?.length) {
+      console.warn('[allocate-pools] unmatched pool names:', data.unmatched);
+    }
+    STATE.investments = (await API.investments.list({ limit: 5000 })).data || [];
+    filterInvestments();
+  } catch (e) {
+    Toast.error(e.message || 'Allocation failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-link"></i> Allocate to Pools';
+  }
 }
 
 function exportInvestmentsCSV() {
@@ -6837,7 +7871,55 @@ function _opsR(v) {
   return `R${Number(v).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 }
 
+function _applyEmailToggleUI(enabled) {
+  const chk   = document.getElementById('emailToggleChk');
+  const track  = document.getElementById('emailToggleTrack');
+  const thumb  = document.getElementById('emailToggleThumb');
+  const label  = document.getElementById('emailToggleLabel');
+  const status = document.getElementById('emailControlsStatus');
+  if (chk)   { chk.checked = enabled; chk.disabled = false; }
+  if (track)  track.style.background = enabled ? '#22c55e' : '#3f3f3f';
+  if (thumb)  thumb.style.transform  = enabled ? 'translateX(22px)' : 'none';
+  if (label)  { label.textContent = enabled ? 'Enabled' : 'Disabled'; label.style.color = enabled ? '#22c55e' : '#ef4444'; }
+  if (status) status.textContent = enabled ? 'Emails are being sent' : 'All emails suppressed';
+}
+
+async function _loadEmailToggle() {
+  try {
+    const res = await fetch('/api/settings/email-toggle', { credentials: 'include' });
+    if (!res.ok) throw new Error(res.statusText);
+    const { enabled } = await res.json();
+    _applyEmailToggleUI(enabled);
+  } catch (e) {
+    console.error('[emailToggle] load failed:', e);
+    const status = document.getElementById('emailControlsStatus');
+    if (status) status.textContent = 'Failed to load — refresh to retry';
+  }
+}
+
+async function toggleEmailDelivery() {
+  const chk = document.getElementById('emailToggleChk');
+  if (!chk || chk.disabled) return;
+  const newVal = !chk.checked;
+  chk.disabled = true;
+  try {
+    const res = await fetch('/api/settings/email-toggle', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: newVal }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+    _applyEmailToggleUI(newVal);
+    Toast.success(newVal ? 'Email delivery enabled' : 'Email delivery disabled');
+  } catch (e) {
+    Toast.error('Failed to update email setting');
+    chk.disabled = false;
+  }
+}
+
 async function loadOpsConsole() {
+  _loadEmailToggle().catch(() => {});
   try {
     const [summary, health, funnel, comms, activity, velocity] = await Promise.all([
       _opsGet('summary').catch(() => null),
@@ -7185,21 +8267,112 @@ async function opsExportSummary() {
    ═══════════════════════════════════════════════ */
 let _broadcastHistory = [];
 
-function loadComms() {
-  // Populate pool options in segment select from STATE.pools
-  const seg = document.getElementById('broadcastSegment');
-  if (seg) {
-    // Remove any old pool options first
-    Array.from(seg.querySelectorAll('option[data-pool]')).forEach(o => o.remove());
-    STATE.pools.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.dataset.pool = '1';
-      opt.textContent = `Pool: ${p.name}`;
-      seg.appendChild(opt);
-    });
-  }
+let _segPickerOpen  = false;
 
+/* ── Segment picker data ─────────────────────────────────────── */
+const _SEGMENT_BASE = [
+  { value: 'all',            label: 'All Investors',           icon: 'fa-users',            desc: 'Everyone with an email address' },
+  { value: 'active',         label: 'Active Investors',        icon: 'fa-circle-check',     desc: 'Currently have an active investment' },
+  { value: 'no_investments', label: 'No Investments Yet',      icon: 'fa-user-clock',       desc: 'Registered but never invested' },
+  { value: 'matured',        label: 'Matured Investors',       icon: 'fa-flag-checkered',   desc: 'Had at least one matured investment' },
+  { value: 'wallet_positive',label: 'Positive Wallet Balance', icon: 'fa-wallet',           desc: 'Wallet balance greater than R0' },
+  { value: 'pending_fica',   label: 'Pending FICA / KYC',      icon: 'fa-id-card',          desc: 'Documents awaiting verification' },
+];
+
+function _buildSegmentGroups() {
+  return [
+    { label: 'General', items: _SEGMENT_BASE },
+    {
+      label: 'By Pool',
+      items: (STATE.pools || []).map(p => ({
+        value: p.id,
+        label: p.name,
+        icon: 'fa-layer-group',
+        desc: p.product_type || 'Investment pool',
+      })),
+    },
+  ];
+}
+
+function buildSegmentPicker() { _renderSegmentList(''); }
+
+function _renderSegmentList(q) {
+  const listEl = document.getElementById('segmentPickerList');
+  if (!listEl) return;
+  const ql = (q || '').toLowerCase();
+  const groups = _buildSegmentGroups();
+  const currentVal = document.getElementById('broadcastSegment')?.value || 'all';
+  let html = '';
+  for (const g of groups) {
+    const items = ql
+      ? g.items.filter(i => i.label.toLowerCase().includes(ql) || (i.desc || '').toLowerCase().includes(ql))
+      : g.items;
+    if (!items.length) continue;
+    html += `<div style="padding:7px 14px 3px;font-size:0.67rem;font-weight:700;letter-spacing:0.07em;color:var(--text-dim);text-transform:uppercase">${_esc(g.label)}</div>`;
+    for (const item of items) {
+      const sel = currentVal === item.value;
+      html += `<div onclick='selectSegment(${JSON.stringify(item.value)},${JSON.stringify(item.label)},${JSON.stringify(item.icon)})'
+        style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-radius:6px;margin:1px 4px;background:${sel ? 'rgba(237,165,255,0.12)' : ''}"
+        onmouseenter="this.style.background='${sel ? 'rgba(237,165,255,0.15)' : 'rgba(255,255,255,0.04)'}'"
+        onmouseleave="this.style.background='${sel ? 'rgba(237,165,255,0.12)' : ''}'">
+        <i class="fa-solid ${_esc(item.icon)}" style="width:15px;text-align:center;color:${sel ? '#eda5ff' : 'var(--text-dim)'};font-size:0.82rem;flex-shrink:0"></i>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.84rem;font-weight:${sel ? '600' : '400'};color:${sel ? 'var(--white)' : 'var(--text)'}">${_esc(item.label)}</div>
+          ${item.desc ? `<div style="font-size:0.71rem;color:var(--text-dim);margin-top:1px">${_esc(item.desc)}</div>` : ''}
+        </div>
+        ${sel ? '<i class="fa-solid fa-check" style="color:#eda5ff;font-size:0.72rem;flex-shrink:0"></i>' : ''}
+      </div>`;
+    }
+  }
+  listEl.innerHTML = html || '<div style="padding:18px;text-align:center;color:var(--text-dim);font-size:0.82rem">No segments match</div>';
+}
+
+function filterSegments(q) { _renderSegmentList(q); }
+
+function selectSegment(value, label, icon) {
+  const hidden = document.getElementById('broadcastSegment');
+  if (hidden) hidden.value = value;
+  const labelEl = document.getElementById('segmentPickerLabel');
+  if (labelEl) labelEl.textContent = label;
+  const iconEl = document.getElementById('segmentPickerIcon');
+  if (iconEl) { iconEl.className = `fa-solid ${icon}`; }
+  closeSegmentPicker();
+  updateBroadcastPreview();
+}
+
+function toggleSegmentPicker() { _segPickerOpen ? closeSegmentPicker() : openSegmentPicker(); }
+
+function openSegmentPicker() {
+  const dd = document.getElementById('segmentPickerDropdown');
+  const ch = document.getElementById('segmentPickerChevron');
+  const sr = document.getElementById('segmentPickerSearch');
+  if (dd) dd.style.display = 'block';
+  if (ch) ch.style.transform = 'rotate(180deg)';
+  if (sr) { sr.value = ''; sr.focus(); }
+  _segPickerOpen = true;
+  _renderSegmentList('');
+  setTimeout(() => document.addEventListener('click', _segPickerOutside, { once: true }), 0);
+}
+
+function closeSegmentPicker() {
+  const dd = document.getElementById('segmentPickerDropdown');
+  const ch = document.getElementById('segmentPickerChevron');
+  if (dd) dd.style.display = 'none';
+  if (ch) ch.style.transform = '';
+  _segPickerOpen = false;
+}
+
+function _segPickerOutside(e) {
+  const wrap = document.getElementById('segmentPickerWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    closeSegmentPicker();
+  } else if (_segPickerOpen) {
+    setTimeout(() => document.addEventListener('click', _segPickerOutside, { once: true }), 0);
+  }
+}
+
+async function loadComms() {
+  buildSegmentPicker();
   toggleBroadcastSubject();
   updateBroadcastPreview();
   _renderBroadcastHistory();
@@ -7434,6 +8607,51 @@ async function loadPushAnalytics() {
   }
 }
 
+async function openPushSubscribersModal() {
+  Modal.open('pushSubscribersModal');
+  const body = document.getElementById('pushSubscribersBody');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+  try {
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : '';
+    const res = await fetch('/api/push/subscribers', {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const { data = [] } = await res.json();
+    if (!data.length) {
+      body.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim)">No push subscribers yet.</div>';
+      return;
+    }
+    const dateStr = d => d ? new Date(d).toLocaleString('en-ZA', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+    body.innerHTML = `
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">${data.length} subscriber${data.length !== 1 ? 's' : ''}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:500">Name</th>
+            <th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:500">Email</th>
+            <th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:500">Channel</th>
+            <th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:500">Since</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(s => `
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:7px 8px;font-weight:500">${_esc(s.first_name)} ${_esc(s.last_name)}</td>
+              <td style="padding:7px 8px;color:var(--text-muted)">${_esc(s.email || '—')}</td>
+              <td style="padding:7px 8px"><span class="badge ${s.channel === 'mobile' ? 'badge--blue' : 'badge--green'}">${_esc(s.channel)}</span></td>
+              <td style="padding:7px 8px;color:var(--text-dim);white-space:nowrap">${dateStr(s.subscribed_at)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (err) {
+    body.innerHTML = `<div style="color:var(--danger);padding:12px">Failed to load subscribers: ${_esc(err.message)}</div>`;
+  }
+}
+
 /* ═══════════════════════════════════════════════
    NAV / AUM REPORT EXPORT (Feature 11)
    ═══════════════════════════════════════════════ */
@@ -7609,13 +8827,35 @@ function renderAMLTable() {
   }).join('');
 }
 
-async function resolveAMLFlag(id) {
-  if (!await Confirm.ask('Resolve AML flag?', { body: 'This AML flag will be marked as resolved.', confirmLabel: 'Resolve' })) return;
+function resolveAMLFlag(id) {
+  const flag = STATE.amlFlags.find(f => f.id === id);
+  const investorName = _esc(flag?.investor_name || 'this investor');
+  Modal.openInline(`
+    <div class="modal__header"><span class="modal__title">Resolve AML Flag</span><button class="modal__close" onclick="Modal.close('_inlineModal')"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal__body">
+      <p style="margin:0 0 14px;font-size:0.9rem;color:var(--text-muted)">Resolving AML flag for <strong style="color:var(--text)">${investorName}</strong>.</p>
+      <div class="form-group">
+        <label class="form-label">Resolution Notes (optional)</label>
+        <textarea class="form-input" id="_amlResolveNote" rows="3" placeholder="e.g. Documents verified, no suspicious activity found…"></textarea>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn--secondary" onclick="Modal.close('_inlineModal')">Cancel</button>
+      <button class="btn btn--success" onclick="_confirmResolveAML(${JSON.stringify(id)})"><i class="fa-solid fa-check"></i> Resolve</button>
+    </div>`);
+}
+
+async function _confirmResolveAML(id) {
+  const note = document.getElementById('_amlResolveNote')?.value?.trim() || '';
+  const adminResponse = note
+    ? `Resolved by admin on ${new Date().toLocaleDateString('en-ZA')}: ${note}`
+    : `Resolved by admin on ${new Date().toLocaleDateString('en-ZA')}`;
+  Modal.close('_inlineModal');
   try {
     await API._fetch('PATCH', `tables/support_tickets/${id}`, {
       status: 'resolved',
       resolved_at: new Date().toISOString(),
-      admin_response: `Resolved by admin on ${new Date().toLocaleDateString('en-ZA')}`
+      admin_response: adminResponse,
     });
     Toast.success('AML flag resolved');
     await loadAML();
@@ -7854,6 +9094,119 @@ function loadInvestorTimeline(inv, invsts, txns) {
       </div>
     </div>
   `).join('');
+}
+
+/* ═══════════════════════════════════════════════
+   ACTIVITY TAB
+   ═══════════════════════════════════════════════ */
+
+async function _loadInvestorActivity(investorId) {
+  const accessEl  = document.getElementById('invActivity-access');
+  const devicesEl = document.getElementById('invActivity-devices');
+  const sessEl    = document.getElementById('invActivity-sessions');
+  const devCnt    = document.getElementById('invActivity-deviceCount');
+  const sesCnt    = document.getElementById('invActivity-sessionCount');
+
+  if (!accessEl) return;
+
+  const spin = '<div style="text-align:center;padding:16px;color:var(--text-dim);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>';
+  [accessEl, devicesEl, sessEl].forEach(el => { if (el) el.innerHTML = spin; });
+
+  let data;
+  try {
+    const r = await fetch(`/api/tables/investors/${investorId}/activity`, { credentials: 'include' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    data = await r.json();
+  } catch (e) {
+    const err = `<div style="text-align:center;padding:16px;color:#ef4444;font-size:0.8rem">Failed to load activity</div>`;
+    [accessEl, devicesEl, sessEl].forEach(el => { if (el) el.innerHTML = err; });
+    return;
+  }
+
+  const { user, devices, sessions } = data;
+
+  // ── Account Access ──────────────────────────────────────
+  if (accessEl) {
+    const rows = [
+      ['Last Login',      user?.last_login  ? Utils.datetime(user.last_login) : '<span style="color:var(--text-dim)">Never</span>'],
+      ['Account Created', user?.created_at  ? Utils.datetime(user.created_at) : '—'],
+      ['2FA Enabled',     user?.totp_enabled
+        ? '<span style="color:#22c55e;font-weight:700"><i class="fa-solid fa-shield-check"></i> Yes</span>'
+        : '<span style="color:var(--text-dim)"><i class="fa-solid fa-shield-xmark"></i> No</span>'],
+      ['Account Status',  user?.is_active === false
+        ? '<span style="color:#ef4444;font-weight:700">Suspended</span>'
+        : '<span style="color:#22c55e;font-weight:700">Active</span>'],
+      ['Portal Role',     user?.role ? `<span style="text-transform:capitalize">${_esc(user.role)}</span>` : '—'],
+    ];
+    accessEl.innerHTML = rows.map(([label, val]) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:0.82rem">
+        <span style="color:var(--text-muted);min-width:120px">${label}</span>
+        <span style="font-weight:500;text-align:right">${val}</span>
+      </div>`).join('');
+  }
+
+  // ── Devices ─────────────────────────────────────────────
+  if (devicesEl) {
+    if (devCnt) devCnt.textContent = devices.length ? `${devices.length} device${devices.length > 1 ? 's' : ''}` : 'No devices';
+    if (!devices.length) {
+      devicesEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:0.82rem"><i class="fa-solid fa-mobile-screen" style="font-size:1.4rem;margin-bottom:8px;display:block;opacity:0.3"></i>App not yet downloaded</div>';
+    } else {
+      devicesEl.innerHTML = devices.map(d => {
+        const platIcon = d.platform === 'ios' ? 'fa-apple' : d.platform === 'android' ? 'fa-android' : 'fa-globe';
+        const platColor = d.platform === 'ios' ? '#888' : d.platform === 'android' ? '#22c55e' : '#eda5ff';
+        return `
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="width:36px;height:36px;border-radius:10px;background:${platColor}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="fa-brands ${platIcon}" style="color:${platColor};font-size:1.1rem"></i>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(d.device_name || (d.platform === 'ios' ? 'iPhone / iPad' : d.platform === 'android' ? 'Android Device' : 'Web Browser'))}</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">Version: ${_esc(d.app_version || 'Unknown')} · ${(d.platform||'').toUpperCase()}</div>
+            <div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">First registered: ${Utils.date(d.created_at)} · Last active: ${Utils.date(d.updated_at)}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // ── Sessions ─────────────────────────────────────────────
+  if (sessEl) {
+    if (sesCnt) sesCnt.textContent = sessions.length ? `${sessions.length} active` : 'None';
+    if (!sessions.length) {
+      sessEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:0.82rem"><i class="fa-solid fa-circle-xmark" style="font-size:1.4rem;margin-bottom:8px;display:block;opacity:0.3"></i>No active sessions</div>';
+    } else {
+      sessEl.innerHTML = sessions.map(s => {
+        const ua = s.user_agent || '';
+        let browser = 'Unknown browser';
+        if (/Edg\//i.test(ua))         browser = 'Edge';
+        else if (/Chrome\//i.test(ua)) browser = 'Chrome';
+        else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+        else if (/Safari\//i.test(ua))  browser = 'Safari';
+        let os = '';
+        if (/iPhone|iPad/i.test(ua))    os = 'iOS';
+        else if (/Android/i.test(ua))   os = 'Android';
+        else if (/Windows/i.test(ua))   os = 'Windows';
+        else if (/Mac OS/i.test(ua))    os = 'macOS';
+        else if (/Linux/i.test(ua))     os = 'Linux';
+        const deviceLabel = os ? `${browser} · ${os}` : browser;
+        const isRecent = s.last_used_at && (Date.now() - new Date(s.last_used_at).getTime()) < 5 * 60 * 1000;
+        return `
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="width:36px;height:36px;border-radius:10px;background:var(--surface-2,#f3f4f6);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="fa-solid fa-computer" style="color:var(--text-muted);font-size:1rem"></i>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(deviceLabel)}</span>
+              ${isRecent ? '<span style="font-size:0.65rem;background:#22c55e22;color:#22c55e;padding:1px 6px;border-radius:20px;font-weight:700">ONLINE</span>' : ''}
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">IP: ${_esc(s.ip_address || 'Unknown')}</div>
+            <div style="font-size:0.68rem;color:var(--text-dim);margin-top:2px">Started: ${Utils.datetime(s.created_at)} · Last active: ${Utils.datetime(s.last_used_at)}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -8134,10 +9487,11 @@ async function runMigration() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Migration failed');
 
-    const { counts, errors } = data;
+    const { counts, errors, errorCount } = data;
+    const totalErrors = errorCount ?? errors.length;
     const errHtml = errors.length
       ? `<div style="margin-top:12px;padding:10px 12px;background:rgba(239,68,68,0.08);border-radius:8px;font-size:0.78rem;color:#ef4444">
-           <strong>${errors.length} error(s):</strong><br>${errors.map(e => `• ${e}`).join('<br>')}
+           <strong>${totalErrors} error(s)${totalErrors > errors.length ? ` (showing first ${errors.length})` : ''}:</strong><br>${errors.map(e => `• ${e}`).join('<br>')}
          </div>`
       : '';
 
@@ -8170,6 +9524,172 @@ async function runMigration() {
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Run Again';
+  }
+}
+
+async function backfillOrphanPools(btn) {
+  await _withBtn(btn, async () => {
+    try {
+      const data = await API._fetch('POST', 'migrate/backfill-orphan-pools');
+      if (data.created === 0) {
+        Toast.success(data.message || 'No orphan pools found');
+        return;
+      }
+      const list = data.pools.map(p =>
+        `<li style="font-size:0.8rem;margin:4px 0"><span style="color:var(--gold);font-family:monospace">${_esc(p.pool_id)}</span> — ${_esc(p.name)} (${p.investments} investment${p.investments !== 1 ? 's' : ''})</li>`
+      ).join('');
+      Toast.success(`${data.created} orphan pool${data.created !== 1 ? 's' : ''} created`);
+      const el = document.getElementById('orphanPoolsResult');
+      if (el) el.innerHTML = `<ul style="margin:8px 0 0;padding-left:18px">${list}</ul>`;
+    } catch (e) {
+      Toast.error('Backfill failed: ' + (e.message || 'unknown error'));
+    }
+  });
+}
+
+let _emailInvestors = [];
+
+async function loadInvestorUsersForEmail() {
+  const btn    = document.getElementById('migLoadUsersBtn');
+  const list   = document.getElementById('migEmailList');
+  const toolbar = document.getElementById('migEmailToolbar');
+  const sendBtn = document.getElementById('migResendBtn');
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading…';
+
+  try {
+    const data = await API._fetch('GET', 'migrate/investor-users');
+    _emailInvestors = data.users || [];
+    renderInvestorEmailList();
+    toolbar.style.display = 'block';
+    list.style.display = 'block';
+    sendBtn.style.display = 'block';
+    updateEmailStats();
+  } catch (e) {
+    Toast.error(e.message || 'Failed to load investors');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Reload';
+  }
+}
+
+function renderInvestorEmailList() {
+  const q = (document.getElementById('migEmailSearch')?.value || '').toLowerCase();
+  const list = document.getElementById('migEmailList');
+  const filtered = _emailInvestors.filter(u =>
+    !q || `${u.first_name} ${u.last_name} ${u.email}`.toLowerCase().includes(q)
+  );
+
+  if (!filtered.length) {
+    list.innerHTML = '<div style="padding:14px;text-align:center;color:var(--text-muted);font-size:0.8rem">No investors found</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(u => `
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background=''">
+      <input type="checkbox" class="email-investor-cb" data-id="${u.id}" checked style="accent-color:#eda5ff;width:14px;height:14px;flex-shrink:0" onchange="updateEmailStats()">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.first_name || ''} ${u.last_name || ''}</div>
+        <div style="font-size:0.74rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.email}</div>
+      </div>
+      ${u.has_logged_in ? '<span style="font-size:0.68rem;padding:2px 6px;background:rgba(34,197,94,0.12);color:#22c55e;border-radius:4px;flex-shrink:0">logged in</span>' : ''}
+    </label>
+  `).join('');
+
+  updateEmailStats();
+}
+
+function filterInvestorEmailList() {
+  renderInvestorEmailList();
+}
+
+function toggleAllEmailInvestors(checked) {
+  document.querySelectorAll('.email-investor-cb').forEach(cb => { cb.checked = checked; });
+  updateEmailStats();
+}
+
+function updateEmailStats() {
+  const total    = document.querySelectorAll('.email-investor-cb').length;
+  const selected = document.querySelectorAll('.email-investor-cb:checked').length;
+  const stats    = document.getElementById('migEmailStats');
+  const label    = document.getElementById('migResendLabel');
+  if (stats) stats.textContent = `${selected} of ${total} selected`;
+  if (label) label.textContent = selected ? `Send to ${selected} Investor${selected !== 1 ? 's' : ''}` : 'Send Setup Emails';
+}
+
+async function resendSetupEmails() {
+  const btn = document.getElementById('migResendBtn');
+  const resultEl = document.getElementById('migResendResult');
+
+  const checked = [...document.querySelectorAll('.email-investor-cb:checked')];
+  if (!checked.length) return Toast.error('Select at least one investor.');
+
+  const userIds = checked.map(cb => cb.dataset.id);
+  if (!confirm(`Send account setup emails to ${userIds.length} investor${userIds.length !== 1 ? 's' : ''}?`)) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending…';
+  resultEl.style.display = 'none';
+
+  try {
+    const data = await API._fetch('POST', 'migrate/resend-setup-emails', { userIds });
+    const errHtml = data.errors?.length
+      ? `<div style="margin-top:8px;font-size:0.75rem;color:#ef4444"><strong>${data.errors.length} failed:</strong><br>${data.errors.map(e => `• ${e}`).join('<br>')}</div>`
+      : '';
+    resultEl.innerHTML = `
+      <div style="padding:10px 14px;background:rgba(34,197,94,0.08);border-radius:8px;font-size:0.85rem;color:#22c55e">
+        <i class="fa-solid fa-check-circle"></i>
+        Sent <strong>${data.sent}</strong> of <strong>${data.total}</strong> emails successfully.
+      </div>${errHtml}`;
+    resultEl.style.display = 'block';
+    Toast.success(`${data.sent} setup email${data.sent !== 1 ? 's' : ''} sent`);
+  } catch (e) {
+    Toast.error(e.message || 'Failed to send emails');
+  } finally {
+    btn.disabled = false;
+    updateEmailStats();
+    btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> <span id="migResendLabel">${document.getElementById('migResendLabel')?.textContent || 'Send Setup Emails'}</span>`;
+  }
+}
+
+async function recalculatePoolStats(btn) {
+  const resultEl = document.getElementById('poolRecalcResult');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Recalculating…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/pools/recalculate');
+    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Updated ${data.poolsUpdated} pool${data.poolsUpdated !== 1 ? 's' : ''} successfully.</span>`;
+    Toast.success(`Pool stats recalculated (${data.poolsUpdated} pools updated)`);
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    Toast.error(e.message || 'Recalculation failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-calculator"></i> Recalculate Pool Stats';
+  }
+}
+
+async function backfillFicaFromKyc(btn) {
+  const resultEl = document.getElementById('ficaBackfillResult');
+  if (!await Confirm.ask(
+    'Approve FICA for all KYC-approved investors?',
+    { body: 'This will set fica_status = "approved" and status = "active" for every investor whose kyc_status is already "approved". Continue?', confirmLabel: 'Run Backfill' }
+  )) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running…';
+  resultEl.textContent = '';
+  try {
+    const data = await API._fetch('POST', 'admin/backfill/fica-from-kyc');
+    resultEl.innerHTML = `<span style="color:#22c55e"><i class="fa-solid fa-check-circle"></i> Updated <strong>${data.updated}</strong> investor${data.updated !== 1 ? 's' : ''} (${data.fromKyc} from KYC→FICA, ${data.fromFica} from FICA→KYC sync).</span>`;
+    Toast.success(`FICA backfill complete — ${data.updated} investors updated`);
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#ef4444">${e.message || 'Failed'}</span>`;
+    Toast.error(e.message || 'Backfill failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-shield-check"></i> Approve FICA for all KYC-approved clients';
   }
 }
 
@@ -8237,16 +9757,34 @@ async function loadCompliance() {
     }).join('');
   }
 
-  // KYC expiry — investors with pending KYC older than 90 days
+  // KYC expiry — documents with expiry_date within 60 days, plus stale pending KYC
   const kycEl = document.getElementById('kycExpiryBody');
   if (kycEl) {
+    const in60 = new Date(now.getTime() + 60 * 86400000);
+    const expiring = STATE.kyc.filter(k => k.expiry_date && new Date(k.expiry_date) <= in60);
     const stale = STATE.investors.filter(i => i.kyc_status === 'pending' && i.date_joined && (now - new Date(i.date_joined)) > 90 * 86400000).slice(0, 10);
-    kycEl.innerHTML = stale.length
-      ? stale.map(i => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-          <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${i.first_name} ${i.last_name}</div><div style="font-size:0.7rem;color:var(--text-muted)">${i.id}</div></div>
+    const alerts = [
+      ...expiring.map(k => {
+        const inv = STATE.investors.find(i => i.id === k.investor_id);
+        const name = k.investor_name || (inv ? `${inv.first_name} ${inv.last_name}` : k.investor_id);
+        const daysLeft = Math.ceil((new Date(k.expiry_date) - now) / 86400000);
+        const isPast = daysLeft < 0;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;color:var(--text)">${_esc(name)}</div>
+            <div style="font-size:0.7rem;color:var(--text-muted)">${_esc(k.doc_type || k.document_type || 'Document')} · expires ${Utils.date(k.expiry_date)}</div>
+          </div>
+          <span class="badge ${isPast ? 'badge--red' : 'badge--yellow'}" style="font-size:0.68rem">${isPast ? 'Expired' : `${daysLeft}d left`}</span>
+        </div>`;
+      }),
+      ...stale.map(i => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div><div style="font-size:0.82rem;font-weight:700;color:var(--text)">${i.first_name} ${i.last_name}</div><div style="font-size:0.7rem;color:var(--text-muted)">${i.id} · pending &gt;90 days</div></div>
           <span class="badge badge--red" style="font-size:0.68rem">KYC Stale</span>
-        </div>`).join('')
-      : '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:0.82rem"><i class="fa-solid fa-circle-check" style="color:#22c55e;margin-right:6px"></i>No stale KYC records</div>';
+        </div>`),
+    ];
+    kycEl.innerHTML = alerts.length
+      ? alerts.join('')
+      : '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:0.82rem"><i class="fa-solid fa-circle-check" style="color:#22c55e;margin-right:6px"></i>No KYC expiry alerts</div>';
   }
 
   // Maturity instructions outstanding
@@ -8570,7 +10108,7 @@ function renderAcceptedDocsTable() {
 
   const docColor = { terms_of_service:'#656565', privacy_policy:'#22c55e', popia_notice:'#eda5ff', fica_consent:'#fec24f', risk_disclaimer:'#ef4444' };
 
-  tbody.innerHTML = rows.slice(0, 500).map(d => {
+  tbody.innerHTML = rows.map(d => {
     const inv  = d.investor;
     const name = inv ? `${_esc(inv.first_name)} ${_esc(inv.last_name)}` : `<span style="color:#7a92a8">${_esc(d.investor_id || '—')}</span>`;
     const email = inv ? `<div style="font-size:0.72rem;color:#7a92a8">${_esc(inv.email || '')}</div>` : '';
@@ -8924,18 +10462,40 @@ function _renderIntlInterest(data) {
   const footer = document.getElementById('intlInterestFooter');
   if (!body) return;
   if (!data.length) {
-    body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#7a92a8;padding:32px"><i class="fa-solid fa-earth-africa" style="font-size:1.5rem;margin-bottom:8px;display:block"></i>No international interest registrations yet</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#7a92a8;padding:32px"><i class="fa-solid fa-earth-africa" style="font-size:1.5rem;margin-bottom:8px;display:block"></i>No international interest registrations yet</td></tr>`;
     if (footer) footer.textContent = '';
     return;
   }
-  body.innerHTML = data.map(r => `
-    <tr>
+  body.innerHTML = data.map(r => {
+    const contacted = r.status === 'contacted';
+    const statusBadge = contacted
+      ? `<span style="background:rgba(100,237,0,0.15);color:#65ed00;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700"><i class="fa-solid fa-check"></i> Contacted</span>`
+      : `<span style="background:rgba(254,194,79,0.15);color:#fec24f;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">New</span>`;
+    return `<tr>
       <td style="font-weight:600;color:#e8edf2">${_esc(r.full_name || '—')}</td>
       <td><a href="mailto:${_esc(r.email)}" style="color:#fec24f;text-decoration:none">${_esc(r.email)}</a></td>
       <td>${_esc(r.country || '—')}</td>
+      <td>${statusBadge}</td>
       <td style="color:#7a92a8">${r.created_at ? new Date(r.created_at).toLocaleDateString('en-ZA',{day:'2-digit',month:'short',year:'numeric'}) : '—'}</td>
-    </tr>`).join('');
+      <td>
+        <div style="display:flex;gap:6px">
+          ${!contacted ? `<button class="btn btn--sm btn--success" onclick='markIntlContacted(${JSON.stringify(r.id)})' title="Mark as contacted"><i class="fa-solid fa-check"></i></button>` : ''}
+          <a class="btn btn--sm btn--secondary" href="mailto:${_esc(r.email)}?subject=${encodeURIComponent('SVCapital International Investment Enquiry')}" title="Send email"><i class="fa-solid fa-envelope"></i></a>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
   if (footer) footer.textContent = `${data.length} registration${data.length !== 1 ? 's' : ''}`;
+}
+
+async function markIntlContacted(id) {
+  try {
+    await API._fetch('PATCH', `tables/international_waitlist/${id}`, { status: 'contacted' });
+    const rec = _intlData.find(r => r.id === id);
+    if (rec) rec.status = 'contacted';
+    _renderIntlInterest(_intlData);
+    Toast.success('Marked as contacted');
+  } catch (e) { Toast.error('Failed to update status'); }
 }
 
 function filterIntlInterest(q) {
@@ -8989,7 +10549,12 @@ async function loadFeedback(filter = 'all') {
   _fbCurrentFilter = filter;
   ['pending','approved','rejected','all'].forEach(f => {
     const btn = document.getElementById(`fbFilter${f.charAt(0).toUpperCase()+f.slice(1)}`);
-    if (btn) btn.style.fontWeight = f === filter ? '800' : '';
+    if (!btn) return;
+    const active = f === filter;
+    btn.style.fontWeight = active ? '800' : '';
+    btn.style.background = active ? 'rgba(237,165,255,0.15)' : '';
+    btn.style.color = active ? '#eda5ff' : '';
+    btn.style.borderColor = active ? 'rgba(237,165,255,0.4)' : '';
   });
   const list = document.getElementById('feedbackList');
   if (!list) return;
@@ -9107,29 +10672,27 @@ async function loadEmailLogs(resetPage = true) {
       _emailLogsOffset === 0 ? API._fetch('GET', 'email-logs/stats') : Promise.resolve(null),
     ]);
 
-    // Stats chips
+    // Stats chips — clickable to filter
     if (statsRes) {
       const statsEl = document.getElementById('emailLogStats');
       if (statsEl) {
         const t = statsRes.totals || {};
-        statsEl.innerHTML = `
-          <div style="background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px">
-            <div style="font-size:1.4rem;font-weight:800">${parseInt(t.total||0).toLocaleString('en-ZA')}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted)">Total Emails</div>
-          </div>
-          <div style="background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px">
-            <div style="font-size:1.4rem;font-weight:800;color:#22c55e">${parseInt(t.sent||0).toLocaleString('en-ZA')}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted)">Sent</div>
-          </div>
-          <div style="background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px">
-            <div style="font-size:1.4rem;font-weight:800;color:#ef4444">${parseInt(t.failed||0).toLocaleString('en-ZA')}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted)">Failed</div>
-          </div>
-          ${(statsRes.byType||[]).slice(0,4).map(b => `
-          <div style="background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px">
-            <div style="font-size:1.2rem;font-weight:800">${parseInt(b.total).toLocaleString('en-ZA')}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted)">${EMAIL_TYPE_LABELS[b.type] || b.type}</div>
-          </div>`).join('')}`;
+        const chip = (val, label, num, color) => {
+          const numFmt = parseInt(num||0).toLocaleString('en-ZA');
+          const style = `background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px;cursor:${val?'pointer':'default'};transition:box-shadow 0.15s` + (val ? ';user-select:none' : '');
+          const onclick = val ? `onclick="_emailLogFilterStatus('${val}')"` : '';
+          return `<div style="${style}" ${onclick} title="${val ? 'Click to filter by '+label : ''}">
+            <div style="font-size:1.4rem;font-weight:800${color?';color:'+color:''}">${numFmt}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">${label}</div>
+          </div>`;
+        };
+        statsEl.innerHTML =
+          chip('', 'Total Emails', t.total, '') +
+          chip('sent', 'Sent', t.sent, '#22c55e') +
+          chip('failed', 'Failed', t.failed, '#ef4444') +
+          (statsRes.byType||[]).slice(0,4).map(b =>
+            chip('', EMAIL_TYPE_LABELS[b.type] || b.type, b.total, '')
+          ).join('');
       }
     }
 
@@ -9142,18 +10705,24 @@ async function loadEmailLogs(resetPage = true) {
       return;
     }
 
+    const RETRYABLE_TYPES = new Set(['account_setup', 'password_reset']);
     tbody.innerHTML = logs.map(l => {
       const sent = l.sent_at ? new Date(l.sent_at).toLocaleString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Johannesburg' }) : '—';
-      const statusPill = l.status === 'sent'
-        ? `<span style="background:#dcfce7;color:#166534;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600">Sent</span>`
-        : `<span style="background:#fee2e2;color:#991b1b;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600" title="${l.error || ''}">Failed</span>`;
+      const isFailed = l.status !== 'sent';
+      const statusPill = isFailed
+        ? `<span style="background:#fee2e2;color:#991b1b;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600" title="${(l.error||'').replace(/"/g,"'")}">Failed</span>`
+        : `<span style="background:#dcfce7;color:#166534;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600">Sent</span>`;
       const typePill = `<span style="background:rgba(254,194,79,0.1);color:#b45309;border-radius:6px;padding:2px 8px;font-size:0.75rem;font-weight:600">${EMAIL_TYPE_LABELS[l.type] || l.type}</span>`;
+      const resendBtn = isFailed && RETRYABLE_TYPES.has(l.type)
+        ? `<button class="btn btn--sm btn--ghost" style="font-size:0.72rem;padding:3px 8px" onclick="retrySingleEmail('${l.id}', this)"><i class="fa-solid fa-paper-plane"></i> Resend</button>`
+        : '';
       return `<tr style="border-bottom:1px solid var(--border)">
         <td style="padding:10px 12px">${l.to_email}</td>
-        <td style="padding:10px 12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.subject}">${l.subject}</td>
+        <td style="padding:10px 12px;max-width:320px;word-break:break-word">${l.subject || ''}</td>
         <td style="padding:10px 12px">${typePill}</td>
         <td style="padding:10px 12px">${statusPill}</td>
         <td style="padding:10px 12px;white-space:nowrap">${sent}</td>
+        <td style="padding:10px 12px">${resendBtn}</td>
       </tr>`;
     }).join('');
 
@@ -9172,6 +10741,385 @@ async function loadEmailLogs(resetPage = true) {
         </div>`;
     }
   } catch (err) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="padding:40px;text-align:center;color:#ef4444">${err.message}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="padding:40px;text-align:center;color:#ef4444">${err.message}</td></tr>`;
   }
+}
+
+function _emailLogFilterStatus(status) {
+  const sel = document.getElementById('emailLogStatus');
+  if (sel) { sel.value = status; loadEmailLogs(); }
+}
+
+async function exportEmailLogsCSV() {
+  const search = (document.getElementById('emailLogSearch') || {}).value || '';
+  const type   = (document.getElementById('emailLogType')   || {}).value || '';
+  const status = (document.getElementById('emailLogStatus') || {}).value || '';
+  Toast.info('Preparing export…');
+  try {
+    const params = { limit: 5000, offset: 0 };
+    if (search) params.search = search;
+    if (type)   params.type   = type;
+    if (status) params.status = status;
+    const res = await API._fetch('GET', 'email-logs', null, params);
+    const rows = res.data || [];
+    if (!rows.length) { Toast.info('No records to export.'); return; }
+    const headers = ['Recipient', 'Subject', 'Type', 'Status', 'Sent At', 'Error'];
+    const escape  = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines   = [
+      headers.map(escape).join(','),
+      ...rows.map(l => [
+        l.to_email, l.subject, EMAIL_TYPE_LABELS[l.type] || l.type,
+        l.status, l.sent_at ? new Date(l.sent_at).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' }) : '',
+        l.error || '',
+      ].map(escape).join(',')),
+    ];
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), { href: url, download: `email-logs-${new Date().toISOString().slice(0,10)}.csv` });
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    Toast.success(`Exported ${rows.length} rows.`);
+  } catch (e) {
+    Toast.error('Export failed: ' + e.message);
+  }
+}
+
+async function retrySingleEmail(id, btn) {
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; }
+  try {
+    await API._fetch('POST', `email-logs/${id}/retry`);
+    Toast.success('Email resent successfully.');
+    if (btn) { btn.innerHTML = '<i class="fa-solid fa-check"></i> Sent'; btn.style.color = '#22c55e'; }
+  } catch (e) {
+    Toast.error(e.message || 'Failed to resend.');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Resend'; }
+  }
+}
+
+async function retryAllFailedEmails() {
+  const typeEl = document.getElementById('emailLogType');
+  const type = typeEl?.value || '';
+  const RETRYABLE = ['account_setup', 'password_reset'];
+  if (type && !RETRYABLE.includes(type)) {
+    return Toast.error(`Bulk resend is only supported for Account Setup and Password Reset emails.`);
+  }
+  const label = type ? (EMAIL_TYPE_LABELS[type] || type) : 'Account Setup';
+  if (!await Confirm.ask(`Resend all failed ${label} emails?`, {
+    body: 'This will send setup links to investors whose emails previously failed. Up to 500 at a time.',
+    confirmLabel: 'Resend All',
+  })) return;
+  try {
+    Toast.info('Processing… this may take a moment.');
+    const res = await API._fetch('POST', 'email-logs/retry-failed', { type: type || 'account_setup' });
+    Toast.success(`Done: ${res.sent} sent, ${res.errors} errors out of ${res.processed} processed.`);
+    loadEmailLogs();
+  } catch (e) {
+    Toast.error(e.message || 'Bulk resend failed.');
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   SEND EMAIL TO SINGLE INVESTOR
+   ═══════════════════════════════════════════════ */
+async function sendInvestorEmail(investorId, email, btn) {
+  const subject = document.getElementById('invEmailSubject')?.value.trim();
+  const message = document.getElementById('invEmailMessage')?.value.trim();
+  if (!subject) { Toast.error('Subject is required'); return; }
+  if (!message) { Toast.error('Message is required'); return; }
+  await _withBtn(btn, async () => {
+    try {
+      await API._fetch('POST', 'admin/send-investor-email', { investor_id: investorId, subject, message });
+      Toast.success(`Email sent to ${email}`);
+      const subEl = document.getElementById('invEmailSubject');
+      const msgEl = document.getElementById('invEmailMessage');
+      if (subEl) subEl.value = '';
+      if (msgEl) msgEl.value = '';
+    } catch (e) { Toast.error('Failed to send email: ' + (e.message || 'error')); }
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   VIEW AS INVESTOR (MAGIC LINK)
+   ═══════════════════════════════════════════════ */
+async function viewAsInvestor(investorId) {
+  try {
+    const res = await API._fetch('POST', 'auth/investor-magic-link', { investor_id: investorId });
+    if (!res.ok || !res.url) throw new Error(res.error || 'No URL returned');
+    window.open(res.url, '_blank', 'noopener,noreferrer');
+    Toast.info('Portal opened in a new tab — link expires in 15 minutes');
+  } catch (e) { Toast.error('Failed to generate magic link: ' + (e.message || 'error')); }
+}
+
+/* ═══════════════════════════════════════════════
+   INVESTOR STATEMENTS
+   ═══════════════════════════════════════════════ */
+async function _loadInvestorStatements(investorId) {
+  const el = document.getElementById('invStatementsList');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>';
+  try {
+    const res = await API._fetch('GET', 'admin/investor-statements', null, { investor_id: investorId });
+    const stmts = res.statements || [];
+    if (!stmts.length) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-file-circle-xmark" style="font-size:2rem;display:block;margin-bottom:10px;opacity:0.3"></i>No statements generated yet</div>';
+      return;
+    }
+    const monthNames = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    el.innerHTML = `<div style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr><th>Period</th><th>Generated</th><th></th></tr></thead>
+        <tbody>${stmts.map(s => `<tr>
+          <td class="td-strong">${monthNames[s.period_month] || s.period_month} ${s.period_year}</td>
+          <td class="td-muted">${Utils.date(s.created_at)}</td>
+          <td><button class="btn btn--secondary btn--sm" onclick='downloadInvestorStatement(${JSON.stringify(s.id)},${JSON.stringify(investorId)},${s.period_year},${s.period_month},this)'><i class="fa-solid fa-download"></i> PDF</button></td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  } catch (e) {
+    el.innerHTML = '<div style="text-align:center;padding:32px;color:#ef4444;font-size:0.82rem"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load statements</div>';
+  }
+}
+
+async function downloadInvestorStatement(stmtId, investorId, year, month, btn) {
+  await _withBtn(btn, async () => {
+    try {
+      const token = localStorage.getItem('svc_token');
+      const r = await fetch(`/api/admin/investor-statements/${encodeURIComponent(stmtId)}/pdf?investor_id=${encodeURIComponent(investorId)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `SVC-Statement-${year}-${String(month).padStart(2,'0')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { Toast.error('Failed to download: ' + e.message); }
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   POOL CLOSE-OUT WIZARD
+   ═══════════════════════════════════════════════ */
+function openPoolCloseoutWizard(poolId) {
+  const pool = STATE.pools.find(p => p.id === poolId);
+  if (!pool) return;
+  const investors = (STATE.investments || []).filter(i => i.pool_id === poolId && i.status === 'active');
+  const totalAmt  = investors.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+  const modal = document.getElementById('poolCloseoutModal');
+  if (!modal) { Toast.error('Close-out modal not found — refresh the page'); return; }
+  document.getElementById('closeoutPoolId').value   = poolId;
+  document.getElementById('closeoutPoolName').textContent = pool.name;
+  document.getElementById('closeoutInvCount').textContent = `${investors.length} investor${investors.length !== 1 ? 's' : ''}`;
+  document.getElementById('closeoutTotalAmt').textContent = Utils.rand(totalAmt);
+  document.getElementById('closeoutMaturityDate').textContent = Utils.date(pool.maturity_date || pool.end_date);
+  document.getElementById('closeoutActualRate').value = pool.actual_rate ? (pool.actual_rate * 100).toFixed(4) : '';
+  document.getElementById('closeoutNotify').checked = true;
+  Modal.open('poolCloseoutModal');
+}
+
+async function savePoolCloseout(btn) {
+  const poolId    = document.getElementById('closeoutPoolId').value;
+  const rateInput = document.getElementById('closeoutActualRate').value.trim();
+  const notify    = document.getElementById('closeoutNotify')?.checked;
+  if (!rateInput) { Toast.error('Actual rate is required'); return; }
+  const rate = parseFloat(rateInput) / 100;
+  if (isNaN(rate) || rate < 0 || rate > 2) { Toast.error('Enter rate as a percentage (e.g. 15.61)'); return; }
+
+  await _withBtn(btn, async () => {
+    try {
+      await API.pools.update(poolId, { status: 'matured', actual_rate: rate });
+      if (notify) {
+        try {
+          await API._fetch('POST', 'admin/broadcast', {
+            target: 'pool',
+            pool_id: poolId,
+            template: 'maturity_notification',
+            subject: 'Your investment has matured',
+            message: `Your investment has matured at an actual return rate of ${(rate * 100).toFixed(2)}%. Please log in to your portal to view your maturity instruction options.`,
+          });
+        } catch (_) {}
+      }
+      Toast.success('Pool finalised — status set to matured');
+      Modal.close('poolCloseoutModal');
+      await loadPools();
+    } catch (e) { Toast.error('Failed to finalise pool: ' + (e.message || 'error')); }
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   UPCOMING MATURITIES
+   ═══════════════════════════════════════════════ */
+async function loadUpcomingMaturities() {
+  const el = document.getElementById('upcomingMaturitiesBody');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+  try {
+    if (!STATE.pools.length) STATE.pools = (await API.pools.list({ limit: 5000 })).data || [];
+    const now = new Date();
+    const in90 = new Date(now.getTime() + 90 * 86400000);
+    const upcoming = STATE.pools
+      .filter(p => {
+        const mat = p.maturity_date || p.end_date;
+        if (!mat || p.status === 'paid_out') return false;
+        const d = new Date(mat);
+        return d >= now && d <= in90;
+      })
+      .sort((a, b) => new Date(a.maturity_date || a.end_date) - new Date(b.maturity_date || b.end_date));
+
+    if (!upcoming.length) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-circle-check" style="color:#22c55e;margin-right:6px"></i>No pools maturing in the next 90 days</div>';
+      return;
+    }
+    el.innerHTML = `<div style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr><th>Pool</th><th>Partner</th><th>Investors</th><th>Maturity Date</th><th>Days Left</th><th>Status</th><th></th></tr></thead>
+        <tbody>${upcoming.map(p => {
+          const mat = new Date(p.maturity_date || p.end_date);
+          const daysLeft = Math.ceil((mat - now) / 86400000);
+          const urgency  = daysLeft <= 7 ? '#ef4444' : daysLeft <= 30 ? '#fec24f' : '#22c55e';
+          const pi = Utils.productInfo(p.product_type);
+          return `<tr>
+            <td class="td-strong">${_esc(p.name)}</td>
+            <td class="td-muted">${_esc(p.partner_name||'—')}</td>
+            <td style="font-weight:700;color:var(--gold)">${p.live_investor_count ?? p.investor_count ?? 0}</td>
+            <td class="td-muted">${Utils.date(p.maturity_date || p.end_date)}</td>
+            <td><span style="font-weight:800;color:${urgency}">${daysLeft}d</span></td>
+            <td>${Utils.statusBadge(p.status)}</td>
+            <td>
+              ${p.status === 'matured' ? `<button class="btn btn--success btn--sm" onclick="openPoolCloseoutWizard('${p.id}')"><i class="fa-solid fa-check-circle"></i> Close Out</button>` : ''}
+            </td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted);text-align:right">${upcoming.length} pool${upcoming.length!==1?'s':''} maturing within 90 days</div>`;
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${e.message}</div>`; }
+}
+
+/* ═══════════════════════════════════════════════
+   FAILED LOGINS VIEW
+   ═══════════════════════════════════════════════ */
+async function loadFailedLogins() {
+  const el = document.getElementById('failedLoginsBody');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+  try {
+    const res = await API.list('audit_events', {
+      limit: 200,
+      order: 'created_at.desc',
+    });
+    const events = (res.data || []).filter(e => e.event_type === 'user.login_failed' || e.event_type === 'user.login_locked');
+    if (!events.length) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:0.85rem"><i class="fa-solid fa-shield-check" style="color:#22c55e;font-size:2rem;display:block;margin-bottom:10px"></i>No failed login events recorded</div>';
+      return;
+    }
+    el.innerHTML = `<div style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr><th>Time</th><th>Email</th><th>Event</th><th>IP</th><th>Attempts</th></tr></thead>
+        <tbody>${events.map(e => {
+          const meta = (() => { try { return typeof e.metadata === 'string' ? JSON.parse(e.metadata) : (e.metadata || {}); } catch (_) { return {}; } })();
+          const isLock = e.event_type === 'user.login_locked';
+          return `<tr>
+            <td class="td-muted" style="font-size:0.78rem">${Utils.date(e.created_at)}</td>
+            <td class="td-strong" style="font-size:0.82rem">${_esc(e.user_email || e.actor_id || '—')}</td>
+            <td><span class="badge ${isLock ? 'badge--red' : 'badge--yellow'}">${isLock ? 'Account Locked' : 'Failed Login'}</span></td>
+            <td class="td-muted" style="font-family:monospace;font-size:0.78rem">${_esc(e.ip_address || '—')}</td>
+            <td style="font-weight:700;color:${isLock?'#ef4444':'#fec24f'}">${meta.attempts || '—'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted)">${events.length} event${events.length!==1?'s':''} · Showing most recent 200 audit records filtered for login failures</div>`;
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load: ${e.message}</div>`; }
+}
+
+/* ═══════════════════════════════════════════════
+   STAFF PERMISSIONS (RBAC)
+   ═══════════════════════════════════════════════ */
+async function loadStaffPermissions() {
+  const el = document.getElementById('staffPermissionsBody');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+  try {
+    const res = await API.list('users', { limit: 200 });
+    const staff = (res.data || []).filter(u => ['admin','director','fund_manager','ifa','staff'].includes(u.role));
+    if (!staff.length) {
+      el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted);font-size:0.85rem">No staff accounts found</div>';
+      return;
+    }
+    const roleColor = { admin:'#eda5ff', director:'#ef4444', fund_manager:'#fec24f', ifa:'#22c55e', staff:'#60a5fa', investor:'#7a92a8' };
+    el.innerHTML = `<div style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr><th>Name / Email</th><th>Role</th><th>Status</th><th>2FA</th><th>Last Login</th></tr></thead>
+        <tbody>${staff.map(u => {
+          const color = roleColor[u.role] || '#7a92a8';
+          const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email;
+          return `<tr>
+            <td>
+              <div class="td-strong">${_esc(name)}</div>
+              <div class="td-muted" style="font-size:0.72rem">${_esc(u.email)}</div>
+            </td>
+            <td><span class="badge" style="background:${color}22;color:${color};border:1px solid ${color}44">${_esc(u.role)}</span></td>
+            <td>${Utils.statusBadge(u.status || 'active')}</td>
+            <td>${u.totp_enabled ? '<span class="badge badge--green" style="font-size:0.68rem"><i class="fa-solid fa-shield-check"></i> On</span>' : '<span class="badge badge--grey" style="font-size:0.68rem">Off</span>'}</td>
+            <td class="td-muted" style="font-size:0.78rem">${u.last_login ? Utils.date(u.last_login) : '—'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted)">${staff.length} staff account${staff.length!==1?'s':''}</div>`;
+  } catch (e) { el.innerHTML = `<div style="color:#ef4444;padding:16px;font-size:0.82rem">Failed to load staff: ${e.message}</div>`; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SSE — Real-time Admin Notifications
+══════════════════════════════════════════════════════════════ */
+function _initSSE() {
+  if (!window.EventSource) return;
+  const raw = localStorage.getItem('staffSession');
+  let token = '';
+  try { const s = JSON.parse(raw || '{}'); if (s.token) token = s.token; } catch (_) {}
+  if (!token) { try { token = localStorage.getItem('svc_staff_token') || ''; } catch (_) {} }
+
+  const url = `/api/events/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  let delay = 3000;
+
+  function connect() {
+    const src = new EventSource(url);
+
+    src.addEventListener('kyc_submitted', e => {
+      try {
+        const d = JSON.parse(e.data);
+        Toast.info(`KYC uploaded: ${d.investor_name || 'An investor'} submitted documents`, 9000, {
+          action: { label: 'Review', callback: () => { const btn = document.querySelector('[data-view=kyc]'); if (btn) navigate('kyc', btn); } }
+        });
+        const badge = document.getElementById('kycBadge');
+        if (badge) badge.textContent = (parseInt(badge.textContent, 10) || 0) + 1;
+      } catch (_) {}
+    });
+
+    src.addEventListener('withdrawal_requested', e => {
+      try {
+        const d = JSON.parse(e.data);
+        const amt = d.amount ? ` — R${parseFloat(d.amount).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}` : '';
+        Toast.info(`Withdrawal request: ${d.investor_name || 'Investor'}${amt}`, 9000, {
+          action: { label: 'Review', callback: () => { const btn = document.querySelector('[data-view=withdrawals]'); if (btn) navigate('withdrawals', btn); } }
+        });
+      } catch (_) {}
+    });
+
+    src.addEventListener('investor_registered', e => {
+      try {
+        const d = JSON.parse(e.data);
+        Toast.info(`New investor: ${d.investor_name || 'Investor'} registered`, 6000);
+      } catch (_) {}
+    });
+
+    src.onerror = () => { src.close(); delay = Math.min(delay * 2, 30000); setTimeout(connect, delay); };
+    src.onopen  = () => { delay = 3000; };
+  }
+
+  connect();
 }

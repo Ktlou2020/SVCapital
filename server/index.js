@@ -38,7 +38,7 @@ app.use(helmet({
       styleSrc:      ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'cdnjs.cloudflare.com'],
       fontSrc:       ["'self'", 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com'],
       // Narrowed from '*' — external images only allowed from trusted chart/QR sources
-      imgSrc:        ["'self'", 'data:', 'blob:', 'api.qrserver.com', 'chart.googleapis.com'],
+      imgSrc:        ["'self'", 'data:', 'blob:', 'api.qrserver.com', 'chart.googleapis.com', 'img.youtube.com', 'i.ytimg.com'],
       connectSrc:    ["'self'", 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com', 'api.paystack.co', '*.paystack.co', 'pay.ozow.com'],
       frameSrc:      ["'self'", 'checkout.paystack.com'],
       objectSrc:     ["'none'"],
@@ -177,6 +177,7 @@ app.use('/api/analytics',  require('./routes/friction'));
 app.use('/api/statements', require('./routes/statements'));
 app.use('/api/waitlist',   require('./routes/waitlist'));
 app.use('/api/migrate',   require('./routes/migrate'));
+app.use('/api/events',    require('./routes/events').router);
 app.use('/api/settings',  require('./routes/settings'));
 app.use('/api/legal',     require('./routes/legal'));
 app.use('/api/quests',        require('./routes/quests'));
@@ -337,11 +338,26 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startPoolCyclerCron } = require('./jobs/poolCyclerCron');
   startPoolCyclerCron();
 
+  // Archive dormant investors (no investments after 6 months) — daily 00:00 UTC
+  const { startArchiveCron } = require('./jobs/archiveCron');
+  startArchiveCron();
+
   // Email queue processor — runs every 2 minutes
   const emailQueueCron = require('node-cron');
   const { processQueue } = require('./services/emailQueue');
   emailQueueCron.schedule('*/2 * * * *', () => {
     processQueue().catch(e => console.error('[emailQueue cron]', e.message));
+  });
+
+  // Self-ping every 4 minutes — keeps the Node process and DB pool warm so
+  // the first real user request is never cold. Works on all Railway plan tiers.
+  const http = require('http');
+  emailQueueCron.schedule('*/4 * * * *', () => {
+    const req = http.get(`http://localhost:${PORT}/api/health`, res => {
+      res.resume(); // drain response body so socket is freed
+    });
+    req.on('error', () => {}); // ignore — server may be mid-restart
+    req.setTimeout(5000, () => req.destroy());
   });
 });
 

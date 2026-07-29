@@ -26,6 +26,13 @@ function _getPush() {
   return _pushSvc;
 }
 
+/* ─── Lazy-load SSE broadcast ─── */
+let _sseBroadcast = null;
+function _getBroadcast() {
+  if (!_sseBroadcast) { try { _sseBroadcast = require('./events').broadcast; } catch (_) {} }
+  return _sseBroadcast;
+}
+
 /* ─── Fire-and-forget push helper ─── */
 async function _sendPush(investorId, payload) {
   const ps = _getPush();
@@ -47,7 +54,10 @@ async function _sendPush(investorId, payload) {
 
 /* ─── Input Validation ─── */
 const NUMERIC_FIELDS = new Set(['amount','wallet_balance','total_invested','total_returns','annual_rate','max_capacity','current_invested','recurring_amount','xp_points']);
-const STATUS_FIELDS  = { status: ['active','inactive','suspended','pending','pending_fica','fica_submitted','matured','paid_out','cancelled','rejected','open','filling','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor','submitted','approved','expired'], fica_status: ['pending','approved','rejected','not_started','submitted'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','payout_custom','reinvest','switch_product','custom_switch','pending'] };
+const STATUS_FIELDS  = { status: ['active','inactive','suspended','pending','pending_fica','fica_submitted','matured','paid_out','cancelled','rejected','open','filling','closed','resolved','in_review','completed','waitlist','in_progress','waiting_investor','submitted','approved','expired','archived'], fica_status: ['pending','approved','rejected','not_started','submitted','in_progress'], bank_account_status: ['none','pending','approved','rejected'], maturity_instruction: ['payout_all','payout_return','payout_custom','reinvest','switch_product','custom_switch','pending'] };
+
+/* Normalise external fica_status values (e.g. from Firebase import / KYC provider) to internal ones */
+const _FICA_NORM_MAP = { Approved:'approved', Verified:'approved', Declined:'rejected', Unverified:'not_started', Outstanding:'pending', Pending:'pending' };
 
 function validateBody(table, body, isCreate) {
   const errors = [];
@@ -398,6 +408,7 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
 
     // Sort — use the original date column for tables that have one
     const defaultSort = {
+      investors:                 'date_joined',
       transactions:              'COALESCE(transaction_date, created_at)',
       investments:               'COALESCE(start_date, created_at)',
       cattle_animals:            'tag_number',
@@ -420,27 +431,56 @@ router.get('/:table', requireAuth, validateTable, async (req, res) => {
       query = `
         SELECT
           ip.*,
-          COALESCE(agg.live_investor_count, 0)  AS live_investor_count,
-          COALESCE(agg.live_raised,         0)  AS live_raised,
-          COALESCE(agg.live_active_amount,  0)  AS live_active_amount,
-          COALESCE(agg.live_investment_count,0) AS live_investment_count
+          COALESCE(agg.live_investor_count,  name_agg.live_investor_count,  0) AS live_investor_count,
+          COALESCE(agg.live_raised,          name_agg.live_raised,          0) AS live_raised,
+          COALESCE(agg.live_active_amount,   name_agg.live_active_amount,   0) AS live_active_amount,
+          COALESCE(agg.live_investment_count,name_agg.live_investment_count, 0) AS live_investment_count
         FROM investment_pools ip
         LEFT JOIN (
           SELECT
             pool_id,
-            COUNT(DISTINCT CASE WHEN sub_account_id IS NOT NULL THEN 'sa:' || sub_account_id ELSE 'inv:' || investor_id END) AS live_investor_count,
+            COUNT(DISTINCT CASE WHEN status != 'cancelled' AND sub_account_id IS NOT NULL THEN 'sa:' || sub_account_id
+                                WHEN status != 'cancelled' THEN 'inv:' || investor_id END) AS live_investor_count,
             SUM(CASE WHEN status IN ('active','matured','paid_out') THEN amount ELSE 0 END) AS live_raised,
             SUM(CASE WHEN status = 'active'  THEN amount ELSE 0 END)            AS live_active_amount,
-            COUNT(*)                                                             AS live_investment_count
+            COUNT(CASE WHEN status != 'cancelled' THEN 1 END)                   AS live_investment_count
           FROM investments
           WHERE pool_id IS NOT NULL
           GROUP BY pool_id
         ) agg ON agg.pool_id = ip.id
+        LEFT JOIN (
+          SELECT
+            pool_name,
+            COUNT(DISTINCT CASE WHEN status != 'cancelled' AND sub_account_id IS NOT NULL THEN 'sa:' || sub_account_id
+                                WHEN status != 'cancelled' THEN 'inv:' || investor_id END) AS live_investor_count,
+            SUM(CASE WHEN status IN ('active','matured','paid_out') THEN amount ELSE 0 END) AS live_raised,
+            SUM(CASE WHEN status = 'active'  THEN amount ELSE 0 END)            AS live_active_amount,
+            COUNT(CASE WHEN status != 'cancelled' THEN 1 END)                   AS live_investment_count
+          FROM investments
+          WHERE pool_name IS NOT NULL
+          GROUP BY pool_name
+        ) name_agg ON name_agg.pool_name = ip.name AND agg.pool_id IS NULL
         ${whereClause}
         ${orderClause.replace(/\b(status|id|name|product_type|created_at)\b/g, 'ip.$1')}
         LIMIT $${params.length - 1} OFFSET $${params.length}
       `;
       countQuery = `SELECT COUNT(*) FROM investment_pools ip ${whereClause}`;
+    } else if (table === 'investments') {
+      // Always resolve product_type from the linked pool so migrated investments
+      // display the correct product label regardless of what was stored on the row.
+      const invWhere   = where   ? where.replace(/\b(id|investor_id|pool_id|status|product_type|created_at|start_date|end_date|amount)\b/g, 'i.$1') : '';
+      const invOrder   = orderClause.replace(/\b(id|investor_id|pool_id|status|product_type|created_at|start_date|end_date|amount)\b/g, 'i.$1');
+      query = `
+        SELECT i.*,
+               COALESCE(ip.product_type, i.product_type) AS product_type,
+               ip.actual_rate AS pool_actual_rate
+        FROM investments i
+        LEFT JOIN investment_pools ip ON ip.id = i.pool_id
+        ${invWhere}
+        ${invOrder}
+        LIMIT $${params.length - 1} OFFSET $${params.length}
+      `;
+      countQuery = `SELECT COUNT(*) FROM investments i LEFT JOIN investment_pools ip ON ip.id = i.pool_id ${invWhere}`;
     } else {
       query = `
         SELECT * FROM ${table}
@@ -498,6 +538,78 @@ router.get('/investors/next-account', requireAuth, async (req, res) => {
   }
 });
 
+/* ─── GET /api/tables/investors/:id/activity ─── */
+/* Returns login/session/device activity for an investor (admin only) */
+router.get('/investors/:id/activity', requireAuth, async (req, res) => {
+  try {
+    if (!['admin','director','fund_manager'].includes(req.user.role))
+      return res.status(403).json({ error: 'Forbidden.' });
+
+    const investorId = req.params.id;
+
+    const [userRes, pushRes, sessionRes] = await Promise.all([
+      pool.query(`
+        SELECT id, email, role, created_at, last_login, totp_enabled, is_active
+        FROM users WHERE investor_id = $1 LIMIT 1
+      `, [investorId]).catch(() => ({ rows: [] })),
+
+      pool.query(`
+        SELECT platform,
+               COALESCE(app_version, NULL) AS app_version,
+               COALESCE(device_name, NULL) AS device_name,
+               created_at, updated_at
+        FROM push_tokens WHERE investor_id = $1
+        ORDER BY updated_at DESC
+      `, [investorId]).catch(() =>
+        pool.query(`SELECT platform, created_at, updated_at FROM push_tokens WHERE investor_id = $1 ORDER BY updated_at DESC`, [investorId]).catch(() => ({ rows: [] }))
+      ),
+
+      pool.query(`
+        SELECT s.ip_address, s.user_agent, s.created_at, s.last_used_at, s.expires_at
+        FROM sessions s
+        JOIN users u ON u.id = s.user_id
+        WHERE u.investor_id = $1
+          AND s.expires_at > NOW()
+        ORDER BY s.last_used_at DESC
+        LIMIT 10
+      `, [investorId]).catch(() => ({ rows: [] })),
+    ]);
+
+    res.json({
+      user:     userRes.rows[0]    || null,
+      devices:  pushRes.rows,
+      sessions: sessionRes.rows,
+    });
+  } catch (err) {
+    console.error('[tables] investor activity', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+/* ─── POST /api/tables/investment_pools/:id/merge ─── */
+/* Moves all investments from source pool into target pool, then deletes source */
+router.post('/investment_pools/:id/merge', requireAuth, async (req, res) => {
+  try {
+    if (!['admin','director'].includes(req.user.role))
+      return res.status(403).json({ error: 'Forbidden.' });
+
+    const sourceId = req.params.id;
+    const { target_pool_id } = req.body || {};
+    if (!target_pool_id)    return res.status(400).json({ error: 'target_pool_id required' });
+    if (target_pool_id === sourceId) return res.status(400).json({ error: 'Cannot merge a pool into itself' });
+
+    const { rowCount: merged } = await pool.query(
+      `UPDATE investments SET pool_id = $1 WHERE pool_id = $2`,
+      [target_pool_id, sourceId]
+    );
+    await pool.query(`DELETE FROM investment_pools WHERE id = $1`, [sourceId]);
+    res.json({ merged, deleted: sourceId });
+  } catch (err) {
+    console.error('[merge pool]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ─── GET /api/tables/investment_pools/:id/investors ─── */
 /* Returns all investors + their investment details for a specific pool */
 router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
@@ -537,6 +649,11 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
       LEFT JOIN investors i ON i.id = inv.investor_id
       LEFT JOIN sub_accounts sa ON sa.id = inv.sub_account_id
       WHERE inv.pool_id = $1
+         OR (
+           inv.pool_id IS NULL
+           AND inv.pool_name IS NOT NULL
+           AND inv.pool_name = (SELECT name FROM investment_pools WHERE id = $1 LIMIT 1)
+         )
       ORDER BY inv.start_date DESC NULLS LAST
     `, [req.params.id]);
 
@@ -557,16 +674,18 @@ router.get('/investment_pools/:id/investors', requireAuth, async (req, res) => {
       r.net_amount      = netAmount;
     });
 
+    const activeRows = rows.filter(r => r.investment_status !== 'cancelled');
     const summary = {
-      total_invested:       rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0),
-      investor_count:       new Set(rows.map(r => r.sub_account_id ? `sa:${r.sub_account_id}` : `inv:${r.investor_id}`)).size,
+      total_invested:       activeRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0),
+      investor_count:       new Set(activeRows.map(r => r.sub_account_id ? `sa:${r.sub_account_id}` : `inv:${r.investor_id}`)).size,
       active_count:         rows.filter(r => r.investment_status === 'active').length,
       matured_count:        rows.filter(r => r.investment_status === 'matured').length,
-      total_platform_fees:  rows.reduce((s, r) => s + (r.platform_fee || 0), 0),
-      total_upfront_fees:   rows.reduce((s, r) => s + (r.upfront_fee || 0), 0),
-      total_eva:            rows.reduce((s, r) => s + (r.eva_contribution || 0), 0),
-      total_fees:           rows.reduce((s, r) => s + (r.total_fees || 0), 0),
-      total_net_invested:   rows.reduce((s, r) => s + (r.net_amount || 0), 0),
+      cancelled_count:      rows.filter(r => r.investment_status === 'cancelled').length,
+      total_platform_fees:  activeRows.reduce((s, r) => s + (r.platform_fee || 0), 0),
+      total_upfront_fees:   activeRows.reduce((s, r) => s + (r.upfront_fee || 0), 0),
+      total_eva:            activeRows.reduce((s, r) => s + (r.eva_contribution || 0), 0),
+      total_fees:           activeRows.reduce((s, r) => s + (r.total_fees || 0), 0),
+      total_net_invested:   activeRows.reduce((s, r) => s + (r.net_amount || 0), 0),
       mgmt_fee_pct:         mgmtFeePct,
     };
 
@@ -590,10 +709,23 @@ router.get('/:table/:id', requireAuth, validateTable, async (req, res) => {
     }
 
 
-    const { rows } = await pool.query(
-      `SELECT * FROM ${table} WHERE ${key} = $1 LIMIT 1`,
-      [req.params.id]
-    );
+    let rows;
+    if (table === 'investments') {
+      const r = await pool.query(
+        `SELECT i.*, COALESCE(ip.product_type, i.product_type) AS product_type
+         FROM investments i
+         LEFT JOIN investment_pools ip ON ip.id = i.pool_id
+         WHERE i.${key} = $1 LIMIT 1`,
+        [req.params.id]
+      );
+      rows = r.rows;
+    } else {
+      const r = await pool.query(
+        `SELECT * FROM ${table} WHERE ${key} = $1 LIMIT 1`,
+        [req.params.id]
+      );
+      rows = r.rows;
+    }
     if (!rows[0]) return res.status(404).json({ error: 'Record not found.' });
 
     // Investor data isolation: verify the row belongs to this investor
@@ -654,6 +786,10 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
     const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
     ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
     if (!isPrivileged) INVESTOR_PROTECTED_COLS.forEach(c => delete body[c]);
+
+    // Normalise external FICA status values before validation
+    if (body.fica_status && _FICA_NORM_MAP[body.fica_status]) body.fica_status = _FICA_NORM_MAP[body.fica_status];
+    if (body.kyc_status  && _FICA_NORM_MAP[body.kyc_status])  body.kyc_status  = _FICA_NORM_MAP[body.kyc_status];
 
     const validationErrors = validateBody(table, body, true);
     if (validationErrors.length) return res.status(400).json({ error: validationErrors.join('; ') });
@@ -729,6 +865,26 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
         throw e;
       } finally {
         _invClient.release();
+      }
+    }
+
+    // ── Withdrawal FICA gate ──────────────────────────────────────────────────
+    // Investors must have approved/verified FICA before they can withdraw funds.
+    if (table === 'transactions' && body.type === 'withdrawal' && req.user.role === 'investor') {
+      const investorIdToCheck = body.investor_id || req.user.investorId;
+      const { rows: ficaRows } = await pool.query(
+        'SELECT fica_status, kyc_status FROM investors WHERE id = $1',
+        [investorIdToCheck]
+      );
+      const ficaInv = ficaRows[0];
+      const ficaOk = ficaInv && (
+        ficaInv.fica_status === 'approved' || ficaInv.fica_status === 'verified' ||
+        ficaInv.kyc_status  === 'approved' || ficaInv.kyc_status  === 'verified'
+      );
+      if (!ficaOk) {
+        return res.status(403).json({
+          error: 'Withdrawals are not available until your FICA / KYC verification is complete. Please ensure all required documents have been submitted and approved by the compliance team.',
+        });
       }
     }
 
@@ -931,6 +1087,25 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
             ]
           );
         }
+
+        // New KYC document → notify all admins/directors + SSE broadcast
+        if (table === 'kyc_documents' && created.investor_id) {
+          const investorName = created.investor_name || created.investor_id;
+          const { rows: kycAdmins } = await pool.query(
+            "SELECT email, first_name, last_name FROM users WHERE role IN ('director','admin') AND email IS NOT NULL AND is_active = true"
+          );
+          for (const kycAdmin of kycAdmins) {
+            await emailService.sendKycDocumentReceived(kycAdmin, {
+              investorName,
+              docType:    created.doc_type,
+              investorId: created.investor_id,
+            });
+          }
+          try {
+            const bcast = _getBroadcast();
+            if (bcast) bcast('kyc_submitted', { investor_name: investorName, doc_type: created.doc_type, investor_id: created.investor_id });
+          } catch (_) {}
+        }
       } catch (hookErr) {
         console.error('[email hook POST] error:', hookErr.message);
       }
@@ -1052,6 +1227,32 @@ router.post('/:table', requireAuth, validateTable, async (req, res) => {
               );
             }
           }
+
+          // Update pool aggregate counters on new investments
+          if (clean.pool_id) {
+            await pool.query(
+              `UPDATE investment_pools
+                  SET raised_amount    = COALESCE(raised_amount, 0) + $1,
+                      current_invested = COALESCE(current_invested, 0) + $1,
+                      investor_count   = (
+                        SELECT COUNT(DISTINCT CASE WHEN sub_account_id IS NOT NULL
+                                                   THEN 'sa:' || sub_account_id
+                                                   ELSE 'inv:' || investor_id END)
+                        FROM investments
+                        WHERE pool_id = $2 AND status IN ('active','matured','paid_out')
+                      ),
+                      updated_at       = NOW()
+                WHERE id = $2`,
+              [investAmt, clean.pool_id]
+            );
+          }
+
+          // Auto-unarchive investor when they make their first investment
+          await pool.query(
+            `UPDATE investors SET status = 'active', archived_at = NULL, updated_at = NOW()
+             WHERE id = $1 AND status = 'archived'`,
+            [clean.investor_id]
+          );
 
           console.log(`[investment hook] R${platformFee} fee + R${investAmt} deducted from wallet for investment ${clean.id}`);
         } catch (err) {
@@ -1175,6 +1376,9 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
     const isPrivileged = ['admin', 'director', 'fund_manager'].includes(req.user.role);
     ALWAYS_PROTECTED_COLS.forEach(c => delete body[c]);
     if (!isPrivileged) INVESTOR_PROTECTED_COLS.forEach(c => delete body[c]);
+
+    if (body.fica_status && _FICA_NORM_MAP[body.fica_status]) body.fica_status = _FICA_NORM_MAP[body.fica_status];
+    if (body.kyc_status  && _FICA_NORM_MAP[body.kyc_status])  body.kyc_status  = _FICA_NORM_MAP[body.kyc_status];
 
     const _badKey = Object.keys(body).find(k => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k));
     if (_badKey) return res.status(400).json({ error: 'Invalid field name: ' + _badKey });
@@ -1384,25 +1588,65 @@ router.patch('/:table/:id', requireAuth, validateTable, async (req, res) => {
           });
         }
 
-        // FICA status approved → record fica_approved_at timestamp (once only)
+        // FICA status approved → only allow if all 3 required docs are approved.
+        // bank_statement is treated as equivalent to proof_of_bank (supports migrated clients).
         if (table === 'investors' && body.fica_status === 'approved') {
+          const REQUIRED_DOCS = ['id_document', 'proof_of_address', 'proof_of_bank'];
+          const BANK_ALIASES   = ['proof_of_bank', 'bank_statement'];
+          const { rows: approvedDocs } = await pool.query(
+            `SELECT DISTINCT doc_type FROM kyc_documents
+             WHERE investor_id = $1 AND status = 'approved'
+               AND doc_type = ANY($2)`,
+            [req.params.id, [...REQUIRED_DOCS, ...BANK_ALIASES]]
+          );
+          const approvedSet = new Set(approvedDocs.map(d => d.doc_type));
+          // bank_statement satisfies the proof_of_bank requirement
+          const hasBankDoc = BANK_ALIASES.some(t => approvedSet.has(t));
+          const allApproved = approvedSet.has('id_document') && approvedSet.has('proof_of_address') && hasBankDoc;
+          if (!allApproved) {
+            const missing = [];
+            if (!approvedSet.has('id_document'))    missing.push('id_document');
+            if (!approvedSet.has('proof_of_address')) missing.push('proof_of_address');
+            if (!hasBankDoc)                         missing.push('proof_of_bank or bank_statement');
+            return res.status(400).json({
+              error: `Cannot approve FICA: the following required documents are not yet approved: ${missing.join(', ')}.`,
+            });
+          }
           await pool.query(
-            'UPDATE investors SET fica_approved_at=NOW() WHERE id=$1 AND fica_approved_at IS NULL',
+            `UPDATE investors
+                SET fica_approved_at = COALESCE(fica_approved_at, NOW()),
+                    kyc_status       = 'approved',
+                    status           = CASE WHEN status IN ('pending','pending_fica','fica_submitted') THEN 'active' ELSE status END,
+                    updated_at       = NOW()
+              WHERE id = $1`,
             [req.params.id]
           ).catch(() => {});
         }
 
-        // KYC document approved → email investor ONLY once all 3 required docs are approved
+        // KYC document approved → promote investor FICA/KYC status once all 3 required docs are approved.
+        // bank_statement is treated as equivalent to proof_of_bank (supports migrated clients).
         if (table === 'kyc_documents' && body.status === 'approved' && updated.investor_id) {
-          const REQUIRED_DOCS = ['id_document', 'proof_of_address', 'proof_of_bank'];
+          const BANK_ALIASES = ['proof_of_bank', 'bank_statement'];
           const { rows: approvedDocs } = await pool.query(
             `SELECT DISTINCT doc_type FROM kyc_documents
-             WHERE investor_id = $1 AND status = 'approved' AND doc_type = ANY($2)`,
-            [updated.investor_id, REQUIRED_DOCS]
+             WHERE investor_id = $1 AND status = 'approved'
+               AND doc_type = ANY($2)`,
+            [updated.investor_id, ['id_document', 'proof_of_address', ...BANK_ALIASES]]
           );
           const approvedSet = new Set(approvedDocs.map(d => d.doc_type));
-          const allApproved = REQUIRED_DOCS.every(t => approvedSet.has(t));
+          const hasBankDoc  = BANK_ALIASES.some(t => approvedSet.has(t));
+          const allApproved = approvedSet.has('id_document') && approvedSet.has('proof_of_address') && hasBankDoc;
           if (allApproved) {
+            await pool.query(
+              `UPDATE investors
+                  SET fica_status       = 'approved',
+                      kyc_status        = 'approved',
+                      status            = CASE WHEN status IN ('pending','pending_fica','fica_submitted') THEN 'active' ELSE status END,
+                      fica_approved_at  = COALESCE(fica_approved_at, NOW()),
+                      updated_at        = NOW()
+                WHERE id = $1 AND fica_status != 'approved'`,
+              [updated.investor_id]
+            ).catch(() => {});
             const { rows: inv } = await pool.query('SELECT * FROM investors WHERE id = $1', [updated.investor_id]);
             if (inv[0]) await emailService.sendKycApproved(inv[0]);
           }

@@ -132,12 +132,24 @@ router.post('/login', loginLimiter, async (req, res) => {
              login_locked_until = NOW() + INTERVAL '${LOCKOUT_MINUTES} minutes'
            WHERE id = $1`, [user.id]
         );
+        // Audit account lock
+        pool.query(
+          `INSERT INTO audit_events (id, event_type, actor_id, user_email, description, ip_address, metadata)
+           VALUES (gen_random_uuid()::TEXT, 'user.login_locked', $1, $2, $3, $4, $5)`,
+          [user.id, user.email, 'Account locked after too many failed login attempts', req.ip || null, JSON.stringify({ attempts: newAttempts })]
+        ).catch(() => {});
         return res.status(429).json({
           error: `Too many failed attempts. Account locked for ${LOCKOUT_MINUTES} minutes.`,
           lockedSecsRemaining: LOCKOUT_MINUTES * 60,
         });
       }
       await pool.query('UPDATE users SET login_attempts = $1 WHERE id = $2', [newAttempts, user.id]);
+      // Audit failed login
+      pool.query(
+        `INSERT INTO audit_events (id, event_type, actor_id, user_email, description, ip_address, metadata)
+         VALUES (gen_random_uuid()::TEXT, 'user.login_failed', $1, $2, $3, $4, $5)`,
+        [user.id, user.email, 'Failed login attempt', req.ip || null, JSON.stringify({ attempts: newAttempts })]
+      ).catch(() => {});
       const left = MAX_LOGIN_ATTEMPTS - newAttempts;
       return res.status(401).json({
         error: `Incorrect email or password. ${left} attempt${left !== 1 ? 's' : ''} remaining.`,
@@ -508,11 +520,14 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
     if (rows.length > 0) {
       const user = rows[0];
 
-      // Per-email cooldown: if a token with >20 min remaining exists, a reset email was
-      // sent within the last 10 minutes — silently skip to prevent inbox flooding.
+      // Per-email cooldown: only block if a SHORT-LIVED token (≤30 min) with >20 min
+      // remaining exists — meaning a reset email was sent in the last 10 minutes.
+      // 7-day first-time-setup tokens are excluded so users can always request a new link.
       const { rows: recent } = await pool.query(
         `SELECT jti FROM password_reset_tokens
-         WHERE user_id=$1 AND used=false AND expires_at > NOW() + INTERVAL '20 minutes'`,
+         WHERE user_id=$1 AND used=false
+           AND expires_at > NOW() + INTERVAL '20 minutes'
+           AND expires_at <= NOW() + INTERVAL '31 minutes'`,
         [user.id]
       );
       if (!recent.length) {
@@ -535,6 +550,96 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
           .catch(err => console.error('[email] reset failed:', err.message)));
       } else {
         console.warn(`[auth] forgot-password cooldown: skipped resend for ${emailAddr}`);
+      }
+    } else {
+      // No users row yet — search all profile tables so any registered person
+      // (investor, IFA, or employee) can set up their login via the reset flow.
+      let profile = null;
+      let setupRole = 'investor';
+      let extraCol = null;   // column name for the profile FK
+      let extraVal = null;   // FK value
+
+      // 1. Investors
+      const { rows: invRows } = await pool.query(
+        `SELECT id, first_name, last_name FROM investors
+         WHERE LOWER(email) = $1 AND status = 'active'`,
+        [emailAddr]
+      );
+      if (invRows.length > 0) {
+        profile   = invRows[0];
+        setupRole = 'investor';
+        extraCol  = 'investor_id';
+        extraVal  = profile.id;
+      }
+
+      // 2. IFAs
+      if (!profile) {
+        const { rows: ifaRows } = await pool.query(
+          `SELECT id, first_name, last_name FROM ifas
+           WHERE LOWER(email) = $1 AND status = 'active'`,
+          [emailAddr]
+        );
+        if (ifaRows.length > 0) {
+          profile   = ifaRows[0];
+          setupRole = 'ifa';
+          extraCol  = 'ifa_id';
+          extraVal  = profile.id;
+        }
+      }
+
+      // 3. Employees (admins, fund managers, directors, support staff)
+      if (!profile) {
+        const { rows: empRows } = await pool.query(
+          `SELECT id, first_name, last_name, role FROM employees
+           WHERE LOWER(email) = $1 AND status IN ('active','onboarding')`,
+          [emailAddr]
+        );
+        if (empRows.length > 0) {
+          profile   = empRows[0];
+          const roleMap = { director:'director', admin:'admin', fund_manager:'fund_manager', ifa:'ifa' };
+          setupRole = roleMap[profile.role] || 'staff';
+          // No FK column — employees link via email
+        }
+      }
+
+      if (profile) {
+        const firstName = profile.first_name || '';
+        const lastName  = profile.last_name  || '';
+        const tempHash  = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+
+        // Build INSERT — conditionally include the profile FK column
+        const fkClause  = extraCol ? `, ${extraCol}` : '';
+        const fkParam   = extraCol ? ', $6' : '';
+        const onConflict = extraCol
+          ? `SET ${extraCol} = COALESCE(users.${extraCol}, EXCLUDED.${extraCol})`
+          : `SET updated_at = NOW()`;
+        const insertParams = extraCol
+          ? [emailAddr, tempHash, setupRole, firstName, lastName, extraVal]
+          : [emailAddr, tempHash, setupRole, firstName, lastName];
+
+        const { rows: [newUser] } = await pool.query(`
+          INSERT INTO users (email, password_hash, role, first_name, last_name${fkClause})
+          VALUES ($1, $2, $3, $4, $5${fkParam})
+          ON CONFLICT (email) DO UPDATE ${onConflict}
+          RETURNING id, email, first_name
+        `, insertParams);
+
+        const jti       = crypto.randomBytes(16).toString('hex');
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7-day setup link
+        const token     = jwt.sign(
+          { sub: newUser.id, purpose: 'password_reset', jti },
+          JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+        await pool.query('DELETE FROM password_reset_tokens WHERE user_id=$1 AND used=false', [newUser.id]);
+        await pool.query(
+          'INSERT INTO password_reset_tokens (jti, user_id, expires_at) VALUES ($1, $2, $3)',
+          [jti, newUser.id, expiresAt]
+        );
+        const setupLink = `${process.env.BASE_URL || 'https://platform.svcapital.co.za'}/reset-password.html?token=${token}`;
+        setImmediate(() => emailService.sendAccountSetup(newUser.email, firstName || emailAddr, setupLink)
+          .catch(err => console.error('[email] first-time setup failed:', err.message)));
+        console.log(`[auth] forgot-password: created login (${setupRole}) + sent setup link to ${emailAddr}`);
       }
     }
     res.json({ success: true, message: 'If this email is registered, a reset link has been sent.' });
@@ -1096,6 +1201,31 @@ router.post('/invite-investor', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[invite-investor] error:', err.message);
     res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// POST /api/auth/investor-magic-link  (admin only — generate a short-lived portal login link)
+router.post('/investor-magic-link', requireAuth, async (req, res) => {
+  if (!['admin', 'director'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Forbidden.' });
+  }
+  const { investor_id } = req.body;
+  if (!investor_id) return res.status(400).json({ error: 'investor_id required' });
+  try {
+    const r = await pool.query('SELECT id, email, first_name, last_name, status FROM investors WHERE id = $1', [investor_id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Investor not found' });
+    const inv = r.rows[0];
+    const token = jwt.sign(
+      { sub: inv.id, email: inv.email, role: 'investor', purpose: 'admin_view_as',
+        firstName: inv.first_name || '', lastName: inv.last_name || '' },
+      JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+    const baseUrl = process.env.BASE_URL || 'https://platform.svcapital.co.za';
+    res.json({ ok: true, url: `${baseUrl}/portal/?viewas=${token}`, expires_in: 900 });
+  } catch (e) {
+    console.error('[investor-magic-link]', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 

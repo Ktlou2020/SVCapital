@@ -125,7 +125,7 @@ router.delete('/unsubscribe', requireAuth, async (req, res) => {
    Saves a Capacitor FCM/APNs device token for push delivery
 ══════════════════════════════════════════════════════════════ */
 router.post('/mobile-token', requireAuth, async (req, res) => {
-  const { token, platform } = req.body || {};
+  const { token, platform, app_version, device_name } = req.body || {};
   if (!token) return res.status(400).json({ error: 'token is required' });
   const validPlatforms = ['ios', 'android', 'web'];
   const plat = validPlatforms.includes(platform) ? platform : 'android';
@@ -141,10 +141,12 @@ router.post('/mobile-token', requireAuth, async (req, res) => {
 
   try {
     await pool.query(
-      `INSERT INTO push_tokens (investor_id, token, platform, updated_at)
-       VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (investor_id, token) DO UPDATE SET platform=$3, updated_at=NOW()`,
-      [investorId, token, plat]
+      `INSERT INTO push_tokens (investor_id, token, platform, app_version, device_name, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (investor_id, token) DO UPDATE
+         SET platform=$3, app_version=COALESCE($4, push_tokens.app_version),
+             device_name=COALESCE($5, push_tokens.device_name), updated_at=NOW()`,
+      [investorId, token, plat, app_version || null, device_name || null]
     );
     res.json({ ok: true });
   } catch (err) {
@@ -187,6 +189,35 @@ router.get('/analytics', requireAuth, requireRole('admin', 'director'), async (r
   } catch (err) {
     console.error('[push] analytics error:', err.message);
     res.status(500).json({ error: 'Failed to load analytics' });
+  }
+});
+
+/* ══════════════════════════════════════════════════════════════
+   GET /api/push/subscribers
+   Returns list of investors with active push subscriptions / tokens
+══════════════════════════════════════════════════════════════ */
+router.get('/subscribers', requireAuth, requireRole('admin', 'director'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT DISTINCT i.id, i.first_name, i.last_name, i.email,
+             MAX(ps.created_at) AS subscribed_at,
+             'web' AS channel
+      FROM push_subscriptions ps
+      JOIN investors i ON i.id = ps.investor_id
+      GROUP BY i.id, i.first_name, i.last_name, i.email
+      UNION
+      SELECT DISTINCT i.id, i.first_name, i.last_name, i.email,
+             MAX(pt.updated_at) AS subscribed_at,
+             'mobile' AS channel
+      FROM push_tokens pt
+      JOIN investors i ON i.id = pt.investor_id
+      GROUP BY i.id, i.first_name, i.last_name, i.email
+      ORDER BY first_name, last_name
+    `);
+    res.json({ data: rows });
+  } catch (err) {
+    console.error('[push] subscribers error:', err.message);
+    res.status(500).json({ error: 'Failed to load subscribers' });
   }
 });
 

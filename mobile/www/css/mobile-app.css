@@ -174,9 +174,10 @@ input, textarea, [contenteditable] {
   display: none !important;
 }
 
-/* Sidebar: full-height on mobile, above bottom nav (z-1200) when open */
+/* Sidebar drawer — slides in from top of screen so logo is visible */
 .sidebar {
-  padding-top: env(safe-area-inset-top, 0px) !important;
+  top: 0 !important;
+  padding-top: 0 !important;
   padding-bottom: env(safe-area-inset-bottom, 0px) !important;
 }
 .sidebar.open {
@@ -607,14 +608,12 @@ input[style], textarea[style], select[style] {
 .input-icon-wrap .form-input,
 .input-icon-wrap input,
 .input-icon-wrap input.form-input {
-  padding-left: 48px !important;
+  padding-left: 52px !important;
 }
 .form-group label, .form-label { font-size: 0.75rem !important; }
 select[style*="min-width:160px"] { min-width: 100% !important; width: 100% !important; }
 /* Hide auto-save meta text — overlaps "Personal Information" heading on mobile */
 #profileSaveMeta { display: none !important; }
-/* Biometric sign-in button — permanently removed from login page */
-#biometricBtn, .btn-biometric { display: none !important; }
 
 /* ─────────────────────────────────────────────────────────────
    16b. Sidebar — icon-square nav design
@@ -2137,7 +2136,7 @@ input[disabled].form-input {
    16d. Sidebar — brand / logo section
    ═══════════════════════════════════════════════════════════════ */
 .sidebar__brand {
-  padding: 32px 18px 18px !important;
+  padding: max(32px, calc(env(safe-area-inset-top, 0px) + max(var(--native-sb-h, 0px), 0px) + 12px)) 18px 18px !important;
   border-bottom: 1px solid rgba(255,255,255,0.07) !important;
   margin-bottom: 8px !important;
   flex-shrink: 0 !important;

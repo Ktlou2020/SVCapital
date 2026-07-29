@@ -186,8 +186,18 @@ section { position: relative; padding: 100px 0; }
 }
 
 .btn--full { width: 100%; justify-content: center; }
+.btn--sm { padding: 9px 18px; font-size: 0.82rem; }
 .btn--lg { padding: 16px 36px; font-size: 1rem; }
 .btn--xl { padding: 18px 44px; font-size: 1.05rem; border-radius: var(--radius-lg); }
+.btn--outline-dark {
+  background: transparent;
+  color: #1a1a1a;
+  border-color: rgba(0,0,0,0.2);
+}
+.btn--outline-dark:hover {
+  background: rgba(0,0,0,0.06);
+  border-color: rgba(0,0,0,0.35);
+}
 
 /* ═══════════════════════════════════════════════
    NAVBAR
@@ -247,7 +257,7 @@ section { position: relative; padding: 100px 0; }
 }
 
 .logo-badge {
-  font-size: 0.6rem;
+  font-size: 0.75rem;
   background: var(--gold-glow);
   border: 1px solid var(--border-gold);
   color: var(--gold);
@@ -305,7 +315,10 @@ section { position: relative; padding: 100px 0; }
   display: none;
   flex-direction: column;
   gap: 5px;
-  padding: 8px;
+  padding: 11px 10px;
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
 }
 
 .nav-mobile-toggle span {
@@ -719,7 +732,6 @@ section { position: relative; padding: 100px 0; }
   color: var(--text-dim);
   text-decoration: none;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   transition: var(--transition);
   opacity: 0.5;
 }
@@ -997,7 +1009,7 @@ section { position: relative; padding: 100px 0; }
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   padding: 40px;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .compare-callout__inner {
@@ -1340,7 +1352,7 @@ section { position: relative; padding: 100px 0; }
 }
 
 .calc-disclaimer {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: var(--text-dim);
   line-height: 1.5;
   border-top: 1px solid var(--border);
@@ -1519,6 +1531,7 @@ section { position: relative; padding: 100px 0; }
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   padding: 40px;
+  text-align: center;
 }
 
 .app-cta__text h3 {
@@ -1532,9 +1545,11 @@ section { position: relative; padding: 100px 0; }
   color: var(--text-muted);
   margin-bottom: 24px;
   max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-.app-btns { display: flex; gap: 16px; flex-wrap: wrap; }
+.app-btns { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
 
 .app-store-btn {
   display: flex;
@@ -1561,7 +1576,7 @@ section { position: relative; padding: 100px 0; }
   flex-direction: column;
 }
 
-.app-store-btn span { font-size: 0.7rem; color: var(--text-muted); }
+.app-store-btn span { font-size: 0.7rem; color: var(--white); }
 .app-store-btn strong { font-size: 0.95rem; }
 
 /* ═══════════════════════════════════════════════
@@ -2099,8 +2114,8 @@ section { position: relative; padding: 100px 0; }
 }
 
 .footer-social a {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -2143,10 +2158,7 @@ section { position: relative; padding: 100px 0; }
   color: var(--text-dim);
   line-height: 1.6;
   margin-bottom: 16px;
-  background: var(--dark-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 14px 16px;
+  padding: 14px 0;
 }
 
 .footer-legal-row {
@@ -2287,8 +2299,13 @@ section { position: relative; padding: 100px 0; }
   .hero-ctas { justify-content: center; }
   .hero-trust { justify-content: center; }
   .hero-eyebrow { justify-content: center; }
+  .hero-social-proof { justify-content: center; }
 
   .products-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 960px) {
+  .products-grid { grid-template-columns: repeat(2, 1fr); }
 
   .compare-callout__inner { grid-template-columns: 1fr; }
   .compare-callout__text p { max-width: 100%; }
@@ -2371,7 +2388,7 @@ section { position: relative; padding: 100px 0; }
 
   .calc-product-tabs { grid-template-columns: repeat(2, 1fr); }
   .calc-result-main { grid-template-columns: 1fr; }
-  .calc-controls { max-width: 100%; overflow: hidden; }
+  .calc-controls { max-width: 100%; }
   .calc-result-card { padding: 20px 16px; position: static; }
   .calc-solar-terms { gap: 6px; }
   .calc-term-btn { padding: 6px 12px; font-size: 0.78rem; }
@@ -2408,9 +2425,12 @@ section { position: relative; padding: 100px 0; }
   .modal-stats { grid-template-columns: 1fr; }
 
   .product-card__stats { grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 12px 10px; }
-  .product-card__stats .stat__label { font-size: 0.62rem; letter-spacing: 0.05em; }
+  .product-card__stats .stat__label { font-size: 0.7rem; letter-spacing: 0.05em; }
   .product-card__stats .stat__value { font-size: 1rem; }
   .product-card__stats .stat__sub { font-size: 0.7rem; }
+}
+
+@media (max-width: 640px) {
   .product-card__tiers { grid-template-columns: 1fr; }
 }
 

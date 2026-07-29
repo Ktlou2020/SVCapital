@@ -234,7 +234,18 @@ const API = {
     };
     if (body && method !== 'GET') opts.body = JSON.stringify(body);
 
-    const r = await fetch(url, opts);
+    // Abort after 35 s so Railway cold-starts don't leave the UI hanging indefinitely
+    const _ctrl = new AbortController();
+    const _tid  = setTimeout(() => _ctrl.abort(), 35000);
+    let r;
+    try {
+      r = await fetch(url, { ...opts, signal: _ctrl.signal });
+    } catch (fetchErr) {
+      clearTimeout(_tid);
+      if (fetchErr.name === 'AbortError') throw new Error('Request timed out — server may be waking up, please try again');
+      throw fetchErr;
+    }
+    clearTimeout(_tid);
 
     // Handle 401 — try silent token refresh before giving up
     if (r.status === 401) {
@@ -402,9 +413,9 @@ const API = {
 
 const Utils = {
   /* Format South African Rand */
-  rand(amount, decimals = 0) {
+  rand(amount, decimals = 2) {
     if (amount == null || isNaN(amount)) return 'R0';
-    return 'R' + Number(amount).toLocaleString('en-ZA', {
+    return 'R' + Number(amount).toLocaleString('en-US', {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals
     });
@@ -471,10 +482,12 @@ const Utils = {
       smme:           { label: 'Short Term Investment',   icon: 'fa-bolt',        color: '#ff5229', badgeClass: 'badge--orange' },
       delivery_bikes: { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
       delivery_bike:  { label: 'Delivery Bikes',          icon: 'fa-motorcycle',  color: '#fec24f', badgeClass: 'badge--orange' },
+      cattle_12j:     { label: '12J Cattle Investment',   icon: 'fa-cow',         color: '#fec24f', badgeClass: 'badge--gold'   },
+      ilobola:        { label: 'iLobola',                 icon: 'fa-heart',       color: '#eda5ff', badgeClass: 'badge--purple' },
       gridfarmer:     { label: 'GridFarmer',              icon: 'fa-seedling',    color: '#65ed00', badgeClass: 'badge--green'  },
       other:          { label: 'Other',                   icon: 'fa-circle',      color: '#656565', badgeClass: 'badge--gray' },
     };
-    const KNOWN_CI = new Set(['cattle','solar','solar_5yr','solar_6yr','solar_7yr','short_term','smme','delivery_bike','delivery_bikes','gridfarmer']);
+    const KNOWN_CI = new Set(['cattle','solar','solar_5yr','solar_6yr','solar_7yr','short_term','smme','delivery_bike','delivery_bikes','cattle_12j','ilobola','gridfarmer']);
     const base = map[type] || { label: type || 'Other', icon: 'fa-circle', color: '#656565', badgeClass: 'badge--gray' };
     const cached = this._productCache[type];
     if (!cached) return base;
@@ -491,7 +504,7 @@ const Utils = {
 
   productColor(product) {
     const type = (product && product.product_type) || product;
-    const KNOWN = ['cattle', 'solar', 'solar_5yr', 'solar_6yr', 'solar_7yr', 'short_term', 'smme', 'delivery_bike', 'delivery_bikes'];
+    const KNOWN = ['cattle', 'solar', 'solar_5yr', 'solar_6yr', 'solar_7yr', 'short_term', 'smme', 'delivery_bike', 'delivery_bikes', 'cattle_12j', 'ilobola'];
     if (KNOWN.includes(type)) return this.productInfo(type).color;
     if (product && product.color) return product.color;
     return this.productInfo(type).color;
@@ -535,6 +548,29 @@ const Utils = {
       waived:           ['badge--gray',   'Waived'],
     };
     const [cls, label] = map[status] || ['badge--gray', status];
+    return `<span class="badge ${cls}" style="text-transform:uppercase;letter-spacing:0.04em">${label}</span>`;
+  },
+
+  /* FICA/KYC status badge — handles both internal values and external provider values */
+  ficaBadge(status) {
+    const FICA_LABEL = {
+      // Internal canonical values
+      approved:    ['badge--green',  '<i class="fa-solid fa-shield-check" style="margin-right:4px"></i>KYC Verified'],
+      verified:    ['badge--green',  '<i class="fa-solid fa-shield-check" style="margin-right:4px"></i>KYC Verified'],
+      rejected:    ['badge--red',    'Rejected'],
+      submitted:   ['badge--blue',   'Pending Review'],
+      in_progress: ['badge--blue',   'Pending Review'],
+      pending:     ['badge--orange', 'Pending Review'],
+      not_started: ['badge--gray',   'No FICA Uploaded'],
+      // External / Firebase-imported capitalised values
+      Approved:    ['badge--green',  '<i class="fa-solid fa-shield-check" style="margin-right:4px"></i>KYC Verified'],
+      Verified:    ['badge--green',  '<i class="fa-solid fa-shield-check" style="margin-right:4px"></i>KYC Verified'],
+      Unverified:  ['badge--gray',   'No FICA Uploaded'],
+      Outstanding: ['badge--orange', 'Pending Review'],
+      Pending:     ['badge--orange', 'Pending Review'],
+      Declined:    ['badge--red',    'Rejected'],
+    };
+    const [cls, label] = FICA_LABEL[String(status || '').trim()] || ['badge--gray', 'No FICA Uploaded'];
     return `<span class="badge ${cls}" style="text-transform:uppercase;letter-spacing:0.04em">${label}</span>`;
   },
 
@@ -620,12 +656,10 @@ const Toast = {
     this.container.className = 'toast-container';
     document.body.appendChild(this.container);
   },
-  show(message, type = 'info', duration) {
-    // Durations per type — success/error/warning stay longer so users can read confirmations
+  show(message, type = 'info', duration, opts = {}) {
     const defaults = { success: 6500, error: 6000, warning: 6000, info: 4000 };
     const ms = duration ?? defaults[type] ?? 4000;
     if (!this.container) this.init();
-    // Cap at 4 visible toasts — remove oldest when exceeded
     const existing = this.container.querySelectorAll('.toast');
     if (existing.length >= 4) existing[0].remove();
     const icons = { success: 'fa-check-circle', error: 'fa-circle-xmark', info: 'fa-circle-info', warning: 'fa-triangle-exclamation' };
@@ -636,26 +670,41 @@ const Toast = {
     const msg = document.createElement('span');
     msg.className = 'toast__msg';
     msg.textContent = message;
+    toast.append(icon, msg);
+    let timer;
+    const startTimer = () => {
+      timer = setTimeout(() => {
+        toast.style.animation = 'none';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        toast.style.transition = '0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, ms);
+    };
+    if (opts.action) {
+      const actionBtn = document.createElement('button');
+      actionBtn.style.cssText = 'background:none;border:1px solid currentColor;cursor:pointer;color:inherit;opacity:0.9;margin-left:10px;padding:2px 10px;font-size:0.76rem;border-radius:4px;line-height:1.5;font-weight:700;white-space:nowrap;flex-shrink:0';
+      actionBtn.textContent = opts.action.label;
+      actionBtn.addEventListener('click', () => { clearTimeout(timer); toast.remove(); opts.action.callback(); });
+      toast.appendChild(actionBtn);
+    }
     const dismiss = document.createElement('button');
-    dismiss.setAttribute('style', 'background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;margin-left:4px;padding:0 2px;font-size:0.9rem;line-height:1');
+    dismiss.setAttribute('style', 'background:none;border:none;cursor:pointer;color:inherit;opacity:0.5;margin-left:6px;padding:0 2px;font-size:0.9rem;line-height:1;flex-shrink:0');
     dismiss.title = 'Dismiss';
     dismiss.textContent = '×';
-    dismiss.addEventListener('click', () => toast.remove());
-    toast.append(icon, msg, dismiss);
+    dismiss.addEventListener('click', () => { clearTimeout(timer); toast.remove(); });
+    toast.appendChild(dismiss);
+    toast.addEventListener('mouseenter', () => clearTimeout(timer));
+    toast.addEventListener('mouseleave', () => startTimer());
     this.container.appendChild(toast);
-    setTimeout(() => {
-      toast.style.animation = 'none';
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateX(100%)';
-      toast.style.transition = '0.3s ease';
-      setTimeout(() => toast.remove(), 300);
-    }, ms);
+    startTimer();
   },
-  success: (msg, ms) => Toast.show(msg, 'success', ms),
-  error:   (msg, ms) => Toast.show(msg, 'error',   ms),
-  info:    (msg, ms) => Toast.show(msg, 'info',     ms),
-  warning: (msg, ms) => Toast.show(msg, 'warning',  ms),
-  warn:    (msg, ms) => Toast.show(msg, 'warning',  ms),
+  success: (msg, ms, opts) => Toast.show(msg, 'success', ms, opts),
+  error:   (msg, ms, opts) => Toast.show(msg, 'error',   ms, opts),
+  info:    (msg, ms, opts) => Toast.show(msg, 'info',     ms, opts),
+  warning: (msg, ms, opts) => Toast.show(msg, 'warning',  ms, opts),
+  warn:    (msg, ms, opts) => Toast.show(msg, 'warning',  ms, opts),
+  action:  (msg, label, callback, type = 'success') => Toast.show(msg, type, 8000, { action: { label, callback } }),
 };
 
 /* ═══════════════════════════════════════════════
@@ -702,6 +751,18 @@ const Modal = {
       m.classList.remove('open');
     });
     document.body.style.overflow = '';
+  },
+  openInline(html) {
+    let el = document.getElementById('_inlineModal');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = '_inlineModal';
+      el.className = 'modal-overlay';
+      el.addEventListener('click', function(e) { if (e.target === el) Modal.close('_inlineModal'); });
+      document.body.appendChild(el);
+    }
+    el.innerHTML = `<div class="modal" style="max-width:460px">${html}</div>`;
+    Modal.open('_inlineModal');
   }
 };
 

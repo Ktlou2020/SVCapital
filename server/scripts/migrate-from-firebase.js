@@ -30,8 +30,28 @@ const PRODUCT_TYPE_MAP = {
   'Cattle Investment':          'cattle',
   'Solar Investment - 5 Years': 'solar',
   'Solar Investment - 6 Years': 'solar',
-  '12J Investment':             'cattle',
+  'Solar Investment - 7 Years': 'solar',
+  '12J Investment':             'cattle_12j',
+  '12J Cattle Investment':      'cattle_12j',
+  'iLobola':                    'ilobola',
+  'iLobola Investment':         'ilobola',
 };
+const PRODUCT_ID_MAP = {
+  '0J1g67Ln99nMOct6vnqS': 'delivery_bikes',
+  '8r3TlnGkizidu1JCgbDp': 'smme',
+  'BjrELvLGvQzTSDt9ztGK': 'solar',
+  'Q3R5RN21GWJ4lGCtI72R': 'cattle_12j',
+  'SfpCxgJjP6i5GUz1JWYp': 'solar',
+  'gSjiuqRg3E8IEO2hwfmu': 'cattle',
+  'lwKM2GFyCXNd88l1nCAK': 'ilobola',
+  'xKQkwQMa0Hnj0dAmGsWH': 'solar',
+};
+function resolveProductType(p) {
+  return PRODUCT_TYPE_MAP[p.productName]
+      || PRODUCT_ID_MAP[p.productId]
+      || PRODUCT_TYPE_MAP[p.name]
+      || 'other';
+}
 
 const POOL_STATUS_MAP = {
   MATURED: 'matured',
@@ -41,9 +61,10 @@ const POOL_STATUS_MAP = {
 };
 
 const INVESTMENT_STATUS_MAP = {
-  MATURED:  'matured',
-  ACTIVE:   'active',
-  PAID_OUT: 'paid_out',
+  MATURED:   'matured',
+  ACTIVE:    'active',
+  PAID_OUT:  'paid_out',
+  CANCELLED: 'cancelled',
 };
 
 const TX_TYPE_MAP = {
@@ -63,15 +84,18 @@ const TX_STATUS_MAP = {
 
 const KYC_STATUS_MAP = {
   Approved:    'approved',
-  Unverified:  'pending',
+  Unverified:  'not_started',
   Outstanding: 'pending',
   Pending:     'pending',
+  Declined:    'rejected',
 };
 
 function extractPoolId(p) {
   if (!p) return null;
-  const parts = p.split('/');
-  return parts[parts.length - 1];
+  // p may be a plain path string "investmentPools/ID" or an object { path: "investmentPools/ID" }
+  const str = (typeof p === 'object' && p !== null) ? (p.path || p.id || '') : String(p);
+  const parts = str.split('/');
+  return parts[parts.length - 1] || null;
 }
 
 function loadFile(name) {
@@ -125,6 +149,8 @@ async function migrate() {
   // Pool lookup by original _id
   const poolById = {};
   pools.forEach(p => { if (p._id) poolById[p._id] = p; });
+  // Maps original _id → DB pool id (built during pool insert step)
+  const sourceIdToPoolId = {};
 
   let errors = 0;
 
@@ -163,13 +189,16 @@ async function migrate() {
     const fullAddress = addr?.fullAddress || null;
     const province    = addr?.province?.trim() || null;
 
+    const kycMapped = KYC_STATUS_MAP[u.kycStatus] || 'pending';
+    const status    = u.status === 'ACTIVE' ? 'active' : u.status === 'ARCHIVED' ? 'archived' : 'suspended';
+
     try {
       await pool.query(`
         INSERT INTO investors
           (id, first_name, last_name, email, phone, id_number, date_of_birth,
-           kyc_status, status, wallet_balance, total_invested, risk_profile,
+           kyc_status, fica_status, status, wallet_balance, total_invested, risk_profile,
            occupation, notes, address, province, date_joined, updated_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW())
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
         ON CONFLICT (id) DO UPDATE SET
           first_name     = EXCLUDED.first_name,
           last_name      = EXCLUDED.last_name,
@@ -178,14 +207,16 @@ async function migrate() {
           id_number      = EXCLUDED.id_number,
           date_of_birth  = EXCLUDED.date_of_birth,
           kyc_status     = EXCLUDED.kyc_status,
+          fica_status    = EXCLUDED.fica_status,
           status         = EXCLUDED.status,
-          wallet_balance = EXCLUDED.wallet_balance,
-          total_invested = EXCLUDED.total_invested,
+          wallet_balance = investors.wallet_balance,
+          total_invested = investors.total_invested,
           risk_profile   = EXCLUDED.risk_profile,
           occupation     = EXCLUDED.occupation,
           notes          = EXCLUDED.notes,
           address        = EXCLUDED.address,
           province       = EXCLUDED.province,
+          date_joined    = COALESCE(EXCLUDED.date_joined, investors.date_joined),
           updated_at     = NOW()
       `, [
         id,
@@ -195,8 +226,9 @@ async function migrate() {
         u.phone_number || '',
         u.identityNumber || '',
         u.dateOfBirth ? new Date(u.dateOfBirth).toISOString().split('T')[0] : null,
-        KYC_STATUS_MAP[u.kycStatus] || 'pending',
-        u.status === 'ACTIVE' ? 'active' : 'inactive',
+        kycMapped,
+        kycMapped,
+        status,
         parseFloat(u.wallet) || 0,
         Math.round(totalInvested * 100) / 100,
         (u.riskTolerence || 'Moderate').toLowerCase(),
@@ -223,7 +255,7 @@ async function migrate() {
   for (const p of pools) {
     if (!p._id) continue;
     const id          = `POOL-MIGR-${p._id}`;
-    const productType = PRODUCT_TYPE_MAP[p.productName] || 'other';
+    const productType = resolveProductType(p);
 
     let termMonths = null;
     if (p.launchDate && p.maturityDate) {
@@ -234,16 +266,22 @@ async function migrate() {
     try {
       await pool.query(`
         INSERT INTO investment_pools
-          (id, name, product_type, status, target_amount, annual_rate,
-           term_months, start_date, end_date, description, updated_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+          (id, source_id, name, product_type, status, target_amount, actual_rate,
+           term_months, start_date, end_date, maturity_date, description, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
         ON CONFLICT (id) DO UPDATE SET
-          name        = EXCLUDED.name,
-          status      = EXCLUDED.status,
-          annual_rate = EXCLUDED.annual_rate,
-          updated_at  = NOW()
+          name          = EXCLUDED.name,
+          actual_rate   = EXCLUDED.actual_rate,
+          product_type  = EXCLUDED.product_type,
+          source_id     = EXCLUDED.source_id,
+          start_date    = EXCLUDED.start_date,
+          end_date      = EXCLUDED.end_date,
+          maturity_date = EXCLUDED.maturity_date,
+          term_months   = EXCLUDED.term_months,
+          updated_at    = NOW()
       `, [
         id,
+        p._id,
         p.name,
         productType,
         POOL_STATUS_MAP[p.status] || 'closed',
@@ -251,9 +289,11 @@ async function migrate() {
         parseFloat(p.returnPercentage) || 0,
         termMonths,
         p.launchDate   ? new Date(p.launchDate)   : null,
+        p.closingDate  ? new Date(p.closingDate)  : null,
         p.maturityDate ? new Date(p.maturityDate) : null,
-        `Migrated from previous platform. Product: ${p.productName}`,
+        `Migrated from previous platform. Product: ${p.productId || p.productName || p.name}`,
       ]);
+      sourceIdToPoolId[p._id] = id;
       poolOk++;
     } catch (err) {
       console.error(`  ✗ pool ${p._id}: ${err.message}`);
@@ -271,9 +311,12 @@ async function migrate() {
   for (const inv of investments) {
     if (!inv._id || !inv.userAccountNumber) continue;
 
-    const origPoolId  = extractPoolId(inv.pool?.path);
-    const poolId      = origPoolId ? `POOL-MIGR-${origPoolId}` : null;
+    // Pool ref: try inv.pool.path (object), inv.pool (string path), or inv.investmentPool
+    const poolRef     = inv.pool?.path || inv.pool || inv.investmentPool || null;
+    const origPoolId  = extractPoolId(poolRef);
+    const poolId      = origPoolId ? (sourceIdToPoolId[origPoolId] || `POOL-MIGR-${origPoolId}`) : null;
     const srcPool     = origPoolId ? poolById[origPoolId] : null;
+    const poolName    = (typeof inv.pool === 'object' ? inv.pool?.name : null) || srcPool?.name || '';
     const productType = PRODUCT_TYPE_MAP[inv.product?.name] || 'other';
     const status      = INVESTMENT_STATUS_MAP[inv.status] || 'active';
     const amount      = parseFloat(inv.investedAmount) || 0;
@@ -305,7 +348,7 @@ async function migrate() {
         `INV-MIGR-${inv._id}`,
         inv.userAccountNumber,
         poolId,
-        inv.pool?.name || '',
+        poolName,
         productType,
         amount,
         status,
@@ -335,8 +378,8 @@ async function migrate() {
     try {
       await pool.query(`
         INSERT INTO transactions
-          (id, investor_id, type, amount, status, reference, description, transaction_date)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+          (id, investor_id, type, amount, status, reference, description, transaction_date, date_updated)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
         ON CONFLICT (id) DO NOTHING
       `, [
         `TXN-MIGR-${tx._id}`,
@@ -347,6 +390,7 @@ async function migrate() {
         tx.txRef || tx._id,
         `${tx.investment?.name || tx.type || ''}`.trim() || 'Migrated transaction',
         tx.dateCreated ? new Date(tx.dateCreated) : new Date(),
+        tx.dateUpdated ? new Date(tx.dateUpdated) : null,
       ]);
       txOk++;
     } catch (err) {

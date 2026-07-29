@@ -162,14 +162,16 @@ router.get('/solar-history', async (req, res) => {
 router.get('/track-record', async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT name, product_type, status, end_date, maturity_date, term_months,
-             COALESCE(actual_rate, 0)   AS actual_rate,
-             COALESCE(annual_rate, 0)   AS annual_rate,
-             COALESCE(raised_amount, 0) AS raised_amount,
-             COALESCE(live_investor_count, investor_count, 0) AS investor_count
-      FROM investment_pools
-      WHERE status IN ('matured','paid_out')
-      ORDER BY COALESCE(maturity_date, end_date) ASC
+      SELECT ip.id, ip.name, ip.product_type, ip.end_date, ip.term_months,
+             COALESCE(ip.actual_rate, 0)  AS actual_rate,
+             COALESCE(ip.annual_rate, 0)  AS annual_rate,
+             COALESCE(SUM(i.amount), ip.raised_amount, 0) AS invested_amount
+      FROM investment_pools ip
+      LEFT JOIN investments i ON i.pool_id = ip.id
+        AND (i.is_reinvestment IS NULL OR i.is_reinvestment = false)
+      WHERE ip.status IN ('matured','paid_out') AND COALESCE(ip.actual_rate, 0) > 0
+      GROUP BY ip.id
+      ORDER BY ip.end_date ASC
     `);
 
     const byType = {};
@@ -178,24 +180,17 @@ router.get('/track-record', async (req, res) => {
       if (!byType[t]) byType[t] = { pools: [], total_paid_back: 0, sum_actual: 0, sum_benchmark: 0, n_with_rate: 0 };
       const actual    = parseFloat(p.actual_rate) || 0;
       const benchmark = parseFloat(p.annual_rate) || 0;
-      const raised    = parseFloat(p.raised_amount) || 0;
+      const invested  = parseFloat(p.invested_amount) || 0;
       const term      = parseInt(p.term_months) || 12;
-      byType[t].pools.push({
-        name:           p.name,
-        status:         p.status,
-        ended:          p.maturity_date || p.end_date,
-        actual_rate:    actual,
-        benchmark_rate: benchmark,
-        raised_amount:  raised,
-        term_months:    term,
-        investor_count: parseInt(p.investor_count) || 0,
-      });
-      byType[t].total_paid_back += raised * (1 + actual * (term / 12));
-      if (actual > 0) {
-        byType[t].sum_actual    += actual;
-        byType[t].sum_benchmark += benchmark;
-        byType[t].n_with_rate   += 1;
-      }
+      const isShortTerm = t === 'short_term';
+      // Short-term: actual_rate is total period return, not p.a. → annualise for display
+      const annualActual = isShortTerm && term > 0 ? actual * 12 / term : actual;
+      // Paid back: principal + returns (short_term uses period rate directly; others use annual rate × months)
+      const paidBack = isShortTerm ? invested * (1 + actual) : invested * (1 + actual * (term / 12));
+      byType[t].pools.push({ name: p.name, ended: p.end_date, actual_rate: annualActual, benchmark_rate: benchmark });
+      byType[t].total_paid_back += paidBack;
+      byType[t].sum_actual      += annualActual;
+      byType[t].sum_benchmark   += benchmark;
     }
 
     const data = {};

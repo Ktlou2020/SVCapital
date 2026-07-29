@@ -63,15 +63,16 @@ async function _sendEmail(to, subject, message) {
 /* ── Helper: query investors by segment ─────────────────────── */
 async function _getInvestors(segment) {
   let rows;
+  const _notArchived = `i.status != 'archived'`;
   if (segment === 'all') {
-    const res = await pool.query(`SELECT id, first_name, last_name, email, phone FROM investors WHERE email IS NOT NULL AND email <> '' ORDER BY first_name`);
+    const res = await pool.query(`SELECT id, first_name, last_name, email, phone FROM investors WHERE email IS NOT NULL AND email <> '' AND status != 'archived' ORDER BY first_name`);
     rows = res.rows;
   } else if (segment === 'active') {
     const res = await pool.query(`
       SELECT DISTINCT i.id, i.first_name, i.last_name, i.email, i.phone
       FROM investors i
       INNER JOIN investments inv ON inv.investor_id = i.id AND inv.status = 'active'
-      WHERE i.email IS NOT NULL AND i.email <> ''
+      WHERE i.email IS NOT NULL AND i.email <> '' AND ${_notArchived}
       ORDER BY i.first_name
     `);
     rows = res.rows;
@@ -80,7 +81,34 @@ async function _getInvestors(segment) {
       SELECT id, first_name, last_name, email, phone
       FROM investors
       WHERE (fica_status = 'pending' OR kyc_status = 'pending')
-        AND email IS NOT NULL AND email <> ''
+        AND email IS NOT NULL AND email <> '' AND status != 'archived'
+      ORDER BY first_name
+    `);
+    rows = res.rows;
+  } else if (segment === 'no_investments') {
+    const res = await pool.query(`
+      SELECT i.id, i.first_name, i.last_name, i.email, i.phone
+      FROM investors i
+      WHERE i.email IS NOT NULL AND i.email <> ''
+        AND ${_notArchived}
+        AND NOT EXISTS (SELECT 1 FROM investments inv WHERE inv.investor_id = i.id)
+      ORDER BY i.first_name
+    `);
+    rows = res.rows;
+  } else if (segment === 'matured') {
+    const res = await pool.query(`
+      SELECT DISTINCT i.id, i.first_name, i.last_name, i.email, i.phone
+      FROM investors i
+      INNER JOIN investments inv ON inv.investor_id = i.id AND inv.status = 'matured'
+      WHERE i.email IS NOT NULL AND i.email <> '' AND ${_notArchived}
+      ORDER BY i.first_name
+    `);
+    rows = res.rows;
+  } else if (segment === 'wallet_positive') {
+    const res = await pool.query(`
+      SELECT id, first_name, last_name, email, phone
+      FROM investors
+      WHERE wallet_balance > 0 AND email IS NOT NULL AND email <> '' AND status != 'archived'
       ORDER BY first_name
     `);
     rows = res.rows;
@@ -90,7 +118,7 @@ async function _getInvestors(segment) {
       SELECT DISTINCT i.id, i.first_name, i.last_name, i.email, i.phone
       FROM investors i
       INNER JOIN investments inv ON inv.investor_id = i.id AND inv.pool_id = $1
-      WHERE i.email IS NOT NULL AND i.email <> ''
+      WHERE i.email IS NOT NULL AND i.email <> '' AND ${_notArchived}
       ORDER BY i.first_name
     `, [segment]);
     rows = res.rows;
@@ -301,6 +329,93 @@ router.post('/run-pool-cycler', async (req, res) => {
   } catch (err) {
     console.error('[admin] manual pool cycler error:', err.message);
     res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// POST /api/admin/send-investor-email
+router.post('/send-investor-email', async (req, res) => {
+  const { investor_id, subject, message, template } = req.body;
+  if (!investor_id || !subject || !message) return res.status(400).json({ error: 'investor_id, subject and message are required' });
+  try {
+    const invRes = await pool.query('SELECT * FROM investors WHERE id = $1', [investor_id]);
+    if (!invRes.rows.length) return res.status(404).json({ error: 'Investor not found' });
+    const investor = invRes.rows[0];
+    const { sendAlert } = require('../services/email');
+    await sendAlert(investor, { subject, message });
+    res.json({ ok: true, sent_to: investor.email });
+  } catch (e) {
+    console.error('[send-investor-email]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/investor-statements?investor_id=xxx
+router.get('/investor-statements', async (req, res) => {
+  const { investor_id } = req.query;
+  if (!investor_id) return res.status(400).json({ error: 'investor_id required' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, investor_id, period_year, period_month, created_at FROM investor_statements WHERE investor_id=$1 ORDER BY period_year DESC, period_month DESC LIMIT 24`,
+      [investor_id]
+    );
+    res.json({ statements: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/investor-statements/:id/pdf?investor_id=xxx
+router.get('/investor-statements/:id/pdf', async (req, res) => {
+  const { investor_id } = req.query;
+  if (!investor_id) return res.status(400).json({ error: 'investor_id required' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM investor_statements WHERE id=$1 AND investor_id=$2',
+      [req.params.id, investor_id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Statement not found' });
+    const buf = Buffer.from(rows[0].pdf_data, 'base64');
+    const mm  = String(rows[0].period_month).padStart(2, '0');
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="SVC-Statement-${rows[0].period_year}-${mm}.pdf"`,
+    });
+    res.send(buf);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* ─── POST /api/admin/recalculate-wallet/:investorId ─────────────────── */
+router.post('/recalculate-wallet/:investorId', requireAuth, requireRole('admin', 'director'), async (req, res) => {
+  try {
+    const { investorId } = req.params;
+
+    // Only sum admin-created manual deposits (ADMIN-DEP-* references).
+    // Historical Firebase transactions are already baked into the imported
+    // wallet_balance and must not be double-counted.
+    const { rows: [calc] } = await pool.query(`
+      SELECT COALESCE(SUM(amount), 0) AS admin_deposits
+      FROM transactions
+      WHERE investor_id = $1
+        AND type = 'deposit'
+        AND status = 'completed'
+        AND reference LIKE 'ADMIN-DEP-%'
+    `, [investorId]);
+
+    const adminDeposits = Math.max(0, parseFloat(calc.admin_deposits) || 0);
+
+    const { rows: [inv] } = await pool.query(
+      'UPDATE investors SET wallet_balance = $1, updated_at = NOW() WHERE id = $2 RETURNING id, first_name, last_name, wallet_balance',
+      [adminDeposits, investorId]
+    );
+
+    if (!inv) return res.status(404).json({ error: 'Investor not found' });
+
+    res.json({ ok: true, investor_id: investorId, new_balance: adminDeposits });
+  } catch (e) {
+    console.error('[recalculate-wallet]', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 

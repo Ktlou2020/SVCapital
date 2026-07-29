@@ -56,6 +56,11 @@ DO $$ BEGIN
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
 
+DO $$ BEGIN
+  ALTER TABLE investors ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
 CREATE TABLE IF NOT EXISTS investment_pools (
   id TEXT PRIMARY KEY, name TEXT NOT NULL,
   product_type TEXT NOT NULL, status TEXT DEFAULT 'open',
@@ -312,6 +317,7 @@ DO $$ BEGIN
   BEGIN ALTER TABLE investments ADD COLUMN pool_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN payout_date TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investments ADD COLUMN maturity_alert_sent_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE investments ADD COLUMN maturity_3day_alert_sent_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
   -- Investor bank detail columns for wallet withdrawals
   BEGIN ALTER TABLE investors ADD COLUMN bank_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE investors ADD COLUMN bank_account_holder TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
@@ -1032,6 +1038,7 @@ CREATE TABLE IF NOT EXISTS products (
   color               TEXT DEFAULT '#656565',
   badge_class         TEXT DEFAULT 'badge--gray',
   partner_name        TEXT,
+  sector              TEXT,                   -- e.g. "Agriculture", "Energy"
   factsheet_url       TEXT,                   -- base64 data URL or external link
   factsheet_name      TEXT,
   is_active           BOOLEAN DEFAULT true,
@@ -1108,6 +1115,34 @@ const DEFAULT_PRODUCTS = [
     min_investment: 3100, term_months: 18, benchmark_rate: 0.13, performance_fee_pct: 0.20,
     risk_profile: 'Low-Medium', risk_color: '#22c55e', icon: 'fa-motorcycle', color: '#f97316',
     badge_class: 'badge--orange', sort_order: 7,
+  },
+  {
+    product_type: 'cattle_12j', label: '12J Cattle Investment', headline: 'Tax-efficient cattle returns.',
+    partner_name: 'Beefcor',
+    description: "Section 12J tax-incentivised cattle investment. Partner with Beefcor's feedlot to grow returns while qualifying for a full SARS income tax deduction on invested capital.",
+    key_details: [
+      'Full SARS Section 12J income tax deduction on invested capital',
+      'Cattle enter feedlot at 200–230kg and are raised to 450–500kg',
+      'Returns determined by weight gain and market price per kilogram',
+      'Beefcor guarantees 99% cattle survival rate',
+      'Minimum 5-year holding period for 12J tax benefit',
+    ].join('\n'),
+    min_investment: 5000, term_months: 60, benchmark_rate: 0.13, performance_fee_pct: 0.20,
+    risk_profile: 'Medium-High', risk_color: '#fec24f', icon: 'fa-cow', color: '#fec24f',
+    badge_class: 'badge--gold', sort_order: 9,
+  },
+  {
+    product_type: 'ilobola', label: 'iLobola', headline: 'Save for what matters most.',
+    description: "A dedicated savings and growth vehicle designed to help you accumulate funds for lobola. Earn competitive returns while working toward one of life's most meaningful milestones.",
+    key_details: [
+      'Purpose-built savings vehicle for lobola preparation',
+      'Competitive fixed returns over a defined term',
+      'Flexible contribution amounts',
+      'Withdraw at maturity or roll over to a new cycle',
+    ].join('\n'),
+    min_investment: 500, term_months: 12, benchmark_rate: 0.13, performance_fee_pct: 0.20,
+    risk_profile: 'Low-Medium', risk_color: '#22c55e', icon: 'fa-heart', color: '#eda5ff',
+    badge_class: 'badge--purple', sort_order: 10,
   },
   {
     product_type: 'gridfarmer', label: 'GridFarmer', headline: 'Buy a hectare, not a fund.',
@@ -1224,6 +1259,7 @@ async function autoSetup() {
         BEGIN ALTER TABLE audit_events ADD COLUMN actor_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE audit_events ADD COLUMN platform TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE investment_pools ADD COLUMN cycled_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE investment_pools ADD COLUMN source_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         -- Merge legacy 'paid_out' status into 'matured' (pools + investments)
         BEGIN UPDATE investment_pools SET status = 'matured' WHERE status = 'paid_out'; EXCEPTION WHEN others THEN NULL; END;
         BEGIN UPDATE investments      SET status = 'matured' WHERE status = 'paid_out'; EXCEPTION WHEN others THEN NULL; END;
@@ -1246,8 +1282,19 @@ async function autoSetup() {
         BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_type TEXT DEFAULT 'current'; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_bank_status TEXT DEFAULT 'none'; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE sub_accounts ADD COLUMN sa_reference TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE products ADD COLUMN sector TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE transactions ADD COLUMN date_updated TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE push_tokens ADD COLUMN app_version TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE push_tokens ADD COLUMN device_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE gifts ADD COLUMN gift_card_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE gifts ADD COLUMN product_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE gifts ADD COLUMN firebase_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE investment_pools ADD COLUMN admin_notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE kyc_documents ADD COLUMN expiry_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE kyc_documents ADD COLUMN doc_subtype TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
       END $$
     `);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS gifts_firebase_id_idx ON gifts(firebase_id) WHERE firebase_id IS NOT NULL`).catch(() => {});
 
     // Backfill sa_reference for existing sub-accounts that don't have one
     await pool.query(`
@@ -1265,6 +1312,41 @@ async function autoSetup() {
       UPDATE products SET partner_name = 'Beefcor'            WHERE product_type = 'cattle'                        AND (partner_name IS NULL OR partner_name = '');
       UPDATE products SET partner_name = 'The Solar Experts'  WHERE product_type IN ('solar_7yr','solar_6yr','solar_5yr') AND (partner_name IS NULL OR partner_name = '');
       UPDATE products SET partner_name = 'MoolaLend'          WHERE product_type IN ('short_term','smme')          AND (partner_name IS NULL OR partner_name = '');
+    `).catch(() => {});
+
+    // Upsert cattle_12j product (safe on existing deployments)
+    await pool.query(`
+      INSERT INTO products
+        (id, product_type, label, headline, description, key_details,
+         min_investment, term_months, benchmark_rate, performance_fee_pct,
+         risk_profile, risk_color, icon, color, badge_class, partner_name, sort_order)
+      VALUES
+        ('PROD-CATTLE_12J', 'cattle_12j', '12J Cattle Investment', 'Tax-efficient cattle returns.',
+         'Section 12J tax-incentivised cattle investment. Partner with Beefcor''s feedlot to grow returns while qualifying for a full SARS income tax deduction on invested capital.',
+         'Full SARS Section 12J income tax deduction on invested capital
+Cattle enter feedlot at 200–230kg and are raised to 450–500kg
+Returns determined by weight gain and market price per kilogram
+Beefcor guarantees 99% cattle survival rate
+Minimum 5-year holding period for 12J tax benefit',
+         5000, 60, 0.13, 0.20, 'Medium-High', '#fec24f', 'fa-cow', '#fec24f', 'badge--gold', 'Beefcor', 9)
+      ON CONFLICT (product_type) DO NOTHING
+    `).catch(() => {});
+
+    // Upsert iLobola product (safe on existing deployments)
+    await pool.query(`
+      INSERT INTO products
+        (id, product_type, label, headline, description, key_details,
+         min_investment, term_months, benchmark_rate, performance_fee_pct,
+         risk_profile, risk_color, icon, color, badge_class, sort_order)
+      VALUES
+        ('PROD-ILOBOLA', 'ilobola', 'iLobola', 'Save for what matters most.',
+         'A dedicated savings and growth vehicle designed to help you accumulate funds for lobola. Earn competitive returns while working toward one of life''s most meaningful milestones.',
+         'Purpose-built savings vehicle for lobola preparation
+Competitive fixed returns over a defined term
+Flexible contribution amounts
+Withdraw at maturity or roll over to a new cycle',
+         500, 12, 0.13, 0.20, 'Low-Medium', '#22c55e', 'fa-heart', '#eda5ff', 'badge--purple', 10)
+      ON CONFLICT (product_type) DO NOTHING
     `).catch(() => {});
 
     // Update short_term key_details to include receivables financing bullet
@@ -1349,9 +1431,6 @@ async function autoSetup() {
     }
 
     // 2. Ensure the COO account exists — upsert so existing users are never wiped
-    const cooPassword = process.env.COO_PASSWORD;
-    if (!cooPassword) throw new Error('[setup] COO_PASSWORD env var must be set before seeding the database');
-
     const { rows: existing } = await pool.query(
       "SELECT id FROM users WHERE email = 'coo@svcapital.co.za' LIMIT 1"
     );
@@ -1362,7 +1441,10 @@ async function autoSetup() {
       return;
     }
 
-    // First-time setup: COO account missing — create it without touching other users
+    // First-time setup: COO account missing — password required
+    const cooPassword = process.env.COO_PASSWORD;
+    if (!cooPassword) throw new Error('[setup] COO_PASSWORD env var must be set before seeding the database');
+
     console.log('🌱 Provisioning COO account…');
     const cooHash = await bcrypt.hash(cooPassword, 12);
 
@@ -1416,7 +1498,8 @@ async function autoSetup() {
         ('kyc_required',        'true',                          'KYC required before investment'),
         ('maintenance_mode',    'false',                         'Maintenance mode'),
         ('currency',            'ZAR',                           'Platform currency'),
-        ('eva_rate',            '0.15',                          'EVA rate — % of net-VAT upfront fee allocated to the referring employee')
+        ('eva_rate',            '0.15',                          'EVA rate — % of net-VAT upfront fee allocated to the referring employee'),
+        ('resend_emails_enabled','true',                         'Set to false to suppress all outbound Resend emails (maintenance / testing)')
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
     `);
 

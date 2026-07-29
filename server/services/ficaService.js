@@ -50,7 +50,17 @@ function ficaId() {
 async function runFicaCheck(investor, trigger) {
   const { id: investorId, first_name, last_name, id_number, notes, date_of_birth } = investor;
 
-  const isPassport = (notes || '').includes('DocType: Passport');
+  // Prefer doc_subtype from kyc_documents if available; fall back to legacy notes field
+  let isPassport = (notes || '').includes('DocType: Passport');
+  try {
+    const { rows: latestIdDoc } = await pool.query(
+      `SELECT doc_subtype FROM kyc_documents WHERE investor_id = $1 AND doc_type = 'id_document' AND doc_subtype IS NOT NULL ORDER BY created_at DESC LIMIT 1`,
+      [investorId]
+    );
+    if (latestIdDoc[0]?.doc_subtype) {
+      isPassport = latestIdDoc[0].doc_subtype === 'passport';
+    }
+  } catch (_) {}
 
   /* ── 1. ID / Passport check ── */
   let idResult, idStatus;
