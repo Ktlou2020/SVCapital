@@ -594,9 +594,13 @@ async function _loadFoxESSPanel(p) {
   const panel = document.getElementById(`foxess-${p.id}`);
   if (!panel) return;
   try {
-    const d = await solGet(`products/solar-device?sn=${encodeURIComponent(p.foxess_device_sn)}`);
+    // Client-side 20 s timeout so the loading spinner never hangs indefinitely
+    const d = await Promise.race([
+      solGet(`products/solar-device?sn=${encodeURIComponent(p.foxess_device_sn)}`),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Request timed out — FoxESS did not respond')), 20000)),
+    ]);
     if (d.unavailable) {
-      panel.innerHTML = `<div class="sol-foxess-unavail"><i class="fa-solid fa-plug-circle-xmark"></i> FoxESS data unavailable</div>`;
+      panel.innerHTML = `<div class="sol-foxess-unavail"><i class="fa-solid fa-plug-circle-xmark"></i> ${d.error || 'FoxESS data unavailable'}</div>`;
       return;
     }
     panel.innerHTML = `

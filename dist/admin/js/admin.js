@@ -3590,12 +3590,12 @@ function openKycReview(id) {
   }
 
   const overlay = document.getElementById('kycReviewModal');
-  if (overlay) { overlay.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+  if (overlay) { overlay.style.display = 'flex'; overlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
 }
 
 function closeKycReview() {
   const overlay = document.getElementById('kycReviewModal');
-  if (overlay) { overlay.style.display = 'none'; }
+  if (overlay) { overlay.style.display = 'none'; overlay.classList.remove('open'); }
   document.body.style.overflow = '';
   _reviewingKycId = null;
 }
@@ -3720,12 +3720,12 @@ function openKycTimeline(investorId) {
   }
 
   const overlay = document.getElementById('kycTimelineModal');
-  if (overlay) { overlay.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+  if (overlay) { overlay.style.display = 'flex'; overlay.classList.add('open'); document.body.style.overflow = 'hidden'; }
 }
 
 function closeKycTimeline() {
   const overlay = document.getElementById('kycTimelineModal');
-  if (overlay) { overlay.style.display = 'none'; }
+  if (overlay) { overlay.style.display = 'none'; overlay.classList.remove('open'); }
   document.body.style.overflow = '';
 }
 

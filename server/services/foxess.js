@@ -33,8 +33,16 @@ function _headers(path) {
   };
 }
 
+const FETCH_TIMEOUT_MS = 12000; // 12 s — abort if FoxESS doesn't respond
+
+function _fetchWithTimeout(url, opts) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
 async function _post(path, body) {
-  const r = await fetch(BASE + path, { method: 'POST', headers: _headers(path), body: JSON.stringify(body || {}) });
+  const r = await _fetchWithTimeout(BASE + path, { method: 'POST', headers: _headers(path), body: JSON.stringify(body || {}) });
   const d = await r.json();
   if (d && d.errno && d.errno !== 0) throw new Error(`FoxESS ${path} errno ${d.errno}: ${d.msg || ''}`);
   return d ? d.result : null;
@@ -42,7 +50,7 @@ async function _post(path, body) {
 
 async function _get(path, query) {
   const url = BASE + path + (query ? '?' + query : '');
-  const r = await fetch(url, { method: 'GET', headers: _headers(path) });
+  const r = await _fetchWithTimeout(url, { method: 'GET', headers: _headers(path) });
   const d = await r.json();
   if (d && d.errno && d.errno !== 0) throw new Error(`FoxESS ${path} errno ${d.errno}: ${d.msg || ''}`);
   return d ? d.result : null;
