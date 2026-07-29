@@ -3740,7 +3740,7 @@ function renderMaturingPoolsAlert() {
     const days    = Math.max(0, Math.ceil((matDate - now) / (1000 * 60 * 60 * 24)));
     const urgency = days <= 30 ? '#ef4444' : days <= 60 ? '#f97316' : '#fec24f';
     const pi = Utils.productInfo(p.product_type);
-    return `<tr style="cursor:pointer" onclick="editPool(${JSON.stringify(p.id)})">
+    return `<tr style="cursor:pointer" onclick="viewPoolInvestors(${JSON.stringify(p.id)})">
       <td><span class="fw-700">${_esc(p.name)}</span>${p.partner_name ? `<br><span style="font-size:0.7rem;color:var(--text-muted)">${_esc(p.partner_name)}</span>` : ''}</td>
       <td><span class="badge ${pi.badgeClass}"><i class="fa-solid ${pi.icon}"></i> ${pi.label}</span></td>
       <td>${Utils.statusBadge(p.status)}</td>
