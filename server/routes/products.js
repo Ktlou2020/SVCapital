@@ -177,7 +177,7 @@ router.get('/track-record', async (req, res) => {
     const byType = {};
     for (const p of rows) {
       const t = p.product_type;
-      if (!byType[t]) byType[t] = { pools: [], total_paid_back: 0, sum_actual: 0, sum_benchmark: 0 };
+      if (!byType[t]) byType[t] = { pools: [], total_paid_back: 0, sum_actual: 0, sum_benchmark: 0, n_with_rate: 0 };
       const actual    = parseFloat(p.actual_rate) || 0;
       const benchmark = parseFloat(p.annual_rate) || 0;
       const invested  = parseFloat(p.invested_amount) || 0;
@@ -196,10 +196,11 @@ router.get('/track-record', async (req, res) => {
     const data = {};
     for (const [t, v] of Object.entries(byType)) {
       const n = v.pools.length;
+      const nr = v.n_with_rate;
       data[t] = {
         matured_count:      n,
-        avg_actual_rate:    n ? v.sum_actual / n : 0,
-        avg_benchmark_rate: n ? v.sum_benchmark / n : 0,
+        avg_actual_rate:    nr ? v.sum_actual / nr : 0,
+        avg_benchmark_rate: nr ? v.sum_benchmark / nr : 0,
         total_paid_back:    Math.round(v.total_paid_back),
         pools:              v.pools,
       };

@@ -3870,36 +3870,71 @@ let _trackChart = null;
 async function _renderProductTrackRecord(type, color) {
   const el = document.getElementById('prodTrackRecord');
   if (!el) return;
+  el.innerHTML = `<div style="font-size:0.78rem;color:var(--text-muted)"><i class="fa-solid fa-spinner fa-spin"></i> Loading past performance…</div>`;
   const data = await _getTrackRecord();
   const isSolar = (type || '').startsWith('solar');
   const keys = Object.keys(data).filter(k => isSolar ? k.startsWith('solar') : k === type);
-  let pools = [], paidBack = 0, sumA = 0, n = 0;
+  let pools = [], paidBack = 0, sumA = 0, nA = 0, nTotal = 0;
   keys.forEach(k => {
     const d = data[k];
     pools = pools.concat(d.pools || []);
-    paidBack += d.total_paid_back || 0;
-    sumA += (d.avg_actual_rate || 0) * (d.matured_count || 0);
-    n += d.matured_count || 0;
+    paidBack  += d.total_paid_back || 0;
+    sumA      += (d.avg_actual_rate || 0) * (d.matured_count || 0);
+    nA        += d.matured_count || 0;
+    nTotal    += d.matured_count || 0;
   });
-  if (!n) { el.innerHTML = ''; return; }
-  pools.sort((a, b) => new Date(a.ended) - new Date(b.ended));
+  if (!nTotal) { el.innerHTML = ''; return; }
+  pools.sort((a, b) => new Date(b.ended) - new Date(a.ended)); // newest first
 
-  // Show the average delivered return (no chart).
+  const avgRate = nA ? (sumA / nA * 100).toFixed(2) : '—';
+
+  const poolRows = pools.map(p => {
+    const rateColor = p.actual_rate > 0 && p.benchmark_rate > 0
+      ? (p.actual_rate >= p.benchmark_rate ? '#22c55e' : '#f59e0b')
+      : '#9ca3af';
+    const statusLabel = p.status === 'paid_out' ? 'Paid Out' : 'Matured';
+    const statusColor = p.status === 'paid_out' ? '#22c55e' : '#eda5ff';
+    return `<tr>
+      <td style="font-weight:600;font-size:0.82rem">${_esc(p.name)}</td>
+      <td style="text-align:center;font-size:0.82rem">${p.term_months ? p.term_months + ' mo' : '—'}</td>
+      <td style="text-align:center">
+        <span style="font-weight:700;color:${rateColor};font-size:0.85rem">${p.actual_rate > 0 ? (p.actual_rate * 100).toFixed(2) + '%' : '—'}</span>
+        ${p.benchmark_rate > 0 ? `<div style="font-size:0.68rem;color:var(--text-muted)">target ${(p.benchmark_rate * 100).toFixed(2)}%</div>` : ''}
+      </td>
+      <td style="text-align:right;font-size:0.82rem;font-variant-numeric:tabular-nums">${p.raised_amount > 0 ? Utils.rand(p.raised_amount) : '—'}</td>
+      <td style="text-align:center;font-size:0.78rem;color:var(--text-muted)">${p.ended ? Utils.date(p.ended) : '—'}</td>
+      <td style="text-align:center"><span style="font-size:0.7rem;font-weight:700;color:${statusColor};background:${statusColor}18;border-radius:20px;padding:2px 9px">${statusLabel}</span></td>
+    </tr>`;
+  }).join('');
+
   el.innerHTML = `
-    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:10px"><i class="fa-solid fa-award" style="color:${color}"></i> Track record — delivered returns</div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap">
-      <div style="flex:1;min-width:130px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:16px">
-        <div style="font-size:1.6rem;font-weight:900;color:${color};letter-spacing:-0.02em">${(sumA / n * 100).toFixed(2)}%</div>
-        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">avg return achieved p.a.</div>
+    <div style="margin-bottom:6px">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:12px">
+        <i class="fa-solid fa-chart-line" style="color:${color};margin-right:5px"></i>Past Performance
       </div>
-      <div style="flex:1;min-width:130px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:16px">
-        <div style="font-size:1.6rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${n}</div>
-        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">pool${n === 1 ? '' : 's'} matured</div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+        <div style="background:${color}12;border:1px solid ${color}30;border-radius:12px;padding:14px 12px;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:${color};letter-spacing:-0.02em">${avgRate}%</div>
+          <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Avg return p.a.</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 12px;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${nTotal}</div>
+          <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Pool${nTotal === 1 ? '' : 's'} completed</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 12px;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${Utils.rand(paidBack)}</div>
+          <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-top:3px">Returned to investors</div>
+        </div>
       </div>
       <div style="flex:1;min-width:130px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:16px">
         <div style="font-size:1.6rem;font-weight:900;color:var(--text);letter-spacing:-0.02em">${Utils.rand(paidBack)}</div>
         <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px">invested to date</div>
       </div>
+
+      <p style="font-size:0.65rem;color:var(--text-muted);margin-top:10px;line-height:1.5;opacity:0.7">
+        <i class="fa-solid fa-circle-info" style="margin-right:4px"></i>Past performance is not a guarantee of future returns. Investment returns may vary.
+      </p>
     </div>`;
 }
 
