@@ -714,7 +714,7 @@ async function loadDashboard() {
     const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
     const nonArchived = STATE.investors.filter(i => i.status !== 'archived');
 
-    document.getElementById('ds-investors').textContent = nonArchived.length;
+    document.getElementById('ds-investors').textContent = STATE.investors.length;
     document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
     document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
     document.getElementById('ds-pools').textContent = activePools;
@@ -859,7 +859,7 @@ async function loadDashboard() {
           const totalInvested = STATE.investments.filter(i => i.status === 'active').reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
           const totalReturns  = STATE.transactions.filter(t => t.type === 'return' && t.status === 'completed').reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
           const activePools = STATE.pools.filter(p => ['open', 'active', 'filling'].includes(p.status)).length;
-          document.getElementById('ds-investors').textContent = nonArchived.length;
+          document.getElementById('ds-investors').textContent = STATE.investors.length;
           document.getElementById('ds-invested').textContent = Utils.rand(totalInvested);
           document.getElementById('ds-returns').textContent = Utils.rand(totalReturns);
           document.getElementById('ds-pools').textContent = activePools;
