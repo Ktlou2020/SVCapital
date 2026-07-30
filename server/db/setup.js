@@ -1559,7 +1559,26 @@ Withdraw at maturity or roll over to a new cycle',
       console.warn('⚠️  Maturity date backfill skipped:', bfErr.message);
     }
 
-    // 8. Backfill cattle_cycles.cycle_start_date from invoice_date.
+    // 8. Migrate product_type 'smme' → 'short_term' everywhere.
+    //    SMME products are now unified under the Short Term Investment type.
+    //    Safe to run repeatedly — WHERE clause prevents no-op re-runs.
+    try {
+      const { rowCount: poolRows } = await pool.query(`
+        UPDATE investment_pools SET product_type = 'short_term' WHERE product_type = 'smme'
+      `);
+      const { rowCount: invRows } = await pool.query(`
+        UPDATE investments SET product_type = 'short_term' WHERE product_type = 'smme'
+      `);
+      const { rowCount: prodRows } = await pool.query(`
+        UPDATE products SET product_type = 'short_term' WHERE product_type = 'smme'
+      `).catch(() => ({ rowCount: 0 }));
+      const total = poolRows + invRows + prodRows;
+      if (total > 0) console.log(`✅ Migrated smme→short_term: ${poolRows} pools, ${invRows} investments, ${prodRows} products.`);
+    } catch (bfErr) {
+      console.warn('⚠️  smme→short_term migration skipped:', bfErr.message);
+    }
+
+    // 9. Backfill cattle_cycles.cycle_start_date from invoice_date.
     //    "Invoice Date_" in the import CSV is the cycle start date — previously
     //    it only populated invoice_date; now we also copy it to cycle_start_date.
     try {

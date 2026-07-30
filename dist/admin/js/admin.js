@@ -5231,7 +5231,8 @@ function setupInvestmentFilters() {
       const investor = STATE.investors.find(inv => inv.id === i.investor_id);
       const invName  = i.investor_name || (investor ? `${investor.first_name} ${investor.last_name}` : '');
       const mq = !q || `${invName} ${i.pool_name} ${i.investor_id||''}`.toLowerCase().includes(q);
-      const mp = !pr || i.product_type === pr;
+      const ipt = i.product_type === 'smme' ? 'short_term' : i.product_type;
+      const mp = !pr || ipt === pr;
       const ms = !st || i.status === st;
       const iDate = i.start_date ? new Date(i.start_date) : null;
       const mFrom = !from || (iDate && iDate >= from);
