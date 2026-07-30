@@ -342,6 +342,10 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   const { startArchiveCron } = require('./jobs/archiveCron');
   startArchiveCron();
 
+  // Withdrawal alert to admins — 10:00, 13:00, 16:00 SAST if pending requests exist
+  const { startWithdrawalAlertCron } = require('./jobs/withdrawalAlertCron');
+  startWithdrawalAlertCron();
+
   // Email queue processor — runs every 2 minutes
   const emailQueueCron = require('node-cron');
   const { processQueue } = require('./services/emailQueue');

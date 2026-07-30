@@ -1023,6 +1023,48 @@ function sendInternationalWaitlistConfirmation({ full_name, email, country }) {
   });
 }
 
+/* ── Withdrawal alert to admins ─────────────────────────────── */
+function sendWithdrawalAlert(admin, { count, total, requests }) {
+  const { email, first_name } = admin;
+  const fmtR = v => `R${Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtDate = d => d ? new Date(d).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Africa/Johannesburg' }) : '—';
+
+  const rows = (requests || []).map(r => `
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.85rem">${escHtml((r.first_name || '') + ' ' + (r.last_name || '')).trim() || '—'}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.85rem;color:#fec24f;font-weight:600">${fmtR(r.amount)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:0.85rem;color:#888">${fmtDate(r.created_at)}</td>
+    </tr>`).join('');
+
+  const moreNote = count > 20 ? `<p style="font-size:0.82rem;color:#888;margin-top:8px">Showing first 20 of ${count} requests.</p>` : '';
+
+  return _send({
+    to: email,
+    subject: `Action required: ${count} pending withdrawal${count === 1 ? '' : 's'} — ${fmtR(total)}`,
+    html: _wrap(`
+      <h2>Pending Withdrawal Requests ⚠️</h2>
+      <p>Hi ${first_name || 'there'}, there ${count === 1 ? 'is' : 'are'} <strong>${count} pending withdrawal request${count === 1 ? '' : 's'}</strong> awaiting approval in the admin console.</p>
+      <div class="box">
+        <div class="row"><span class="lbl">Pending Requests</span><span class="val" style="color:#f97316;font-weight:700">${count}</span></div>
+        <div class="row"><span class="lbl">Total Amount</span><span class="val gold">${fmtR(total)}</span></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;background:#f7f9fc;border-radius:10px;overflow:hidden">
+        <thead>
+          <tr style="background:#f0f2f5">
+            <th style="padding:10px 12px;text-align:left;font-size:0.8rem;color:#888;font-weight:600">Investor</th>
+            <th style="padding:10px 12px;text-align:left;font-size:0.8rem;color:#888;font-weight:600">Amount</th>
+            <th style="padding:10px 12px;text-align:left;font-size:0.8rem;color:#888;font-weight:600">Requested</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${moreNote}
+      <a href="${BASE_URL}/admin/#withdrawals" class="btn">Review Withdrawals →</a>
+    `),
+    text: `Hi ${first_name || 'there'}, there are ${count} pending withdrawal request(s) totalling ${fmtR(total)} awaiting approval. Log in to the admin console: ${BASE_URL}/admin/`,
+  });
+}
+
 module.exports = {
   sendWelcome,
   sendLeaveRequestSubmitted,
@@ -1054,4 +1096,5 @@ module.exports = {
   sendKycDocumentReceived,
   sendAlert,
   sendInternationalWaitlistConfirmation,
+  sendWithdrawalAlert,
 };
