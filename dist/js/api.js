@@ -426,10 +426,16 @@ const Utils = {
     return (Number(rate) * 100).toFixed(decimals) + '%';
   },
 
-  /* Format date */
+  /* Format date — parse date-only strings (YYYY-MM-DD) in local time to
+     avoid the UTC-midnight → timezone-shift off-by-one-day bug. */
   date(str) {
     if (!str) return '—';
-    return new Date(str).toLocaleDateString('en-ZA', {
+    const s = String(str);
+    const dateOnly = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const d = dateOnly
+      ? new Date(+dateOnly[1], +dateOnly[2] - 1, +dateOnly[3])
+      : new Date(s);
+    return d.toLocaleDateString('en-ZA', {
       day: '2-digit', month: 'short', year: 'numeric'
     });
   },
