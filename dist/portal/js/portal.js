@@ -2699,7 +2699,7 @@ function _renderRecurringTab() {
   const listEl     = document.getElementById('recurringInvestmentsList');
   if (!statusCard || !listEl) return;
 
-  const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar Energy 7yr', solar_6yr:'Solar Energy 6yr', solar_5yr:'Solar Energy 5yr', short_term:'Short Term', smme:'SMME Finance', delivery_bike:'Delivery Bike', other:'Other' };
+  const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar Energy 7yr', solar_6yr:'Solar Energy 6yr', solar_5yr:'Solar Energy 5yr', short_term:'Short Term', smme:'Short Term', delivery_bike:'Delivery Bike', other:'Other' };
   const productType = inv?.recurring_product_type;
   const isActive    = !!(inv?.recurring_enabled && inv?.recurring_amount && productType);
   const day         = inv?.recurring_day || 1;
@@ -11756,7 +11756,7 @@ async function saveRecurringInvestment() {
     Modal.close('recurringModal');
     SVC.track('svc_recurring_investment_set', { enabled, product_type: productType, amount, day });
 
-    const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar 7yr', solar_6yr:'Solar 6yr', solar_5yr:'Solar 5yr', short_term:'Short Term', smme:'SMME Finance', delivery_bike:'Delivery Bike', other:'Other' };
+    const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar 7yr', solar_6yr:'Solar 6yr', solar_5yr:'Solar 5yr', short_term:'Short Term', smme:'Short Term', delivery_bike:'Delivery Bike', other:'Other' };
     if (enabled) {
       const suffix = day === 1 ? 'st' : day === 2 ? 'nd' : day === 3 ? 'rd' : 'th';
       Toast.success(`Recurring ${Utils.rand(amount)}/month into ${PRODUCT_LABELS[productType] || productType} set for the ${day}${suffix} of each month`);
@@ -11779,7 +11779,7 @@ function _renderRecurringStatusSummary() {
   const summaryEl = document.getElementById('recurringStatusSummary');
   if (!summaryEl) return;
 
-  const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar 7yr', solar_6yr:'Solar 6yr', solar_5yr:'Solar 5yr', short_term:'Short Term', smme:'SMME Finance', delivery_bike:'Delivery Bike', other:'Other' };
+  const PRODUCT_LABELS = { cattle:'Cattle Finance', solar_7yr:'Solar 7yr', solar_6yr:'Solar 6yr', solar_5yr:'Solar 5yr', short_term:'Short Term', smme:'Short Term', delivery_bike:'Delivery Bike', other:'Other' };
   if (inv && inv.recurring_enabled && inv.recurring_amount && inv.recurring_product_type) {
     const day    = inv.recurring_day || 1;
     const suffix = day === 1 ? 'st' : day === 2 ? 'nd' : day === 3 ? 'rd' : 'th';
